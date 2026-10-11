@@ -80,6 +80,10 @@ class SloNetBenchmark:
         self.test_training_convergence()
         self.test_export_import_roundtrip()
         self.test_accelerator_speed()
+        # Added in 215578254 but never listed here, so the sweep had never run
+        # as part of the suite. It returns early on a CPU-only host without
+        # appending a result, so it is safe to invoke unconditionally.
+        self.test_accelerator_matmul_crossover()
         self.test_lstm_forward_backward_speed()
         self.test_inference_consistency()
         self.test_transformer_vs_pytorch()
@@ -285,7 +289,35 @@ class SloNetBenchmark:
     # Test 4: Accelerator Speed
     # -------------------------------------------------------------------------
     def test_accelerator_speed(self):
-        """Benchmark matmul + layernorm + gelu on available accelerator vs numpy."""
+        """Benchmark matmul + layernorm + gelu on available accelerator vs numpy.
+
+        This is a REPORT, not a gate. There is no universal threshold at which
+        the accelerator "should" beat numpy at these sizes, because the
+        crossover is a property of the device rather than of the code — that is
+        the whole finding of test_accelerator_matmul_crossover below. It is
+        therefore recorded with passed=True by design, exactly like that sweep,
+        and must not be read as a regression guard.
+
+        Two measurement defects were making this report actively misleading, and
+        both are fixed here:
+
+        * No warmup. The accelerator was timed first, so the one-time CUDA
+          context creation landed inside the measurement. Measured on a GTX
+          1050, (64,64) reported acc=105.96ms against numpy=226us — "0.0x", or
+          the GPU allegedly 468x slower at the smallest size. That figure was
+          context setup divided by 20, not arithmetic. Both paths are now warmed
+          once outside the timing.
+        * A single timed pass. On a shared machine that absorbs scheduler noise
+          and GPU contention outright: the same run reported numpy=164ms for a
+          128x128 matmul, roughly three orders of magnitude beyond its real
+          cost. Both paths now take the minimum of 3 passes, matching the
+          crossover sweep's defence.
+
+        Previously only the last size's ratio survived into `value`, via the
+        leaked `speedup` loop variable; every ratio is now recorded in
+        `details`, and a CPU-only host skips instead of reporting a meaningless
+        1.0x self-comparison.
+        """
         print("[4] Accelerator Speed")
         print("-" * 40)
 
@@ -294,13 +326,50 @@ class SloNetBenchmark:
         reset_accelerator()
         acc = get_accelerator()
 
+        if acc.name == "cpu":
+            print("  CPU-only backend: nothing to compare against numpy, skipping")
+            return
+
+        def acc_once(A, B, X, W, Bv):
+            c = acc.matmul(A, B)
+            c = acc.layer_norm(X, W, Bv)
+            c = acc.gelu(c)
+            if hasattr(acc, "sync"):
+                acc.sync()
+            return c
+
+        def numpy_once(A, B, X, W, Bv):
+            # Workload must mirror acc_once exactly. The original numpy path
+            # rebound `c` at every step, so it computed gelu(X) while the
+            # accelerator computed gelu(layer_norm(X)) — different work, which
+            # made the ratio meaningless. Matmul is kept in the workload on both
+            # sides even though both discard its result, so the comparison
+            # stays about the same three ops.
+            np.matmul(A, B)
+            mean = X.mean(axis=-1, keepdims=True)
+            var = X.var(axis=-1, keepdims=True)
+            c = ((X - mean) / np.sqrt(var + 1e-5)) * W + Bv
+            return 0.5 * c * (1 + np.tanh(np.sqrt(2 / np.pi) * (c + 0.044715 * c**3)))
+
         # Test sizes
         sizes = [(64, 64), (128, 128)]
+        reps = 20
+        passes = 3
 
         print(f"  Accelerator: {acc.name} (tier={acc.compute_tier}, vram={acc.vram_gb():.1f}GB)")
         print()
 
-        total_ops = 0
+        def best_of(fn, A, B, X, W, Bv) -> float:
+            """Minimum per-call time over `passes` passes — noise only adds."""
+            out = float("inf")
+            for _ in range(passes):
+                t0 = time.perf_counter()
+                for _ in range(reps):
+                    fn(A, B, X, W, Bv)
+                out = min(out, (time.perf_counter() - t0) / reps)
+            return out
+
+        ratios = []
         for m, k in sizes:
             A = np.random.randn(m, k).astype(np.float32)
             B = np.random.randn(k, m).astype(np.float32)
@@ -308,43 +377,32 @@ class SloNetBenchmark:
             W = np.random.randn(k).astype(np.float32)
             Bv = np.random.randn(k).astype(np.float32)
 
-            # Accelerator
-            t0 = time.perf_counter()
-            for _ in range(20):
-                c = acc.matmul(A, B)
-                c = acc.layer_norm(X, W, Bv)
-                c = acc.gelu(c)
-            if hasattr(acc, "sync"):
-                acc.sync()
-            acc_time = time.perf_counter() - t0
+            # Warm both paths outside the timing: the first accelerator call
+            # pays CUDA context creation, which is what made (64,64) report 0.0x
+            acc_once(A, B, X, W, Bv)
+            numpy_once(A, B, X, W, Bv)
 
-            # NumPy fallback
-            t0 = time.perf_counter()
-            for _ in range(20):
-                c = np.matmul(A, B)
-                mean = X.mean(axis=-1, keepdims=True)
-                var = X.var(axis=-1, keepdims=True)
-                c = ((X - mean) / np.sqrt(var + 1e-5)) * W + Bv
-                c = 0.5 * X * (1 + np.tanh(np.sqrt(2 / np.pi) * (X + 0.044715 * X**3)))
-            numpy_time = time.perf_counter() - t0
+            acc_time = best_of(acc_once, A, B, X, W, Bv)
+            numpy_time = best_of(numpy_once, A, B, X, W, Bv)
 
-            speedup = numpy_time / acc_time if acc_time > 0 else 0
-            total_ops += 1
+            speedup = numpy_time / acc_time if acc_time > 0 else 0.0
+            ratios.append(speedup)
 
             print(
-                f"    {m}x{k} × {k}x{m}: acc={format_time(acc_time / 20):>10s}  "
-                f"numpy={format_time(numpy_time / 20):>10s}  "
+                f"    {m}x{k} × {k}x{m}: acc={format_time(acc_time):>10s}  "
+                f"numpy={format_time(numpy_time):>10s}  "
                 f"speedup={speedup:.1f}x"
             )
 
         print()
+        ratio_txt = ", ".join(f"{m}x{k}:{r:.1f}x" for (m, k), r in zip(sizes, ratios))
         self.results.append(
             TestResult(
                 name="accelerator_speed",
                 passed=True,
-                value=speedup if total_ops > 0 else 0,
+                value=ratios[-1] if ratios else 0.0,
                 unit="speedup",
-                details=f"{acc.name} vs numpy on {sizes[-1]} matmul",
+                details=f"{acc.name} vs numpy ({ratio_txt}); informational, not a gate",
             )
         )
 
