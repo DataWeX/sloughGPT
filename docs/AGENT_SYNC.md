@@ -4,6 +4,17 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-10 ~06:50 — PRE-PUSH FORMAT GUARD is live (card ca7d10ff, `9f27f6799`).**
+`git config core.hooksPath githooks` is now set repo-wide (all worktrees of this
+clone). Pushes whose range touches Python under `packages/core-py/` or
+`apps/api/server/` run `ruff format --check` on those trees via `scripts/python`
+(the CI pin, 0.16.8) — the same verdict as ci_cd.yml, so main's lint gate stops
+depending on whichever lane merges next. Unblock: `./scripts/python -m ruff
+format <files>`. Emergency bypass: `git push --no-verify`. Fail-open: if the
+toolchain or the `githooks/` dir is absent in your checkout (pre-merge branches),
+the hook no-ops and CI remains the hard gate. Fresh clones: re-run `git config
+core.hooksPath githooks` once after cloning.
+
 **2026-10-10 ~06:28 — b22e878a router/controller/engine conformance CLOSED
 (landed `0d75f84d5` + board `4f05b7110`).** All 30 controller `_internal`
 import sites now go through `domain.<feature>` facades; missing names were
