@@ -43,6 +43,26 @@ class TestEmbeddingConfigFields:
         assert cfg.embedding.base_url == "http://llm.local:8080/v1"
         assert cfg.embedding.openai_api_key == "sk-env"
 
+    def test_env_legacy_openai_key_still_fills_generic_field(self, monkeypatch):
+        # The env name .env.example documented BEFORE this change must keep
+        # working end-to-end (old deployments): SLO_EMBEDDING__OPENAI_API_KEY
+        # -> env walk -> post-env model_validate -> alias mirror -> api_key.
+        from domain.infrastructure._internal.config import AppConfig, _apply_env_overrides
+
+        monkeypatch.delenv("SLO_EMBEDDING__API_KEY", raising=False)
+        monkeypatch.setenv("SLO_EMBEDDING__OPENAI_API_KEY", "sk-legacy-env")
+        cfg = _apply_env_overrides(AppConfig())
+        assert cfg.embedding.api_key == "sk-legacy-env"
+        assert cfg.embedding.openai_api_key == "sk-legacy-env"
+
+    def test_new_field_wins_when_both_set(self):
+        from domain.infrastructure._internal.config import EmbeddingConfig
+
+        cfg = EmbeddingConfig(api_key="sk-new", openai_api_key="sk-old")
+        assert cfg.api_key == "sk-new"
+        # mirror keeps old-field readers in agreement with the winning value
+        assert cfg.openai_api_key == "sk-new"
+
 
 @pytest.fixture
 def fake_openai(monkeypatch):
@@ -99,3 +119,13 @@ class TestOpenAIEmbedderProviderConfig:
         impl = embedder._impl
         assert impl.base_url == "http://host/v1"
         assert impl.client.api_key == "sk-x"
+
+    def test_no_base_url_config_means_none(self, fake_openai, monkeypatch):
+        # Empty base_url must reach the OpenAI client as None (provider
+        # default / OPENAI_BASE_URL env), never as "" or a fabricated URL.
+        from domain.inference._internal import embeddings as emb_mod
+
+        monkeypatch.setattr(emb_mod, "get_config", lambda: self._config(api_key="sk-cfg"))
+        embedder = emb_mod.OpenAIEmbedder()
+        assert embedder.base_url is None
+        assert embedder.client.base_url is None
