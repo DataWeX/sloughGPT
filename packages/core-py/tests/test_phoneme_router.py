@@ -165,3 +165,42 @@ class TestPhonemeStatus:
         resp = client.get("/phoneme/status")
         assert resp.status_code == 200
         assert resp.json()["data"]["loaded"] is True
+
+
+class TestPhonemeLanguagesRealEngine:
+    """The same routes, driven by the real engine instead of a mock.
+
+     Every test above injects `_mock_engine()`, and a bare `MagicMock` accepts
+     any attribute access and any call. That is how `GET /phoneme/languages`
+     shipped returning 500 in production while its test stayed green: the
+     handler called `encoder.supported_languages()`, which is a `@property`
+     returning `list[str]`, and the mock's happy little `()` returned another
+     mock instead of raising `'list' object is not callable`.
+
+     The mock also encoded the wrong *shape* — it returned
+     `data={"languages": [...]}` where the real engine returns the list itself
+    — so the old assertion was checking a payload no client has ever received.
+
+     These tests therefore assert two things at once: the status code, and that
+     `data` is a plain list of language codes. Both are properties of the real
+     object, which is the only thing that was ever in doubt.
+    """
+
+    def test_languages_returns_200_with_the_real_engine(self):
+        client = TestClient(_app())  # no engine injected -> the real one
+        resp = client.get("/phoneme/languages")
+        assert resp.status_code == 200, resp.text
+
+    def test_languages_data_is_a_list_of_codes(self):
+        client = TestClient(_app())
+        data = client.get("/phoneme/languages").json()["data"]
+        assert isinstance(data, list), (
+            f"expected the bare language list, got {type(data).__name__} — the "
+            f"mock's {data!r} shape is not what the engine returns"
+        )
+        assert "en" in data
+
+    def test_status_still_works_on_the_real_engine(self):
+        client = TestClient(_app())
+        resp = client.get("/phoneme/status")
+        assert resp.status_code == 200, resp.text
