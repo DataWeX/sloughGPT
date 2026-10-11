@@ -138,12 +138,23 @@ is the `_internal` row, where the code is _worse_ than the doc claims.
 # accounted for all 6 architecture alarms. Values now match measured code and
 # act as a DOWNWARD ratchet: card b22e878a (proxy controllers through engines)
 # should lower them as it lands, and later drift shows up as an alarm again.
+#
+# 2026-10-11 refresh (card 28606dd3): controllers_lines 3223 -> 3296 and
+# controllers_defs 105 -> 106. Re-measured rather than copied from the alarm:
+# 5 controller files with __init__.py excluded (raw wc -l is 3313), defs are
+# ast.walk FunctionDef + AsyncFunctionDef (nested included) — both match the
+# script's own measurement independently. The drift came from unrelated
+# controller edits after the 10-04 sync, not from this block.
+# DECISION STILL OPEN on the card: keep refreshing these two numbers, or drop
+# the line/def ratchet entirely (it alarms on every unrelated controller edit
+# and missed the 384-line GPU accelerator deletion). Refreshing was taken as
+# the conservative option — it keeps the guard and makes the claim true.
 routers_internal_files=11
 routers_internal_stmts=36
 routers_internal_in_scope_files=8
 controllers_files=5
-controllers_lines=3223
-controllers_defs=105
+controllers_lines=3296
+controllers_defs=106
 controllers_internal_files=4
 controllers_internal_stmts=31
 controllers_internal_modules=14
