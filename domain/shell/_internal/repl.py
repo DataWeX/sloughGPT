@@ -852,8 +852,15 @@ class ShellREPL(LinuxCommandsMixin):
             fetcher = _COMMAND_CACHE_FETCHERS.get(cmd)
             if fetcher:
                 return self._completion_cache_obj.get(cmd, fetcher)
-            # No API fetcher — fall through to path completion
-            return self._complete_path("")
+            # No API fetcher — but several commands still answer from a
+            # static table (_complete_args_for_uncached: train, permit,
+            # deny, note, svc, api, finetuned). Delegate to it rather than
+            # to _complete_path, which is only that resolver's *last*
+            # resort. Returning _complete_path("") here made `train <TAB>`
+            # list the cwd's files instead of train's subcommands, and only
+            # when the CompletionCache is live — i.e. in real interactive
+            # use, where readline has been set up.
+            return self._complete_args_for_uncached(cmd)
 
         # Fallback: local dict cache with 30s TTL
         now = time.monotonic()
@@ -5342,7 +5349,37 @@ _shell_commands = {
     "svc": ShellREPL._cmd_svc,
     "uptime": ShellREPL._cmd_uptime,
     "lsdev": ShellREPL._cmd_lsdev,
+    # `devices` is a second spelling of `lsdev`, restored from e5208a8c9
+    # (feat/separate-workspace), which registered lsdev/devices and titled
+    # the full help list. Only the `devices` alias was still missing here —
+    # `lsdev` and the title both already landed (7f7602e81).
+    "devices": ShellREPL._cmd_lsdev,
     "render": ShellREPL._cmd_render,
+    # ── restored 2026-10-09 ─────────────────────────────────────────
+    # 6e9b7d94d ("Update packages and SDK") rewrote 704 lines of this file
+    # and dropped these 12 entries while leaving every _cmd_* method in
+    # place, so `set`, `source`, `export`, `vmrun` … answered
+    # `Unknown command: <name>` with exit 127 at the prompt.
+    # unset/setenv were lost earlier by 98404d8f2.
+    # Nothing depended on the broken state: 0 tests assert these are
+    # unknown, and docs/SHELL.md documents them as user commands.
+    # Guarded now by TestShellCommandRegistry, which fails if any _cmd_*
+    # is declared but unregistered (and not explicitly allowlisted
+    # internal).
+    "set": ShellREPL._cmd_set,
+    "unset": ShellREPL._cmd_unset,
+    "setenv": ShellREPL._cmd_setenv,
+    "export": ShellREPL._cmd_export,
+    "source": ShellREPL._cmd_source,
+    "fc": ShellREPL._cmd_fc,
+    "procs": ShellREPL._cmd_procs,
+    "type": ShellREPL._cmd_type,
+    "read": ShellREPL._cmd_read,
+    "bg": ShellREPL._cmd_bg,
+    "fg": ShellREPL._cmd_fg,
+    "asm": ShellREPL._cmd_asm,
+    "vmrun": ShellREPL._cmd_vmrun,
+    "vmperms": ShellREPL._cmd_vmperms,
 }
 # Auto-register LinuxCommandsMixin handlers missing from the explicit map
 # (env, mkdir, rm, touch, ...). Explicit entries win via setdefault so

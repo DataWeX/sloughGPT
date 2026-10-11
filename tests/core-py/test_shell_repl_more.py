@@ -25034,6 +25034,13 @@ class TestCmdLoadDeeperV3:
 
 class TestCmdWhoamiShellDeeper:
     def test_whoami_via_execute(self, repl):
+        # `whoami` reaches the API for the current soul (souls_cmd.run ->
+        # api.current_soul(), passed as self.cmds at repl.py:1462). The suite
+        # is hermetic by card 4eefc74c, so no server answers: stub the one
+        # call the command makes instead of pinning a live-server rc of 0
+        # that the hermetic fixture (d1c96d49e) deliberately made
+        # unreachable — with a dead base it correctly returns 1.
+        repl.cmds.current_soul = MagicMock(return_value={"name": "maya"})
         with _CaptureOutput(repl):
             repl._execute_single("whoami")
         assert repl._last_exit_code == 0
@@ -26295,6 +26302,8 @@ class TestCmdLoadDeeperV4:
 
 class TestCmdWhoamiShellDeeperV2:
     def test_whoami_via_execute(self, repl):
+        # See TestCmdWhoamiShellDeeper: hermetic suite, stub the one API call.
+        repl.cmds.current_soul = MagicMock(return_value={"name": "maya"})
         with _CaptureOutput(repl):
             repl._execute_single("whoami")
         assert repl._last_exit_code == 0
@@ -26436,7 +26445,13 @@ class TestRenderPromptDeeperV3:
 
     def test_render_prompt_lambda(self, repl):
         result = repl._render_prompt()
-        assert "̓" in result
+        # The prompt is a plain lambda. This assertion asked for a
+        # COMBINING GREEK KORONIS (U+0343) on top of it, which production
+        # has never emitted: `git log --all -S <U+0343> -- domain/shell`
+        # returns 0 commits, and PromptRenderer.render only expands PS1
+        # escapes onto ps1 as given (prompt.py:42), whose default is the
+        # bare lambda (repl.py:311).
+        assert "λ" in result
 
 
 class TestLogHelpersDeeperV2:
@@ -31044,3 +31059,66 @@ class TestCmdTrEnhanced:
             repl._cmd_tr("-s ' '")
         out = cap.getvalue()
         assert "  " not in out.strip()
+
+
+# ── COMMANDS registry invariant ─────────────────────────────────────
+
+# Implemented on ShellREPL but deliberately NOT dispatched at the prompt.
+# Every entry must still be a real _cmd_* method — checked below, so this
+# can never rot into a catch-all as methods are renamed away.
+_INTERNAL_SHELL_COMMANDS = frozenset(
+    {
+        # driven by _cmd_chat (repl.py:3369), never typed at the prompt
+        "chat_interactive",
+        # no production caller, no docstring: register it or delete it.
+        # See the note on this commit; it is NOT one of the 14 restored.
+        "export_state",
+    }
+)
+
+
+def _declared_shell_commands() -> set:
+    """Names of every _cmd_* defined on ShellREPL itself (not the mixin)."""
+    return {n[len("_cmd_") :] for n in vars(repl_mod.ShellREPL) if n.startswith("_cmd_")}
+
+
+class TestShellCommandRegistry:
+    """Guard `_shell_commands` against silent clobbering.
+
+    Commit 6e9b7d94d ("Update packages and SDK") rewrote 704 lines of
+    repl.py and dropped 12 entries from `_shell_commands` while leaving
+    every `_cmd_*` method in place. `unset`/`setenv` were lost earlier by
+    98404d8f2. Net effect: 14 commands that still had implementations,
+    docstrings and documentation answered
+
+        Unknown command: <name>          exit 127
+
+    at the prompt. No test noticed, because almost every shell test calls
+    the handler directly (`repl._cmd_source(...)`) and bypasses dispatch
+    entirely — the breakage was invisible from the test side until a test
+    ran a sourced script whose `set VAR=value` line hit the 127 path.
+    """
+
+    def test_every_cmd_method_is_dispatchable(self):
+        orphaned = sorted(
+            _declared_shell_commands() - set(repl_mod.ShellREPL.COMMANDS) - _INTERNAL_SHELL_COMMANDS
+        )
+        assert not orphaned, (
+            "ShellREPL defines these _cmd_* methods but never registered "
+            "them, so typing them yields `Unknown command: <name>` + exit "
+            "127: " + ", ".join(orphaned)
+        )
+
+    def test_internal_allowlist_has_no_stale_entries(self):
+        stale = sorted(_INTERNAL_SHELL_COMMANDS - _declared_shell_commands())
+        assert not stale, (
+            "_INTERNAL_SHELL_COMMANDS names methods that no longer exist "
+            "(rename? deletion?); drop them or the allowlist becomes a "
+            "silent catch-all: " + ", ".join(stale)
+        )
+
+    def test_registered_names_resolve_to_a_callable(self):
+        """Registration must point at something invocable — a clobber that
+        swapped in a non-callable would only explode at dispatch time."""
+        for name, fn in repl_mod.ShellREPL.COMMANDS.items():
+            assert callable(fn), f"COMMANDS[{name!r}] is not callable: {fn!r}"
