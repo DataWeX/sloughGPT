@@ -4,6 +4,21 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-11 ~04:14 — GENE BATCH 3 FINISHED INLINE (Gene's 4th infra death,
+ETIMEOUT) + queue sweep.** Landed: `14ccda235` one-pytest-config PART 1
+(port of stranded f2cc0ee0a — packages/core-py/pytest.ini deleted, root ini
+single source, python_functions key removed to protect 37 camelCase tests);
+plain `pytest` from packages/core-py and from root now resolve the same
+configfile and collect identically (42541/43062, 521 deselected). PART 2
+(55 duplicate test basenames) split to card d79237cd (low). cleanup-14
+closed: SLNC fd-safety port `2e0dd9e64` (fd claimed before release, idempotent
+close/__del__) + audit verdict — SLNCCompiler IS the single conversion path,
+all 7 external SLNCParser users are read-only mmap loads; 154 slnc tests
+green. Also closed on evidence: 122109a9 (avion collection failure gone —
+369 collected, 368P/1S), lint-fix-01 (ruff over full prod scope: 0 errors —
+claim long stale). npu-01 screened OUT: undescribed big-feature card, needs
+user product input. Gene worktrees/branches cleaned up.
+
 **2026-10-11 ~03:24 — LOGGING DRIFT CLOSED (`070ffc7ad`) + cleanup family swept.**
 `LogFormatter` now serializes `error_code` additively as `"code"` (it was accepted,
 carried on LogRecord, then silently dropped — the one genuine defect behind
