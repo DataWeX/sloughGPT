@@ -20,8 +20,62 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
+
+# Directory names the scan must never descend into. `scripts/` is excluded by
+# design: this guard does not protect itself.
+_SKIP_DIR_NAMES = frozenset({"__pycache__", "node_modules", "scripts"})
+
+
+def _iter_candidate_files(root: Path):
+    """Yield the Python files the FEATURE scan should consider.
+
+    Tracked files only, enumerated with `git ls-files`. The previous
+    implementation used `root.rglob("*.py")`, which walked every `.wt-*` git
+    worktree living inside the repo root — each a full checkout — and counted
+    every tagged file once per worktree. With 68 worktrees present that
+    reported 701 tagged files where 11 are actually protected (card 3dfbbb90).
+
+    Tracking-only is not merely cheaper; it is the correct scope for this
+    guard. It protects files under version control, and the worktree copies
+    are untracked, so they vanish with their worktree and can never be
+    protected. Counting them made the guard report green while the one file it
+    existed to protect could be deleted. Enumerating the index also makes
+    worktrees invisible by construction, so no path-prefix exclusion list can
+    fall behind the set of worktrees that happen to exist.
+
+    A plain (non-git) directory falls back to a filesystem walk that still
+    skips worktrees and caches, because callers may point this at any root.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "-z", "--", "*.py"],
+            capture_output=True,
+            text=True,
+            cwd=str(root),
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        proc = None
+
+    if proc is not None:
+        for rel in proc.stdout.split("\0"):
+            if not rel:
+                continue
+            # Same exclusions as the fallback — scripts/ in particular, since
+            # this guard does not protect itself.
+            if any(p in _SKIP_DIR_NAMES for p in Path(rel).parts):
+                continue
+            yield root / rel
+        return
+
+    for py_file in root.rglob("*.py"):
+        parts = py_file.relative_to(root).parts
+        if any(p in _SKIP_DIR_NAMES or p.startswith(".wt-") for p in parts):
+            continue
+        yield py_file
 
 
 def find_feature_tagged_files(root: Path) -> list[tuple[Path, str, str]]:
@@ -32,13 +86,7 @@ def find_feature_tagged_files(root: Path) -> list[tuple[Path, str, str]]:
     results = []
     pattern = re.compile(r"FEATURE:\s*([a-z][a-z\-]+)\s+—\s+(.+?)(?:\n|$)")
 
-    for py_file in root.rglob("*.py"):
-        if (
-            "__pycache__" in str(py_file)
-            or "node_modules" in str(py_file)
-            or "scripts/" in str(py_file)
-        ):
-            continue
+    for py_file in _iter_candidate_files(root):
         try:
             content = py_file.read_text(encoding="utf-8", errors="ignore")
             # Look for FEATURE: name — description pattern
@@ -55,8 +103,6 @@ def find_feature_tagged_files(root: Path) -> list[tuple[Path, str, str]]:
 
 def check_deletions(root: Path) -> list[str]:
     """Check if any FEATURE-tagged files have been deleted (git diff)."""
-    import subprocess
-
     errors = []
 
     # Get deleted files from git
@@ -185,4 +231,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
