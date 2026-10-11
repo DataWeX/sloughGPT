@@ -714,6 +714,34 @@ def _tail_follow(log_path: Path, filters: dict, output_json: bool, use_color: bo
 # ── CLI entry point ───────────────────────────────────────────────────
 
 
+def run_dashboard(
+    host: str,
+    port: int,
+    interval: float,
+    output_json: bool = False,
+    no_clear: bool = False,
+    compact: bool = False,
+) -> None:
+    """Run the live dashboard until interrupted — the single dashboard path.
+
+    Shared by ``logs --dashboard`` and ``train monitor`` (card 8182563a: one
+    command, one code path — the old ``commands/monitor.py`` copy is deleted).
+    """
+    clear = not no_clear
+    if _TTY and not output_json:
+        log.hide_cursor()
+    try:
+        _consume_sse_dashboard(host, port, interval, output_json, clear, compact)
+    except (urllib.error.URLError, OSError, ValueError):
+        try:
+            _poll_fallback_dashboard(host, port, interval, output_json, clear, compact)
+        except KeyboardInterrupt:
+            pass
+    finally:
+        if _TTY and not output_json:
+            log.show_cursor()
+
+
 @click.command(help="Query, filter, and monitor server logs")
 @click.option("--tail", "-n", default=50, type=int, help="Number of lines to show (from end)")
 @click.option("--request-id", "-r", default=None, help="Filter by correlation request ID")
@@ -761,19 +789,14 @@ def logs(
     use_color = sys.stdout.isatty() and not output_json
 
     if dashboard:
-        clear = not no_clear
-        if _TTY and not output_json:
-            log.hide_cursor()
-        try:
-            _consume_sse_dashboard(host, port, interval, output_json, clear, compact)
-        except (urllib.error.URLError, OSError, ValueError):
-            try:
-                _poll_fallback_dashboard(host, port, interval, output_json, clear, compact)
-            except KeyboardInterrupt:
-                pass
-        finally:
-            if _TTY and not output_json:
-                log.show_cursor()
+        run_dashboard(
+            host,
+            port,
+            interval,
+            output_json=output_json,
+            no_clear=no_clear,
+            compact=compact,
+        )
         return
 
     # Resolve log file

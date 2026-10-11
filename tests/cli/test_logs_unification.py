@@ -44,6 +44,52 @@ def test_system_command_group_dropped_monitor():
     assert '"monitor"' not in text, "System group must not list the retired monitor command"
 
 
+def test_train_py_has_no_monitor_import():
+    """Regression guard: `train monitor` must not import the deleted module.
+
+    The fold (0a29d5c6e) deleted ``commands/monitor.py`` but left
+    ``groups/train.py`` importing it — ``slough train monitor`` raised
+    ImportError on main until the shared ``run_dashboard`` path landed.
+    """
+    text = (SRC / "groups" / "train.py").read_text()
+    assert "commands.monitor" not in text, (
+        "groups/train.py imports the retired commands.monitor — route through commands.logs.run_dashboard"
+    )
+
+
+def test_train_monitor_delegates_to_run_dashboard(monkeypatch):
+    """`train monitor` uses the same dashboard path (no commands.monitor import)."""
+    from core.framework import Context, Group  # noqa: PLC0415
+    from groups.train import register as register_train  # noqa: PLC0415
+
+    called = {}
+    monkeypatch.setattr(
+        logs_mod,
+        "run_dashboard",
+        lambda *a, **k: called.update(args=a, kwargs=k),
+    )
+
+    root = Group("sloughgpt")
+    register_train(root)
+    cmd = root.groups["train"].commands["monitor"]
+
+    ctx = Context()
+    ctx.obj = {"host": "h1", "port": 1234}
+    cmd.func(ctx=ctx, watch=False, interval=2)
+
+    assert called["args"] == ("h1", 1234, 2.0)
+    assert called["kwargs"] == {"output_json": False, "no_clear": False}
+
+
+def test_run_dashboard_is_the_single_dashboard_path():
+    """`logs --dashboard` and `train monitor` share one code path."""
+    from commands.logs import run_dashboard  # noqa: PLC0415
+
+    assert callable(run_dashboard), (
+        "run_dashboard is the single dashboard entry (card 8182563a: one command, one code path)"
+    )
+
+
 # ── flag parity: everything monitor offered still exists on logs ─────────────
 
 
