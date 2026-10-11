@@ -4,6 +4,20 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-11 ~05:05 — CARD 3dfbbb90 (feature-tag guard counted every .wt-*
+worktree copy): PORTED, not rebuilt.** A parallel fix for the same card landed
+on local main as `e99c1a0ad` while this lane held it; `fix/feature-tags-worktree-count`
+carries a `-x` cherry-pick of that commit plus one follow-up (`370df5bd9`):
+both test suites merged into the single `tests/test_feature_tags_gate.py` —
+new git-backed `.wt-`-copy case on the primary `ls-files` path (the shipped
+test only covered the non-git fallback, and its repo-level no-.wt- assertion
+is vacuous in a fresh clone), parity ratchet upgraded count → set, duplicate
+module dropped. `a3bc6d5e8`'s CI fix (Feature Tags PYTHONPATH + `_internal`
+import) had already reached origin/main independently at `a01bc99b8` — not
+ported, not needed. Gates: suite 6/6, ruff check+format clean, exact CI
+invocation green, main-root `--list` = 11 (old rglob: 722 across 70
+worktrees). Branch pushed; card → review.
+
 **2026-10-11 ~04:14 — GENE BATCH 3 FINISHED INLINE (Gene's 4th infra death,
 ETIMEOUT) + queue sweep.** Landed: `14ccda235` one-pytest-config PART 1
 (port of stranded f2cc0ee0a — packages/core-py/pytest.ini deleted, root ini
