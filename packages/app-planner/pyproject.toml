@@ -3,15 +3,30 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "planner"
+name = "app-planner"
 version = "0.1.0"
 description = "Planner — notes + kanban board management"
 requires-python = ">=3.10"
 dependencies = []
 
 [project.scripts]
-planner = "planner.cli:main"
-kanban = "planner.cli:main"
+# ONE app, ONE command, per .opencode/plans/planner-notes-specs.md
+# (`planner notes | kanban | sync | gui`). `planner` is primary.
+#
+# Both other names were previously declared but pointed at
+# `planner.cli:main`, a module that does not exist anywhere in the repo —
+# they installed console scripts that crashed on import with
+# ModuleNotFoundError. The real module is `app_planner` (src/app_planner/),
+# so every target below is rewritten to it and the dead `planner.cli` target
+# is gone. The two aliases stay because `app-planner` is what the README and
+# the CLI's own help text say, and `kanban` was already shipped.
+#
+# The distribution name was also `planner`, colliding with
+# packages/planner/setup.py which claims the same name — renamed here to
+# `app-planner`, matching this directory.
+planner = "app_planner.cli:main"
+app-planner = "app_planner.cli:main"
+kanban = "app_planner.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

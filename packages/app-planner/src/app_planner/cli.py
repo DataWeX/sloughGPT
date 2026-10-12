@@ -1,5 +1,5 @@
 """
-app-planner — unified notes + kanban CLI.
+planner — unified notes + kanban CLI.
 
 One entry point for both notes and board operations. Every note mutation
 optionally syncs to the kanban board so the two views stay in step.
@@ -251,10 +251,10 @@ def _board_dedupe(args: argparse.Namespace) -> int:
             f"-> first slot {first} survives{origin}"
         )
     if plan["applied"]:
-        print("\nApplied. Run `app-planner sync` to re-converge note->card positions.")
+        print("\nApplied. Run `planner sync` to re-converge note->card positions.")
         return 0
     print("\nPlan only — nothing written. Re-run with --apply.")
-    print("Positions shift when a line is dropped, so run `app-planner sync` after --apply.")
+    print("Positions shift when a line is dropped, so run `planner sync` after --apply.")
     return 1
 
 
@@ -331,7 +331,7 @@ def _gui(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="app-planner",
+        prog="planner",
         description="Unified notes + kanban planner.",
     )
     parser.add_argument("--notes-dir", default=None, help="Notes directory")
@@ -402,7 +402,7 @@ def build_parser() -> argparse.ArgumentParser:
             "carrying one id. Plan mode reports them and changes nothing, exiting "
             "1 when any exist (same convention as `verify`). --apply keeps the "
             "FIRST line's slot and the NEWEST copy's content. Positions shift when "
-            "a line is dropped, so run `app-planner sync` afterwards to re-converge "
+            "a line is dropped, so run `planner sync` afterwards to re-converge "
             "note->card matching."
         ),
     )

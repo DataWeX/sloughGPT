@@ -1,14 +1,18 @@
-# app-planner
+# planner
 
-Unified notes + kanban CLI. One entry point (`app-planner`) with subcommands for
-both notes and board operations. Note mutations auto-sync to the kanban board by
-default. Pure Python stdlib: no external dependencies, no servers.
+Unified notes + kanban CLI. **One app, one command**: `planner` is the single
+entry point, with `notes` and `board` subcommand groups under it. Note mutations
+auto-sync to the kanban board by default. Pure Python stdlib: no external
+dependencies, no servers.
+
+`app-planner` and `kanban` are installed as aliases of the same program, so
+either spelling resolves here.
 
 ## Philosophy
 
 - **One CLI.** Notes and kanban share one command tree under `app_planner.cli`.
-  `planner`, `notes`, `kanban`, and `sync-notes-to-board` all resolve to the
-  same entry point.
+  The spec (`.opencode/plans/planner-notes-specs.md`) fixes the shape as
+  `planner notes | kanban | sync | gui`, and that is what ships.
 - **One source of truth.** Data locations, storage backend, and the
   status <-> column mapping live in `app_planner/config.py`, not scattered across
   commands. Every tool reads the same answer.
@@ -31,72 +35,68 @@ pip install -e packages/app-planner        # editable, console scripts auto-inst
 ## Quick start
 
 ```bash
-# Notes
-app-planner new "Fix boot order" --tags kernel,os --status wip
-app-planner list --today
-app-planner show <short-id>
-app-planner edit <short-id> --status done --body "Completed: ..."
-app-planner search "keyword"
+# Notes  (group: planner note  — alias `notes`)
+planner note new "Fix boot order" --tags kernel,os --status wip
+planner note list --status wip
+planner note show <short-id>
+planner note update <short-id> --status done
+planner note search "keyword"
 
-# Kanban
-app-planner board                          # ASCII board, grouped by column
-app-planner add "Ship v2.0" --column in_progress --tags release
-app-planner move <card-id> done
+# Kanban (group: planner board — alias `kanban`)
+planner board                       # ASCII board, grouped by column
+planner board add "Ship v2.0" --column in_progress --tags release
+planner board move <card-id> done
+planner board stats
 
 # Sync notes to board explicitly
-app-planner sync
+planner sync
 
 # Three-way diff: note frontmatter (status/board/landed) <-> board card <-> git
-app-planner verify card092 --repo /path/to/repo   # exit 1 on any drift
+planner verify card092 --repo /path/to/repo   # exit 1 on any drift
 
 # Local web UI (stdlib HTTP server, embedded SPA)
-app-planner gui
+planner gui
+
+# Report (or, with --apply, remove) card lines sharing one card id
+planner board dedupe
 ```
 
 ## Commands
 
+Top level: `planner` — plus the `app-planner` and `kanban` aliases.
+
+Global options: `--notes-dir`, `--board-dir`
+
+### `planner note` (alias `notes`)
+
 | Command | Purpose |
 |---------|---------|
-| `new` | Create a note |
-| `list` | List notes |
+| `new <title>` | Create a note (`--tags`, `--status`, `--body`, `--sprint`, `--gh`, `--author`) |
+| `list` / `ls` | List notes (`--tag`, `--status`, `--limit`) |
 | `show <id>` | Show a note |
-| `edit <id>` | Edit a note |
-| `delete` / `rm` | Delete a note |
+| `update <id>` | Edit a note (`--title`, `--status`, `--tags`, `--body`) |
+| `delete <id>` / `rm <id>` | Delete a note |
 | `search <query>` | Search notes |
-| `today` | Show today's notes |
-| `export` | Export all notes |
-| `tags` | List all tags |
-| `status` | Status summary |
-| `timeline` | Show notes grouped by day |
-| `sprint <name>` | Sprint operations |
-| `init` | Initialize a new board |
-| `add` | Add a card |
-| `cards` | List cards |
-| `card <id>` | Show card details |
-| `edit-card <id>` | Edit a card |
-| `move <id> <column>` | Move card to another column |
-| `block <card> <blocker>` | Block a card by another card |
-| `unblock <card> <blocker>` | Unblock a card |
-| `blocked` | List blocked cards |
-| `delete-card` / `rm-card` | Delete a card |
-| `board` | Show ASCII kanban board |
-| `note add <card> <text>` | Add note to a card |
-| `note list <card>` | List notes on a card |
-| `note delete <card> <id>` | Delete note from a card |
-| `columns` | List columns |
-| `column-add <name>` | Add a column |
-| `column-rename <old> <new>` | Rename a column |
-| `column-rm <name>` | Remove a column |
-| `archive` | Archive (delete) all done cards |
-| `search-cards <query>` | Search cards |
-| `stats` | Board statistics |
-| `verify <note>` | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift) |
-| `export-board` | Export board to JSON |
-| `import-board <file>` | Import board from JSON |
-| `sync` | Sync notes to board |
-| `gui` | Launch web GUI |
 
-Global options: `--backend {file,mogdb}`, `--notes-dir`, `--board-dir`, `--no-sync`
+### `planner board` (alias `kanban`)
+
+| Command | Purpose |
+|---------|---------|
+| `show [id ...]` / `ls` | Show the board or specific card(s) |
+| `add <title>` | Add a card (`--column`, `--priority`, `--description`, `--tags`) |
+| `move <id> <column>` | Move card to another column |
+| `delete <id>` / `rm <id>` | Delete a card |
+| `tags` | List tags |
+| `stats` | Board statistics |
+| `dedupe [--apply]` | Report duplicate card-id lines; `--apply` removes them |
+
+### Top-level commands
+
+| Command | Purpose |
+|---------|---------|
+| `sync [--quiet]` | Sync notes to board |
+| `verify <note>` | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift). `--repo`, `--board-file` |
+| `gui` | Launch web GUI. `--host`, `--port`, `--backend` |
 
 Environment: `APP_PLANNER_NOTES_DIR`, `APP_PLANNER_BOARD_DIR`, `APP_PLANNER_BACKEND`, `APP_PLANNER_NO_SYNC` (set to any value to disable auto-sync)
 
@@ -154,7 +154,7 @@ added, updated, total = sync_notes_to_board(notes, board)
 
 ## Web GUI
 
-`app-planner gui` serves a zero-dependency single-page app on `127.0.0.1:8787`
+`planner gui` serves a zero-dependency single-page app on `127.0.0.1:8787`
 (`ThreadingHTTPServer` + embedded HTML/CSS/JS, no external assets). If the
 requested port is taken it steps to the next free port and reports the change;
 `--port 0` asks the kernel for an ephemeral port.
