@@ -250,6 +250,14 @@ python3 -m pytest tests/ --cov=domain --cov-report=html
 python3 -m pytest tests/test_integration.py -v
 ````
 
+### Stale bytecode guard
+
+`tests/conftest.py` registers a `pytest_sessionstart` hook that purges orphaned
+and stale `.pyc` under `tests/` before each session (repo-restructures leave
+caches whose `co_filename` cites dead paths, so tracebacks cite files that no
+longer exist). The logic lives in `scripts/purge_stale_pyc.py`; dry-run by
+default, `--apply` to delete outside pytest.
+
 ## 📊 Monitoring & Debugging
 
 ### Logging
