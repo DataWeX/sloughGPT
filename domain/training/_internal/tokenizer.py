@@ -892,6 +892,7 @@ class SloUnigram:
     """
 
     SPECIAL_TOKENS = ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]
+    WORD_SUFFIX = "</w>"
 
     def __init__(self, pretokenizer: str = "gpt2") -> None:
         self.vocab: list[str] = []
@@ -899,7 +900,22 @@ class SloUnigram:
         self.itos: dict[int, str] = {}
         self._scores: dict[int, float] = {}  # token_id → log-probability
         self._pretokenizer: str = pretokenizer
+        self._word_suffix: str = self.WORD_SUFFIX
         self._special_set: set[str] = set(self.SPECIAL_TOKENS)
+
+    def _boundary_unit(self, pretok: str) -> str:
+        """Pretoken plus its word boundary — the string the vocab is built from.
+
+        ``gpt2`` pretokens already carry a leading space, so they pass through
+        untouched. The ``whitespace`` pretokenizer splits with ``text.split()``,
+        which discards the separators: nothing else records where a word ends,
+        so the boundary has to be materialised as ``WORD_SUFFIX`` for ``decode``
+        to turn it back into a space. This mirrors what ``SloBPE.encode`` does
+        with ``word + self._word_suffix``.
+        """
+        if self._pretokenizer == "gpt2":
+            return pretok
+        return pretok + self._word_suffix
 
     @property
     def vocab_size(self) -> int:
@@ -960,9 +976,10 @@ class SloUnigram:
         seen: set[str] = set()
         for doc in corpus:
             for pretok in self._pretokenize(doc, lowercase):
-                for i in range(len(pretok)):
-                    for j in range(i + 1, min(i + seed_max_len + 1, len(pretok) + 1)):
-                        seen.add(pretok[i:j])
+                unit = self._boundary_unit(pretok)
+                for i in range(len(unit)):
+                    for j in range(i + 1, min(i + seed_max_len + 1, len(unit) + 1)):
+                        seen.add(unit[i:j])
 
         # Ensure coverage of all printable ASCII characters in seed vocab
         import string as _string_mod
@@ -986,8 +1003,9 @@ class SloUnigram:
         pretok_counts: Counter = Counter()
         for doc in corpus:
             for pt in self._pretokenize(doc, lowercase):
-                if pt.strip():
-                    pretok_counts[pt] += 1
+                unit = self._boundary_unit(pt)
+                if unit.strip():
+                    pretok_counts[unit] += 1
 
         pretok_list = list(pretok_counts.keys())
         # Precompute all tokenization paths for each pretoken
@@ -1122,7 +1140,7 @@ class SloUnigram:
         for pretok in self._pretokenize(text, True):
             if not pretok.strip():
                 continue  # pragma: no cover (unreachable — pretokenize never yields empty strings)
-            path = self._viterbi(pretok)
+            path = self._viterbi(self._boundary_unit(pretok))
             ids.extend(self.stoi.get(t, self.unk_id) for t in path)
 
         if add_eos:
@@ -1156,7 +1174,7 @@ class SloUnigram:
         for pretok in self._pretokenize(text, True):
             if not pretok.strip():
                 continue  # pragma: no cover (unreachable — pretokenize never yields empty strings)
-            paths = self._all_segmentations(pretok)
+            paths = self._all_segmentations(self._boundary_unit(pretok))
             if not paths:
                 continue  # pragma: no cover (unreachable — seed vocab covers every substring)
 
@@ -1309,6 +1327,14 @@ class SloUnigram:
             tokens.append(t)
 
         raw = "".join(tokens)
+        if self._pretokenizer == "gpt2":
+            # gpt2 pretokens carry the separator as a leading space; no marker
+            # is ever emitted (see _boundary_unit).
+            raw = raw.replace(self._word_suffix, "")
+        else:
+            # whitespace mode materialised the boundary as WORD_SUFFIX — turn
+            # it back into the separator that text.split() discarded.
+            raw = raw.replace(self._word_suffix, " ")
         # Single-token decodes (streaming) must be lossless so inter-token
         # whitespace survives chunk concatenation; only full sequences strip.
         if len(tokens) <= 1:

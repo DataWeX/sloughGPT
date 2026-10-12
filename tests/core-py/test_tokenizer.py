@@ -561,6 +561,39 @@ class TestSloUnigramDecode:
         assert joined.strip() == full.strip()
         assert any(p != p.strip() for p in pieces), f"all chunks stripped: {pieces!r}"
 
+    def test_whitespace_mode_preserves_word_boundaries(self):
+        """The `whitespace` pretokenizer must not collapse words.
+
+        Reproduces the live defect: streamed chat responses rendered as
+        'thequickbrownfoxjumpsoverthelazydog' — punctuation survived (it rides
+        inside the word) but every inter-word space was lost. The existing
+        streaming test above only covers the default `gpt2` pretokenizer,
+        whose leading-space convention hides the bug.
+        """
+        tok = SloUnigram(pretokenizer="whitespace")
+        tok.train(["the quick brown fox jumps over the lazy dog "] * 20, vocab_size=256)
+        text = "the quick brown fox jumps over the lazy dog"
+
+        ids = tok.encode(text)
+        whole = tok.decode(ids)
+        streamed = "".join(tok.decode([i]) for i in ids)
+
+        assert whole == text, f"whole decode lost boundaries: {whole!r}"
+        # Streaming materialises every boundary; the final chunk carries a
+        # trailing separator because a single-token decode cannot know it is
+        # last (SloBPE in whitespace mode behaves the same way).
+        assert streamed.strip() == text, f"single-token stream lost boundaries: {streamed!r}"
+
+    def test_gpt2_mode_roundtrip_unchanged(self):
+        """Default gpt2 pretokenizer must stay byte-identical after any fix."""
+        tok = SloUnigram(pretokenizer="gpt2")
+        tok.train(["the quick brown fox jumps over the lazy dog "] * 20, vocab_size=256)
+        text = "the quick brown fox jumps over the lazy dog"
+
+        ids = tok.encode(text)
+        assert tok.decode(ids) == text
+        assert "".join(tok.decode([i]) for i in ids) == text
+
 
 class TestSloUnigramSerialization:
     def test_to_dict_roundtrip(self):
