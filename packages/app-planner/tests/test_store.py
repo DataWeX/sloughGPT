@@ -516,3 +516,53 @@ class TestDedupeBoard:
     def test_missing_board_is_a_noop(self, store):
         plan = dedupe_board(store._board_file)
         assert plan == {"groups": 0, "removed": 0, "applied": False, "details": []}
+
+
+class TestBoardDedupeCLI:
+    """`app-planner board dedupe` — plan by default, --apply to write."""
+
+    def _seed(self, board_dir: Path) -> list[str]:
+        board_dir.mkdir(parents=True, exist_ok=True)
+        (board_dir / "board.jsonl").write_text(
+            _line("dup", updated_at="2026-10-02T07:53:16")
+            + "\n"
+            + _line("dup", column="done", updated_at="2026-10-11T02:14:39")
+            + "\n"
+            + _line("solo")
+            + "\n"
+        )
+        return (board_dir / "board.jsonl").read_text().splitlines()
+
+    def test_plan_is_read_only_and_exits_one_on_drift(self, tmp_dir):
+        before = self._seed(tmp_dir)
+
+        code, out = _run(tmp_dir, "board", "dedupe")
+
+        assert code == 1
+        assert "duplicate-id group" in out
+        assert "Plan only" in out
+        assert (tmp_dir / "board.jsonl").read_text().splitlines() == before
+
+    def test_apply_removes_the_lines_and_exits_zero(self, tmp_dir):
+        self._seed(tmp_dir)
+
+        code, out = _run(tmp_dir, "board", "dedupe", "--apply")
+
+        assert code == 0
+        assert "sync" in out
+        assert duplicate_ids(tmp_dir / "board.jsonl") == set()
+        assert len((tmp_dir / "board.jsonl").read_text().splitlines()) == 2
+
+    def test_clean_board_exits_zero(self, tmp_dir):
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        (tmp_dir / "board.jsonl").write_text(_line("a") + "\n" + _line("b") + "\n")
+
+        code, out = _run(tmp_dir, "board", "dedupe")
+
+        assert code == 0
+        assert "no duplicate" in out
+
+    def test_kanban_alias_works(self, tmp_dir):
+        self._seed(tmp_dir)
+        code, _ = _run(tmp_dir, "kanban", "dedupe")
+        assert code == 1

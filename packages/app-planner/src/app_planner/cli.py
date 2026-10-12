@@ -225,6 +225,39 @@ def _board_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def _board_dedupe(args: argparse.Namespace) -> int:
+    from app_planner.store import dedupe_board
+
+    board_file = _get_store(args)._board_file
+    plan = dedupe_board(board_file, apply=args.apply)
+
+    if plan["groups"] == 0:
+        print(f"Board {board_file}: no duplicate card ids.")
+        return 0
+
+    verb = "removed" if plan["applied"] else "would remove"
+    print(
+        f"Board {board_file}: {plan['groups']} duplicate-id group(s), "
+        f"{verb} {plan['removed']} line(s):"
+    )
+    for d in plan["details"]:
+        lines = ", ".join(str(n) for n in d["lines"])
+        first = d["lines"][0]
+        # the FIRST occurrence keeps its slot; content comes from the newest
+        # copy, which is not always that same line
+        origin = "" if d["keep_line"] == first else f", content taken from line {d['keep_line']}"
+        print(
+            f"  {d['id'][:8]}  {len(d['lines'])} copies on lines {lines} "
+            f"-> first slot {first} survives{origin}"
+        )
+    if plan["applied"]:
+        print("\nApplied. Run `app-planner sync` to re-converge note->card positions.")
+        return 0
+    print("\nPlan only — nothing written. Re-run with --apply.")
+    print("Positions shift when a line is dropped, so run `app-planner sync` after --apply.")
+    return 1
+
+
 # ── Sync ─────────────────────────────────────────────────────────────────
 
 
@@ -361,6 +394,24 @@ def build_parser() -> argparse.ArgumentParser:
     board_sub.add_parser("tags", help="List tags")
     board_sub.add_parser("stats", help="Show stats")
 
+    p = board_sub.add_parser(
+        "dedupe",
+        help="Find (and optionally remove) card lines sharing one card id",
+        description=(
+            "The board is append-only, so a re-appended card can leave two lines "
+            "carrying one id. Plan mode reports them and changes nothing, exiting "
+            "1 when any exist (same convention as `verify`). --apply keeps the "
+            "FIRST line's slot and the NEWEST copy's content. Positions shift when "
+            "a line is dropped, so run `app-planner sync` afterwards to re-converge "
+            "note->card matching."
+        ),
+    )
+    p.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the deduped board (default: plan only, write nothing)",
+    )
+
     # Sync
     sync_p = sub.add_parser("sync", help="Sync notes to board")
     sync_p.add_argument("--quiet", action="store_true")
@@ -429,6 +480,7 @@ def main(argv: list[str] | None = None) -> int:
         ("board", "rm"): _board_delete,
         ("board", "tags"): _board_tags,
         ("board", "stats"): _board_stats,
+        ("board", "dedupe"): _board_dedupe,
         ("kanban", "show"): _board_show,
         ("kanban", "ls"): _board_show,
         ("kanban", "add"): _board_add,
@@ -437,6 +489,7 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "rm"): _board_delete,
         ("kanban", "tags"): _board_tags,
         ("kanban", "stats"): _board_stats,
+        ("kanban", "dedupe"): _board_dedupe,
         ("sync", None): _sync,
         ("verify", None): _verify,
         ("gui", None): _gui,
