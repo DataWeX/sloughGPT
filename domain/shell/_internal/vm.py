@@ -4244,6 +4244,11 @@ class X86Assembler:
                 if self._pfx("ax"):
                     self._output.append(0x66)
                 self._output.append(0xA5)
+            elif inner == "movsd":
+                # dword string move: default-size A5 in BITS 32, 66 A5 in BITS 16
+                if not self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xA5)
             elif inner == "stosb":
                 self._output.append(0xAA)
             elif inner == "stosw":
