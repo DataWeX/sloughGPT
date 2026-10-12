@@ -60,12 +60,15 @@ def _get_slo_layernorm():
 # TokenTree — char checkpoints store their stoi/itos ON the tree (chars on the
 # tree) — while encode/decode keep the exact per-format semantics the two
 # legacy wrappers had, byte for byte:
-#   native/char         raw per-char lookup (no normalize, OOV -> 0, raw join)
-#   native/token-tree   TokenTree walk (lowercase normalize + pretokenize)
-# `scheme` names the format and `origin` records the checkpoint it was loaded
-# from, so "what tokenizer is this, where did it come from" is answerable from
-# the object instead of a code crawl.
+#   variant "char"      raw per-char lookup (no normalize, OOV -> 0, raw join)
+#   variant "tree"      TokenTree walk (lowercase normalize + pretokenize)
+# Provenance surface (user decision, card 2a586fea): ONE scheme per family —
+# scheme == "native" here; the char/tree distinction is `.variant`, the tree's
+# pretokenizer is `.pretokenizer` (None for char), and `origin` records the
+# checkpoint it was loaded from. NATIVE_FORMAT_* remain the self-describing
+# .soul `tokenizer_format` tag values written at rest.
 
+NATIVE_SCHEME = "native"
 NATIVE_FORMAT_CHAR = "native/char"
 NATIVE_FORMAT_TREE = "native/token-tree"
 
@@ -94,18 +97,19 @@ def _char_carrier_tree(stoi: dict[str, int], itos: dict) -> Any:
 class NativeTokenizer:
     """Core native tokenizer format — see module note above."""
 
-    def __init__(self, tree: Any, scheme: str, origin: str | None = None) -> None:
-        if scheme not in (NATIVE_FORMAT_CHAR, NATIVE_FORMAT_TREE):
-            raise ValueError(f"Unknown native tokenizer scheme: {scheme!r}")
+    def __init__(self, tree: Any, variant: str, origin: str | None = None) -> None:
+        if variant not in ("char", "tree"):
+            raise ValueError(f"Unknown native tokenizer variant: {variant!r}")
         self.tree = tree
-        self.scheme = scheme
+        self.scheme = NATIVE_SCHEME
+        self.variant = variant
         self.origin = origin
         # Legacy private attrs, kept for older reach-ins:
         # char semantics read tree.stoi/tree.itos; tree semantics use _tree.
         self._tree = tree
         self._stoi = tree.stoi
         self._itos = tree.itos
-        if scheme == NATIVE_FORMAT_CHAR:
+        if variant == "char":
             # Byte-parity with the legacy _CharTokenizer attribute semantics.
             self.eos_token_id = tree.stoi.get("\n", 0)
             self.pad_token_id = 0
@@ -119,26 +123,33 @@ class NativeTokenizer:
     def from_char_vocab(
         cls, stoi: dict[str, int], itos: dict, origin: str | None = None
     ) -> NativeTokenizer:
-        """Build a char-scheme tokenizer with its vocab on the tree."""
-        return cls(_char_carrier_tree(stoi, itos), NATIVE_FORMAT_CHAR, origin)
+        """Build a char-variant tokenizer with its vocab on the tree."""
+        return cls(_char_carrier_tree(stoi, itos), "char", origin)
+
+    @property
+    def pretokenizer(self) -> str | None:
+        """The tree's pretokenizer ('gpt2' | 'whitespace'); None for char."""
+        if self.variant == "char":
+            return None
+        return self.tree.pretokenizer
 
     @property
     def vocab_size(self) -> int:
-        if self.scheme == NATIVE_FORMAT_CHAR:
+        if self.variant == "char":
             # Legacy char wrapper cached this at init — keep that.
             return self._vocab_size
         # Legacy tree wrapper read len(tree.vocab) live — keep that.
         return self.tree.vocab_size
 
     def encode(self, text: str) -> list[int]:
-        """Encode text to token IDs (format-dependent, byte-parity with legacy)."""
-        if self.scheme == NATIVE_FORMAT_CHAR:
+        """Encode text to token IDs (variant-dependent, byte-parity with legacy)."""
+        if self.variant == "char":
             return [int(self.tree.stoi.get(c, 0)) for c in text]
         return self.tree.encode(text)
 
     def decode(self, token_ids) -> str:
-        """Decode token IDs back to text (format-dependent, byte-parity)."""
-        if self.scheme == NATIVE_FORMAT_CHAR:
+        """Decode token IDs back to text (variant-dependent, byte-parity)."""
+        if self.variant == "char":
             return "".join(self.tree.itos.get(int(tid), "") for tid in token_ids)
         return self.tree.decode(token_ids)
 
@@ -177,7 +188,7 @@ def native_tokenizer_from_metadata(
             )
         from domain.training._internal.token_tree import TokenTree
 
-        return NativeTokenizer(TokenTree.from_dict(tok["tree"]), NATIVE_FORMAT_TREE, origin)
+        return NativeTokenizer(TokenTree.from_dict(tok["tree"]), "tree", origin)
     stoi = metadata.get("stoi")
     itos = metadata.get("itos")
     if stoi and itos:
@@ -191,17 +202,17 @@ def native_tokenizer_from_metadata(
 
 
 class _CharTokenizer(NativeTokenizer):
-    """Legacy name — char-scheme NativeTokenizer (kept importable)."""
+    """Legacy name — char-variant NativeTokenizer (kept importable)."""
 
     def __init__(self, stoi: dict[str, int], itos: dict, origin: str | None = None):
-        super().__init__(_char_carrier_tree(stoi, itos), NATIVE_FORMAT_CHAR, origin)
+        super().__init__(_char_carrier_tree(stoi, itos), "char", origin)
 
 
 class _TreeTokenizer(NativeTokenizer):
-    """Legacy name — token-tree-scheme NativeTokenizer (kept importable)."""
+    """Legacy name — tree-variant NativeTokenizer (kept importable)."""
 
     def __init__(self, tree: Any, origin: str | None = None):
-        super().__init__(tree, NATIVE_FORMAT_TREE, origin)
+        super().__init__(tree, "tree", origin)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

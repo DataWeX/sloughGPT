@@ -437,18 +437,28 @@ class MorphTokenizer:
 
     @property
     def scheme(self) -> str:
-        """Core tokenizer provenance: the hf/* vocab family this tokenizer is.
+        """Core tokenizer provenance family — ONE value per family.
 
-        Derived from the detected decode flags — never stored, so it cannot
-        disagree with the vocab it describes. Sibling families: native/*
-        (SloNet checkpoints) and training/* (SloBPE/SloUnigram); the prefixes
-        keep them apart at a glance.
+        Sibling families: native (SloNet checkpoints) and training
+        (SloBPE/SloUnigram). The decode-format detail is ``.variant``,
+        derived from the detected flags — never stored, so it cannot
+        disagree with the vocab it describes.
         """
+        return "hf"
+
+    @property
+    def variant(self) -> str:
+        """The decode format: 'byte-fallback' > 'byte-level' > 'char'."""
         if self.byte_fallback:
-            return "hf/byte-fallback"
+            return "byte-fallback"
         if self.byte_level:
-            return "hf/byte-level"
-        return "hf/char"
+            return "byte-level"
+        return "char"
+
+    @property
+    def pretokenizer(self) -> None:
+        """None — MorphTokenizer has no pretokenizer dimension (flags instead)."""
+        return None
 
     @property
     def origin(self) -> str | None:

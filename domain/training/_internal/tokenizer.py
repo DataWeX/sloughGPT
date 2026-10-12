@@ -96,20 +96,23 @@ class SloBPE:
 
     @property
     def scheme(self) -> str:
-        """Core tokenizer provenance: the training/* family this tokenizer is.
+        """Core tokenizer provenance family — ONE value per family.
 
-        Derived from the pretokenizer — never stored, so it cannot disagree
-        with the encode path it describes. Sibling families: native/* (SloNet
-        checkpoints) and hf/* (MorphTokenizer); the prefixes keep them apart
-        at a glance. v1 checkpoints force the whitespace pretokenizer in
-        ``from_dict``, so this stays truthful for legacy loads too.
+        Byte-level vs whitespace is a pretokenizer detail, not a family: read
+        ``.pretokenizer`` for it. Sibling families: native (SloNet
+        checkpoints) and hf (MorphTokenizer).
         """
-        if self._pretokenizer == "gpt2":
-            return "training/bpe-byte-level"
-        # Everything else — including unrecognized values — falls through to
-        # whitespace-style handling in encode, so the scheme says so rather
-        # than inventing a family name (user decision, card 2a586fea).
-        return "training/bpe-whitespace"
+        return "training/bpe"
+
+    @property
+    def pretokenizer(self) -> str:
+        """The pretokenizer actually in use ('gpt2' | 'whitespace').
+
+        Reported raw — anything non-'gpt2' falls through to whitespace-style
+        encoding, so an unusual value here is visible instead of normalized
+        away.
+        """
+        return self._pretokenizer
 
     @property
     def pad_id(self) -> int:
@@ -929,13 +932,18 @@ class SloUnigram:
 
     @property
     def scheme(self) -> str:
-        """Core tokenizer provenance: the training/unigram family.
+        """Core tokenizer provenance family — ONE value per family.
 
-        Single family value by design — the pretokenizer only changes how
-        boundaries are materialised, not the model family. See ``SloBPE.scheme``
-        for the sibling families (native/*, hf/*).
+        The pretokenizer only changes how boundaries are materialised, not
+        the family; read ``.pretokenizer`` for it. See ``SloBPE.scheme`` for
+        the sibling families (native, hf).
         """
         return "training/unigram"
+
+    @property
+    def pretokenizer(self) -> str:
+        """The pretokenizer in use ('gpt2' | 'whitespace')."""
+        return self._pretokenizer
 
     def _boundary_unit(self, pretok: str) -> str:
         """Pretoken plus its word boundary — the string the vocab is built from.

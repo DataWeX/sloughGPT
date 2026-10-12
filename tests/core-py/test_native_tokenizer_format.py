@@ -52,7 +52,10 @@ class TestCharFormatBitIdentity:
         return native_tokenizer_from_metadata({"stoi": CHAR_STOI, "itos": CHAR_ITOS})
 
     def test_scheme_derived_from_content_when_tag_absent(self, tok):
-        assert tok.scheme == NATIVE_FORMAT_CHAR
+        # ONE scheme per family (user decision): family + variant + pretokenizer.
+        assert tok.scheme == "native"
+        assert tok.variant == "char"
+        assert tok.pretokenizer is None
 
     def test_chars_live_on_the_tree(self, tok):
         # The vocab rides a TokenTree carrier: dense vocab view + verbatim maps.
@@ -123,7 +126,9 @@ class TestTokenTreeFormat:
         )
 
     def test_scheme_derived_from_content_when_tag_absent(self, tok):
-        assert tok.scheme == NATIVE_FORMAT_TREE
+        assert tok.scheme == "native"
+        assert tok.variant == "tree"
+        assert tok.pretokenizer in ("gpt2", "whitespace")
 
     def test_delegates_encode_decode_to_tree(self, tok):
         # The tree itself is the oracle for this format (its semantics are
@@ -158,7 +163,7 @@ class TestFormatTag:
             tok = native_tokenizer_from_metadata(
                 {"stoi": CHAR_STOI, "itos": CHAR_ITOS, "tokenizer_format": NATIVE_FORMAT_CHAR}
             )
-        assert tok.scheme == NATIVE_FORMAT_CHAR
+        assert tok.scheme == "native" and tok.variant == "char"
         assert not [r for r in caplog.records if "tokenizer_format" in r.getMessage()]
 
     def test_tag_mismatch_content_wins_char(self, caplog):
@@ -167,7 +172,7 @@ class TestFormatTag:
             tok = native_tokenizer_from_metadata(
                 {"stoi": CHAR_STOI, "itos": CHAR_ITOS, "tokenizer_format": NATIVE_FORMAT_TREE}
             )
-        assert tok.scheme == NATIVE_FORMAT_CHAR
+        assert tok.scheme == "native" and tok.variant == "char"
         assert any("tokenizer_format" in r.getMessage() for r in caplog.records)
 
     def test_tag_mismatch_content_wins_tree(self, caplog):
@@ -180,7 +185,7 @@ class TestFormatTag:
         }
         with caplog.at_level("WARNING"):
             tok = native_tokenizer_from_metadata(meta)
-        assert tok.scheme == NATIVE_FORMAT_TREE
+        assert tok.scheme == "native" and tok.variant == "tree"
         assert any("tokenizer_format" in r.getMessage() for r in caplog.records)
 
     def test_no_tokenizer_at_all_returns_none(self):
@@ -197,7 +202,7 @@ class TestLegacySurface:
 
     def test_legacy_char_constructor(self):
         tok = _CharTokenizer(CHAR_STOI, CHAR_ITOS)
-        assert tok.scheme == NATIVE_FORMAT_CHAR
+        assert tok.scheme == "native" and tok.variant == "char"
         assert tok.encode("abc") == _legacy_char_encode(CHAR_STOI, "abc")
 
     def test_legacy_tree_constructor(self):
@@ -205,13 +210,13 @@ class TestLegacySurface:
 
         tree = TokenTree().train(["hello world"], vocab_size=32, min_frequency=1)
         tok = _TreeTokenizer(tree)
-        assert tok.scheme == NATIVE_FORMAT_TREE
+        assert tok.scheme == "native" and tok.variant == "tree"
         assert tok.tree is tree and tok._tree is tree
 
     def test_unknown_scheme_rejected(self):
         from domain.training._internal.token_tree import TokenTree
 
-        with pytest.raises(ValueError, match="Unknown native tokenizer scheme"):
+        with pytest.raises(ValueError, match="Unknown native tokenizer variant"):
             NativeTokenizer(TokenTree(), "nonsense")
 
     def test_embedded_loader_raises_when_missing(self):
@@ -247,19 +252,27 @@ class TestSaveLoadContract:
 class TestProvenanceTaxonomy:
     """Scheme names separate tokenizer families at a glance (card 85dedb7e)."""
 
-    def test_family_prefixes_separated(self):
+    def test_one_scheme_per_family_and_uniform_attrs(self):
         from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
-        from domain.training._internal.tokenizer import SloBPE
+        from domain.training._internal.tokenizer import SloBPE, SloUnigram
 
-        native_schemes = {NATIVE_FORMAT_CHAR, NATIVE_FORMAT_TREE}
-        hf_scheme = MorphTokenizer({}, [], byte_level=True).scheme
-        training_schemes = {
-            SloBPE().scheme,
-            SloBPE(pretokenizer="whitespace").scheme,
-        }
-        assert {s.split("/", 1)[0] for s in native_schemes} == {"native"}
-        assert hf_scheme.startswith("hf/")
-        assert all(s.startswith("training/") for s in training_schemes)
-        # All three families disjoint at a glance.
-        assert not native_schemes & (training_schemes | {hf_scheme})
-        assert not training_schemes & {hf_scheme}
+        native = NativeTokenizer.from_char_vocab({"a": 0}, {0: "a"})
+        morph = MorphTokenizer({}, [], byte_level=True)
+        bpe = SloBPE()
+        uni = SloUnigram()
+
+        # ONE scheme per family — all four distinct, no scheme variants.
+        schemes = {native.scheme, morph.scheme, bpe.scheme, uni.scheme}
+        assert schemes == {"native", "hf", "training/bpe", "training/unigram"}
+
+        # Uniform provenance surface: every tokenizer answers the same fields.
+        for tok in (native, morph, bpe, uni):
+            assert isinstance(tok.scheme, str)
+            assert hasattr(tok, "origin")
+            assert hasattr(tok, "pretokenizer")
+
+        # The details live in the uniform attributes, not the scheme.
+        assert native.variant == "char" and native.pretokenizer is None
+        assert morph.variant == "byte-level" and morph.pretokenizer is None
+        assert bpe.pretokenizer == "gpt2"
+        assert uni.pretokenizer == "gpt2"

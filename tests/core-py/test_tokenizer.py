@@ -731,25 +731,31 @@ class TestProvenance:
 
     # --- scheme: derived from the pretokenizer, never stored ----------------
 
-    def test_scheme_bpe_gpt2(self):
-        assert SloBPE().scheme == "training/bpe-byte-level"
+    def test_scheme_is_family_only(self):
+        # ONE scheme per family (user decision): the pretokenizer is a
+        # separate attribute, not a scheme variant.
+        assert SloBPE().scheme == "training/bpe"
+        assert SloBPE(pretokenizer="whitespace").scheme == "training/bpe"
 
-    def test_scheme_bpe_whitespace(self):
-        assert SloBPE(pretokenizer="whitespace").scheme == "training/bpe-whitespace"
+    def test_pretokenizer_attribute(self):
+        assert SloBPE().pretokenizer == "gpt2"
+        assert SloBPE(pretokenizer="whitespace").pretokenizer == "whitespace"
 
-    def test_scheme_bpe_unknown_pretokenizer_matches_runtime_fallthrough(self):
-        # encode() falls through to whitespace handling for anything that is
-        # not gpt2 — the scheme must mirror the behavior, not invent a family.
-        assert SloBPE(pretokenizer="weird").scheme == "training/bpe-whitespace"
+    def test_pretokenizer_reports_unknown_raw(self):
+        # Reported raw instead of normalized away — encode() falls through to
+        # whitespace handling for anything non-gpt2; the object stays honest.
+        tok = SloBPE(pretokenizer="weird")
+        assert tok.scheme == "training/bpe"
+        assert tok.pretokenizer == "weird"
 
-    def test_scheme_v1_from_dict_forced_whitespace(self):
-        # v1 checkpoints force the whitespace pretokenizer — scheme must agree.
+    def test_v1_from_dict_forced_whitespace(self):
+        # v1 checkpoints force the whitespace pretokenizer — attribute agrees.
         data = {"vocab": [], "stoi": {}, "itos": {}, "merges": []}
         tok = SloBPE.from_dict(data)
-        assert tok._pretokenizer == "whitespace"
-        assert tok.scheme == "training/bpe-whitespace"
+        assert tok.pretokenizer == "whitespace"
+        assert tok.scheme == "training/bpe"
 
-    def test_scheme_v2_from_dict_pretokenizer_honored(self):
+    def test_v2_from_dict_pretokenizer_honored(self):
         data = {
             "vocab": [],
             "stoi": {},
@@ -758,10 +764,11 @@ class TestProvenance:
             "version": 2,
             "pretokenizer": "gpt2",
         }
-        assert SloBPE.from_dict(data).scheme == "training/bpe-byte-level"
+        assert SloBPE.from_dict(data).pretokenizer == "gpt2"
 
     def test_scheme_unigram(self):
         assert SloUnigram().scheme == "training/unigram"
+        assert SloUnigram(pretokenizer="whitespace").pretokenizer == "whitespace"
 
     # --- origin: stored at from_dict, default None, never serialized --------
 
@@ -809,7 +816,8 @@ class TestManagerProvenance:
         mgr = TokenizerManager()
         mgr.load(str(p))
         assert mgr.get_tokenizer().origin == f"checkpoint:{p}"
-        assert mgr.get_tokenizer().scheme == "training/bpe-byte-level"
+        assert mgr.get_tokenizer().scheme == "training/bpe"
+        assert mgr.get_tokenizer().pretokenizer == "gpt2"
 
     def test_from_dict_origin_defaults_none(self):
         from domain.training._internal.tokenizer_manager import TokenizerManager
