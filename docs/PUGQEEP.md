@@ -435,7 +435,7 @@ changed size during iteration`, and `dispatch()` therefore _merges_ into
 Long-running pugqeep operations wire into `CancelManager` for cancellation:
 
 ```python
-from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+from domain.infrastructure._internal.cancel_manager import get_cancel_manager, OpType
 
 mgr = get_cancel_manager()
 op_id = mgr.register(OpType.TRAINING, "compress model")

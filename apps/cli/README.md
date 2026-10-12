@@ -10,7 +10,7 @@ sloughgpt --help
 
 **`python3 cli.py --help`** groups commands by how people use them (train/chat first, then server and config). **`gen`** is an alias for **`generate`**. Top-level **`stats`** reports **`models/`** + **`datasets/`** sizes; **`data stats PATH`** inspects one path.
 
-**Inventory:** **`python3 cli.py models`** lists **`models/*.soul`**, **`*.slnc`**, **`.safetensors`**; **`personalities`** prints built-in **`PersonalityType`** presets from **`domains.ai_personality`**.
+**Inventory:** **`python3 cli.py models`** lists **`models/*.soul`**, **`*.slnc`**, **`.safetensors`**; **`personalities`** prints built-in **`PersonalityType`** presets from **`domain.ai_personality`**.
 
 See **QUICKSTART.md** for common commands and **CONTRIBUTING.md** for validation.
 
@@ -20,7 +20,7 @@ With the FastAPI app in **`apps/api/server`**, **`--api`** sends a **`TrainingRe
 
 ### Training saves (`cli.py train`)
 
-Beginner path: set **`--dataset`**, **`--max-steps`** (or **`--epochs`**), **`--checkpoint-dir`**, then **`--resume-latest`** when continuing. Run **`python3 cli.py train --help`** for grouped flags, defaults, and copy-paste examples. For the legacy argparse-only driver (same **`SloughGPTTrainer`**), use **`python3 -m domains.training.train_pipeline --help`**.
+Beginner path: set **`--dataset`**, **`--max-steps`** (or **`--epochs`**), **`--checkpoint-dir`**, then **`--resume-latest`** when continuing. Run **`python3 cli.py train --help`** for grouped flags, defaults, and copy-paste examples. For the legacy argparse-only driver (same **`SloughGPTTrainer`**), use **`python3 -m domain.training._internal.train_pipeline --help`**.
 
 **Log / eval cadence:** defaults live under **`training.log_interval`** and **`training.eval_interval`** in **`config.yaml`** (10 / 100). **`--log-interval`** and **`--eval-interval`** override for the local trainer and for **`train --api`** (**`TrainingRequest`** JSON).
 
