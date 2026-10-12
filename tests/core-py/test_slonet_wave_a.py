@@ -757,9 +757,17 @@ def test_export_to_sou_rename_failure_cleans_temp(tmp_path, monkeypatch):
     def _fake_unlink(path):
         raise OSError("unlink failed")
 
-    monkeypatch.setattr(os, "rename", _boom)
+    # export_to_sou writes through the shared atomic_writer primitive, which
+    # finalizes with os.replace() (atomic_write.py:112) — not os.rename. The
+    # patch used to target os.rename and went stale when the export was moved
+    # onto that primitive, leaving the test green-by-accident: nothing
+    # intercepted, so no error was raised at all ("DID NOT RAISE"). Target the
+    # syscall the code actually makes, otherwise the test asserts nothing.
+    monkeypatch.setattr(os, "replace", _boom)
     monkeypatch.setattr(os, "unlink", _fake_unlink)
     target = str(tmp_path / "x.soul")
+    # unlink fails too, so this pins the more important half of the contract:
+    # a failing cleanup must not mask the original write error.
     with pytest.raises(OSError):
         export_to_sou(net, target, include_weights=False)
 
