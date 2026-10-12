@@ -136,6 +136,23 @@ describe('ConversationSidebar', () => {
     expect(aside!.className).toContain('hidden lg:flex')
   })
 
+  it('reserves a left gutter for the nav bookmark tab when expanded', () => {
+    // AppLayout's nav collapse tab protrudes 1.15rem past the nav edge at z-20.
+    // The expanded desktop panel must dock it in a gutter so it does not cover
+    // row titles or steal their clicks at vertical center.
+    render(<ConversationSidebar {...defaultProps} />)
+    const aside = document.querySelector('aside')
+    expect(aside!.className).toContain('pl-[1.15rem]')
+    expect(aside!.className).toContain('w-[calc(var(--conv-sidebar-width)+1.15rem)]')
+  })
+
+  it('drops the gutter when collapsed (width must be 0, no padding)', () => {
+    render(<ConversationSidebar {...defaultProps} collapsed />)
+    const aside = document.querySelector('aside')
+    expect(aside!.className).toContain('w-0')
+    expect(aside!.className).not.toContain('pl-[1.15rem]')
+  })
+
   it('shows empty state message', () => {
     render(<ConversationSidebar {...defaultProps} />)
     expect(screen.getByText(/No conversations yet/)).toBeDefined()
