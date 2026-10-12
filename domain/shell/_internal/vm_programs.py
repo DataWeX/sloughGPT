@@ -1925,9 +1925,798 @@ SHELL_ASM = """\
 """
 
 
+# ── Conway's Game of Life ─────────────────────────────────────────────────────
+
+LIFE_ASM = """\
+; life - Conway's Game of Life for the sloughGPT x86 VM
+;
+; Runner contract: [BITS 32], no ORG directive, zero syscalls — raw VGA
+; text-buffer pokes at 0xB8000 plus the BIOS keyboard byte at [0x400],
+; hlt on exit. The same source runs on the bare VMEngine (CLI `vm run life`
+; / shell `vmrun`) and on X86VirtualSystem (API POST /vm/run, console
+; session).
+;
+; Grid: 60x20 = 1200 cells (rows 0..19, cols 0..59). 1200 is also the
+; largest live count the prompt accepts — a full board. Toroidal wrap,
+; Conway B3/S23.
+;
+; The prompt asks "Enter number of lifes(max=1200): " and VALIDATES the
+; entry (1..1200, digits only, backspace edits, at most 9 digits): anything
+; else prints an error on row 3 and re-prompts. Third-party MikeOS life.bin
+; wedges instead when 1212 is typed at its own prompt.
+;
+; Byte loads use mov reg8, [mem] forms only: this assembler silently turns
+; unrecognised mnemonics (movzx!) into a NOP, so every instruction here
+; must be one the encoder actually emits (guarded by
+; test_no_silently_dropped_instructions).
+;
+; Keys: space pause/resume, s step one generation (while paused), r reseed,
+; q quit (exit line on serial port 0x3F8). Batch mode — no key ever typed —
+; auto-starts with deflives cells after the prompt idle timeout and halts
+; after bgens generations, so headless runs terminate.
+[BITS 32]
+
+; VGA row bases: row0=0xB8000 banner, row2=0xB8140 prompt, row3=0xB81E0 error,
+; row5=0xB8320 help, row21=0xB8D20 HUD, row22=0xB8DC0 legend, row23=0xB8E60 status.
+; Digit echo base = row2 + 33 prompt chars * 2 = 0xB8182.
+
+start:
+    mov esp, 0xB8000
+    call init_tables
+    call clear_screen
+    mov esi, banner
+    mov edi, 0xB8000
+    mov byte [attr], 0x0E
+    call wr_str
+    mov esi, help_line
+    mov edi, 0xB8320
+    mov byte [attr], 0x08
+    call wr_str
+
+prompt_again:
+    mov dword [value], 0
+    mov dword [digits], 0
+    mov esi, prompt_str
+    mov edi, 0xB8140
+    mov byte [attr], 0x07
+    call wr_str
+    call clear_echo
+
+prompt_loop:
+    call poll_key
+    test al, al
+    jz prompt_nokey
+    cmp al, 13
+    je prompt_enter
+    cmp al, 8
+    je prompt_back
+    cmp al, '0'
+    jl prompt_bad_char
+    cmp al, '9'
+    jg prompt_bad_char
+    cmp dword [digits], 9
+    jge prompt_bad_char
+    mov byte [tmp], al
+    sub al, '0'
+    xor ebx, ebx
+    mov bl, al
+    mov eax, [value]
+    mov ecx, 10
+    imul eax, ecx
+    add eax, ebx
+    mov [value], eax
+    inc dword [digits]
+    mov eax, [digits]
+    dec eax
+    shl eax, 1
+    mov edi, 0xB8182
+    add edi, eax
+    mov al, [tmp]
+    mov byte [edi], al
+    mov byte [edi+1], 0x07
+    jmp prompt_loop
+
+prompt_nokey:
+    cmp byte [pk_timeout], 1
+    jne prompt_loop
+    cmp dword [ever], 0
+    jne prompt_loop
+    mov eax, [deflives]
+    mov [value], eax
+    jmp prompt_accept
+
+prompt_back:
+    cmp dword [digits], 0
+    je prompt_loop
+    dec dword [digits]
+    mov eax, [value]
+    xor edx, edx
+    mov ecx, 10
+    div ecx
+    mov [value], eax
+    mov eax, [digits]
+    shl eax, 1
+    mov edi, 0xB8182
+    add edi, eax
+    mov byte [edi], ' '
+    mov byte [edi+1], 0x07
+    jmp prompt_loop
+
+prompt_bad_char:
+    mov esi, err_digits
+    mov edi, 0xB81E0
+    mov byte [attr], 0x0C
+    call wr_str
+    jmp prompt_loop
+
+prompt_enter:
+    cmp dword [digits], 0
+    jne prompt_check
+    call reset_entry
+    mov esi, err_empty
+    mov edi, 0xB81E0
+    mov byte [attr], 0x0C
+    call wr_str
+    jmp prompt_loop
+
+prompt_check:
+    mov eax, [value]
+    cmp eax, 1
+    jl prompt_range
+    cmp eax, 1200
+    jg prompt_range
+    jmp prompt_accept
+
+prompt_range:
+    call reset_entry
+    mov esi, err_range
+    mov edi, 0xB81E0
+    mov byte [attr], 0x0C
+    call wr_str
+    jmp prompt_loop
+
+prompt_accept:
+    mov eax, [value]
+    mov [lives], eax
+    call clear_screen
+    call seed_board
+    mov dword [gen], 0
+    mov dword [frame], 0
+    mov dword [simkeys], 0
+    mov dword [running], 1
+    jmp frame_loop
+
+; ════════════════════════════════════════════════════════════════════════════
+; simulation frame: draw, poll one key, batch-halt check, step
+; ════════════════════════════════════════════════════════════════════════════
+
+frame_loop:
+    call draw_grid
+    call draw_hud
+    call poll_key
+    test al, al
+    jnz sim_key
+    cmp dword [simkeys], 0
+    jne frame_tick
+    mov eax, [bgens]
+    cmp [gen], eax
+    jl frame_tick
+    jmp do_quit
+
+sim_key:
+    inc dword [simkeys]
+    cmp al, 'q'
+    je do_quit
+    cmp al, ' '
+    je key_pause
+    cmp al, 's'
+    je key_step
+    cmp al, 'r'
+    je key_reseed
+    jmp frame_tick
+
+key_pause:
+    mov eax, [running]
+    xor eax, 1
+    mov [running], eax
+    jmp frame_tick
+
+key_step:
+    cmp dword [running], 0
+    jne frame_tick
+    call step_gen
+    jmp frame_tick
+
+key_reseed:
+    call next_rand
+    call seed_board
+    mov dword [gen], 0
+    jmp frame_tick
+
+frame_tick:
+    cmp dword [running], 0
+    je frame_loop
+    call step_gen
+    inc dword [frame]
+    jmp frame_loop
+
+do_quit:
+    mov esi, bye_str
+    call serial_str
+    mov esi, bye_gen
+    call serial_str
+    mov eax, [gen]
+    call serial_num
+    mov esi, bye_live
+    call serial_str
+    mov eax, [livecount]
+    call serial_num
+    mov esi, nl_str
+    call serial_str
+    xor eax, eax
+    hlt
+
+; ════════════════════════════════════════════════════════════════════════════
+; step_gen: nxt[y][x] = B3/S23 rule over 8 toroidal neighbors of cur,
+; then copy nxt -> cur, count live cells, bump gen.
+; Neighbor loads: edx always holds the (small, zero-high-byte) index first,
+; then mov dl, [base+edx] replaces only the low byte — zero-extension for
+; free, no movzx needed.
+; ════════════════════════════════════════════════════════════════════════════
+
+step_gen:
+    mov dword [ri], 0
+sg_row:
+    mov eax, [ri]
+    shl eax, 2
+    mov ebx, rowbase
+    add ebx, eax
+    mov ecx, [ebx]
+    add ecx, cur
+    mov [p_mid], ecx
+    mov ebx, rowup
+    add ebx, eax
+    mov ecx, [ebx]
+    add ecx, cur
+    mov [p_up], ecx
+    mov ebx, rowdn
+    add ebx, eax
+    mov ecx, [ebx]
+    add ecx, cur
+    mov [p_dn], ecx
+    mov ebx, rowbase
+    add ebx, eax
+    mov ecx, [ebx]
+    add ecx, nxt
+    mov [q_mid], ecx
+    mov dword [ci], 0
+
+sg_col:
+    mov eax, [ci]
+    mov ebx, xm
+    add ebx, eax
+    xor edx, edx
+    mov dl, [ebx]
+    mov [tmp_xl], edx
+    mov ebx, xp
+    add ebx, eax
+    xor edx, edx
+    mov dl, [ebx]
+    mov [tmp_xr], edx
+    xor ecx, ecx
+    ; up row: xl, x, xr
+    mov eax, [p_up]
+    mov edx, [tmp_xl]
+    mov dl, [eax+edx]
+    add ecx, edx
+    mov edx, [ci]
+    mov dl, [eax+edx]
+    add ecx, edx
+    mov edx, [tmp_xr]
+    mov dl, [eax+edx]
+    add ecx, edx
+    ; mid row: xl, xr (x is the cell itself)
+    mov eax, [p_mid]
+    mov edx, [tmp_xl]
+    mov dl, [eax+edx]
+    add ecx, edx
+    mov edx, [tmp_xr]
+    mov dl, [eax+edx]
+    add ecx, edx
+    ; alive = current cell
+    xor ebx, ebx
+    mov edx, [ci]
+    mov bl, [eax+edx]
+    ; down row: xl, x, xr
+    mov eax, [p_dn]
+    mov edx, [tmp_xl]
+    mov dl, [eax+edx]
+    add ecx, edx
+    mov edx, [ci]
+    mov dl, [eax+edx]
+    add ecx, edx
+    mov edx, [tmp_xr]
+    mov dl, [eax+edx]
+    add ecx, edx
+    ; rule: alive -> (n==2 || n==3); dead -> (n==3)
+    mov eax, [q_mid]
+    mov edx, [ci]
+    cmp ecx, 3
+    je sg_alive
+    test ebx, ebx
+    jz sg_dead
+    cmp ecx, 2
+    je sg_alive
+sg_dead:
+    mov byte [eax+edx], 0
+    jmp sg_col_next
+sg_alive:
+    mov byte [eax+edx], 1
+sg_col_next:
+    inc dword [ci]
+    cmp dword [ci], 60
+    jl sg_col
+    inc dword [ri]
+    cmp dword [ri], 20
+    jl sg_row
+
+    mov esi, nxt
+    mov edi, cur
+    mov edx, 1200
+    xor ecx, ecx
+sg_copy:
+    xor eax, eax
+    mov al, [esi]
+    mov [edi], al
+    add ecx, eax
+    inc esi
+    inc edi
+    dec edx
+    jnz sg_copy
+    mov [livecount], ecx
+    inc dword [gen]
+    ret
+
+; ════════════════════════════════════════════════════════════════════════════
+; seed_board: clear cur, place [lives] distinct cells (fast path: full board)
+; ════════════════════════════════════════════════════════════════════════════
+
+seed_board:
+    mov esi, cur
+    mov edx, 1200
+sb_clear:
+    mov byte [esi], 0
+    inc esi
+    dec edx
+    jnz sb_clear
+    mov dword [placed], 0
+    cmp dword [lives], 1200
+    jl sb_loop
+    mov esi, cur
+    mov edx, 1200
+sb_fill:
+    mov byte [esi], 1
+    inc esi
+    dec edx
+    jnz sb_fill
+    jmp sb_done
+sb_loop:
+    mov eax, [placed]
+    cmp eax, [lives]
+    jge sb_done
+    call next_rand
+    xor edx, edx
+    mov ecx, 1200
+    div ecx                    ; edx = rand % 1200 (the cell index)
+    mov esi, cur
+    add esi, edx
+    cmp byte [esi], 0
+    jne sb_loop
+    mov byte [esi], 1
+    inc dword [placed]
+    jmp sb_loop
+sb_done:
+    call compute_livecount
+    ret
+
+compute_livecount:
+    mov esi, cur
+    mov edx, 1200
+    xor ecx, ecx
+clc_loop:
+    xor eax, eax
+    mov al, [esi]
+    add ecx, eax
+    inc esi
+    dec edx
+    jnz clc_loop
+    mov [livecount], ecx
+    ret
+
+; next_rand: xorshift32 (never called with seed 0)
+next_rand:
+    mov eax, [seed]
+    mov ebx, eax
+    shl ebx, 13
+    xor eax, ebx
+    mov ebx, eax
+    shr ebx, 17
+    xor eax, ebx
+    mov ebx, eax
+    shl ebx, 5
+    xor eax, ebx
+    mov [seed], eax
+    ret
+
+; ════════════════════════════════════════════════════════════════════════════
+; drawing
+; ════════════════════════════════════════════════════════════════════════════
+
+draw_grid:
+    mov dword [ri], 0
+dg_row:
+    mov eax, [ri]
+    shl eax, 2
+    mov ebx, rowbase
+    add ebx, eax
+    mov ecx, [ebx]
+    add ecx, cur
+    mov [tmp_src], ecx
+    mov eax, [ri]
+    mov ecx, 160
+    imul eax, ecx
+    add eax, 0xB8000
+    mov [tmp_dst], eax
+    mov dword [ci], 0
+dg_col:
+    mov ebx, [tmp_src]
+    add ebx, [ci]
+    xor ecx, ecx
+    mov cl, [ebx]
+    mov eax, [tmp_dst]
+    add eax, [ci]
+    add eax, [ci]
+    test ecx, ecx
+    jnz dg_live
+    mov byte [eax], 250
+    mov byte [eax+1], 0x08
+    jmp dg_next
+dg_live:
+    mov byte [eax], 219
+    mov byte [eax+1], 0x0A
+dg_next:
+    inc dword [ci]
+    cmp dword [ci], 60
+    jl dg_col
+    inc dword [ri]
+    cmp dword [ri], 20
+    jl dg_row
+    ret
+
+draw_hud:
+    mov edi, 0xB8D20
+    mov ecx, 60
+    mov byte [attr], 0x07
+    call wr_blanks
+    mov edi, 0xB8D20
+    mov esi, hud_gen
+    call wr_str
+    mov eax, [gen]
+    call wr_num
+    mov esi, hud_live
+    call wr_str
+    mov eax, [livecount]
+    call wr_num
+    mov esi, hud_lives
+    call wr_str
+    mov eax, [lives]
+    call wr_num
+    mov edi, 0xB8DC0
+    mov ecx, 50
+    mov byte [attr], 0x07
+    call wr_blanks
+    mov edi, 0xB8DC0
+    mov esi, legend
+    call wr_str
+    mov edi, 0xB8E60
+    mov ecx, 20
+    mov byte [attr], 0x07
+    call wr_blanks
+    mov edi, 0xB8E60
+    cmp dword [running], 0
+    jne hud_running
+    mov esi, st_paused
+    mov byte [attr], 0x0E
+    call wr_str
+    ret
+hud_running:
+    mov esi, st_running
+    mov byte [attr], 0x0A
+    call wr_str
+    ret
+
+; wr_str: NUL-terminated at esi -> VGA at edi, attribute from [attr]
+wr_str:
+    xor eax, eax
+    mov al, [esi]
+    test al, al
+    jz wr_str_done
+    mov [edi], al
+    mov al, [attr]
+    mov [edi+1], al
+    add edi, 2
+    inc esi
+    jmp wr_str
+wr_str_done:
+    ret
+
+; wr_blanks: ecx cells of blank at edi (attribute from [attr])
+wr_blanks:
+wr_blanks_loop:
+    mov byte [edi], ' '
+    mov al, [attr]
+    mov [edi+1], al
+    add edi, 2
+    dec ecx
+    jnz wr_blanks_loop
+    ret
+
+; wr_num: eax (0..9999) -> decimal digits at edi (no leading zeros)
+wr_num:
+    mov [numval], eax
+    mov dword [numstarted], 0
+    mov dword [tmp_div], 1000
+    call wr_digit
+    mov dword [tmp_div], 100
+    call wr_digit
+    mov dword [tmp_div], 10
+    call wr_digit
+    mov dword [tmp_div], 1
+    call wr_digit
+    ret
+
+wr_digit:
+    xor edx, edx
+    mov eax, [numval]
+    mov ebx, [tmp_div]
+    div ebx
+    mov [numval], edx
+    cmp eax, 0
+    jne wr_digit_print
+    cmp dword [numstarted], 0
+    jne wr_digit_print
+    cmp dword [tmp_div], 1
+    je wr_digit_print
+    ret
+wr_digit_print:
+    mov dword [numstarted], 1
+    add eax, '0'
+    mov [edi], al
+    mov al, [attr]
+    mov [edi+1], al
+    add edi, 2
+    ret
+
+; serial_str: NUL-terminated at esi -> port 0x3F8 (CLI console)
+serial_str:
+    xor eax, eax
+    mov al, [esi]
+    test al, al
+    jz serial_str_done
+    mov edx, 0x3F8
+    out dx, al
+    inc esi
+    jmp serial_str
+serial_str_done:
+    ret
+
+; serial_num: eax -> decimal digits on port 0x3F8 (no leading zeros)
+serial_num:
+    mov [numval], eax
+    mov dword [numstarted], 0
+    mov dword [tmp_div], 1000
+    call serial_digit
+    mov dword [tmp_div], 100
+    call serial_digit
+    mov dword [tmp_div], 10
+    call serial_digit
+    mov dword [tmp_div], 1
+    call serial_digit
+    ret
+
+serial_digit:
+    xor edx, edx
+    mov eax, [numval]
+    mov ebx, [tmp_div]
+    div ebx
+    mov [numval], edx
+    cmp eax, 0
+    jne serial_digit_print
+    cmp dword [numstarted], 0
+    jne serial_digit_print
+    cmp dword [tmp_div], 1
+    je serial_digit_print
+    ret
+serial_digit_print:
+    mov dword [numstarted], 1
+    add eax, '0'
+    mov edx, 0x3F8
+    out dx, al
+    ret
+
+; clear_echo: blank the digit-entry field after the prompt
+clear_echo:
+    mov edi, 0xB8182
+    mov ecx, 44
+    mov byte [attr], 0x07
+    call wr_blanks
+    ret
+
+; reset_entry: blank the entry field and zero the parsed number
+reset_entry:
+    mov dword [value], 0
+    mov dword [digits], 0
+    call clear_echo
+    ret
+
+; poll_key: al = ASCII from [0x400] (consumed), 0 when none.
+; Sets pk_timeout after 15000 consecutive empty polls (prompt auto-start).
+poll_key:
+    xor eax, eax
+    mov al, [0x400]
+    test al, al
+    jz poll_empty
+    mov byte [0x400], 0
+    mov dword [ever], 1
+    mov dword [idle], 0
+    mov byte [pk_timeout], 0
+    ret
+poll_empty:
+    inc dword [idle]
+    cmp dword [idle], 15000
+    jl poll_ret
+    mov dword [idle], 0
+    mov byte [pk_timeout], 1
+poll_ret:
+    xor eax, eax
+    ret
+
+clear_screen:
+    mov edi, 0xB8000
+    mov ecx, 1000
+clear_screen_loop:
+    mov dword [edi], 0x07200720
+    add edi, 4
+    dec ecx
+    jnz clear_screen_loop
+    ret
+
+; init_tables: x wrap pairs + row base/neighbor offsets (torus geometry)
+init_tables:
+    xor ecx, ecx
+init_x:
+    mov eax, ecx
+    dec eax
+    cmp eax, 0
+    jge init_xm_ok
+    add eax, 60
+init_xm_ok:
+    mov ebx, xm
+    add ebx, ecx
+    mov [ebx], al
+    mov eax, ecx
+    inc eax
+    cmp eax, 60
+    jl init_xp_ok
+    xor eax, eax
+init_xp_ok:
+    mov ebx, xp
+    add ebx, ecx
+    mov [ebx], al
+    inc ecx
+    cmp ecx, 60
+    jl init_x
+    xor ecx, ecx
+init_y:
+    mov eax, ecx
+    shl eax, 2
+    mov [tmp], eax
+    mov ebx, ecx
+    mov edx, 60
+    imul ebx, edx
+    mov edi, rowbase
+    add edi, eax
+    mov [edi], ebx
+    mov ebx, ecx
+    dec ebx
+    cmp ebx, 0
+    jge init_up_ok
+    add ebx, 20
+init_up_ok:
+    mov edx, 60
+    imul ebx, edx
+    mov edi, rowup
+    add edi, eax
+    mov [edi], ebx
+    mov ebx, ecx
+    inc ebx
+    cmp ebx, 20
+    jl init_dn_ok
+    sub ebx, 20
+init_dn_ok:
+    mov edx, 60
+    imul ebx, edx
+    mov edi, rowdn
+    add edi, eax
+    mov [edi], ebx
+    inc ecx
+    cmp ecx, 20
+    jl init_y
+    ret
+
+; ════════════════════════════════════════════════════════════════════════════
+; data
+; ════════════════════════════════════════════════════════════════════════════
+seed:       dd 0x2F6E2B1
+deflives:   dd 240                 ; batch-mode default (prompt idle timeout)
+bgens:      dd 4                   ; batch-mode generation count before hlt
+lives:      dd 0
+gen:        dd 0
+livecount:  dd 0
+placed:     dd 0
+value:      dd 0
+digits:     dd 0
+frame:      dd 0
+idle:       dd 0
+ever:       dd 0
+simkeys:    dd 0
+running:    dd 0
+ri:         dd 0
+ci:         dd 0
+numval:     dd 0
+numstarted: dd 0
+tmp_div:    dd 0
+tmp:        dd 0
+tmp_xl:     dd 0
+tmp_xr:     dd 0
+tmp_src:    dd 0
+tmp_dst:    dd 0
+p_up:       dd 0
+p_mid:      dd 0
+p_dn:       dd 0
+q_mid:      dd 0
+pk_timeout: db 0
+attr:       db 0
+xm:         times 60 db 0
+xp:         times 60 db 0
+rowbase:    times 20 dd 0
+rowup:      times 20 dd 0
+rowdn:      times 20 dd 0
+cur:        times 1200 db 0
+nxt:        times 1200 db 0
+banner:     db "Conway's Game of Life - sloughGPT x86 VM", 0
+prompt_str: db "Enter number of lifes(max=1200): ", 0
+help_line:  db "Type 1..1200 then Enter. Idle -> 240 cells. space pause s step r reseed q quit", 0
+err_range:  db "Out of range - enter a number from 1 to 1200", 0
+err_empty:  db "Nothing typed - enter a number from 1 to 1200", 0
+err_digits: db "Digits only - backspace and try again", 0
+hud_gen:    db "LIVE gen=", 0
+hud_live:   db " live=", 0
+hud_lives:  db " lives=", 0
+legend:     db "space=pause  s=step  r=reseed  q=quit", 0
+st_running: db "running", 0
+st_paused:  db "paused", 0
+bye_str:    db "life: exit", 0
+bye_gen:    db " gen=", 0
+bye_live:   db " live=", 0
+nl_str:     db 10, 0
+"""
+
+
 # ── Program Registry ──────────────────────────────────────────────────────────
 
 PROGRAMS = {
+    "life": LIFE_ASM,
     "test_hello": TEST_HELLO_ASM,
     "hello": HELLO_ASM,
     "test_syscalls": TEST_SYSCALLS_ASM,
