@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pytest
 from app_planner.cli import main as cli_main
-from app_planner.store import PlannerStore, reset_store
+from app_planner.store import (
+    BoardIntegrityError,
+    PlannerStore,
+    dedupe_board,
+    duplicate_ids,
+    reset_store,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -359,3 +365,154 @@ class TestCLI:
     def test_unknown_command(self, tmp_dir):
         code, _ = _run(tmp_dir, "nonexistent")
         assert code != 0
+
+
+def _line(card_id: str, column: str = "todo", **extra) -> str:
+    return json.dumps({"id": card_id, "title": "T", "column": column, **extra})
+
+
+class TestBoardIdIntegrity:
+    """The board must never gain a second line carrying one card id."""
+
+    def test_write_refuses_a_new_duplicate_id(self, store):
+        board_file = store._board_file
+        board_file.write_text(_line("alpha") + "\n")
+        before = board_file.read_text()
+
+        with pytest.raises(BoardIntegrityError, match="alpha"):
+            store._atomic_write(before + _line("alpha", column="done") + "\n")
+
+        # nothing was persisted — the guard fires before the tmp->fsync->replace
+        assert board_file.read_text() == before
+
+    def test_pre_existing_duplicates_are_grandfathered(self, store):
+        """Repair must not wedge a board that is already corrupt.
+
+        The live board carries 11 such groups; banning duplicates outright
+        would refuse every write sessions make against it.
+        """
+        board_file = store._board_file
+        board_file.write_text(_line("dup") + "\n" + _line("dup", column="done") + "\n")
+
+        assert store.move_card("dup", "review") is True
+
+        # the write actually landed (first line of the group) ...
+        first = json.loads(board_file.read_text().splitlines()[0])
+        assert first["column"] == "review"
+        # ... and the pre-existing duplicate was allowed to persist
+        assert store.duplicate_board_ids() == {"dup"}
+
+    def test_append_cannot_reuse_an_id_already_on_the_board(self, store):
+        board_file = store._board_file
+        board_file.write_text(_line("alpha") + "\n")
+        stale = PlannerStore(board_dir=store._board_dir, notes_dir=store._notes_dir)
+        stale_card = stale.add_card("Existing")
+        # rewrite its id to one already present, simulating a re-append of a
+        # card object that another writer has already landed
+        stale_card.id = "alpha"
+
+        with pytest.raises(BoardIntegrityError, match="alpha"):
+            store._append_card(stale_card)
+
+        assert board_file.read_text().count('"alpha"') == 1
+
+    def test_duplicate_ids_skips_header_and_unparsable_lines(self, store):
+        board_file = store._board_file
+        board_file.write_text(
+            json.dumps({"schema": "planner/1", "columns": []})
+            + "\n"
+            + _line("alpha")
+            + "\n"
+            + "{not json"
+            + "\n"
+            + _line("alpha")
+            + "\n"
+        )
+        assert duplicate_ids(board_file) == {"alpha"}
+
+    def test_duplicate_ids_on_a_missing_board_is_empty(self, store):
+        assert duplicate_ids(store._board_file) == set()
+
+
+class TestDedupeBoard:
+    """Remediation plans by default and never touches bytes unasked."""
+
+    def _seed(self, board_file) -> list[str]:
+        """One duplicate pair + one unique card. The pair is byte-distinguishable."""
+        board_file.write_text(
+            _line("dup", slot_position=1, updated_at="2026-10-02T07:53:16", notes=["old"])
+            + "\n"
+            + _line(
+                "dup",
+                column="done",
+                slot_position=2,
+                updated_at="2026-10-11T02:14:39",
+                notes=["new"],
+            )
+            + "\n"
+            + _line("solo", updated_at="2026-10-05T00:00:00")
+            + "\n"
+        )
+        return board_file.read_text().splitlines()
+
+    def test_plan_only_reports_without_writing(self, store):
+        before = self._seed(store._board_file)
+
+        plan = dedupe_board(store._board_file)
+
+        assert plan["groups"] == 1
+        assert plan["removed"] == 1
+        assert plan["applied"] is False
+        assert plan["details"][0]["id"] == "dup"
+        assert plan["details"][0]["lines"] == [1, 2]
+        assert store._board_file.read_text().splitlines() == before
+
+    def test_apply_keeps_first_slot_but_newest_content(self, store):
+        """Position preserved, bytes of the newest copy survive.
+
+        Position matters because sync() maps the Nth note to the Nth card by
+        title; bytes matter because legacy lines carry notes/slot_* fields
+        Card does not model and would silently strip.
+        """
+        self._seed(store._board_file)
+
+        plan = dedupe_board(store._board_file, apply=True)
+
+        assert plan["applied"] is True
+        assert plan["removed"] == 1
+        lines = store._board_file.read_text().splitlines()
+        assert len(lines) == 2
+        # first slot still holds the dup card ...
+        survivor = json.loads(lines[0])
+        assert survivor["id"] == "dup"
+        # ... but with the NEWEST copy's content, legacy fields intact
+        assert survivor["updated_at"] == "2026-10-11T02:14:39"
+        assert survivor["notes"] == ["new"]
+        assert survivor["slot_position"] == 2
+        assert duplicate_ids(store._board_file) == set()
+
+    def test_apply_writes_through_the_guarded_funnel(self, store):
+        """The repair itself is subject to the same ratchet it restores."""
+        self._seed(store._board_file)
+
+        dedupe_board(store._board_file, apply=True)
+
+        assert duplicate_ids(store._board_file) == set()
+        # and a board with no duplicates now passes a fresh write
+        store.move_card("solo", "review")
+        assert store.duplicate_board_ids() == set()
+
+    def test_apply_is_a_noop_on_a_clean_board(self, store):
+        store._board_file.write_text(_line("a") + "\n" + _line("b") + "\n")
+        before = store._board_file.read_text()
+
+        plan = dedupe_board(store._board_file, apply=True)
+
+        assert plan["groups"] == 0
+        assert plan["removed"] == 0
+        assert plan["applied"] is False
+        assert store._board_file.read_text() == before
+
+    def test_missing_board_is_a_noop(self, store):
+        plan = dedupe_board(store._board_file)
+        assert plan == {"groups": 0, "removed": 0, "applied": False, "details": []}

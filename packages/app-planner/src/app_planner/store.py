@@ -33,6 +33,57 @@ from .slot_chain import apply_board
 
 logger = logging.getLogger("app_planner.store")
 
+
+# ── Board integrity ──────────────────────────────────────────────────────
+
+
+class BoardIntegrityError(RuntimeError):
+    """A board write would have introduced a duplicate card id."""
+
+
+def _card_ids(text: str) -> list[str]:
+    """Card ids present in *text*, in file order.
+
+    Skips blank lines, the schema header (it carries no ``id``) and any line
+    that is not a JSON object — so an unparsable line is never mistaken for a
+    card.
+    """
+    ids: list[str] = []
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("id"):
+            ids.append(obj["id"])
+    return ids
+
+
+def _duplicate_ids(ids: list[str]) -> set[str]:
+    """Ids seen more than once."""
+    seen: set[str] = set()
+    dups: set[str] = set()
+    for card_id in ids:
+        if card_id in seen:
+            dups.add(card_id)
+        seen.add(card_id)
+    return dups
+
+
+def duplicate_ids(board_file: Path) -> set[str]:
+    """Ids carried by more than one line of *board_file*. Read-only.
+
+    This is the check the live board fails: it carries 11 such groups, all
+    pre-existing (see ``dedupe_board``).
+    """
+    if not board_file.exists():
+        return set()
+    return _duplicate_ids(_card_ids(board_file.read_text()))
+
+
 # ── Data Models ──────────────────────────────────────────────────────────
 
 
@@ -165,9 +216,46 @@ class PlannerStore:
         )
 
     def _atomic_write(self, text: str) -> None:
-        """Write the board durably and atomically (tmp -> fsync -> replace)."""
+        """Write the board durably and atomically (tmp -> fsync -> replace).
+
+        Every board mutation funnels through here — ``_append_card``,
+        ``_surgical_rewrite`` and ``_write_board`` alike — so this is the one
+        place where card-id uniqueness can actually be enforced, and the one
+        place a future regression has to get past.
+
+        The rule is a **ratchet**, not a ban: a write may not introduce an id
+        that is not *already* duplicated on disk. The live board carries 11
+        pre-existing duplicate-id groups written by an older code path
+        (``_surgical_rewrite`` once matched every line for an id; fixed in
+        72188d8de, which also recorded the groups). Banning duplicates
+        outright would refuse every board write on this machine and wedge all
+        sessions — worse than the corruption it is meant to stop. Grandfathering
+        what is already there lets those cards still be read, moved, repaired
+        and rewritten while making it impossible to add a 12th group.
+
+        The check re-reads the file, so it also catches a duplicate introduced
+        between this call's caller reading and writing.
+        """
+        self._assert_no_new_duplicates(text)
         atomic_write_text(self._board_file, text)
         apply_board(self._board_file)  # one line: re-derive slot chain on every board write
+
+    def _assert_no_new_duplicates(self, text: str) -> None:
+        """Raise if *text* carries a duplicate id the file does not already have."""
+        on_disk = self._board_file.read_text() if self._board_file.exists() else ""
+        grandfathered = _duplicate_ids(_card_ids(on_disk))
+        fresh = sorted(_duplicate_ids(_card_ids(text)) - grandfathered)
+        if fresh:
+            raise BoardIntegrityError(
+                f"refusing to write {self._board_file}: {len(fresh)} card id(s) "
+                f"would appear on more than one line: {', '.join(fresh)}. "
+                "Board ids must be unique — this is a bug in the calling path, "
+                "not a board the user can repair."
+            )
+
+    def duplicate_board_ids(self) -> set[str]:
+        """Ids carried by more than one line of this board. Read-only."""
+        return duplicate_ids(self._board_file)
 
     @staticmethod
     def _has_schema_header(lines: list[str]) -> bool:
@@ -594,6 +682,82 @@ class PlannerStore:
 
         total = len(self.load_board().cards)
         return added, updated, total
+
+
+def dedupe_board(board_file: Path, apply: bool = False) -> dict[str, Any]:
+    """Plan the removal of duplicate-id card lines; write only with ``apply=True``.
+
+    Returns ``{"groups", "removed", "applied", "details", "text_before",
+    "text_after"}``; each detail carries ``{"id", "lines", "keep_line",
+    "keep_updated_at"}`` so a reviewer can see exactly what would go.
+
+    Two properties are deliberate:
+
+    * **Position** — the first occurrence keeps its slot. ``sync()`` maps the
+      Nth note to the Nth card *by title position*, so deleting a line shifts
+      every card after it. Keeping the first slot bounds the damage to
+      everything below the removed copies; run ``app-planner sync`` afterwards
+      and it re-converges (it is idempotent once positions settle).
+    * **Bytes, not ``Card``** — the surviving line is copied raw. Legacy lines
+      carry ``notes``/``note_hashes``/``slot_*`` fields that ``Card`` does not
+      model, so round-tripping through the dataclass would silently strip note
+      history and slot-chain metadata off the very cards being repaired.
+
+    The newest copy wins on ``updated_at``, ties going to the first line.
+
+    This is a data migration and is therefore never implicit: nothing runs
+    without ``apply=True``, and the write goes through ``_atomic_write`` so it
+    re-derives the slot chain and is checked by the same id ratchet.
+    """
+    if not board_file.exists():
+        return {"groups": 0, "removed": 0, "applied": False, "details": []}
+
+    raws = [raw for raw in board_file.read_text().splitlines() if raw.strip()]
+    objs: dict[int, dict[str, Any]] = {}
+    positions: dict[str, list[int]] = {}
+    for i, raw in enumerate(raws):
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(obj, dict) or not obj.get("id"):
+            continue
+        objs[i] = obj
+        positions.setdefault(obj["id"], []).append(i)
+
+    details: list[dict[str, Any]] = []
+    drop: set[int] = set()
+    for card_id, idxs in positions.items():
+        if len(idxs) < 2:
+            continue
+        # newest updated_at wins; ties fall back to the first line (-i is
+        # larger for the smaller index, so max() selects it).
+        keep = max(idxs, key=lambda i: (str(objs[i].get("updated_at") or ""), -i))
+        details.append(
+            {
+                "id": card_id,
+                "lines": [i + 1 for i in idxs],
+                "keep_line": keep + 1,
+                "keep_updated_at": objs[keep].get("updated_at"),
+            }
+        )
+        drop.update(i for i in idxs if i != keep)
+
+    new_text = "\n".join(raw for i, raw in enumerate(raws) if i not in drop) + "\n" if raws else ""
+    applied = False
+    if drop and apply:
+        PlannerStore(board_dir=board_file.parent, notes_dir=board_file.parent)._atomic_write(
+            new_text
+        )
+        applied = True
+    return {
+        "groups": len(details),
+        "removed": len(drop),
+        "applied": applied,
+        "details": details,
+        "text_before": "\n".join(raws),
+        "text_after": new_text,
+    }
 
 
 # ── Module-level singleton ───────────────────────────────────────────────
