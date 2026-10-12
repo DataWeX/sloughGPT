@@ -67,7 +67,7 @@ class SearchService:
                 else:
                     result.hits.extend(hits)
 
-        result.hits.sort(key=lambda h: (-h.score, h.title, h.store))
+        result.hits.sort(key=lambda h: (-h.score, -h.updated_at, h.title, h.store))
         return result
 
     async def _run_one(

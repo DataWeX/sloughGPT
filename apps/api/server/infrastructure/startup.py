@@ -1013,6 +1013,15 @@ class StartupOrchestrator:
             logger.warning(
                 "Memory maintenance scheduler start failed: %s", e, extra={"tag": "START"}
             )
+        try:
+            from domain.search import start_search_sweeper
+
+            if start_search_sweeper() is not None:
+                logger.info("Search index sweeper started", extra={"tag": "START"})
+            else:
+                logger.info("Search index sweeper disabled", extra={"tag": "START"})
+        except Exception as e:
+            logger.warning("Search index sweeper start failed: %s", e, extra={"tag": "START"})
 
     async def _phase_config(self):
         """Validate and warm the config system + init ResourceManager."""
@@ -1085,6 +1094,13 @@ class StartupOrchestrator:
                 await stop_memory_maintenance()
             except Exception as e:
                 logger.warning("Memory maintenance shutdown: %s", e, extra={"tag": "START"})
+            try:
+                from domain.search import stop_search_sweeper
+
+                await stop_search_sweeper()
+                logger.info("Search index sweeper stopped", extra={"tag": "START"})
+            except Exception as e:
+                logger.warning("Search index sweeper shutdown: %s", e, extra={"tag": "START"})
             try:
                 await self._task_queue.stop()
                 logger.info("Task queue stopped", extra={"tag": "START"})

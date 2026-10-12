@@ -24,6 +24,11 @@ class SearchHit:
         locator: Jump target — ``route:/path``, ``file:path:line``,
             ``anchor:section``. What makes a hit navigable instead of
             merely readable.
+        updated_at: Source modification time (unix seconds) when the store
+            knows it, ``0.0`` otherwise. The aggregator uses it as the
+            tiebreak after score so the latest entry wins among
+            equal-relevance hits; adapters that cannot date their rows
+            simply leave it at the default and ordering falls back to title.
     """
 
     id: str
@@ -32,6 +37,7 @@ class SearchHit:
     detail: str = ""
     score: float = 0.0
     locator: str = ""
+    updated_at: float = 0.0
 
     def __post_init__(self) -> None:
         if not self.store:
@@ -59,7 +65,8 @@ class SearchResult:
     """Aggregated outcome of a multi-store search.
 
     Attributes:
-        hits: Merged results, sorted by score desc then title.
+        hits: Merged results, sorted by score desc, then updated_at desc
+            (latest entry first among equal-relevance hits), then title.
         partial: Stores that failed or timed out — never silent.
         skipped: Stores not queried (e.g. workspace-scoped stores when
             no workspace is in context) — a deliberate skip, not a failure.
