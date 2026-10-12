@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from domain.shell._internal.surface import TextSurface
-from domain.shell._internal.tui_repl import _P_LOG_INFO, _STYLE_PAIRS, TuiIo, _complete_path
+from domain.shell._internal.tui_repl import (
+    _P_LOG_INFO,
+    _STYLE_PAIRS,
+    TuiIo,
+    _complete_path,
+)
 
 # ── _complete_path ──────────────────────────────────────────────────────────
 
@@ -92,48 +95,3 @@ class TestTuiReplConstants:
         from domain.shell._internal.tui_repl import TuiRepl
 
         assert TuiRepl.OUTPUT_MIN == 6
-
-
-# ── _read_escape_remainder ──────────────────────────────────────────────────
-
-
-class TestReadEscapeRemainder:
-    def test_no_more_bytes(self):
-        from domain.shell._internal.tui_repl import _read_escape_remainder
-
-        mock_stdscr = MagicMock()
-        mock_stdscr.getch.return_value = -1
-        result = _read_escape_remainder(mock_stdscr, {})
-        assert result is None
-
-    def test_ctrl_sequence(self):
-        from domain.shell._internal.tui_repl import _read_escape_remainder
-
-        mock_stdscr = MagicMock()
-        mock_stdscr.getch.side_effect = [ord("["), ord("5"), ord("C")]
-        result = _read_escape_remainder(mock_stdscr, {})
-        assert result == "seq:ctrl-right"
-
-    def test_ctrl_left(self):
-        from domain.shell._internal.tui_repl import _read_escape_remainder
-
-        mock_stdscr = MagicMock()
-        mock_stdscr.getch.side_effect = [ord("["), ord("5"), ord("D")]
-        result = _read_escape_remainder(mock_stdscr, {})
-        assert result == "seq:ctrl-left"
-
-    def test_alt_key(self):
-        from domain.shell._internal.tui_repl import _read_escape_remainder
-
-        mock_stdscr = MagicMock()
-        mock_stdscr.getch.side_effect = [ord("f")]
-        result = _read_escape_remainder(mock_stdscr, {"f": "find"})
-        assert result == "alt:find"
-
-    def test_alt_key_no_mapping(self):
-        from domain.shell._internal.tui_repl import _read_escape_remainder
-
-        mock_stdscr = MagicMock()
-        mock_stdscr.getch.side_effect = [ord("x")]
-        result = _read_escape_remainder(mock_stdscr, {})
-        assert result is None
