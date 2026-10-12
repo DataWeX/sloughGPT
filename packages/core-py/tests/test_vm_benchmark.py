@@ -175,7 +175,7 @@ class TestTensorOps:
         bench_cpu("ARGMAX 10000", "RANDN R0, 10000, 1\nARGMAX R1, R0", iterations=200)
 
     def test_reshape(self):
-        bench_cpu("RESHAPE 4x4->16", "RANDN R0, 4, 4\nRESHAPE R1, R0, 16", iterations=500)
+        bench_cpu("RESHAPE 4x4->16", "RANDN R0, 4, 4\nRESHAPE R1, R0, 16, 1", iterations=500)
 
 
 class TestTensorActivations:
@@ -264,7 +264,7 @@ class TestTensorComposite:
     def test_attention(self):
         bench_cpu(
             "attention 32x32",
-            "RANDN R0, 32, 32\nRANDN R1, 32, 32\nMATMUL R2, R0, R1\nLOAD_CONST R3, 5.656\nFDIV R4, R2, R3\nSOFTMAX R5, R4",
+            "RANDN R0, 32, 32\nRANDN R1, 32, 32\nMATMUL R2, R0, R1\nLOAD_CONST R3, 5.656\nDIV R4, R2, R3\nSOFTMAX R5, R4",
             iterations=50,
         )
 
