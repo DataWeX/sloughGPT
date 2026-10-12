@@ -4,6 +4,7 @@ Tests for the task queue infrastructure (task_queue.py).
 
 import asyncio
 
+import infra_lib.task_queue as tq
 import pytest
 from infra_lib.task_queue import (
     InProcessTaskQueue,
@@ -477,16 +478,51 @@ class TestInProcessTaskQueue:
         assert get_task_queue() is q
 
     async def test_get_task_queue_initializes_singleton(self):
-        import infra_lib.task_queue as tq
+        # Card 44229b2a: infra_lib.task_queue is a delegating shim — the
+        # singleton global lives in the canonical domain module, and a
+        # num_workers-less default resolves via the resource manager.
+        from domain.infrastructure._internal import task_queue as canonical_tq
+        from domain.infrastructure._internal.resource_manager import get_resource_manager
 
-        old = tq._default_queue
-        tq._default_queue = None
+        old = canonical_tq._default_queue
+        canonical_tq._default_queue = None
         try:
             q = tq.get_task_queue()
             assert q is not None
-            assert q._pool.num_workers == 2
+            assert q._pool.num_workers == get_resource_manager().task_queue_workers
         finally:
-            tq._default_queue = old
+            canonical_tq._default_queue = old
+
+
+class TestShimDelegation:
+    """Card 44229b2a: the infra-lib fork is a shim, not a second body."""
+
+    def test_public_surface_is_canonical(self):
+        from domain.infrastructure._internal import task_queue as canonical_tq
+
+        for name in (
+            "TaskStatus",
+            "Priority",
+            "Task",
+            "TaskQueue",
+            "WorkerPool",
+            "InProcessTaskQueue",
+            "get_task_queue",
+            "set_task_queue",
+        ):
+            assert getattr(tq, name) is getattr(canonical_tq, name), name
+
+    def test_task_status_is_str_enum(self):
+        from enum import StrEnum
+
+        assert issubclass(tq.TaskStatus, StrEnum)
+        assert str(tq.TaskStatus.PENDING) == "pending"
+        assert tq.TaskStatus("pending") is tq.TaskStatus.PENDING
+
+    def test_logger_namespace_is_canonical(self):
+        from domain.infrastructure._internal import task_queue as canonical_tq
+
+        assert canonical_tq.logger.name == "slo.task_queue"
 
 
 @pytest.mark.asyncio
