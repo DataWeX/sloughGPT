@@ -3323,6 +3323,22 @@ class InferenceRouter:
                         # this method raised nothing, and why the default log
                         # level recorded no cause at all. Coercing with
                         # `default=str` is what the SSE routers already do.
+                        #
+                        # `metadata` is declared a @property on the Provider
+                        # protocol, but ct_provider / slonet_provider /
+                        # slonet_server implement it as a plain METHOD while
+                        # api_provider / router / slo_transformer use @property.
+                        # Reading it property-style on a plain-method provider
+                        # puts a bound method in the payload; `default=str` then
+                        # coerces it to the useless
+                        # "<bound method ... at 0x...>" repr. Normalise the read
+                        # first so the real dict is what gets serialised, then
+                        # let `default=str` catch genuinely non-JSON values
+                        # inside it. Callers are split the same way, so accept
+                        # both forms here rather than churning every call site.
+                        meta = provider.metadata
+                        if callable(meta):
+                            meta = meta()
                         result[name] = json.loads(
                             json.dumps(
                                 {
@@ -3333,7 +3349,7 @@ class InferenceRouter:
                                         "embedding": caps.embedding,
                                         "vision": caps.vision,
                                     },
-                                    "metadata": provider.metadata,
+                                    "metadata": meta,
                                 },
                                 default=str,
                             )

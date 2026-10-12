@@ -552,6 +552,80 @@ class TestProviders:
         data = resp.json()
         assert "data" in data
 
+    @staticmethod
+    def _register_both_shapes():
+        """Register one provider of each metadata shape.
+
+        The Provider protocol declares ``metadata`` a ``@property``, but
+        ct_provider / slonet_provider / slonet_server implement it as a plain
+        method while api_provider / router / slo_transformer / multimodal use
+        ``@property``. The route read it property-style, so a method-shaped
+        provider put a bound method in the payload and 500'd with
+        E_SERIALIZATION — the live bug behind card 2460373b. Every other test
+        here registers no provider at all, which is why they passed while
+        production failed.
+        """
+        from domain.models._internal.provider import registry as _reg
+
+        class _Caps:
+            chat = streaming = embedding = vision = True
+
+        class MethodShaped:
+            model_id = "probe-method"
+
+            @property
+            def capabilities(self):
+                return _Caps()
+
+            def metadata(self):  # plain method, like slonet_provider
+                return {"n_layer": 4, "shaped": "method"}
+
+        class PropertyShaped:
+            model_id = "probe-property"
+
+            @property
+            def capabilities(self):
+                return _Caps()
+
+            @property
+            def metadata(self):  # @property, like api_provider
+                return {"n_layer": 8, "shaped": "property"}
+
+        saved = {n: _reg.get_provider(n) for n in _reg.list_providers()}
+        _reg.register_provider("probe-method", MethodShaped())
+        _reg.register_provider("probe-property", PropertyShaped())
+        return _reg, saved
+
+    @staticmethod
+    def _restore(_reg, saved):
+        _reg.clear_providers()
+        for name, provider in saved.items():
+            _reg.register_provider(name, provider)
+
+    def test_method_shaped_metadata_serialises(self, client):
+        """A plain-method `metadata` must come back as a dict, not 500."""
+        _reg, saved = self._register_both_shapes()
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, resp.text
+            meta = resp.json()["data"]["probe-method"]["metadata"]
+            assert meta == {"n_layer": 4, "shaped": "method"}
+            assert not callable(meta)
+        finally:
+            self._restore(_reg, saved)
+
+    def test_property_shaped_metadata_still_works(self, client):
+        """The @property half must not regress — both shapes are accepted."""
+        _reg, saved = self._register_both_shapes()
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, resp.text
+            payload = resp.json()["data"]
+            assert payload["probe-property"]["metadata"] == {"n_layer": 8, "shaped": "property"}
+            assert payload["probe-method"]["capabilities"]["chat"] is True
+        finally:
+            self._restore(_reg, saved)
+
 
 class TestCurrentSession:
     """GET /chat/sessions/current"""
