@@ -261,3 +261,40 @@ class TestByteFallbackDecodeStreaming:
         ids = [10, 11]
         streamed = "".join(tok.decode([i]) for i in ids)
         assert streamed.lstrip(" ") == tok.decode(ids)
+
+
+class TestProvenance:
+    """scheme/origin surface (card 85dedb7e) — fields only, derived, truthful."""
+
+    def test_scheme_byte_level(self):
+        tok = MorphTokenizer({}, [], byte_level=True)
+        assert tok.scheme == "hf/byte-level"
+
+    def test_scheme_byte_fallback(self):
+        tok = MorphTokenizer({}, [], byte_fallback=True)
+        assert tok.scheme == "hf/byte-fallback"
+
+    def test_scheme_byte_fallback_overrides_byte_level(self):
+        # The decode flags have the same precedence as the decode itself.
+        tok = MorphTokenizer({}, [], byte_level=True, byte_fallback=True)
+        assert tok.scheme == "hf/byte-fallback"
+
+    def test_scheme_char_fallback(self):
+        tok = MorphTokenizer({}, [])
+        assert tok.scheme == "hf/char"
+
+    def test_origin_from_model_id(self):
+        tok = MorphTokenizer({}, [], model_id=QWEN2_ID)
+        assert tok.origin == f"hf:{QWEN2_ID}"
+
+    def test_origin_none_without_model_id(self):
+        assert MorphTokenizer({}, []).origin is None
+
+    def test_loaded_qwen_provenance(self):
+        if not _is_cached(QWEN2_ID):
+            pytest.skip("Qwen not cached locally")
+        tok = MorphTokenizer.from_pretrained(QWEN2_ID)
+        assert tok.origin == f"hf:{QWEN2_ID}"
+        # Qwen is byte-level BPE; scheme must reflect the detected flags.
+        assert tok.scheme == "hf/byte-level"
+        assert tok.byte_level is True

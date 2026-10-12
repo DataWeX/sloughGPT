@@ -242,3 +242,21 @@ class TestSaveLoadContract:
         tree_pos = src.find('soul.metadata["tokenizer_format"] = "native/token-tree"')
         char_pos = src.find('soul.metadata["tokenizer_format"] = "native/char"')
         assert tree_pos != -1 and char_pos != -1 and tree_pos < char_pos
+
+
+class TestProvenanceTaxonomy:
+    """Scheme names separate tokenizer families at a glance (card 85dedb7e)."""
+
+    def test_family_prefixes_separated(self):
+        from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+
+        native_schemes = {NATIVE_FORMAT_CHAR, NATIVE_FORMAT_TREE}
+        hf_scheme = MorphTokenizer({}, [], byte_level=True).scheme
+        assert {s.split("/", 1)[0] for s in native_schemes} == {"native"}
+        assert hf_scheme.startswith("hf/")
+        assert not native_schemes & {hf_scheme}
+
+    # training/* (SloBPE/SloUnigram) lands when domain/training/_internal/
+    # tokenizer.py is free of the foreign WIP; its values are locked in card
+    # 85dedb7e: training/bpe-byte-level, training/bpe-whitespace,
+    # training/unigram — disjoint from both families above.
