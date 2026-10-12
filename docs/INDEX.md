@@ -38,7 +38,7 @@ Single source of truth for navigation. Read this first.
 | **VM_CONSOLE.md** | VM console |
 | **vm-devices-spec.md** | VM device spec |
 | **WORLD_REALM.md** | World rendering |
-| **CACHING.md** | LLM response cache: keys + invalidation |
+| **LLM_RESPONSE_CACHE.md** | LLM response cache: keys + invalidation |
 
 ## Design
 
