@@ -638,10 +638,14 @@ export function ConversationSidebar({
   return (
     <>
       {/* Desktop: collapsible aside */}
+      {/* The nav's bookmark tab (AppLayout) protrudes 1.15rem past the nav edge
+          at z-20, so the panel docks it in a dedicated left gutter: content
+          keeps the full 16rem and no longer sits under the tab (it used to
+          cover row titles and steal their clicks at vertical center). */}
       <aside
         className={cn(
           'hidden lg:flex shrink-0 flex-col border-r border-border/40 bg-background/80 transition-all duration-200 ease-in-out overflow-hidden',
-          collapsed ? 'w-0 border-r-0' : 'w-[var(--conv-sidebar-width)]',
+          collapsed ? 'w-0 border-r-0' : 'w-[calc(var(--conv-sidebar-width)+1.15rem)] pl-[1.15rem]',
         )}
       >
         <div
