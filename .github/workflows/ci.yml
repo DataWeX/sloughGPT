@@ -182,6 +182,25 @@ jobs:
           # went red at the ModuleNotFoundError rather than checking tags.
           PYTHONPATH="$PWD:packages/core-py" python3 scripts/check_feature_tags.py --validate --check-deletions
 
+  # .kanban/board.jsonl is append-only and shared by every concurrent session
+  # and worktree; its failure mode is duplicate rows -- the same id written
+  # more than once, one id in several columns at once (open AND finished), or
+  # one id with two bodies -- which re-offers finished work in every queue.
+  # check_board_hygiene.py classifies those strictly and --settle repairs
+  # what the notes can decide; --strict keeps the defect class out of the
+  # committed merge state (two branches adding one id is exactly what a
+  # merge produces). Pure stdlib, no PYTHONPATH needed.
+  board-hygiene:
+    name: Board hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check board for duplicate/contradictory cards
+        run: python3 scripts/check_board_hygiene.py --strict
+
   # Doc-vs-code parity. The Router Playbook used to be a prose checklist
   # ("grep -c _internal <router> = 0"), which is how the documented figures
   # drifted from the code without anyone noticing. This runs the executable
