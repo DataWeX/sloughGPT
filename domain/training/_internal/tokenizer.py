@@ -85,6 +85,7 @@ class SloBPE:
         self._word_suffix: str = self.WORD_SUFFIX
         self._pretokenizer: str = pretokenizer
         self._special_set: set[str] = set(self.SPECIAL_TOKENS)
+        self.origin: str | None = None
         # Analysis caches — populated by analyze_corpus()
         self._token_freqs: Counter = Counter()
         self._training_corpus_len: int = 0
@@ -92,6 +93,22 @@ class SloBPE:
     @property
     def vocab_size(self) -> int:
         return len(self.vocab)
+
+    @property
+    def scheme(self) -> str:
+        """Core tokenizer provenance: the training/* family this tokenizer is.
+
+        Derived from the pretokenizer — never stored, so it cannot disagree
+        with the encode path it describes. Sibling families: native/* (SloNet
+        checkpoints) and hf/* (MorphTokenizer); the prefixes keep them apart
+        at a glance. v1 checkpoints force the whitespace pretokenizer in
+        ``from_dict``, so this stays truthful for legacy loads too.
+        """
+        if self._pretokenizer == "gpt2":
+            return "training/bpe-byte-level"
+        if self._pretokenizer == "whitespace":
+            return "training/bpe-whitespace"
+        return "training/bpe-unknown"
 
     @property
     def pad_id(self) -> int:
@@ -425,9 +442,14 @@ class SloBPE:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> SloBPE:
-        """Deserialize tokenizer state from a dict."""
+    def from_dict(cls, data: dict, origin: str | None = None) -> SloBPE:
+        """Deserialize tokenizer state from a dict.
+
+        ``origin`` records where the state was loaded from (e.g.
+        ``checkpoint:<path>``); it is provenance-only and never serialized.
+        """
         tok = cls()
+        tok.origin = origin
         tok.vocab = data["vocab"]
         tok.merges = [(m[0], m[1]) for m in data["merges"]]
         tok.stoi = data["stoi"]
@@ -902,6 +924,17 @@ class SloUnigram:
         self._pretokenizer: str = pretokenizer
         self._word_suffix: str = self.WORD_SUFFIX
         self._special_set: set[str] = set(self.SPECIAL_TOKENS)
+        self.origin: str | None = None
+
+    @property
+    def scheme(self) -> str:
+        """Core tokenizer provenance: the training/unigram family.
+
+        Single family value by design — the pretokenizer only changes how
+        boundaries are materialised, not the model family. See ``SloBPE.scheme``
+        for the sibling families (native/*, hf/*).
+        """
+        return "training/unigram"
 
     def _boundary_unit(self, pretok: str) -> str:
         """Pretoken plus its word boundary — the string the vocab is built from.
@@ -1358,9 +1391,14 @@ class SloUnigram:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> SloUnigram:
-        """Deserialize tokenizer state from a dict."""
+    def from_dict(cls, data: dict, origin: str | None = None) -> SloUnigram:
+        """Deserialize tokenizer state from a dict.
+
+        ``origin`` records where the state was loaded from (e.g.
+        ``checkpoint:<path>``); it is provenance-only and never serialized.
+        """
         tok = cls()
+        tok.origin = origin
         tok.vocab = data["vocab"]
         tok.stoi = data["stoi"]
         tok.itos = {int(k): v for k, v in data["itos"].items()}

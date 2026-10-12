@@ -240,16 +240,16 @@ class TokenizerManager:
         data[_TOKENIZER_ALGO_KEY] = self._algo
         return data
 
-    def from_dict(self, data: dict) -> None:
+    def from_dict(self, data: dict, origin: str | None = None) -> None:
         algo = data.get(_TOKENIZER_ALGO_KEY, "bpe")
         if algo == "unigram":
             from domain.training._internal.tokenizer import SloUnigram
 
-            self._tokenizer = SloUnigram.from_dict(data)
+            self._tokenizer = SloUnigram.from_dict(data, origin=origin)
         else:
             from domain.training._internal.tokenizer import SloBPE
 
-            self._tokenizer = SloBPE.from_dict(data)
+            self._tokenizer = SloBPE.from_dict(data, origin=origin)
         self._algo = algo
 
     def save(self, path: str) -> None:
@@ -260,7 +260,7 @@ class TokenizerManager:
     def load(self, path: str) -> None:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        self.from_dict(data)
+        self.from_dict(data, origin=f"checkpoint:{path}")
 
     # ------------------------------------------------------------------
     # Integration helpers
