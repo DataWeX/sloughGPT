@@ -75,7 +75,8 @@ def test_renders_every_step_label_and_skips_lifecycle():
 def test_header_carries_session_and_counts():
     html = render_html(_sample())
     assert "arken_run" in html
-    assert "5 steps" in html and "1 picks" in html and "1 failed" in html
+    assert "5 steps" in html and "1 pick" in html and "1 failed" in html
+    assert "1 picks" not in html  # pluralised correctly
 
 
 def test_click_targets_line_up_across_panes():
@@ -149,9 +150,10 @@ def test_label_with_braces_survives_intact():
 # ── segments + empty state ──────────────────────────────────────────────────
 
 
-def test_page_boundary_drawn_between_navigations():
-    html = render_html(_sample())  # two NAVIGATE segments
-    assert "page boundary" in html
+def test_page_boundary_names_the_navigation_target():
+    html = render_html(_sample())  # second segment opens with "go /settings"
+    assert "page: go /settings" in html
+    assert "page boundary" not in html  # generic label retired
 
 
 def test_empty_graph_renders_empty_state():
@@ -183,3 +185,47 @@ def test_save_html_writes_openable_file(tmp_path):
     assert text.startswith("<!doctype html>")
     assert "selectStep" in text
     assert out.stat().st_size > 1000
+
+
+# ── quirk regressions (viewer polish round) ─────────────────────────────────
+
+
+def test_truncation_keeps_map_list_and_details_aligned():
+    """A >500-step flow must cap the MAP at the same 500 the list renders —
+    otherwise map nodes past the cap call selectStep() with no detail."""
+    big = build_flow([_ev(i, EventType.CLICK, f"step {i}") for i in range(1, 503)])
+    html = render_html(big)
+    assert html.count('id="li') == 500  # list capped
+    assert html.count('id="n') == 500  # map capped to the SAME count
+    assert html.count('id="d') == 500  # details capped to the same count
+    assert "selectStep(500)" not in html  # indices are 0..499 only
+    assert "showing first 500 of 502 steps" in html  # truncation is visible
+    assert "502 steps" in html  # header counts the FULL flow
+
+
+def test_keyboard_navigation_attrs():
+    html = render_html(_sample())
+    # both panes are operable without a mouse
+    assert html.count("onkeydown") == 10  # 5 list items + 5 map nodes
+    assert 'tabindex="0"' in html
+    assert 'role="button"' in html  # map nodes
+    assert 'aria-label="Step ' in html  # map nodes carry accessible names
+    assert "aria-current" in html  # selection announced, not just coloured
+
+
+def test_focus_visible_and_narrow_window_styles():
+    html = render_html(_sample())
+    assert ":focus-visible" in html  # keyboard focus is visible, not silent
+    assert "@media (max-width: 1100px)" in html  # side panels narrow on small screens
+    # the media block must be CLOSED — an unclosed one swallows later rules
+    assert "290px; }\n  }\n  .seq" in html
+
+
+def test_long_label_truncated_in_map_full_in_detail():
+    long_label = "L" * 60
+    g = build_flow([_ev(1, EventType.CLICK, long_label)])
+    html = render_html(g)
+    # map text node: "[seq] " + 27 chars + ellipsis (fits _NODE_W)
+    assert f"[1] {'L' * 27}\u2026" in html
+    # the detail panel still shows the full instruction
+    assert long_label in html

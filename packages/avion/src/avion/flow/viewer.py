@@ -36,14 +36,19 @@ if TYPE_CHECKING:  # avoid a circular import with the package __init__
     from avion.flow import FlowGraph, FlowStep
 
 # Display constants (kept here so the layout is one readable block).
-_NODE_W = 220
+_NODE_W = 240
 _NODE_H = 46
 _NODE_GAP = 34
 _SEGMENT_GAP = 64
 _SVG_W = 640
 _SVG_X = _SVG_W // 2
-_MAX_LABEL = 30
+_MAX_LABEL = 28  # fits "[123] " prefix + text inside _NODE_W at font-size 11
 _MAX_STEPS = 500  # safety cap; a flow bigger than this is a log, not a map
+
+
+def _count(n: int, word: str) -> str:
+    """'1 step' / '2 steps' — pluralise instead of shipping '1 picks'."""
+    return f"{n} {word}" + ("" if n == 1 else "s")
 
 
 def _label(step: FlowStep) -> str:
@@ -142,7 +147,10 @@ def _map_svg(graph: FlowGraph) -> str:
     for si, seg in enumerate(segments):
         if si > 0:
             y += _SEGMENT_GAP - _NODE_GAP
-            seg_labels.append((y - _SEGMENT_GAP // 2 - 6, "page boundary"))
+            # name the boundary after the navigation that opened the page,
+            # not a generic "page boundary"
+            target = " ".join(seg[0].label.split())[:40] if seg else ""
+            seg_labels.append((y - _SEGMENT_GAP // 2 - 6, f"page: {target}"))
             y += _SEGMENT_GAP // 2
         for step in seg:
             i = idx_by_id[id(step)]
@@ -191,7 +199,10 @@ def _map_svg(graph: FlowGraph) -> str:
             )
         parts.append(
             f'<g class="node {cls}" id="n{i}" onclick="selectStep({i})" '
-            'style="cursor:pointer">'
+            f'onkeydown="if(event.key===\'Enter\'||event.key===\' \')'
+            f'{{event.preventDefault();selectStep({i})}}" '
+            f'role="button" tabindex="0" aria-label="Step {step.seq}: '
+            f'{_label(step)}" style="cursor:pointer">'
             f"{shape}"
             f'<text x="{_SVG_X}" y="{cy + 4}" text-anchor="middle" font-size="11" '
             f'font-family="system-ui,sans-serif" fill="#111827">'
@@ -204,10 +215,16 @@ def _map_svg(graph: FlowGraph) -> str:
 def render_html(graph: FlowGraph) -> str:
     """Render the flow as one standalone trace-viewer HTML page."""
     steps = graph.steps[:_MAX_STEPS]
+    # Build the map from the SAME capped steps the list renders: otherwise a
+    # >500-step flow emits map nodes whose selectStep() has no detail panel.
+    view = type(graph)(steps=list(steps), session_name=graph.session_name)
     title = html.escape(graph.session_name or "avion flow")
 
     list_items = "".join(
-        f'<li id="li{i}" onclick="selectStep({i})" class="{"" if s.success else "bad"}">'
+        f'<li id="li{i}" onclick="selectStep({i})" '
+        f'onkeydown="if(event.key===\'Enter\'||event.key===\' \')'
+        f'{{event.preventDefault();selectStep({i})}}" tabindex="0"'
+        f' class="{"" if s.success else "bad"}">'
         f'<span class="seq">{s.seq}</span> '
         f'<span class="type">{html.escape(s.type)}</span> '
         f"<span>{_label(s)}</span></li>"
@@ -215,8 +232,15 @@ def render_html(graph: FlowGraph) -> str:
     )
     details = "".join(_detail_panel(i, s) for i, s in enumerate(steps))
     counts = (
-        f"{len(graph.steps)} steps \u00b7 {len(graph.picks)} picks"
+        f"{_count(len(graph.steps), 'step')} \u00b7 "
+        f"{_count(len(graph.picks), 'pick')}"
         + (f" \u00b7 {len(graph.failed)} failed" if graph.failed else "")
+    )
+    trunc = (
+        f'<p class="empty">showing first {_MAX_STEPS} of '
+        f"{len(graph.steps)} steps</p>"
+        if len(graph.steps) > _MAX_STEPS
+        else ""
     )
     empty = (
         '<p class="empty">No steps recorded yet \u2014 run a flow, then reload.</p>'
@@ -245,6 +269,11 @@ def render_html(graph: FlowGraph) -> str:
   .timeline li:hover {{ background: #f3f4f6; }}
   .timeline li.active {{ background: #ede9fe; outline: 1px solid #7c3aed; }}
   .timeline li.bad .type {{ color: #dc2626; }}
+  .timeline li:focus-visible, .map .node:focus-visible {{
+    outline: 2px solid #7c3aed; outline-offset: 2px; }}
+  @media (max-width: 1100px) {{
+    main {{ grid-template-columns: 210px 1fr 290px; }}
+  }}
   .seq {{ font-family: monospace; color: #6b7280; min-width: 2ch; }}
   .type {{ font-weight: 600; color: #7c3aed; }}
   .map {{ background: #f9fafb; padding: 12px; display: flex;
@@ -271,8 +300,8 @@ def render_html(graph: FlowGraph) -> str:
 </style>
 <header><h1>{title}</h1><span class="counts">{counts}</span></header>
 <main>
-  <aside class="timeline"><ul>{list_items}</ul>{empty}</aside>
-  <div class="map">{_map_svg(graph) if steps else ''}</div>
+  <aside class="timeline"><ul>{list_items}</ul>{empty}{trunc}</aside>
+  <div class="map">{_map_svg(view) if steps else ''}</div>
   <section class="details">{details}
     <p class="empty"{' hidden' if steps else ''}>Nothing selected.</p>
   </section>
@@ -281,13 +310,15 @@ def render_html(graph: FlowGraph) -> str:
 function selectStep(i) {{
   document.querySelectorAll('.detail').forEach(d => d.hidden = true);
   const d = document.getElementById('d' + i); if (d) d.hidden = false;
-  document.querySelectorAll('.timeline li').forEach(
-    el => el.classList.remove('active'));
+  document.querySelectorAll('.timeline li').forEach(el => {{
+    el.classList.remove('active'); el.removeAttribute('aria-current'); }});
   const li = document.getElementById('li' + i);
-  if (li) {{ li.classList.add('active'); li.scrollIntoView({{block: 'nearest'}}); }}
-  document.querySelectorAll('.map .node').forEach(
-    el => el.classList.remove('active'));
-  const n = document.getElementById('n' + i); if (n) n.classList.add('active');
+  if (li) {{ li.classList.add('active'); li.setAttribute('aria-current', 'true');
+             li.scrollIntoView({{block: 'nearest'}}); }}
+  document.querySelectorAll('.map .node').forEach(el => {{
+    el.classList.remove('active'); el.removeAttribute('aria-current'); }});
+  const n = document.getElementById('n' + i);
+  if (n) {{ n.classList.add('active'); n.setAttribute('aria-current', 'true'); }}
 }}
 if (document.getElementById('d0')) selectStep(0);
 </script>
