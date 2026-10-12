@@ -4,6 +4,23 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-12 ~09:00 — KERNEL DEVICE BASEBOARD FIX PORTED (branch
+`fix/kernel-device-baseboard-port`, card a641d68e stranded-done-fix).**
+Card was `done` on evidence that never left the machine: `47de9a882` (test port
+off the 96b0d69d1 baseboard rewrite + 3 restored DeviceTable invariants) sat
+unpushed on the dead `fix/gpu-accelerator-ops-restore` lane while
+`test_kernel_devices.py` stayed 24-red on origin/main. Cherry-picked `-x` as
+`a3de3ef37` (applied clean — git followed the test-root rename) + a second
+commit `1a0db577d` porting `DeviceTable/DeviceManager.alias()` from stranded
+`1a2fb8588` (the fd-alive-while-alias-survives invariant needs it). Gates:
+kernel pair 75/75 (was 25F), consumer sweep failure set byte-identical to
+clean-HEAD baseline outside the 25 fixed, ruff+py_compile clean. Still
+stranded, NOT ported: the rest of `1a2fb8588` (devices.py AI family — 4 red
+tests, VFS dispatch, repl renderer, benchmark_devices). NOTE the accelerator
+op-restore ALSO duplicated `fix/gpu-accelerator-ops-restore@19760f7c9`
+(Oct 10, unpushed) — mine (`fix/cpu-accelerator-elementwise` `20ef82c8c`) is
+the pushed one.
+
 **2026-10-11 ~04:14 — GENE BATCH 3 FINISHED INLINE (Gene's 4th infra death,
 ETIMEOUT) + queue sweep.** Landed: `14ccda235` one-pytest-config PART 1
 (port of stranded f2cc0ee0a — packages/core-py/pytest.ini deleted, root ini
