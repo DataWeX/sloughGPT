@@ -1141,10 +1141,18 @@ class TestTrainingDataPathValidation:
 
 
 class TestCheckpointPruning:
-    """Tests for _prune_stale_checkpoints behavior."""
+    """Tests for _prune_stale_checkpoints behavior.
+
+    Retention is scoped to one job (b7ec9a7e6): the shared ``checkpoint_dir``
+    may hold other jobs' checkpoints, and a prune must never evict them — the
+    old directory-wide sweep deleted them and their owners' Resume then failed.
+    These tests therefore seed files under this run's own stem (no
+    ``data_path``/``soul_name`` on the trainer -> ``stem_for`` fallback
+    ``"assistant"``) and assert a foreign job's file survives alongside them.
+    """
 
     def test_prune_keeps_max_checkpoints(self, tmp_path, monkeypatch):
-        """During training, max_checkpoints newest files are kept."""
+        """During training, max_checkpoints newest OWNED files are kept."""
         import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(
@@ -1157,39 +1165,47 @@ class TestCheckpointPruning:
         trainer._last_checkpoint_path = None
 
         for i in range(5):
-            f = tmp_path / f"ckpt_{i}.soul"
+            f = tmp_path / f"assistant_{i}.soul"
             f.write_text(f"checkpoint {i}")
             os.utime(f, (i, i))
+        foreign = tmp_path / "other_job.soul"
+        foreign.write_text("another job's resume")
+        os.utime(foreign, (0, 0))
 
         trainer._prune_stale_checkpoints(keep_final=False)
 
-        remaining = list(tmp_path.glob("*.soul"))
-        assert len(remaining) == 3
+        remaining = sorted(p.name for p in tmp_path.glob("assistant*.soul"))
+        # newest three by mtime (2, 3, 4) stay; 0 and 1 are evicted.
+        assert remaining == ["assistant_2.soul", "assistant_3.soul", "assistant_4.soul"]
+        assert foreign.exists()
 
     def test_prune_final_keeps_one(self, tmp_path, monkeypatch):
-        """On final save, only the newest checkpoint is kept."""
+        """On final save, only this run's newest checkpoint is kept — others' files survive."""
         import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(checkpoint_dir=str(tmp_path))
         trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
         trainer.config = config
         trainer._best_model_path = None
-        trainer._last_checkpoint_path = str(tmp_path / "final.soul")
+        trainer._last_checkpoint_path = str(tmp_path / "assistant_final.soul")
 
         for i in range(4):
-            f = tmp_path / f"ckpt_{i}.soul"
+            f = tmp_path / f"assistant_{i}.soul"
             f.write_text(f"checkpoint {i}")
             os.utime(f, (i, i))
 
-        final = tmp_path / "final.soul"
+        final = tmp_path / "assistant_final.soul"
         final.write_text("final checkpoint")
         os.utime(final, (10, 10))
+        foreign = tmp_path / "other_job.soul"
+        foreign.write_text("another job's resume")
+        os.utime(foreign, (0, 0))
 
         trainer._prune_stale_checkpoints(keep_final=True)
 
         remaining = list(tmp_path.glob("*.soul"))
-        assert len(remaining) == 1
         assert final in remaining
+        assert sorted(p.name for p in remaining) == ["assistant_final.soul", "other_job.soul"]
 
     def test_prune_final_rewires_best_model_path(self, tmp_path):
         """After final prune, _best_model_path points to final checkpoint."""
@@ -1241,7 +1257,7 @@ class TestCheckpointPruning:
         trainer._prune_stale_checkpoints(keep_final=False)
 
     def test_prune_cleans_meta_files(self, tmp_path):
-        """Pruning removes associated .meta.json files."""
+        """Pruning removes evicted checkpoints' sidecars — and only theirs."""
         import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(checkpoint_dir=str(tmp_path), max_checkpoints=1)
@@ -1251,15 +1267,21 @@ class TestCheckpointPruning:
         trainer._last_checkpoint_path = None
 
         for i in range(3):
-            f = tmp_path / f"ckpt_{i}.soul"
+            f = tmp_path / f"assistant_{i}.soul"
             f.write_text(f"checkpoint {i}")
-            meta = tmp_path / f"ckpt_{i}.soul.meta.json"
-            meta.write_text(f'{{"name": "ckpt_{i}"}}')
+            meta = tmp_path / f"assistant_{i}.soul.meta.json"
+            meta.write_text(f'{{"name": "assistant_{i}"}}')
             os.utime(f, (i, i))
+        foreign = tmp_path / "other_job.soul"
+        foreign.write_text("another job's resume")
+        foreign_meta = tmp_path / "other_job.soul.meta.json"
+        foreign_meta.write_text('{"name": "other_job"}')
 
         trainer._prune_stale_checkpoints(keep_final=False)
 
-        remaining_soul = list(tmp_path.glob("*.soul"))
-        remaining_meta = list(tmp_path.glob("*.meta.json"))
-        assert len(remaining_soul) == 1
-        assert len(remaining_meta) == 1
+        remaining_soul = sorted(p.name for p in tmp_path.glob("*.soul"))
+        remaining_meta = sorted(p.name for p in tmp_path.glob("*.meta.json"))
+        # Only assistant_0/1 (with their sidecars) were evicted; assistant_2
+        # is kept by the window and the foreign job's pair is never touched.
+        assert remaining_soul == ["assistant_2.soul", "other_job.soul"]
+        assert remaining_meta == ["assistant_2.soul.meta.json", "other_job.soul.meta.json"]
