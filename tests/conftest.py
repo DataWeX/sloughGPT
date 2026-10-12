@@ -102,3 +102,8 @@ class TestHelpers:
 @pytest.fixture
 def helpers() -> TestHelpers:
     return TestHelpers()
+
+
+def pytest_sessionstart(session):
+    try: from scripts.purge_stale_pyc import purge_stale_pyc; purge_stale_pyc(apply=True)  # noqa: I001
+    except Exception: pass  # bytecode purge is a guard, never a session-breaker
