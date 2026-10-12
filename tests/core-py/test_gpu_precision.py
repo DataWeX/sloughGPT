@@ -498,9 +498,18 @@ class TestModuleLevelFunctions:
         assert acc1 is not acc2
 
     def test_set_accelerator_precision_fp16(self):
+        # The effective precision is backend-dependent BY DESIGN: CUDA hardcodes
+        # _fp16_available = True (a real tensor-core path), while Metal and the
+        # numpy base default to False. Asserting a bare "fp32" passed only on
+        # fp16-incapable hardware and failed outright on a CUDA host, so state
+        # the contract — the answer must follow backend capability — instead of
+        # pinning one machine's answer. The fp32 fallback itself stays covered
+        # by TestBaseAcceleratorPrecision, which exercises the CPU path where
+        # _fp16_available is False.
         reset_accelerator()
-        result = set_accelerator_precision("fp16")
-        assert result == "fp32"
+        acc = get_accelerator()
+        expected = "fp16" if acc._fp16_available else "fp32"
+        assert set_accelerator_precision("fp16") == expected
 
     def test_set_accelerator_precision_unknown(self):
         reset_accelerator()
