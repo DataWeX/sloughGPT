@@ -106,9 +106,10 @@ class SloBPE:
         """
         if self._pretokenizer == "gpt2":
             return "training/bpe-byte-level"
-        if self._pretokenizer == "whitespace":
-            return "training/bpe-whitespace"
-        return "training/bpe-unknown"
+        # Everything else — including unrecognized values — falls through to
+        # whitespace-style handling in encode, so the scheme says so rather
+        # than inventing a family name (user decision, card 2a586fea).
+        return "training/bpe-whitespace"
 
     @property
     def pad_id(self) -> int:

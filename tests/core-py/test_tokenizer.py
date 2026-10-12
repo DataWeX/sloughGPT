@@ -737,8 +737,10 @@ class TestProvenance:
     def test_scheme_bpe_whitespace(self):
         assert SloBPE(pretokenizer="whitespace").scheme == "training/bpe-whitespace"
 
-    def test_scheme_bpe_unknown_pretokenizer_is_truthful(self):
-        assert SloBPE(pretokenizer="weird").scheme == "training/bpe-unknown"
+    def test_scheme_bpe_unknown_pretokenizer_matches_runtime_fallthrough(self):
+        # encode() falls through to whitespace handling for anything that is
+        # not gpt2 — the scheme must mirror the behavior, not invent a family.
+        assert SloBPE(pretokenizer="weird").scheme == "training/bpe-whitespace"
 
     def test_scheme_v1_from_dict_forced_whitespace(self):
         # v1 checkpoints force the whitespace pretokenizer — scheme must agree.
