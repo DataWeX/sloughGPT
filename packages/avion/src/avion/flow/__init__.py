@@ -181,3 +181,18 @@ def load_flow(path: str) -> FlowGraph:
 # browser avion owns (import at the end — complete imports the session,
 # which must not be pulled in before the pure map above).
 from avion.flow.complete import FlowOutcome, complete_flow  # noqa: E402,F401
+
+# Imported last so viewer.py's TYPE_CHECKING-only import of FlowGraph (and the
+# names above) never races package initialisation.
+from avion.flow.viewer import render_html, save_html  # noqa: E402
+
+__all__ = [
+    "FlowGraph",
+    "FlowStep",
+    "FlowOutcome",
+    "build_flow",
+    "complete_flow",
+    "load_flow",
+    "render_html",
+    "save_html",
+]
