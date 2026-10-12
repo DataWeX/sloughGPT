@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from app_planner import config
+from app_planner.notes_controller import NotesController, NoteStoreError, NoteValidationError
 from app_planner.store import PlannerStore, get_store
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -31,33 +32,37 @@ def _auto_sync(store: PlannerStore) -> tuple[int, int, int] | None:
         return None
 
 
+def _note_ctl(args: argparse.Namespace) -> NotesController:
+    """Controller over the CLI's store — one validation/read-model contract."""
+    return NotesController(_get_store(args))
+
+
 # ── Note subcommands ─────────────────────────────────────────────────────
 
 
 def _note_new(args: argparse.Namespace) -> int:
-    store = _get_store(args)
-    tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
-    status = args.status or "open"
-    if status not in config.STATUSES:
-        print(f"Invalid status: {status}. Valid: {', '.join(config.STATUSES)}", file=sys.stderr)
+    ctl = _note_ctl(args)
+    try:
+        note = ctl.create(
+            args.title,
+            tags=[t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else [],
+            status=args.status or "open",
+            body=args.body or "",
+            sprint=args.sprint or "",
+            gh=args.gh or "",
+            assignee=args.author or "",
+        )
+    except NoteValidationError as e:
+        print(f"{e}", file=sys.stderr)
         return 2
-    note = store.create_note(
-        args.title,
-        tags=tags,
-        status=status,
-        body=args.body or "",
-        sprint=args.sprint or "",
-        gh=args.gh or "",
-        assignee=args.author or "",
-    )
-    _auto_sync(store)
+    _auto_sync(ctl.store)
     print(f"Created note: {note.id[:8]} — {note.title}")
     return 0
 
 
 def _note_list(args: argparse.Namespace) -> int:
-    store = _get_store(args)
-    notes = store.list_notes(tag=args.tag, status=args.status, limit=args.limit)
+    ctl = _note_ctl(args)
+    notes = ctl.list_notes(tag=args.tag, status=args.status, limit=args.limit)
     for note in notes:
         icon = "\u25cf" if note.status == "done" else "\u25cb"
         tags = ",".join(note.tags[:3]) if note.tags else ""
@@ -67,8 +72,12 @@ def _note_list(args: argparse.Namespace) -> int:
 
 
 def _note_show(args: argparse.Namespace) -> int:
-    store = _get_store(args)
-    note = store.get_note(args.id)
+    ctl = _note_ctl(args)
+    try:
+        note = ctl.get(args.id)
+    except NoteValidationError as e:
+        print(f"{e}", file=sys.stderr)
+        return 2
     if not note:
         print(f"Note not found: {args.id}", file=sys.stderr)
         return 1
@@ -85,7 +94,7 @@ def _note_show(args: argparse.Namespace) -> int:
 
 
 def _note_update(args: argparse.Namespace) -> int:
-    store = _get_store(args)
+    ctl = _note_ctl(args)
     updates: dict = {}
     if args.status:
         updates["status"] = args.status
@@ -95,19 +104,30 @@ def _note_update(args: argparse.Namespace) -> int:
         updates["title"] = args.title
     if args.body is not None:
         updates["body"] = args.body
-    note = store.update_note(args.id, **updates)
+    try:
+        note = ctl.update(args.id, **updates)
+    except NoteValidationError as e:
+        print(f"{e}", file=sys.stderr)
+        return 2
     if not note:
         print(f"Note not found: {args.id}", file=sys.stderr)
         return 1
-    _auto_sync(store)
+    _auto_sync(ctl.store)
     print(f"Updated: {note.id[:8]} — {note.title}")
     return 0
 
 
 def _note_delete(args: argparse.Namespace) -> int:
-    store = _get_store(args)
-    if store.delete_note(args.id):
-        _auto_sync(store)
+    ctl = _note_ctl(args)
+    try:
+        gone = ctl.delete(args.id)
+    except NoteStoreError as e:
+        # The store claimed a delete that did not take: report it rather than
+        # print a success that would be false.
+        print(f"{e}", file=sys.stderr)
+        return 1
+    if gone:
+        _auto_sync(ctl.store)
         print(f"Deleted: {args.id[:8]}")
         return 0
     print(f"Note not found: {args.id}", file=sys.stderr)
@@ -115,8 +135,12 @@ def _note_delete(args: argparse.Namespace) -> int:
 
 
 def _note_search(args: argparse.Namespace) -> int:
-    store = _get_store(args)
-    notes = store.search_notes(args.query)
+    ctl = _note_ctl(args)
+    try:
+        notes = ctl.search(args.query)
+    except NoteValidationError as e:
+        print(f"{e}", file=sys.stderr)
+        return 2
     for note in notes:
         icon = "\u25cf" if note.status == "done" else "\u25cb"
         print(f"  {icon} [{note.id[:8]}] {note.title}")
