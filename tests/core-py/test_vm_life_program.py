@@ -69,27 +69,45 @@ def _spawn() -> X86VirtualSystem:
     return vs
 
 
-def _drain(vs: X86VirtualSystem, budget: int = 400_000) -> None:
+def _drain(vs: X86VirtualSystem, budget: int = 400_000) -> bool:
     """Step until the keyboard byte at [0x400] is consumed (or budget spent).
 
     Then settle a little: the byte clears inside ``poll_key``, before the
     consuming program finishes acting on it (echoing the digit, updating
     state), so post-consume steps must run before callers inspect memory.
+
+    Returns True when the CPU halted during the drain.  Halt is NOT sticky
+    in this CPU: ``hlt`` raises with EIP already past the F4 byte and no
+    halted flag is recorded, so a later ``run()`` call would happily resume
+    execution one byte after the hlt (falling into step_gen's ``ret``, which
+    pops the empty stack at 0xB8000 and jumps into the VGA cell pattern —
+    MemFault at e.g. 0x8FA08FA).  Every helper must therefore know whether
+    the CPU is already dead instead of probing it with another run.
     """
     limit = vs.cpu._step_count + budget
     while vs.cpu._mem[0x400] != 0 and vs.cpu._step_count < limit:
-        vs.cpu.step()
+        if not vs.cpu.step():
+            vs._life_halted = True
+            return True
     settle = vs.cpu._step_count + 2_000
-    while vs.cpu._step_count < settle and vs.cpu.step():
-        pass
+    while vs.cpu._step_count < settle:
+        if not vs.cpu.step():
+            vs._life_halted = True
+            return True
+    return False
 
 
-def _feed(vs: X86VirtualSystem, keys: str, budget: int = 400_000) -> None:
-    """Type `keys`, waiting for each byte to be consumed before the next."""
+def _feed(vs: X86VirtualSystem, keys: str, budget: int = 400_000) -> bool:
+    """Type `keys`, waiting for each byte to be consumed before the next.
+
+    Returns True if the CPU halted before all keys were delivered.
+    """
     for ch in keys:
         vs.cpu.push_key(ch)
         vs.cpu.transfer_key()
-        _drain(vs, budget)
+        if _drain(vs, budget):
+            return True
+    return False
 
 
 def _backspace(vs: X86VirtualSystem, budget: int = 400_000) -> None:
@@ -111,9 +129,21 @@ def _run_until(vs: X86VirtualSystem, predicate, budget: int = 3_000_000) -> bool
 
 
 def _halted(vs: X86VirtualSystem, budget: int = 3_000_000) -> bool:
-    """Run to halt; True when the CPU stopped before exhausting the budget."""
+    """Run to halt; True when the CPU stopped before exhausting the budget.
+
+    If an earlier helper already observed the halt (see ``_drain``), do NOT
+    call run() again — Halt is not sticky and a second run would resume past
+    the hlt byte.  (bug found via test_pause_step_reseed_quit: the 'q' path
+    halts inside _feed's settle phase, and the follow-up run() re-entered a
+    dead CPU.)
+    """
+    if getattr(vs, "_life_halted", False):
+        return True
     limit = vs.cpu._step_count + budget
-    return vs.cpu.run(max_steps=limit) < limit
+    stopped = vs.cpu.run(max_steps=limit) < limit
+    if stopped:
+        vs._life_halted = True
+    return stopped
 
 
 def _grid(vs: X86VirtualSystem) -> set[tuple[int, int]]:
