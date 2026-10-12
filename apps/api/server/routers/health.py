@@ -26,6 +26,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncGenerator
+from typing import Any
 
 from controllers.health import get_health_controller
 from fastapi import APIRouter, Request
@@ -47,6 +48,11 @@ class HealthRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/health", tags=["health"])
         self.HEALTH_STREAM_INTERVAL = 3.0
+        # A snapshot slower than the cadence is merely late. One that has taken
+        # 3x the cadence is stuck — and a stuck health stream that says nothing
+        # is indistinguishable from a healthy one to any observer. Past this
+        # bound we report the stall instead of going quiet.
+        self.HEALTH_SNAPSHOT_STALL_S = self.HEALTH_STREAM_INTERVAL * 3
         self._register_routes()
 
     def _register_routes(self):
@@ -881,27 +887,104 @@ class HealthRouter:
         ctrl = get_health_controller()
 
         async def generate() -> AsyncGenerator[str, None]:
+            # The snapshot build runs as ONE long-lived task that this loop
+            # polls, rather than being awaited inline. Two separate reasons:
+            #
+            # 1. Visibility. `_build_health_snapshot` -> `get_detailed_health()`
+            #    is synchronous and unbounded. Awaited inline, a subsystem check
+            #    that blocks (a lock, a subprocess, a network call) wedges the
+            #    stream with no signal whatsoever — and this is the one stream
+            #    an observer most needs to be able to distinguish from a dead
+            #    process. Polling keeps us speaking while it is stuck.
+            #
+            # 2. Lifetime. `asyncio.wait_for(asyncio.to_thread(...))` abandons
+            #    the *future* on timeout, not the thread underneath it. Retrying
+            #    that naively every cycle spawns a fresh pool thread per cycle
+            #    (measured on 3.12.14: live threads 2->3->4->5 over four cycles).
+            #    Shielding a single task means exactly one build is ever in
+            #    flight (measured: flat at 2 across ten cycles).
+            #
+            # The `task.done()` check below is load-bearing, not an optimisation.
+            # A build can finish *during* a cycle whose wait timed out. Without
+            # it the next cycle sees the task already done, discards the
+            # finished result and starts another build — so the stream stalls
+            # forever and re-spawns a thread each time a build completes.
+            task: asyncio.Task | None = None
+
+            def _frame(payload: dict[str, Any]) -> str:
+                return "data: " + json.dumps(payload, default=str) + "\n\n"
+
+            def _stall_frame() -> str:
+                waited = self.HEALTH_SNAPSHOT_STALL_S
+                return _frame(
+                    {
+                        "stream": "health",
+                        "phase": "STALL",
+                        # Still "working", not "error": the stream is alive and
+                        # the check may yet return. Clients keying on `status`
+                        # are unaffected; clients reading `phase` get a
+                        # distinct signal. (`health-blocks.ts` reads neither.)
+                        "status": "working",
+                        "data": {
+                            "stalled": True,
+                            "waited_seconds": round(waited, 1),
+                            "interval_seconds": self.HEALTH_STREAM_INTERVAL,
+                        },
+                        "message": (
+                            f"health check has not returned in {waited:.0f}s; "
+                            "a subsystem is likely blocked"
+                        ),
+                    }
+                )
+
+            def _error_frame(exc: Exception) -> str:
+                return _frame(
+                    {
+                        "stream": "health",
+                        "phase": "ERROR",
+                        "status": "error",
+                        "data": {"error": str(exc)},
+                        "message": str(exc),
+                    }
+                )
+
             while True:
                 if await request.is_disconnected():
                     break
-                try:
-                    snapshot = await asyncio.to_thread(self._build_health_snapshot, ctrl)
-                    yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
-                except Exception as e:
-                    logger.warning("Health stream snapshot failed: %s", e)
-                    yield (
-                        "data: "
-                        + json.dumps(
-                            {
-                                "stream": "health",
-                                "phase": "ERROR",
-                                "status": "error",
-                                "data": {"error": str(e)},
-                                "message": str(e),
-                            }
-                        )
-                        + "\n\n"
+
+                if task is None:
+                    task = asyncio.create_task(
+                        asyncio.to_thread(self._build_health_snapshot, ctrl)
                     )
+
+                try:
+                    snapshot = await asyncio.wait_for(
+                        asyncio.shield(task), timeout=self.HEALTH_SNAPSHOT_STALL_S
+                    )
+                    frame = _frame(snapshot)
+                    task = None  # consumed — the next cycle starts a new build
+                except TimeoutError:
+                    if not task.done():
+                        logger.warning(
+                            "Health stream snapshot stalled after %.1fs",
+                            self.HEALTH_SNAPSHOT_STALL_S,
+                        )
+                        frame = _stall_frame()
+                    else:
+                        # Finished during this cycle's wait: take the result
+                        # rather than throwing it away and building again.
+                        try:
+                            frame = _frame(await task)
+                        except Exception as exc:
+                            logger.warning("Health stream snapshot failed: %s", exc)
+                            frame = _error_frame(exc)
+                        task = None
+                except Exception as exc:
+                    logger.warning("Health stream snapshot failed: %s", exc)
+                    frame = _error_frame(exc)
+                    task = None
+
+                yield frame
                 await asyncio.sleep(self.HEALTH_STREAM_INTERVAL)
 
         return StreamingResponse(
