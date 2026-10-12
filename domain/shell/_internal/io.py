@@ -49,6 +49,15 @@ def readline_safe_prompt(prompt: str) -> str:
 class ShellIO(Protocol):
     """Abstract I/O interface — swap for TUI, tests, etc."""
 
+    owns_stdin: bool
+    """Whether this object is the sole reader of the terminal descriptor.
+
+    Declared, never probed. Every ShellIO must answer it, because a probe
+    cannot distinguish "curses owns this descriptor" from "nobody owns it" —
+    both are ttys — and guessing wrong puts the terminal into raw mode behind
+    the TUI's back. `InteractiveBase._detect_tty` reads this and nothing else.
+    """
+
     def write(self, text: str, end: str = "\n") -> None: ...
     def read(self, prompt: str = "") -> str: ...
     def flush(self) -> None: ...
@@ -92,6 +101,19 @@ class ConsoleIO:
 
     @property
     def _is_tty(self) -> bool:
+        return self._tty is not None or self._uses_stdin
+
+    @property
+    def owns_stdin(self) -> bool:
+        """True when this object holds the only handle on the terminal.
+
+        The same condition as `_is_tty`, and for the same reason: opening
+        /dev/tty successfully means nobody else has it, and falling back to
+        stdin means stdin *is* the terminal and nothing has been placed in
+        front of it. If a caller ever wraps stdin in something that reads it,
+        this is the line that has to change — which is why it is a property and
+        not a constant.
+        """
         return self._tty is not None or self._uses_stdin
 
     def write(self, text: str, end: str = "\n") -> None:
@@ -177,6 +199,21 @@ class ConsoleIO:
 class TuiIo:
     """ShellIO-compatible writer that feeds a TextSurface."""
 
+    owns_stdin = False
+    """Always False, and this is the declaration that matters.
+
+    A curses session *is* a tty, so the old `os.isatty(stdin.fileno())` probe
+    answered True here — and the prompt layer concluded it owned stdin, put the
+    terminal into raw mode behind curses' back, and called `os.read` on the
+    descriptor the event loop was already polling. Two readers, one
+    descriptor, keystrokes destroyed.
+
+    False is not a limitation, it is the truth: the event loop in front of this
+    object owns the descriptor, hands keys over through `CursesSession`, and
+    renders the frame. Anything wanting a key from the TUI goes through the
+    session, which queues what the loop already decoded.
+    """
+
     def __init__(self, surface: TextSurface) -> None:
         self._surface = surface
         self._tui_ref: Any | None = None
@@ -198,6 +235,9 @@ class TuiIo:
 
 class MemoryIO:
     """In-memory I/O for testing and programmatic use."""
+
+    owns_stdin = False
+    """Nothing here is a terminal, and a test script is not a keypress source."""
 
     def __init__(self) -> None:
         self._output: list[str] = []

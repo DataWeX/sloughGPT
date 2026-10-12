@@ -13,6 +13,20 @@ from domain.shell._internal.interactive import (
     InteractivePrompt,
     _RawKey,
 )
+
+# The raw-mode key vocabulary. `interactive` re-exports only the subset its own
+# fallback paths reach for; the filter-box tests drive the raw paths, which see
+# the full set.
+from domain.shell._internal.interactive_term import (
+    _CURSOR_UP,
+    _ERASE_LINE,
+    _KEY_BACKSPACE,
+    _KEY_DELETE,
+    _KEY_ENTER,
+    _KEY_ESC,
+    _KEY_HOME,
+    _KEY_LEFT,
+)
 from domain.shell._internal.io import MemoryIO
 
 
@@ -3599,3 +3613,1039 @@ class TestCalendarViewFallback:
         c = Console(io, has_readline=False)
         result = c.calendar_view(2024, 1)
         assert result is None
+
+
+# ── type-to-filter caret ──────────────────────────────────────────────────────
+
+
+import contextlib as _contextlib
+import io as _io_mod
+import re as _re
+
+from domain.shell._internal.tui_session import Key as _Key
+
+_CSI = _re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def _plain(text: str) -> str:
+    """Strip every CSI sequence and carriage return, leaving printable text."""
+    return _CSI.sub("", text).replace("\r", "")
+
+
+def _frames(raw: str) -> list[str]:
+    """Split a captured run into the individual frames that painted it.
+
+    The loop clears before painting, and `_clear` writes one `CURSOR_UP` per
+    line it must move back over, so splitting there recovers the frames.
+
+    Reading the whole capture instead is a trap: frame one is painted with an
+    empty query, and an empty query renders *every* option. Any assertion about
+    what matched would therefore pass on frame one no matter what the caret
+    actually did — which is exactly how five of these tests came back green
+    before a caret existed.
+    """
+    frames = []
+    for part in raw.split(_CURSOR_UP):
+        text = _CSI.sub("", part).replace("\r", "")
+        if text.strip():
+            frames.append(text)
+    return frames
+
+
+def _frame(raw: str) -> str:
+    """The last frame painted before the prompt returned."""
+    frames = _frames(raw)
+    return frames[-1] if frames else ""
+
+
+def _filter_text(raw: str, label: str = "Filter:") -> str:
+    """The contents of the final frame's *label* line, caret marker included.
+
+    Boxes do not agree on the word — most say `Filter:`, the search boxes say
+    `Search:` — so the label is a parameter rather than a second helper.
+    """
+    for line in _frame(raw).splitlines():
+        if label in line:
+            return line.split(label, 1)[1].strip()
+    return ""
+
+
+class _ScriptedSession:
+    """Replays a fixed key sequence through a prompt's raw-mode surface.
+
+    `read_key` raises rather than exhausting, so a script that forgets its
+    terminating key fails loudly instead of looping on an empty list.
+    """
+
+    def __init__(self, keys):
+        self._keys = list(keys)
+
+    def raw(self):
+        return _contextlib.nullcontext()
+
+    def read_key(self):
+        if not self._keys:
+            raise AssertionError("key script exhausted before the prompt returned")
+        return self._keys.pop(0)
+
+
+def _drive(p, options, keys, meth: str = "_select_raw") -> str:
+    """Run *meth* over *keys*, returning everything it wrote to stdout.
+
+    Always appends Esc, which is what every one of these prompts returns on, so
+    the loop terminates deterministically rather than depending on a test to
+    end it. The method name is a parameter because the family is seventeen
+    boxes with one shape and seventeen names.
+    """
+    p._session = _ScriptedSession([*keys, _RawKey(_KEY_ESC)])
+    buf = _io_mod.StringIO()
+    with _contextlib.redirect_stdout(buf):
+        getattr(p, meth)("Pick", options)
+    return buf.getvalue()
+
+
+def _form_frames(raw: str, message: str) -> list[str]:
+    """Split a form-style capture into one entry per repaint.
+
+    `_form_raw` repaints without ever returning to the top of the frame it is
+    replacing: it erases the single line the cursor happens to sit on and writes
+    a fresh copy of the whole form below. So the repaints run together, and
+    `_frames` — which splits on the cursor-up these prompts never emit between
+    paints — sees the entire capture as one frame.
+
+    The message line is the only seam. Every `_render` body opens with
+    `ERASE_LINE CR two-spaces message`, and after escape-stripping that is
+    nothing but the message at the head of a line. Splitting on the message
+    recovers the repaints, last one included.
+    """
+    parts = _re.split(rf"(?=\s*{_re.escape(message)})", _plain(raw))
+    return [p for p in parts if p.strip()]
+
+
+def _frame_with(raw: str, message: str, marker: str) -> str:
+    """The last repaint that still shows *marker* — i.e. the frame we mean.
+
+    The final repaint is always the submitted view, where the caret has already
+    gone, so "last frame" is the wrong frame. Failing loudly when no repaint
+    ever showed the marker is the point: a caret that never painted must not
+    read as a caret that was somewhere else.
+    """
+    for part in reversed(_form_frames(raw, message)):
+        if marker in part:
+            return part
+    raise AssertionError(f"no repaint ever showed {marker!r}")
+
+
+def _chars(text: str):
+    return [_RawKey(_KEY_CHAR, c) for c in text]
+
+
+class TestSelectFilterCaret:
+    """The type-to-filter box in `select` must behave like a normal input field.
+
+    It edits a bare `str` one character at a time from the end, so until now it
+    had no caret to move: left/right, home/end, word jumps and forward-delete
+    were all dead keys inside it, and backspace could only ever take the last
+    character off. Every other caret-bearing field in the shell already moves
+    (see `interactive_prompt`), so this is the one that lagged.
+
+    The assertions observe *what the filter matched*, not the markup around it,
+    because the match is the user-visible consequence of the caret position: a
+    caret that does not actually move insertion produces a different surviving
+    option list, which is a thing a test can see without parsing ANSI.
+    """
+
+    def test_filter_renders_caret(self):
+        p, _ = _make_prompt()
+        out = _drive(p, ["abc"], _chars("a"))
+        assert _filter_text(out) == "a|"
+
+    def test_caret_starts_at_end_so_typing_is_unchanged(self):
+        # Guard: the caret defaults to end-of-text, so plain typing must keep
+        # appending exactly as it did before there was a caret at all.
+        p, _ = _make_prompt()
+        out = _drive(p, ["abc"], _chars("abc"))
+        assert _filter_text(out).replace("|", "") == "abc"
+
+    def test_home_then_type_inserts_at_start(self):
+        # "abc" -> Home -> type X should make the query "Xabc". If Home is
+        # ignored the X lands at the end and the query becomes "abcX".
+        p, _ = _make_prompt()
+        out = _drive(p, ["Xabc"], [*_chars("abc"), _RawKey(_KEY_HOME), _RawKey(_KEY_CHAR, "X")])
+        assert _filter_text(out).replace("|", "") == "Xabc"
+
+    def test_backspace_takes_the_character_before_the_caret(self):
+        # "abc" -> Left -> Backspace should leave "ac". Backspacing from the
+        # end instead leaves "ab".
+        p, _ = _make_prompt()
+        out = _drive(
+            p,
+            ["ac"],
+            [*_chars("abc"), _RawKey(_KEY_LEFT), _RawKey(_KEY_BACKSPACE)],
+        )
+        assert _filter_text(out).replace("|", "") == "ac"
+
+    def test_delete_takes_the_character_at_the_caret(self):
+        # "abc" -> Home -> Delete should leave "bc". Today Delete is not bound
+        # in this branch at all, so the query stays "abc".
+        p, _ = _make_prompt()
+        out = _drive(p, ["bc"], [*_chars("abc"), _RawKey(_KEY_HOME), _RawKey(_KEY_DELETE)])
+        assert _filter_text(out).replace("|", "") == "bc"
+
+    def test_ctrl_left_jumps_to_the_start_of_the_word(self):
+        # "foo bar" -> Ctrl+Left lands before "bar"; typing X then makes
+        # "foo Xbar". This also proves the plain-Left branch cannot be the one
+        # firing: a one-character step from the end would give "foo baXr", and
+        # a chord left unhandled would give "foo barX".
+        p, _ = _make_prompt()
+        out = _drive(
+            p,
+            ["foo Xbar"],
+            [*_chars("foo bar"), _Key(_KEY_LEFT, ctrl=True), _RawKey(_KEY_CHAR, "X")],
+        )
+        assert _filter_text(out).replace("|", "") == "foo Xbar"
+
+    def test_filter_still_matches_the_whole_query_from_a_mid_caret(self):
+        # Moving the caret must not narrow the query: the filter always sees
+        # every character, wherever the caret happens to sit.
+        p, _ = _make_prompt()
+        out = _drive(p, ["ab", "abc"], [*_chars("ab"), _RawKey(_KEY_HOME)])
+        assert "ab" in _frame(out)
+        assert "abc" in _frame(out)
+
+
+# ── the rest of the filter-box family ─────────────────────────────────────────
+
+
+class TestSearchBoxCaret:
+    """A second box, in a different module, driven the same way.
+
+    `_select_raw` proved the helper works. This proves the hand-off reaches a
+    *different* file through a different chain — `interactive_select`'s search
+    box, which labels itself `Search:` and draws its bar with `_RESET` rather
+    than reverse video. A conversion verified at only one site is a conversion
+    verified at exactly one point.
+    """
+
+    def test_search_box_renders_its_bar(self):
+        p, _ = _make_prompt()
+        out = _drive(p, ["abc"], _chars("a"), "_select_with_search_raw")
+        assert _filter_text(out, "Search:") == "a│"
+
+    def test_search_box_inserts_at_a_moved_caret(self):
+        p, _ = _make_prompt()
+        out = _drive(
+            p,
+            ["Xabc"],
+            [*_chars("abc"), _RawKey(_KEY_HOME), _RawKey(_KEY_CHAR, "X")],
+            "_select_with_search_raw",
+        )
+        query = _filter_text(out, "Search:").replace("|", "").replace("│", "")
+        assert query == "Xabc"
+
+    def test_search_box_word_jumps(self):
+        p, _ = _make_prompt()
+        out = _drive(
+            p,
+            ["foo Xbar"],
+            [*_chars("foo bar"), _Key(_KEY_LEFT, ctrl=True), _RawKey(_KEY_CHAR, "X")],
+            "_select_with_search_raw",
+        )
+        query = _filter_text(out, "Search:").replace("|", "").replace("│", "")
+        assert query == "foo Xbar"
+
+
+class TestFilterBoxWiring:
+    """Sweep every type-to-filter box, so none can be left append-only.
+
+    Eighteen boxes across four modules gained a caret in one mechanical pass.
+    The risk in a pass like that is not that one box regressed — it is that one
+    box was silently *missed* and stayed append-only while its siblings moved,
+    which driving any single box would never show. This asserts the contract on
+    all of them at once, and counts them, so a box added later fails until it
+    is wired too.
+    """
+
+    MODULES = (
+        "interactive_input",
+        "interactive_prompt",
+        "interactive_select",
+        "interactive_table",
+    )
+    MIN_BOXES = 18
+
+    @staticmethod
+    def _boxes(module: str, needle: str = 'query = ""') -> list[tuple[str, str]]:
+        """`(method, source)` for each method in *module* owning a `needle` init.
+
+        The needle is a parameter rather than a second helper because there are
+        two families of text-entry surface with two buffer names — `query` for a
+        filter over options, `edit_buf` for a value being edited — and a sweep
+        that only knew about one of them is what let the other go caret-less.
+        """
+        import importlib
+        import inspect as _inspect
+
+        pkg = importlib.import_module(f"domain.shell._internal.{module}")
+        src = _inspect.getsource(pkg)
+        out = []
+        for m in _re.finditer(r"^    def (\w+)\(", src, _re.MULTILINE):
+            nxt = _re.search(r"^    def ", src[m.end() :], _re.MULTILINE)
+            body = src[m.start() : m.end() + (nxt.start() if nxt else len(src))]
+            if needle in body:
+                out.append((m.group(1), body))
+        return out
+
+    def test_every_filter_box_is_wired_to_the_shared_editor(self):
+        boxes = [(mod, name, body) for mod in self.MODULES for name, body in self._boxes(mod)]
+        assert len(boxes) >= self.MIN_BOXES, (
+            f"expected at least {self.MIN_BOXES} filter boxes, found {len(boxes)}: "
+            f"{[f'{m}.{n}' for m, n, _ in boxes]}"
+        )
+        for mod, name, body in boxes:
+            where = f"{mod}.{name}"
+            assert "qcur = 0" in body, f"{where}: never initialises its caret"
+            assert "_filter_view(query, qcur" in body, (
+                f"{where}: renders the query without a caret on it"
+            )
+            assert "self._filter_key(query, qcur, key)" in body, (
+                f"{where}: its keys never reach the shared editor"
+            )
+            assert "query, qcur," in body, f"{where}: throws the caret away"
+
+    def test_every_value_field_is_wired_to_the_shared_editor(self):
+        """The same contract for the three fields the query sweep cannot see.
+
+        `_form_raw`, `_config_editor_raw` and `_spreadsheet_editor_raw` edit a
+        *value* on `edit_buf`, so they carry no `query` and the sweep above
+        skips them entirely — which is how they came to be the last three
+        caret-less surfaces in the shell. Sweeping by `edit_buf = ""` instead
+        closes that hole, and keeps it closed if a fourth field is added.
+        """
+        boxes = [
+            (mod, name, body)
+            for mod in self.MODULES
+            for name, body in self._boxes(mod, needle='edit_buf = ""')
+        ]
+        assert len(boxes) >= 3, (
+            f"expected at least 3 value fields, found {len(boxes)}: "
+            f"{[f'{m}.{n}' for m, n, _ in boxes]}"
+        )
+        for mod, name, body in boxes:
+            where = f"{mod}.{name}"
+            # Whitespace-flattened: the dispatch is written across three lines
+            # because it does not fit in one, and an assertion that only saw
+            # one spelling would fail on a re-indent rather than on a real
+            # unwiring. The words are the contract, not where the breaks are.
+            flat = " ".join(body.split())
+            assert "edit_cur = 0" in body, f"{where}: never initialises its caret"
+            # `source` is the form's password mask; the other two fields paint
+            # the buffer itself. Either is the shared view doing its job.
+            assert _re.search(r"_filter_view\((?:edit_buf|source), edit_cur", flat), (
+                f"{where}: renders the value without a caret on it"
+            )
+            assert _re.search(r"self\._filter_key\(\s*edit_buf,\s*edit_cur,\s*key\s*\)", flat), (
+                f"{where}: its keys never reach the shared editor"
+            )
+            assert "edit_cur = len(edit_buf)" in flat, (
+                f"{where}: opens a field without parking the caret at the end"
+            )
+
+
+# ── the fields that were not filter boxes ────────────────────────────────────
+
+
+class TestFormCaret:
+    """`_form_raw`'s text fields, which the filter-box sweep does not cover.
+
+    The sweep reached every box whose string is a *query* — a filter over an
+    option list. A form edits a *value*: a different method, a different buffer
+    (`edit_buf`, not `query`), and a line already running in reverse video with
+    a `│` frozen at its end. Same caret convention, none of the motion.
+    """
+
+    FIELDS = [{"label": "Name", "type": "text", "default": ""}]
+    MESSAGE = "Save?"
+
+    @staticmethod
+    def _drive(p, keys, fields=None) -> tuple[dict, str]:
+        """Run `_form_raw` to completion, returning its result and stdout.
+
+        Always sandwiches *keys* between an Esc-to-edit opener and the
+        `ENTER`/`Esc` closer, because `_form_raw` only returns from its
+        not-editing branch: an Esc pressed *inside* a field just leaves it
+        without saving, which would drive the key script past its end.
+        """
+        p._session = _ScriptedSession(
+            [_RawKey(_KEY_ENTER), *keys, _RawKey(_KEY_ENTER), _RawKey(_KEY_ESC)]
+        )
+        buf = _io_mod.StringIO()
+        with _contextlib.redirect_stdout(buf):
+            result = p._form_raw(
+                fields if fields is not None else TestFormCaret.FIELDS,
+                TestFormCaret.MESSAGE,
+            )
+        return result, buf.getvalue()
+
+    @staticmethod
+    def _editing(out: str, marker: str = "│") -> str:
+        """The last repaint while a field was open, escapes stripped."""
+        return _frame_with(out, TestFormCaret.MESSAGE, marker)
+
+    @staticmethod
+    def _field(out: str, label: str = "Name", marker: str = "│") -> str:
+        """The cell contents of `<label>:` in the frame that showed *marker*.
+
+        Asking for the marker on the same line is what makes this assert the
+        caret's *position* rather than the text's identity: without it,
+        `Name: Xabc` would pass whether the caret sat at column 0 or at the end.
+        """
+        for ln in TestFormCaret._editing(out, marker).splitlines():
+            if f"{label}:" in ln and marker in ln:
+                return ln.strip().split(f"{label}:", 1)[1].strip()
+        raise AssertionError(f"no line showed {label} with {marker!r}")
+
+    @staticmethod
+    def _value(out: str, label: str = "Name") -> str:
+        """The field's contents with the caret marker removed."""
+        return TestFormCaret._field(out, label).replace("│", "")
+
+    def test_editing_shows_the_caret_where_the_caret_is(self):
+        p, _ = _make_prompt()
+        _, out = self._drive(p, _chars("abc"))
+        assert self._field(out) == "abc│"
+
+    def test_home_makes_room_at_the_front(self):
+        p, _ = _make_prompt()
+        _, out = self._drive(p, [*_chars("abc"), _RawKey(_KEY_HOME), _RawKey(_KEY_CHAR, "X")])
+        assert self._value(out) == "Xabc"
+        # the marker proves the caret is genuinely at column 0, not merely that
+        # the insert happened to land there
+        assert self._field(out) == "X│abc"
+
+    def test_word_jump_lands_between_the_words(self):
+        p, _ = _make_prompt()
+        _, out = self._drive(
+            p,
+            [
+                *_chars("foo bar"),
+                _Key(_KEY_LEFT, ctrl=True),
+                _RawKey(_KEY_CHAR, "X"),
+            ],
+        )
+        assert self._value(out) == "foo Xbar"
+        assert self._field(out) == "foo X│bar"
+
+    def test_the_saved_value_follows_the_caret(self):
+        # A caret is only worth having if what it edits is what gets saved —
+        # the render and `results` must agree, or the field lies to the user.
+        p, _ = _make_prompt()
+        result, _ = self._drive(
+            p,
+            [*_chars("abc"), _RawKey(_KEY_HOME), _RawKey(_KEY_CHAR, "X")],
+        )
+        assert result == {"Name": "Xabc"}
+
+    def test_rubout_deletes_the_char_left_of_the_caret(self):
+        p, _ = _make_prompt()
+        _, out = self._drive(
+            p,
+            [*_chars("abc"), _RawKey(_KEY_LEFT), _RawKey(_KEY_BACKSPACE)],
+        )
+        assert self._value(out) == "ac"
+        assert self._field(out) == "a│c"
+
+    def test_password_fields_mask_but_still_track_the_caret(self):
+        # The mask is one `*` per character, so index-for-index the caret sits
+        # in the same place in mask space — but only if the render feeds the
+        # mask through the shared view instead of painting stars and a static
+        # bar separately, which is exactly the mistake this catches.
+        p, _ = _make_prompt()
+        result, out = self._drive(
+            p,
+            [
+                *_chars("secret"),
+                _RawKey(_KEY_HOME),
+                _RawKey(_KEY_CHAR, "X"),
+            ],
+            fields=[{"label": "Pass", "type": "password", "default": ""}],
+        )
+        assert self._field(out, "Pass") == "*│******"
+        assert result == {"Pass": "Xsecret"}
+
+
+class TestSpreadsheetCaret:
+    """The third text-entry surface, and the one a table lives or dies by.
+
+    A spreadsheet cell is where a caret matters most — you are editing inside
+    a fixed-width column, so a caret pinned to the end tells you nothing about
+    where the next character lands. It was still a bare `str` with a `│` glued
+    to the end of the cell.
+    """
+
+    HEADERS = ["Name"]
+    ROWS = [[""]]
+
+    @staticmethod
+    def _drive(p, keys, rows=None) -> tuple[list[list[str]], str]:
+        """Run `_spreadsheet_editor_raw`, returning the rows and stdout.
+
+        Same sandwich as the form: enter edit mode, run *keys*, confirm the
+        cell, then Esc — the only key that returns from the not-editing branch.
+        """
+        data = rows if rows is not None else [[""]]
+        p._session = _ScriptedSession(
+            [_RawKey(_KEY_ENTER), *keys, _RawKey(_KEY_ENTER), _RawKey(_KEY_ESC)]
+        )
+        buf = _io_mod.StringIO()
+        with _contextlib.redirect_stdout(buf):
+            result = p._spreadsheet_editor_raw(TestSpreadsheetCaret.HEADERS, data, "Sheet:")
+        return result, buf.getvalue()
+
+    @staticmethod
+    def _cell(out: str) -> str:
+        """The cell contents from the frame that showed the caret."""
+        frame = _frame_with(out, "Sheet:", "│")
+        for ln in frame.splitlines():
+            if "│" in ln:
+                return ln.strip()
+        raise AssertionError("no cell was ever painted with a caret in it")
+
+    @staticmethod
+    def _value(out: str) -> str:
+        return TestSpreadsheetCaret._cell(out).replace("│", "")
+
+    def test_editing_shows_the_caret_at_the_end_of_the_cell(self):
+        p, _ = _make_prompt()
+        _, out = self._drive(p, _chars("abc"))
+        assert self._cell(out) == "abc│"
+
+    def test_home_makes_room_at_the_front_of_the_cell(self):
+        p, _ = _make_prompt()
+        _, out = self._drive(p, [*_chars("abc"), _RawKey(_KEY_HOME), _RawKey(_KEY_CHAR, "X")])
+        assert self._cell(out) == "X│abc"
+
+    def test_word_jump_lands_between_the_words(self):
+        p, _ = _make_prompt()
+        _, out = self._drive(
+            p,
+            [
+                *_chars("prod-v2"),
+                _Key(_KEY_LEFT, ctrl=True),
+                _RawKey(_KEY_CHAR, "X"),
+            ],
+        )
+        # `prod-v2` is one word — the delimiter is whitespace, so the jump goes
+        # to the front of the whole token rather than to the hyphen.
+        assert self._value(out) == "Xprod-v2"
+        assert self._cell(out) == "X│prod-v2"
+
+    def test_the_saved_cell_follows_the_caret(self):
+        # The rendered cell and the row that gets returned must agree, or the
+        # table shows one thing and saves another.
+        p, _ = _make_prompt()
+        result, _ = self._drive(p, [*_chars("abc"), _RawKey(_KEY_HOME), _RawKey(_KEY_CHAR, "X")])
+        assert result == [["Xabc"]]
+
+    def test_rubout_deletes_the_char_left_of_the_caret(self):
+        p, _ = _make_prompt()
+        _, out = self._drive(p, [*_chars("abc"), _RawKey(_KEY_LEFT), _RawKey(_KEY_BACKSPACE)])
+        assert self._cell(out) == "a│c"
+
+
+# ── what the terminal actually ends up showing ───────────────────────────────
+
+_CSI_PARTS = _re.compile(r"\x1b\[([0-9;?]*)([A-Za-z])")
+
+
+def _screen(raw: str, *, strip_trailing: bool = True) -> list[str]:
+    """Feed a capture through a terminal and return the rows still visible.
+
+    Only four sequences move or mark anything these prompts write: line feed,
+    carriage return, cursor-up (`1A`) and erase-line (`2K`). Everything else is
+    SGR or cursor visibility — it changes how a row looks or whether the caret
+    blinks, never where the cursor is — so it is skipped rather than modelled.
+
+    Rows are a dict keyed by index rather than a list, so a row erased and
+    rewritten later reads as its final content and not as two rows. That is
+    the whole point: a prompt that erases one line and writes the rest below
+    leaves its earlier copy intact, and only a keyed grid shows it there.
+
+    `strip_trailing=False` keeps the pad, because a cell padded past the
+    terminal's right edge still moves the cursor past it. Trimming it by
+    default reads a row comfortably inside the margin when the element
+    actually drew one column over it.
+    """
+    if not raw:
+        return []
+    rows: dict[int, str] = {}
+    row = col = 0
+    i = 0
+    while i < len(raw):
+        if raw[i] == "\x1b":
+            m = _CSI_PARTS.match(raw, i)
+            if not m:
+                i += 1
+                continue
+            params, final = m.group(1), m.group(2)
+            if final == "A":  # cursor up — the only mover they use
+                row = max(0, row - (int(params) if params.isdigit() else 1))
+            elif final == "K":  # `_ERASE_LINE` is `2K`: the whole row
+                rows[row] = ""
+            i = m.end()
+            continue
+        if raw[i] == "\n":
+            row += 1
+            col = 0
+        elif raw[i] == "\r":
+            col = 0
+        else:
+            cur = rows.get(row, "")
+            rows[row] = (cur + " " * col)[:col] + raw[i] + cur[col + 1 :]
+            col += 1
+        i += 1
+    if not rows:
+        return []
+    drawn = [rows.get(r, "") for r in range(min(rows), max(rows) + 1) if rows.get(r, "").strip()]
+    return [r.rstrip() for r in drawn] if strip_trailing else drawn
+
+
+class TestRepaintLeavesNothingBehind:
+    """A prompt must paint *over* its previous frame, not under it.
+
+    Eleven of `interactive_prompt`'s prompts wrote the whole form again below
+    the one already on screen:
+
+        while True:
+            sys.stdout.write(f"\\r{_ERASE_LINE}\\r{_render()}")
+
+    `_ERASE_LINE` erases the single row the cursor happens to sit on — the
+    *last* row of the frame just painted — and `_render` then starts writing
+    the whole form from there, two rows further down each time. A handful of
+    keystrokes scrolled a dozen stale copies past the user, and a caret drawn
+    into the newest copy sat above four that still claimed to be live.
+
+    `_file_browser_raw` and `_multi_choice_raw`, in the same file, already do
+    it correctly: rewind to the top of the previous frame, then paint. This
+    pins that as the contract for the whole module.
+    """
+
+    # Prompts that return on a plain Esc, so a character script alone drives
+    # them all the way out. `_diff_viewer_raw`, `_wizard_raw` and
+    # `_playlist_manager_raw` end on keys no character script reaches — they
+    # are covered by the sweep below instead.
+    DRIVES = [
+        ("_history_search_raw", (["one", "two", "three"], "Search history:")),
+        ("_config_editor_raw", ({"Host": "localhost"}, "Config:")),
+        ("_form_raw", ([{"label": "Name", "type": "text", "default": ""}], "Save?")),
+    ]
+
+    @staticmethod
+    def _run(meth: str, args: tuple) -> str:
+        p = InteractivePrompt(MemoryIO())
+        p._session = _ScriptedSession([*_chars("abcdef"), _RawKey(_KEY_ESC)])
+        buf = _io_mod.StringIO()
+        with _contextlib.redirect_stdout(buf):
+            getattr(p, meth)(*args)
+        return buf.getvalue()
+
+    def test_it_paints_on_every_key_yet_keeps_no_copy(self):
+        keys = "abcdef"
+        for meth, args in self.DRIVES:
+            raw = self._run(meth, args)
+
+            # It really did repaint, once per key: the loop's own leading
+            # erase plus the renderer's. Without this, the clean screen below
+            # would pass just as happily on a prompt that drew nothing at all.
+            assert raw.count(_ERASE_LINE) >= 2 * len(keys), (
+                f"{meth}: did not repaint once per keystroke"
+            )
+
+            # And it really did paint something: everything before the first
+            # cursor-up is the first frame, before any clear touched it.
+            first = _screen(raw.split(_CURSOR_UP, 1)[0])
+            assert first, f"{meth}: its first frame painted nothing at all"
+
+            # The contract — having painted six times, it still leaves none
+            # of it behind on the way out.
+            assert _screen(raw) == [], f"{meth}: left a copy of itself on screen: {_screen(raw)!r}"
+
+    def test_every_prompt_loop_rewinds_before_it_paints(self):
+        """All eleven, including the three a character script cannot reach.
+
+        The test above exercises three prompts by driving them. The other
+        three end on keys no character script can produce, so nothing
+        behavioural covers them. This asks the source the same question the
+        terminal is asked above: does the loop return to the top of the frame
+        it is replacing *before* it writes the next one?
+        """
+        import importlib
+        import inspect as _inspect
+
+        pkg = importlib.import_module("domain.shell._internal.interactive_prompt")
+        src = _inspect.getsource(pkg)
+
+        # Both spellings of the paint site: the one that measures nothing and
+        # the one that does. Keying the sweep off the old spelling alone would
+        # make it blind the moment the fix lands — every method would stop
+        # matching and the count would drop to zero, which reads as a pass
+        # only because of the assertion that follows it.
+        unmeasured = "{_ERASE_LINE}\\r{_render()}"
+        measured = "{_ERASE_LINE}\\r{frame}"
+
+        found = []
+        for m in _re.finditer(r"^    def (\w+)\(", src, _re.MULTILINE):
+            nxt = _re.search(r"^    def ", src[m.end() :], _re.MULTILINE)
+            body = src[m.start() : m.end() + (nxt.start() if nxt else len(src))]
+            if unmeasured not in body and measured not in body:
+                continue
+            found.append(m.group(1))
+            where = f"interactive_prompt.{m.group(1)}"
+            assert unmeasured not in body, (
+                f"{where}: still writes a frame it never measured, so the copy "
+                "lands below the one it just drew"
+            )
+            assert "frame = _render()" in body, f"{where}: does not keep the frame"
+            assert "prev_rows = 0" in body, f"{where}: never tracks its frame height"
+            # Written with `\\n` so the search string holds a literal
+            # backslash-n, the way the source file spells it.
+            assert 'prev_rows = frame.count("\\n") + 1' in body, (
+                f"{where}: does not measure the frame it just painted"
+            )
+            rewind = body.find("_rewind(prev_rows)")
+            paint = body.find('sys.stdout.write(f"\\r{_ERASE_LINE}\\r{frame}"')
+            assert rewind != -1, f"{where}: never rewinds to the top of its frame"
+            assert paint != -1, f"{where}: no longer writes the frame the way it should"
+            assert rewind < paint, f"{where}: paints before it rewinds, so the copy lands below"
+        assert len(found) == 11, f"expected 11 repaint-shaped prompts, found {len(found)}: {found}"
+
+
+class TestTheRestOfTheFamilyRepaintsAndClears:
+    """The same contract for the five modules `interactive_prompt` did not cover.
+
+    The class above pins eleven prompts in `interactive_prompt`. The defect
+    itself never lived only there: driving all 121 elements through a real
+    terminal grid found **58 methods in five other modules** carrying one or
+    both halves of it — 50 paints and 45 clears, sharing 37.
+
+    **Paint.** `f"\\r{_ERASE_LINE}\\r{_render()}"` erases the single row the
+    cursor sits on — the frame's *last* row — and writes the whole frame from
+    there, so every key leaves N-1 rows of the previous copy below the new
+    one. This is measured rather than inferred: every element that grew grew
+    by *exactly* 2*(N-1) for a frame N rows tall, which is pure stacking with
+    no content change in any of them. `_select_with_grouping_raw` ran
+    19 -> 55, `_kanban_board_raw` 17 -> 49, `_color_picker_raw` 2 -> 4.
+
+    **Clear.** `for _ in range(n): UP; ERASE` walks up *before* it erases, so
+    it clears the n rows above the cursor and never the one it is sitting on:
+    the frame's own last row survives. 45 elements left rows behind after
+    returning, and not one of `interactive_prompt`'s fixed prompts did — that
+    comparison is what names this defect rather than some other.
+
+    `interactive_input` is deliberately absent. Its two prompts paint the same
+    way, but both are one row tall: erase-one-and-write-one is a correct
+    repaint regardless of whether anything measured it, and neither stacked
+    nor leaked when driven. Measured harmless, left alone.
+    """
+
+    MODULES = (
+        "interactive_select",
+        "interactive_confirm",
+        "interactive_table",
+        "interactive_widget",
+        "interactive_picker",
+    )
+
+    # Return on a plain Esc, so a character script drives them all the way out.
+    EXIT_DRIVES = [
+        ("_select_with_filter_raw", ("Pick", ["alpha", "bravo", "charlie"], "")),
+        ("_confirm_action_raw", ("Deploy", "to production", False)),
+        ("_table_with_search_raw", (["Name"], [["alpha"]], "Table")),
+        ("_multi_confirm_raw", ("Pick", ["alpha", "bravo"], False)),
+        ("_color_picker_raw", ("Pick", "#ffffff")),
+    ]
+
+    # Stopped by an exhausted script rather than returned: the frame has to be
+    # inspected *while still up*, which is the only place stacking shows. The
+    # assertion compares the screen to the last frame alone, so it holds
+    # whatever typing did to the element's content.
+    GROWTH_DRIVES = [
+        ("_select_with_filter_raw", ("Pick", ["alpha", "bravo", "charlie"], "")),
+        ("_confirm_action_raw", ("Deploy", "to production", False)),
+        (
+            "_select_table_with_preview_raw",
+            (["Name"], [["alpha"]], lambda rows: "preview"),
+        ),
+        ("_multi_confirm_raw", ("Pick", ["alpha", "bravo"], False)),
+        ("_color_picker_raw", ("Pick", "#ffffff")),
+    ]
+
+    PAINT_PREFIX = "\r" + _ERASE_LINE + "\r"  # where every paint begins
+
+    @staticmethod
+    def _run(meth: str, args: tuple, keys: str, *, exits: bool) -> str:
+        """Everything *meth* wrote over *keys*, stopping it either way.
+
+        `exits=True` ends on Esc so the prompt clears and returns, which is
+        what the exit contract is about. `exits=False` leaves it waiting for a
+        key that never comes: the script runs out mid-loop, the frame stays on
+        screen, and that is the state the stacking contract inspects. Either
+        way the raise has to be the script running dry — anything else means
+        the element broke, and a broken element must not read as a passing one.
+        """
+        p = InteractivePrompt(MemoryIO())
+        tail = [_RawKey(_KEY_ESC)] if exits else []
+        p._session = _ScriptedSession([*_chars(keys), *tail])
+        buf = _io_mod.StringIO()
+        with _contextlib.redirect_stdout(buf):
+            try:
+                getattr(p, meth)(*args)
+            except AssertionError as e:
+                assert "exhausted" in str(e), e
+        return buf.getvalue()
+
+    def test_repaint_replaces_its_frame_instead_of_piling_under_it(self):
+        for meth, args in self.GROWTH_DRIVES:
+            raw = self._run(meth, args, "ab", exits=False)
+
+            # It really did repaint: an initial paint plus one per key. The
+            # unfixed shape writes one erase per paint, the fixed one one more
+            # per rewind, so this floor admits both and lets the contract
+            # below be the thing that decides.
+            assert raw.count(_ERASE_LINE) >= len("ab") + 1, (
+                f"{meth}: did not repaint once per keystroke"
+            )
+            assert self.PAINT_PREFIX in raw, f"{meth}: never painted a frame"
+
+            last = raw.rsplit(self.PAINT_PREFIX, 1)[-1]
+            # The screen shows the frame that was last painted and nothing
+            # else. A prompt stacking under itself fails this with the stale
+            # rows still counted on screen; one that repainted in place passes
+            # however its content changed while being driven.
+            assert _screen(last), f"{meth}: its last frame painted nothing"
+            stale = len(_screen(raw)) - len(_screen(last))
+            assert stale <= 0, f"{meth}: left {stale} stale row(s) below its last frame"
+
+    def test_the_contract_is_one_already_met_by_a_fixed_prompt(self):
+        """The assertion above is satisfiable *today*, so a failure means the fix.
+
+        `_history_search_raw` was among the eleven fixed first. If this could
+        not pass while the other four fail, the green that follows the fix
+        would prove nothing about the fix — it would only show the test had
+        been shaped around a result.
+        """
+        raw = self._run("_history_search_raw", (["one", "two"], "Search:"), "ab", exits=False)
+        assert self.PAINT_PREFIX in raw
+        last = raw.rsplit(self.PAINT_PREFIX, 1)[-1]
+        assert len(_screen(raw)) <= len(_screen(last)), (
+            "_history_search_raw: a prompt already fixed does not pass this contract"
+        )
+
+    def test_returning_leaves_the_screen_empty(self):
+        for meth, args in self.EXIT_DRIVES:
+            raw = self._run(meth, args, "ab", exits=True)
+            left = _screen(raw)
+            assert left == [], f"{meth}: left rows behind on exit: {left!r}"
+
+    def test_no_module_paints_a_frame_it_never_measured(self):
+        """Every paint site in the five modules measures the frame it wrote.
+
+        Keying the sweep off the unfixed spelling alone would make it blind the
+        moment the fix lands — the count would fall to zero and read as a pass
+        only because of the count that follows it, so methods are found by
+        *either* spelling and judged on the source inside them.
+        """
+        import importlib
+        import inspect as _inspect
+
+        unmeasured = "{_ERASE_LINE}\\r{_render()}"
+        measured = "{_ERASE_LINE}\\r{frame}"
+        found: list[str] = []
+        for mod in self.MODULES:
+            src = _inspect.getsource(importlib.import_module(f"domain.shell._internal.{mod}"))
+            for m in _re.finditer(r"^    def (\w+)\(", src, _re.MULTILINE):
+                nxt = _re.search(r"^    def ", src[m.end() :], _re.MULTILINE)
+                body = src[m.start() : m.end() + (nxt.start() if nxt else len(src))]
+                if unmeasured not in body and measured not in body:
+                    continue
+                where = f"{mod}.{m.group(1)}"
+                found.append(where)
+                assert unmeasured not in body, (
+                    f"{where}: still writes a frame it never measured, so the copy "
+                    "lands below the one it just drew"
+                )
+                assert "frame = _render()" in body, f"{where}: does not keep the frame"
+                assert "prev_rows = 0" in body, f"{where}: never tracks its frame height"
+                # Written with `\\n` so the search string holds a literal
+                # backslash-n, the way the source file spells it.
+                assert 'prev_rows = frame.count("\\n") + 1' in body, (
+                    f"{where}: does not measure the frame it just painted"
+                )
+                rewind = body.find("_rewind(prev_rows)")
+                paint = body.find('sys.stdout.write(f"\\r{_ERASE_LINE}\\r{frame}"')
+                assert rewind != -1, f"{where}: never rewinds to the top of its frame"
+                assert paint != -1, f"{where}: no longer writes the frame as it should"
+                assert rewind < paint, f"{where}: paints before it rewinds, so the copy lands below"
+        # 51, not 50: `_color_picker_rgb_raw` already carried the repaint fix
+        # from the colour-picker defect work, so it matches the shape without
+        # being part of the 50 N1 converted. Counting only N1's own output
+        # would make this assert fail the moment a second module is fixed.
+        assert len(found) == 51, (
+            f"expected 51 repaint-shaped prompts across the five modules, "
+            f"found {len(found)}: {found}"
+        )
+
+    def test_no_module_clears_upwards_before_it_erases(self):
+        """No method in the five modules walks up before it erases.
+
+        The two lines are only ever adjacent when the erase is *inside* a
+        `for _ in range(...)` loop, which is what makes this checkable from
+        the source: a lone `up`+`erase` moves the cursor deliberately and is
+        not the defect. The `_rewind` assertion on each module is what stops
+        this passing vacuously — a module that never cleared at all would
+        have no loop-clear either.
+        """
+        import importlib
+        import inspect as _inspect
+
+        checked: list[str] = []
+        for mod in self.MODULES:
+            src = _inspect.getsource(importlib.import_module(f"domain.shell._internal.{mod}"))
+            lines = src.splitlines()
+            offenders: list[str] = []
+            for i, ln in enumerate(lines):
+                if "{_CURSOR_UP}{_ERASE_LINE}" not in ln:
+                    continue
+                if not (i and lines[i - 1].lstrip().startswith("for _ in range")):
+                    continue
+                for j in range(i, 0, -1):
+                    if lines[j].startswith("    def "):
+                        offenders.append(lines[j].strip()[4:].split("(")[0])
+                        break
+            assert not offenders, (
+                f"{mod}: clears up before it erases, so the frame's own last row "
+                f"survives: {sorted(set(offenders))}"
+            )
+            assert "_rewind(" in src, (
+                f"{mod}: never rewinds — the sweep above would pass on a module "
+                "that does not clear at all"
+            )
+            checked.append(mod)
+        assert checked == list(self.MODULES), "a module escaped the sweep"
+
+
+class TestDiffFitsTheTerminal:
+    """`diff` sets two columns side by side; both must fit the terminal.
+
+    At width 80 it drew a 232-column separator: `"  ─" * col_w` repeats the
+    two spaces along with the dash, so each half ran three times too wide.
+    Header, separator and body rows then put their divider at four different
+    columns — 41, 116, 51, 42 — because the body pads a cell that may already
+    be wrapped in `ESC[31m`/`ESC[0m`, and those nine bytes count as content,
+    so a coloured row gets nine fewer visible spaces than the plain one above
+    it.
+
+    One divider column for every row, and no row wider than the terminal that
+    is showing it.
+    """
+
+    WIDTH = 80
+    DIVIDER = "│"
+    CROSS = "┼"
+
+    @staticmethod
+    def _render(
+        left: list[str],
+        right: list[str],
+        left_label: str = "alpha bravo charlie",
+        right_label: str = "alpha bravo charlie",
+    ) -> list[str]:
+        p = InteractivePrompt(MemoryIO())
+        p._is_tty = True
+        p.diff(left_label, left, right_label, right)
+        raw = "".join(getattr(p._io, "_output", []))
+        return _screen(raw, strip_trailing=False)
+
+    @classmethod
+    def _dividers(cls, rows: list[str]) -> list[int]:
+        """Column of each row's divider — `│` in the header and body, `┼`
+        in the separator. Two glyphs, one column between them."""
+        cols = []
+        for row in rows:
+            if cls.DIVIDER in row:
+                cols.append(row.index(cls.DIVIDER))
+            elif cls.CROSS in row:
+                cols.append(row.index(cls.CROSS))
+        return cols
+
+    def test_no_row_runs_past_the_terminal(self):
+        rows = self._render(["alpha", "bravo"], ["alpha", "charlie"])
+        assert rows, "diff painted nothing"
+        over = [len(r) for r in rows if len(r) > self.WIDTH]
+        assert not over, f"rows wider than {self.WIDTH} columns: {over}"
+
+    def test_every_row_puts_its_divider_in_one_column(self):
+        rows = self._render(["alpha", "bravo"], ["alpha", "charlie"])
+        cols = self._dividers(rows)
+        assert len(cols) >= 2, f"only {len(cols)} row(s) carry a divider"
+        assert len(set(cols)) == 1, (
+            f"dividers at columns {sorted(set(cols))} — a table whose columns do not line up"
+        )
+
+    def test_a_coloured_row_does_not_shift_its_divider(self):
+        # Left and right differ only on line two, so the first body row comes
+        # back plain and the second wrapped in colour. Padding after colouring
+        # is what makes those two disagree by exactly the escape length.
+        rows = self._render(["same", "alpha"], ["same", "bravo"])
+        cols = self._dividers(rows)
+        assert len(set(cols)) == 1, f"dividers at columns {sorted(set(cols))}"
+
+    def test_a_long_label_still_fits(self):
+        rows = self._render(["alpha"], ["bravo"], left_label="x" * 200, right_label="y" * 200)
+        assert max(len(r) for r in rows) <= self.WIDTH
+
+
+class TestColorPickerRepaintsInPlace:
+    """The RGB colour picker must sit on the same rows after every key.
+
+    It painted a five-row frame behind a one-row erase: `\\r{_ERASE_LINE}`
+    clears the line the cursor is on, and after painting, that is the frame's
+    *last* line. Each keystroke therefore overwrote the old footer and dropped
+    the next copy four rows lower — measured heights 5, 9, 13, 17 across four
+    keys.
+
+    Its own `_clear()` already rewinds `range(5)`, so the height was known; the
+    repaint simply never used it. `_clear()` is wrong in the opposite
+    direction for the same reason: `up` then `erase` erases the row *above*
+    the cursor and leaves the footer the cursor is sitting on, so Esc stranded
+    that one row.
+    """
+
+    FRAME = 5
+    MESSAGE = "Deploy to production?"
+
+    @classmethod
+    def _run(cls, n_keys: int, tail: tuple = ()) -> str:
+        p = InteractivePrompt(MemoryIO())
+        p._is_tty = True
+        p._session = _ScriptedSession([*_chars("a" * n_keys), *tail])
+        buf = _io_mod.StringIO()
+        try:
+            with _contextlib.redirect_stdout(buf):
+                p._color_picker_rgb_raw(cls.MESSAGE, "#ffffff")
+        except AssertionError:
+            pass  # script ran dry — the prompt is waiting for another key
+        return buf.getvalue()
+
+    def test_it_holds_its_height_across_every_keypress(self):
+        heights = [len(_screen(self._run(n))) for n in range(4)]
+        assert heights[0] == self.FRAME, f"first frame is {heights[0]} rows, expected {self.FRAME}"
+        assert len(set(heights)) == 1, (
+            f"heights {heights} after 0,1,2,3 keys — it stacks a fresh "
+            f"copy per keypress instead of repainting in place"
+        )
+
+    def test_esc_leaves_nothing_behind(self):
+        raw = self._run(0, tail=(_RawKey(_KEY_ESC),))
+        left = _screen(raw)
+        assert left == [], f"Esc left {left} row(s) on screen"
