@@ -27,6 +27,7 @@ headless-testable model of the view.
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 from pathlib import Path
@@ -115,6 +116,22 @@ def _detail_panel(index: int, step: FlowStep) -> str:
     )
     kind = " \u2014 picked element" if step.is_pick else ""
     rows = _data_rows(step)
+    # Per-step screenshot (the trace-viewer hallmark). Bytes from a live
+    # recorder; a base64 string after a JSON round-trip. Inline data URI —
+    # the page must stay one self-contained file:// document.
+    raw = step.data.get("screenshot")
+    if isinstance(raw, (bytes, bytearray)) and raw:
+        src = base64.b64encode(bytes(raw)).decode("ascii")
+    elif isinstance(raw, str) and raw:
+        src = raw
+    else:
+        src = ""
+    img = (
+        f'<img class="shot" alt="page state at step {step.seq}" '
+        f'src="data:image/png;base64,{src}">'
+        if src
+        else ""
+    )
     return f"""
     <section class="detail" id="d{index}"{' hidden' if index else ''}>
       <h2>Step {step.seq}: {html.escape(step.type)}{kind}</h2>
@@ -124,6 +141,7 @@ def _detail_panel(index: int, step: FlowStep) -> str:
       }</p>
       <p class="meta">{status}{dur}</p>
       {err}
+      {img}
       {f'<table class="data">{rows}</table>' if rows else ''}
     </section>"""
 
@@ -282,6 +300,8 @@ def render_html(graph: FlowGraph) -> str:
   .node.step:hover rect, .node.pick:hover polygon {{ stroke-width: 2.5; }}
   .map .active rect, .map .active polygon {{ stroke: #7c3aed; stroke-width: 2.5; }}
   .details {{ background: #fff; border-left: 1px solid #e5e7eb; padding: 14px; }}
+  .detail img.shot {{ max-width: 100%; border: 1px solid #e5e7eb;
+         border-radius: 6px; margin-top: 8px; }}
   .detail h2 {{ margin: 0 0 6px; font-size: 14px; }}
   .instr {{ font-family: ui-monospace, monospace; font-size: 12.5px;
             background: #f3f4f6; padding: 8px; border-radius: 6px;

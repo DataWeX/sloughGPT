@@ -192,6 +192,17 @@ class ElementPicker:
         self._backend = backend
         self._recorder = recorder
 
+    async def _shot(self) -> bytes | None:
+        """Best-effort page screenshot at pick time (the trace-viewer image).
+
+        A capture failure (backend without a page, CDP hiccup) must never
+        break picking — the event is still recorded, just without its image.
+        """
+        try:
+            return await self._backend.screenshot()
+        except Exception:
+            return None
+
     async def activate(self) -> bool:
         """Inject the overlay and arm it for picking."""
         result = await self._backend.evaluate(_PICKER_JS)
@@ -224,6 +235,7 @@ class ElementPicker:
                         EventType.SELECT,
                         name=f"pick <{picked.tag}>",
                         data=picked.to_flow_data(),
+                        screenshot=await self._shot(),
                     )
                 return picked
             await asyncio.sleep(0.1)
@@ -242,6 +254,7 @@ class ElementPicker:
                     name=f"click <{picked.tag}>",
                     success=False,
                     error="picked element no longer resolvable",
+                    screenshot=await self._shot(),
                 )
             return
         await self._backend.click(element)
@@ -250,4 +263,5 @@ class ElementPicker:
                 EventType.CLICK,
                 name=f"click <{picked.tag}>",
                 data={"best": picked.locator.describe()},
+                screenshot=await self._shot(),
             )

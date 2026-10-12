@@ -12,6 +12,7 @@ a headless test with no UI dependency.
 
 from __future__ import annotations
 
+import base64
 import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -62,7 +63,15 @@ class FlowStep:
         if self.error:
             d["error"] = self.error
         if self.data:
-            d["data"] = self.data
+            # Screenshots land in data as raw bytes; the JSON interchange
+            # must stay real JSON — bytes become base64 strings here rather
+            # than falling through json's default=str mangling ("b'\\x89PN..").
+            d["data"] = {
+                k: base64.b64encode(v).decode("ascii")
+                if isinstance(v, (bytes, bytearray))
+                else v
+                for k, v in self.data.items()
+            }
         return d
 
 

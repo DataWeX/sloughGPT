@@ -8,6 +8,9 @@ names and data verbatim, so escaping is a security invariant, not a nit).
 
 from __future__ import annotations
 
+import base64
+import json
+
 from avion.events.models import Event, EventType
 from avion.flow import build_flow, render_html, save_html
 
@@ -229,3 +232,34 @@ def test_long_label_truncated_in_map_full_in_detail():
     assert f"[1] {'L' * 27}\u2026" in html
     # the detail panel still shows the full instruction
     assert long_label in html
+
+
+def test_screenshot_renders_inline_and_serializes_as_base64():
+    """Per-step screenshots: inline data URI in the page (self-contained
+    file:// rule), and real JSON on the wire — bytes become base64 strings,
+    never json's default=str mangling."""
+    shot = b"\x89PNG\r\n-fake-png-bytes-"
+    g = build_flow(
+        [
+            _ev(
+                1,
+                EventType.SELECT,
+                "pick <button>",
+                data={"best": "testId='save'", "screenshot": shot},
+            )
+        ]
+    )
+    html_doc = render_html(g)
+    b64 = base64.b64encode(shot).decode("ascii")
+    assert 'class="shot"' in html_doc
+    assert f"base64,{b64}" in html_doc
+    assert 'alt="page state at step 1"' in html_doc
+
+    doc = json.loads(g.to_json())
+    assert doc["steps"][0]["data"]["screenshot"] == b64
+
+
+def test_step_without_screenshot_renders_no_img():
+    g = build_flow([_ev(1, EventType.CLICK, "click save")])
+    html_doc = render_html(g)
+    assert 'class="shot"' not in html_doc

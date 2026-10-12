@@ -30,6 +30,7 @@ class FakeBackend:
     def __init__(self, payload: dict | None = None) -> None:
         self.payload = payload or _SAMPLE_PAYLOAD
         self.evaluations: list[str] = []
+        self.shots = 0
         self._picked_served = False
 
     async def evaluate(self, expression: str) -> object:
@@ -46,6 +47,10 @@ class FakeBackend:
 
     async def click(self, element) -> None:
         self.clicked = True
+
+    async def screenshot(self) -> bytes:
+        self.shots += 1
+        return b"\x89PNG-fake"
 
 
 class FakeElement:
@@ -192,3 +197,72 @@ async def test_act_records_failure_when_element_unresolvable():
     assert len(clicks) == 1
     assert clicks[0].success is False
     assert "no longer resolvable" in clicks[0].error
+
+
+# ── per-pick screenshots (the trace-viewer hallmark) ────────────────────────
+
+
+async def test_pick_screenshot_reaches_the_recorder():
+    backend = FakeBackend()
+    recorder = EventRecorder(session_name="test")
+    picker = ElementPicker(backend, recorder=recorder)
+
+    await picker.pick(timeout=1)
+
+    selects = recorder.of_type(EventType.SELECT)
+    assert len(selects) == 1
+    assert selects[0].data.get("screenshot") == b"\x89PNG-fake"
+    assert backend.shots == 1
+
+
+async def test_act_click_screenshot_reaches_the_recorder():
+    backend = FakeBackend()
+    recorder = EventRecorder(session_name="test")
+    picker = ElementPicker(backend, recorder=recorder)
+    picked = PickedElement(
+        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="button"
+    )
+
+    await picker.act(picked)
+
+    clicks = recorder.of_type(EventType.CLICK)
+    assert len(clicks) == 1 and clicks[0].success is True
+    assert clicks[0].data.get("screenshot") == b"\x89PNG-fake"
+
+
+async def test_failed_act_still_captures_the_broken_state():
+    """The failure screenshot is the valuable one — it shows WHY the click broke."""
+
+    class GoneBackend(FakeBackend):
+        async def find_element(self, locator):
+            return None
+
+    recorder = EventRecorder(session_name="test")
+    picker = ElementPicker(GoneBackend(), recorder=recorder)
+    picked = PickedElement(
+        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="button"
+    )
+
+    await picker.act(picked)
+
+    clicks = recorder.of_type(EventType.CLICK)
+    assert len(clicks) == 1 and clicks[0].success is False
+    assert clicks[0].data.get("screenshot") == b"\x89PNG-fake"
+
+
+async def test_screenshot_failure_never_breaks_picking():
+    """Best-effort contract: a blind backend loses the image, not the event."""
+
+    class BlindBackend(FakeBackend):
+        async def screenshot(self) -> bytes:
+            raise RuntimeError("backend has no page")
+
+    recorder = EventRecorder(session_name="test")
+    picker = ElementPicker(BlindBackend(), recorder=recorder)
+
+    picked = await picker.pick(timeout=1)
+
+    assert picked is not None  # picking still works
+    selects = recorder.of_type(EventType.SELECT)
+    assert len(selects) == 1
+    assert "screenshot" not in selects[0].data  # event kept, image dropped
