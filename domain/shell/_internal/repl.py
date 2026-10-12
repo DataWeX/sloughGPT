@@ -4572,6 +4572,7 @@ nl: db 10
                 self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
                 self._print(f"    {'count':15s} Count 0 to 9")
                 self._print(f"    {'counter':15s} Count 0 to 4")
+                self._print(f"    {'life':15s} Conway's Game of Life (60x20, validated lives prompt)")
                 self._last_exit_code = 0
                 return
             else:
@@ -4590,10 +4591,13 @@ nl: db 10
         file_or_name = rest if rest else ""
 
         # Check built-in programs by name
+        from domain.shell._internal.vm_programs import LIFE_ASM  # noqa: PLC0415
+
         builtins = {
             "hello": ShellREPL.HELLO_X86,
             "count": ShellREPL.FIB_X86,
             "counter": ShellREPL.COLLATZ_X86,
+            "life": LIFE_ASM,
         }
         if file_or_name and file_or_name in builtins:
             source = builtins[file_or_name]
