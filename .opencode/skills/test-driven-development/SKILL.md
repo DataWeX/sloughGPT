@@ -228,7 +228,7 @@ expect(elements.length).toBeGreaterThanOrEqual(1)
 
 ```python
 import pytest
-from domains.training.trainer_protocol import TrainResult
+from domain.training._internal.trainer_protocol import TrainResult
 
 
 def test_train_result_backward_compat():

@@ -321,19 +321,19 @@ FAST_CONFIG = {
 
 class TestMyModule:
     def test_basic(self):
-        from domains.my_module import my_function
+        from domain.my_module import my_function
 
         result = my_function("input")
         assert result == "expected"
 
     def test_error(self):
-        from domains.my_module import my_function
+        from domain.my_module import my_function
 
         with pytest.raises(ValueError, match="not found"):
             my_function(None)
 
     def test_with_temp_file(self, tmp_path):
-        from domains.my_module import process_file
+        from domain.my_module import process_file
 
         f = tmp_path / "test.txt"
         f.write_text(DATA_TEXT)

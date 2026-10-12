@@ -216,8 +216,8 @@ sloughgpt train --dataset data.txt --soul-name "MyModel"
 
 ### Export from any checkpoint
 ```bash
-python3 -c "from domains.training.export import export_model, ExportConfig; \
-  from domains.inference.sou_format import create_soul_profile; \
+python3 -c "from domain.training._internal.export import export_model, ExportConfig; \
+  from domain.inference._internal.slo_format import create_soul_profile; \
   export_model(ExportConfig(input_path='model.soul', output_path='model', format='sou'))"
 ```
 

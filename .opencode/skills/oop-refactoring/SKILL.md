@@ -108,7 +108,7 @@ def get_thing():
 
 
 # After: One import
-from domains.infrastructure.singleton import SingletonMeta
+from domain.infrastructure._internal.singleton import SingletonMeta
 
 
 class Thing(metaclass=SingletonMeta):

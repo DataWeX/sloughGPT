@@ -68,12 +68,12 @@ cd apps/web && npm run typecheck
 
 # 4. Verify no import errors
 /home/mana/miniconda3/envs/sloughgpt/bin/python -c "
-from domains.infrastructure.singleton import SingletonMeta
-from domains.inference.session_kv_manager import SessionKVManager
-from domains.infrastructure.task_queue import Task, TaskQueue
-from domains.infrastructure.server_state import AtomicRef, ServerState
-from domains.infrastructure.model_server import CircuitBreaker
-from domains.infrastructure.process_guard import ProcessGuard
+from domain.infrastructure._internal.singleton import SingletonMeta
+from domain.inference._internal.session_kv_manager import SessionKVManager
+from domain.infrastructure._internal.task_queue import Task, TaskQueue
+from domain.infrastructure._internal.server_state import AtomicRef, ServerState
+from domain.infrastructure._internal.model_server import CircuitBreaker
+from domain.infrastructure._internal.process_guard import ProcessGuard
 print('All imports successful')
 "
 ```

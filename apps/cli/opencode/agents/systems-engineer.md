@@ -122,7 +122,7 @@ dbg> quit              # Exit debugger
 Dynamic addon loading for kernel extensions:
 
 ```python
-from domains.shell.addons.module_loader import ModuleLoader
+from domain.shell._internal.addons.module_loader import ModuleLoader
 
 loader = ModuleLoader(addon_dirs=["path/to/addons"])
 loader.set_kernel(kernel)
