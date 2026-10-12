@@ -55,71 +55,95 @@ def _get_slo_layernorm():
     return _SloLayerNorm
 
 
-class _CharTokenizer:
-    """Minimal tokenizer wrapper for char-level models trained by SloNet.
+# ── Core native tokenizer format ──────────────────────────────────────────────
+# One wrapper for every natively-trained tokenizer. The vocab ALWAYS rides a
+# TokenTree — char checkpoints store their stoi/itos ON the tree (chars on the
+# tree) — while encode/decode keep the exact per-format semantics the two
+# legacy wrappers had, byte for byte:
+#   native/char         raw per-char lookup (no normalize, OOV -> 0, raw join)
+#   native/token-tree   TokenTree walk (lowercase normalize + pretokenize)
+# `scheme` names the format and `origin` records the checkpoint it was loaded
+# from, so "what tokenizer is this, where did it come from" is answerable from
+# the object instead of a code crawl.
 
-    Wraps stoi/itos dicts from training into the encode/decode interface
-    that SloNetChatProvider expects from a HuggingFace tokenizer.
+NATIVE_FORMAT_CHAR = "native/char"
+NATIVE_FORMAT_TREE = "native/token-tree"
+
+
+def _char_carrier_tree(stoi: dict[str, int], itos: dict) -> Any:
+    """Build the TokenTree carrier for a char-level vocab.
+
+    stoi/itos are stored VERBATIM on the tree (encode/decode read them back
+    unchanged, so behavior is identical to the legacy wrapper regardless of
+    stoi/itos consistency or id gaps); tree.vocab is the dense id->token view
+    for tree-shaped consumers. The trie stays empty and _trained=False — char
+    semantics never walk it.
     """
+    from domain.training._internal.token_tree import TokenTree
 
-    def __init__(self, stoi: dict[str, int], itos: dict):
-        self._stoi = stoi
-        # JSON serializes int keys as strings — normalize to int
-        self._itos = {int(k): v for k, v in itos.items()}
-        self.eos_token_id = stoi.get("\n", 0)
-        self.pad_token_id = 0
-        self._vocab_size = max(self._itos.keys()) + 1 if self._itos else 0
-
-    @property
-    def vocab_size(self) -> int:
-        return self._vocab_size
-
-    def encode(self, text: str) -> list[int]:
-        """Encode text to token IDs (one per character)."""
-        return [int(self._stoi.get(c, 0)) for c in text]
-
-    def decode(self, token_ids) -> str:
-        """Decode token IDs back to text."""
-        return "".join(self._itos.get(int(tid), "") for tid in token_ids)
-
-    def apply_chat_template(self, messages: list[dict[str, str]], **kwargs) -> str:
-        """Format messages as a simple chat string for char-level models."""
-        parts = []
-        for msg in messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            parts.append(f"{role}: {content}")
-        parts.append("assistant:")
-        return "\n".join(parts)
+    # JSON serializes int keys as strings — normalize to int
+    itos_n = {int(k): v for k, v in itos.items()}
+    vocab_size = max(itos_n.keys()) + 1 if itos_n else 0
+    tree = TokenTree()
+    tree.vocab = [itos_n.get(i, "") for i in range(vocab_size)]
+    tree.stoi = dict(stoi)
+    tree.itos = itos_n
+    return tree
 
 
-class _TreeTokenizer:
-    """SloBPE-compatible tokenizer wrapper for TokenTree-trained models.
+class NativeTokenizer:
+    """Core native tokenizer format — see module note above."""
 
-    Wraps a reconstructed TokenTree into the encode/decode interface that
-    SloNetChatProvider expects from a HuggingFace tokenizer, so BPE-level
-    checkpoints round-trip through .soul metadata.
-    """
-
-    def __init__(self, tree: Any):
+    def __init__(self, tree: Any, scheme: str, origin: str | None = None) -> None:
+        if scheme not in (NATIVE_FORMAT_CHAR, NATIVE_FORMAT_TREE):
+            raise ValueError(f"Unknown native tokenizer scheme: {scheme!r}")
+        self.tree = tree
+        self.scheme = scheme
+        self.origin = origin
+        # Legacy private attrs, kept for older reach-ins:
+        # char semantics read tree.stoi/tree.itos; tree semantics use _tree.
         self._tree = tree
-        self.eos_token_id = int(tree.eos_id)
-        self.pad_token_id = int(tree.pad_id)
+        self._stoi = tree.stoi
+        self._itos = tree.itos
+        if scheme == NATIVE_FORMAT_CHAR:
+            # Byte-parity with the legacy _CharTokenizer attribute semantics.
+            self.eos_token_id = tree.stoi.get("\n", 0)
+            self.pad_token_id = 0
+            self._vocab_size = max(tree.itos.keys()) + 1 if tree.itos else 0
+        else:
+            self.eos_token_id = int(tree.eos_id)
+            self.pad_token_id = int(tree.pad_id)
+            self._vocab_size = tree.vocab_size
+
+    @classmethod
+    def from_char_vocab(
+        cls, stoi: dict[str, int], itos: dict, origin: str | None = None
+    ) -> NativeTokenizer:
+        """Build a char-scheme tokenizer with its vocab on the tree."""
+        return cls(_char_carrier_tree(stoi, itos), NATIVE_FORMAT_CHAR, origin)
 
     @property
     def vocab_size(self) -> int:
-        return self._tree.vocab_size
+        if self.scheme == NATIVE_FORMAT_CHAR:
+            # Legacy char wrapper cached this at init — keep that.
+            return self._vocab_size
+        # Legacy tree wrapper read len(tree.vocab) live — keep that.
+        return self.tree.vocab_size
 
     def encode(self, text: str) -> list[int]:
-        """Encode text to BPE token IDs via the token tree."""
-        return self._tree.encode(text)
+        """Encode text to token IDs (format-dependent, byte-parity with legacy)."""
+        if self.scheme == NATIVE_FORMAT_CHAR:
+            return [int(self.tree.stoi.get(c, 0)) for c in text]
+        return self.tree.encode(text)
 
     def decode(self, token_ids) -> str:
-        """Decode token IDs back to text."""
-        return self._tree.decode(token_ids)
+        """Decode token IDs back to text (format-dependent, byte-parity)."""
+        if self.scheme == NATIVE_FORMAT_CHAR:
+            return "".join(self.tree.itos.get(int(tid), "") for tid in token_ids)
+        return self.tree.decode(token_ids)
 
     def apply_chat_template(self, messages: list[dict[str, str]], **kwargs) -> str:
-        """Format messages as a simple chat string for tree-tokenized models."""
+        """Format messages as a simple chat string (identical across formats)."""
         parts = []
         for msg in messages:
             role = msg.get("role", "user")
@@ -127,6 +151,57 @@ class _TreeTokenizer:
             parts.append(f"{role}: {content}")
         parts.append("assistant:")
         return "\n".join(parts)
+
+
+def native_tokenizer_from_metadata(
+    metadata: dict, origin: str | None = None
+) -> NativeTokenizer | None:
+    """Single loader for the core native tokenizer format.
+
+    Content decides which vocab is loaded — it is what encode/decode will
+    actually use — so a legacy file without a ``tokenizer_format`` tag (or one
+    whose tag disagrees with its content) still loads with byte-identical
+    behavior: content wins, the disagreement is logged.
+    """
+    tag = metadata.get("tokenizer_format")
+    tok = metadata.get("tokenizer")
+    if (
+        isinstance(tok, dict)
+        and tok.get("type") == "token_tree"
+        and isinstance(tok.get("tree"), dict)
+    ):
+        if tag and tag != NATIVE_FORMAT_TREE:
+            logger.warning(
+                "tokenizer_format=%r disagrees with embedded token_tree — content wins",
+                tag,
+            )
+        from domain.training._internal.token_tree import TokenTree
+
+        return NativeTokenizer(TokenTree.from_dict(tok["tree"]), NATIVE_FORMAT_TREE, origin)
+    stoi = metadata.get("stoi")
+    itos = metadata.get("itos")
+    if stoi and itos:
+        if tag and tag != NATIVE_FORMAT_CHAR:
+            logger.warning(
+                "tokenizer_format=%r disagrees with embedded char vocab — content wins",
+                tag,
+            )
+        return NativeTokenizer.from_char_vocab(stoi, itos, origin=origin)
+    return None
+
+
+class _CharTokenizer(NativeTokenizer):
+    """Legacy name — char-scheme NativeTokenizer (kept importable)."""
+
+    def __init__(self, stoi: dict[str, int], itos: dict, origin: str | None = None):
+        super().__init__(_char_carrier_tree(stoi, itos), NATIVE_FORMAT_CHAR, origin)
+
+
+class _TreeTokenizer(NativeTokenizer):
+    """Legacy name — token-tree-scheme NativeTokenizer (kept importable)."""
+
+    def __init__(self, tree: Any, origin: str | None = None):
+        super().__init__(tree, NATIVE_FORMAT_TREE, origin)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1057,24 +1132,11 @@ class SloNetChatProvider:
         except Exception as e:
             logger.warning("ResourceManager.apply_blas_env skipped (soul load): %s", e)
 
-        # Load tokenizer from soul metadata if available
-        tokenizer_meta = soul.metadata.get("tokenizer")
-        if (
-            isinstance(tokenizer_meta, dict)
-            and tokenizer_meta.get("type") == "token_tree"
-            and isinstance(tokenizer_meta.get("tree"), dict)
-        ):
-            from domain.training._internal.token_tree import TokenTree
-
-            instance._tokenizer = _TreeTokenizer(TokenTree.from_dict(tokenizer_meta["tree"]))
-        else:
-            stoi = soul.metadata.get("stoi")
-            itos = soul.metadata.get("itos")
-            if stoi and itos:
-                # Char-level model — create a simple tokenizer from vocab
-                instance._tokenizer = _CharTokenizer(stoi, itos)
-            else:
-                instance._tokenizer = None
+        # Load tokenizer from soul metadata if available (core native format;
+        # provenance stamped with the checkpoint it was loaded from)
+        instance._tokenizer = native_tokenizer_from_metadata(
+            soul.metadata, origin=f"checkpoint:{soul_path}"
+        )
 
         logger.info(
             "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d rope=%s norm=%s",
@@ -1325,24 +1387,12 @@ class SloNetChatProvider:
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
     @staticmethod
-    def _tokenizer_from_embedded(emb: dict):
-        """Rebuild a char/token-tree tokenizer from SLNC-embedded metadata."""
-        tok = emb.get("tokenizer")
-        if (
-            isinstance(tok, dict)
-            and tok.get("type") == "token_tree"
-            and isinstance(tok.get("tree"), dict)
-        ):
-            from domain.training._internal.token_tree import TokenTree
-
-            return _TreeTokenizer(TokenTree.from_dict(tok["tree"]))
-
-        stoi = emb.get("stoi")
-        itos = emb.get("itos")
-        if stoi and itos:
-            return _CharTokenizer(stoi, itos)
-
-        raise ValueError("Embedded tokenizer missing stoi/itos/tree")
+    def _tokenizer_from_embedded(emb: dict, origin: str | None = None):
+        """Rebuild a native tokenizer from SLNC-embedded metadata."""
+        tok = native_tokenizer_from_metadata(emb, origin=origin)
+        if tok is None:
+            raise ValueError("Embedded tokenizer missing stoi/itos/tree")
+        return tok
 
     def _get_model(self):
         """Return the loaded model, loading lazily on first access.

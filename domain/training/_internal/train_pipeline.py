@@ -2452,6 +2452,15 @@ class SloughGPTTrainer:
                 "tree": tokenizer.to_dict(),
             }
 
+        # Core native tokenizer format declaration. Parallel key: existing
+        # readers of metadata["stoi"]/metadata["tokenizer"] are untouched, and
+        # legacy files without this tag derive the scheme from content on load,
+        # so old checkpoints keep working unchanged.
+        if "tokenizer" in soul.metadata:
+            soul.metadata["tokenizer_format"] = "native/token-tree"
+        elif _stoi is not None and _itos is not None:
+            soul.metadata["tokenizer_format"] = "native/char"
+
         # Embed training state so the .soul is self-contained. Momentum buffers
         # are omitted when include_optimizer_state=False (final artifacts) —
         # they dwarf the weights and are not needed for inference; resume
