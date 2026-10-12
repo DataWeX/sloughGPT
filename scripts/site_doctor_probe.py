@@ -18,6 +18,15 @@ Three things are checked, in the order they matter:
    `{parameters}` are reported as skipped, not guessed at: inventing an id to
    probe would produce noise, and a wrong id reads as a 404 that isn't a
    defect.
+4. **Streaming health.** Phase 1 skipped every SSE route, because reading a
+   stream to completion turns the client's own `IncompleteRead` into a false
+   failure. Phase 2 judges them on the *first* read instead — bounded in bytes
+   and in seconds — and separates four outcomes that need four different fixes:
+   emits (`ok`), keepalives and nothing else (`heartbeat-only`), holds the
+   connection and says nothing (`silent`), and dies (`dropped`/`closed-empty`).
+   The window must outlast the slowest heartbeat in the tree or correctly
+   behaving routes read as broken, so it is pinned against the routers by
+   `tests/contract/test_site_doctor_probe.py`.
 
 Findings are ranked critical > high > medium > low, and the run exits non-zero
 only under `--strict`, so it can gate CI once the baseline is clean.
@@ -35,6 +44,17 @@ import urllib.request
 from typing import Any
 
 TIMEOUT = 6.0
+
+# A stream is judged on its FIRST read, bounded in bytes and seconds.
+STREAM_BYTES = 512
+# The window MUST exceed the slowest heartbeat the tree actually uses,
+# or a correctly-behaving stream is indistinguishable from a hung one and the
+# probe reports false silences — the same mistake as phase 1's 108 failures.
+# Slowest cadence measured in apps/api/server/routers:
+#   errors.py:451      heartbeat every 30.0s
+#   consciousness.py   heartbeat every 10s, loop sleeps 5
+#   health.py:49       HEALTH_STREAM_INTERVAL 3.0s, emits every 1.0s
+STREAM_GRACE = 35.0
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "ok": 4}
 
@@ -192,7 +212,204 @@ def _is_streaming(operations: dict[str, Any], path: str) -> bool:
     return False
 
 
-def check_routes(gateway: str) -> list[dict[str, Any]]:
+def _is_heartbeat_only(chunk: bytes) -> bool:
+    """True when every line received so far is an SSE comment, i.e. a heartbeat.
+
+    SSE reserves lines beginning with ``:`` as comments, which is how this tree
+    sends keepalives (``yield ": heartbeat\\n\\n"``). A stream that sends only
+    comments is *alive* but delivers nothing: the connection is healthy, the
+    status line is 200, and the consumer still receives no events. Reporting
+    that as "ok" would hide it; reporting it as "silent" would misattribute it.
+    """
+    lines = [line for line in chunk.decode("utf-8", "replace").splitlines() if line.strip()]
+    return bool(lines) and all(line.lstrip().startswith(":") for line in lines)
+
+
+def probe_stream(url: str) -> tuple[str, dict[str, Any]]:
+    """Bounded first-read of a streaming route. Returns (classification, detail).
+
+    Phase 1 skipped every streaming route, and that was right for its reason:
+    an SSE body never finishes, so reading it to completion turns the client's
+    own ``IncompleteRead`` into a false failure. But skipping them wholesale
+    hid a defect that only a consumer ever sees — a route that accepts the
+    connection and then never emits a byte is indistinguishable from a healthy
+    one until someone waits on it.
+
+    The observation that separates them is not the whole body, it is the
+    *first* read, capped in bytes and seconds: connect, take what has already
+    arrived, and close. Classification:
+
+      ``ok``          bytes arrived and they are events — the stream delivers;
+      ``heartbeat-only``bytes arrived but every line is an SSE comment (``:``)
+                      — the route is alive and heartbeating, yet a consumer
+                      receives no events at all; a distinct failure from
+                      silence, because the connection looks healthy;
+      ``silent``      connected, but nothing arrived even within STREAM_GRACE
+                      — longer than the slowest heartbeat in the tree, so the
+                      route holds the connection open and says nothing;
+      ``dropped``     the connection died before any byte (RemoteDisconnected
+                      / IncompleteRead at zero);
+      ``closed-empty``the route answered 200 and closed without emitting;
+      ``auth-gated``  401/403 — correct behaviour unauthenticated;
+      ``error``       any other >= 400, or no answer at all.
+
+    Still read-only: a GET with no body, exactly as in phase 1.
+    """
+    request = urllib.request.Request(url, method="GET")
+    # An SSE consumer's own headers, so the route is seen as the consumer sees it.
+    request.add_header("Accept", "text/event-stream")
+    request.add_header("Cache-Control", "no-cache")
+    detail: dict[str, Any] = {"url": url}
+    started = time.perf_counter()
+    try:
+        # The window is deliberately long: a stream that emits returns the
+        # instant its first bytes arrive, so the long window costs nothing on a
+        # healthy route and only the genuinely silent ones wait it out. Cost
+        # therefore tracks defects, not route count.
+        with urllib.request.urlopen(request, timeout=STREAM_GRACE) as response:
+            detail["status"] = response.status
+            detail["content_type"] = response.headers.get("Content-Type", "")
+            try:
+                # read1(), not read(): read(n) blocks until it has n bytes or
+                # EOF, so a route that only heartbeats (14 bytes every 30s)
+                # looks starved and then "drops" minutes later. read1() returns
+                # whatever one buffer already holds — the true first read.
+                reader = getattr(response, "read1", None)
+                chunk = reader(STREAM_BYTES) if reader else response.read(STREAM_BYTES)
+            except http.client.HTTPException:
+                # RemoteDisconnected / IncompleteRead — the stream died.
+                detail["elapsed_ms"] = (time.perf_counter() - started) * 1000
+                return "dropped", detail
+            except (TimeoutError, OSError):
+                # Connected and holding the connection open without sending.
+                detail["elapsed_ms"] = (time.perf_counter() - started) * 1000
+                return "silent", detail
+            detail["elapsed_ms"] = (time.perf_counter() - started) * 1000
+            detail["bytes"] = len(chunk)
+            if not chunk:
+                return "closed-empty", detail
+            if _is_heartbeat_only(chunk):
+                return "heartbeat-only", detail
+            return "ok", detail
+    except urllib.error.HTTPError as error:
+        detail["status"] = error.code
+        if error.code in (401, 403):
+            return "auth-gated", detail
+        return "error", detail
+    except (urllib.error.URLError, TimeoutError, OSError):
+        detail["elapsed_ms"] = (time.perf_counter() - started) * 1000
+        return "error", detail
+
+
+def check_streams(gateway: str, spec: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Classify every streaming GET the gateway advertises.
+
+    These are the routes phase 1 skipped as ``skipped_stream``. They get their
+    own check rather than joining ``route-reachability`` because their failure
+    modes are different: a stream does not go 500 when it breaks, it goes
+    quiet, and quiet reads as success to anything that only inspects the
+    status line.
+    """
+    findings: list[dict[str, Any]] = []
+    if spec is None:
+        status, spec, _ = get(f"{gateway}/openapi.json")
+    else:
+        status = 200
+    if not isinstance(spec, dict):
+        return [
+            {
+                "severity": "high",
+                "check": "openapi-reachable",
+                "message": f"gateway openapi.json did not answer ({status})",
+            }
+        ]
+    paths = spec.get("paths") or {}
+    seen: dict[str, list[str]] = {}
+    for path, operations in sorted(paths.items()):
+        if not isinstance(operations, dict) or "get" not in operations:
+            continue
+        if "{" in path:
+            continue
+        # A query-required stream would 422 before it ever streamed.
+        if _required_query_params(operations):
+            continue
+        if not _is_streaming(operations, path):
+            continue
+        classification, detail = probe_stream(f"{gateway}{path}")
+        entry = path if classification == "ok" else f"{path} [{detail}]"
+        seen.setdefault(classification, []).append(entry)
+
+    total = sum(len(v) for v in seen.values())
+    if not total:
+        findings.append(
+            {
+                "severity": "ok",
+                "check": "stream-coverage",
+                "message": "the gateway advertises no streaming GETs",
+            }
+        )
+        return findings
+
+    findings.append(
+        {
+            "severity": "ok",
+            "check": "stream-coverage",
+            "message": f"{total} streaming route(s) probed with a bounded first read",
+        }
+    )
+
+    healthy = len(seen.get("ok", [])) + len(seen.get("auth-gated", []))
+    if healthy:
+        findings.append(
+            {
+                "severity": "ok",
+                "check": "stream-health",
+                "message": (
+                    f"{healthy} streaming route(s) emitted bytes or are "
+                    f"correctly auth-gated: " + ", ".join(seen.get("ok", [])[:6])
+                ),
+            }
+        )
+
+    silent = seen.get("silent", [])
+    if silent:
+        findings.append(
+            {
+                "severity": "high",
+                "check": "stream-silent",
+                "message": (
+                    f"{len(silent)} stream(s) accepted the connection and then "
+                    f"said nothing within {STREAM_GRACE:.0f}s — longer than the "
+                    f"slowest heartbeat in the tree, so this is not a slow "
+                    f"route, it is a quiet one: the status line reads 200 so "
+                    f"every shallow check passes, and only a consumer waiting "
+                    f"on an event notices: " + "; ".join(silent[:6])
+                ),
+            }
+        )
+
+    for kind, severity, why in (
+        ("heartbeat-only", "medium", "heartbeats and nothing else — alive but event-free"),
+        ("dropped", "high", "the connection died mid-stream"),
+        ("closed-empty", "high", "answered 200 and closed without emitting"),
+        ("error", "medium", "did not return a streamable response"),
+    ):
+        bad = seen.get(kind, [])
+        if bad:
+            findings.append(
+                {
+                    "severity": severity,
+                    "check": f"stream-{kind}",
+                    "message": (
+                        f"{len(bad)} streaming route(s) where {why}: "
+                        + "; ".join(bad[:6])
+                    ),
+                }
+            )
+    return findings
+
+
+def check_routes(gateway: str, spec: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Fetch every genuinely-callable GET the gateway advertises.
 
     The OpenAPI document advertises far more than a bare GET can answer, so
@@ -210,7 +427,10 @@ def check_routes(gateway: str) -> list[dict[str, Any]]:
         not a defect.
     """
     findings: list[dict[str, Any]] = []
-    status, spec, _ = get(f"{gateway}/openapi.json")
+    if spec is None:
+        status, spec, _ = get(f"{gateway}/openapi.json")
+    else:
+        status = 200
     if not isinstance(spec, dict):
         return [
             {
@@ -358,7 +578,12 @@ def main() -> int:
     findings: list[dict[str, Any]] = []
     findings += check_edge(args.gateway, args.api, args.web)
     findings += check_health_consistency(args.api)
-    findings += check_routes(args.gateway)
+    # One openapi fetch for both route checks — the document is the gateway's
+    # own description, so reading it twice would only double the chance of the
+    # two checks disagreeing about what is a stream.
+    _status, spec, _ = get(f"{args.gateway}/openapi.json")
+    findings += check_routes(args.gateway, spec)
+    findings += check_streams(args.gateway, spec)
 
     problems = report(findings)
     if args.strict and problems:
