@@ -48,6 +48,9 @@ class FakeBackend:
     async def click(self, element) -> None:
         self.clicked = True
 
+    async def fill(self, element, value: str, *, force: bool = False) -> None:
+        self.filled = value
+
     async def screenshot(self) -> bytes:
         self.shots += 1
         return b"\x89PNG-fake"
@@ -266,3 +269,57 @@ async def test_screenshot_failure_never_breaks_picking():
     selects = recorder.of_type(EventType.SELECT)
     assert len(selects) == 1
     assert "screenshot" not in selects[0].data  # event kept, image dropped
+
+
+# ── fill(): form fills must leave the flow map too ──────────────────────────
+
+
+async def test_fill_records_a_fill_event_without_the_raw_value():
+    backend = FakeBackend()
+    recorder = EventRecorder(session_name="test")
+    picker = ElementPicker(backend, recorder=recorder)
+    picked = PickedElement(
+        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input"
+    )
+
+    await picker.fill(picked, "hunter2-secret")
+
+    assert backend.filled == "hunter2-secret"  # the page really got the value
+    fills = recorder.of_type(EventType.FILL)
+    assert len(fills) == 1 and fills[0].success is True
+    assert fills[0].data["best"] == picked.locator.describe()
+    assert fills[0].data["value_len"] == len("hunter2-secret")
+    # PRIVACY: the raw value must not travel with the event
+    assert "hunter2-secret" not in str(fills[0].data)
+    assert backend.shots == 1  # fill carries its screenshot like act()
+
+
+async def test_fill_on_unresolvable_element_records_failure():
+    class GoneBackend(FakeBackend):
+        async def find_element(self, locator):
+            return None
+
+    recorder = EventRecorder(session_name="test")
+    picker = ElementPicker(GoneBackend(), recorder=recorder)
+    picked = PickedElement(
+        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input"
+    )
+
+    await picker.fill(picked, "anything")
+
+    fills = recorder.of_type(EventType.FILL)
+    assert len(fills) == 1 and fills[0].success is False
+    assert "no longer resolvable" in fills[0].error
+    assert fills[0].data.get("screenshot") == b"\x89PNG-fake"  # broken state captured
+
+
+async def test_fill_without_recorder_still_fills():
+    backend = FakeBackend()
+    picker = ElementPicker(backend)  # no recorder wired
+    picked = PickedElement(
+        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input"
+    )
+
+    await picker.fill(picked, "plain value")
+
+    assert backend.filled == "plain value"  # recording is a side effect, not a gate

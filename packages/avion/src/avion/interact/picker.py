@@ -265,3 +265,32 @@ class ElementPicker:
                 data={"best": picked.locator.describe()},
                 screenshot=await self._shot(),
             )
+
+    async def fill(self, picked: PickedElement, value: str) -> None:
+        """Fill the picked element through the backend, recording a FILL.
+
+        Same shape as :meth:`act`: resolve, act, record — including the
+        unresolvable-element failure vocabulary. PRIVACY: the event carries
+        the resolved selector and the value's LENGTH only, never the raw
+        value — flow maps travel as standalone files, and passwords or
+        tokens must not leak into them.
+        """
+        element = await self._backend.find_element(picked.locator)
+        if element is None:
+            if self._recorder is not None:
+                self._recorder.record(
+                    EventType.FILL,
+                    name=f"fill <{picked.tag}>",
+                    success=False,
+                    error="picked element no longer resolvable",
+                    screenshot=await self._shot(),
+                )
+            return
+        await self._backend.fill(element, value)
+        if self._recorder is not None:
+            self._recorder.record(
+                EventType.FILL,
+                name=f"fill <{picked.tag}>",
+                data={"best": picked.locator.describe(), "value_len": len(value)},
+                screenshot=await self._shot(),
+            )
