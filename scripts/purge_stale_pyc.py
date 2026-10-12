@@ -20,7 +20,7 @@ guard.
 
 Usage:
     python scripts/purge_stale_pyc.py                    # dry-run, tests/ + packages/
-    python scripts/purge_stale_pyc.py tests/core-py      # dry-run, one root
+    python scripts/purge_stale_pyc.py tests              # dry-run, one root
     python scripts/purge_stale_pyc.py --apply            # delete
 """
 

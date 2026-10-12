@@ -59,7 +59,7 @@ SEED_POINTS = (1, 240, 600, 1199, 1200)
 STEP_BUDGET = 4_000_000
 
 
-# ── harness (mirrors tests/core-py/test_vm_life_program.py) ──────────────────
+# ── harness (mirrors packages/core-py/tests/test_vm_life_program.py) ─────────
 
 def _spawn() -> X86VirtualSystem:
     vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
