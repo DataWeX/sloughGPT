@@ -32,9 +32,9 @@ core Python infrastructure in `domain/`.
 - `domain/multimodal/_internal/` — vision, speech, engine.
 - `tests/core-py/` — unit and integration tests.
 
-Layout note: check the target worktree's layout — `domain/…` and
-`packages/core-py/domains/…` currently coexist, until reconciliation
-decision D4 executes. Tests are consolidated at repo-root `tests/`
+Layout note: core logic lives in `domain/…` — the legacy plural
+`packages/core-py/domains/…` was deleted except the deferred
+`infrastructure/pugqeep/`. Tests are consolidated at repo-root `tests/`
 (`tests/core-py/`, `tests/api-server/`, `tests/cli/`) — one test root only.
 
 Out of scope unless asked: frontend, CLI UX, docs.

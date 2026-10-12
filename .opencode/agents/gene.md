@@ -48,8 +48,8 @@ Every brief must carry: goal (1-2 sentences), exact file paths/branches,
 constraints (AGENTS.md rules that bite here), gates to run (lint, typecheck,
 test, benchmark), what must NOT be touched (other sessions' territory,
 uncommitted user work), definition of done, and which source tree the target
-worktree uses (`domain/…` vs `packages/core-py/domains/…` — both coexist
-until reconciliation decision D4 executes). Work happens in worktrees
+worktree uses (`domain/…`; the legacy plural `packages/core-py/domains/…`
+was deleted except the deferred `infrastructure/pugqeep/`). Work happens in worktrees
 (`.wt-<name>`, branch `feat|test|fix/<name>`) — never in a tree with another
 session's uncommitted changes.
 

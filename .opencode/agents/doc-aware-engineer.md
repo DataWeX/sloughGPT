@@ -29,9 +29,9 @@ Given a task, identify which area(s) it touches:
 | **Testing**         | `tests/`, `apps/web/cypress/`                                               | `docs/DEVELOPER_GUIDE.md`                                                                                                     |
 | **Uncertain**       | —                                                                           | `docs/README.md`, `docs/STRUCTURE.md`                                                                                         |
 
-Path note: the `domain/` rows show the repo-root tree; check the target
-worktree's layout — `domain/…` and `packages/core-py/domains/…` currently
-coexist (reconciliation decision D4 pending).
+Path note: the `domain/` rows show the repo-root tree — the canonical
+(only) core tree; the legacy plural `packages/core-py/domains/` was
+deleted except the deferred `infrastructure/pugqeep/`.
 
 ## 2. Read Docs First
 

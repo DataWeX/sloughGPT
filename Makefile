@@ -62,18 +62,27 @@ test: test-py-fast test-web-lib
 # ── Build ────────────────────────────────────────────────
 build: quant-core
 
+QUANT_DIR := domain/infrastructure/_internal/quant_core
+ifeq ($(shell uname -s),Darwin)
+QUANT_EXT := dylib
+else
+QUANT_EXT := so
+endif
+
 quant-core:
 	@echo "Building AVX2 C GEMM extensions..."
+	@test -f $(QUANT_DIR)/matmul_int8.c || { echo "  ✗ MISSING SOURCE: $(QUANT_DIR)/matmul_int8.c"; exit 1; }
+	@test -f $(QUANT_DIR)/matmul_int4.c || { echo "  ✗ MISSING SOURCE: $(QUANT_DIR)/matmul_int4.c"; exit 1; }
 	@gcc -O3 -mavx2 -shared -fPIC \
-		-o packages/core-py/domains/infrastructure/quant_core/matmul_int8.dylib \
-		packages/core-py/domains/infrastructure/quant_core/matmul_int8.c \
-		2>/dev/null && echo "  ✓ matmul_int8.dylib" \
-		|| echo "  ⚠  matmul_int8.c — gcc/AVX2 unavailable"
+		-o $(QUANT_DIR)/matmul_int8.$(QUANT_EXT) \
+		$(QUANT_DIR)/matmul_int8.c \
+		&& echo "  ✓ matmul_int8.$(QUANT_EXT)" \
+		|| { echo "  ⚠ toolchain: gcc/AVX2 unavailable — matmul_int8 NOT built (source present: $(QUANT_DIR)/matmul_int8.c)"; exit 1; }
 	@gcc -O3 -mavx2 -shared -fPIC \
-		-o packages/core-py/domains/infrastructure/quant_core/matmul_int4.dylib \
-		packages/core-py/domains/infrastructure/quant_core/matmul_int4.c \
-		2>/dev/null && echo "  ✓ matmul_int4.dylib" \
-		|| echo "  ⚠  matmul_int4.c — gcc/AVX2 unavailable"
+		-o $(QUANT_DIR)/matmul_int4.$(QUANT_EXT) \
+		$(QUANT_DIR)/matmul_int4.c \
+		&& echo "  ✓ matmul_int4.$(QUANT_EXT)" \
+		|| { echo "  ⚠ toolchain: gcc/AVX2 unavailable — matmul_int4 NOT built (source present: $(QUANT_DIR)/matmul_int4.c)"; exit 1; }
 
 # ── Buildroot (Linux Image for v86) ─────────────────────
 buildroot:

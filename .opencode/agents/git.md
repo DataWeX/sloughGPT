@@ -51,7 +51,7 @@ For each file, check:
 
 The project has strict layer boundaries:
 
-- `domain/` / `packages/core-py/domains/` — Core logic, no HTTP deps (both trees currently coexist; check the target worktree's layout)
+- `domain/` — Core logic, no HTTP deps (the legacy plural tree was deleted; only deferred `infrastructure/pugqeep/` remains)
 - `apps/api/server/` — FastAPI routes, thin adapters
 - `apps/web/` — Vite frontend, uses @sloughgpt/strui
 - `packages/strui/` — Shared component library

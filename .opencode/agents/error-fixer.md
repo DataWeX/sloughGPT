@@ -78,9 +78,9 @@ packages/core-py/       # Python core logic
 packages/strui/         # Component library
 ```
 
-Path note: check the target worktree's layout — repo-root `domain/` and
-`packages/core-py/domains/` currently coexist (reconciliation decision D4
-pending). Tests are consolidated at repo-root `tests/` — one test root only.
+Path note: core logic lives in repo-root `domain/` — the legacy plural
+`packages/core-py/domains/` was deleted except the deferred
+`infrastructure/pugqeep/`. Tests are consolidated at repo-root `tests/` — one test root only.
 
 ## Key Commands
 

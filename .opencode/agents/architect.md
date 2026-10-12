@@ -24,7 +24,7 @@ to reduce memory usage, improve performance, and enhance maintainability.
 - `domain/` — Python backend
 - `apps/web/` — TypeScript frontend
 - Any file with structural improvements needed
-- Layout: check the target worktree's layout — `domain/…` and `packages/core-py/domains/…` currently coexist (reconciliation decision D4 pending)
+- Layout: core logic lives in `domain/…`; the legacy plural tree `packages/core-py/domains/` was deleted (only `infrastructure/pugqeep/` remains, deferred)
 
 ## Anti-Patterns to Target
 

@@ -21,7 +21,7 @@ echo "Checking required files..."
 files=(
     "package.json"
     "apps/api/server/main.py"
-    "packages/core-py/domains/api/__init__.py"
+    "domain/api/__init__.py"
     "apps/web/package.json"
     "apps/web/app/(app)/page.tsx"
     "apps/web/app/(app)/chat/page.tsx"
@@ -46,7 +46,7 @@ if [ "$all_found" = true ]; then
     echo ""
     if python3 -m ruff --version &>/dev/null; then
         echo "Ruff smoke (same rules as CI)..."
-        python3 -m ruff check tests/ apps/cli/ apps/api/server/ packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82 || {
+        python3 -m ruff check tests/ apps/cli/ apps/api/server/ domain/training/_internal/checkpoint_utils.py --select E9,F63,F7,F82 || {
             echo "❌ Ruff smoke failed"
             exit 1
         }

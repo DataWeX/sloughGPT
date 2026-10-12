@@ -217,14 +217,14 @@ npm run test          # Full suite
 ## File Organization
 
 ```
-packages/core-py/domains/
-├── infrastructure/
+domain/
+├── infrastructure/_internal/
 │   ├── singleton.py          # SingletonMeta metaclass
 │   ├── server_state.py       # AtomicRef with __slots__
 │   ├── task_queue.py         # Task with __slots__
 │   ├── model_server.py       # CircuitBreaker with __slots__
 │   └── process_guard.py      # Module-level psutil import
-├── inference/
+├── inference/_internal/
 │   ├── session_kv_manager.py # Extracted KV cache manager
 │   └── slonet_provider.py    # Uses SessionKVManager
 ```

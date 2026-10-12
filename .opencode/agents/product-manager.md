@@ -47,7 +47,7 @@ When asked "what can we remove":
 
 - Check `PRODUCT_ENGINEERING.md` dead code section
 - Verify no frontend consumers (grep for endpoint in `apps/web/`)
-- Verify no domain consumers (grep for import in `domain/` and `packages/core-py/domains/` — both trees currently coexist)
+- Verify no domain consumers (grep for imports in `domain/`)
 - Propose deletion with justification
 
 ### 4. Roadmap Maintenance
