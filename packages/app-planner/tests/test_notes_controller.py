@@ -323,7 +323,9 @@ def test_to_dict_includes_author_on_legacy_note(legacy_ctrl):
 
 
 def test_column_for_status_uses_config_map():
-    assert NotesController.column_for("wip") == "in_progress"
+    # Vocabulary is main's post-cutover map (config.STATUS_TO_COLUMN):
+    # wip -> wip (the in_progress rename landed), open/blocked -> todo.
+    assert NotesController.column_for("wip") == "wip"
     assert NotesController.column_for("done") == "done"
     assert NotesController.column_for("open") == "todo"
     assert NotesController.column_for("") == "todo"
@@ -336,8 +338,9 @@ def test_column_for_reads_note_status(ctrl):
 
 
 def test_status_for_column_round_trips():
+    # Main's COLUMN_TO_STATUS: wip -> wip, todo -> open; unknown -> open.
     assert NotesController.status_for("done") == "done"
-    assert NotesController.status_for("in_progress") == "doing"
+    assert NotesController.status_for("wip") == "wip"
     assert NotesController.status_for("unknown-column") == "open"
 
 
@@ -364,7 +367,7 @@ def test_sync_legacy_uses_handed_in_kanban_store(legacy_ctrl, tmp_path):
     legacy_ctrl.create("Card me", status="wip")
     added, updated, total = legacy_ctrl.sync(board)
     assert (added, total) == (1, 1)
-    assert board.load_board().cards[0].column == "in_progress"
+    assert board.load_board().cards[0].column == "wip"
 
 
 # ── Locking ───────────────────────────────────────────────────────────────
