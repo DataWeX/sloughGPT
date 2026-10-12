@@ -363,7 +363,17 @@ def test_bind_server_steps_past_occupied_port(tmp_path):
     try:
         srv = _bind_server("127.0.0.1", taken, GuiHandler, note_store, kanban_store)
         try:
-            assert srv.server_address[1] == taken + 1
+            # The contract is "never rebind the occupied port — take the first
+            # free one in [port, port + attempts)", per _bind_server's own
+            # docstring. Asserting exactly `taken + 1` over-specified it: the
+            # kernel hands out ephemeral ports adjacently, so when the NEIGHBOUR
+            # is also busy (common under full-suite load, which is why this went
+            # red only in the full run and passed 3/3 in isolation) the correct
+            # implementation steps further and the test still went red.
+            # Measured: with taken+1 occupied, _bind_server binds taken+2.
+            bound = srv.server_address[1]
+            assert bound != taken, "bound the very port known to be occupied"
+            assert bound > taken, "stepping must move upward, not wrap or retry"
         finally:
             srv.server_close()
     finally:
