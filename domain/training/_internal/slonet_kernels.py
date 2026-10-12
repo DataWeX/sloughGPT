@@ -19,6 +19,30 @@ All kernels are @njit(cache=True, nogil=True) — compiled once, cached to disk,
 and entered with the GIL released, so a thread-domain call never starves the
 host loop (probe: scripts/probe_gil_hold.py; card f30be275).
 
+Six of them additionally carry parallel=True + prange, for multi-core
+throughput (probe: scripts/probe_parallel_kernels.py,
+scripts/probe_parallel_small.py, scripts/probe_parallel_elementwise.py;
+card 21135daa). The prange is always over an axis of INDEPENDENT output
+elements — never across a reduction — so every parallel kernel is still
+bit-identical to its serial form; the weaker numeric tolerance that
+parallel=True usually forces is NOT needed here. Measured 2.8-6.2x on this
+box (8 cores).
+
+Deliberately left serial, and why:
+  - nb_rmsnorm, nb_layernorm — the flat element loop carries per-row state
+    (inv_rms / mu / var computed at col==0, consumed by the rest of the row).
+    prange needs a loop-structure rewrite there, which is a separate change
+    with its own risk, not a throughput knob.
+  - _gqa_expand, _add_residual, nb_embed — serial cost is only ~40-80us at
+    realistic shapes, the same order as numba's per-call thread-team dispatch.
+    Across two runs at similar load they swung from 3.1x to 0.2x, i.e. the
+    dispatch cost is not reliably amortised. Kept serial until a benchmark
+    shows a stable margin.
+  - _lm_head_argmax — parallelising it means materialising a V-wide scratch
+    vector, which is exactly the allocation the kernel exists to avoid
+    (measured 4.78x faster, rejected on that design ground).
+  - _fused_layernorm_residual — only a (1, E) input: one row, no parallel axis.
+
 Note on fused attention: attempts to replace np.einsum with numba manual-loop
 attention were SLOWER (0.71x) because numba does 3 passes over dot products
 (find max, softmax, weighted sum) vs einsum's single-pass C implementation.
@@ -51,7 +75,7 @@ def _check_numba() -> bool:
 
 def _build_kernels():
     """Build and return compiled kernels (called lazily)."""
-    from numba import njit
+    from numba import njit, prange
 
     # ---- RMSNorm ---------------------------------------------------------
     @njit(cache=True, nogil=True)
@@ -100,22 +124,30 @@ def _build_kernels():
         return out
 
     # ---- SiLU (swish) / SwiGLU gate ---------------------------------------
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def nb_swiglu(h1):
         """SiLU (SwiGLU gate): h1 * sigmoid(h1)."""
         out = np.empty_like(h1)
-        for i in range(h1.size):
+        for i in prange(h1.size):
             v = h1.flat[i]
             out.flat[i] = v * (1.0 / (1.0 + np.exp(-v)))
         return out
 
     # ---- Softmax (in-place on last axis) ----------------------------------
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def nb_softmax_last_axis(e):
         """Softmax over the last axis.  Modifies e in-place, returns e."""
         n_last = e.shape[-1]
         total = e.size
-        for offset in range(0, total, n_last):
+        # prange only accepts a CONSTANT step, so the original
+        # `for offset in range(0, total, n_last)` cannot be pranged as written
+        # (numba: "Only constant step size is supported for prange"). Rewritten
+        # as a row-index loop with a deterministic offset — same work, same
+        # order within each row, so results stay bit-identical. Measured 4.05x
+        # at (256, 896).
+        n_rows = total // n_last
+        for r in prange(n_rows):
+            offset = r * n_last
             # Find max for numerical stability
             mx = e.flat[offset]
             for j in range(1, n_last):
@@ -161,7 +193,7 @@ def _build_kernels():
                 x.flat[base + d] += pos_emb.flat[p * emb_dim + d]
 
     # ---- SwiGLU + element-wise multiply (fused) ---------------------------
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def nb_swi_glu_mul(h1, h3):
         """SwiGLU(h1) * h3 — single pass, no temp alloc.
 
@@ -170,7 +202,7 @@ def _build_kernels():
         Returns: (..., 4E) = swiglu(h1) * h3
         """
         out = np.empty_like(h1)
-        for i in range(h1.size):
+        for i in prange(h1.size):
             v = h1.flat[i]
             s = v * (1.0 / (1.0 + np.exp(-v)))
             out.flat[i] = s * h3.flat[i]
@@ -438,15 +470,15 @@ _fused_built = False
 
 def _build_fused_kernels():
     """Build fused block kernels (LayerNorm variant + RMSNorm variant)."""
-    from numba import njit
+    from numba import njit, prange
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def _fused_layer_norm(x, w, b, eps):
         """LayerNorm for (seq, E) 2D array, returns (seq, E)."""
         seq = x.shape[0]
         E = x.shape[1]
         out = np.empty_like(x)
-        for s in range(seq):
+        for s in prange(seq):
             mu = 0.0
             for d in range(E):
                 mu += x[s, d]
@@ -464,14 +496,14 @@ def _build_fused_kernels():
                 out[s, d] = val
         return out
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def _fused_swiglu_inplace(h):
         """SwiGLU activation in-place for (seq, 4E) array."""
-        for i in range(h.size):
+        for i in prange(h.size):
             v = h.flat[i]
             h.flat[i] = 0.5 * v * (1.0 + np.tanh(0.7978845608 * (v + 0.044715 * v * v * v)))
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def _fused_attention_single(
         q,
         k_full,
@@ -489,8 +521,11 @@ def _build_fused_kernels():
         k_full: (H, new_len, E_head) — already GQA-expanded
         v_full: (H, new_len, E_head) — already GQA-expanded
         out: (H, E_head) — output
+
+        Heads are independent (each writes out[h, :]), so the head loop is a
+        prange — measured 3.7-6.0x over the serial form, bit-identical.
         """
-        for h in range(H):
+        for h in prange(H):
             # Pass 1: compute all scores, find max
             scores_max = -1e30
             for n in range(new_len):
@@ -520,7 +555,7 @@ def _build_fused_kernels():
                     acc += attn_w * v_full[h, n, d]
                 out[h, d] = acc
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def _fused_attention_multi(
         q,
         k_full,
@@ -538,45 +573,52 @@ def _build_fused_kernels():
         k_full: (H, new_len, E_head) — already GQA-expanded
         v_full: (H, new_len, E_head) — already GQA-expanded
         out: (seq_len, H, E_head) — output
+
+        Each (h, s) pair writes its own out[s, h, :] slice and carries no state
+        into any other pair, so the two loops are flattened into one prange over
+        H * seq_len — the only way to get enough parallel tasks out of a short
+        prompt (prange over heads alone would cap us at H ways). Measured
+        3.1-6.2x over the serial form, bit-identical.
         """
-        for h in range(H):
-            for s in range(seq_len):
-                # Pass 1: compute all scores with causal mask, find max
-                scores_max = -1e30
-                for n in range(new_len):
-                    dot = 0.0
-                    for d in range(E_head):
-                        dot += q[s, h, d] * k_full[h, n, d]
-                    dot *= scale
-                    if n > s:
-                        dot = -1e9
-                    if dot > scores_max:
-                        scores_max = dot
-                # Pass 2: softmax
-                total = 0.0
-                for n in range(new_len):
-                    dot = 0.0
-                    for d in range(E_head):
-                        dot += q[s, h, d] * k_full[h, n, d]
-                    dot *= scale
-                    if n > s:
-                        dot = -1e9
-                    val = np.exp(dot - scores_max)
-                    total += val
-                inv_total = 1.0 / total
-                # Pass 3: weighted sum of V
+        for hs in prange(H * seq_len):
+            h = hs // seq_len
+            s = hs - h * seq_len
+            # Pass 1: compute all scores with causal mask, find max
+            scores_max = -1e30
+            for n in range(new_len):
+                dot = 0.0
                 for d in range(E_head):
-                    acc = 0.0
-                    for n in range(new_len):
-                        dot = 0.0
-                        for dd in range(E_head):
-                            dot += q[s, h, dd] * k_full[h, n, dd]
-                        dot *= scale
-                        if n > s:
-                            dot = -1e9
-                        attn_w = np.exp(dot - scores_max) * inv_total
-                        acc += attn_w * v_full[h, n, d]
-                    out[s, h, d] = acc
+                    dot += q[s, h, d] * k_full[h, n, d]
+                dot *= scale
+                if n > s:
+                    dot = -1e9
+                if dot > scores_max:
+                    scores_max = dot
+            # Pass 2: softmax
+            total = 0.0
+            for n in range(new_len):
+                dot = 0.0
+                for d in range(E_head):
+                    dot += q[s, h, d] * k_full[h, n, d]
+                dot *= scale
+                if n > s:
+                    dot = -1e9
+                val = np.exp(dot - scores_max)
+                total += val
+            inv_total = 1.0 / total
+            # Pass 3: weighted sum of V
+            for d in range(E_head):
+                acc = 0.0
+                for n in range(new_len):
+                    dot = 0.0
+                    for dd in range(E_head):
+                        dot += q[s, h, dd] * k_full[h, n, dd]
+                    dot *= scale
+                    if n > s:
+                        dot = -1e9
+                    attn_w = np.exp(dot - scores_max) * inv_total
+                    acc += attn_w * v_full[h, n, d]
+                out[s, h, d] = acc
 
     @njit(cache=True, nogil=True)
     def _gqa_expand(k, out, reps):
