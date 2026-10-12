@@ -31,6 +31,34 @@ class PhonemeResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+# TTS sample rate used by both TTS backends
+# (domain/voice/_internal/tts.py and domain/multimodal/_internal/tts.py).
+_SAMPLE_RATE = 22050
+
+
+def _wav_data_uri(waveform: Any) -> str:
+    """Encode a float waveform as a ``data:audio/wav;base64,...`` URI.
+
+    Same shape ``apps/api/server/routers/multimodal.py`` already uses for TTS
+    output, so both routes serve audio a browser can play directly. Kept lazy
+    on the imports because they are only needed on the synthesis path.
+    """
+    import base64
+    import io
+    import wave
+
+    import numpy as np
+
+    samples = np.asarray(waveform, dtype=np.float32)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(_SAMPLE_RATE)
+        wf.writeframes((np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16).tobytes())
+    return f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}"
+
+
 class PhonemeEngine:
     """Phoneme domain engine — encoding, scoring, synthesis.
 
@@ -157,12 +185,24 @@ class PhonemeEngine:
     # ── TTS synthesis via voice engine ──
 
     def synthesize(self, text: str) -> PhonemeResult:
-        """Synthesize text to speech via the voice engine."""
+        """Synthesize text to speech via the voice engine.
+
+        Returns a JSON-ready payload, like every sibling method here — see
+        ``encode``, which calls ``ids.tolist()``. The voice engine hands back a
+        raw ``np.ndarray`` waveform, and returning that untouched made this one
+        route 500 with ``E_SERIALIZATION`` (the response model cannot encode an
+        ndarray), while the other eight routes returned 200.
+        """
         try:
             voice = self._get_voice()
+            waveform = voice.synthesize(text).data
             return PhonemeResult(
                 success=True,
-                data=voice.synthesize(text).data,
+                data={
+                    "audio": _wav_data_uri(waveform),
+                    "text": text,
+                    "duration_sec": len(waveform) / _SAMPLE_RATE,
+                },
                 metadata={"text": text, "source": "voice_engine"},
             )
         except Exception as e:
