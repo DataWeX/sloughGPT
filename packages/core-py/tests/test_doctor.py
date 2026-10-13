@@ -635,16 +635,16 @@ class TestReportSerialization:
 
 class TestRunDoctor:
     def test_all_skipped_is_clean_and_never_touches_network(self):
-        report = run_doctor(skip={"http", "sse", "journey"}, preflight=False, write=False)
+        report = run_doctor(skip={"http", "sse", "journey", "system"}, preflight=False, write=False)
         assert report.overall == Severity.OK
         assert report.exit_code() == 0
-        assert {p["name"] for p in report.probes} == {"http", "sse", "journey"}
+        assert {p["name"] for p in report.probes} == {"http", "sse", "journey", "system"}
         assert all(p["ok"] is None and p["error"] == "skipped" for p in report.probes)
 
     def test_writes_to_env_report_path(self, tmp_path, monkeypatch):
         path = tmp_path / "sub" / "findings.json"
         monkeypatch.setenv("SLO_DOCTOR_REPORT", str(path))
-        run_doctor(skip={"http", "sse", "journey"}, preflight=False)
+        run_doctor(skip={"http", "sse", "journey", "system"}, preflight=False)
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["overall"] == "ok"
         assert data["targets"]["web"] == "http://localhost:5173"

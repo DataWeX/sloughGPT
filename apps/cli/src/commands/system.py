@@ -177,6 +177,30 @@ def cmd_config_check(args):
                 log.info(f"  > {check.suggestion}")
 
 
+def cmd_doctor(args):
+    """Run environment checks, then the shared site-doctor core.
+
+    Two views, one core: section 2 consumes the same ``run_doctor`` as
+    ``python -m domain.core._internal.doctor``, the ``/doctor`` API and
+    the ``/doctor`` page — and the report it writes (``write=True``) is
+    the artifact those consumers read. The validator's checks stay in
+    their own section (section 1).
+    """
+    cmd_config_check(args)
+
+    log.blank()
+    log.header("Site Doctor")
+    try:
+        from domain.core._internal.doctor import run_doctor
+        from domain.core._internal.doctor.__main__ import _summary_lines
+
+        report = run_doctor(write=True)
+        for line in _summary_lines(report):
+            log.info(line)
+    except Exception as exc:  # a CLI diagnostic must print, never traceback
+        log.warning(f"site doctor failed: {exc}")
+
+
 def cmd_config_validate(args):
     """Validate environment configuration."""
     env_file = args.env
