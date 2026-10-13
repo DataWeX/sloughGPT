@@ -317,6 +317,7 @@ class _TuiSession:
             os.environ["TERM"] = "xterm-256color"
             with open(self.err_path, "w") as errf:
                 os.dup2(errf.fileno(), 2)
+
             winsz = struct.pack("HHHH", self.rows, self.cols, 0, 0)
             fcntl.ioctl(1, termios.TIOCSWINSZ, winsz)
 
@@ -325,7 +326,10 @@ class _TuiSession:
 
             rt = DaitRuntime()
             rt._api = _FakeAPI()
-            rt.boot = lambda shell_run=None: ("", {"available": True, "model_id": "qwen"})
+            rt.boot = lambda shell_run=None: (
+                "",
+                {"available": True, "model_id": "qwen"},
+            )
             rt.shutdown = lambda: ""
             repl = ShellREPL(rt, use_tui=True)
             repl._history = []
@@ -360,13 +364,47 @@ class _TuiSession:
             self.screen.feed(data)
         return self.buf
 
+    def _settle(self, quiet: int = 4, step: float = 0.05, timeout: float = 4.0) -> bool:
+        """Block until the screen has stopped changing.
+
+        `write` and `keys` slept a fixed 0.15/0.2 s and returned whether or not
+        the child had caught up. How long the prompt needs to echo a line and
+        repaint depends on the line and on what the key did, so a fixed number
+        is a guess — and the assertion after it races the echo. The suite
+        caught `λ alpha bravo char` where the line was still being written and
+        read it as a word-motion bug; it is not one, and the same race reports
+        a different test each run, which is why the failures never repeated
+        themselves.
+
+        Waiting for quiescence asks the only question that matters — has the
+        screen finished changing? — over `quiet` consecutive identical reads.
+        It can only *extend* a wait: nothing is asserted any earlier than
+        before, and a screen that never settles gives up at `timeout`.
+        """
+        end = time.time() + timeout
+        prev = None
+        same = 0
+        while time.time() < end:
+            self.feed(step)
+            cur = self.screen.text()
+            if cur == prev:
+                same += 1
+                if same >= quiet:
+                    return True
+            else:
+                same = 0
+            prev = cur
+        return False
+
     def write(self, text: str, settle: float = 0.15) -> None:
         os.write(self.fd, text.encode())
         self.feed(settle)
+        self._settle()
 
     def keys(self, seq: bytes, settle: float = 0.2) -> None:
         os.write(self.fd, seq)
         self.feed(settle)
+        self._settle()
 
     def wait_until(self, pred, timeout: float = 10.0) -> bool:
         end = time.time() + timeout
@@ -521,7 +559,7 @@ def test_down_arrow_clears_input(session):
 
 
 def test_ctrl_left_word_motion(session):
-    """``ESC [ 1 ; 5 D`` is folded by keypad(True) into KEY_CTRL_LEFT; the
+    """``ESC [ 1 ; 5 D`` decodes to ``Key(KEY_LEFT, ctrl=True)``; the
     caret must jump word-wise so inserted text lands mid-line."""
     assert session.wait_until(lambda sc: _ready(session))
     session.write("echo bravo\r")
@@ -783,10 +821,14 @@ def test_alt_word_motion_via_escape_remainder(session):
     session.keys(b"\x1bOH")  # Home
     session.keys(b"\x1bf")  # Alt+F — to end of "one"
     session.write("X")
-    assert session.screen.row(ROWS - 1) == "\u03bb oneX two"
+    # Both reads wait for the child to render: the screen snapshot below is a
+    # view of the last frame the child emitted, and asserting on it straight
+    # after a write races that child's ~100ms input poll — the keystroke is
+    # processed correctly and the assertion still sees the previous frame.
+    assert session.wait_until(lambda sc: sc.row(ROWS - 1) == "\u03bb oneX two")
     session.keys(b"\x1bb")  # Alt+B — back to word start
     session.write("Y")
-    assert session.screen.row(ROWS - 1) == "\u03bb YoneX two", (
+    assert session.wait_until(lambda sc: sc.row(ROWS - 1) == "\u03bb YoneX two"), (
         f"Alt+F/Alt+B word motion wrong.\n{session.screen.text()}"
     )
 
@@ -1158,7 +1200,7 @@ def test_ctrl_left_word_backward_manual_path(session):
 
 
 def test_ctrl_right_folds_to_key_ctrl_right(session):
-    """``ESC [ 1 ; 5 C`` is folded by keypad(True) into KEY_CTRL_RIGHT; the
+    """``ESC [ 1 ; 5 C`` decodes to ``Key(KEY_RIGHT, ctrl=True)``; the
     caret must jump word-wise so inserted text lands mid-line."""
     assert session.wait_until(lambda sc: _ready(session))
     session.write("one two")

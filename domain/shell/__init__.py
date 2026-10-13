@@ -10,6 +10,9 @@ from __future__ import annotations
 from domain.shell._internal.commands import (
     ShellCommands,
 )
+from domain.shell._internal.interactive import (
+    InteractivePrompt,
+)
 from domain.shell._internal.io import (
     ConsoleIO,
     MemoryIO,
@@ -94,17 +97,14 @@ def get_dait_runtime() -> DaitRuntime:
 
 
 __all__ = [
+    "ConsoleIO",
+    "DaitRuntime",
+    "InteractivePrompt",
     "Kernel",
+    "MemoryIO",
     "NeuralKernel",
     "Process",
     "ProcessState",
-    "ShellState",
-    "ShellIO",
-    "ConsoleIO",
-    "MemoryIO",
-    "capture_output",
-    "ShellCommands",
-    "DaitRuntime",
     "Resource",
     "get_dait_runtime",
     "InsFault",
@@ -119,5 +119,9 @@ __all__ = [
     "SimScene",
     "Simulation",
     "WorldParams",
+    "ShellCommands",
+    "ShellIO",
+    "ShellState",
     "X86VirtualSystem",
+    "capture_output",
 ]

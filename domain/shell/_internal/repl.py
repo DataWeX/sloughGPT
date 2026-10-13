@@ -293,6 +293,14 @@ class _CaptureOutput:
 # ── REPL ─────────────────────────────────────────────────────────────
 
 
+# The TUI chain (tui_repl, graphics, term_screen) is imported on demand — the
+# shell must start without it — and this name sits at module scope rather than
+# inside the method so the failure paths stay patchable: tests reach it as
+# `domain.shell._internal.repl.TuiRepl`, and the on-demand import below goes
+# through the canonical dotted path.
+TuiRepl: Any = None
+
+
 class ShellREPL(LinuxCommandsMixin):
     """Interactive REPL with built-in commands and AI-assisted mode.
 
@@ -2545,9 +2553,11 @@ Examples:
     def _cmd_tui(self, args: str = "") -> None:
         """Launch the split-panel TUI mode — console panel + shell output + input line."""
         try:
-            from .tui_repl import TuiRepl
+            _TuiRepl = TuiRepl
+            if _TuiRepl is None:
+                from domain.shell._internal.tui_repl import TuiRepl as _TuiRepl
 
-            tui = TuiRepl(self, self._log_buffer)
+            tui = _TuiRepl(self, self._log_buffer)
             tui.run()
         except ImportError as ex:
             self._print(f"  TUI mode not available: {ex}")

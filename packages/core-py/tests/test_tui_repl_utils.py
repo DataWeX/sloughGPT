@@ -15,7 +15,6 @@ from domain.shell._internal.surface import (
     TextSurface,
 )
 from domain.shell._internal.tui_repl import (
-    _ESC_FINALS,
     _STYLE_PAIRS,
     TuiIo,
     TuiRepl,
@@ -82,11 +81,6 @@ class TestCompletePath:
 
 
 class TestConstants:
-    def test_esc_finals_is_frozen(self):
-        assert isinstance(_ESC_FINALS, frozenset)
-        assert "A" in _ESC_FINALS
-        assert "C" in _ESC_FINALS
-
     def test_style_pairs_cover_all_styles(self):
         expected = {STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL}
         assert set(_STYLE_PAIRS.keys()) == expected
