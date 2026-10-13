@@ -7,6 +7,7 @@ jest.mock('react-native', () => ({
 jest.mock('../api-client', () => ({
   api: {post: jest.fn()},
   getApiUrl: jest.fn(() => 'http://localhost:8000'),
+  getAuthHeaders: jest.fn().mockResolvedValue({}),
 }));
 
 const mockLaunchImageLibrary = jest.fn();
