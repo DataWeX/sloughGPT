@@ -1,6 +1,6 @@
 """Exec-mode child entry point for ``SubprocessProcess`` (``start_method="exec"``).
 
-Launched by the parent as ``python -m domains.infrastructure.pugqeep.exec_worker
+Launched by the parent as ``python -m domain.infrastructure._internal.pugqeep.exec_worker
 <channel_fd>``. The job ``(fn, args, kwargs, capture, config)`` arrives pickled
 on stdin; the framed PGQ channel arrives as an inherited fd.
 

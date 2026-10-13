@@ -37,9 +37,9 @@ for _p in (str(_REPO_ROOT), str(_REPO_ROOT / "packages" / "core-py")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from domains.infrastructure.pugqeep import Pipe, PipeClosed  # noqa: E402
-from domains.infrastructure.pugqeep.config import EngineConfig  # noqa: E402
-from domains.infrastructure.pugqeep.engine import Engine  # noqa: E402
+from domain.infrastructure._internal.pugqeep import Pipe, PipeClosed  # noqa: E402
+from domain.infrastructure._internal.pugqeep.config import EngineConfig  # noqa: E402
+from domain.infrastructure._internal.pugqeep.engine import Engine  # noqa: E402
 
 BASELINE_FILE = Path("data/benchmark_pipe_baseline.json")
 

@@ -810,7 +810,7 @@ if __name__ == "__main__":
         uvicorn_kw["reload_dirs"] = [
             str(_SERVER_ROOT),  # apps/api/server
             str(_REPO_ROOT / "domain"),  # domain/** — was missing before
-            str(_CORE_PY_ROOT / "domains"),  # packages/core-py/domains
+            str(_CORE_PY_ROOT),  # packages/core-py (domains/ retired -> domain/)
         ]
 
     try:

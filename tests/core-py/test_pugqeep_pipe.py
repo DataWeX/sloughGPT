@@ -19,14 +19,14 @@ import pytest
 # re-executes each real module under its own name (its package __init__
 # overwrites __path__), so a class imported from there is NOT the class the
 # engine raises -- pytest.raises would silently fail to match.
-from domains.infrastructure.pugqeep import (
+from domain.infrastructure._internal.pugqeep import (
     DEFAULT_CAPACITY,
     Pipe,
     PipeClosed,
     ProcessQueue,
 )
-from domains.infrastructure.pugqeep.config import EngineConfig
-from domains.infrastructure.pugqeep.engine import Engine, Pool, Process, Stem
+from domain.infrastructure._internal.pugqeep.config import EngineConfig
+from domain.infrastructure._internal.pugqeep.engine import Engine, Pool, Process, Stem
 
 
 class _Stub:
