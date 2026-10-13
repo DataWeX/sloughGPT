@@ -409,6 +409,11 @@ class TestTrainingSubsystems:
         ("/training/runs", "runs"),
     ]
 
+    # The route data above was never wired to the test, so `route`/`name` were
+    # unresolved fixtures and this collected as an ERROR — the subsystem pages
+    # were never actually exercised. Parametrize against the class attribute
+    # (readable in the class body) rather than a second copy of the list.
+    @pytest.mark.parametrize(("route", "name"), ROUTES)
     def test_subsystem_pages_load(self, page, collector, route, name):
         body = go(page, route, collector)
         dt = record_devtools(
@@ -684,6 +689,11 @@ class TestCrossPageNavigation:
         "/auto-train",
     ]
 
+    # As in TestTrainingSubsystems: ALL_ROUTES held the data but nothing
+    # parametrized it, so `route` never resolved and this collected as an
+    # ERROR — all 11 routes went unverified. Wiring it turns one erroring test
+    # into 11 real navigation checks.
+    @pytest.mark.parametrize("route", ALL_ROUTES)
     @retry_on_failure()
     def test_all_routes_load_without_crash(self, page, collector, route):
         body = go(page, route, collector)
