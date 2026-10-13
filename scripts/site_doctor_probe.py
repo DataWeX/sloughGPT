@@ -401,8 +401,7 @@ def check_streams(gateway: str, spec: dict[str, Any] | None = None) -> list[dict
                     "severity": severity,
                     "check": f"stream-{kind}",
                     "message": (
-                        f"{len(bad)} streaming route(s) where {why}: "
-                        + "; ".join(bad[:6])
+                        f"{len(bad)} streaming route(s) where {why}: " + "; ".join(bad[:6])
                     ),
                 }
             )

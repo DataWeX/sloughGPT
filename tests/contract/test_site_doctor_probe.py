@@ -111,7 +111,7 @@ def test_a_heartbeat_is_not_an_event_and_not_a_silence() -> None:
     assert doctor._is_heartbeat_only(b": heartbeat\n\n")
     assert doctor._is_heartbeat_only(b"   : keepalive\n\n"), "leading space is still a comment"
 
-    assert not doctor._is_heartbeat_only(b"data: {\"x\": 1}\n\n")
+    assert not doctor._is_heartbeat_only(b'data: {"x": 1}\n\n')
     assert not doctor._is_heartbeat_only(b""), "no bytes is closed-empty, not heartbeat-only"
     # A comment followed by a real event means the route DOES deliver.
     assert not doctor._is_heartbeat_only(b": heartbeat\n\nid: 1\ndata: {}\n\n")
