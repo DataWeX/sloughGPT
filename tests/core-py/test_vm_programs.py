@@ -232,8 +232,13 @@ class TestAsmProgramExecution:
         from domain.shell._internal.vm import VMRunner
 
         r = VMRunner()
-        with pytest.raises(Exception):
-            r.assemble_and_run(NPU_PROGRAM_ASM)
+        # The DEV_* device protocol is implemented (vm.py _op_dev_open): a
+        # missing device is reported as output, not raised. The old
+        # pytest.raises pinned the pre-implementation era where DEV_* were
+        # unknown mnemonics (card d5219810); unknown mnemonics still raise —
+        # see X86Assembler's intake gate.
+        out = r.assemble_and_run(NPU_PROGRAM_ASM)
+        assert any(line.startswith("[VM] DEV_") for line in out)
 
     def test_boot_asm(self):
         from domain.shell._internal.vm import VMRunner

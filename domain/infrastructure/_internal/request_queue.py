@@ -147,10 +147,20 @@ class PriorityRequestQueue:
                 # Worker already popped it — release the slot
                 _release()
             else:
-                # Marker still in heap — remove it
+                # Marker still in heap — remove it, and unwind the depth
+                # counters it incremented on entry: _pop never saw it, so
+                # nothing else decrements them (cancel leak, card d5219810).
                 async with self._lock:
+                    before = len(self._heap)
                     self._heap = [x for x in self._heap if x.future is not grant]
                     heapq.heapify(self._heap)
+                    if len(self._heap) < before:
+                        if item.priority == 0:
+                            self._depth_high -= 1
+                        elif item.priority == 1:
+                            self._depth_medium -= 1
+                        elif item.priority == 2:
+                            self._depth_low -= 1
             raise
 
         return _release

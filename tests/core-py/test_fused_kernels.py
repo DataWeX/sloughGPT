@@ -538,7 +538,14 @@ class TestFusedKernelsAvailability:
                 causal[0, 0, i, j] = -1e9
 
         out_masked, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(), mask=causal)
-        out_unmasked, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy())
+        # mask=None takes the fused prompt path, which applies BUILT-IN causal
+        # masking (slonet forward_numpy) — comparing against it would be
+        # causal-vs-causal (diff 0.0). A zero mask forces the same reference
+        # path with no-op masking, isolating the custom mask's effect
+        # (card d5219810).
+        out_unmasked, _ = attn.forward_numpy(
+            q.copy(), k.copy(), v.copy(), mask=np.zeros((1, 1, N, N), dtype=np.float32)
+        )
 
         diff = np.abs(out_masked - out_unmasked).max()
         assert diff > 0, "Causal mask should change output"

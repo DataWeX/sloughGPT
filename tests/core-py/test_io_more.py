@@ -230,10 +230,18 @@ class TestCaptureCmd:
     def test_capture_cmd_returns_output_and_restores(self):
         repl = types.SimpleNamespace(
             io=MemoryIO(),
-            console=types.SimpleNamespace(_io=MemoryIO()),
+            console=types.SimpleNamespace(
+                _io=MemoryIO(),
+                # capture_cmd swaps all four io surfaces the real console
+                # exposes (io, console._io, console._interactive._io/_is_tty)
+                # — the mock must mirror that shape (card d5219810).
+                _interactive=types.SimpleNamespace(_io=MemoryIO(), _is_tty=True),
+            ),
         )
         old_io = repl.io
         old_console_io = repl.console._io
+        old_interactive_io = repl.console._interactive._io
+        old_interactive_tty = repl.console._interactive._is_tty
 
         def _greet(name):
             repl.io.write("hi " + name)
@@ -242,13 +250,21 @@ class TestCaptureCmd:
         assert out == "hi bob\n"
         assert repl.io is old_io
         assert repl.console._io is old_console_io
+        assert repl.console._interactive._io is old_interactive_io
+        assert repl.console._interactive._is_tty is old_interactive_tty
 
     def test_capture_cmd_restores_on_error(self):
         repl = types.SimpleNamespace(
             io=MemoryIO(),
-            console=types.SimpleNamespace(_io=MemoryIO()),
+            console=types.SimpleNamespace(
+                _io=MemoryIO(),
+                _interactive=types.SimpleNamespace(_io=MemoryIO(), _is_tty=True),
+            ),
         )
         old_io = repl.io
+        old_console_io = repl.console._io
+        old_interactive_io = repl.console._interactive._io
+        old_interactive_tty = repl.console._interactive._is_tty
 
         def _explode():
             repl.io.write("partial")
@@ -257,3 +273,6 @@ class TestCaptureCmd:
         with pytest.raises(RuntimeError):
             capture_cmd(repl, _explode)
         assert repl.io is old_io
+        assert repl.console._io is old_console_io
+        assert repl.console._interactive._io is old_interactive_io
+        assert repl.console._interactive._is_tty is old_interactive_tty
