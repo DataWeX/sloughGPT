@@ -920,6 +920,33 @@ class StartupOrchestrator:
                 warmup_proc = PgqProcess(fn=_warm_checkpoints, name="ckpt-warmup")
                 self._bg_tree.branch([warmup_proc])
 
+                # Background health-snapshot warmup. The FIRST
+                # get_detailed_health() call costs ~1.3s: it imports the
+                # controllers.health graph (284 modules) and, via
+                # domain.slolib.get_accelerator() -> _detect_best_backend() ->
+                # is_available(), reaches the GPU stack (cupy: 279ms self,
+                # 758ms cumulative). Nothing warmed it before, so that whole
+                # cost landed in-request on the first /health/stream
+                # subscriber — measured 1281ms vs 1.5ms warm.
+                #
+                # Run it here, where there is no traffic yet. Note this only
+                # works because PgqProcess executes IN-PROCESS: the warmed
+                # sys.modules are this process's. (Verified: a marker file and
+                # a deliberately-unrelated stdlib module both landed in the
+                # parent.) A forked child would warm nothing but the page
+                # cache.
+                def _warm_health():
+                    try:
+                        from controllers.health import get_health_controller
+
+                        get_health_controller().get_detailed_health()
+                    except Exception as e:
+                        logger.debug(
+                            "Health warmup failed (non-fatal): %s", e, extra={"tag": "START"}
+                        )
+
+                self._bg_tree.branch([PgqProcess(fn=_warm_health, name="health-warmup")])
+
                 return
             except Exception as e:
                 last_exc = e

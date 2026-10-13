@@ -171,6 +171,46 @@ def test_phase6_routers_skips_already_registered_prefixes():
 # ── Phase 2: model load ──────────────────────────────────────────────────────
 
 
+def test_phase6_warms_the_health_snapshot_before_first_subscriber():
+    """Boot must warm `get_detailed_health()` before anyone subscribes.
+
+    `controllers.health` pulls in 284 modules and, through
+    ``domain.slolib.get_accelerator() -> _detect_best_backend() ->
+    is_available()``, reaches the GPU stack (cupy: 279ms self, 758ms
+    cumulative). Nothing warmed it, so ~1.3s of cold import landed in-request
+    on whoever first opened ``/health/stream`` — measured 804-1281ms cold
+    against ~0ms warm.
+
+    The warmup function itself is not run here (only branched onto the tree),
+    so this asserts the wiring rather than paying the import in a test.
+    """
+    get_all = MagicMock(return_value=[])
+    orch = _make_orchestrator()
+    branched: list[str] = []
+
+    def _spy(processes, *args, **kwargs):
+        branched.extend(p.name for p in processes)
+        return MagicMock()  # a Stem; `_phase6_routers` ignores the return here
+
+    with (
+        patch.dict(
+            sys.modules,
+            {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
+        ),
+        patch.object(orch._bg_tree, "branch", side_effect=_spy),
+        patch("faulthandler.dump_traceback"),
+        patch("traceback.print_exc"),
+    ):
+        asyncio.run(orch._phase6_routers())
+
+    assert "health-warmup" in branched, (
+        "boot never warms the health snapshot, so its ~1.3s cold import still "
+        f"lands in-request on the first subscriber; branched instead: {branched}"
+    )
+    # The checkpoint warmup must survive alongside it.
+    assert "ckpt-warmup" in branched
+
+
 class TestPhase2ModelLoad:
     """_phase2_model_load — autoload disabled / lazy-guard routing."""
 
