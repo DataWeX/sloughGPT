@@ -47,14 +47,18 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
-from domain.shared import utc_now_iso
-
-# Add core-py + repo root to path (root holds the top-level ``domain`` package)
+# Add core-py + repo root to path (root holds the top-level ``domain`` package).
+# This must precede the domain import: run as ``python scripts/...`` the script
+# directory is sys.path[0] and the repo root is not on PYTHONPATH, so the import
+# below failed with ModuleNotFoundError for every direct run (the e2e suite
+# invokes the CLI exactly that way).
 _root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_root / "packages" / "core-py"))
 sys.path.insert(0, str(_root))
+
+import numpy as np
+
+from domain.shared import utc_now_iso
 
 # Force single-thread BLAS for best single-core performance
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
