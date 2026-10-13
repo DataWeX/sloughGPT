@@ -703,7 +703,10 @@ class TestExportExceptionBranch:
         def _boom(src, dst):
             raise OSError("disk full")
 
-        monkeypatch.setattr(slonet.os, "rename", _boom)
+        # The save path moved to os.replace (atomic_write's chosen primitive
+        # — see domain/infrastructure/_internal/atomic_write.py); inject the
+        # failure there so the propagation + temp-cleanup contract is real.
+        monkeypatch.setattr(slonet.os, "replace", _boom)
         with pytest.raises(OSError, match="disk full"):
             export_to_sou(net, str(out))
         assert list(tmp_path.glob("*.tmp")) == []
