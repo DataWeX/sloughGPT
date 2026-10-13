@@ -66,6 +66,7 @@ under parallelism.
   - `scripts/benchmark_slonet.py` — inference throughput, latency
   - `scripts/benchmark_stability.py` — generation consistency across runs
   - `scripts/benchmark_latency.py` — end-to-end request latency
+  - `scripts/benchmark_tokenizer_battery.py` — tokenizer fidelity + throughput, one row per ALGORITHM (Morph / SloBPE+SloUnigram / TokenTree char+tree). Reports worst-case vocabulary coverage first, so a low round-trip score reads as a coverage limit rather than a decode bug.
   - `scripts/benchmark_results.py record/history/compare` — track results over time
   - If no benchmark exists for your change, create one in `scripts/` and document what it measures.
 - **Always mine test runs and benchmarks for insights — never report pass/fail alone.** A run is evidence about the system, not a verdict. Two obligations, both mandatory:

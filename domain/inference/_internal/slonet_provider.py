@@ -58,10 +58,13 @@ def _get_slo_layernorm():
 # ── Core native tokenizer format ──────────────────────────────────────────────
 # One wrapper for every natively-trained tokenizer. The vocab ALWAYS rides a
 # TokenTree — char checkpoints store their stoi/itos ON the tree (chars on the
-# tree) — while encode/decode keep the exact per-format semantics the two
-# legacy wrappers had, byte for byte:
-#   variant "char"      raw per-char lookup (no normalize, OOV -> 0, raw join)
-#   variant "tree"      TokenTree walk (lowercase normalize + pretokenize)
+# tree). There is ONE encode/decode implementation: TokenTree's trie walk.
+# `variant` is provenance, not a code path — it says which configuration the
+# tree was built with, and the two configurations differ only in POLICY
+# (see _CHAR_POLICY): raw units vs gpt2 pretokenization, case-faithful vs
+# lowercased, no "</w>" vs "</w>", OOV->0 vs OOV-><UNK>, verbatim decode vs
+# special-skipping decode. The walk itself is shared, because characters make
+# up tokens: a char vocab is a depth-1 tree, not a peer of one.
 # Provenance surface (user decision, card 2a586fea): ONE scheme per family —
 # scheme == "native" here; the char/tree distinction is `.variant`, the tree's
 # pretokenizer is `.pretokenizer` (None for char), and `origin` records the
@@ -72,25 +75,50 @@ NATIVE_SCHEME = "native"
 NATIVE_FORMAT_CHAR = "native/char"
 NATIVE_FORMAT_TREE = "native/token-tree"
 
+# The char configuration of TokenTree — POLICY ONLY, no separate algorithm.
+# Each value is something the legacy _CharTokenizer did implicitly; stating it
+# explicitly is what lets char and tree share one walker.
+_CHAR_POLICY: dict[str, Any] = {
+    "pretokenizer": None,  # raw code points — no gpt2 regex splitting
+    "lowercase": False,  # characters are case-faithful
+    "word_suffix": "",  # no "</w>"; that marker is the word-boundary fix
+    "oov_id": 0,  # legacy stoi.get(c, 0), not <UNK>
+    "skip_special_decode": False,  # legacy joined ids verbatim
+}
+
 
 def _char_carrier_tree(stoi: dict[str, int], itos: dict) -> Any:
-    """Build the TokenTree carrier for a char-level vocab.
+    """Build the TokenTree that carries a char-level vocab.
 
-    stoi/itos are stored VERBATIM on the tree (encode/decode read them back
-    unchanged, so behavior is identical to the legacy wrapper regardless of
-    stoi/itos consistency or id gaps); tree.vocab is the dense id->token view
-    for tree-shaped consumers. The trie stays empty and _trained=False — char
-    semantics never walk it.
+    stoi/itos are stored VERBATIM on the tree (so the dense vocab view and the
+    id maps survive regardless of stoi/itos consistency or id gaps), and the
+    trie is populated with single-character edges so encode walks the same
+    path a token-tree does: char is this tree configured with a depth-1 trie,
+    not a second implementation.
+
+    Multi-character keys (``"</w>"``, ``"<PAD>"``, ...) are deliberately kept
+    OUT of the trie. Legacy char lookup matched one code point at a time and
+    never resolved those as a unit, so admitting them would change the ids of
+    text containing them; they stay in stoi/itos for the vocab view.
     """
-    from domain.training._internal.token_tree import TokenTree
+    from domain.training._internal.token_tree import TokenTree, TrieNode
 
     # JSON serializes int keys as strings — normalize to int
     itos_n = {int(k): v for k, v in itos.items()}
     vocab_size = max(itos_n.keys()) + 1 if itos_n else 0
-    tree = TokenTree()
+    tree = TokenTree(**_CHAR_POLICY)
     tree.vocab = [itos_n.get(i, "") for i in range(vocab_size)]
     tree.stoi = dict(stoi)
     tree.itos = itos_n
+    for token, tid in stoi.items():
+        if len(token) != 1:
+            continue
+        node = tree.root
+        child = node.children.get(token)
+        if child is None:
+            child = TrieNode()
+            node.children[token] = child
+        child.token_id = tid
     return tree
 
 
@@ -104,8 +132,9 @@ class NativeTokenizer:
         self.scheme = NATIVE_SCHEME
         self.variant = variant
         self.origin = origin
-        # Legacy private attrs, kept for older reach-ins:
-        # char semantics read tree.stoi/tree.itos; tree semantics use _tree.
+        # Legacy private attrs, kept for older reach-ins. Both variants read
+        # the tree — these are aliases of the same object now that there is a
+        # single encode/decode implementation.
         self._tree = tree
         self._stoi = tree.stoi
         self._itos = tree.itos
@@ -128,9 +157,11 @@ class NativeTokenizer:
 
     @property
     def pretokenizer(self) -> str | None:
-        """The tree's pretokenizer ('gpt2' | 'whitespace'); None for char."""
-        if self.variant == "char":
-            return None
+        """The tree's pretokenizer ('gpt2' | 'whitespace'); None for char.
+
+        Read straight off the tree — the char configuration simply carries
+        ``pretokenizer=None`` as policy, so there is nothing to branch on.
+        """
         return self.tree.pretokenizer
 
     @property
@@ -142,15 +173,19 @@ class NativeTokenizer:
         return self.tree.vocab_size
 
     def encode(self, text: str) -> list[int]:
-        """Encode text to token IDs (variant-dependent, byte-parity with legacy)."""
-        if self.variant == "char":
-            return [int(self.tree.stoi.get(c, 0)) for c in text]
+        """Encode text to token IDs.
+
+        One implementation for both variants: the TokenTree trie walk. Char
+        differs from tree by configuration (``_CHAR_POLICY``), not by code
+        path — the legacy per-char lookup is gone.
+        """
         return self.tree.encode(text)
 
     def decode(self, token_ids) -> str:
-        """Decode token IDs back to text (variant-dependent, byte-parity)."""
-        if self.variant == "char":
-            return "".join(self.tree.itos.get(int(tid), "") for tid in token_ids)
+        """Decode token IDs back to text.
+
+        One implementation for both variants — see :meth:`encode`.
+        """
         return self.tree.decode(token_ids)
 
     def apply_chat_template(self, messages: list[dict[str, str]], **kwargs) -> str:

@@ -93,10 +93,38 @@ class TokenTree:
     """Tree-structured BPE tokenizer standing on the pugqeep Point substrate.
 
     Args:
-        pretokenizer: "gpt2" or "whitespace".
+        pretokenizer: "gpt2" | "whitespace" | None. ``None`` disables
+            pretokenization entirely — the whole input stays one unit, which
+            is the char-level configuration of this same walker.
+        lowercase: fold case during encode (the token-tree default). The
+            char configuration passes ``False``: characters are case-faithful.
+        word_suffix: the word-boundary marker appended to every unit before
+            the walk (``"</w>"`` by default). The char configuration passes
+            ``""`` — see the note on WORD_SUFFIX below.
+        oov_id: id returned when nothing in the trie matches. ``None`` falls
+            back to ``unk_id`` (the tree default); the char configuration
+            passes ``0`` to preserve legacy ``stoi.get(c, 0)`` semantics.
+        skip_special_decode: drop special tokens on decode. The char
+            configuration passes ``False`` — legacy char decode joined ids
+            verbatim, specials included.
+
+    Note:
+        These five arguments are the ONLY difference between a char-level
+        tokenizer and a token-tree tokenizer. The walk itself — greedy
+        longest-prefix match over the encoding trie in :meth:`query` — is one
+        algorithm; char is this tree configured with a depth-1 trie (one
+        character per edge), no normalization, and no word suffix. They are
+        not two implementations sharing a base class.
     """
 
-    def __init__(self, pretokenizer: str = "gpt2") -> None:
+    def __init__(
+        self,
+        pretokenizer: str | None = "gpt2",
+        lowercase: bool = True,
+        word_suffix: str = WORD_SUFFIX,
+        oov_id: int | None = None,
+        skip_special_decode: bool = True,
+    ) -> None:
         self.root = TrieNode()
         self.vocab: list[str] = []
         self.stoi: dict[str, int] = {}
@@ -104,8 +132,13 @@ class TokenTree:
         self.merges: list[tuple[str, str]] = []
         self._lineage: dict[int, tuple[int | None, int | None]] = {}
         self._freqs: Counter = Counter()
-        self._word_suffix: str = WORD_SUFFIX
-        self._pretokenizer: str = pretokenizer
+        # Encoding policy — configuration, not algorithm. Defaults reproduce
+        # the historical token-tree behavior exactly.
+        self._word_suffix: str = word_suffix
+        self._pretokenizer: str | None = pretokenizer
+        self._lowercase: bool = lowercase
+        self._oov_id: int | None = oov_id
+        self._skip_special_decode: bool = skip_special_decode
         self._library: PointLibrary = PointLibrary(name="token_tree")
         self._embed_dim: int = 0
         self._trained: bool = False
@@ -115,8 +148,8 @@ class TokenTree:
         self._embedding_matrix_cached: bool = False
 
     @property
-    def pretokenizer(self) -> str:
-        """The pretokenizer in use ('gpt2' | 'whitespace')."""
+    def pretokenizer(self) -> str | None:
+        """The pretokenizer in use ('gpt2' | 'whitespace'); None = raw units."""
         return self._pretokenizer
 
     def _invalidate_caches(self) -> None:
@@ -295,45 +328,56 @@ class TokenTree:
     # Encoding — the tree's query handlers
     # ------------------------------------------------------------------
 
-    def query(self, text: str) -> tuple[int, int]:
+    def query(self, text: str, start: int = 0) -> tuple[int, int]:
         """Greedy longest-prefix-match query against the encoding trie.
 
         Args:
-            text: the remaining input to match, starting at position 0.
+            text: the input to match.
+            start: offset in ``text`` to begin at. Passing an offset instead
+                of a slice ``text[start:]`` keeps encode O(n) — a per-step
+                slice makes the walk quadratic in input length, which the
+                char configuration (no pretokenization, so one unit per
+                whole document) would hit directly.
 
         Returns:
-            (token_id, matched_char_count). Falls back to <UNK> with a
-            single-character advance when nothing in the tree matches.
+            (token_id, matched_char_count). Falls back to ``oov_id`` (or
+            ``unk_id`` when ``oov_id`` is None) with a single-character
+            advance when nothing in the tree matches.
         """
         node = self.root
-        i = 0
+        i = start
         best_id: int | None = None
         best_end = 0
         n = len(text)
         while i < n:
             ch = text[i]
+            nxt: TrieNode | None = None
+            step = 0
             if ch == "<":
-                nxt: TrieNode | None = None
                 for piece in _MULTI_PIECES:
                     if text.startswith(piece, i) and piece in node.children:
                         nxt = node.children[piece]
+                        step = len(piece)
                         break
-                if nxt is None:
-                    break
-                node = nxt
-                i += len(piece)
-            else:
+            if nxt is None:
+                # Fall through to a single-piece edge instead of abandoning the
+                # match. Without this a bare "<" that is itself a vocabulary
+                # character (the char configuration, or any corpus that carries
+                # a literal angle bracket) could never match and would silently
+                # degrade to the OOV id.
                 nxt = node.children.get(ch)
-                if nxt is None:
-                    break
-                node = nxt
-                i += 1
+                step = 1
+            if nxt is None:
+                break
+            node = nxt
+            i += step
             if node.token_id is not None:
                 best_id = node.token_id
                 best_end = i
         if best_id is None:
-            return self.unk_id, 1
-        return best_id, best_end
+            return (self.unk_id if self._oov_id is None else self._oov_id), 1
+        # best_end is an absolute index; callers expect a relative advance.
+        return best_id, best_end - start
 
     def encode(self, text: str, add_bos: bool = False, add_eos: bool = False) -> list[int]:
         """Encode text into token ids by walking the tree.
@@ -346,15 +390,17 @@ class TokenTree:
         Returns:
             list of integer token ids.
         """
-        text = self._normalize(text, lowercase=True)
+        text = self._normalize(text, lowercase=self._lowercase)
         ids: list[int] = []
         if add_bos:
             ids.append(self.bos_id)
-        for word in self._pretokenize(text, lowercase=True):
-            s = word + self._word_suffix
+        for word in self._pretokenize(text, lowercase=self._lowercase):
+            # Skip the copy when there is no word suffix: the char policy uses
+            # "" and would otherwise duplicate the whole unit per encode.
+            s = word + self._word_suffix if self._word_suffix else word
             i = 0
             while i < len(s):
-                token_id, advance = self.query(s[i:])
+                token_id, advance = self.query(s, i)
                 ids.append(token_id)
                 i += advance
         if add_eos:
@@ -378,14 +424,14 @@ class TokenTree:
             the consumed prefixes reproduces ``encode(text)``: the sequence of
             ``id`` values is exactly ``encode(text)``.
         """
-        normalized = self._normalize(text, lowercase=True)
+        normalized = self._normalize(text, lowercase=self._lowercase)
         steps: list[dict] = []
-        for word in self._pretokenize(normalized, lowercase=True):
+        for word in self._pretokenize(normalized, lowercase=self._lowercase):
             s = word + self._word_suffix
             i = 0
             while i < len(s):
                 remaining = s[i:]
-                token_id, advance = self.query(remaining)
+                token_id, advance = self.query(s, i)
                 steps.append({"remaining": remaining, "id": token_id, "consumed": advance})
                 i += advance
         return steps
@@ -429,38 +475,56 @@ class TokenTree:
                 )
             )
 
-    def decode(self, ids: Sequence[int], skip_special: bool = True) -> str:
+    def decode(self, ids: Sequence[int], skip_special: bool | None = None) -> str:
         """Decode token ids back into text.
 
         Args:
             ids: token id sequence.
-            skip_special: omit special-token markers (""</w>"" is always
-                removed; it is a word-boundary marker, not output text).
+            skip_special: omit special-token markers (``word_suffix`` is
+                always removed; it is a word-boundary marker, not output
+                text). ``None`` uses the instance policy — the char
+                configuration passes ``False`` so specials join verbatim,
+                exactly as the legacy char wrapper did.
 
         Returns:
             reconstructed string.
         """
+        if skip_special is None:
+            skip_special = self._skip_special_decode
+        suffix = self._word_suffix
         pieces: list[str] = []
         word_end = False
         for tid in ids:
-            token = self.itos.get(tid)
+            try:
+                # Fast path: ids arrive as int already, and int() per token is
+                # measurable across a long sequence.
+                key = tid if type(tid) is int else int(tid)
+            except (TypeError, ValueError):
+                continue
+            token = self.itos.get(key)
             if token is None:
                 continue
-            if token == WORD_SUFFIX:
+            if suffix and token == suffix:
                 word_end = True
                 continue
-            if token in self.stoi and token in SPECIAL_TOKENS:
-                if skip_special:
-                    continue
+            # ``skip_special`` is hoisted to the front: the char policy sets it
+            # False, so this costs one bool test per token instead of a dict
+            # and a list lookup. Reordering is behavior-preserving — when the
+            # special token falls through to the ordinary branch below, its
+            # text has no word suffix, so word_end ends up False either way.
+            if skip_special and token in self.stoi and token in SPECIAL_TOKENS:
                 pieces.append(token)
                 word_end = False
+                continue
+            piece = token.replace(suffix, "") if suffix else token
+            if word_end and pieces and piece and not piece[0].isspace():
+                pieces.append(" " + piece)
             else:
-                piece = token.replace(WORD_SUFFIX, "")
-                if word_end and pieces and piece and not piece[0].isspace():
-                    pieces.append(" " + piece)
-                else:
-                    pieces.append(piece)
-                word_end = token.endswith(WORD_SUFFIX)
+                pieces.append(piece)
+            # ``suffix == ""`` (char config) must never set word_end:
+            # str.endswith("") is always True, which would inject a space
+            # between every character.
+            word_end = bool(suffix) and token.endswith(suffix)
         return "".join(pieces)
 
     def resolve_token(self, token: str) -> int:
@@ -752,6 +816,11 @@ class TokenTree:
             "version": 1,
             "pretokenizer": self._pretokenizer,
             "word_suffix": self._word_suffix,
+            # Encoding policy — without these a saved char-config tree would
+            # reload with tree defaults and silently change its ids.
+            "lowercase": self._lowercase,
+            "oov_id": self._oov_id,
+            "skip_special_decode": self._skip_special_decode,
             "embed_dim": self._embed_dim,
             "vocab": self.vocab,
             "merges": [list(m) for m in self.merges],
@@ -773,8 +842,15 @@ class TokenTree:
             a fully reconstructed TokenTree (embedding Points excluded —
             encode/decode only need the trie, vocabulary, and merges).
         """
-        tree = cls(pretokenizer=meta.get("pretokenizer", "gpt2"))
-        tree._word_suffix = meta.get("word_suffix", WORD_SUFFIX)
+        # Defaults reproduce the historical token-tree policy, so legacy
+        # sidecars (which predate these keys) load byte-identically.
+        tree = cls(
+            pretokenizer=meta.get("pretokenizer", "gpt2"),
+            lowercase=meta.get("lowercase", True),
+            word_suffix=meta.get("word_suffix", WORD_SUFFIX),
+            oov_id=meta.get("oov_id"),
+            skip_special_decode=meta.get("skip_special_decode", True),
+        )
         tree._embed_dim = meta.get("embed_dim", 0)
         tree.vocab = list(meta.get("vocab", []))
         tree.stoi = {t: i for i, t in enumerate(tree.vocab)}
@@ -997,6 +1073,11 @@ class TokenTree:
         return tid
 
     def _pretokenize(self, text: str, lowercase: bool = True) -> list[str]:
+        if self._pretokenizer is None:
+            # Char configuration: no splitting. The input stays one unit so the
+            # walk sees raw code points in order — exactly what legacy char
+            # encode did by iterating the string directly.
+            return [text] if text else []
         if self._pretokenizer == "whitespace":
             return default_pretokenize(text)
         return gpt2_pretokenize(text)
