@@ -261,14 +261,27 @@ There is nothing else to name: module, URLs, and CLI all say Mole
 (`domain/core/_internal/mole`, the `/mole` URLs). Grandfathered literals kept:
 `$SLO_DOCTOR_*` env vars, `~/.cache/slog-mole/`, `scripts/test-mole.py`.
 
-- **What it probes:** API health/errors (`/health*`, `/errors/*`),
+- **What it probes** (six — `system` first, then the local file probes
+  `gates` + `benchmarks`, then the network probes `http` + `sse` + `journey`):
+  **system** — host thermal/load/uptime read-only from `/sys` and `/proc`
+  (readers are hermetic in tests, never raise: missing sensors degrade to an
+  explicit finding, not a crash); API health/errors (`/health*`, `/errors/*`);
   `/health/stream` cadence + payload size (flags >256 KB frames and >8s
-  stalls), the UX journey sweep report (`domain/journeys`), the newest
+  stalls); the UX journey sweep report (`domain/journeys`); the newest
   full-suite gate artifact vs the drift baseline (`~/.cache/slog-gates`;
-  env `SLO_GATES_DIR` / `SLO_GATES_DRIFT_MAX` / `SLO_GATES_FULL_PASSED`),
+  env `SLO_GATES_DIR` / `SLO_GATES_DRIFT_MAX` / `SLO_GATES_FULL_PASSED`);
   and stored benchmark records vs thresholds — the verdict comes from
   `scripts/benchmark_results.py` itself (`data/benchmark_results`;
   env `SLO_BENCH_RESULTS_DIR`).
+- **Sibling, standalone:** `scripts/site_doctor_probe.py` — the read-only
+  **route/stream triage** probe (Site Doctor). It walks the router manifest
+  (~246 routes, no write verbs) and judges each streaming route on its
+  **first read**, bounded in bytes and seconds, separating the outcomes that
+  need different owners: `ok` / `heartbeat-only` / `silent` / `dropped` /
+  `closed-empty`. It is a script, not a Mole probe — run it directly; exits
+  non-zero only under `--strict`, so it can gate CI once the baseline is
+  clean. Pinned against the routers by
+  `tests/contract/test_site_doctor_probe.py`.
 - **Placement:** wiring lives in `domain/core/_internal/mole/` (the
   "body of the system" — system-level ops); probes are seams onto the
   core components.
