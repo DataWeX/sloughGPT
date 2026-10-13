@@ -69,7 +69,7 @@ curl -s -X POST http://localhost:8000/models/load \
 
 # Full char-level trainer: merges config.yaml with CLI flags (intervals, device, dropout, LoRA, checkpoints, …)
 ./sloughgpt train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
-# Module entrypoint (no config.yaml merge; --dropout / --lora-alpha on main): python3 -m domains.training.train_pipeline --data datasets/shakespeare/input.txt --epochs 3
+# Module entrypoint (no config.yaml merge; --dropout / --lora-alpha on main): python3 -m domain.training._internal.train_pipeline --data datasets/shakespeare/input.txt --epochs 3
 # API job: ./sloughgpt train --api --dataset shakespeare --epochs 2
 # Char-LM perplexity on held-out text (fair when checkpoint embeds stoi/itos/chars — e.g. sloughgpt train step_*.soul):
 #   ./sloughgpt eval --checkpoint models/sloughgpt.soul --data datasets/shakespeare/input.txt

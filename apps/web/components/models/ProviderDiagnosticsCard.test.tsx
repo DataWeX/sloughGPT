@@ -18,13 +18,13 @@ const mockData = {
   providers: {
     'default': {
       type: 'ProviderRouter',
-      module: 'domains.models.provider',
+      module: 'domain.models._internal.provider',
       text_provider: 'slonet-native',
       processors: ['VisionProcessor', 'ToolUseProcessor'],
     },
     'slonet-native': {
       type: 'SloNetChatProvider',
-      module: 'domains.inference.slonet_provider',
+      module: 'domain.inference._internal.slonet_provider',
       model_id: 'Qwen/Qwen2.5-0.5B-Instruct',
       server: { type: 'SloNetServer', has_circuit_breaker: true },
     },
@@ -144,7 +144,7 @@ describe('ProviderDiagnosticsCard', () => {
       providers: {
         'default': {
           type: 'ProviderRouter',
-          module: 'domains.models.provider',
+          module: 'domain.models._internal.provider',
           processors: [],
         },
       },
