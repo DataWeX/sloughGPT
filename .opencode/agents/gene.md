@@ -49,7 +49,7 @@ constraints (AGENTS.md rules that bite here), gates to run (lint, typecheck,
 test, benchmark), what must NOT be touched (other sessions' territory,
 uncommitted user work), definition of done, and which source tree the target
 worktree uses (`domain/…`; the legacy plural `packages/core-py/domains/…`
-was deleted except the deferred `infrastructure/pugqeep/`). Work happens in worktrees
+is fully deleted, pugqeep ported). Work happens in worktrees
 (`.wt-<name>`, branch `feat|test|fix/<name>`) — never in a tree with another
 session's uncommitted changes.
 

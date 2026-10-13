@@ -620,7 +620,7 @@ display-width truncation. CJK characters count as 2 columns.
 
 ```bash
 # Core library
-PYTHONPATH=packages/core-py .venv/bin/python -c "from domains.infrastructure.pugqeep import Tree; print('ok')"
+PYTHONPATH=. /home/mana/miniconda3/envs/sloughgpt/bin/python -c "from domain.infrastructure._internal.pugqeep import Tree; print(1)"
 
 # API server
 cd apps/api && .venv/bin/python -m uvicorn server.main:app --port 8000

@@ -79,8 +79,8 @@ packages/strui/         # Component library
 ```
 
 Path note: core logic lives in repo-root `domain/` — the legacy plural
-`packages/core-py/domains/` was deleted except the deferred
-`infrastructure/pugqeep/`. Tests are consolidated at repo-root `tests/` — one test root only.
+`packages/core-py/domains/` is fully deleted (pugqeep was the last
+subtree, now ported). Tests are consolidated at repo-root `tests/` — one test root only.
 
 ## Key Commands
 

@@ -30,8 +30,8 @@ Given a task, identify which area(s) it touches:
 | **Uncertain**       | —                                                                           | `docs/README.md`, `docs/STRUCTURE.md`                                                                                         |
 
 Path note: the `domain/` rows show the repo-root tree — the canonical
-(only) core tree; the legacy plural `packages/core-py/domains/` was
-deleted except the deferred `infrastructure/pugqeep/`.
+(only) core tree; the legacy plural `packages/core-py/domains/` is
+fully deleted (pugqeep was the last subtree, now ported).
 
 ## 2. Read Docs First
 

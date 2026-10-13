@@ -30,7 +30,7 @@ Fix: Change `logger.info(f"msg {var}")` to `logger.info("msg %s", var)`
 ### 2. Missing `from __future__ import annotations`
 
 ```bash
-for f in $(find packages/core-py/domains -name "*.py" -not -path "*__pycache__*"); do
+for f in $(find domain -name "*.py" -not -path "*__pycache__*"); do
   if ! grep -q "from __future__ import annotations" "$f"; then
     echo "Missing: $f"
   fi
@@ -50,7 +50,7 @@ Fix: Change `except:` to `except Exception:`
 ### 4. print() in production code
 
 ```bash
-rg '^\s*print\(' packages/core-py/domains --include '*.py'
+rg '^\s*print(' domain --include '*.py'
 ```
 
 Fix: Replace `print(...)` with `logger.info(...)` or `logger.debug(...)`
@@ -148,8 +148,8 @@ scripts/                # Utility scripts
 ```
 
 Note: this diagram shows the `packages/core-py` tree; check the
-worktree's layout — repo-root `domain/` and `packages/core-py/domains/`
-currently coexist (reconciliation decision D4 pending). Tests are
+worktree's layout — repo-root `domain/` is the only core tree; the
+legacy plural `packages/core-py/domains/` is fully deleted. Tests are
 consolidated at repo-root `tests/` — one test root only.
 
 ## Key Files
