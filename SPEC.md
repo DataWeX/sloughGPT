@@ -9,7 +9,7 @@ SloughGPT is a self-hosted LLM infrastructure platform with character-level trai
 ```
 sloughGPT/
 ├── packages/
-│   ├── core-py/          # Python domain logic (importable as `domains`)
+│   ├── core-py/          # Packaging shell for the repo-root domain/ tree
 │   ├── sdk-py/           # Python API client
 │   ├── sdk-ts/           # TypeScript SDK
 │   ├── strui/            # React UI components
@@ -24,7 +24,7 @@ sloughGPT/
 
 ## Core Packages
 
-### `packages/core-py/domains/` - Domain Logic
+### `domain/` - Domain Logic
 
 | Module            | Purpose                                                           |
 | ----------------- | ----------------------------------------------------------------- |
@@ -101,49 +101,49 @@ Uses:
 
 ### TextDataset (4 copies → 1)
 
-Consolidate into `domains/training/train_pipeline.py`:
+Consolidate into `domain/training/_internal/train_pipeline.py`:
 
-- `domains/training/unified_training.py`
-- `domains/training/train_pipeline.py`
+- `unified_training.py` (no live module — absent at base)
+- `domain/training/_internal/train_pipeline.py`
 
 ### RAG System
 
-Choose canonical: `domains/infrastructure/rag.RAGSystem`
+Choose canonical: `RAGSystem` (no live module — absent at base)
 
 Deprecate:
 
-- `domains/cognitive/rag.ProductionRAG`
-- `domains/inference/streaming.StreamingRAG`
-- `domains/cognitive/grounding.RAGGrounder`
+- `domain/cognition/_internal/rag.ProductionRAG`
+- `StreamingRAG` (no live module — absent at base)
+- `domain/cognition/_internal/grounding.RAGGrounder`
 
 ### KnowledgeGraph
 
-Choose canonical: `domains/cognitive/knowledge_graph_v2.KnowledgeGraph`
+Choose canonical: `domain/cognition/_internal/knowledge_graph_v2.KnowledgeGraph`
 
 Deprecate:
 
-- `domains/cognitive/knowledge_graph.KnowledgeGraph` (v1)
-- `domains/infrastructure/rag.SLOKnowledgeGraph`
+- `knowledge_graph.KnowledgeGraph` (v1, retired — no live module)
+- `SLOKnowledgeGraph` (no live module — absent at base)
 
 ### BM25
 
-Choose canonical: `domains/infrastructure/rag.BM25`
+Choose canonical: `domain/cognition/_internal/math_rag.BM25`
 
 Deprecate:
 
-- `domains/cognitive/rag.BM25Indexer`
+- `domain/cognition/_internal/rag.BM25Indexer`
 
 ### InferenceEngine
 
-**Canonical:** `domains/inference/engine.InferenceEngine`
+**Canonical:** `domain/infrastructure/_internal/inference_engine.InferenceEngine`
 
 **Deprecated:**
 
-- `domains/training/inference_engine.InferenceEngine` → use canonical
+- `domain/training/inference_engine.py` → no live module; use canonical
 
 **Removed:**
 
-- `domains/ml_infrastructure/model_serving.py` → entirely unused (contained duplicate InferenceEngine + generic ModelServer)
+- `model_serving.py` → entirely unused (contained duplicate InferenceEngine + generic ModelServer); no live module
 
 ## Public API Contracts
 
@@ -281,7 +281,7 @@ GGUF models handled by llama.cpp:
 - **llama-cpp-python**: Primary (if installed)
 - **llama-cli**: Subprocess fallback
 
-Located at `packages/core-py/domains/inference/llama_engine.py`:
+Located at `llama_engine.py` (no live module — absent at base):
 
 - `LlamaInferenceEngine`: Main engine
 - `LlamaCLIInferenceEngine`: CLI subprocess
