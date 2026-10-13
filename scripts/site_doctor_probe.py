@@ -5,7 +5,7 @@ consumer** and emit a severity-ranked worklist. It orders tests; it does not
 operate. Every request here is a GET with no body, so a probe can never change
 what it is measuring.
 
-Three things are checked, in the order they matter:
+Five things are checked, in the order they matter:
 
 1. **Self-consistency of the health surface.** `/health` and `/health/detailed`
    are two views of one process. If they disagree about whether the site is
@@ -28,6 +28,13 @@ Three things are checked, in the order they matter:
    behaving routes read as broken, so it is pinned against the routers by
    `tests/contract/test_site_doctor_probe.py`.
 
+5. **Journeys and inference.** Phase 3 reads the UX journey report that
+   `domain/journeys` writes (it never launches a browser sweep — no browser
+   stack is imported, so the probe stays a consumer), and triages the
+   inference engine from `/health/detailed`'s service status and residency
+   counters. A missing journey report is `info`, not a defect, so `--strict`
+   still only trips on real problems.
+
 Findings are ranked critical > high > medium > low, and the run exits non-zero
 only under `--strict`, so it can gate CI once the baseline is clean.
 """
@@ -37,6 +44,7 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -56,7 +64,7 @@ STREAM_BYTES = 512
 #   health.py:49       HEALTH_STREAM_INTERVAL 3.0s, emits every 1.0s
 STREAM_GRACE = 35.0
 
-SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "ok": 4}
+SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "ok": 4, "info": 5}
 
 
 def get(url: str, timeout: float = TIMEOUT) -> tuple[int | None, Any, float]:
@@ -547,6 +555,152 @@ def check_edge(gateway: str, api: str, web: str) -> list[dict[str, Any]]:
     return findings
 
 
+def check_journeys(report_path: str | None = None) -> list[dict[str, Any]]:
+    """Read the UX journey report — the probe never launches a browser sweep.
+
+    `domain/journeys` writes the report after every flow; this reads it the
+    same way `mole/probes/journey.py` does. A missing report is information
+    (no sweep has run yet), not a defect, so it carries `severity=info` and
+    never trips `--strict`. The probe stays read-only: it imports no browser
+    stack, it only parses a file someone else produced.
+    """
+    if report_path is None:
+        report_path = os.environ.get(
+            "SLO_JOURNEY_REPORT",
+            os.path.join(
+                os.environ.get("SLO_JOURNEY_CACHE", os.path.expanduser("~/.cache/slog-journeys")),
+                "ux-flows-report.json",
+            ),
+        )
+
+    if not os.path.exists(report_path):
+        return [
+            {
+                "severity": "info",
+                "check": "journeys",
+                "message": (
+                    f"no journey report at {report_path} — run "
+                    "`python -m domain.journeys` to sweep the UX flows"
+                ),
+            }
+        ]
+
+    try:
+        with open(report_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        return [
+            {
+                "severity": "medium",
+                "check": "journeys",
+                "message": f"journey report at {report_path} is unreadable: {exc}",
+            }
+        ]
+
+    findings: list[dict[str, Any]] = []
+    flows = data.get("flows") or []
+    failed = [r for r in flows if isinstance(r, dict) and r.get("status") not in (None, "passed")]
+    for rec in failed:
+        findings.append(
+            {
+                "severity": "high",
+                "check": "journeys-failed",
+                "message": (
+                    f"journey {rec.get('id') or rec.get('label')} failed: "
+                    f"{rec.get('error') or rec.get('status')}"
+                ),
+            }
+        )
+
+    console_count = data.get("console_error_count") or 0
+    if console_count:
+        sample = data.get("console_errors_sample") or []
+        first = sample[0] if sample else "n/a"
+        findings.append(
+            {
+                "severity": "medium",
+                "check": "journeys-console",
+                "message": f"{console_count} console error(s) during the sweep; first: {first}",
+            }
+        )
+
+    if not findings:
+        findings.append(
+            {
+                "severity": "ok",
+                "check": "journeys",
+                "message": (
+                    f"journey sweep: {data.get('passed', 0)} passed, "
+                    f"{data.get('failed', 0)} failed, "
+                    f"{console_count} console error(s)"
+                ),
+            }
+        )
+    return findings
+
+
+def check_inference(api: str) -> list[dict[str, Any]]:
+    """Triage the inference engine from the health surface — read-only GETs.
+
+    The health endpoint already exposes the engine's service status, model
+    residency, and inference counters. An engine stuck `init` or reporting an
+    `error` service is the defect this surfaces; everything is judged from
+    `/health/detailed` without touching the engine itself.
+    """
+    findings: list[dict[str, Any]] = []
+    status, detailed, _ = get(f"{api}/health/detailed")
+    if not isinstance(detailed, dict):
+        return [
+            {
+                "severity": "high",
+                "check": "inference-engine",
+                "message": f"/health/detailed did not answer ({status}) — cannot triage inference",
+            }
+        ]
+
+    data = detailed.get("data") or {}
+    services = data.get("services") or {}
+    inference_service = services.get("inference") or {}
+    if inference_service.get("status") == "error":
+        findings.append(
+            {
+                "severity": "high",
+                "check": "inference-engine",
+                "message": (
+                    "inference service reports error: "
+                    f"{inference_service.get('error') or 'unknown'}"
+                ),
+            }
+        )
+
+    model_loaded = data.get("model_loaded")
+    inference_count = data.get("inference_count")
+    if model_loaded is False and isinstance(inference_count, int) and inference_count > 0:
+        findings.append(
+            {
+                "severity": "medium",
+                "check": "inference-residency",
+                "message": (
+                    f"model_loaded=False while inference_count={inference_count} — "
+                    "the engine served traffic but reports no model resident"
+                ),
+            }
+        )
+
+    if not findings:
+        findings.append(
+            {
+                "severity": "ok",
+                "check": "inference-engine",
+                "message": (
+                    f"model_loaded={model_loaded} device={data.get('device')} "
+                    f"inference_count={inference_count}"
+                ),
+            }
+        )
+    return findings
+
+
 def report(findings: list[dict[str, Any]], out: Any = sys.stdout) -> int:
     ordered = sorted(findings, key=lambda f: SEVERITY_ORDER.get(f["severity"], 9))
     counts: dict[str, int] = {}
@@ -583,6 +737,10 @@ def main() -> int:
     _status, spec, _ = get(f"{args.gateway}/openapi.json")
     findings += check_routes(args.gateway, spec)
     findings += check_streams(args.gateway, spec)
+    # Phase 3: read the UX journey report someone else produced (never launch
+    # a sweep) and triage the inference engine off the health surface.
+    findings += check_journeys()
+    findings += check_inference(args.api)
 
     problems = report(findings)
     if args.strict and problems:

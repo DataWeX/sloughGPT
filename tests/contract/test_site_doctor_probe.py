@@ -31,6 +31,7 @@ either healthy or broken.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -211,3 +212,93 @@ def test_a_stream_probe_survives_an_unreachable_host(monkeypatch) -> None:
 
 def _raise_unreachable(request, timeout=0):  # noqa: ANN001, ANN202
     raise OSError("connection refused")
+
+
+# -----------------------------------------------------------------------
+# Phase 3 (2026-10-13): the journey report is READ, never launched, and the
+# inference engine is triaged from the health surface. The probe stays a
+# consumer: it never starts a browser sweep, so `--strict` can gate CI on a
+# report someone else produced.
+# -----------------------------------------------------------------------
+
+
+def test_a_missing_journey_report_is_an_info_finding_not_a_crash(tmp_path) -> None:
+    """No report yet (no sweep has run) is information, not a defect."""
+    missing = tmp_path / "nope" / "ux-flows-report.json"
+    findings = doctor.check_journeys(str(missing))
+    assert len(findings) == 1, findings
+    assert findings[0]["severity"] == "info"
+    assert findings[0]["check"] == "journeys"
+
+
+def test_a_failed_flow_reads_as_a_high_finding_naming_the_flow(tmp_path) -> None:
+    """A failed journey is the site doctor's core signal — high, with the error."""
+    report = {
+        "passed": 1,
+        "failed": 1,
+        "console_error_count": 2,
+        "console_errors_sample": ["Uncaught TypeError: x is not a function"],
+        "flows": [
+            {"id": "2-write", "status": "passed", "label": "Write a note"},
+            {"id": "3-chat", "status": "failed", "error": "selector not found"},
+        ],
+    }
+    path = tmp_path / "ux-flows-report.json"
+    path.write_text(json.dumps(report))
+    checks = {f["check"]: f for f in doctor.check_journeys(str(path))}
+    assert "journeys-failed" in checks, checks
+    finding = checks["journeys-failed"]
+    assert finding["severity"] == "high"
+    assert "3-chat" in finding["message"]
+    assert "selector not found" in finding["message"]
+
+
+def test_console_errors_alone_are_a_medium_finding(tmp_path) -> None:
+    """A passing sweep can still be broken in the browser console."""
+    report = {
+        "passed": 3,
+        "failed": 0,
+        "console_error_count": 5,
+        "console_errors_sample": ["Refused to load image"],
+        "flows": [{"id": "1-read", "status": "passed"}],
+    }
+    path = tmp_path / "ux-flows-report.json"
+    path.write_text(json.dumps(report))
+    checks = {f["check"]: f for f in doctor.check_journeys(str(path))}
+    assert "journeys-console" in checks, checks
+    assert checks["journeys-console"]["severity"] == "medium"
+
+
+def test_the_probe_never_launches_a_browser_sweep() -> None:
+    """Read-only: importing avion/running a sweep would make the probe a writer."""
+    src = open(doctor.__file__, encoding="utf-8").read()
+    assert "import avion" not in src and "from avion" not in src, (
+        "the probe must read the journey report, never launch a sweep"
+    )
+    assert "playwright" not in src, "playwright import would break the read-only contract"
+
+
+def test_inference_triage_reports_a_stuck_or_error_engine(monkeypatch) -> None:
+    """An erroring inference service is a defect the health surface already knows."""
+    detailed = {
+        "data": {
+            "status": "degraded",
+            "health_score": {"status": "degraded"},
+            "services": {"inference": {"status": "error", "error": "engine timeout"}},
+            "model_loaded": True,
+            "device": "cpu",
+            "inference_count": 42,
+        }
+    }
+
+    def fake_get(url, timeout=5.0):
+        if url.endswith("/health/detailed"):
+            return 200, detailed, 0.1
+        return 200, {"data": {"status": "healthy"}}, 0.1
+
+    monkeypatch.setattr(doctor, "get", fake_get)
+    checks = {f["check"]: f for f in doctor.check_inference("http://unused")}
+    assert "inference-engine" in checks, checks
+    finding = checks["inference-engine"]
+    assert finding["severity"] == "high"
+    assert "engine timeout" in finding["message"]
