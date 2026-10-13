@@ -15,6 +15,7 @@ Probe seams:
     http      API self-diagnosis surface (/health, /errors/*)
     sse       /health/stream — payload-size + cadence watchdog
     journey   UX sweep report (domain.journeys) — report-only unless swept
+    system    local host: thermal / load / uptime (environmental seam)
 
 The journey runner freezes ``SLO_WEB_URL``/``SLO_API_URL`` at *import*
 time with a stale ``:5175`` web default; this package sets
@@ -110,7 +111,8 @@ def run_doctor(
         run_sweep: run the browser journey sweep (default: read the
             existing journey report file only).
         window_s: SSE observation window in seconds.
-        skip: probe names to skip (``http``, ``sse``, ``journey``).
+        skip: probe names to skip (``http``, ``sse``, ``journey``,
+            ``system``).
         report_path: report destination (default ``$SLO_DOCTOR_REPORT`` or
             ``~/.cache/slog-doctor/findings-report.json``).
         write: persist the report as JSON.

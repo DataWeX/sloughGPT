@@ -30,9 +30,10 @@ class ProbeResult:
 
 # Submodules resolve ProbeResult from this package at module scope, so
 # they may only be imported after the dataclass above exists.
-from . import http, journey, sse  # noqa: E402
+from . import http, journey, sse, system  # noqa: E402
 
 PROBES: list[dict] = [
+    {"name": "system", "run": system.run_probe},
     {"name": "http", "run": http.run_probe},
     {"name": "sse", "run": sse.run_probe},
     {"name": "journey", "run": journey.run_probe},
