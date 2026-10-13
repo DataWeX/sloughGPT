@@ -27,26 +27,33 @@ never a half-written one). That is *not* a crash-durability guarantee, so
 The two axes are priced separately (measured on this repo's filesystem with
 this module, a few hundred bytes per write):
 
-    raw write    ~0.2ms    torn reads possible
-    atomic       ~0.2ms    no torn reads, not power-safe   <- default
-    durable      ~10-25ms  power-safe
+    raw write    ~0.3ms    torn reads possible
+    atomic       ~0.3ms    no torn reads, not power-safe   <- default
+    durable      ~28ms     power-safe (measured range 14-45ms)
 
-Atomic is the default because it costs no more than a plain write; durable is
-opt-in because it costs ~50-100x that. The split is not theoretical — flux's
-``advance()`` heartbeat rides on rename atomicity while the checkpoint claim
-about weights earns the flush, and that distinction is what keeps a durable
-record cheap.
+Atomic is the default because it costs no more than a plain write — measured
+identical, within noise — while durable is opt-in because it costs two orders
+of magnitude more. The split is not theoretical: flux's ``advance()``
+heartbeat rides on rename atomicity while the checkpoint claim about weights
+earns the flush, and that distinction is what keeps a durable record cheap.
 
-Where the durable cost actually lives, and how to spend it well:
+Where the durable cost actually lives (interleaved medians, 7 reps x 100
+iters, so every tier saw the same system load):
 
-    flush file            ~7ms    fsync of the temp before the rename
-    flush dir when dirty  ~5ms    fsync of the parent after the rename
-    flush dir when clean  ~0.01ms nothing to commit
+    flush file             ~12ms   fsync of the temp before the rename
+    flush dir when dirty   ~15ms   fsync of the parent after the rename
+    flush dir when clean   ~0.01ms nothing to commit
+    makedirs               ~0.03ms
 
-So the directory flush is free until a rename dirties it — which makes
-*batching* the lever: N writes behind one directory flush amortizes it hard
-(8 renames + 1 flush measured 7.3ms total, ~0.9ms/write, against 8 separate
-flushes at ~5ms each). Flush once per batch, not once per write.
+The directory flush is free until a rename dirties it — a ~1000x ratio — and
+that is why *batching* is the lever, not a faster fsync. Eight writes behind
+one directory flush measured 21ms total (2.6ms/write) against 191ms
+(23.9ms/write) when flushing after every rename: 9x. Flush once per batch,
+never once per write.
+
+Absolute figures swing 2-3x with machine load (durable ranged 14-45ms across
+reps on a busy, nearly-full filesystem); the ratios above are the durable
+facts, the milliseconds are the least of them.
 
 The directory flush is not decoration. ``os.replace`` changes a *directory
 entry*; without ``fsync`` of the parent directory the rename itself can be
