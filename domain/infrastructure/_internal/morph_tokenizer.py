@@ -435,6 +435,36 @@ class MorphTokenizer:
         self.added_tokens: dict[str, int] = added_tokens or {}
         self._added_token_patterns = self._build_added_token_patterns()
 
+    @property
+    def scheme(self) -> str:
+        """Core tokenizer provenance family — ONE value per family.
+
+        Sibling families: native (SloNet checkpoints) and training
+        (SloBPE/SloUnigram). The decode-format detail is ``.variant``,
+        derived from the detected flags — never stored, so it cannot
+        disagree with the vocab it describes.
+        """
+        return "hf"
+
+    @property
+    def variant(self) -> str:
+        """The decode format: 'byte-fallback' > 'byte-level' > 'char'."""
+        if self.byte_fallback:
+            return "byte-fallback"
+        if self.byte_level:
+            return "byte-level"
+        return "char"
+
+    @property
+    def pretokenizer(self) -> None:
+        """None — MorphTokenizer has no pretokenizer dimension (flags instead)."""
+        return None
+
+    @property
+    def origin(self) -> str | None:
+        """Core tokenizer provenance: where this tokenizer was loaded from."""
+        return f"hf:{self.model_id}" if self.model_id else None
+
     def _build_added_token_patterns(self):
         """Build regex patterns for matching added tokens, longest first."""
         import re as _re

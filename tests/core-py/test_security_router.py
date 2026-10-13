@@ -105,9 +105,9 @@ class TestAuditLogs:
 class TestKeys:
     def test_keys_configured(self):
         sr = SecurityRouter()
-        mock_sec = MagicMock()
-        mock_sec.valid_api_keys = ["key1", "key2"]
-        with patch("settings.get_security_settings", return_value=mock_sec):
+        # Keys are stored in MogDB via ApiKeyManager now; the route no longer
+        # reads settings.get_security_settings (storage refactor).
+        with patch("routers.api_keys.ApiKeyManager.list", return_value=["key1", "key2"]):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
         assert resp.status_code == 200
@@ -117,9 +117,7 @@ class TestKeys:
 
     def test_keys_not_configured(self):
         sr = SecurityRouter()
-        mock_sec = MagicMock()
-        mock_sec.valid_api_keys = []
-        with patch("settings.get_security_settings", return_value=mock_sec):
+        with patch("routers.api_keys.ApiKeyManager.list", return_value=[]):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
         assert resp.status_code == 200
@@ -127,9 +125,7 @@ class TestKeys:
 
     def test_single_key(self):
         sr = SecurityRouter()
-        mock_sec = MagicMock()
-        mock_sec.valid_api_keys = ["only-one-key"]
-        with patch("settings.get_security_settings", return_value=mock_sec):
+        with patch("routers.api_keys.ApiKeyManager.list", return_value=["only-one-key"]):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
         data = resp.json()["data"]
@@ -138,9 +134,9 @@ class TestKeys:
 
     def test_many_keys(self):
         sr = SecurityRouter()
-        mock_sec = MagicMock()
-        mock_sec.valid_api_keys = [f"key_{i}" for i in range(50)]
-        with patch("settings.get_security_settings", return_value=mock_sec):
+        with patch(
+            "routers.api_keys.ApiKeyManager.list", return_value=[f"key_{i}" for i in range(50)]
+        ):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
         assert resp.json()["data"]["count"] == 50

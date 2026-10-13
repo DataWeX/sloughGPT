@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from '@sloughgpt/strui'
 import { formatDateTime, toDateSeconds } from '@/lib/time-format'
-import { QUALIA_COLORS, type Episode } from './types'
+import { QUALIA_COLORS, toNum, type Episode } from './types'
 
 export interface EpisodeDetailModalProps {
   episode: Episode | null
@@ -68,23 +68,26 @@ export function EpisodeDetailModal({
                   Qualia Breakdown
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(episode.qualia).map(([k, v]) => (
-                    <div key={k} className="flex items-center gap-2">
-                      <span className="text-xs capitalize w-20">{k}</span>
-                      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${Math.max(0, Math.min(100, (((v as number) + 1) / 2) * 100))}%`,
-                            backgroundColor: QUALIA_COLORS[k] || 'var(--chart-1)',
-                          }}
-                        />
+                  {Object.entries(episode.qualia).map(([k, v]) => {
+                    const n = toNum(v)
+                    return (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className="text-xs capitalize w-20">{k}</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.max(0, Math.min(100, ((n + 1) / 2) * 100))}%`,
+                              backgroundColor: QUALIA_COLORS[k] || 'var(--chart-1)',
+                            }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground w-8 text-right">
+                          {n.toFixed(2)}
+                        </span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground w-8 text-right">
-                        {(v as number).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
               <div>

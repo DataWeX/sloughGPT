@@ -83,7 +83,9 @@ describe('ConsciousnessDashboardPage', () => {
     mockController.getBeliefsHistory.mockResolvedValue({ beliefs: [] as any })
     mockController.evaluate.mockResolvedValue(mockEvalReport as any)
     mockController.getSelfModel.mockResolvedValue({ self_beliefs: { competence: 0.7, helpfulness: 0.8 } } as any)
-    mockController.getQualia.mockResolvedValue({ valence: 0.5, arousal: 0.3 })
+    mockController.getQualia.mockResolvedValue({
+      current: { valence: 0.5, arousal: 0.3 },
+    })
     mockController.getStatus.mockResolvedValue(mockStatus as any)
     mockController.seedData.mockResolvedValue({ seeded: true })
     mockController.reflect.mockResolvedValue({ reflection: 'Test reflection' })

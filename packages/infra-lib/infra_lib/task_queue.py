@@ -4,6 +4,24 @@ and dependency tracking.
 
 Standalone library version — zero internal dependencies.
 Optional integrations (EventBus, SSE) are injected at runtime if available.
+
+DELIBERATE FORK (kanban card 9bdf83f2): this is the standalone twin of the
+canonical ``domain/infrastructure/_internal/task_queue.py``. It exists so the
+queue can ship with zero internal dependencies — importing the canonical
+copy from here would defeat that purpose. The two stay behaviorally aligned
+except for these documented differences:
+
+- ``num_workers``: canonical resolves ``None`` via the resource manager;
+  this fork resolves ``None`` to the literal default 2 (no resource manager
+  exists standalone).
+- EventBus: canonical auto-resolves ``get_event_bus()``; this fork receives
+  one via ``set_event_bus()`` (injection only).
+- SSE terminal events: canonical uses ``domain.api``'s ``sse_error`` helper;
+  this fork hand-rolls the equivalent JSON envelope.
+- Log records carry no ``extra={"tag": "INFRA"}`` here.
+
+``tests/test_task_queue_equivalence.py`` asserts the two stay equivalent on
+everything NOT listed above; keep it green when touching either copy.
 """
 
 from __future__ import annotations
@@ -14,13 +32,13 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     PENDING = "pending"
     QUEUED = "queued"
     RUNNING = "running"
@@ -76,8 +94,10 @@ class Task:
 class WorkerPool:
     """Pool of async workers that pull tasks from a queue."""
 
-    def __init__(self, num_workers: int = 2):
-        self.num_workers = num_workers
+    def __init__(self, num_workers: int | None = None):
+        # Canonical twin resolves None via the resource manager; standalone,
+        # None means the documented default of 2 (see module docstring).
+        self.num_workers = num_workers if num_workers is not None else 2
         self._queue: asyncio.Queue | None = None
         self._workers: list[asyncio.Task] = []
         self._running = False
@@ -146,7 +166,7 @@ class WorkerPool:
 class TaskQueue:
     """Async task queue with priority scheduling, pause/resume, cancel, dependencies."""
 
-    def __init__(self, num_workers: int = 2):
+    def __init__(self, num_workers: int | None = None):
         self._pool = WorkerPool(num_workers=num_workers)
         self._pool.set_handler(self._process_task)
         self._tasks: dict[str, Task] = {}
@@ -417,7 +437,7 @@ class TaskQueue:
 class InProcessTaskQueue(TaskQueue):
     """TaskQueue that runs handlers via registered callbacks (no subprocess)."""
 
-    def __init__(self, num_workers: int = 2):
+    def __init__(self, num_workers: int | None = None):
         super().__init__(num_workers=num_workers)
         self._handlers: dict[str, Callable[[Task], Awaitable[Any]]] = {}
 
@@ -505,7 +525,7 @@ class InProcessTaskQueue(TaskQueue):
 _default_queue: InProcessTaskQueue | None = None
 
 
-def get_task_queue(num_workers: int = 2) -> InProcessTaskQueue:
+def get_task_queue(num_workers: int | None = None) -> InProcessTaskQueue:
     """Get or create the global InProcessTaskQueue singleton."""
     global _default_queue
     if _default_queue is None:

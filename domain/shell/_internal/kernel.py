@@ -284,8 +284,11 @@ class Kernel:
         return self._devices.unregister(name)
 
     def open_device(self, name: str) -> Any:
-        """Open a device by name, returns a DeviceHandle."""
-        return self._devices.open(name)
+        """Open a device by name; returns a DeviceHandle, or -1 if it cannot be opened."""
+        fd = self._devices.open(name)
+        if fd < 0:
+            return -1
+        return DeviceHandle(fd=fd, device_name=name)
 
     def close_device(self, fd: Any) -> bool:
         """Close a device handle. Accepts DeviceHandle or int fd."""

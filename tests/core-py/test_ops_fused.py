@@ -867,7 +867,10 @@ class TestEfficientCrossEntropy:
         logits = np.array([[1.0, 2.0]], dtype=np.float32)
         targets = np.array([0])
         loss = efficient_cross_entropy(logits, targets, reduction="none")
-        assert loss == 0.0
+        # Per-sample CE: -log softmax[0] = log(1 + e^(2-1)) ≈ 1.3133.
+        # The old `== 0.0` pinned a zeros-placeholder bug, not the contract
+        # (card d5219810); loss must be the real per-sample value.
+        np.testing.assert_allclose(loss, [np.log1p(np.e)], rtol=1e-5)
 
     def test_batch_multiple(self):
         logits = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)

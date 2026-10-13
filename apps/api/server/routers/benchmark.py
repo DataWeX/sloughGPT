@@ -176,7 +176,12 @@ class BenchmarkRouter:
                 "num_parameters": _resolve_num_parameters(provider),
             }
         except Exception as e:
-            raise_error(str(e), "E_DOMAIN", details={"model": model})
+            raise_error(
+                str(e),
+                "E_DOMAIN",
+                user_message="The benchmark could not run for this model.",
+                details={"model": model},
+            )
 
     @endpoint("benchmark.run_benchmark")
     async def run_benchmark(

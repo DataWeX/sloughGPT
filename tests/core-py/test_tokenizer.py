@@ -1,5 +1,7 @@
 """Tests for tokenizer.py — pure logic, no mocks."""
 
+import json
+
 import pytest
 
 from domain.training._internal.tokenizer import (
@@ -561,6 +563,39 @@ class TestSloUnigramDecode:
         assert joined.strip() == full.strip()
         assert any(p != p.strip() for p in pieces), f"all chunks stripped: {pieces!r}"
 
+    def test_whitespace_mode_preserves_word_boundaries(self):
+        """The `whitespace` pretokenizer must not collapse words.
+
+        Reproduces the live defect: streamed chat responses rendered as
+        'thequickbrownfoxjumpsoverthelazydog' — punctuation survived (it rides
+        inside the word) but every inter-word space was lost. The existing
+        streaming test above only covers the default `gpt2` pretokenizer,
+        whose leading-space convention hides the bug.
+        """
+        tok = SloUnigram(pretokenizer="whitespace")
+        tok.train(["the quick brown fox jumps over the lazy dog "] * 20, vocab_size=256)
+        text = "the quick brown fox jumps over the lazy dog"
+
+        ids = tok.encode(text)
+        whole = tok.decode(ids)
+        streamed = "".join(tok.decode([i]) for i in ids)
+
+        assert whole == text, f"whole decode lost boundaries: {whole!r}"
+        # Streaming materialises every boundary; the final chunk carries a
+        # trailing separator because a single-token decode cannot know it is
+        # last (SloBPE in whitespace mode behaves the same way).
+        assert streamed.strip() == text, f"single-token stream lost boundaries: {streamed!r}"
+
+    def test_gpt2_mode_roundtrip_unchanged(self):
+        """Default gpt2 pretokenizer must stay byte-identical after any fix."""
+        tok = SloUnigram(pretokenizer="gpt2")
+        tok.train(["the quick brown fox jumps over the lazy dog "] * 20, vocab_size=256)
+        text = "the quick brown fox jumps over the lazy dog"
+
+        ids = tok.encode(text)
+        assert tok.decode(ids) == text
+        assert "".join(tok.decode([i]) for i in ids) == text
+
 
 class TestSloUnigramSerialization:
     def test_to_dict_roundtrip(self):
@@ -689,3 +724,111 @@ class TestSloUnigramAllSegmentations:
         tok = SloUnigram()
         tok.train(["hello"], vocab_size=16)
         assert tok._all_segmentations("") == []
+
+
+class TestProvenance:
+    """scheme/origin surface (card 2a586fea) — training/* family, derived + stored."""
+
+    # --- scheme: derived from the pretokenizer, never stored ----------------
+
+    def test_scheme_is_family_only(self):
+        # ONE scheme per family (user decision): the pretokenizer is a
+        # separate attribute, not a scheme variant.
+        assert SloBPE().scheme == "training/bpe"
+        assert SloBPE(pretokenizer="whitespace").scheme == "training/bpe"
+
+    def test_pretokenizer_attribute(self):
+        assert SloBPE().pretokenizer == "gpt2"
+        assert SloBPE(pretokenizer="whitespace").pretokenizer == "whitespace"
+
+    def test_pretokenizer_reports_unknown_raw(self):
+        # Reported raw instead of normalized away — encode() falls through to
+        # whitespace handling for anything non-gpt2; the object stays honest.
+        tok = SloBPE(pretokenizer="weird")
+        assert tok.scheme == "training/bpe"
+        assert tok.pretokenizer == "weird"
+
+    def test_v1_from_dict_forced_whitespace(self):
+        # v1 checkpoints force the whitespace pretokenizer — attribute agrees.
+        data = {"vocab": [], "stoi": {}, "itos": {}, "merges": []}
+        tok = SloBPE.from_dict(data)
+        assert tok.pretokenizer == "whitespace"
+        assert tok.scheme == "training/bpe"
+
+    def test_v2_from_dict_pretokenizer_honored(self):
+        data = {
+            "vocab": [],
+            "stoi": {},
+            "itos": {},
+            "merges": [],
+            "version": 2,
+            "pretokenizer": "gpt2",
+        }
+        assert SloBPE.from_dict(data).pretokenizer == "gpt2"
+
+    def test_scheme_unigram(self):
+        assert SloUnigram().scheme == "training/unigram"
+        assert SloUnigram(pretokenizer="whitespace").pretokenizer == "whitespace"
+
+    # --- origin: stored at from_dict, default None, never serialized --------
+
+    def test_origin_default_none(self):
+        assert SloBPE().origin is None
+        assert SloUnigram().origin is None
+
+    def test_origin_from_dict_passthrough(self):
+        data = {
+            "vocab": [],
+            "stoi": {},
+            "itos": {},
+            "merges": [],
+            "version": 2,
+            "pretokenizer": "gpt2",
+        }
+        tok = SloBPE.from_dict(data, origin="checkpoint:/x/tok.json")
+        assert tok.origin == "checkpoint:/x/tok.json"
+
+    def test_origin_not_serialized(self):
+        # Provenance is instance-only: absolute paths would lie after moves.
+        tok = SloBPE(pretokenizer="whitespace")
+        tok.origin = "checkpoint:/some/absolute/path.json"
+        d = tok.to_dict()
+        assert "origin" not in d
+
+
+class TestManagerProvenance:
+    """TokenizerManager.load stamps checkpoint:<path> (card 2a586fea)."""
+
+    MIN_BPE = {
+        "vocab": ["a", "b"],
+        "stoi": {"a": 0, "b": 1},
+        "itos": {"0": "a", "1": "b"},
+        "merges": [],
+        "version": 2,
+        "pretokenizer": "gpt2",
+    }
+
+    def test_load_stamps_checkpoint_origin(self, tmp_path):
+        from domain.training._internal.tokenizer_manager import TokenizerManager
+
+        p = tmp_path / "tok.json"
+        p.write_text(json.dumps(self.MIN_BPE), encoding="utf-8")
+        mgr = TokenizerManager()
+        mgr.load(str(p))
+        assert mgr.get_tokenizer().origin == f"checkpoint:{p}"
+        assert mgr.get_tokenizer().scheme == "training/bpe"
+        assert mgr.get_tokenizer().pretokenizer == "gpt2"
+
+    def test_from_dict_origin_defaults_none(self):
+        from domain.training._internal.tokenizer_manager import TokenizerManager
+
+        mgr = TokenizerManager()
+        mgr.from_dict(self.MIN_BPE)
+        assert mgr.get_tokenizer().origin is None
+
+    def test_from_dict_origin_passthrough(self):
+        from domain.training._internal.tokenizer_manager import TokenizerManager
+
+        mgr = TokenizerManager()
+        mgr.from_dict(self.MIN_BPE, origin="checkpoint:/y/tok.json")
+        assert mgr.get_tokenizer().origin == "checkpoint:/y/tok.json"

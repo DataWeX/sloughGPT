@@ -85,6 +85,7 @@ class SloBPE:
         self._word_suffix: str = self.WORD_SUFFIX
         self._pretokenizer: str = pretokenizer
         self._special_set: set[str] = set(self.SPECIAL_TOKENS)
+        self.origin: str | None = None
         # Analysis caches — populated by analyze_corpus()
         self._token_freqs: Counter = Counter()
         self._training_corpus_len: int = 0
@@ -92,6 +93,26 @@ class SloBPE:
     @property
     def vocab_size(self) -> int:
         return len(self.vocab)
+
+    @property
+    def scheme(self) -> str:
+        """Core tokenizer provenance family — ONE value per family.
+
+        Byte-level vs whitespace is a pretokenizer detail, not a family: read
+        ``.pretokenizer`` for it. Sibling families: native (SloNet
+        checkpoints) and hf (MorphTokenizer).
+        """
+        return "training/bpe"
+
+    @property
+    def pretokenizer(self) -> str:
+        """The pretokenizer actually in use ('gpt2' | 'whitespace').
+
+        Reported raw — anything non-'gpt2' falls through to whitespace-style
+        encoding, so an unusual value here is visible instead of normalized
+        away.
+        """
+        return self._pretokenizer
 
     @property
     def pad_id(self) -> int:
@@ -425,9 +446,14 @@ class SloBPE:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> SloBPE:
-        """Deserialize tokenizer state from a dict."""
+    def from_dict(cls, data: dict, origin: str | None = None) -> SloBPE:
+        """Deserialize tokenizer state from a dict.
+
+        ``origin`` records where the state was loaded from (e.g.
+        ``checkpoint:<path>``); it is provenance-only and never serialized.
+        """
         tok = cls()
+        tok.origin = origin
         tok.vocab = data["vocab"]
         tok.merges = [(m[0], m[1]) for m in data["merges"]]
         tok.stoi = data["stoi"]
@@ -892,6 +918,7 @@ class SloUnigram:
     """
 
     SPECIAL_TOKENS = ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]
+    WORD_SUFFIX = "</w>"
 
     def __init__(self, pretokenizer: str = "gpt2") -> None:
         self.vocab: list[str] = []
@@ -899,7 +926,38 @@ class SloUnigram:
         self.itos: dict[int, str] = {}
         self._scores: dict[int, float] = {}  # token_id → log-probability
         self._pretokenizer: str = pretokenizer
+        self._word_suffix: str = self.WORD_SUFFIX
         self._special_set: set[str] = set(self.SPECIAL_TOKENS)
+        self.origin: str | None = None
+
+    @property
+    def scheme(self) -> str:
+        """Core tokenizer provenance family — ONE value per family.
+
+        The pretokenizer only changes how boundaries are materialised, not
+        the family; read ``.pretokenizer`` for it. See ``SloBPE.scheme`` for
+        the sibling families (native, hf).
+        """
+        return "training/unigram"
+
+    @property
+    def pretokenizer(self) -> str:
+        """The pretokenizer in use ('gpt2' | 'whitespace')."""
+        return self._pretokenizer
+
+    def _boundary_unit(self, pretok: str) -> str:
+        """Pretoken plus its word boundary — the string the vocab is built from.
+
+        ``gpt2`` pretokens already carry a leading space, so they pass through
+        untouched. The ``whitespace`` pretokenizer splits with ``text.split()``,
+        which discards the separators: nothing else records where a word ends,
+        so the boundary has to be materialised as ``WORD_SUFFIX`` for ``decode``
+        to turn it back into a space. This mirrors what ``SloBPE.encode`` does
+        with ``word + self._word_suffix``.
+        """
+        if self._pretokenizer == "gpt2":
+            return pretok
+        return pretok + self._word_suffix
 
     @property
     def vocab_size(self) -> int:
@@ -960,9 +1018,10 @@ class SloUnigram:
         seen: set[str] = set()
         for doc in corpus:
             for pretok in self._pretokenize(doc, lowercase):
-                for i in range(len(pretok)):
-                    for j in range(i + 1, min(i + seed_max_len + 1, len(pretok) + 1)):
-                        seen.add(pretok[i:j])
+                unit = self._boundary_unit(pretok)
+                for i in range(len(unit)):
+                    for j in range(i + 1, min(i + seed_max_len + 1, len(unit) + 1)):
+                        seen.add(unit[i:j])
 
         # Ensure coverage of all printable ASCII characters in seed vocab
         import string as _string_mod
@@ -986,8 +1045,9 @@ class SloUnigram:
         pretok_counts: Counter = Counter()
         for doc in corpus:
             for pt in self._pretokenize(doc, lowercase):
-                if pt.strip():
-                    pretok_counts[pt] += 1
+                unit = self._boundary_unit(pt)
+                if unit.strip():
+                    pretok_counts[unit] += 1
 
         pretok_list = list(pretok_counts.keys())
         # Precompute all tokenization paths for each pretoken
@@ -1122,7 +1182,7 @@ class SloUnigram:
         for pretok in self._pretokenize(text, True):
             if not pretok.strip():
                 continue  # pragma: no cover (unreachable — pretokenize never yields empty strings)
-            path = self._viterbi(pretok)
+            path = self._viterbi(self._boundary_unit(pretok))
             ids.extend(self.stoi.get(t, self.unk_id) for t in path)
 
         if add_eos:
@@ -1156,7 +1216,7 @@ class SloUnigram:
         for pretok in self._pretokenize(text, True):
             if not pretok.strip():
                 continue  # pragma: no cover (unreachable — pretokenize never yields empty strings)
-            paths = self._all_segmentations(pretok)
+            paths = self._all_segmentations(self._boundary_unit(pretok))
             if not paths:
                 continue  # pragma: no cover (unreachable — seed vocab covers every substring)
 
@@ -1309,6 +1369,14 @@ class SloUnigram:
             tokens.append(t)
 
         raw = "".join(tokens)
+        if self._pretokenizer == "gpt2":
+            # gpt2 pretokens carry the separator as a leading space; no marker
+            # is ever emitted (see _boundary_unit).
+            raw = raw.replace(self._word_suffix, "")
+        else:
+            # whitespace mode materialised the boundary as WORD_SUFFIX — turn
+            # it back into the separator that text.split() discarded.
+            raw = raw.replace(self._word_suffix, " ")
         # Single-token decodes (streaming) must be lossless so inter-token
         # whitespace survives chunk concatenation; only full sequences strip.
         if len(tokens) <= 1:
@@ -1332,9 +1400,14 @@ class SloUnigram:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> SloUnigram:
-        """Deserialize tokenizer state from a dict."""
+    def from_dict(cls, data: dict, origin: str | None = None) -> SloUnigram:
+        """Deserialize tokenizer state from a dict.
+
+        ``origin`` records where the state was loaded from (e.g.
+        ``checkpoint:<path>``); it is provenance-only and never serialized.
+        """
         tok = cls()
+        tok.origin = origin
         tok.vocab = data["vocab"]
         tok.stoi = data["stoi"]
         tok.itos = {int(k): v for k, v in data["itos"].items()}

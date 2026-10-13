@@ -248,4 +248,9 @@ async def train_from_feedback(
 
     except Exception as e:
         logger.exception("Failed to start feedback training", extra={"tag": "TRAIN"})
-        raise_error(str(e), "E_INFRA_STARTUP", status_code=500)
+        raise_error(
+            str(e),
+            "E_INFRA_STARTUP",
+            status_code=500,
+            user_message="Training could not be started from feedback data.",
+        )

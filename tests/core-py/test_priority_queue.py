@@ -191,22 +191,16 @@ class TestMetrics:
     async def test_depth_per_priority(self):
         """Items queued should appear in depth before execution."""
         q2 = PriorityRequestQueue(max_concurrent=1, max_queue=32)
-        import heapq
-
-        from domain.infrastructure._internal.model_server import _QueueItem
-
-        loop = asyncio.get_running_loop()
-        for p in range(3):
-            heapq.heappush(
-                q2._heap,
-                _QueueItem(
-                    priority=p,
-                    enqueue_order=-p,
-                    coro=None,
-                    future=loop.create_future(),
-                    request_id=f"r{p}",
-                ),
-            )
+        # Park three slots through the public acquire() API: it maintains the
+        # depth counters that depth()/metrics_snapshot() read — raw _heap
+        # pushes bypass them (card d5219810). No worker runs in this test, so
+        # the markers stay queued until we cancel them.
+        tasks = [
+            asyncio.create_task(q2.acquire(priority=p, request_id=f"r{i}"))
+            for i, p in enumerate((Priority.HIGH, Priority.MEDIUM, Priority.LOW))
+        ]
+        for _ in range(3):
+            await asyncio.sleep(0)  # let every task enqueue before inspecting
         m = q2.metrics_snapshot()
         d = await q2.depth()
         assert d == [1, 1, 1]
@@ -214,6 +208,11 @@ class TestMetrics:
         assert m.depth_medium == 1
         assert m.depth_low == 1
         assert m.total_depth == 3
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        # Cancelling a parked marker must unwind its counters (no leak).
+        assert await q2.depth() == [0, 0, 0]
 
     @pytest.mark.asyncio
     async def test_wait_time_metrics(self, queue):
@@ -251,35 +250,22 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_depth_api(self, queue):
         q2 = PriorityRequestQueue(max_concurrent=1)
-        import heapq
-
-        from domain.infrastructure._internal.model_server import _QueueItem
-
-        loop = asyncio.get_running_loop()
-        heapq.heappush(
-            q2._heap,
-            _QueueItem(
-                priority=0,
-                enqueue_order=-1,
-                coro=None,
-                future=loop.create_future(),
-                request_id="r0",
-            ),
-        )
-        heapq.heappush(
-            q2._heap,
-            _QueueItem(
-                priority=1,
-                enqueue_order=-2,
-                coro=None,
-                future=loop.create_future(),
-                request_id="r1",
-            ),
-        )
+        # Public API instead of raw _heap pushes — depth() reads the counters
+        # that acquire() maintains (card d5219810).
+        tasks = [
+            asyncio.create_task(q2.acquire(priority=p, request_id=f"r{i}"))
+            for i, p in enumerate((Priority.HIGH, Priority.MEDIUM))
+        ]
+        for _ in range(3):
+            await asyncio.sleep(0)  # let both tasks enqueue before inspecting
         d = await q2.depth()
         assert d[0] == 1  # HIGH
         assert d[1] == 1  # MEDIUM
         assert d[2] == 0  # LOW
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        assert await q2.depth() == [0, 0, 0]
 
 
 # ── Slot reservation (acquire/release) ──

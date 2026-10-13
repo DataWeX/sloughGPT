@@ -42,3 +42,28 @@ class Searchable(Protocol):
             the store in ``partial`` instead of pretending it was empty.
         """
         ...
+
+
+@runtime_checkable
+class Sweepable(Protocol):
+    """Optional capability: a store that can refresh its own index on demand.
+
+    The periodic sweeper (``domain.search.sweeper``) calls ``sweep()`` to pull
+    an index up to date out-of-band, so a doc nobody queries stops drifting
+    behind the source. Not every store has a meaningful refresh (a pure
+    ``live`` store always answers from the source), so this is a separate
+    protocol — adapters opt in by implementing it, and the sweeper detects
+    support with ``isinstance(adapter, Sweepable)``.
+    """
+
+    def sweep(self) -> dict[str, int]:
+        """Refresh the index; return per-outcome counts.
+
+        Implementations must:
+          - bring the index to the source's current state (absorb new
+            entries, refresh changed ones, drop deleted ones);
+          - return a dict of counts keyed by outcome (e.g. ``new``,
+            ``refreshed``, ``evicted``, ``unchanged``);
+          - never raise for an absent or empty source (sweep to zeroes).
+        """
+        ...

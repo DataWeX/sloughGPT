@@ -135,3 +135,35 @@ async def test_scoped_store_receives_context_with_workspace():
     assert len(result.hits) == 1
     assert result.skipped == []
     assert scoped.seen_ctx.workspace_id == "ws1"
+
+
+# ── recency ordering — latest entry breaks score ties ───────────────────────
+
+
+def _dated(store: str, title: str, score: float, updated_at: float) -> SearchHit:
+    return SearchHit(
+        id=f"{store}:{title}", store=store, title=title, score=score, updated_at=updated_at
+    )
+
+
+async def test_equal_score_prefers_latest_entry():
+    older = _dated("s", "match-alpha", 0.9, updated_at=100.0)
+    newer = _dated("s", "match-beta", 0.9, updated_at=200.0)
+    result = await _service(FakeAdapter("s", hits=[older, newer])).search("match", CTX)
+    # "match-beta" is later alphabetically — recency, not title, wins the tie.
+    assert [h.title for h in result.hits] == ["match-beta", "match-alpha"]
+
+
+async def test_score_still_beats_recency():
+    stale_top = _dated("s", "match-top", 1.0, updated_at=100.0)
+    fresh_low = _dated("s", "match-fresh", 0.6, updated_at=999.0)
+    result = await _service(FakeAdapter("s", hits=[fresh_low, stale_top])).search("match", CTX)
+    assert [h.title for h in result.hits] == ["match-top", "match-fresh"]
+
+
+async def test_undated_hits_fall_back_to_title_order():
+    """Adapters that cannot date their rows keep the old ordering."""
+    a = SearchHit(id="s:a", store="s", title="match-a", score=0.9)
+    b = SearchHit(id="s:b", store="s", title="match-b", score=0.9)
+    result = await _service(FakeAdapter("s", hits=[b, a])).search("match", CTX)
+    assert [h.title for h in result.hits] == ["match-a", "match-b"]

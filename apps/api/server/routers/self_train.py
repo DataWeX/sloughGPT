@@ -134,7 +134,12 @@ class SelfTrainRouter:
                     "Self-training killed after terminate timeout (pid=%d): %s", proc.pid, e
                 )
                 safe_audit_log("self_train.stop", resource=str(proc.pid), detail="killed")
-                raise_error(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
+                raise_error(
+                    str(e),
+                    "E_INFRA_STARTUP",
+                    user_message="The training run did not stop cleanly and was force-killed.",
+                    details={"status": "killed"},
+                )
         except Exception as e:
             classify_and_raise(e, source="self_train.stop")
 

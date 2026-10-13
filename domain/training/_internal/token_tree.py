@@ -114,6 +114,11 @@ class TokenTree:
         self._embedding_matrix_cache: np.ndarray | None = None
         self._embedding_matrix_cached: bool = False
 
+    @property
+    def pretokenizer(self) -> str:
+        """The pretokenizer in use ('gpt2' | 'whitespace')."""
+        return self._pretokenizer
+
     def _invalidate_caches(self) -> None:
         """Drop memoized aggregates; call whenever the tree is (re)built."""
         self._ranked_merges_cache = None

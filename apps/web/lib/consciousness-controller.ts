@@ -25,7 +25,15 @@ export interface ConsciousnessStatus {
 
 export interface SelfModel {
   traits: Record<string, number>
-  beliefs: string[]
+  /**
+   * Current belief magnitudes, name -> 0..1.
+   *
+   * Declared as a numeric map (the live payload returns
+   * `{competence, helpfulness, creativity, accuracy, empathy}`), correcting the
+   * previous `string[]` declaration which let callers read a shape the API
+   * never sent.
+   */
+  beliefs: Record<string, number>
   goals: string[]
   memories: string[]
   self_beliefs: Record<string, number>
@@ -37,6 +45,23 @@ export interface QualiaEntry {
   intensity: number
   valence: number
   timestamp: string
+}
+
+/**
+ * Live shape of GET /consciousness/qualia.
+ *
+ * Corrected from the previous `Record<string, number>` declaration, which did
+ * not match the wire: the payload nests the renderable map under `current`
+ * alongside a narrative string and a history counter. Reading the whole
+ * payload as a flat map fed the narrative STRING to the chart renderer, which
+ * threw `v.toFixed is not a function` and blanked the dashboard.
+ */
+export interface QualiaSnapshot {
+  /** Flat name -> value map of the current state — this is what charts render. */
+  current: Record<string, number>
+  /** Natural-language rendering of the current state. */
+  narrative?: string
+  history_count?: number
 }
 
 export interface Episode {
@@ -98,7 +123,7 @@ export const consciousnessController = {
     return apiGet<SelfModel>('/consciousness/self-model')
   },
 
-  async getQualia(): Promise<Record<string, number>> {
+  async getQualia(): Promise<QualiaSnapshot> {
     return apiGet('/consciousness/qualia')
   },
 

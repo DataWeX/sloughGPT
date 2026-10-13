@@ -286,11 +286,15 @@ class TestPriorityRequestQueue:
             return val
 
         async def run():
-            workers = [asyncio.create_task(q.worker()) for _ in range(1)]
-            # Submit low priority first, then high
+            # Enqueue BOTH submissions before the worker starts: with
+            # max_concurrent=1 the worker pops immediately, and an in-flight
+            # LOW cannot be preempted — starting it early made this test a
+            # timing race that always served LOW first (card d5219810 blast
+            # radius; pre-existing failure at ffee273e8, proven by A/B stash).
             f1 = asyncio.create_task(q.submit(make_task(1, Priority.LOW), Priority.LOW))
-            await asyncio.sleep(0.02)
             f2 = asyncio.create_task(q.submit(make_task(0, Priority.HIGH), Priority.HIGH))
+            await asyncio.sleep(0.02)  # both items enqueued, heap ordered
+            workers = [asyncio.create_task(q.worker()) for _ in range(1)]
             await asyncio.sleep(0.2)
             q.close()
             for w in workers:

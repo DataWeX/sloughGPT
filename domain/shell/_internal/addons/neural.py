@@ -22,7 +22,7 @@ from typing import Any
 
 import numpy as np
 
-from ..kernel_devices import DeviceDriver, DeviceType
+from ..kernel_devices import DeviceDriver, DeviceState, DeviceType
 from ..kernel_interrupts import Interrupt, InterruptType
 from ..kernel_process import Process, ProcessState
 from ..kernel_syscall import SyscallResult
@@ -430,6 +430,21 @@ class NeuralEngineDevice(DeviceDriver):
         self._request_count = 0
         self._lock = threading.Lock()
 
+    # ── Device lifecycle (card d5219810) ─────────────────────────────────
+    # Driver-level open/close is a deliberate OPT-IN: the baseboard keeps
+    # fd routing on DeviceTable, while drivers driven directly expose their
+    # own state lifecycle (pattern: kernel_npu.NPUDevice, added after the
+    # baseboard rework). See the DeviceDriver docstring — the base provides
+    # none of this; subclasses opt in.
+
+    def open(self) -> bool:
+        self._state = DeviceState.OPEN
+        return True
+
+    def close(self) -> bool:
+        self._state = DeviceState.CLOSED
+        return True
+
     def load_model(self, name: str, model: Any) -> None:
         self._models[name] = model
 
@@ -502,6 +517,16 @@ class TokenizerDevice(DeviceDriver):
         self._tokenize_count = 0
         self._total_tokens = 0
 
+    # ── Device lifecycle (card d5219810; see NeuralEngineDevice) ─────────
+
+    def open(self) -> bool:
+        self._state = DeviceState.OPEN
+        return True
+
+    def close(self) -> bool:
+        self._state = DeviceState.CLOSED
+        return True
+
     def read(self, offset: int = 0, size: int = -1) -> Any:
         return getattr(self._tokenizer, "vocab_size", 0) if self._tokenizer else None
 
@@ -551,6 +576,16 @@ class EmbeddingStoreDevice(DeviceDriver):
         self._stores: dict[str, NeuralEmbeddingStore] = {}
         if store is not None:
             self._stores["default"] = store
+
+    # ── Device lifecycle (card d5219810; see NeuralEngineDevice) ─────────
+
+    def open(self) -> bool:
+        self._state = DeviceState.OPEN
+        return True
+
+    def close(self) -> bool:
+        self._state = DeviceState.CLOSED
+        return True
 
     def get_store(self, name: str) -> NeuralEmbeddingStore | None:
         return self._stores.get(name)
