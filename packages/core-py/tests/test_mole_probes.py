@@ -875,7 +875,7 @@ class TestReportSerialization:
 class TestRunMole:
     def test_all_skipped_is_clean_and_never_touches_network(self):
         report = run_mole(
-            skip={"gates", "benchmarks", "http", "sse", "journey"},
+            skip={"gates", "benchmarks", "http", "sse", "journey", "system"},
             preflight=False,
             write=False,
         )
@@ -887,6 +887,7 @@ class TestRunMole:
             "http",
             "sse",
             "journey",
+            "system",
         }
         assert all(p["ok"] is None and p["error"] == "skipped" for p in report.probes)
 
@@ -894,6 +895,7 @@ class TestRunMole:
         from domain.core._internal.mole.probes import PROBES
 
         assert [p["name"] for p in PROBES] == [
+            "system",
             "gates",
             "benchmarks",
             "http",
@@ -905,7 +907,7 @@ class TestRunMole:
         path = tmp_path / "sub" / "findings.json"
         monkeypatch.setenv("SLO_DOCTOR_REPORT", str(path))
         run_mole(
-            skip={"gates", "benchmarks", "http", "sse", "journey"},
+            skip={"gates", "benchmarks", "http", "sse", "journey", "system"},
             preflight=False,
         )
         data = json.loads(path.read_text(encoding="utf-8"))

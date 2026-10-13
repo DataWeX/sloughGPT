@@ -23,7 +23,7 @@ from domain.core._internal.mole import (
 from domain.core._internal.mole.models import Finding
 from domain.infrastructure._internal.health_flow import Severity
 
-_KNOWN_PROBES = ("gates", "benchmarks", "http", "sse", "journey")
+_KNOWN_PROBES = ("gates", "benchmarks", "http", "sse", "journey", "system")
 _TOP_FINDINGS = 5
 
 

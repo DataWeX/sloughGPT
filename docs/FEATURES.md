@@ -319,8 +319,9 @@ routes, page, and nav label are grandfathered legacy paths.
   corrupt report file → `report: null`, an empty state rather than an error);
   `POST /mole/run` → `{report}`.
 - **Light run only:** the API runs `run_mole(run_sweep=False, window_s=6.0)`
-  — `http` + `sse` probes plus journey findings read **from disk**. The
-  browser journey sweep is never triggered from the API.
+  — `system`, `gates`, `benchmarks`, `http` + `sse` probes plus journey
+  findings read **from disk**. The browser journey sweep is never
+  triggered from the API.
 - **Data path:** the page uses `apiGet`/`apiPost` from `lib/http-client.ts`
   exclusively; the component strip reads the shared `useLiveStatus` snapshot.
 

@@ -177,6 +177,30 @@ def cmd_config_check(args):
                 log.info(f"  > {check.suggestion}")
 
 
+def cmd_mole(args):
+    """Run environment checks, then the shared Mole core.
+
+    Two views, one core: section 2 consumes the same ``run_mole`` as
+    ``python -m domain.core._internal.mole``, the ``/mole`` API and
+    the ``/mole`` page — and the report it writes (``write=True``) is
+    the artifact those consumers read. The validator's checks stay in
+    their own section (section 1).
+    """
+    cmd_config_check(args)
+
+    log.blank()
+    log.header("Mole")
+    try:
+        from domain.core._internal.mole import run_mole
+        from domain.core._internal.mole.__main__ import _summary_lines
+
+        report = run_mole(write=True)
+        for line in _summary_lines(report):
+            log.info(line)
+    except Exception as exc:  # a CLI diagnostic must print, never traceback
+        log.warning(f"mole failed: {exc}")
+
+
 def cmd_config_validate(args):
     """Validate environment configuration."""
     env_file = args.env
