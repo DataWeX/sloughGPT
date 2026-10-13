@@ -369,11 +369,30 @@ except Exception as exc:
 # expose_headers: without these, cross-origin JS (3000 → 8000) cannot read
 # Retry-After / rate-limit headers, so429 retries fire at 500ms instead of
 # honoring Retry-After: 60 and hammer the limiters.
+# Ported from 2706eb1fc (fix/dead-port-and-journey-skip) — the allowlist had
+# frozen on :3000 when the web UI moved to Vite, so the browser sent Origin
+# :5173, got no Access-Control-Allow-Origin back, and reported a *running*
+# backend as dead.
+#
+# The explicit list keeps :3000 (kept intentionally on that branch) and adds
+# the Vite ports, but a list alone still loses the frontend the moment the
+# port moves: vite.config.ts sets `strictPort: false`, so 5173 silently
+# becomes 5174/5175 under contention. The loopback regex is what actually
+# settles it — one rule, no per-port maintenance.
+# Set SLO_CORS_LOCAL_ORIGIN_REGEX= (empty) to disable the loopback rule.
+_CORS_LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get(
-        "SLO_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000"
+        "SLO_CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:5173,http://localhost:5175,"
+        "http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5175,"
+        "http://localhost:8000",
     ).split(","),
+    allow_origin_regex=os.environ.get(
+        "SLO_CORS_LOCAL_ORIGIN_REGEX", _CORS_LOCAL_ORIGIN_REGEX
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

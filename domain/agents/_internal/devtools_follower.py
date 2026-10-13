@@ -7,7 +7,7 @@ and automatic error detection during user journey tests.
 Usage:
     from domain.agents._internal.devtools_follower import DevToolsFollower
 
-    async with DevToolsFollower(base_url="http://localhost:3000") as follower:
+    async with DevToolsFollower(base_url="http://localhost:5173") as follower:
         await follower.navigate("/training")
         await follower.click("Train")
         report = follower.report()
@@ -15,7 +15,7 @@ Usage:
 Or as a pytest fixture:
     @pytest.fixture
     def follower():
-        return DevToolsFollower.fixture(base_url="http://localhost:3000")
+        return DevToolsFollower.fixture(base_url="http://localhost:5173")
 """
 
 from __future__ import annotations
@@ -167,7 +167,7 @@ class DevToolsFollower:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:3000",
+        base_url: str = "http://localhost:5173",
         headless: bool = True,
         output_path: str | None = None,
     ):

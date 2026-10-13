@@ -12,7 +12,7 @@ Run this test using opencode's chrome-devtools MCP.
 
 ### Step 1: Open Training Page
 ```
-chrome-devtools_new_page → http://localhost:3000/training
+chrome-devtools_new_page → http://localhost:5173/training
 ```
 
 ### Step 2: Wait for Load

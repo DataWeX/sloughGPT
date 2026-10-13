@@ -11,12 +11,13 @@ Usage:
 Requirements:
     .venv/bin/playwright install chromium
     API server at localhost:8000
-    Web server at localhost:3000
+    Web server at localhost:5173
 """
 
 from __future__ import annotations
 
 import json
+import os
 import time
 import urllib.request
 from pathlib import Path
@@ -27,8 +28,13 @@ if TYPE_CHECKING:
 
 import pytest
 
-BASE = "http://localhost:3000"
-API = "http://localhost:8000"
+# Web lives on vite :5173 (vite.config.ts; card 2b65962b retired the stale
+# :3000 default left by the Next.js -> Vite migration). Override with
+# SLO_WEB_URL / SLO_API_URL for non-standard setups — vite runs with
+# `strictPort: false`, so the port can shift under contention and a hardcoded
+# literal would strand this module again the first time it moved.
+BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
+API = os.environ.get("SLO_API_URL") or "http://localhost:8000"
 RESULTS: list[dict[str, Any]] = []
 DEVTOOLS_LOG: list[dict[str, Any]] = []
 
@@ -55,6 +61,30 @@ def _wait_for_api(timeout: int = 60) -> bool:
             return True
         time.sleep(1)
     return False
+
+
+def _web_is_ready() -> bool:
+    try:
+        req = urllib.request.Request(BASE)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return 200 <= resp.status < 400
+    except Exception:
+        return False
+
+
+# Browser journeys drive a real browser against a live stack. Skip the whole
+# module when neither is running instead of failing every test — 36 tests
+# previously died on `net::ERR_CONNECTION_REFUSED`, which reports as broken
+# product when it only means the dev stack is down (same pattern as
+# test_user_journeys, card b9f12ad2). Start one first if you want these:
+#   scripts/dev-stack.sh   (web :5173, api :8000)  or  ./sloughgpt serve --web
+pytestmark = pytest.mark.skipif(
+    not (_web_is_ready() and _api_is_ready()),
+    reason=(
+        f"training journeys need a live stack "
+        f"({BASE} + {API} — scripts/dev-stack.sh or sloughgpt serve --web)"
+    ),
+)
 
 
 def retry_on_failure(max_retries: int = MAX_RETRIES, delay: float = RETRY_DELAY):

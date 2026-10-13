@@ -13,7 +13,7 @@ Compose examples use **Docker Compose V2** and the stack file at **`infra/docker
 ```bash
 # Vite image + static server (nginx, SPA redirects in apps/web/nginx.conf)
 docker compose -f infra/docker/docker-compose.yml up -d web
-curl -I http://localhost:3000/collections   # expect 307 → /datasets
+curl -I http://localhost:5173/collections   # expect 307 → /datasets
 ```
 
 CI (`.github/workflows/ci.yml`) runs **`Vite build`** + **`Vite E2E`**. Local parity: `npm run ci:vite` and `npm run e2e:vite` from `apps/web`.

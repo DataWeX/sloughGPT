@@ -12,8 +12,8 @@ class TestChromeDevToolsBrowser:
     def test_browser_creation(self):
         from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
-        browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
-        assert browser.base_url == "http://localhost:3000"
+        browser = ChromeDevToolsBrowser(base_url="http://localhost:5173")
+        assert browser.base_url == "http://localhost:5173"
 
     def test_browser_state(self):
         from testing._internal.chrome_devtools import BrowserState
@@ -39,10 +39,10 @@ class TestChromeDevToolsBrowser:
     def test_report_generation(self):
         from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
-        browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
+        browser = ChromeDevToolsBrowser(base_url="http://localhost:5173")
         report = browser.report()
         assert "ChromeDevTools Browser Report" in report
-        assert "http://localhost:3000" in report
+        assert "http://localhost:5173" in report
 
 
 class TestSloughGPTConfig:
@@ -52,7 +52,7 @@ class TestSloughGPTConfig:
         from testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         assert SLOUGHPGPT_SITE.name == "sloughGPT"
-        assert SLOUGHPGPT_SITE.base_url == "http://localhost:3000"
+        assert SLOUGHPGPT_SITE.base_url == "http://localhost:5173"
         assert len(SLOUGHPGPT_SITE.pages) > 0
 
     def test_sloughgpt_pages(self):
@@ -63,11 +63,14 @@ class TestSloughGPTConfig:
         assert "datasets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_training_pages(self):
-        from testing._internal.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
+        from testing._internal.sloughgpt import SLOUGHPGPT_PAGES
 
-        assert "queue" in SLOUGHPGPT_TRAINING_PAGES
-        assert "runs" in SLOUGHPGPT_TRAINING_PAGES
-        assert "presets" in SLOUGHPGPT_TRAINING_PAGES
+        # f7e3d3963 merged SLOUGHPGPT_TRAINING_PAGES into SLOUGHPGPT_PAGES,
+        # so the keys are now prefixed to match test_comprehensive_journeys'
+        # list. /training/queue registers nowhere — no app route, no redirect,
+        # no config entry — so assert what actually registers.
+        assert "training/runs" in SLOUGHPGPT_PAGES
+        assert "training/presets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_api_endpoints(self):
         from testing._internal.sloughgpt import SLOUGHPGPT_API_ENDPOINTS
@@ -111,9 +114,9 @@ class TestJourneyIntegration:
         from testing import Journey, SiteConfig
         from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
-        browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
+        browser = ChromeDevToolsBrowser(base_url="http://localhost:5173")
 
         assert journey.config.base_url == browser.base_url
 

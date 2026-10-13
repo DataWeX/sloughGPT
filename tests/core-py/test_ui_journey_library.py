@@ -12,14 +12,14 @@ class TestJourneyCore:
     def test_journey_creation(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         assert journey.config.name == "Test"
 
     def test_journey_execution(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         result = journey.run(
             [
@@ -33,7 +33,7 @@ class TestJourneyCore:
     def test_journey_result_to_dict(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         result = journey.run([journey.goto("/")])
         d = result.to_dict()
@@ -43,7 +43,7 @@ class TestJourneyCore:
     def test_report_generation(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         journey.journey("test1", [journey.goto("/")]) if hasattr(
             journey, "journey"
@@ -76,7 +76,7 @@ class TestJourneySteps:
     def test_goto_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.goto("/training")
         result = step()
@@ -86,7 +86,7 @@ class TestJourneySteps:
     def test_wait_for_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.wait_for("train")
         result = step()
@@ -95,7 +95,7 @@ class TestJourneySteps:
     def test_check_body_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.check_body("training")
         result = step()
@@ -104,7 +104,7 @@ class TestJourneySteps:
     def test_click_button_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.click_button("Start")
         result = step()
@@ -113,7 +113,7 @@ class TestJourneySteps:
     def test_check_api_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.check_api("/health")
         result = step()
@@ -122,7 +122,7 @@ class TestJourneySteps:
     def test_check_no_console_errors_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.check_no_console_errors()
         result = step()
@@ -131,7 +131,7 @@ class TestJourneySteps:
     def test_check_no_network_errors_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.check_no_network_errors()
         result = step()
@@ -140,7 +140,7 @@ class TestJourneySteps:
     def test_custom_step(self):
         from testing import Journey, SiteConfig, StepResult
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
 
         def my_check():
@@ -158,7 +158,7 @@ class TestJourneyResults:
     def test_all_passed(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         result = journey.run(
             [
@@ -172,7 +172,7 @@ class TestJourneyResults:
     def test_one_failed(self):
         from testing import Journey, SiteConfig, StepResult
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
 
         def failing_step():
@@ -186,7 +186,7 @@ class TestJourneyResults:
     def test_multiple_results(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         journey.run([journey.goto("/")])
         journey.run([journey.goto("/chat")])

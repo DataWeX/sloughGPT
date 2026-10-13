@@ -10,7 +10,7 @@ Usage:
     python scripts/run_journey_tests.py
 
     # Run against specific URL
-    BASE_URL=http://localhost:3000 python scripts/run_journey_tests.py
+    BASE_URL=http://localhost:5173 python scripts/run_journey_tests.py
 
     # Run specific journey
     python scripts/run_journey_tests.py --journey chat
@@ -139,7 +139,7 @@ def print_report(results: list[tuple]):
 
 def main():
     parser = argparse.ArgumentParser(description="Run Arken journey tests")
-    parser.add_argument("--base-url", default=os.environ.get("BASE_URL", "http://localhost:3000"))
+    parser.add_argument("--base-url", default=os.environ.get("BASE_URL", "http://localhost:5173"))
     parser.add_argument("--backend", choices=["playwright", "api"], default="api")
     parser.add_argument("--journey", nargs="+", help="Specific journeys to run")
     args = parser.parse_args()

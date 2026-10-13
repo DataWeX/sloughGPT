@@ -2,7 +2,7 @@
 Integration tests for Computer-Use Agent + Comprehensive Trainer.
 
 Tests the full pipeline: agent navigates UI → triggers training → monitors DevTools.
-Requires running API (localhost:8000) and web (localhost:3000) servers.
+Requires running API (localhost:8000) and web (localhost:5173) servers.
 
 Usage:
     .venv/bin/python -m pytest tests/test_computer_use_training_integration.py -x -v -s
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-BASE = "http://localhost:3000"
+BASE = "http://localhost:5173"
 API = "http://localhost:8000"
 RESULTS = []
 

@@ -14,7 +14,7 @@ const apiUrl = env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || 'ht
 
 export default defineConfig({
   e2e: {
-    baseUrl: 'http://localhost:3000',
+    baseUrl: 'http://localhost:5173',
     env: { apiUrl },
     video: false,
     screenshotOnRunFailure: true,

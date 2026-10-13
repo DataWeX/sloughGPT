@@ -454,7 +454,7 @@ The `ROUTES` list in `test_user_journeys.py` accepts tuples of `(path, name)`:
 
 All routes in the list get a parametrized navigation test that:
 
-1. Navigates to `http://localhost:3000{path}`
+1. Navigates to `http://localhost:5173{path}`
 2. Waits for load + "Connecting..." to disappear
 3. Asserts `len(body) > 50`
 4. Records pass/fail via `ok()`

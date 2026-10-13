@@ -23,7 +23,7 @@ import pytest
 if TYPE_CHECKING:
     from playwright.sync_api import Page
 
-BASE = "http://localhost:3000"
+BASE = "http://localhost:5173"
 API = "http://localhost:8000"
 RESULTS = []
 

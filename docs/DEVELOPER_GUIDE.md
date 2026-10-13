@@ -73,7 +73,7 @@ python3 -m pip install -e ".[dev]"
 
 ### API + web (local)
 
-Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full options are in **QUICKSTART.md**.
+Run the FastAPI app and the Vite dev server in **one terminal** or two. Full options are in **QUICKSTART.md**.
 
 ```bash
 # One terminal (API :8000 + web :3000)
@@ -631,7 +631,7 @@ cd apps/web && npx vitest run && npx tsc --noEmit
 # API (http://localhost:8000 — OpenAPI at /docs)
 python3 apps/api/server/main.py
 
-# Web UI (http://localhost:3000)
+# Web UI (http://localhost:5173)
 cd apps/web && npm run dev
 ```
 

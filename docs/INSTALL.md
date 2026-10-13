@@ -142,7 +142,7 @@ BCRYPT_ROUNDS=12
 # API Settings
 API_HOST=0.0.0.0
 API_PORT=8000
-# Web UI (local dev): Next.js in apps/web — typically http://localhost:3000
+# Web UI (local dev): Vite in apps/web — typically http://localhost:5173
 
 # Logging
 LOG_LEVEL=INFO
@@ -243,7 +243,7 @@ except Exception as e:
     print(f'❌ Import error: {e}')
 "
 
-# 4. Check ports (API vs Next.js dev server)
+# 4. Check ports (API vs Vite dev server)
 lsof -i :8000  # Should be free before starting API
 lsof -i :3000  # Should be free before npm run dev (web)
 ```

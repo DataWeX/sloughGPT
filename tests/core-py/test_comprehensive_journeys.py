@@ -7,7 +7,7 @@ UI journey testing library.
 Usage:
     # Requires running servers:
     #   API: localhost:8000
-    #   Web: localhost:3000
+    #   Web: localhost:5173
     FORCE_COLOR=1 .venv/bin/python -m pytest tests/test_comprehensive_journeys.py -x -v
 
     # Dry-run (no servers needed):
@@ -64,7 +64,7 @@ class TestSiteConfig:
         assert SLOUGHPGPT_SITE.name == "sloughGPT"
 
     def test_config_base_url(self):
-        assert SLOUGHPGPT_SITE.base_url == "http://localhost:3000"
+        assert SLOUGHPGPT_SITE.base_url == "http://localhost:5173"
 
     def test_config_api_url(self):
         assert SLOUGHPGPT_SITE.api_url == "http://localhost:8000"

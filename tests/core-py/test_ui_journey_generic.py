@@ -14,10 +14,10 @@ class TestGenericCore:
 
         config = SiteConfig(
             name="Test App",
-            base_url="http://localhost:3000",
+            base_url="http://localhost:5173",
         )
         assert config.name == "Test App"
-        assert config.base_url == "http://localhost:3000"
+        assert config.base_url == "http://localhost:5173"
 
     def test_page_creation(self):
         from testing import Page
@@ -36,7 +36,7 @@ class TestGenericCore:
 
         config = create_site_config(
             name="My App",
-            base_url="http://localhost:3000",
+            base_url="http://localhost:5173",
             pages={
                 "home": ("/", ["welcome"]),
                 "about": ("/about", ["about us"]),
@@ -49,14 +49,14 @@ class TestGenericCore:
     def test_journey_creation(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         assert journey.config.name == "Test"
 
     def test_journey_run(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         result = journey.run(
             [
@@ -70,7 +70,7 @@ class TestGenericCore:
     def test_journey_report(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         journey.run([journey.goto("/")])
         report = journey.report()
@@ -87,7 +87,7 @@ class TestGenericCore:
     def test_journey_result_to_dict(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         result = journey.run([journey.goto("/")])
         d = result.to_dict()
@@ -166,7 +166,7 @@ class TestStepBuilder:
     def test_goto_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.goto("/training")
         result = step()
@@ -176,7 +176,7 @@ class TestStepBuilder:
     def test_wait_for_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.wait_for("train")
         result = step()
@@ -185,7 +185,7 @@ class TestStepBuilder:
     def test_check_body_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.check_body("training")
         result = step()
@@ -194,7 +194,7 @@ class TestStepBuilder:
     def test_click_button_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.click_button("Start")
         result = step()
@@ -203,7 +203,7 @@ class TestStepBuilder:
     def test_check_api_step(self):
         from testing import Journey, SiteConfig
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
         step = journey.check_api("/health")
         result = step()
@@ -212,7 +212,7 @@ class TestStepBuilder:
     def test_custom_step(self):
         from testing import Journey, SiteConfig, StepResult
 
-        config = SiteConfig(name="Test", base_url="http://localhost:3000")
+        config = SiteConfig(name="Test", base_url="http://localhost:5173")
         journey = Journey(config)
 
         def my_check():
@@ -231,7 +231,7 @@ class TestSloughGPTConfig:
         from testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         assert SLOUGHPGPT_SITE.name == "sloughGPT"
-        assert SLOUGHPGPT_SITE.base_url == "http://localhost:3000"
+        assert SLOUGHPGPT_SITE.base_url == "http://localhost:5173"
         assert len(SLOUGHPGPT_SITE.pages) > 0
 
     def test_sloughgpt_pages(self):
@@ -242,11 +242,14 @@ class TestSloughGPTConfig:
         assert "datasets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_training_pages(self):
-        from testing._internal.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
+        from testing._internal.sloughgpt import SLOUGHPGPT_PAGES
 
-        assert "queue" in SLOUGHPGPT_TRAINING_PAGES
-        assert "runs" in SLOUGHPGPT_TRAINING_PAGES
-        assert "presets" in SLOUGHPGPT_TRAINING_PAGES
+        # f7e3d3963 merged SLOUGHPGPT_TRAINING_PAGES into SLOUGHPGPT_PAGES,
+        # so the keys are now prefixed to match test_comprehensive_journeys'
+        # list. /training/queue registers nowhere — no app route, no redirect,
+        # no config entry — so assert what actually registers.
+        assert "training/runs" in SLOUGHPGPT_PAGES
+        assert "training/presets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_journey(self):
         from testing._internal.sloughgpt import SloughGPTJourney
@@ -289,8 +292,8 @@ class TestChromeDevTools:
     def test_browser_creation(self):
         from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
-        browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
-        assert browser.base_url == "http://localhost:3000"
+        browser = ChromeDevToolsBrowser(base_url="http://localhost:5173")
+        assert browser.base_url == "http://localhost:5173"
 
     def test_browser_state(self):
         from testing._internal.chrome_devtools import BrowserState
@@ -309,6 +312,6 @@ class TestChromeDevTools:
     def test_browser_report(self):
         from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
-        browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
+        browser = ChromeDevToolsBrowser(base_url="http://localhost:5173")
         report = browser.report()
         assert "ChromeDevTools Browser Report" in report

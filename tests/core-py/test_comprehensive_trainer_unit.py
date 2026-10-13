@@ -308,7 +308,7 @@ class TestComputerUseAgent:
         from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent()
-        assert agent.base_url == "http://localhost:3000"
+        assert agent.base_url == "http://localhost:5173"
         assert agent.api_url == "http://localhost:8000"
         assert agent.headless is True
         assert agent._page is None
