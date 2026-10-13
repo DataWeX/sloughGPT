@@ -359,6 +359,28 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     _line(f"  {_c('SloughGPT', _BOLD + _CYAN)}  {_c(_format_ts(time.time()), _DIM)}")
     _line(f"  {'─' * 60}")
 
+    # A STALL/ERROR frame deliberately carries no health data — that is what
+    # distinguishes it from a real snapshot. Rendering it through the normal
+    # path would print "no model" and up 0s, visually identical to a server
+    # that is idle and fine, which is exactly the confusion the server-side
+    # STALL frame exists to prevent (silence must never read as "nothing to
+    # report"). Say what is actually happening, then stop: there is nothing
+    # else in this frame to show.
+    phase = str(snapshot.get("phase", ""))
+    if phase in ("STALL", "ERROR"):
+        detail = snapshot.get("message") or data.get("error")
+        if phase == "STALL":
+            _line(f"  {_c('SNAPSHOT STALLED', _BOLD + _YELLOW)}")
+            _line(f"  {_c(str(detail or 'a subsystem is likely blocked'), _DIM)}")
+            cadence = data.get("interval_seconds")
+            if cadence:
+                _line(f"  {_c(f'cadence {cadence:g}s — a stall, not an empty server', _DIM)}")
+        else:
+            _line(f"  {_c('SNAPSHOT FAILED', _BOLD + _RED)}")
+            _line(f"  {_c(str(detail or 'unknown error'), _DIM)}")
+        sys.stdout.flush()
+        return
+
     loaded = health.get("model_loaded", False)
     status_str = _c("online", _GREEN) if loaded else _c("no model", _YELLOW)
     _line(
