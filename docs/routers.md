@@ -63,6 +63,15 @@ Registered pre-lifespan in `main.py`.
 | `GET`  | `/system/output`                   | Tail recent log output.                                                 |
 | `GET`  | `/system/stream`                   | SSE system metrics stream.                                              |
 
+## Metrics Router (`/metrics`)
+
+Internal request metrics for monitoring and Prometheus scraping.
+
+| Method | Path                  | Description                                                     |
+| ------ | --------------------- | --------------------------------------------------------------- |
+| `GET`  | `/metrics`            | Get internal request metrics (JSON).                            |
+| `GET`  | `/metrics/prometheus` | Render server metrics in Prometheus text exposition format.     |
+
 ## Inference Router (`/inference`, `/chat`, `/context`, `/session`)
 
 | Method   | Path                                    | Description                                         |
