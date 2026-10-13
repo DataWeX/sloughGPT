@@ -56,7 +56,7 @@ Same as Python SDK, for JS/TS applications.
 ### Trainer
 
 **Canonical:** `domain.training._internal.train_pipeline.SloughGPTTrainer`
-**Protocol:** `domains.training.trainer_protocol.TrainerProtocol`
+**Protocol:** `domain.training._internal.trainer_protocol.TrainerProtocol`
 
 ```python
 from domain.training import SloughGPTTrainer
