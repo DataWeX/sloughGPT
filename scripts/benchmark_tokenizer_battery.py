@@ -55,11 +55,15 @@ CORPUS: list[str] = [
     "",
 ]
 
-# 11 cases. The last is a single unbroken 48-character word — the input that
+# 12 cases. The last is a single unbroken 48-character word — the input that
 # trips SloUnigram's exponential segmentation, kept deliberately.
 CASES: list[str] = [
     "hello world",
     "The quick brown fox jumps over the lazy dog",
+    # Title Case, deliberately next to the sentence case above: with exactly one
+    # uppercase char in CORPUS, this is the case that separates case-faithful
+    # formats (char, morph) from case-folding ones (tree, bpe, unigram).
+    "The Quick Brown Fox Jumps Over The Lazy Dog",
     "1234567890 98765",
     "abcabc!",
     "CamelCaseMixed123",
@@ -190,7 +194,7 @@ def build_tree() -> Candidate:
     from domain.inference._internal.slonet_provider import NativeTokenizer
     from domain.training._internal.token_tree import TokenTree
 
-    tree = TokenTree().train(CORPUS, vocab_size=VOCAB_SIZE, min_frequency=1)
+    tree = TokenTree().train(CORPUS, vocab_size=VOCAB_SIZE, min_frequency=1, lowercase=False)
     tok = NativeTokenizer(tree, "tree")
     chars = {c for t in CORPUS for c in t}
     return Candidate("C TokenTree", "tree config", tok, charset=chars)

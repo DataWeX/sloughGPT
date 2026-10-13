@@ -276,3 +276,103 @@ class TestProvenanceTaxonomy:
         assert morph.variant == "byte-level" and morph.pretokenizer is None
         assert bpe.pretokenizer == "gpt2"
         assert uni.pretokenizer == "gpt2"
+
+
+TITLE_CASE = "The Quick Brown Fox"
+
+
+def _title_char_tok() -> NativeTokenizer:
+    """A char vocab holding both cases of every letter in TITLE_CASE."""
+    chars = sorted(set(TITLE_CASE) | set(TITLE_CASE.lower()))
+    stoi = {c: i for i, c in enumerate(chars)}
+    return NativeTokenizer.from_char_vocab(stoi, {str(v): k for k, v in stoi.items()})
+
+
+def _title_tree_tok() -> NativeTokenizer:
+    from domain.training._internal.token_tree import TokenTree
+
+    tree = TokenTree().train([TITLE_CASE, TITLE_CASE.lower()], vocab_size=128, min_frequency=1)
+    return NativeTokenizer(tree, "tree")
+
+
+class TestCaseContracts:
+    """Title Case separates case-faithful formats from case-folding ones.
+
+    Both answers are correct — they are pinned by DIFFERENT contracts, which is
+    exactly why the battery reports coverage next to round-trip: native/char is
+    case-faithful (``test_case_is_preserved``) while native/token-tree
+    lowercases at encode (``test_lowercase_normalization_active``). The training
+    corpus behind the battery carries a single uppercase character, so Title
+    Case input is what makes that split visible at all.
+    """
+
+    def test_char_roundtrips_title_case(self):
+        tok = _title_char_tok()
+        assert tok.decode(tok.encode(TITLE_CASE)) == TITLE_CASE
+
+    def test_tree_folds_title_case(self):
+        tok = _title_tree_tok()
+        # Pinned: encode lowercases, so Title Case folds on the way in.
+        assert tok.encode(TITLE_CASE) == tok.encode(TITLE_CASE.lower())
+
+    def test_char_and_tree_disagree_on_case(self):
+        """The whole reason two variants survive: same letters, opposite case."""
+        char = _title_char_tok()
+        tree = _title_tree_tok()
+        assert char.encode(TITLE_CASE) != char.encode(TITLE_CASE.lower())
+        assert tree.encode(TITLE_CASE) == tree.encode(TITLE_CASE.lower())
+
+
+class TestSloBPEIntoCore:
+    """``NativeTokenizer.from_slo_bpe`` — SloBPE as a core native tokenizer.
+
+    Lossless because ``SloBPE.train`` and ``TokenTree.train`` emit the same
+    vocabulary in the same order with the same merge rules; only the encoding
+    structure differs (flat vocab + merge-index application vs. a trie walk).
+    """
+
+    @pytest.fixture
+    def bpe(self):
+        from domain.training._internal.tokenizer import SloBPE
+
+        # Must cover the whitespace case below — a corpus missing a letter
+        # turns the assertion into a coverage artifact (OOV is skipped on
+        # decode, so "leading" would round-trip as "leadin").
+        corpus = [
+            "hello world",
+            "the quick brown fox",
+            "CamelCase Mixed Case",
+            "abcabc abc",
+            "leading and trailing",
+        ]
+        return SloBPE().train(corpus * 4, vocab_size=96, min_frequency=1, lowercase=False)
+
+    @pytest.fixture
+    def core(self, bpe):
+        return NativeTokenizer.from_slo_bpe(bpe, origin="checkpoint:test.soul")
+
+    def test_vocab_and_merges_are_identical(self, bpe, core):
+        assert core.tree.vocab == bpe.vocab
+        assert list(core.tree.merges) == [(a, b) for a, b in bpe.merges]
+
+    def test_lineage_attached_for_every_merge(self, bpe, core):
+        assert len(core.tree._lineage) == len(bpe.merges)
+
+    def test_encode_matches_on_normal_input(self, bpe, core):
+        # Whitespace-free input is where the two encoders must agree exactly.
+        for text in ("hello world", "the quick brown fox", "abcabc", TITLE_CASE.lower()):
+            assert core.encode(text) == bpe.encode(text)
+
+    def test_core_preserves_whitespace_bpe_destroys(self, bpe, core):
+        # SloBPE.encode .strip()s and collapses \s+ before encoding, so it
+        # cannot round-trip this; the core does.
+        text = "  leading and trailing  "
+        assert core.decode(core.encode(text)) == text
+        assert bpe.decode(bpe.encode(text)) != text
+
+    def test_provenance_keeps_both_families_distinct(self, bpe, core):
+        # card 85dedb7e: converting BPE INTO core must not reclassify BPE.
+        assert core.scheme == "native" and core.variant == "tree"
+        assert bpe.scheme == "training/bpe"
+        assert core.origin == "checkpoint:test.soul"
+        assert core.pretokenizer == bpe.pretokenizer

@@ -155,6 +155,61 @@ class NativeTokenizer:
         """Build a char-variant tokenizer with its vocab on the tree."""
         return cls(_char_carrier_tree(stoi, itos), "char", origin)
 
+    @classmethod
+    def from_slo_bpe(cls, bpe: Any, origin: str | None = None) -> NativeTokenizer:
+        """Convert a trained ``SloBPE`` into the core native format.
+
+        Lossless by construction: ``SloBPE.train`` and ``TokenTree.train`` are
+        the same algorithm and emit the same vocabulary in the same order plus
+        the same merge rules — measured at matched settings (81 merges each,
+        81 shared, 0 bpe-only, 0 tree-only, ``bpe.vocab == tree.vocab``). What
+        differs is only the encoding *structure: SloBPE keeps a flat vocab and
+        applies merge rules in index order, while the core keeps a trie and
+        walks it. So the conversion replays ``vocab`` (already ordered specials
+        → "</w>" → base chars → one entry per merge) into the trie, attaching
+        lineage from ``merges`` as it goes.
+
+        Behaviour: the core normalizes less than ``SloBPE.encode``. SloBPE
+        ``.strip()``s and collapses ``\\s+`` to a single space before encoding,
+        so it cannot round-trip leading/trailing whitespace or newlines; the
+        core preserves them. ``lowercase=True`` is carried across because it is
+        the policy ``SloBPE.encode`` actually applies — it passes a literal
+        rather than a stored flag.
+
+        Args:
+            bpe: a trained ``SloBPE``.
+            origin: provenance for the wrapper; never serialized.
+
+        Returns:
+            the equivalent core tokenizer, ``variant="tree"``.
+        """
+        from domain.training._internal.token_tree import TokenTree
+
+        tree = TokenTree(
+            pretokenizer=getattr(bpe, "_pretokenizer", "gpt2"),
+            lowercase=True,
+            word_suffix=getattr(bpe, "_word_suffix", "</w>"),
+            oov_id=None,  # falls back to unk_id, same OOV as SloBPE
+            skip_special_decode=True,  # SloBPE.decode(skip_special=True)
+        )
+        # Every merge's inputs precede its product in vocab order, so lineage
+        # attaches in a single pass with no second walk.
+        merge_origin = {a + b: (a, b) for a, b in bpe.merges}
+        for token in bpe.vocab:
+            pair = merge_origin.get(token)
+            if pair is None:
+                tree._add_token(token, freq=0)
+            else:
+                tree._add_token(
+                    token,
+                    freq=0,
+                    left_id=tree.stoi.get(pair[0]),
+                    right_id=tree.stoi.get(pair[1]),
+                )
+        tree.merges = [(a, b) for a, b in bpe.merges]
+        tree._trained = True
+        return cls(tree, "tree", origin)
+
     @property
     def pretokenizer(self) -> str | None:
         """The tree's pretokenizer ('gpt2' | 'whitespace'); None for char.

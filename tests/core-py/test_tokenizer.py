@@ -832,3 +832,45 @@ class TestManagerProvenance:
         mgr = TokenizerManager()
         mgr.from_dict(self.MIN_BPE, origin="checkpoint:/y/tok.json")
         assert mgr.get_tokenizer().origin == "checkpoint:/y/tok.json"
+
+
+class TestCaseFolding:
+    """Title Case behaviour for the training-scheme tokenizers.
+
+    ``SloBPE``/``SloUnigram`` encode call ``_normalize(..., lowercase=True)``,
+    so Title Case folds on the way in. That is observable behaviour worth
+    pinning: it is why a model trained with ``lowercase=False`` still emits
+    only lowercase ids (the training flag is read for corpus prep, not encode).
+    """
+
+    TITLE = "The Quick Brown Fox"
+
+    @pytest.fixture
+    def bpe(self):
+        from domain.training._internal.tokenizer import SloBPE
+
+        tok = SloBPE()
+        tok.train([self.TITLE, self.TITLE.lower()] * 8, vocab_size=96, min_frequency=1)
+        return tok
+
+    @pytest.fixture
+    def unigram(self):
+        from domain.training._internal.tokenizer import SloUnigram
+
+        tok = SloUnigram()
+        tok.train([self.TITLE, self.TITLE.lower()] * 8, vocab_size=96)
+        return tok
+
+    def test_bpe_folds_title_case(self, bpe):
+        assert bpe.encode(self.TITLE) == bpe.encode(self.TITLE.lower())
+
+    def test_unigram_folds_title_case(self, unigram):
+        assert unigram.encode(self.TITLE) == unigram.encode(self.TITLE.lower())
+
+    def test_normalize_still_honours_lowercase_flag(self):
+        # The folding lives in encode, not in _normalize — the flag itself
+        # keeps working (pinned by TestNormalize.test_no_lowercasing).
+        from domain.training._internal.tokenizer import SloBPE
+
+        assert SloBPE._normalize(self.TITLE, lowercase=False) == self.TITLE
+        assert SloBPE._normalize(self.TITLE, lowercase=True) == self.TITLE.lower()

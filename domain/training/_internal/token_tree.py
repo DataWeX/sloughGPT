@@ -512,12 +512,27 @@ class TokenTree:
             # and a list lookup. Reordering is behavior-preserving — when the
             # special token falls through to the ordinary branch below, its
             # text has no word suffix, so word_end ends up False either way.
-            if skip_special and token in self.stoi and token in SPECIAL_TOKENS:
+            if token in self.stoi and token in SPECIAL_TOKENS:
+                # ``skip_special`` OMITS the marker; when it is off (char
+                # policy) the marker joins verbatim with no injected boundary
+                # space and word_end cleared — exactly as the legacy wrapper
+                # did. Guarding on skip_special first and falling through to
+                # the piece branch instead would append the marker on the True
+                # side and space-prefix it on the False side; both wrong.
+                if skip_special:
+                    continue
                 pieces.append(token)
                 word_end = False
                 continue
             piece = token.replace(suffix, "") if suffix else token
-            if word_end and pieces and piece and not piece[0].isspace():
+            # ``512da4522``: materialize </w> as a space so a space-less
+            # position-0 word token can't glue onto the previous word. The
+            # guard is alnum, not "not isspace": punctuation standing alone as
+            # its own gpt-2 pretoken ("!" after "abcabc") must attach directly,
+            # or every word+mark round-trip gains a stray space. Letters and
+            # digits still get the boundary space, so both word-boundary tests
+            # from that commit keep passing.
+            if word_end and pieces and piece and piece[0].isalnum():
                 pieces.append(" " + piece)
             else:
                 pieces.append(piece)

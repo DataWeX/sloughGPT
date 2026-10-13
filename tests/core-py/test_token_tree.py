@@ -109,6 +109,20 @@ class TestTokenTreeTrain:
         answer = [tree.stoi["hello</w>"], tree.stoi[" world</w>"], tree.stoi[" this</w>"]]
         assert tree.decode(enc + answer) == "the world hello world this"
 
+    def test_decode_punctuation_attaches_after_word_boundary(self):
+        """``512da4522`` materializes ``</w>`` as a space for WORD pieces only.
+
+        Punctuation arrives as its own gpt-2 pretoken, so injecting a boundary
+        space before it turned every word+mark round-trip into "abcabc !". The
+        guard is ``isalnum`` (letters and digits still get the boundary space —
+        see the two tests above), not ``not isspace``, which admitted marks.
+        """
+        tree = TokenTree()
+        tree.train(["abcabc! hello", "abcabc! world", "the quick"], vocab_size=200)
+        bang = tree.stoi.get("!</w>")
+        assert bang is not None, "punctuation token should exist in the vocab"
+        assert tree.decode(tree.encode("abcabc") + [bang]) == "abcabc!"
+
     def test_decode_round_trip_preserved(self):
         tree = TokenTree()
         tree.train(["the quick brown fox", "lazy dog", "fox jumps"], vocab_size=200)
