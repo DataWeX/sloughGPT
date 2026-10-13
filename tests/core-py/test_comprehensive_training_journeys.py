@@ -379,6 +379,7 @@ class TestTrainingSubsystems:
         ("/training/runs", "runs"),
     ]
 
+    @pytest.mark.parametrize("route,name", ROUTES)
     def test_subsystem_pages_load(self, page, collector, route, name):
         body = go(page, route, collector)
         dt = record_devtools(
@@ -655,6 +656,7 @@ class TestCrossPageNavigation:
     ]
 
     @retry_on_failure()
+    @pytest.mark.parametrize("route", ALL_ROUTES)
     def test_all_routes_load_without_crash(self, page, collector, route):
         body = go(page, route, collector)
         has_crash = "Something went wrong" in body
