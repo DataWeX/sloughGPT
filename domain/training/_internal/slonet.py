@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 
 from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.shared import align_dim_ff, find_repo_root  # noqa: F401 — kept for compatibility
 
@@ -4952,46 +4953,39 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
     json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
-    # Write .meta.json first (small, fast — serves as sidecar for list endpoint)
-    with open(path + ".meta.json", "w") as f:
-        json.dump(_sanitize(metadata), f, indent=2)
+    # WAL order: weights first, then the sidecar that describes them. The old
+    # order wrote .meta.json before the weights, so a crash in between left a
+    # sidecar claiming an artifact that never survived. The artifact earns the
+    # durable flush; the sidecar is re-derivable, so it rides on rename
+    # atomicity alone.
+    with atomic_writer(path, binary=True, durable=True) as f:
+        params: list[tuple[str, np.ndarray]] = []
+        if include_weights:
+            if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
+                state_items = list(net.state_dict().items())
+            else:
+                state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
+            params = [
+                (k, np.asarray(v, dtype=np.float32))
+                for k, v in state_items
+                if not isinstance(v, (dict, list, tuple, str, bytes, bool))
+            ]
+        # Envelope owned by slo_format — single writer for the v3 layout.
+        from domain.inference._internal.slo_format import _write_soul_v3
 
-    # Atomic write: temp file then rename
-    import tempfile
+        _write_soul_v3(
+            f,
+            json_bytes,
+            params,
+            include_weights=include_weights,
+        )
 
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(path) or ".",
-        suffix=".tmp",
+    # Sidecar second and cheap — one durable flush per artifact, not per file.
+    atomic_write(
+        path + ".meta.json",
+        json.dumps(_sanitize(metadata), indent=2),
     )
-    try:
-        with os.fdopen(tmp_fd, "wb") as f:
-            params: list[tuple[str, np.ndarray]] = []
-            if include_weights:
-                if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
-                    state_items = list(net.state_dict().items())
-                else:
-                    state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
-                params = [
-                    (k, np.asarray(v, dtype=np.float32))
-                    for k, v in state_items
-                    if not isinstance(v, (dict, list, tuple, str, bytes, bool))
-                ]
-            # Envelope owned by slo_format — single writer for the v3 layout.
-            from domain.inference._internal.slo_format import _write_soul_v3
 
-            _write_soul_v3(
-                f,
-                json_bytes,
-                params,
-                include_weights=include_weights,
-            )
-        os.rename(tmp_path, path)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
     return path
 
 
