@@ -171,18 +171,26 @@ def test_phase6_routers_skips_already_registered_prefixes():
 # ── Phase 2: model load ──────────────────────────────────────────────────────
 
 
-def test_phase6_warms_the_health_snapshot_before_first_subscriber():
-    """Boot must warm `get_detailed_health()` before anyone subscribes.
+def test_phase6_warms_the_snapshot_builders_before_first_subscriber():
+    """Boot must warm every snapshot builder before anyone subscribes.
 
-    `controllers.health` pulls in 284 modules and, through
-    ``domain.slolib.get_accelerator() -> _detect_best_backend() ->
-    is_available()``, reaches the GPU stack (cupy: 279ms self, 758ms
-    cumulative). Nothing warmed it, so ~1.3s of cold import landed in-request
-    on whoever first opened ``/health/stream`` — measured 804-1281ms cold
-    against ~0ms warm.
+    Both closures are cold and both land in-request otherwise, and they are
+    *disjoint* — warming one does not warm the other:
 
-    The warmup function itself is not run here (only branched onto the tree),
-    so this asserts the wiring rather than paying the import in a test.
+    - ``controllers.health`` pulls 284 modules and, through
+      ``domain.slolib.get_accelerator() -> _detect_best_backend() ->
+      is_available()``, reaches the GPU stack (cupy: 279ms self, 758ms
+      cumulative): measured **804-1281ms cold vs ~0ms warm**.
+    - ``routers.dashboard._build_snapshot`` reaches its own closure
+      (``domain.infrastructure``, ``training.jobs``, the event buffer): measured
+      **1419ms cold vs 6.6ms warm** across 654 modules, with neither
+      ``controllers.health`` nor ``cupy`` in ``sys.modules`` afterwards.
+
+    So without this, the first ``/health/stream`` and first
+    ``/dashboard/stream`` subscriber each pay a cold import.
+
+    The warmup functions themselves are not run here (only branched onto the
+    tree), so this asserts the wiring rather than paying the imports in a test.
     """
     get_all = MagicMock(return_value=[])
     orch = _make_orchestrator()
@@ -203,11 +211,20 @@ def test_phase6_warms_the_health_snapshot_before_first_subscriber():
     ):
         asyncio.run(orch._phase6_routers())
 
-    assert "health-warmup" in branched, (
-        "boot never warms the health snapshot, so its ~1.3s cold import still "
-        f"lands in-request on the first subscriber; branched instead: {branched}"
-    )
-    # The checkpoint warmup must survive alongside it.
+    for warmup, rationale in (
+        (
+            "health-warmup",
+            "its ~1.3s cold import still lands in-request on the first /health/stream subscriber",
+        ),
+        (
+            "dashboard-warmup",
+            "its ~1.4s cold import still lands in-request on the first "
+            "/dashboard/stream subscriber, and it is a separate closure the "
+            "health warmup does not reach",
+        ),
+    ):
+        assert warmup in branched, f"boot never runs {warmup}: {rationale}; branched: {branched}"
+    # The pre-existing checkpoint warmup must survive alongside them.
     assert "ckpt-warmup" in branched
 
 
