@@ -1268,7 +1268,6 @@ def save_soul(
             include_weights=not weights_only,
         )
 
-
     return output_path
 
 
