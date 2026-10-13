@@ -1071,6 +1071,170 @@ def _md_boom_probe(
     return out
 
 
+# ── Patch-target tier (static pre-filter for mock drift) ────────────────────
+#
+# `--mock-drift` answers "does this patch land?" EMPIRICALLY: it imports both
+# modules and measures whether `reader.attr` moves under `mock.patch(target)`.
+# That is the authority, and it gets eager-vs-lazy right for free.
+#
+# This tier is the cheap half, folded in from scripts/lint_patch_targets.py
+# (c0ebd5f31), which duplicated this check and had to go. An AST scan finds
+# `@patch("pkg.attr")` targets where `pkg/__init__.py` EAGERLY re-exports
+# `attr` from a submodule — two independent bindings to one object, so
+# patching the deep module never reaches a reader that did
+# `from pkg import attr`. No imports, no execution: safe over the whole tree.
+#
+# It cannot judge relevance (if the code under test imports `_internal`
+# directly, the patch lands anyway), so findings here are ADVISORY. Confirm
+# with --mock-drift before acting on them.
+
+_PT_REEXPORT_CACHE: dict[Path, dict[str, str]] = {}
+
+
+def _pt_parse(path: Path) -> ast.AST | None:
+    try:
+        return ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
+    except (OSError, SyntaxError):
+        return None
+
+
+def _pt_reexports(pkg_init: Path) -> dict[str, str]:
+    """`attr -> submodule` for EAGER re-exports. Empty when there are none.
+
+    A module-level `__getattr__` (PEP 562) makes a re-export lazy: attribute
+    access defers to the submodule, so a deep-module patch DOES land. Those are
+    not copies and are excluded here. This is the guard that stops the static
+    tier reporting `domain.inference._internal.vector_store.simple_embed`,
+    which the standalone linter false-positived on before it was folded in.
+    """
+    cached = _PT_REEXPORT_CACHE.get(pkg_init)
+    if cached is not None:
+        return cached
+    found: dict[str, str] = {}
+    if pkg_init.exists():
+        tree = _pt_parse(pkg_init)
+        if tree is not None:
+            lazy = any(
+                isinstance(n, ast.FunctionDef) and n.name == "__getattr__" for n in tree.body
+            )
+            if not lazy:
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom) and node.module:
+                        for alias in node.names:
+                            if alias.asname in (None, alias.name):
+                                found.setdefault(alias.name, node.module)
+    _PT_REEXPORT_CACHE[pkg_init] = found
+    return found
+
+
+def _pt_patch_targets(test_file: Path) -> set[str]:
+    """Every `@patch("a.b.c")` target named in *test_file*."""
+    tree = _pt_parse(test_file)
+    if tree is None:
+        return set()
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+        if name != "patch":
+            continue
+        if node.args and isinstance(node.args[0], ast.Constant):
+            value = node.args[0].value
+            if isinstance(value, str) and value:
+                found.add(value)
+    return found
+
+
+def _pt_immune_readers(repo: Path) -> dict[str, set[str]]:
+    """`"pkg.attr" -> {production files doing an eager `from pkg import attr`}`."""
+    readers: dict[str, set[str]] = defaultdict(set)
+    for root_name in ("domain", "apps", "packages"):
+        base = repo / root_name
+        if not base.exists():
+            continue
+        for path in base.rglob("*.py"):
+            if "/tests/" in str(path) or path.name.startswith("test_"):
+                continue
+            tree = _pt_parse(path)
+            if tree is None:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    for alias in node.names:
+                        if alias.asname is None:
+                            readers[f"{node.module}.{alias.name}"].add(
+                                str(path.relative_to(repo))
+                            )
+    return readers
+
+
+def _pt_find_stale(repo: Path, paths: list[str] | None = None) -> list[dict]:
+    readers = _pt_immune_readers(repo)
+    per_target: dict[str, set[str]] = defaultdict(set)
+    bases = [Path(x) for x in paths] if paths else [repo / "tests", *sorted(
+        p for p in (repo / "packages").glob("*/tests") if p.exists()
+    )]
+    for base in bases:
+        if not base.is_absolute():
+            base = (Path.cwd() / base).resolve()
+        files = [base] if base.is_file() else sorted(base.rglob("test_*.py"))
+        for test_file in files:
+            try:
+                rel = str(test_file.relative_to(repo))
+            except ValueError:
+                rel = str(test_file)
+            for target in _pt_patch_targets(test_file):
+                per_target[target].add(rel)
+
+    findings: list[dict] = []
+    for target, tests in sorted(per_target.items()):
+        module, _, attr = target.rpartition(".")
+        parts = module.split(".")
+        # Walk every ancestor package: the eager copy can live at any depth
+        # (`domain/agents/__init__.py`, not `domain/__init__.py`), so a miss
+        # skips this depth and keeps going. Reporting at every depth that both
+        # re-exports and is read matches the standalone linter exactly.
+        for depth in range(1, len(parts)):
+            pkg = ".".join(parts[:depth])
+            if attr not in _pt_reexports(repo.joinpath(*parts[:depth]) / "__init__.py"):
+                continue
+            key = f"{pkg}.{attr}"
+            if key in readers:
+                findings.append(
+                    {
+                        "patch": target,
+                        "immune_read": key,
+                        "read_by": sorted(readers[key]),
+                        "patched_in": sorted(tests),
+                        "suggest": f'patch("{key}")',
+                    }
+                )
+    return findings
+
+
+def cmd_patch_targets(verbose: bool = False) -> int:
+    _p(f"\n  {_b}{_c}Patch targets (static){_r}\n")
+    _p(f"  {_dim('@patch targets an eager package re-export makes blind — advisory; confirm with --mock-drift')}\n")
+    findings = _pt_find_stale(REPO_ROOT)
+    if not findings:
+        _p(f"  {_gn}ok{_r} — no re-export-immune @patch targets\n")
+        return 0
+    _p(f"  {_y}{len(findings)} @patch target(s) cannot reach the code under test{_r}\n\n")
+    for item in findings:
+        _p(f" {_b}{item['patch']}{_r}\n")
+        _p(f"      production reads {item['immune_read']} (eager copy made by the package __init__)\n")
+        for reader in item["read_by"][:3]:
+            _p(f"        <- {reader}\n")
+        if len(item["read_by"]) > 3:
+            _p(f"        ... and {len(item['read_by']) - 3} more\n")
+        _p(f"      patched in {', '.join(item['patched_in'][:3])}\n")
+        _p(f"      suggest: {item['suggest']}\n\n")
+    if verbose:
+        _p(f"  {_dim('advisory only — run --mock-drift to confirm the patch is actually dead')}\n")
+    return 0
+
+
 def cmd_mock_drift(verbose: bool = False, boom: bool = True) -> int:
     _p(f"\n  {_b}{_c}Mock drift{_r}\n")
     _p(f"  {_dim('patch() targets that production no longer reads')}\n")
@@ -1724,6 +1888,11 @@ def main() -> int:
     ap.add_argument("--fix-hint", metavar="TEST")
     ap.add_argument("--mock-drift", action="store_true", help="dead @patch targets")
     ap.add_argument(
+        "--patch-targets",
+        action="store_true",
+        help="static tier: @patch targets an eager package re-export makes blind",
+    )
+    ap.add_argument(
         "--no-boom",
         action="store_true",
         help="with --mock-drift: skip the boom-vs-baseline subprocess probe",
@@ -1756,6 +1925,8 @@ def main() -> int:
 
     if args.mock_drift:
         return cmd_mock_drift(verbose=args.verbose, boom=not args.no_boom)
+    if args.patch_targets:
+        return cmd_patch_targets(verbose=args.verbose)
     if args.dead_seam:
         if not args.target:
             ap.error("--dead-seam needs a test file: test-doctor --dead-seam tests/test_x.py")
