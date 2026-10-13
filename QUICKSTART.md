@@ -73,7 +73,7 @@ curl -s -X POST http://localhost:8000/models/load \
 # API job: ./sloughgpt train --api --dataset shakespeare --epochs 2
 # Char-LM perplexity on held-out text (fair when checkpoint embeds stoi/itos/chars — e.g. sloughgpt train step_*.soul):
 #   ./sloughgpt eval --checkpoint models/sloughgpt.soul --data datasets/shakespeare/input.txt
-#   python3 -m domains.training.lm_eval_char --checkpoint PATH --data PATH [--json]
+#   python3 -m domain.training._internal.lm_eval_char --checkpoint PATH --data PATH [--json]
 # Weights-only bundles without stoi: eval rebuilds vocab from --data (see eval warning). See docs/policies/CONTRIBUTING.md (Checkpoint vocabulary).
 # Details: apps/cli/README.md
 ```
@@ -362,6 +362,10 @@ helm install sloughgpt ./infra/k8s/helm/sloughgpt/ -n sloughgpt --create-namespa
 
 ## Optimization Presets
 
+> **Not implemented.** `Presets` has no live module: `domains.training.optimized_trainer`
+> was already absent at base `b5724d3a7` and has no `domain/` successor. The example
+> below is aspirational, kept for the intended API shape — do not run it.
+
 ```python
 from domains.training.optimized_trainer import Presets
 
@@ -397,6 +401,11 @@ export DYLD_INSERT_LIBRARIES=""
 
 - **API server** (`apps/api/server/main.py`): disables MPS by default on macOS via `domains.torch_runtime.apply_api_process_torch_env`. To experiment with MPS inference: `MAN_API_ENABLE_MPS=1` (before `import torch`). Linux/CUDA is no longer forced to CPU.
 - **Training DataLoaders**: `domains.torch_runtime.effective_dataloader_num_workers` clamps workers to `0` on macOS (fork + MPS deadlocks). See `packages/core-py/domains/torch_runtime.py` for env vars (`MAN_SKIP_TORCH_ENV`, etc.).
+
+> **Unverified — no live module.** `torch_runtime` (and both functions above) was
+> already absent at base `b5724d3a7`, before the plural tree was retired, and has no
+> `domain/` successor. The `MAN_API_ENABLE_MPS` / `MAN_SKIP_TORCH_ENV` env vars are the
+> part that still applies; the module paths are not.
 
 ### Docker not running?
 
