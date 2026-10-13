@@ -57,12 +57,12 @@ def register(cli):
 
         cmd_stats(_ns(json_output=ctx.obj.get("json")))
 
-    @system.command("mole", help="Run environment checks")
+    @system.command("mole", help="Run environment checks + Mole")
     @click.pass_context
     def system_mole(ctx):
-        from commands.system import cmd_config_check
+        from commands.system import cmd_mole
 
-        cmd_config_check(_ns(json_output=ctx.obj.get("json")))
+        cmd_mole(_ns(json_output=ctx.obj.get("json")))
 
     @system.command("config", help="Show or validate configuration")
     @click.option("--validate", "do_validate", is_flag=True, help="Validate .env file")

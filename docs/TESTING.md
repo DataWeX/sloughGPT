@@ -284,7 +284,7 @@ There is nothing else to name: module, URLs, and CLI all say Mole
 .venv/bin/python -m domain.core._internal.mole --no-sweep
 # Machine-readable report on stdout; also written to the report path:
 .venv/bin/python -m domain.core._internal.mole --json
-# --window N (SSE seconds), --skip gates,benchmarks,sse,http,journey, --report PATH, --strict
+# --window N (SSE seconds), --skip gates,benchmarks,sse,http,journey,system, --report PATH, --strict
 ```
 
 **Exit codes:** `0` ok/info · `1` warn (with `--strict`: info too) ·
@@ -307,7 +307,7 @@ watch (a newly registered probe is picked up on the next tick).
 # Watch mode (default is the one-pass sweep above):
 .venv/bin/python -m domain.core._internal.mole --watch
 # Watch at 30s cadence, one event line per change, journal every tick:
-# --interval S · --max-ticks N · --skip http|sse|journey|gates|benchmarks · --journal PATH
+# --interval S · --max-ticks N · --skip http|sse|journey|gates|benchmarks|system · --journal PATH
 # --strict (info → nonzero, same rule as the report run) · --quiet (journal only)
 # --json (change events as one JSON object each)
 ```
@@ -326,7 +326,7 @@ watch-error tick, `130` on Ctrl-C.
 | Endpoint | Data | Notes |
 |----------|------|-------|
 | `GET /mole/report` | `{report, path, age_s}` | reads `$SLO_DOCTOR_REPORT`; missing/corrupt file → `report: null` + `age_s: null` (empty state, **not** an error); `age_s` = seconds since `report.ts` |
-| `POST /mole/run` | `{report}` | **light run**: `http` + `sse` (6s window) + journey findings from disk, written atomically, then returned; the browser sweep is **never** triggered here (`run_sweep=False`) |
+| `POST /mole/run` | `{report}` | **light run**: `system` + `gates` + `benchmarks` + `http` + `sse` (6s window) + journey findings from disk, written atomically, then returned; the browser sweep is **never** triggered here (`run_sweep=False`) |
 
 The `/mole` page (`apps/web/app/(app)/mole/page.tsx`) fetches the report
 on mount and after every run, then shows the overall severity pill + severity
