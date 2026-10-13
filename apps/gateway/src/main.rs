@@ -10,7 +10,7 @@
 use axum::{
     body::{to_bytes, Body},
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
@@ -21,7 +21,7 @@ use serde::Serialize;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tower_http::{
-    cors::{Any, CorsLayer},
+    cors::{AllowOrigin, Any, CorsLayer},
     services::ServeDir,
     trace::TraceLayer,
 };
@@ -41,6 +41,36 @@ const BUFFERED_TIMEOUT: Duration = Duration::from_secs(30);
 /// Streaming relays (SSE) have no total timeout here — Python owns generation
 /// timeouts. The reqwest client timeout below remains as a backstop.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Allowed browser origins: any loopback origin, on any port.
+///
+/// Mirrors `_CORS_LOCAL_ORIGIN_REGEX` in apps/api/server/main.py
+/// (`^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$`). The gateway sits in
+/// front of the API, so `allow_origin(Any)` here defeated that allowlist no
+/// matter how tight it got — the edge was serving any origin that asked.
+///
+/// The port is deliberately not pinned: vite.config.ts sets
+/// `strictPort: false`, so the dev server silently moves 5173 → 5174/5175
+/// under contention and a fixed list loses the frontend the moment the port
+/// shifts.
+fn is_loopback_origin(origin: &HeaderValue) -> bool {
+    let Ok(origin) = origin.to_str() else {
+        return false;
+    };
+    let Some(rest) = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"))
+    else {
+        return false;
+    };
+    // rsplit, not split: bare IPv6 ("[::1]") contains colons that are not a
+    // port separator, and only a trailing all-digits tail counts as one.
+    let host = match rest.rsplit_once(':') {
+        Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => host,
+        _ => rest,
+    };
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]")
+}
 
 /// Hop-by-hop headers, never forwarded upstream→client.
 const HOP_HEADERS: [&str; 8] = [
@@ -190,7 +220,12 @@ async fn main() {
     let app = build_router(state)
         .layer(
             CorsLayer::new()
-                .allow_origin(Any)
+                // Loopback-only, mirroring the API's allowlist. This was
+                // `Any`, which let any origin read responses from the edge
+                // and silently defeated the stricter policy behind it.
+                .allow_origin(AllowOrigin::predicate(|origin, _| {
+                    is_loopback_origin(origin)
+                }))
                 .allow_methods(Any)
                 .allow_headers(Any),
         )
@@ -774,4 +809,43 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    fn origin(v: &str) -> HeaderValue {
+        HeaderValue::from_str(v).expect("static test origin is valid")
+    }
+
+    #[test]
+    fn loopback_origin_accepts_any_local_port() {
+        // vite.config.ts sets strictPort:false, so the dev server silently
+        // moves 5173 -> 5174/5175 under contention. Pinning a port would lose
+        // the frontend the moment it shifted, which is how the original
+        // :3000 freeze broke the stack after the Next.js -> Vite migration.
+        for o in [
+            "http://localhost:5173",
+            "http://localhost:3000", // kept intentionally (2706eb1fc)
+            "http://localhost:5174",
+            "http://localhost:5175",
+            "http://127.0.0.1:8000",
+            "http://[::1]:5173",
+            "https://localhost:5173",
+            "http://localhost", // no port at all
+        ] {
+            assert!(is_loopback_origin(&origin(o)), "{o} should be allowed");
+        }
+    }
+
+    #[test]
+    fn loopback_origin_refuses_everything_else() {
+        for o in [
+            "https://evil.example.com",
+            "http://localhost.evil.com:5173", // prefix spoof
+            "http://sub.localhost:5173",
+            "http://192.168.1.10:5173",
+            "http://[::1].evil.com:5173",
+            "null", // sandboxed frames send the literal string "null"
+            "http://localhost:5173/path", // origins carry no path
+            "not-a-url",
+        ] {
+            assert!(!is_loopback_origin(&origin(o)), "{o} should be refused");
+        }
+    }
 }
