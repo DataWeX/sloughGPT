@@ -755,6 +755,24 @@ def _md_test_imports(test: Path, module: str) -> bool:
             module == imported
             or module.startswith(imported + ".")
             or imported.startswith(module + ".")
+            # Reader modules are rooted at a PACKAGE root: _md_path_module
+            # turns apps/api/server/routers/models.py into `routers.models`.
+            # The test that exercises it imports the same file from the REPO
+            # root -- `apps.api.server.routers.models` -- because pytest.ini
+            # puts `.` on pythonpath. Prefix comparison never joins those two
+            # spellings (the longer path shares `routers.models` as a tail, not
+            # a head), so `hits` stayed empty and a genuinely dead patch was
+            # filed as advisory "latent" instead of "confirmed". That is how
+            # domain.slolib._internal.gpu.get_accelerator sat unreported behind
+            # two live failures: reaches() was already False, the reader was
+            # already qualifying, only the import join failed.
+            #
+            # Suffix match is deliberately one-directional (imported longer
+            # than module) and gated on a dotted module: the reverse direction
+            # has no legitimate producer -- _md_path_module never emits a
+            # repo-rooted name -- while a bare `module` such as `models` would
+            # otherwise match every import ending in `.models`.
+            or ("." in module and imported.endswith("." + module))
         ):
             return True
     return False

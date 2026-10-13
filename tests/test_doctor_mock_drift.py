@@ -59,6 +59,37 @@ def test_test_imports_false_for_unrelated_module(tool, tmp_path):
     assert tool._md_test_imports(f, "routers.system") is False
 
 
+def test_test_imports_matches_repo_rooted_import(tool, tmp_path):
+    """Reader rooted at a package root, test importing from the repo root.
+
+    `_md_path_module` maps apps/api/server/routers/models.py to
+    `routers.models`, while a test exercises it via the repo-rooted spelling
+    `apps.api.server.routers.models` (pytest.ini puts `.` on pythonpath).
+    Prefix-only comparison joined neither, so `hits` came back empty and the
+    pair was filed as advisory "latent" instead of "confirmed" -- burying
+    domain.slolib._internal.gpu.get_accelerator behind two live failures
+    even though reaches() had already reported the patch as dead.
+    """
+    f = tmp_path / "test_x.py"
+    f.write_text("from apps.api.server.routers.models import download\n")
+    assert tool._md_test_imports(f, "routers.models") is True
+    assert tool._md_test_imports(f, "infrastructure.startup") is False
+
+
+def test_test_imports_does_not_match_a_bare_name_tail(tool, tmp_path):
+    """The suffix join is gated on a dotted module.
+
+    A one-component reader name (`models`) would otherwise match every
+    import ending in `.models` -- routers.models, controllers.models and
+    friends are distinct modules -- so the tail match must not apply to it.
+    """
+    f = tmp_path / "test_x.py"
+    f.write_text("from apps.api.server.routers.models import download\n")
+    assert tool._md_test_imports(f, "models") is False
+    # ...while the dotted reader it really names still resolves.
+    assert tool._md_test_imports(f, "routers.models") is True
+
+
 def test_targets_only_collects_internal_definition_sites(tool):
     targets = tool._md_targets()
     assert targets, "expected some _internal patch targets in the suite"
