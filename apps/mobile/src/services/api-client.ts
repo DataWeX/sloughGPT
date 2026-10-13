@@ -4,6 +4,31 @@ import type {SearchResult} from '../types';
 const API_URL_KEY = '@sloughgpt/api_url';
 const DEFAULT_URL = 'http://localhost:8000';
 
+/** AsyncStorage key AuthScreen stores the JWT under. */
+export const AUTH_TOKEN_KEY = '@sloughgpt/auth_token';
+
+export interface RequestOptions {
+  /** Skip the Authorization header (for /auth/login, /auth/register, /auth/verify). */
+  noAuth?: boolean;
+}
+
+/**
+ * Single source for the JWT bearer header across all mobile HTTP calls.
+ * Returns {} when no token is stored or noAuth is set — callers merge the
+ * result into their fetch headers.
+ */
+export async function getAuthHeaders(
+  opts?: RequestOptions,
+): Promise<Record<string, string>> {
+  if (opts?.noAuth) return {};
+  try {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    return token ? {Authorization: `Bearer ${token}`} : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function getApiUrl(): Promise<string> {
   const stored = await AsyncStorage.getItem(API_URL_KEY);
   return stored || DEFAULT_URL;
@@ -101,6 +126,7 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
+  opts?: RequestOptions,
 ): Promise<T> {
   if (method === 'GET' && !body) {
     const cached = cache.get<T>(path);
@@ -110,6 +136,7 @@ async function request<T>(
   const baseUrl = await getApiUrl();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...(await getAuthHeaders(opts)),
   };
 
   let retries = 0;
@@ -194,15 +221,20 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>('GET', path),
-  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
-  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
-  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
-  delete: <T>(path: string) => request<T>('DELETE', path),
+  get: <T>(path: string, opts?: RequestOptions) => request<T>('GET', path, undefined, opts),
+  post: <T>(path: string, body?: unknown, opts?: RequestOptions) =>
+    request<T>('POST', path, body, opts),
+  put: <T>(path: string, body?: unknown, opts?: RequestOptions) =>
+    request<T>('PUT', path, body, opts),
+  patch: <T>(path: string, body?: unknown, opts?: RequestOptions) =>
+    request<T>('PATCH', path, body, opts),
+  delete: <T>(path: string, opts?: RequestOptions) =>
+    request<T>('DELETE', path, undefined, opts),
 
   /** Upload a file (image/audio) via multipart form data. */
-  upload: async <T>(path: string, formData: FormData): Promise<T> => {
+  upload: async <T>(path: string, formData: FormData, opts?: RequestOptions): Promise<T> => {
     const baseUrl = await getApiUrl();
+    const authHeaders = await getAuthHeaders(opts);
     const MAX_RETRIES = 2;
     const TIMEOUT_MS = 60_000;
 
@@ -214,6 +246,7 @@ export const api = {
         const res = await fetch(`${baseUrl}${path}`, {
           method: 'POST',
           body: formData,
+          headers: authHeaders,
           signal: controller.signal,
         });
         clearTimeout(timeoutId);

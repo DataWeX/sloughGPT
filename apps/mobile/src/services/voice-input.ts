@@ -4,7 +4,7 @@
  */
 
 import {Alert, Linking} from 'react-native';
-import {getApiUrl} from './api-client';
+import {getApiUrl, getAuthHeaders} from './api-client';
 
 let Audio: any;
 try {
@@ -92,7 +92,7 @@ export async function transcribeAudio(uri: string): Promise<string> {
     const res = await fetch(`${baseUrl}/multimodal/transcribe`, {
       method: 'POST',
       body: formData,
-      headers: {'Content-Type': 'multipart/form-data'},
+      headers: {'Content-Type': 'multipart/form-data', ...(await getAuthHeaders())},
       signal: controller.signal,
     });
 

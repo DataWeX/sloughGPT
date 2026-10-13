@@ -126,8 +126,8 @@ export function AuthScreen() {
     setError(null);
     try {
       const data = mode === 'login'
-        ? await api.post<{token: string; user: UserInfo}>('/auth/login', {username, password})
-        : await api.post<{token: string; user: UserInfo}>('/auth/register', {username, email, password});
+        ? await api.post<{token: string; user: UserInfo}>('/auth/login', {username, password}, {noAuth: true})
+        : await api.post<{token: string; user: UserInfo}>('/auth/register', {username, email, password}, {noAuth: true});
       setToken(data.token);
       setCurrentUser(data.user);
       await AsyncStorage.setItem(AUTH_TOKEN_KEY, data.token);
