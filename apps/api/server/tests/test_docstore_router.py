@@ -265,9 +265,7 @@ def test_message_notes_list_filters_by_session():
         "/docstore/message-notes",
         json=_note(id="n2", sessionId="other", messageId="m2"),
     )
-    notes = _data(
-        client.get("/docstore/message-notes", params={"session_id": "chat_abc"})
-    )
+    notes = _data(client.get("/docstore/message-notes", params={"session_id": "chat_abc"}))
     assert [n["id"] for n in notes] == ["n1"]
 
 
@@ -282,9 +280,7 @@ def test_message_notes_delete():
     deleted = client.delete("/docstore/message-notes/chat_abc/m1")
     assert deleted.status_code == 200
     assert _data(deleted) == {"deleted": True}
-    notes = _data(
-        client.get("/docstore/message-notes", params={"session_id": "chat_abc"})
-    )
+    notes = _data(client.get("/docstore/message-notes", params={"session_id": "chat_abc"}))
     assert notes == []
 
 

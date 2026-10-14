@@ -453,9 +453,7 @@ class TestGenerateStream:
             block.wait(timeout=10)
 
         server._generate_stream_sync = _slow_gen
-        monkeypatch.setattr(
-            "domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02
-        )
+        monkeypatch.setattr("domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02)
 
         results = []
 
@@ -478,9 +476,7 @@ class TestGenerateStream:
             yield np.int64(1)
 
         mock_model.generate_numpy_stream.return_value = _hang()
-        monkeypatch.setattr(
-            "domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02
-        )
+        monkeypatch.setattr("domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02)
         s = SloNetServer(mock_model, mock_tokenizer, generate_timeout=0.1, enable_warmup=False)
         cancel = threading.Event()
 
@@ -503,9 +499,7 @@ class TestGenerateStream:
             yield np.int64(1)
 
         mock_model.generate_numpy_stream.return_value = _hang()
-        monkeypatch.setattr(
-            "domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02
-        )
+        monkeypatch.setattr("domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02)
         s = SloNetServer(mock_model, mock_tokenizer, generate_timeout=0.1, enable_warmup=False)
         loop = asyncio.get_running_loop()
         old = getattr(loop, "_default_executor", None)
@@ -760,8 +754,8 @@ class TestPoolMode:
         factory.return_value = model
         tokenizer = MagicMock()
         tokenizer.encode.return_value = [10, 20, 30]
-        tokenizer.decode.side_effect = (
-            lambda ids: "hello" if list(ids) == [10, 20, 30] else "hello pool result"
+        tokenizer.decode.side_effect = lambda ids: (
+            "hello" if list(ids) == [10, 20, 30] else "hello pool result"
         )
         tokenizer.eos_token_id = 0
 
@@ -885,8 +879,8 @@ class TestProcessGuardDelegation:
         self, mock_model, mock_tokenizer
     ):
         dead = _FakeGuard(alive=False)
-        mock_tokenizer.decode.side_effect = (
-            lambda ids: "hi" if list(ids) == [10, 20, 30] else "hi hello world"
+        mock_tokenizer.decode.side_effect = lambda ids: (
+            "hi" if list(ids) == [10, 20, 30] else "hi hello world"
         )
         srv = SloNetServer(
             model=mock_model,

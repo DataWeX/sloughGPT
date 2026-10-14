@@ -207,9 +207,7 @@ class TestLifeAssembly:
     def test_no_org_directive_in_source(self):
         # loaders must own the org so label addresses match the load address
         # (comment lines are stripped — prose may legitimately mention it)
-        code_lines = [
-            line for line in LIFE_ASM.splitlines() if not line.lstrip().startswith(";")
-        ]
+        code_lines = [line for line in LIFE_ASM.splitlines() if not line.lstrip().startswith(";")]
         assert "[ORG" not in "\n".join(code_lines)
 
     def test_no_syscalls(self):
@@ -229,8 +227,7 @@ class TestLifeAssembly:
         # not recognise (movzx did exactly this — every neighbor load was a
         # no-op).  Every code line of the program must therefore produce real
         # bytes; label/jump/directive lines are checked as a group.
-        jumpy = ("jmp", "je ", "jne", "jl ", "jg ", "jge", "jle", "ja ", "jb ",
-                 "call", "loop")
+        jumpy = ("jmp", "je ", "jne", "jl ", "jg ", "jge", "jle", "ja ", "jb ", "call", "loop")
         for raw in LIFE_ASM.splitlines():
             line = raw.strip()
             if not line or line.startswith(";") or line.startswith("["):
@@ -348,9 +345,7 @@ class TestConwayRules:
         _poke(vs, cells)
         labels = _labels()
         gen0 = _dword(vs, labels["gen"])
-        assert _run_until(
-            vs, lambda: _dword(vs, labels["gen"]) == gen0 + 1, budget=1_000_000
-        )
+        assert _run_until(vs, lambda: _dword(vs, labels["gen"]) == gen0 + 1, budget=1_000_000)
         return _grid(vs)
 
     def test_block_is_a_still_life(self):
@@ -390,9 +385,7 @@ class TestControls:
         vs.cpu.run(max_steps=vs.cpu._step_count + 200_000)
         assert _dword(vs, labels["gen"]) == frozen  # paused: no evolution
         _feed(vs, "s")  # single step while paused
-        assert _run_until(
-            vs, lambda: _dword(vs, labels["gen"]) == frozen + 1, budget=600_000
-        )
+        assert _run_until(vs, lambda: _dword(vs, labels["gen"]) == frozen + 1, budget=600_000)
         _feed(vs, "r")  # reseed: generation resets, live count returns to N
         assert _run_until(vs, lambda: _dword(vs, labels["gen"]) == 0, budget=600_000)
         assert _run_until(vs, lambda: _dword(vs, labels["livecount"]) == 3, budget=600_000)

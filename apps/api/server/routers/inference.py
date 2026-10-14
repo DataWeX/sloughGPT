@@ -1720,9 +1720,7 @@ class InferenceRouter:
             # A WebSocket frame carries no pydantic model, so a parameter is
             # "explicit" exactly when the client included it in the frame.
             _ws_explicit = {
-                k
-                for k in ("temperature", "top_p", "top_k", "repetition_penalty")
-                if k in msg
+                k for k in ("temperature", "top_p", "top_k", "repetition_penalty") if k in msg
             }
             gen_params = _apply_meta_weights(
                 temperature=temperature,

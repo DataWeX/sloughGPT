@@ -953,9 +953,7 @@ class HealthRouter:
                     break
 
                 if task is None:
-                    task = asyncio.create_task(
-                        asyncio.to_thread(self._build_health_snapshot, ctrl)
-                    )
+                    task = asyncio.create_task(asyncio.to_thread(self._build_health_snapshot, ctrl))
 
                 try:
                     snapshot = await asyncio.wait_for(

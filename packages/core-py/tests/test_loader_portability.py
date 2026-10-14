@@ -150,27 +150,25 @@ def _qwen2_sd(h, inter, n_layer, vocab, heads, kv_heads, seed=0):
                 f"model.layers.{i}.self_attn.q_proj.weight": rng.standard_normal(
                     (heads * head_dim, h)
                 ).astype(np.float32),
-                f"model.layers.{i}.self_attn.q_proj.bias": np.zeros(
-                    heads * head_dim, np.float32
-                ),
+                f"model.layers.{i}.self_attn.q_proj.bias": np.zeros(heads * head_dim, np.float32),
                 f"model.layers.{i}.self_attn.k_proj.weight": rng.standard_normal(
                     (kv_heads * head_dim, h)
                 ).astype(np.float32),
                 f"model.layers.{i}.self_attn.v_proj.weight": rng.standard_normal(
                     (kv_heads * head_dim, h)
                 ).astype(np.float32),
-                f"model.layers.{i}.self_attn.o_proj.weight": rng.standard_normal(
-                    (h, h)
-                ).astype(np.float32),
-                f"model.layers.{i}.mlp.gate_proj.weight": rng.standard_normal(
-                    (inter, h)
-                ).astype(np.float32),
-                f"model.layers.{i}.mlp.up_proj.weight": rng.standard_normal(
-                    (inter, h)
-                ).astype(np.float32),
-                f"model.layers.{i}.mlp.down_proj.weight": rng.standard_normal(
-                    (h, inter)
-                ).astype(np.float32),
+                f"model.layers.{i}.self_attn.o_proj.weight": rng.standard_normal((h, h)).astype(
+                    np.float32
+                ),
+                f"model.layers.{i}.mlp.gate_proj.weight": rng.standard_normal((inter, h)).astype(
+                    np.float32
+                ),
+                f"model.layers.{i}.mlp.up_proj.weight": rng.standard_normal((inter, h)).astype(
+                    np.float32
+                ),
+                f"model.layers.{i}.mlp.down_proj.weight": rng.standard_normal((h, inter)).astype(
+                    np.float32
+                ),
             }
         )
     config = {
@@ -209,16 +207,12 @@ class TestPortableLoad:
         np.testing.assert_array_equal(w2[:, :32], sd["model.layers.0.mlp.down_proj.weight"])
         np.testing.assert_array_equal(w2[:, 32:], 0)
         w1 = params["blocks.0.ff.w1.weight"].data
-        np.testing.assert_array_equal(
-            w1[:32], sd["model.layers.0.mlp.gate_proj.weight"]
-        )
+        np.testing.assert_array_equal(w1[:32], sd["model.layers.0.mlp.gate_proj.weight"])
         np.testing.assert_array_equal(w1[32:], 0)
 
     def test_qwen25_dims_exact_match_no_padding(self):
         """Known-good production dims: already 64-aligned → exact writes."""
-        sd, config = _qwen2_sd(
-            h=896, inter=4864, n_layer=2, vocab=512, heads=14, kv_heads=2
-        )
+        sd, config = _qwen2_sd(h=896, inter=4864, n_layer=2, vocab=512, heads=14, kv_heads=2)
         model = build_model_from_config(config, _lazy=True)
         params = dict(model._named_parameters())
         assert params["blocks.0.ff.w2.weight"].data.shape == (896, 4864)

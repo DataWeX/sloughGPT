@@ -275,9 +275,7 @@ class DocStoreRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """All message notes for one chat session, oldest first."""
-        docs = _collection("message-notes").find(
-            {"sessionId": session_id}, sort=[("createdAt", 1)]
-        )
+        docs = _collection("message-notes").find({"sessionId": session_id}, sort=[("createdAt", 1)])
         return success_response(data=[_strip_meta(d) for d in docs])
 
     @endpoint("docstore.message_notes.put")
@@ -290,9 +288,7 @@ class DocStoreRouter:
         session_id = body.get("sessionId")
         message_id = body.get("messageId")
         if not session_id or not message_id:
-            raise_error(
-                "sessionId and messageId are required", code="E_BAD_REQUEST"
-            )
+            raise_error("sessionId and messageId are required", code="E_BAD_REQUEST")
         note_id = str(body.get("id") or f"{session_id}:{message_id}")
         doc = dict(body)
         doc["_id"] = note_id
@@ -314,9 +310,7 @@ class DocStoreRouter:
         deleted = _collection("message-notes").delete_one(
             {"sessionId": session_id, "messageId": message_id}
         )
-        safe_audit_log(
-            "docstore.message_notes.delete", resource=f"{session_id}/{message_id}"
-        )
+        safe_audit_log("docstore.message_notes.delete", resource=f"{session_id}/{message_id}")
         return success_response(data={"deleted": bool(deleted)})
 
     @endpoint("docstore.message_notes.search")
