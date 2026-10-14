@@ -42,7 +42,7 @@ SloughGPT uses a domain-driven architecture where each domain represents a bound
 ### Key Conventions
 
 - **Routers** in `apps/api/server/routers/` — one per domain, thin wrapper around domain logic
-- **Domains** in `packages/core-py/domains/` — business logic, no framework imports
+- **Domains** in `domain/` — business logic, no framework imports
 - **Controllers** on frontend (`apps/web/lib/*-controller.ts`) — axios-based API wrappers
 - **No PyTorch in SloNet** — pure NumPy autograd for the custom training pipeline
 

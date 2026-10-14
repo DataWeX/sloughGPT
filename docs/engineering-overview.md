@@ -33,7 +33,7 @@ Self-hosted LLM platform: train from scratch, serve, chat. One core engine, four
                                    ▼
                     ┌──────────────────────────────┐
                     │        Core Logic            │
-                    │   packages/core-py/domains   │
+                    │           domain/            │
                     │                              │
                     │  training/  inference/        │
                     │  models/    cognitive/        │
@@ -42,13 +42,13 @@ Self-hosted LLM platform: train from scratch, serve, chat. One core engine, four
                     └──────────────────────────────┘
 ```
 
-**Principle:** Core logic is framework-agnostic. No FastAPI, React, or CLI imports in `domains/`. This keeps the engine portable across API server, CLI local mode, notebooks, and workers.
+**Principle:** Core logic is framework-agnostic. No FastAPI, React, or CLI imports in `domain/`. This keeps the engine portable across API server, CLI local mode, notebooks, and workers.
 
 ---
 
 ## The Five Components
 
-### 1. Core Engine (`packages/core-py/domains/`)
+### 1. Core Engine (`domain/`)
 
 29 domain modules. The brain.
 
