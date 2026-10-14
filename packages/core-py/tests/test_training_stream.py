@@ -98,7 +98,7 @@ class TestProcessTrainingCompletion:
 
 
 class TestCleanupStreamState:
-    @patch("domain.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training._internal.runtime_protocol.get_training_runtime")
     @patch("domain.training._internal.stream.update_job")
     def test_sets_running_false(self, mock_update, mock_runtime):
         mock_runtime.return_value.get.return_value = None
@@ -107,7 +107,7 @@ class TestCleanupStreamState:
         cleanup_stream_state("t1", {}, state, finish_fn)
         assert state["running"] is False
 
-    @patch("domain.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training._internal.runtime_protocol.get_training_runtime")
     @patch("domain.training._internal.stream.update_job")
     def test_updates_non_terminal_job(self, mock_update, mock_runtime):
         mock_runtime.return_value.get.return_value = {"status": "running", "error": None}
@@ -116,7 +116,7 @@ class TestCleanupStreamState:
         cleanup_stream_state("t1", {}, state, finish_fn)
         mock_update.assert_called_once()
 
-    @patch("domain.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training._internal.runtime_protocol.get_training_runtime")
     @patch("domain.training._internal.stream.update_job")
     def test_skips_terminal_job(self, mock_update, mock_runtime):
         mock_runtime.return_value.get.return_value = {"status": "completed"}
@@ -125,7 +125,7 @@ class TestCleanupStreamState:
         cleanup_stream_state("t1", {}, state, finish_fn)
         mock_update.assert_not_called()
 
-    @patch("domain.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training._internal.runtime_protocol.get_training_runtime")
     @patch("domain.training._internal.stream.update_job")
     def test_skips_when_no_job(self, mock_update, mock_runtime):
         mock_runtime.return_value.get.return_value = None
@@ -134,7 +134,7 @@ class TestCleanupStreamState:
         cleanup_stream_state("t1", {}, state, finish_fn)
         mock_update.assert_not_called()
 
-    @patch("domain.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training._internal.runtime_protocol.get_training_runtime")
     @patch("domain.training._internal.stream.update_job")
     def test_custom_status_and_error(self, mock_update, mock_runtime):
         mock_runtime.return_value.get.return_value = {"status": "running"}
