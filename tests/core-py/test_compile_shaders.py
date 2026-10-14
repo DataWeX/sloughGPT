@@ -17,6 +17,7 @@ _CORE_PY = Path(__file__).resolve().parents[2] / "packages" / "core-py"
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
+from domain.infrastructure._internal.gpu import compile_shaders as _compile_shaders
 from domain.infrastructure._internal.gpu.compile_shaders import (
     COMPUTE_SHADERS,
     OUTPUT_DIR,
@@ -48,14 +49,10 @@ class TestShaderConstants:
         assert SHADERS_DIR == OUTPUT_DIR
 
     def test_dirs_are_under_gpu_module(self):
-        gpu_dir = (
-            Path(__file__).resolve().parents[2]
-            / "packages"
-            / "core-py"
-            / "domains"
-            / "infrastructure"
-            / "gpu"
-        )
+        # Derived from the module itself rather than a hardcoded tree path: the
+        # plural packages/core-py/domains/ layout was retired by card 8e46f3e7,
+        # and pinning the old path turned this into a stale-layout assertion.
+        gpu_dir = Path(_compile_shaders.__file__).resolve().parent
         assert SHADERS_DIR.parent == gpu_dir
 
     def test_compute_shaders_is_list(self):
