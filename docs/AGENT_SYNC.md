@@ -4,6 +4,18 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-11 ~06:30 — PROVIDER ROUTER CHAT DRIFT FIXED (branch
+`fix/provider-processor-flakes`, card 9e0483b3 item 4).** The lone remaining
+failure the cleanup scan flagged as "needs owner": `test_chat_delegates_to_stream`
+was RED because `ProviderRouter.chat` had drifted to `await text_provider.chat(...)`
+(a duplicated processor loop with **no tool rounds**), while the Jul-25 test pins
+the original contract — chat is a blocking adapter over `chat_stream`. Restored
+the consumer form (all providers implement both protocol methods; prod has zero
+router.chat callers — the HTTP layer uses `get_provider()` raw). Gates: target
+1/1, test_provider_processors 49/49, Router-touching suites 567/567, adjacent
+raw-provider suites 78/78, ruff check clean (file's `ruff format` dirt is
+pre-existing at HEAD). slonet-path test already green at HEAD.
+
 **Last update**: 2026-10-09 — card `ff9ef505` → review: **generic embedding
 provider config restored on main** — `api_key`/`base_url` + the
 `openai_api_key` alias sync on `EmbeddingConfig`, `OpenAIEmbedder`

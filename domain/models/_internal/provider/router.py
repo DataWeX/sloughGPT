@@ -130,18 +130,14 @@ class ProviderRouter:
         return f"[unknown tool: {tool_name}]"
 
     async def chat(self, messages: list[ChatMessage], max_tokens: int = 512, temperature: float = 0.7, **kwargs) -> str:
-        msgs = list(messages)
-        for processor in self._processors:
-            try:
-                msgs = await processor.process(msgs)
-            except Exception as e:
-                logger.warning("Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"})
-        if not self._text_name:
-            return "No text model configured. Please load a model first."
-        text_provider = get_provider(self._text_name)
-        if text_provider is None:
-            return f"Text model '{self._text_name}' is not available. Please load a model."
-        return await text_provider.chat(msgs, max_tokens=max_tokens, temperature=temperature, **kwargs)
+        # Blocking adapter over chat_stream: one streaming primitive shared by both
+        # paths (processors, tool rounds, error strings). Providers implement both
+        # methods (ModelProvider protocol), and test_chat_delegates_to_stream pins
+        # this contract — a direct provider.chat() call here reintroduces drift.
+        chunks: list[str] = []
+        async for chunk in self.chat_stream(messages, max_tokens=max_tokens, temperature=temperature, **kwargs):
+            chunks.append(chunk)
+        return "".join(chunks)
 
     def embed(self, text: str) -> list[float]:
         return []
