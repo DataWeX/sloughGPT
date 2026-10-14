@@ -15,6 +15,11 @@ router.chat callers — the HTTP layer uses `get_provider()` raw). Gates: target
 1/1, test_provider_processors 49/49, Router-touching suites 567/567, adjacent
 raw-provider suites 78/78, ruff check clean (file's `ruff format` dirt is
 pre-existing at HEAD). slonet-path test already green at HEAD.
+**PORTED 2026-10-14** — the fix was stranded on `fix/provider-processor-flakes`;
+cherry-picked to main as `35cca61bd` under merge `af14b2231`. Re-verified on
+merged main: both named tests 2/2, `test_provider_processors` 0F, 9
+router-touching suites 917 green, ruff check clean; `ruff format` dirt
+re-confirmed pre-existing against main's own copy.
 
 **Last update**: 2026-10-09 — card `ff9ef505` → review: **generic embedding
 provider config restored on main** — `api_key`/`base_url` + the
