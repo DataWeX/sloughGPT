@@ -115,10 +115,7 @@ def ensure_servers_ready():
     keeps serverless gate runs from burning the old 90s wait.
     """
     if not _wait_for_api(timeout=5):
-        pytest.skip(
-            "API server not running — start with "
-            "FORCE_COLOR=1 ./sloughgpt serve --web"
-        )
+        pytest.skip("API server not running — start with FORCE_COLOR=1 ./sloughgpt serve --web")
     # Give the web server a moment to compile after API is up
     time.sleep(3)
 
