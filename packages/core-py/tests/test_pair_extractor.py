@@ -3,6 +3,9 @@
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from domain.training._internal.pair_extractor import (
     count_pairs_in_corpus,
@@ -228,6 +231,27 @@ class TestExtractPairsFromSessions:
 
 
 class TestExtractPairsFromLogs:
+    @pytest.fixture(autouse=True)
+    def _force_jsonl_fallback(self, monkeypatch):
+        """Pin these tests to the JSONL branch by disabling the MogDB read.
+
+        extract_pairs_from_logs() tries MogDB FIRST (get_response_tracker()._coll)
+        and only falls back to the JSONL dir when that yields nothing, so patching
+        _RESPONSE_LOGS_DIR alone does not isolate the function under test: any row
+        other suite left in the shared responses collection wins and is returned
+        instead. That state lives on disk (data/response_mogdb), so the failure is
+        checkout-dependent rather than order-dependent — a populated checkout
+        (e.g. the long-lived sloughgpt-api-std tree) fails 8/8 here while a fresh
+        worktree passes, which is exactly what RUN7 recorded.
+
+        _coll = None reproduces the "MogDB unavailable" path the class's own
+        docstrings describe, so the JSONL assertions below see their own writes.
+        """
+        monkeypatch.setattr(
+            "domain.feedback._internal.response_tracker.get_response_tracker",
+            lambda: SimpleNamespace(_coll=None),
+        )
+
     def test_basic_extraction(self, tmp_path, monkeypatch):
         """Extracts pairs from JSONL response logs."""
         monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
