@@ -426,7 +426,61 @@ def _rule_factual(text: str) -> tuple:
     reasons = {}
     t = text.lower().strip()
 
-    # Factual indicators
+    # Strong verification verbs — beat generic starter/descriptive scores.
+    factual_strong = (
+        "contains ",
+        "measures ",
+        "weighs ",
+        "equals ",
+        "will ",
+    )
+    for indicator in factual_strong:
+        if indicator in t:
+            scores["factual"] = 0.6
+            reasons["factual"] = f"contains factual indicator '{indicator.strip()}'"
+            return scores, reasons
+
+    # Counted quantity: has/have/had + digit/number word (e.g. "has three classes")
+    count_weak = ("has ", "have ", "had ")
+    number_markers = (
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+        "twenty",
+        "hundred",
+        "thousand",
+    )
+    if any(ind in t for ind in count_weak) and any(m in t for m in number_markers):
+        scores["factual"] = 0.6
+        reasons["factual"] = "counted quantity (has + number)"
+        return scores, reasons
+
+    # Weak indicators — stative copulas lose to descriptive starters.
     factual_indicators = (
         "is ",
         "was ",
@@ -435,15 +489,9 @@ def _rule_factual(text: str) -> tuple:
         "have ",
         "had ",
         "can ",
-        "will ",
         "does ",
         "did ",
-        "contains ",
-        "measures ",
-        "weighs ",
-        "equals ",
     )
-
     for indicator in factual_indicators:
         if indicator in t:
             scores["factual"] = 0.4
