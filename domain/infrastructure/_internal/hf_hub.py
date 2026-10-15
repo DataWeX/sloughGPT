@@ -460,6 +460,65 @@ def resolve_cached_path(
     return None
 
 
+def _read_sha_sidecar(path: Path) -> str:
+    """Read the hex digest from a ``<file>.sha256`` sidecar, or ``""``.
+
+    Written by :func:`write_sha_sidecar` at download time; a model file
+    downloaded before sidecars existed simply has none.
+    """
+    sidecar = path.with_suffix(path.suffix + ".sha256")
+    if not sidecar.is_file():
+        return ""
+    try:
+        return sidecar.read_text().split()[0]
+    except (OSError, IndexError):
+        return ""
+
+
+def build_model_manifest(
+    model_id: str, hf_home: str | None = None
+) -> dict[str, Any] | None:
+    """Describe a **cached** model as a downloadable file manifest.
+
+    Returns ``{"files": [{"path", "size", "sha256"}, ...]}`` — the exact shape
+    ``ExternalDownloadBackend`` fetches from ``{base_url}/models/{id}/manifest.json``
+    before downloading. Paths come from walking the same cache layout
+    :func:`resolve_cached_path` reads (snapshot dir, else the flat project-local
+    mirror), and each one is confirmed servable by calling that resolver, so
+    every listed path is one ``GET /models/{id}/file/{path}`` actually returns
+    rather than 404s. Checksums come from the ``.sha256`` sidecars (``""`` when
+    a file predates them).
+
+    Returns ``None`` when the model is not cached at all or has no servable
+    file, which callers turn into a 404.
+    """
+    cache_dir = find_cached_model_dir(model_id, hf_home)
+    if cache_dir is None:
+        return None
+    root = _snapshot_dir(cache_dir) or cache_dir
+
+    files: list[dict[str, Any]] = []
+    for candidate in sorted(root.rglob("*")):
+        if not candidate.is_file():
+            continue
+        rel = candidate.relative_to(root).as_posix()
+        if rel.endswith(".sha256"):
+            continue  # integrity sidecar, not a model file
+        if resolve_cached_path(model_id, rel, hf_home) is None:
+            continue  # below the serve size floor or otherwise unresolvable
+        files.append(
+            {
+                "path": rel,
+                "size": candidate.stat().st_size,
+                "sha256": _read_sha_sidecar(candidate),
+            }
+        )
+
+    if not files:
+        return None
+    return {"files": files}
+
+
 # ---------------------------------------------------------------------------
 # Model download (composed from downcraft's generic downloader + state)
 # ---------------------------------------------------------------------------

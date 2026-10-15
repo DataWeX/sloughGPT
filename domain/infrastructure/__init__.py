@@ -42,6 +42,10 @@ _LAZY_IMPORTS = {
     "DatasetRepository": ("._internal.entity_repositories", "DatasetRepository"),
     "KnowledgeRepository": ("._internal.entity_repositories", "KnowledgeRepository"),
     "artifact_registry": ("._internal.artifact_registry", None),
+    # Lazy: hf_hub imports `requests` + `downcraft` at module scope, so it is
+    # kept off the cold-start path (peer manifest serving is a rare call).
+    "build_model_manifest": ("._internal.hf_hub", "build_model_manifest"),
+    "resolve_cached_path": ("._internal.hf_hub", "resolve_cached_path"),
 }
 
 
@@ -71,7 +75,9 @@ __all__ = [
     "AppError",
     "ErrorCode",
     "artifact_registry",
+    "build_model_manifest",
     "classify_exception",
+    "resolve_cached_path",
     "emit_error_event",
     "get_event_buffer",
     "get_server_buffer",
