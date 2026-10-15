@@ -6,8 +6,8 @@
   },
   {
     "test": "e2e_training_config_elements",
-    "passed": false,
-    "detail": "elements={'has_method': False, 'has_epochs': False, 'has_lr': False, 'has_batch': False}"
+    "passed": true,
+    "detail": "elements={'has_method': True, 'has_epochs': True, 'has_lr': True, 'has_batch': True}"
   },
   {
     "test": "e2e_training_start_button",
@@ -47,7 +47,7 @@
   {
     "test": "e2e_training_job_detail",
     "passed": true,
-    "detail": "len=316"
+    "detail": "len=423"
   },
   {
     "test": "e2e_monitoring_metrics",

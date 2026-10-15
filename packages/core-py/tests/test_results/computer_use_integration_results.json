@@ -2,12 +2,12 @@
   {
     "test": "agent_navigates_training",
     "passed": true,
-    "detail": "status=200, len=393"
+    "detail": "status=200, len=1096"
   },
   {
     "test": "agent_navigates_datasets",
     "passed": true,
-    "detail": "status=200, len=336"
+    "detail": "status=200, len=576"
   },
   {
     "test": "agent_clicks_import",
@@ -27,7 +27,7 @@
   {
     "test": "agent_devtools_network",
     "passed": true,
-    "detail": "requests=280"
+    "detail": "requests=282"
   },
   {
     "test": "agent_devtools_no_critical",
@@ -37,7 +37,7 @@
   {
     "test": "agent_screenshot",
     "passed": true,
-    "detail": "path=/tmp/pytest-of-mana/pytest-26/test_agent_screenshot0/training_screenshot.png"
+    "detail": "path=/tmp/pytest-of-mana/pytest-0/test_agent_screenshot0/training_screenshot.png"
   },
   {
     "test": "agent_step_recording",
@@ -47,7 +47,7 @@
   {
     "test": "agent_full_log",
     "passed": true,
-    "detail": "entries=14"
+    "detail": "entries=15"
   },
   {
     "test": "follower_navigate",
@@ -72,7 +72,7 @@
   {
     "test": "follower_devtools_summary",
     "passed": true,
-    "detail": "summary=Steps: 1 | Console: 14 (0 err, 0 warn) | Network: 281 (0 failed, 0ms avg) | Errors: 0 | Duration: 4."
+    "detail": "summary=Steps: 1 | Console: 15 (0 err, 0 warn) | Network: 282 (0 failed, 0ms avg) | Errors: 0 | Duration: 2."
   },
   {
     "test": "follower_screenshot",
@@ -96,7 +96,7 @@
   },
   {
     "test": "cross_full_flow",
-    "passed": false,
+    "passed": true,
     "detail": ""
   },
   {

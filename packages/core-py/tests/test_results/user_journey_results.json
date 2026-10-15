@@ -2,202 +2,202 @@
   {
     "test": "dashboard_loads",
     "passed": true,
-    "detail": "len=1787"
+    "detail": "len=2065"
   },
   {
     "test": "dashboard_has_nav",
     "passed": true,
-    "detail": "links=24"
+    "detail": "links=34"
   },
   {
     "test": "nav_chat",
     "passed": true,
-    "detail": "len=495"
+    "detail": "len=688"
   },
   {
     "test": "nav_training",
     "passed": true,
-    "detail": "len=959"
+    "detail": "len=2897"
   },
   {
     "test": "nav_datasets",
     "passed": true,
-    "detail": "len=336"
+    "detail": "len=5427"
   },
   {
     "test": "nav_models",
     "passed": true,
-    "detail": "len=320"
+    "detail": "len=504"
   },
   {
     "test": "nav_agents",
     "passed": true,
-    "detail": "len=79276"
+    "detail": "len=114328"
   },
   {
     "test": "nav_souls",
     "passed": true,
-    "detail": "len=679"
+    "detail": "len=890"
   },
   {
     "test": "nav_knowledge",
     "passed": true,
-    "detail": "len=309"
+    "detail": "len=676"
   },
   {
     "test": "nav_monitoring",
     "passed": true,
-    "detail": "len=461"
+    "detail": "len=932"
   },
   {
     "test": "nav_settings",
     "passed": true,
-    "detail": "len=4139"
+    "detail": "len=4234"
   },
   {
     "test": "nav_planner",
     "passed": true,
-    "detail": "len=567872"
+    "detail": "len=366"
   },
   {
     "test": "nav_benchmark",
     "passed": true,
-    "detail": "len=215"
+    "detail": "len=763"
   },
   {
     "test": "nav_tokenizer",
     "passed": true,
-    "detail": "len=497"
+    "detail": "len=681"
   },
   {
     "test": "nav_errors",
     "passed": true,
-    "detail": "len=557"
+    "detail": "len=930"
   },
   {
     "test": "nav_security",
     "passed": true,
-    "detail": "len=557"
+    "detail": "len=932"
   },
   {
     "test": "nav_shell",
     "passed": true,
-    "detail": "len=320"
+    "detail": "len=504"
   },
   {
     "test": "nav_feedback",
     "passed": true,
-    "detail": "len=740"
+    "detail": "len=926"
   },
   {
     "test": "nav_files",
     "passed": true,
-    "detail": "len=320"
+    "detail": "len=504"
   },
   {
     "test": "nav_adapters",
     "passed": true,
-    "detail": "len=474"
+    "detail": "len=728"
   },
   {
     "test": "nav_brainstorm",
     "passed": true,
-    "detail": "len=495"
+    "detail": "len=1992"
   },
   {
     "test": "nav_decide",
     "passed": true,
-    "detail": "len=2107"
+    "detail": "len=1991"
   },
   {
     "test": "nav_explain",
     "passed": true,
-    "detail": "len=534"
+    "detail": "len=1946"
   },
   {
     "test": "nav_rewrite",
     "passed": true,
-    "detail": "len=585"
+    "detail": "len=1967"
   },
   {
     "test": "nav_translate",
     "passed": true,
-    "detail": "len=2181"
+    "detail": "len=745"
   },
   {
     "test": "nav_wellness",
     "passed": true,
-    "detail": "len=556"
+    "detail": "len=1940"
   },
   {
     "test": "nav_writing",
     "passed": true,
-    "detail": "len=2141"
+    "detail": "len=1997"
   },
   {
     "test": "nav_consciousness_dashboard",
     "passed": true,
-    "detail": "len=441"
+    "detail": "len=9260"
   },
   {
     "test": "nav_consciousness_health",
     "passed": true,
-    "detail": "len=694"
+    "detail": "len=879"
   },
   {
     "test": "nav_consciousness_training",
     "passed": true,
-    "detail": "len=760"
+    "detail": "len=945"
   },
   {
     "test": "nav_consciousness_settings",
     "passed": true,
-    "detail": "len=1289"
+    "detail": "len=1474"
   },
   {
     "test": "nav_consciousness_playground",
     "passed": true,
-    "detail": "len=3654"
+    "detail": "len=3570"
   },
   {
     "test": "nav_training_analytics",
     "passed": true,
-    "detail": "len=268"
+    "detail": "len=452"
   },
   {
     "test": "nav_training_presets",
     "passed": true,
-    "detail": "len=268"
+    "detail": "len=452"
   },
   {
     "test": "nav_training_runs",
     "passed": true,
-    "detail": "len=3396"
+    "detail": "len=9680"
   },
   {
     "test": "nav_training_compare",
     "passed": true,
-    "detail": "len=183"
+    "detail": "len=452"
   },
   {
     "test": "nav_training_trends",
     "passed": true,
-    "detail": "len=268"
+    "detail": "len=452"
   },
   {
     "test": "nav_shortcuts",
     "passed": true,
-    "detail": "len=1087"
+    "detail": "len=1271"
   },
   {
     "test": "nav_phoneme",
     "passed": true,
-    "detail": "len=1126"
+    "detail": "len=1310"
   },
   {
     "test": "chat_loads",
     "passed": true,
-    "detail": "len=495"
+    "detail": "len=1907"
   },
   {
     "test": "chat_has_input",
@@ -212,12 +212,12 @@
   {
     "test": "training_loads",
     "passed": true,
-    "detail": "len=1706"
+    "detail": "len=2897"
   },
   {
     "test": "training_job_detail_loads",
     "passed": true,
-    "detail": "len=271"
+    "detail": "len=455"
   },
   {
     "test": "training_job_detail_back_link",
@@ -227,32 +227,32 @@
   {
     "test": "settings_loads",
     "passed": true,
-    "detail": "len=3523"
+    "detail": "len=4234"
   },
   {
     "test": "planner_loads",
     "passed": true,
-    "detail": "len=567957"
+    "detail": "len=366"
   },
   {
     "test": "models_loads",
     "passed": true,
-    "detail": "len=320"
+    "detail": "len=504"
   },
   {
     "test": "monitoring_loads",
     "passed": true,
-    "detail": "len=557"
+    "detail": "len=383"
   },
   {
     "test": "knowledge_loads",
     "passed": true,
-    "detail": "len=348"
+    "detail": "len=676"
   },
   {
     "test": "datasets_loads",
     "passed": true,
-    "detail": "len=336"
+    "detail": "len=5426"
   },
   {
     "test": "datasets_import_button",
@@ -261,53 +261,68 @@
   },
   {
     "test": "datasets_import_dialog_opens",
-    "passed": false,
+    "passed": true,
     "detail": ""
   },
   {
-    "test": "datasets_kaggle_radio_exists",
-    "passed": false,
+    "test": "datasets_hf_source_exists",
+    "passed": true,
     "detail": ""
+  },
+  {
+    "test": "datasets_hf_radio_clicks",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_hf_input_fills",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_hf_import_attempt",
+    "passed": true,
+    "detail": "reacted=True, body_snippet= ID\n\nExamples: HuggingFaceH4/tinyshakespeare, HuggingFaceH4/ultrachat_200k\n\nDataset Name\nHuggingFace dataset download requires the 'datasets' package. Install: pip install datasets\nCancel\nImport\nClose"
   },
   {
     "test": "redirect__companion",
     "passed": true,
-    "detail": "/companion -> /souls, len=241"
+    "detail": "/companion -> /souls, len=890"
   },
   {
     "test": "redirect__evaluate",
     "passed": true,
-    "detail": "/evaluate -> /benchmark, len=538"
+    "detail": "/evaluate -> /benchmark, len=763"
   },
   {
     "test": "redirect__memory",
     "passed": true,
-    "detail": "/memory -> /knowledge, len=561"
+    "detail": "/memory -> /knowledge, len=676"
   },
   {
     "test": "redirect__collections",
     "passed": true,
-    "detail": "/collections -> /datasets, len=336"
+    "detail": "/collections -> /datasets, len=5428"
   },
   {
     "test": "redirect__self-train",
     "passed": true,
-    "detail": "/self-train -> /training, len=2283"
+    "detail": "/self-train -> /training, len=2897"
   },
   {
     "test": "redirect__admin",
     "passed": true,
-    "detail": "/admin -> /settings, len=4137"
+    "detail": "/admin -> /settings, len=4234"
   },
   {
     "test": "redirect__images",
     "passed": true,
-    "detail": "/images -> /files, len=320"
+    "detail": "/images -> /files, len=504"
   },
   {
     "test": "redirect__session",
     "passed": true,
-    "detail": "/session -> /shell, len=2039"
+    "detail": "/session -> /shell, len=1907"
   },
   {
     "test": "brainstorm_input_and_suggestions",
@@ -321,8 +336,8 @@
   },
   {
     "test": "explain_has_difficulty",
-    "passed": false,
-    "detail": "simple=True, normal=False"
+    "passed": true,
+    "detail": "simple=True, moderate=True"
   },
   {
     "test": "rewrite_has_actions",
@@ -331,8 +346,8 @@
   },
   {
     "test": "translate_has_selector",
-    "passed": false,
-    "detail": "select=False, btn=True"
+    "passed": true,
+    "detail": "pair=True, btn=True"
   },
   {
     "test": "wellness_has_options",
@@ -347,16 +362,156 @@
   {
     "test": "consciousness_dashboard_loads",
     "passed": true,
-    "detail": "len=326"
+    "detail": "len=9260"
   },
   {
     "test": "consciousness_health_loads",
     "passed": true,
-    "detail": "len=694"
+    "detail": "len=879"
   },
   {
     "test": "consciousness_playground_loads",
     "passed": true,
-    "detail": "len=3654"
+    "detail": "len=3570"
+  },
+  {
+    "test": "route_loads[/training/runs]",
+    "passed": true,
+    "detail": "len=9680, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/files]",
+    "passed": true,
+    "detail": "len=504, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/adapters]",
+    "passed": true,
+    "detail": "len=728, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/agents]",
+    "passed": true,
+    "detail": "len=114328, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/souls]",
+    "passed": true,
+    "detail": "len=890, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/shell]",
+    "passed": true,
+    "detail": "len=504, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/benchmark]",
+    "passed": true,
+    "detail": "len=763, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/tokenizer]",
+    "passed": true,
+    "detail": "len=681, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/errors]",
+    "passed": true,
+    "detail": "len=929, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/security]",
+    "passed": true,
+    "detail": "len=931, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/feedback]",
+    "passed": true,
+    "detail": "len=926, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/auto-train]",
+    "passed": true,
+    "detail": "len=2897, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/consciousness/debug]",
+    "passed": true,
+    "detail": "len=2120, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/consciousness/testing]",
+    "passed": true,
+    "detail": "len=1080, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/consciousness/analytics]",
+    "passed": true,
+    "detail": "len=443, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/consciousness/insights]",
+    "passed": true,
+    "detail": "len=385, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/consciousness/monitor]",
+    "passed": true,
+    "detail": "len=873, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/consciousness/benchmark]",
+    "passed": true,
+    "detail": "len=606, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/consciousness/versions]",
+    "passed": true,
+    "detail": "len=383, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/infer]",
+    "passed": true,
+    "detail": "len=504, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/evaluate]",
+    "passed": true,
+    "detail": "len=763, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/compare]",
+    "passed": true,
+    "detail": "len=763, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/export]",
+    "passed": true,
+    "detail": "len=4234, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/vector]",
+    "passed": true,
+    "detail": "len=750, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/multimodal]",
+    "passed": true,
+    "detail": "len=504, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/workflow]",
+    "passed": true,
+    "detail": "len=926, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/memory]",
+    "passed": true,
+    "detail": "len=676, crash=False, 404=False"
+  },
+  {
+    "test": "route_loads[/vm]",
+    "passed": true,
+    "detail": "len=504, crash=False, 404=False"
   }
 ]
