@@ -21,6 +21,16 @@ case ":${PYTHONPATH:-}:" in
   *":$ROOT:"*) ;;
   *) PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" ;;
 esac
+# packages/downcraft must be on the path as .../packages/downcraft itself,
+# not .../packages: packages/ is not a package (no __init__.py), so the
+# parent entry would resolve `downcraft` as a PEP 420 namespace portion and
+# lose to the regular installed package in site-packages (a silent no-op).
+# The child entry makes it a regular package that shadows the stale
+# site-packages snapshot (PYTHONPATH precedes site-packages).
+case ":${PYTHONPATH:-}:" in
+  *":$ROOT/packages/downcraft:"*) ;;
+  *) PYTHONPATH="$ROOT/packages/downcraft${PYTHONPATH:+:$PYTHONPATH}" ;;
+esac
 export PYTHONPATH
 
 # Only reached when no python could run the resolver at all.
