@@ -199,11 +199,22 @@ export class SloughGPTClient {
     }
   }
 
-  private async request<T>(
+  /**
+   * Perform a request and return the raw `Response`, armed with the client
+   * timeout.
+   *
+   * The timeout is cleared the moment headers arrive — deliberately. It exists
+   * to bound the *wait for a response*, so a connection that is accepted but
+   * never answers cannot hang the caller indefinitely. It must NOT bound the
+   * body: streaming endpoints hand this Response straight to a reader, and a
+   * generation legitimately outlives any idle timeout. Both the JSON callers
+   * and the streaming callers therefore share one timeout + error contract.
+   */
+  private async fetchResponse(
     method: string,
     endpoint: string,
     body?: unknown
-  ): Promise<T> {
+  ): Promise<Response> {
     const url = `${this.baseUrl}${endpoint}`;
     this.log('debug', `${method} ${url}`);
 
@@ -227,7 +238,7 @@ export class SloughGPTClient {
         );
       }
 
-      return await response.json();
+      return response;
     } catch (error: unknown) {
       clearTimeout(timeoutId);
       if ((error as { name?: string }).name === 'AbortError') {
@@ -235,6 +246,15 @@ export class SloughGPTClient {
       }
       throw error;
     }
+  }
+
+  private async request<T>(
+    method: string,
+    endpoint: string,
+    body?: unknown
+  ): Promise<T> {
+    const response = await this.fetchResponse(method, endpoint, body);
+    return await response.json();
   }
 
   private unwrap(data: unknown): unknown {
@@ -323,24 +343,19 @@ export class SloughGPTClient {
   async *generateStream(
     request: GenerateRequest
   ): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/inference/generate/stream`;
     this.log('info', `Streaming: "${request.prompt.slice(0, 50)}..."`);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify({
+    const response = await this.fetchResponse(
+      'POST',
+      '/inference/generate/stream',
+      {
         prompt: request.prompt,
         max_new_tokens: request.max_new_tokens || 100,
         temperature: request.temperature || 0.8,
         personality: request.personality,
         model: request.model,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new SloughGPTError(`HTTP ${response.status}`, response.status);
-    }
+      }
+    );
 
     const reader = response.body?.getReader();
     if (!reader) throw new SloughGPTError('No response body');
@@ -418,25 +433,16 @@ export class SloughGPTClient {
   async *chatStream(
     request: ChatRequest
   ): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/chat/stream`;
     this.log('info', `Chat stream: ${request.messages.length} messages`);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify({
-        messages: request.messages,
-        model: request.model,
-        temperature: request.temperature ?? 0.8,
-        max_new_tokens: request.max_new_tokens ?? 100,
-        top_p: request.top_p ?? 0.9,
-        top_k: request.top_k ?? 50,
-      }),
+    const response = await this.fetchResponse('POST', '/chat/stream', {
+      messages: request.messages,
+      model: request.model,
+      temperature: request.temperature ?? 0.8,
+      max_new_tokens: request.max_new_tokens ?? 100,
+      top_p: request.top_p ?? 0.9,
+      top_k: request.top_k ?? 50,
     });
-
-    if (!response.ok) {
-      throw new SloughGPTError(`HTTP ${response.status}`, response.status);
-    }
 
     const reader = response.body?.getReader();
     if (!reader) throw new SloughGPTError('No response body');
@@ -543,9 +549,10 @@ export class SloughGPTClient {
   }
 
   async *regenerateStream(sessionId: string): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/session/${sessionId}/regenerate`;
-    const response = await fetch(url, { method: 'POST', headers: this.headers });
-    if (!response.ok) throw new SloughGPTError(`HTTP ${response.status}`, response.status);
+    const response = await this.fetchResponse(
+      'POST',
+      `/session/${sessionId}/regenerate`
+    );
 
     const reader = response.body?.getReader();
     if (!reader) throw new SloughGPTError('No response body');

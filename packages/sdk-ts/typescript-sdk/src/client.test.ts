@@ -2664,4 +2664,59 @@ describe('SloughGPTClient', () => {
       expect(mockFetch.mock.calls[0][1]?.method).toBe('POST');
     });
   });
+
+  describe('streaming timeout protection (card 25ebfc0f step 2)', () => {
+    // request<T>() arms an AbortController so a stalled server cannot hang the
+    // caller forever. The three streaming endpoints hand-rolled their own fetch
+    // and never passed a signal, so a connection that is accepted but never
+    // delivers data waited indefinitely. All three must be covered.
+    const sseStream = () => {
+      const enc = new TextEncoder();
+      return new ReadableStream({
+        start(c) {
+          c.enqueue(
+            enc.encode(
+              'data: {"stream":"chat","phase":"STREAMING","data":{"token":"x"},"status":"working"}\n\n'
+            )
+          );
+          c.enqueue(enc.encode('data: [DONE]\n\n'));
+          c.close();
+        },
+      });
+    };
+
+    const endpoints: Array<{ name: string; run: (c: SloughGPTClient) => AsyncGenerator<string> }> = [
+      {
+        name: 'chatStream',
+        run: (c) => c.chatStream({ messages: [{ role: 'user', content: 'hi' }] }),
+      },
+      { name: 'generateStream', run: (c) => c.generateStream({ prompt: 'hello' }) },
+      { name: 'regenerateStream', run: (c) => c.regenerateStream('sess-1') },
+    ];
+
+    for (const { name, run } of endpoints) {
+      it(`${name} passes an AbortSignal so a stalled stream cannot hang`, async () => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          body: sseStream(),
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers(),
+        });
+
+        const client = new SloughGPTClient();
+        for await (const _token of run(client)) {
+          // drain to completion
+        }
+
+        const init = mockFetch.mock.calls[0][1] as RequestInit | undefined;
+        expect(init, `${name} fetch init missing`).toBeDefined();
+        expect(
+          init?.signal,
+          `${name} must pass an AbortSignal (request<T>() already does)`
+        ).toBeDefined();
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+      });
+    }
+  });
 });
