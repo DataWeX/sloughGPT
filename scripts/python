@@ -21,6 +21,25 @@ case ":${PYTHONPATH:-}:" in
   *":$ROOT:"*) ;;
   *) PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" ;;
 esac
+
+# Repo packages must beat an installed site-packages snapshot (AGENTS
+# one-shared-copy rule: the shared tree copy is the only copy). `downcraft`
+# is pip-installed into the conda env as a Sep-18 snapshot whose "already
+# downloaded" branch is unconditional, so without this entry `python -m
+# downcraft` ran stale code: a dest missing from disk was reported as done,
+# the reget fix (6c626f043) never fired, and e2e section 3 failed (card
+# dd670ece). Only PYTHONPATH beats site-packages, so listing the repo path
+# here is what makes the shared copy win.
+#
+# Deliberately narrow: only packages/ names that actually have an installed
+# copy belong in this list. Adding the whole pytest.ini set would drag
+# pytest-only entries (.pytest-libs, tests/api-server) into every invocation.
+# tests/core-py/test_launcher_repo_copy.py ratchets it — it fails if any
+# other packages/ name gains a site-packages copy and is not listed here.
+case ":${PYTHONPATH:-}:" in
+  *":$ROOT/packages/downcraft:"*) ;;
+  *) PYTHONPATH="$ROOT/packages/downcraft${PYTHONPATH:+:$PYTHONPATH}" ;;
+esac
 export PYTHONPATH
 
 # Only reached when no python could run the resolver at all.
