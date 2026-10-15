@@ -15,7 +15,7 @@ from typing import Any
 
 from controllers.models import get_models_controller
 from fastapi import APIRouter, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import (
@@ -215,6 +215,21 @@ class ModelsRouter:
         )
         self.router.add_api_route(
             path="/memory-pressure", endpoint=self.memory_pressure, methods=["GET"]
+        )
+        # Peer-to-peer serving: registered LAST on purpose. Both use a greedy
+        # `{model_id:path}` prefix, so they must be tried only after every
+        # static route above — otherwise `/models/file/{id}/{path}` and
+        # `/models/download/...` would be swallowed by the catch-all shapes.
+        # These two are what ExternalDownloadBackend actually requests.
+        self.router.add_api_route(
+            path="/{model_id:path}/manifest.json",
+            endpoint=self.serve_model_manifest,
+            methods=["GET"],
+        )
+        self.router.add_api_route(
+            path="/{model_id:path}/file/{file_path:path}",
+            endpoint=self.serve_model_file_nested,
+            methods=["GET"],
         )
 
     @staticmethod
@@ -1034,6 +1049,65 @@ class ModelsRouter:
             media_type="application/octet-stream",
             headers=headers,
         )
+
+    @endpoint("models.serve_model_manifest")
+    async def serve_model_manifest(
+        self,
+        model_id: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ):
+        """Serve a cached model's file manifest so a peer can download it.
+
+        ``ExternalDownloadBackend`` fetches this route *first* and returns
+        ``{"status": "error"}`` on 404, so without it a server running this
+        codebase cannot serve models to ``POST /models/external/download``
+        clients — the client seam existed but the server half did not.
+
+        Deliberately **not** wrapped in ``success_response()``: the peer does
+        ``json.loads(resp.read())`` and reads ``manifest["files"]`` at the top
+        level. The standard ``{"status": ..., "data": ...}`` envelope would make
+        it see zero files and fail with "Manifest contains no files".
+        """
+        from domain.infrastructure import build_model_manifest
+
+        manifest = build_model_manifest(model_id)
+        if manifest is None:
+            raise_error(f"Model not cached: {model_id}", status_code=404)
+
+        # Manifests describe an immutable snapshot; let peers revalidate cheaply.
+        return JSONResponse(
+            content=manifest,
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
+    @endpoint("models.serve_model_file")
+    async def serve_model_file_nested(
+        self,
+        model_id: str,
+        file_path: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ):
+        """Peer-shaped alias of :meth:`serve_model_file`.
+
+        ``ExternalDownloadBackend`` builds ``/models/{id}/file/{path}``, while
+        the pre-existing route serves ``/models/file/{id}/{path}`` — the same
+        bytes under a different shape. Serving both keeps the existing contract
+        untouched and is what actually lets a peer finish the download the
+        manifest starts.
+
+        Serves straight from the cache via ``resolve_cached_path`` (the same
+        resolver the compressed path uses) instead of delegating: the existing
+        route calls ``get_backend()`` with no argument, which raises
+        ``TypeError`` against ``get_backend(name: str)``. A plain ``FileResponse``
+        is a valid answer because ``CompressedDownloader`` passes bytes through
+        unchanged when no ``lz4`` ``Content-Encoding`` is advertised.
+        """
+        from domain.infrastructure import resolve_cached_path
+
+        resolved = resolve_cached_path(model_id, file_path)
+        if resolved is None or not resolved.is_file():
+            raise_error(f"File not found: {model_id}/{file_path}", status_code=404)
+        return FileResponse(resolved, media_type="application/octet-stream")
 
     # ── External server management ───────────────────────────────────────
 
