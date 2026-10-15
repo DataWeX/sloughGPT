@@ -26,6 +26,15 @@ import benchmark_quantization as bq  # noqa: E402
 
 from domain.infrastructure._internal.quantization import walk_slo_linears  # noqa: E402
 
+# Every test here builds a real QuantizationBenchmark and runs the tiny model
+# in-process, so the whole module is e2e-slow: 73 non-run_all tests alone need
+# >420s. `pytest.ini` addopts already runs `-m "not slow"`, and an unmarked file
+# this heavy wedged full-suite gate runs (this one exceeded 20 minutes in the
+# domain-port infra sweep). Same treatment as test_multimodal_v2.py,
+# test_infer_router.py and test_slo_embedder.py. Opt back in explicitly with
+# `-m slow --timeout=0`.
+pytestmark = pytest.mark.slow
+
 EXPECTED_TEST_NAMES = [
     "throughput_vs_length",
     "throughput_vs_prompt",
