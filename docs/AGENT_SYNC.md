@@ -21,6 +21,33 @@ merged main: both named tests 2/2, `test_provider_processors` 0F, 9
 router-touching suites 917 green, ruff check clean; `ruff format` dirt
 re-confirmed pre-existing against main's own copy.
 
+**PORTED 2026-10-15** — three fixes stranded on the tokenizer lane
+(`a1b3c2a92`, plus the write-behind follow-up `6abe7ada1`) that never reached
+main, so all three defects were still **live on main**: (1) RAG per-document
+O(corpus) index rebuild (`ProductionRAG.add_document` called
+`retriever.build_index()` every insert — card `9327d5ba`); (2)
+`knowledge_store` drop-before-insert data loss + O(N²) persistence
+(`_save_entries`/`_save_visited` dropped the collection then re-inserted
+every doc per add — a crash in that window left the store empty — card
+`d35a8000`); (3) `quant_core` import-time crash when the `.c` source or gcc
+was missing (unguarded `_LIB` deref turned a numpy-fallback situation into an
+`AttributeError` at import — card `9c548bf0`). Hand-ported to main's layout
+(`quant_core` lives at `domain/infrastructure/_internal/`, tests at
+`packages/core-py/tests/`); main's `BM25Indexer.index()` keeps its own
+reset-then-rebuild structure rather than the lane's local-variables rewrite.
+Landed `4f28e31d2` under merge `f66e92893`. Measured: 400 single-entry
+persists 0.393s → **0.018s**, per-insert cost flat vs corpus (was growing
+0.31→0.98ms). Re-verified on merged main: 431 green across `test_rag` 52,
+`test_vector_store` 72, `test_quant_core` 18, `test_knowledge_memory` 43,
+`test_knowledge_ops` 67, `test_memory_service` 65, `test_learner_continual`
+42, 6 memory/rag suites 72; `ruff check` clean on all changed files (the
+file's `ruff format` dirt at `rag.py:381` is pre-existing on main). Two lane
+test patches ported with the source: `_save_entries` → `_write_entries_json`
+monkeypatch targets in `test_knowledge_ops.py`/`test_knowledge_memory.py`
+(the count must track the actual store rewrite, not helper naming), plus the
+`flush_json()` call in the `clear_all` test now that single-entry writes are
+write-behind.
+
 **Last update**: 2026-10-09 — card `ff9ef505` → review: **generic embedding
 provider config restored on main** — `api_key`/`base_url` + the
 `openai_api_key` alias sync on `EmbeddingConfig`, `OpenAIEmbedder`
