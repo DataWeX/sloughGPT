@@ -48,6 +48,35 @@ monkeypatch targets in `test_knowledge_ops.py`/`test_knowledge_memory.py`
 `flush_json()` call in the `clear_all` test now that single-entry writes are
 write-behind.
 
+**LANDED 2026-10-15** — card `dd670ece` (high): `scripts/python` put only the
+repo **root** on `PYTHONPATH`, never `packages/`, so `import downcraft` fell
+through to the conda env's pip-installed **Sep-18 snapshot** (pip 0.2.0,
+`site-packages/downcraft`). That copy's "already downloaded" branch is
+unconditional, while the tree copy (`6c626f043`, an ancestor of main)
+re-downloads when a "complete" state entry has no file on disk — so every
+`$PY -m downcraft` consumer (`e2e_gateway_downcraft.sh`, benchmarks, anything
+using the launcher) silently ran stale code, reported success for a download
+that wrote **no file**, and the already-merged reget fix was dead in practice.
+Only a `PYTHONPATH` entry beats site-packages, so the launcher now prepends
+`$ROOT/packages/downcraft` — deliberately narrow, because only `downcraft`
+actually has an installed copy (verified: no other `packages/` name is
+shadowed), and replicating the whole `pytest.ini` set would drag pytest-only
+entries (`.pytest-libs`, `tests/api-server`) into every invocation.
+`tests/core-py/test_launcher_repo_copy.py` **ratchets** the list: it scans
+`packages/` for importable names that also exist in the *resolved*
+interpreter's site-packages and fails until each is pinned by the launcher, so
+a future installed copy cannot silently shadow the tree again. Landed
+`bd58cba40` under merge `2d427428b`. Gates: guard test **4 passed** (with the
+launcher stashed it is 1 failed / 3 passed — the ratchet fires as designed);
+broad import smoke **5/5** through the modified launcher
+(`domain.shared/infrastructure/cognition/memory` + `downcraft`, the latter
+resolving to the tree copy); `downcraft` contract test **6 passed**; `ruff`
+clean. `e2e_gateway_downcraft.sh` fails at section 1 ("identity body !=
+source") **identically with and without the fix** (baseline-verified by
+stashing) — a pre-existing gateway-content mismatch, not this change; the
+checkpoint fixture it needs (`checkpoints/step_25.pt`) is absent from this
+checkout and is gitignored.
+
 **Last update**: 2026-10-09 — card `ff9ef505` → review: **generic embedding
 provider config restored on main** — `api_key`/`base_url` + the
 `openai_api_key` alias sync on `EmbeddingConfig`, `OpenAIEmbedder`
