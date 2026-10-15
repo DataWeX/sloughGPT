@@ -7,22 +7,22 @@
   {
     "test": "dashboard_has_nav",
     "passed": true,
-    "detail": "links=34"
+    "detail": "links=32"
   },
   {
     "test": "nav_chat",
     "passed": true,
-    "detail": "len=688"
+    "detail": "len=1116"
   },
   {
     "test": "nav_training",
     "passed": true,
-    "detail": "len=2897"
+    "detail": "len=1150"
   },
   {
     "test": "nav_datasets",
     "passed": true,
-    "detail": "len=5427"
+    "detail": "len=520"
   },
   {
     "test": "nav_models",
@@ -32,172 +32,172 @@
   {
     "test": "nav_agents",
     "passed": true,
-    "detail": "len=114328"
+    "detail": "len=114334"
   },
   {
     "test": "nav_souls",
     "passed": true,
-    "detail": "len=890"
+    "detail": "len=896"
   },
   {
     "test": "nav_knowledge",
     "passed": true,
-    "detail": "len=676"
+    "detail": "len=14979"
   },
   {
     "test": "nav_monitoring",
     "passed": true,
-    "detail": "len=932"
+    "detail": "len=963"
   },
   {
     "test": "nav_settings",
     "passed": true,
-    "detail": "len=4234"
+    "detail": "len=4238"
   },
   {
     "test": "nav_planner",
     "passed": true,
-    "detail": "len=366"
+    "detail": "len=372"
   },
   {
     "test": "nav_benchmark",
     "passed": true,
-    "detail": "len=763"
+    "detail": "len=405"
   },
   {
     "test": "nav_tokenizer",
     "passed": true,
-    "detail": "len=681"
+    "detail": "len=458"
   },
   {
     "test": "nav_errors",
     "passed": true,
-    "detail": "len=930"
+    "detail": "len=965"
   },
   {
     "test": "nav_security",
     "passed": true,
-    "detail": "len=932"
+    "detail": "len=963"
   },
   {
     "test": "nav_shell",
     "passed": true,
-    "detail": "len=504"
+    "detail": "len=510"
   },
   {
     "test": "nav_feedback",
     "passed": true,
-    "detail": "len=926"
+    "detail": "len=932"
   },
   {
     "test": "nav_files",
     "passed": true,
-    "detail": "len=504"
+    "detail": "len=510"
   },
   {
     "test": "nav_adapters",
     "passed": true,
-    "detail": "len=728"
+    "detail": "len=734"
   },
   {
     "test": "nav_brainstorm",
     "passed": true,
-    "detail": "len=1992"
+    "detail": "len=1200"
   },
   {
     "test": "nav_decide",
     "passed": true,
-    "detail": "len=1991"
+    "detail": "len=1183"
   },
   {
     "test": "nav_explain",
     "passed": true,
-    "detail": "len=1946"
+    "detail": "len=724"
   },
   {
     "test": "nav_rewrite",
     "passed": true,
-    "detail": "len=1967"
+    "detail": "len=1212"
   },
   {
     "test": "nav_translate",
     "passed": true,
-    "detail": "len=745"
+    "detail": "len=742"
   },
   {
     "test": "nav_wellness",
     "passed": true,
-    "detail": "len=1940"
+    "detail": "len=1183"
   },
   {
     "test": "nav_writing",
     "passed": true,
-    "detail": "len=1997"
+    "detail": "len=1224"
   },
   {
     "test": "nav_consciousness_dashboard",
     "passed": true,
-    "detail": "len=9260"
+    "detail": "len=9266"
   },
   {
     "test": "nav_consciousness_health",
     "passed": true,
-    "detail": "len=879"
+    "detail": "len=885"
   },
   {
     "test": "nav_consciousness_training",
     "passed": true,
-    "detail": "len=945"
+    "detail": "len=951"
   },
   {
     "test": "nav_consciousness_settings",
     "passed": true,
-    "detail": "len=1474"
+    "detail": "len=1480"
   },
   {
     "test": "nav_consciousness_playground",
     "passed": true,
-    "detail": "len=3570"
+    "detail": "len=3576"
   },
   {
     "test": "nav_training_analytics",
     "passed": true,
-    "detail": "len=452"
+    "detail": "len=458"
   },
   {
     "test": "nav_training_presets",
     "passed": true,
-    "detail": "len=452"
+    "detail": "len=458"
   },
   {
     "test": "nav_training_runs",
     "passed": true,
-    "detail": "len=9680"
+    "detail": "len=13763"
   },
   {
     "test": "nav_training_compare",
     "passed": true,
-    "detail": "len=452"
+    "detail": "len=458"
   },
   {
     "test": "nav_training_trends",
     "passed": true,
-    "detail": "len=452"
+    "detail": "len=458"
   },
   {
     "test": "nav_shortcuts",
     "passed": true,
-    "detail": "len=1271"
+    "detail": "len=1277"
   },
   {
     "test": "nav_phoneme",
     "passed": true,
-    "detail": "len=1310"
+    "detail": "len=1316"
   },
   {
     "test": "chat_loads",
     "passed": true,
-    "detail": "len=1907"
+    "detail": "len=1109"
   },
   {
     "test": "chat_has_input",
@@ -212,7 +212,7 @@
   {
     "test": "training_loads",
     "passed": true,
-    "detail": "len=2897"
+    "detail": "len=1996"
   },
   {
     "test": "training_job_detail_loads",
@@ -232,7 +232,7 @@
   {
     "test": "planner_loads",
     "passed": true,
-    "detail": "len=366"
+    "detail": "len=376"
   },
   {
     "test": "models_loads",
@@ -242,17 +242,17 @@
   {
     "test": "monitoring_loads",
     "passed": true,
-    "detail": "len=383"
+    "detail": "len=924"
   },
   {
     "test": "knowledge_loads",
     "passed": true,
-    "detail": "len=676"
+    "detail": "len=14973"
   },
   {
     "test": "datasets_loads",
     "passed": true,
-    "detail": "len=5426"
+    "detail": "len=5420"
   },
   {
     "test": "datasets_import_button",
@@ -297,17 +297,17 @@
   {
     "test": "redirect__memory",
     "passed": true,
-    "detail": "/memory -> /knowledge, len=676"
+    "detail": "/memory -> /knowledge, len=14973"
   },
   {
     "test": "redirect__collections",
     "passed": true,
-    "detail": "/collections -> /datasets, len=5428"
+    "detail": "/collections -> /datasets, len=5420"
   },
   {
     "test": "redirect__self-train",
     "passed": true,
-    "detail": "/self-train -> /training, len=2897"
+    "detail": "/self-train -> /training, len=2751"
   },
   {
     "test": "redirect__admin",
@@ -322,7 +322,7 @@
   {
     "test": "redirect__session",
     "passed": true,
-    "detail": "/session -> /shell, len=1907"
+    "detail": "/session -> /shell, len=679"
   },
   {
     "test": "brainstorm_input_and_suggestions",
@@ -362,7 +362,7 @@
   {
     "test": "consciousness_dashboard_loads",
     "passed": true,
-    "detail": "len=9260"
+    "detail": "len=9266"
   },
   {
     "test": "consciousness_health_loads",
@@ -377,12 +377,12 @@
   {
     "test": "route_loads[/training/runs]",
     "passed": true,
-    "detail": "len=9680, crash=False, 404=False"
+    "detail": "len=13763, crash=False, 404=False"
   },
   {
     "test": "route_loads[/files]",
     "passed": true,
-    "detail": "len=504, crash=False, 404=False"
+    "detail": "len=510, crash=False, 404=False"
   },
   {
     "test": "route_loads[/adapters]",
@@ -392,126 +392,126 @@
   {
     "test": "route_loads[/agents]",
     "passed": true,
-    "detail": "len=114328, crash=False, 404=False"
+    "detail": "len=114334, crash=False, 404=False"
   },
   {
     "test": "route_loads[/souls]",
     "passed": true,
-    "detail": "len=890, crash=False, 404=False"
+    "detail": "len=896, crash=False, 404=False"
   },
   {
     "test": "route_loads[/shell]",
     "passed": true,
-    "detail": "len=504, crash=False, 404=False"
+    "detail": "len=510, crash=False, 404=False"
   },
   {
     "test": "route_loads[/benchmark]",
     "passed": true,
-    "detail": "len=763, crash=False, 404=False"
+    "detail": "len=769, crash=False, 404=False"
   },
   {
     "test": "route_loads[/tokenizer]",
     "passed": true,
-    "detail": "len=681, crash=False, 404=False"
+    "detail": "len=687, crash=False, 404=False"
   },
   {
     "test": "route_loads[/errors]",
     "passed": true,
-    "detail": "len=929, crash=False, 404=False"
+    "detail": "len=964, crash=False, 404=False"
   },
   {
     "test": "route_loads[/security]",
     "passed": true,
-    "detail": "len=931, crash=False, 404=False"
+    "detail": "len=965, crash=False, 404=False"
   },
   {
     "test": "route_loads[/feedback]",
     "passed": true,
-    "detail": "len=926, crash=False, 404=False"
+    "detail": "len=932, crash=False, 404=False"
   },
   {
     "test": "route_loads[/auto-train]",
     "passed": true,
-    "detail": "len=2897, crash=False, 404=False"
+    "detail": "len=1996, crash=False, 404=False"
   },
   {
     "test": "route_loads[/consciousness/debug]",
     "passed": true,
-    "detail": "len=2120, crash=False, 404=False"
+    "detail": "len=2126, crash=False, 404=False"
   },
   {
     "test": "route_loads[/consciousness/testing]",
     "passed": true,
-    "detail": "len=1080, crash=False, 404=False"
+    "detail": "len=1086, crash=False, 404=False"
   },
   {
     "test": "route_loads[/consciousness/analytics]",
     "passed": true,
-    "detail": "len=443, crash=False, 404=False"
+    "detail": "len=382, crash=False, 404=False"
   },
   {
     "test": "route_loads[/consciousness/insights]",
     "passed": true,
-    "detail": "len=385, crash=False, 404=False"
+    "detail": "len=1435, crash=False, 404=False"
   },
   {
     "test": "route_loads[/consciousness/monitor]",
     "passed": true,
-    "detail": "len=873, crash=False, 404=False"
+    "detail": "len=1058, crash=False, 404=False"
   },
   {
     "test": "route_loads[/consciousness/benchmark]",
     "passed": true,
-    "detail": "len=606, crash=False, 404=False"
+    "detail": "len=612, crash=False, 404=False"
   },
   {
     "test": "route_loads[/consciousness/versions]",
     "passed": true,
-    "detail": "len=383, crash=False, 404=False"
+    "detail": "len=392, crash=False, 404=False"
   },
   {
     "test": "route_loads[/infer]",
     "passed": true,
-    "detail": "len=504, crash=False, 404=False"
+    "detail": "len=512, crash=False, 404=False"
   },
   {
     "test": "route_loads[/evaluate]",
     "passed": true,
-    "detail": "len=763, crash=False, 404=False"
+    "detail": "len=769, crash=False, 404=False"
   },
   {
     "test": "route_loads[/compare]",
     "passed": true,
-    "detail": "len=763, crash=False, 404=False"
+    "detail": "len=769, crash=False, 404=False"
   },
   {
     "test": "route_loads[/export]",
     "passed": true,
-    "detail": "len=4234, crash=False, 404=False"
+    "detail": "len=4241, crash=False, 404=False"
   },
   {
     "test": "route_loads[/vector]",
     "passed": true,
-    "detail": "len=750, crash=False, 404=False"
+    "detail": "len=756, crash=False, 404=False"
   },
   {
     "test": "route_loads[/multimodal]",
     "passed": true,
-    "detail": "len=504, crash=False, 404=False"
+    "detail": "len=510, crash=False, 404=False"
   },
   {
     "test": "route_loads[/workflow]",
     "passed": true,
-    "detail": "len=926, crash=False, 404=False"
+    "detail": "len=932, crash=False, 404=False"
   },
   {
     "test": "route_loads[/memory]",
     "passed": true,
-    "detail": "len=676, crash=False, 404=False"
+    "detail": "len=499, crash=False, 404=False"
   },
   {
     "test": "route_loads[/vm]",
     "passed": true,
-    "detail": "len=504, crash=False, 404=False"
+    "detail": "len=510, crash=False, 404=False"
   }
 ]

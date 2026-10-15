@@ -945,15 +945,29 @@ class TestTrainingConfigInteraction:
     def test_checkpoint_name_input(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
-        body = page.inner_text("body")
-        has_checkpoint = any(w in body.lower() for w in ["checkpoint", "save", "name", "output"])
+        _open_training_configure(page)
+        # The guided Configure step (bb13e2a22 redesign) exposes no free-text
+        # checkpoint-name field; the checkpoint control it does expose is the
+        # resume picker. Assert on that real control instead of the old
+        # generic-word body scan (["checkpoint","save","name","output"]),
+        # which matched almost any page text and masked the redesign
+        # (card 675bb16d). Fallback requires BOTH keywords, not any one.
+        try:
+            page.get_by_label("Resume from checkpoint").first.wait_for(
+                state="visible", timeout=5000
+            )
+            has_checkpoint, detail = True, "aria-label='Resume from checkpoint'"
+        except Exception:
+            body = page.inner_text("body").lower()
+            has_checkpoint = "resume" in body and "checkpoint" in body
+            detail = f"body_snippet={body[:200]}"
         dt = record_devtools(
             "config_checkpoint",
             collector.console_messages,
             collector.network_requests,
             collector.errors,
         )
-        ok("config_checkpoint_name", has_checkpoint, f"body_snippet={body[:200]}", dt)
+        ok("config_checkpoint_name", has_checkpoint, detail, dt)
         assert has_checkpoint
 
 

@@ -20,11 +20,11 @@
   {
     "step": "training_pipeline",
     "console_count": 15,
-    "request_count": 294,
+    "request_count": 295,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 294 network, 0 errors"
+    "summary": "15 console, 295 network, 0 errors"
   },
   {
     "step": "training_datasets",
@@ -38,20 +38,20 @@
   {
     "step": "training_config",
     "console_count": 15,
-    "request_count": 293,
-    "error_count": 0,
-    "console_errors": [],
-    "failed_requests": [],
-    "summary": "15 console, 293 network, 0 errors"
-  },
-  {
-    "step": "training_start_btn",
-    "console_count": 15,
     "request_count": 295,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
     "summary": "15 console, 295 network, 0 errors"
+  },
+  {
+    "step": "training_start_btn",
+    "console_count": 15,
+    "request_count": 294,
+    "error_count": 0,
+    "console_errors": [],
+    "failed_requests": [],
+    "summary": "15 console, 294 network, 0 errors"
   },
   {
     "step": "training_job_detail",
@@ -62,28 +62,28 @@
       {
         "type": "error",
         "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-        "timestamp": 1792079444.0083413
+        "timestamp": 1792086396.18594
       },
       {
         "type": "error",
         "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-        "timestamp": 1792079444.0105257
+        "timestamp": 1792086396.191744
       }
     ],
     "failed_requests": [
       {
         "url": "http://localhost:8080/training/jobs/test-job-123",
         "method": "GET",
-        "timestamp": 1792079444.005522,
+        "timestamp": 1792086396.1822205,
         "status": 404,
-        "duration_ms": 2.5107860565185547
+        "duration_ms": 3.4089088439941406
       },
       {
         "url": "http://localhost:8080/training/jobs/test-job-123/summary",
         "method": "GET",
-        "timestamp": 1792079444.005964,
+        "timestamp": 1792086396.1826854,
         "status": 404,
-        "duration_ms": 4.252433776855469
+        "duration_ms": 4.447221755981445
       }
     ],
     "summary": "17 console, 263 network, 0 errors"
@@ -97,28 +97,28 @@
       {
         "type": "error",
         "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-        "timestamp": 1792079446.643646
+        "timestamp": 1792086398.6674056
       },
       {
         "type": "error",
         "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-        "timestamp": 1792079446.6451838
+        "timestamp": 1792086398.6752732
       }
     ],
     "failed_requests": [
       {
         "url": "http://localhost:8080/training/jobs/test-job-123",
         "method": "GET",
-        "timestamp": 1792079446.6338465,
+        "timestamp": 1792086398.6651304,
         "status": 404,
-        "duration_ms": 1.3818740844726562
+        "duration_ms": 1.9447803497314453
       },
       {
         "url": "http://localhost:8080/training/jobs/test-job-123/summary",
         "method": "GET",
-        "timestamp": 1792079446.6342933,
+        "timestamp": 1792086398.6656132,
         "status": 404,
-        "duration_ms": 10.525941848754883
+        "duration_ms": 9.19795036315918
       }
     ],
     "summary": "17 console, 263 network, 0 errors"
@@ -143,12 +143,12 @@
   },
   {
     "step": "subsystem_presets",
-    "console_count": 15,
+    "console_count": 16,
     "request_count": 254,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 254 network, 0 errors"
+    "summary": "16 console, 254 network, 0 errors"
   },
   {
     "step": "subsystem_queue",
@@ -206,21 +206,21 @@
   },
   {
     "step": "datasets_import_btn",
-    "console_count": 15,
-    "request_count": 270,
-    "error_count": 0,
-    "console_errors": [],
-    "failed_requests": [],
-    "summary": "15 console, 270 network, 0 errors"
-  },
-  {
-    "step": "datasets_import_dialog",
     "console_count": 16,
     "request_count": 270,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
     "summary": "16 console, 270 network, 0 errors"
+  },
+  {
+    "step": "datasets_import_dialog",
+    "console_count": 15,
+    "request_count": 270,
+    "error_count": 0,
+    "console_errors": [],
+    "failed_requests": [],
+    "summary": "15 console, 270 network, 0 errors"
   },
   {
     "step": "datasets_kaggle",
@@ -233,24 +233,33 @@
   },
   {
     "step": "datasets_upload",
-    "console_count": 16,
+    "console_count": 15,
     "request_count": 269,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "16 console, 269 network, 0 errors"
+    "summary": "15 console, 269 network, 0 errors"
   },
   {
     "step": "datasets_to_training",
     "console_count": 16,
-    "request_count": 295,
+    "request_count": 294,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "16 console, 295 network, 0 errors"
+    "summary": "16 console, 294 network, 0 errors"
   },
   {
     "step": "auto_train_load",
+    "console_count": 15,
+    "request_count": 297,
+    "error_count": 0,
+    "console_errors": [],
+    "failed_requests": [],
+    "summary": "15 console, 297 network, 0 errors"
+  },
+  {
+    "step": "auto_train_config",
     "console_count": 15,
     "request_count": 296,
     "error_count": 0,
@@ -259,49 +268,51 @@
     "summary": "15 console, 296 network, 0 errors"
   },
   {
-    "step": "auto_train_config",
-    "console_count": 15,
-    "request_count": 293,
-    "error_count": 0,
-    "console_errors": [],
-    "failed_requests": [],
-    "summary": "15 console, 293 network, 0 errors"
-  },
-  {
     "step": "auto_train_redirect",
     "console_count": 15,
-    "request_count": 292,
+    "request_count": 295,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 292 network, 0 errors"
+    "summary": "15 console, 295 network, 0 errors"
   },
   {
     "step": "chat_load",
     "console_count": 17,
-    "request_count": 384,
+    "request_count": 375,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "17 console, 384 network, 0 errors"
+    "summary": "17 console, 375 network, 0 errors"
   },
   {
     "step": "chat_input",
-    "console_count": 19,
-    "request_count": 404,
+    "console_count": 23,
+    "request_count": 406,
     "error_count": 0,
-    "console_errors": [],
+    "console_errors": [
+      {
+        "type": "error",
+        "text": "%creact-virtuoso: %c%s %o color: #0253b3; font-weight: bold color: initial Zero-sized element, this should not happen {child: div}",
+        "timestamp": 1792086469.8433146
+      },
+      {
+        "type": "error",
+        "text": "%creact-virtuoso: %c%s %o color: #0253b3; font-weight: bold color: initial Zero-sized element, this should not happen {child: div}",
+        "timestamp": 1792086469.8451915
+      }
+    ],
     "failed_requests": [],
-    "summary": "19 console, 404 network, 0 errors"
+    "summary": "23 console, 406 network, 0 errors"
   },
   {
     "step": "feedback_load",
-    "console_count": 18,
-    "request_count": 275,
+    "console_count": 15,
+    "request_count": 269,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "18 console, 275 network, 0 errors"
+    "summary": "15 console, 269 network, 0 errors"
   },
   {
     "step": "training_dpo_available",
@@ -315,6 +326,15 @@
   {
     "step": "monitoring_load",
     "console_count": 15,
+    "request_count": 310,
+    "error_count": 0,
+    "console_errors": [],
+    "failed_requests": [],
+    "summary": "15 console, 310 network, 0 errors"
+  },
+  {
+    "step": "monitoring_cards",
+    "console_count": 15,
     "request_count": 323,
     "error_count": 0,
     "console_errors": [],
@@ -322,49 +342,40 @@
     "summary": "15 console, 323 network, 0 errors"
   },
   {
-    "step": "monitoring_cards",
-    "console_count": 15,
-    "request_count": 324,
-    "error_count": 0,
-    "console_errors": [],
-    "failed_requests": [],
-    "summary": "15 console, 324 network, 0 errors"
-  },
-  {
     "step": "benchmark_load",
     "console_count": 15,
-    "request_count": 270,
+    "request_count": 269,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 270 network, 0 errors"
+    "summary": "15 console, 269 network, 0 errors"
   },
   {
     "step": "nav_/",
-    "console_count": 15,
-    "request_count": 287,
+    "console_count": 14,
+    "request_count": 284,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 287 network, 0 errors"
+    "summary": "14 console, 284 network, 0 errors"
   },
   {
     "step": "nav_/chat",
-    "console_count": 15,
-    "request_count": 337,
+    "console_count": 16,
+    "request_count": 335,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 337 network, 0 errors"
+    "summary": "16 console, 335 network, 0 errors"
   },
   {
     "step": "nav_/training",
-    "console_count": 15,
-    "request_count": 297,
+    "console_count": 17,
+    "request_count": 333,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 297 network, 0 errors"
+    "summary": "17 console, 333 network, 0 errors"
   },
   {
     "step": "nav_/datasets",
@@ -387,20 +398,20 @@
   {
     "step": "nav_/monitoring",
     "console_count": 15,
-    "request_count": 321,
+    "request_count": 311,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 321 network, 0 errors"
+    "summary": "15 console, 311 network, 0 errors"
   },
   {
     "step": "nav_/settings",
     "console_count": 15,
-    "request_count": 278,
+    "request_count": 284,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 278 network, 0 errors"
+    "summary": "15 console, 284 network, 0 errors"
   },
   {
     "step": "nav_/knowledge",
@@ -414,11 +425,11 @@
   {
     "step": "nav_/feedback",
     "console_count": 15,
-    "request_count": 269,
+    "request_count": 270,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 269 network, 0 errors"
+    "summary": "15 console, 270 network, 0 errors"
   },
   {
     "step": "nav_/benchmark",
@@ -432,11 +443,11 @@
   {
     "step": "nav_/auto-train",
     "console_count": 15,
-    "request_count": 294,
+    "request_count": 295,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 294 network, 0 errors"
+    "summary": "15 console, 295 network, 0 errors"
   },
   {
     "step": "nav_back_forth",
@@ -450,38 +461,38 @@
   {
     "step": "telemetry_console",
     "console_count": 15,
-    "request_count": 294,
+    "request_count": 295,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 294 network, 0 errors"
+    "summary": "15 console, 295 network, 0 errors"
   },
   {
     "step": "telemetry_network",
     "console_count": 16,
-    "request_count": 293,
+    "request_count": 292,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "16 console, 293 network, 0 errors"
+    "summary": "16 console, 292 network, 0 errors"
   },
   {
     "step": "telemetry_no_errors",
     "console_count": 16,
-    "request_count": 294,
+    "request_count": 292,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "16 console, 294 network, 0 errors"
+    "summary": "16 console, 292 network, 0 errors"
   },
   {
     "step": "telemetry_api_requests",
     "console_count": 16,
-    "request_count": 294,
+    "request_count": 295,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "16 console, 294 network, 0 errors"
+    "summary": "16 console, 295 network, 0 errors"
   },
   {
     "step": "telemetry_performance",
@@ -492,13 +503,22 @@
     "failed_requests": [],
     "summary": "16 console, 295 network, 0 errors",
     "performance": {
-      "domContentLoaded": 1279.6999999997206,
-      "loadEvent": 1285.2999999998137,
+      "domContentLoaded": 1117.300000000745,
+      "loadEvent": 1126.2000000001863,
       "resourceCount": 250
     }
   },
   {
     "step": "config_method",
+    "console_count": 16,
+    "request_count": 296,
+    "error_count": 0,
+    "console_errors": [],
+    "failed_requests": [],
+    "summary": "16 console, 296 network, 0 errors"
+  },
+  {
+    "step": "config_hyperparams",
     "console_count": 16,
     "request_count": 294,
     "error_count": 0,
@@ -507,31 +527,22 @@
     "summary": "16 console, 294 network, 0 errors"
   },
   {
-    "step": "config_hyperparams",
-    "console_count": 16,
-    "request_count": 295,
-    "error_count": 0,
-    "console_errors": [],
-    "failed_requests": [],
-    "summary": "16 console, 295 network, 0 errors"
-  },
-  {
     "step": "config_lora",
     "console_count": 16,
-    "request_count": 295,
-    "error_count": 0,
-    "console_errors": [],
-    "failed_requests": [],
-    "summary": "16 console, 295 network, 0 errors"
-  },
-  {
-    "step": "config_checkpoint",
-    "console_count": 15,
     "request_count": 294,
     "error_count": 0,
     "console_errors": [],
     "failed_requests": [],
-    "summary": "15 console, 294 network, 0 errors"
+    "summary": "16 console, 294 network, 0 errors"
+  },
+  {
+    "step": "config_checkpoint",
+    "console_count": 16,
+    "request_count": 296,
+    "error_count": 0,
+    "console_errors": [],
+    "failed_requests": [],
+    "summary": "16 console, 296 network, 0 errors"
   },
   {
     "step": "results_tab",

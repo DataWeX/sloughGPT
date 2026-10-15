@@ -2,12 +2,12 @@
   {
     "test": "agent_navigates_training",
     "passed": true,
-    "detail": "status=200, len=1096"
+    "detail": "status=200, len=426"
   },
   {
     "test": "agent_navigates_datasets",
     "passed": true,
-    "detail": "status=200, len=576"
+    "detail": "status=200, len=426"
   },
   {
     "test": "agent_clicks_import",
@@ -22,12 +22,12 @@
   {
     "test": "agent_devtools_console",
     "passed": true,
-    "detail": "console=14"
+    "detail": "console=15"
   },
   {
     "test": "agent_devtools_network",
     "passed": true,
-    "detail": "requests=282"
+    "detail": "requests=281"
   },
   {
     "test": "agent_devtools_no_critical",
@@ -37,7 +37,7 @@
   {
     "test": "agent_screenshot",
     "passed": true,
-    "detail": "path=/tmp/pytest-of-mana/pytest-0/test_agent_screenshot0/training_screenshot.png"
+    "detail": "path=/tmp/pytest-of-mana/pytest-9/test_agent_screenshot0/training_screenshot.png"
   },
   {
     "test": "agent_step_recording",
@@ -72,7 +72,7 @@
   {
     "test": "follower_devtools_summary",
     "passed": true,
-    "detail": "summary=Steps: 1 | Console: 15 (0 err, 0 warn) | Network: 282 (0 failed, 0ms avg) | Errors: 0 | Duration: 2."
+    "detail": "summary=Steps: 1 | Console: 14 (0 err, 0 warn) | Network: 282 (0 failed, 0ms avg) | Errors: 0 | Duration: 2."
   },
   {
     "test": "follower_screenshot",

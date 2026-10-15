@@ -47,7 +47,7 @@
   {
     "test": "e2e_training_job_detail",
     "passed": true,
-    "detail": "len=423"
+    "detail": "len=421"
   },
   {
     "test": "e2e_monitoring_metrics",
