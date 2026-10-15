@@ -2,15 +2,15 @@
   {
     "test": "training_lifecycle_page_loads",
     "passed": true,
-    "detail": "len=2895",
+    "detail": "len=2134",
     "devtools": {
       "step": "training_page_load",
       "console_count": 15,
-      "request_count": 293,
+      "request_count": 294,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 293 network, 0 errors"
+      "summary": "15 console, 294 network, 0 errors"
     }
   },
   {
@@ -34,11 +34,11 @@
     "devtools": {
       "step": "training_pipeline",
       "console_count": 15,
-      "request_count": 295,
+      "request_count": 294,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 295 network, 0 errors"
+      "summary": "15 console, 294 network, 0 errors"
     }
   },
   {
@@ -62,11 +62,11 @@
     "devtools": {
       "step": "training_config",
       "console_count": 15,
-      "request_count": 295,
+      "request_count": 293,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 295 network, 0 errors"
+      "summary": "15 console, 293 network, 0 errors"
     }
   },
   {
@@ -96,28 +96,28 @@
         {
           "type": "error",
           "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-          "timestamp": 1791996538.1477542
+          "timestamp": 1792079444.0083413
         },
         {
           "type": "error",
           "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-          "timestamp": 1791996538.1483793
+          "timestamp": 1792079444.0105257
         }
       ],
       "failed_requests": [
         {
           "url": "http://localhost:8080/training/jobs/test-job-123",
           "method": "GET",
-          "timestamp": 1791996538.1444948,
+          "timestamp": 1792079444.005522,
           "status": 404,
-          "duration_ms": 3.1015872955322266
+          "duration_ms": 2.5107860565185547
         },
         {
           "url": "http://localhost:8080/training/jobs/test-job-123/summary",
           "method": "GET",
-          "timestamp": 1791996538.1447856,
+          "timestamp": 1792079444.005964,
           "status": 404,
-          "duration_ms": 3.4360885620117188
+          "duration_ms": 4.252433776855469
         }
       ],
       "summary": "17 console, 263 network, 0 errors"
@@ -136,28 +136,28 @@
         {
           "type": "error",
           "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-          "timestamp": 1791996540.0561485
+          "timestamp": 1792079446.643646
         },
         {
           "type": "error",
           "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
-          "timestamp": 1791996540.0570095
+          "timestamp": 1792079446.6451838
         }
       ],
       "failed_requests": [
         {
           "url": "http://localhost:8080/training/jobs/test-job-123",
           "method": "GET",
-          "timestamp": 1791996540.0536602,
+          "timestamp": 1792079446.6338465,
           "status": 404,
-          "duration_ms": 2.3267269134521484
+          "duration_ms": 1.3818740844726562
         },
         {
           "url": "http://localhost:8080/training/jobs/test-job-123/summary",
           "method": "GET",
-          "timestamp": 1791996540.0539443,
+          "timestamp": 1792079446.6342933,
           "status": 404,
-          "duration_ms": 2.908468246459961
+          "duration_ms": 10.525941848754883
         }
       ],
       "summary": "17 console, 263 network, 0 errors"
@@ -183,12 +183,12 @@
     "detail": "len=450",
     "devtools": {
       "step": "subsystem_compare",
-      "console_count": 16,
+      "console_count": 15,
       "request_count": 254,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "16 console, 254 network, 0 errors"
+      "summary": "15 console, 254 network, 0 errors"
     }
   },
   {
@@ -208,7 +208,7 @@
   {
     "test": "training_subsystem_queue_loads",
     "passed": true,
-    "detail": "len=2895",
+    "detail": "len=2134",
     "devtools": {
       "step": "subsystem_queue",
       "console_count": 15,
@@ -222,7 +222,7 @@
   {
     "test": "training_subsystem_runs_loads",
     "passed": true,
-    "detail": "len=8533",
+    "detail": "len=12431",
     "devtools": {
       "step": "subsystem_runs",
       "console_count": 15,
@@ -278,7 +278,7 @@
   {
     "test": "flow_datasets_page_loads",
     "passed": true,
-    "detail": "len=5425",
+    "detail": "len=5429",
     "devtools": {
       "step": "datasets_load",
       "console_count": 15,
@@ -305,8 +305,8 @@
   },
   {
     "test": "flow_datasets_import_dialog_opens",
-    "passed": false,
-    "detail": "found=0",
+    "passed": true,
+    "detail": "found=1",
     "devtools": {
       "step": "datasets_import_dialog",
       "console_count": 16,
@@ -319,16 +319,16 @@
   },
   {
     "test": "flow_datasets_kaggle_option",
-    "passed": false,
-    "detail": "found=0",
+    "passed": true,
+    "detail": "found=1",
     "devtools": {
       "step": "datasets_kaggle",
-      "console_count": 15,
+      "console_count": 16,
       "request_count": 270,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 270 network, 0 errors"
+      "summary": "16 console, 270 network, 0 errors"
     }
   },
   {
@@ -337,12 +337,12 @@
     "detail": "body_snippet=Skip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS\n\nFeedback\nPlanner\nPlugi",
     "devtools": {
       "step": "datasets_upload",
-      "console_count": 18,
-      "request_count": 306,
+      "console_count": 16,
+      "request_count": 269,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "18 console, 306 network, 0 errors"
+      "summary": "16 console, 269 network, 0 errors"
     }
   },
   {
@@ -351,18 +351,18 @@
     "detail": "url=http://localhost:5173/training",
     "devtools": {
       "step": "datasets_to_training",
-      "console_count": 15,
+      "console_count": 16,
       "request_count": 295,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 295 network, 0 errors"
+      "summary": "16 console, 295 network, 0 errors"
     }
   },
   {
     "test": "auto_train_page_loads",
     "passed": true,
-    "detail": "len=2134",
+    "detail": "len=1141",
     "devtools": {
       "step": "auto_train_load",
       "console_count": 15,
@@ -380,11 +380,11 @@
     "devtools": {
       "step": "auto_train_config",
       "console_count": 15,
-      "request_count": 296,
+      "request_count": 293,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 296 network, 0 errors"
+      "summary": "15 console, 293 network, 0 errors"
     }
   },
   {
@@ -394,25 +394,25 @@
     "devtools": {
       "step": "auto_train_redirect",
       "console_count": 15,
-      "request_count": 296,
+      "request_count": 292,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 296 network, 0 errors"
+      "summary": "15 console, 292 network, 0 errors"
     }
   },
   {
     "test": "dpo_chat_page_loads",
     "passed": true,
-    "detail": "len=1116",
+    "detail": "len=1109",
     "devtools": {
       "step": "chat_load",
       "console_count": 17,
-      "request_count": 374,
+      "request_count": 384,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "17 console, 374 network, 0 errors"
+      "summary": "17 console, 384 network, 0 errors"
     }
   },
   {
@@ -421,38 +421,26 @@
     "detail": "found=True",
     "devtools": {
       "step": "chat_input",
-      "console_count": 22,
-      "request_count": 410,
+      "console_count": 19,
+      "request_count": 404,
       "error_count": 0,
-      "console_errors": [
-        {
-          "type": "error",
-          "text": "%creact-virtuoso: %c%s %o color: #0253b3; font-weight: bold color: initial Zero-sized element, this should not happen {child: div}",
-          "timestamp": 1791996594.0208259
-        }
-      ],
+      "console_errors": [],
       "failed_requests": [],
-      "summary": "22 console, 410 network, 0 errors"
+      "summary": "19 console, 404 network, 0 errors"
     }
   },
   {
     "test": "dpo_feedback_page_loads",
     "passed": true,
-    "detail": "len=939",
+    "detail": "len=923",
     "devtools": {
       "step": "feedback_load",
-      "console_count": 16,
-      "request_count": 271,
+      "console_count": 18,
+      "request_count": 275,
       "error_count": 0,
-      "console_errors": [
-        {
-          "type": "error",
-          "text": "%creact-virtuoso: %c%s %o color: #0253b3; font-weight: bold color: initial Zero-sized element, this should not happen {child: div}",
-          "timestamp": 1791996594.0313256
-        }
-      ],
+      "console_errors": [],
       "failed_requests": [],
-      "summary": "16 console, 271 network, 0 errors"
+      "summary": "18 console, 275 network, 0 errors"
     }
   },
   {
@@ -462,33 +450,19 @@
     "devtools": {
       "step": "training_dpo_available",
       "console_count": 15,
-      "request_count": 294,
+      "request_count": 295,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 294 network, 0 errors"
+      "summary": "15 console, 295 network, 0 errors"
     }
   },
   {
     "test": "monitoring_page_loads",
     "passed": true,
-    "detail": "len=932",
+    "detail": "len=777",
     "devtools": {
       "step": "monitoring_load",
-      "console_count": 15,
-      "request_count": 324,
-      "error_count": 0,
-      "console_errors": [],
-      "failed_requests": [],
-      "summary": "15 console, 324 network, 0 errors"
-    }
-  },
-  {
-    "test": "monitoring_has_metrics_cards",
-    "passed": true,
-    "detail": "body_snippet=Skip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS\n\nFeedback\nPlanner\nPlugi",
-    "devtools": {
-      "step": "monitoring_cards",
       "console_count": 15,
       "request_count": 323,
       "error_count": 0,
@@ -498,65 +472,79 @@
     }
   },
   {
+    "test": "monitoring_has_metrics_cards",
+    "passed": true,
+    "detail": "body_snippet=Skip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS\n\nFeedback\nPlanner\nPlugi",
+    "devtools": {
+      "step": "monitoring_cards",
+      "console_count": 15,
+      "request_count": 324,
+      "error_count": 0,
+      "console_errors": [],
+      "failed_requests": [],
+      "summary": "15 console, 324 network, 0 errors"
+    }
+  },
+  {
     "test": "monitoring_benchmark_loads",
     "passed": true,
     "detail": "len=765",
     "devtools": {
       "step": "benchmark_load",
       "console_count": 15,
-      "request_count": 269,
+      "request_count": 270,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 269 network, 0 errors"
+      "summary": "15 console, 270 network, 0 errors"
     }
   },
   {
     "test": "nav__",
     "passed": true,
-    "detail": "len=1446, crash=False",
+    "detail": "len=706, crash=False",
     "devtools": {
       "step": "nav_/",
       "console_count": 15,
-      "request_count": 288,
+      "request_count": 287,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 288 network, 0 errors"
+      "summary": "15 console, 287 network, 0 errors"
     }
   },
   {
     "test": "nav__chat",
     "passed": true,
-    "detail": "len=1116, crash=False",
+    "detail": "len=369, crash=False",
     "devtools": {
       "step": "nav_/chat",
-      "console_count": 17,
-      "request_count": 379,
+      "console_count": 15,
+      "request_count": 337,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "17 console, 379 network, 0 errors"
+      "summary": "15 console, 337 network, 0 errors"
     }
   },
   {
     "test": "nav__training",
     "passed": true,
-    "detail": "len=2895, crash=False",
+    "detail": "len=1141, crash=False",
     "devtools": {
       "step": "nav_/training",
       "console_count": 15,
-      "request_count": 305,
+      "request_count": 297,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 305 network, 0 errors"
+      "summary": "15 console, 297 network, 0 errors"
     }
   },
   {
     "test": "nav__datasets",
     "passed": true,
-    "detail": "len=5425, crash=False",
+    "detail": "len=5429, crash=False",
     "devtools": {
       "step": "nav_/datasets",
       "console_count": 15,
@@ -584,21 +572,21 @@
   {
     "test": "nav__monitoring",
     "passed": true,
-    "detail": "len=958, crash=False",
+    "detail": "len=806, crash=False",
     "devtools": {
       "step": "nav_/monitoring",
       "console_count": 15,
-      "request_count": 322,
+      "request_count": 321,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 322 network, 0 errors"
+      "summary": "15 console, 321 network, 0 errors"
     }
   },
   {
     "test": "nav__settings",
     "passed": true,
-    "detail": "len=4233, crash=False",
+    "detail": "len=3375, crash=False",
     "devtools": {
       "step": "nav_/settings",
       "console_count": 15,
@@ -626,15 +614,15 @@
   {
     "test": "nav__feedback",
     "passed": true,
-    "detail": "len=939, crash=False",
+    "detail": "len=923, crash=False",
     "devtools": {
       "step": "nav_/feedback",
       "console_count": 15,
-      "request_count": 270,
+      "request_count": 269,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 270 network, 0 errors"
+      "summary": "15 console, 269 network, 0 errors"
     }
   },
   {
@@ -654,7 +642,7 @@
   {
     "test": "nav__auto-train",
     "passed": true,
-    "detail": "len=2895, crash=False",
+    "detail": "len=2134, crash=False",
     "devtools": {
       "step": "nav_/auto-train",
       "console_count": 15,
@@ -686,25 +674,25 @@
     "devtools": {
       "step": "telemetry_console",
       "console_count": 15,
-      "request_count": 295,
+      "request_count": 294,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 295 network, 0 errors"
+      "summary": "15 console, 294 network, 0 errors"
     }
   },
   {
     "test": "devtools_network_captured",
     "passed": true,
-    "detail": "count=295",
+    "detail": "count=293",
     "devtools": {
       "step": "telemetry_network",
       "console_count": 16,
-      "request_count": 295,
+      "request_count": 293,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "16 console, 295 network, 0 errors"
+      "summary": "16 console, 293 network, 0 errors"
     }
   },
   {
@@ -714,59 +702,31 @@
     "devtools": {
       "step": "telemetry_no_errors",
       "console_count": 16,
-      "request_count": 295,
+      "request_count": 294,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "16 console, 295 network, 0 errors"
+      "summary": "16 console, 294 network, 0 errors"
     }
   },
   {
     "test": "devtools_api_requests",
-    "passed": false,
-    "detail": "api_requests=0",
+    "passed": true,
+    "detail": "api_requests=28",
     "devtools": {
       "step": "telemetry_api_requests",
       "console_count": 16,
-      "request_count": 295,
+      "request_count": 294,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "16 console, 295 network, 0 errors"
-    }
-  },
-  {
-    "test": "devtools_api_requests",
-    "passed": false,
-    "detail": "api_requests=0",
-    "devtools": {
-      "step": "telemetry_api_requests",
-      "console_count": 16,
-      "request_count": 295,
-      "error_count": 0,
-      "console_errors": [],
-      "failed_requests": [],
-      "summary": "16 console, 295 network, 0 errors"
-    }
-  },
-  {
-    "test": "devtools_api_requests",
-    "passed": false,
-    "detail": "api_requests=0",
-    "devtools": {
-      "step": "telemetry_api_requests",
-      "console_count": 16,
-      "request_count": 295,
-      "error_count": 0,
-      "console_errors": [],
-      "failed_requests": [],
-      "summary": "16 console, 295 network, 0 errors"
+      "summary": "16 console, 294 network, 0 errors"
     }
   },
   {
     "test": "devtools_performance_metrics",
     "passed": true,
-    "detail": "perf={'domContentLoaded': 600.7999999998137, 'loadEvent': 603.5, 'resourceCount': 250}",
+    "detail": "perf={'domContentLoaded': 1279.6999999997206, 'loadEvent': 1285.2999999998137, 'resourceCount': 250}",
     "devtools": {
       "step": "telemetry_performance",
       "console_count": 16,
@@ -776,52 +736,52 @@
       "failed_requests": [],
       "summary": "16 console, 295 network, 0 errors",
       "performance": {
-        "domContentLoaded": 600.7999999998137,
-        "loadEvent": 603.5,
+        "domContentLoaded": 1279.6999999997206,
+        "loadEvent": 1285.2999999998137,
         "resourceCount": 250
       }
     }
   },
   {
     "test": "config_method_selector",
-    "passed": false,
+    "passed": true,
     "detail": "body_snippet=Skip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS\n\nFeedback\nPlanner\nPlugi",
     "devtools": {
       "step": "config_method",
-      "console_count": 15,
-      "request_count": 295,
+      "console_count": 16,
+      "request_count": 294,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 295 network, 0 errors"
+      "summary": "16 console, 294 network, 0 errors"
     }
   },
   {
     "test": "config_hyperparameter_inputs",
-    "passed": false,
+    "passed": true,
     "detail": "body_snippet=Skip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS\n\nFeedback\nPlanner\nPlugi",
     "devtools": {
       "step": "config_hyperparams",
-      "console_count": 15,
+      "console_count": 16,
       "request_count": 295,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 295 network, 0 errors"
+      "summary": "16 console, 295 network, 0 errors"
     }
   },
   {
     "test": "config_lora_toggle",
-    "passed": false,
+    "passed": true,
     "detail": "body_snippet=Skip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS\n\nFeedback\nPlanner\nPlugi",
     "devtools": {
       "step": "config_lora",
-      "console_count": 15,
+      "console_count": 16,
       "request_count": 295,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 295 network, 0 errors"
+      "summary": "16 console, 295 network, 0 errors"
     }
   },
   {
@@ -830,12 +790,12 @@
     "detail": "body_snippet=Skip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS\n\nFeedback\nPlanner\nPlugi",
     "devtools": {
       "step": "config_checkpoint",
-      "console_count": 16,
-      "request_count": 292,
+      "console_count": 15,
+      "request_count": 294,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "16 console, 292 network, 0 errors"
+      "summary": "15 console, 294 network, 0 errors"
     }
   },
   {
@@ -845,17 +805,17 @@
     "devtools": {
       "step": "results_tab",
       "console_count": 15,
-      "request_count": 295,
+      "request_count": 293,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 295 network, 0 errors"
+      "summary": "15 console, 293 network, 0 errors"
     }
   },
   {
     "test": "results_runs_page_loads",
     "passed": true,
-    "detail": "len=8533",
+    "detail": "len=12506",
     "devtools": {
       "step": "training_runs",
       "console_count": 15,
