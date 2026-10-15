@@ -44,14 +44,22 @@ def _block_psutil(monkeypatch):
 
 
 def _broken_resource_manager(monkeypatch):
-    """Make resource_manager importable but raise at call time."""
-    mod = types.ModuleType("domain.infrastructure.resource_manager")
+    """Make resource_manager importable but raise at call time.
+
+    The stub must sit on the module the consumer actually reads —
+    ``domain.infrastructure._internal.resource_manager``. The pre-restructure
+    name ``domain.infrastructure.resource_manager`` is inert (the module has
+    no such path), so the real manager answered ``topology.logical_cores``
+    with this machine's core count and the psutil-stub fallback was never
+    reached (card 9a7a42e7; consumer-read-point pattern per 0e36c1658).
+    """
+    mod = types.ModuleType("domain.infrastructure._internal.resource_manager")
 
     def _raise():
         raise RuntimeError("no resource manager in test")
 
     mod.get_resource_manager = _raise
-    monkeypatch.setitem(sys.modules, "domain.infrastructure.resource_manager", mod)
+    monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.resource_manager", mod)
 
 
 # ---------------------------------------------------------------------------
