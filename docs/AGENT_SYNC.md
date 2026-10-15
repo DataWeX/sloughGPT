@@ -77,6 +77,33 @@ stashing) — a pre-existing gateway-content mismatch, not this change; the
 checkpoint fixture it needs (`checkpoints/step_25.pt`) is absent from this
 checkout and is gitignored.
 
+**LANDED 2026-10-15** — card `1f5dec62`: peer manifest serving. Server-to-server
+model sharing was **half a feature** — `ExternalDownloadBackend` fetches
+`{base_url}/models/{id}/manifest.json` and bails with `{'status': 'error'}` on
+404, then downloads each file from `/models/{id}/file/{path}`, but this server
+exposed *neither* shape (only `/models/file/{id}/{path}`). The client seam
+worked against a stub peer; a real peer running our codebase could not serve.
+Landed two routes plus a domain helper: `build_model_manifest()` derives
+`{files:[{path,size,sha256}]}` from the same cache `resolve_cached_path` reads,
+confirming each listed path is one the file route actually serves (the
+resolver's 1000-byte floor means a sub-1KB file must **not** be advertised),
+and reads checksums from the `.sha256` sidecars. Three things worth remembering:
+(1) the manifest route returns the **bare** `{'files': [...]}`, not
+`success_response()` — the peer does `json.loads(resp.read())` and reads
+`manifest["files"]` at the top level, so an envelope makes it see zero files
+and fail with "Manifest contains no files"; (2) both routes are registered
+**last** so their greedy `{model_id:path}` prefixes cannot swallow
+`/models/download/...` or `/models/file/...`; (3) the nested file route resolves
+straight from the cache instead of delegating to `serve_model_file`, which calls
+`get_backend()` bare — **pre-existing breakage**, verified failing on clean main
+against `get_backend(name: str)`, left untouched here. A plain `FileResponse` is
+a valid answer because `CompressedDownloader` passes bytes through when no lz4
+`Content-Encoding` is advertised. Landed `078f8f01a` under merge `9d2106188`.
+Gates: `tests/server/test_models_router.py` **50 passed** (6 new peer-contract
+tests), `TestPrecision::test_cpu_path_uses_suggestion` fails **identically on
+clean main** (pre-existing, unrelated), `ruff` clean; standalone e2e seeded a
+snapshot cache and drove both routes → `E2E_PEER_MANIFEST_OK`.
+
 **Last update**: 2026-10-09 — card `ff9ef505` → review: **generic embedding
 provider config restored on main** — `api_key`/`base_url` + the
 `openai_api_key` alias sync on `EmbeddingConfig`, `OpenAIEmbedder`
