@@ -7,7 +7,7 @@ targets). Mirrors apps/gateway/src/compression.rs codecs.
 
 Usage:
     scripts/python scripts/benchmark_gateway_compression.py [--mib 64]
-    scripts/python scripts/benchmark_gateway_compression.py --file checkpoints/step_25.pt
+    scripts/python scripts/benchmark_gateway_compression.py --file apps/web/public/v86/v86-fallback.wasm
     scripts/python scripts/benchmark_gateway_compression.py --file apps/web/public/v86/v86-fallback.wasm
 """
 

@@ -13,7 +13,12 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PY="${PY:-$REPO/scripts/python}"
 GW="${GW:-http://127.0.0.1:8080}"
-SRC_REL="${SRC_REL:-checkpoints/step_25.pt}"
+# Default to a GENERATED fixture, not a tracked checkpoint. Training checkpoints
+# are gitignored ("checkpoints/") and are no longer shipped in the repo, so a
+# fresh clone has no checkpoints/step_*.pt to serve. Set SRC_REL to exercise a
+# real file instead — a missing file is then an error, as before.
+SRC_REL_GIVEN="${SRC_REL:-}"
+SRC_REL="${SRC_REL:-checkpoints/e2e-fixture.bin}"
 SRC="$REPO/$SRC_REL"
 OUT="${OUT:-/tmp/e2e_gw_dc.pt}"
 WORKDIR="$(dirname "$OUT")"
@@ -21,9 +26,48 @@ WORKDIR="$(dirname "$OUT")"
 fail() { echo "E2E_FAIL: $*" >&2; exit 1; }
 ok() { echo "E2E_OK: $*"; }
 
-# ── 0. stack health ────────────────────────────────────────────────────────
+# ── 0. stack health + source ──────────────────────────────────────────────
 curl -sf "$GW/health" >/dev/null || fail "gateway not healthy at $GW/health"
-[ -f "$SRC" ] || fail "source missing: $SRC"
+
+if [ ! -f "$SRC" ]; then
+  if [ -n "$SRC_REL_GIVEN" ]; then
+    fail "source missing: $SRC (SRC_REL was set explicitly)"
+  fi
+  mkdir -p "$(dirname "$SRC")"
+  "$PY" - "$SRC" <<'FIXTURE'
+import pathlib, random, sys
+
+# Deterministic payload standing in for a training checkpoint. Constraints:
+#   * > 1 MiB       — section 4 resumes from a 1 MiB partial (dd bs=1M count=1);
+#   * byte-stable   — seeded PRNG, so the sha256 assertions hold across runs;
+#   * realistic     — section 1 reports zstd/gzip wire savings, so the payload's
+#     own compressibility has to resemble a real checkpoint. All-structured text
+#     would report ~99% saved and pure noise ~0%; a 30/70 mix of semi-structured
+#     records (the make_payload() shape from benchmark_gateway_compression.py)
+#     and high-entropy tensor-like bytes lands near ~30%, which is what a real
+#     float-tensor .pt actually compresses to.
+TARGET = 8 * 1024 * 1024
+BLOCK = 65536
+STRUCT_FRAC = 0.30
+LINE = "id=%08d name=item-%d status=ok tags=a,b,c payload=%s\n"
+PAD = "x" * 200
+
+rng = random.Random(20261014)
+out = bytearray()
+i = 0
+struct_n = int(BLOCK * STRUCT_FRAC)
+while len(out) < TARGET:
+    chunk = bytearray()
+    while len(chunk) < struct_n:
+        chunk.extend((LINE % (i, i, PAD)).encode())
+        i += 1
+    out.extend(bytes(chunk[:struct_n]))
+    out.extend(rng.randbytes(BLOCK - struct_n))
+
+pathlib.Path(sys.argv[1]).write_bytes(bytes(out[:TARGET]))
+print(f"generated fixture: {sys.argv[1]} ({TARGET} bytes)")
+FIXTURE
+fi
 
 SRC_SHA="$(sha256sum "$SRC" | awk '{print $1}')"
 SRC_LEN="$(wc -c < "$SRC")"
