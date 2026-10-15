@@ -311,6 +311,26 @@ def go(page: Page, path: str, collector: DevToolsCollector | None = None) -> str
     return body
 
 
+def _open_training_configure(page: Page) -> None:
+    """Walk the guided-setup pipeline to the Configure step (card 675bb16d).
+
+    The method selector, hyperparameters and LoRA toggle live in
+    ConfigureStep — step 2 of the guided pipeline — not on initial load:
+    /training opens on step 1 "Pick your data" (training pipeline redesign,
+    bb13e2a22). The config tests must click through like a user instead of
+    asserting config text on first paint.
+    """
+    try:
+        page.get_by_role("button", name="Next: Configure").click(timeout=10000)
+    except Exception:
+        # Step-indicator fallback: "Go to Configure step" (StepIndicator nav)
+        try:
+            page.get_by_role("button", name="Go to Configure step").click(timeout=5000)
+        except Exception:
+            pass
+    time.sleep(1)
+
+
 @pytest.fixture(scope="module")
 def collector(page):
     return DevToolsCollector(page)
@@ -492,7 +512,10 @@ class TestDatasetToTrainingFlow:
     def test_datasets_import_button(self, page, collector):
         go(page, "/datasets", collector)
         time.sleep(1)
-        btn = page.get_by_role("button", name="Import").first
+        # Entry renamed Import -> Add file in 1fb486f16 (Read My Files flow).
+        # The old substring match silently targeted "Train with Imported
+        # Dataset" instead (card 675bb16d) — hence the explicit new label.
+        btn = page.get_by_role("button", name="Add file").first
         dt = record_devtools(
             "datasets_import_btn",
             collector.console_messages,
@@ -505,7 +528,7 @@ class TestDatasetToTrainingFlow:
     def test_datasets_import_dialog(self, page, collector):
         go(page, "/datasets", collector)
         time.sleep(1)
-        page.get_by_role("button", name="Import").first.click(force=True)
+        page.get_by_role("button", name="Add file").first.click(force=True)
         time.sleep(1)
         dialog = page.get_by_role("dialog")
         dt = record_devtools(
@@ -520,7 +543,7 @@ class TestDatasetToTrainingFlow:
     def test_datasets_kaggle_option(self, page, collector):
         go(page, "/datasets", collector)
         time.sleep(1)
-        page.get_by_role("button", name="Import").first.click(force=True)
+        page.get_by_role("button", name="Add file").first.click(force=True)
         time.sleep(1)
         kaggle = page.get_by_role("radio", name="Kaggle: Download from Kaggle")
         dt = record_devtools(
@@ -535,7 +558,7 @@ class TestDatasetToTrainingFlow:
     def test_datasets_file_upload_option(self, page, collector):
         go(page, "/datasets", collector)
         time.sleep(1)
-        page.get_by_role("button", name="Import").first.click(force=True)
+        page.get_by_role("button", name="Add file").first.click(force=True)
         time.sleep(1)
         body = page.inner_text("body")
         has_upload = any(w in body.lower() for w in ["upload", "file", "csv", "jsonl", "json"])
@@ -816,7 +839,17 @@ class TestDevToolsTelemetry:
     def test_api_requests_reach_backend(self, page, collector):
         go(page, "/training", collector)
         time.sleep(2)
-        api_reqs = [r for r in collector.network_requests if API_NETLOC in r.get("url", "")]
+        # The client targets the edge gateway by design (apps/web/.env.local:
+        # NEXT_PUBLIC_API_URL=http://localhost:8080 — vite.config.ts "points the
+        # client at the edge"), and the gateway proxies to this API. Count both
+        # origins, mirroring test_computer_use_training_integration.py:298 —
+        # the direct :8000-only filter reported zero while ~40 requests reached
+        # the backend through :8080, all 200 (card 675bb16d).
+        api_reqs = [
+            r
+            for r in collector.network_requests
+            if API_NETLOC in r.get("url", "") or "localhost:8080" in r.get("url", "")
+        ]
         dt = record_devtools(
             "telemetry_api_requests",
             collector.console_messages,
@@ -866,6 +899,7 @@ class TestTrainingConfigInteraction:
     def test_method_selector_exists(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
+        _open_training_configure(page)
         body = page.inner_text("body")
         has_method = any(
             w in body.lower() for w in ["method", "sft", "rlhf", "dpo", "lora", "finetune"]
@@ -882,6 +916,7 @@ class TestTrainingConfigInteraction:
     def test_hyperparameter_inputs_exist(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
+        _open_training_configure(page)
         body = page.inner_text("body")
         has_hyper = any(
             w in body.lower() for w in ["learning rate", "batch", "epoch", "dropout", "rank"]
@@ -898,6 +933,7 @@ class TestTrainingConfigInteraction:
     def test_lora_toggle_exists(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
+        _open_training_configure(page)
         body = page.inner_text("body")
         has_lora = "lora" in body.lower()
         dt = record_devtools(
