@@ -25,6 +25,14 @@ import type {
 
 const CACHE_KEY_PREFIX = '@sloughgpt/slonet_';
 
+// Bound the checkpoint download. This fetch has NO options at all today, so a
+// connection the server accepts but never answers hangs loadCheckpoint forever
+// (the card 25ebfc0f bug class). export-mobile streams a model out of the
+// backend, so this deliberately gets 120s rather than the 30s/60s API defaults:
+// generous enough that a slow-but-healthy download is never aborted mid-flight,
+// while still ending a genuine stall instead of hanging indefinitely.
+const CHECKPOINT_DOWNLOAD_TIMEOUT_MS = 120_000;
+
 // ── Tensor helpers (Float32Array wrappers) ──────────────────────────────
 
 function matMul(A: Float32Array, B: Float32Array, M: number, K: number, N: number): Float32Array {
@@ -451,7 +459,13 @@ export async function loadCheckpoint(name: string): Promise<void> {
 
   // Download from server
   const baseUrl = await getApiUrl();
-  const res = await fetch(`${baseUrl}/training/checkpoints/${encodeURIComponent(name)}/export-mobile`);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), CHECKPOINT_DOWNLOAD_TIMEOUT_MS);
+  const res = await fetch(
+    `${baseUrl}/training/checkpoints/${encodeURIComponent(name)}/export-mobile`,
+    {signal: ac.signal},
+  );
+  clearTimeout(timer);
   if (!res.ok) throw new Error(`Failed to load checkpoint: ${res.status}`);
   const data: MobileExportResponse = await res.json();
 

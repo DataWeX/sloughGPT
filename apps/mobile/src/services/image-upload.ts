@@ -6,6 +6,13 @@
 import {Platform, Alert, Linking} from 'react-native';
 import {api, getApiUrl} from './api-client';
 
+// Bound the backend analysis call. Without a signal, a connection the server
+// accepts but never answers hangs the caller forever (the card 25ebfc0f bug
+// class — the same defect fixed in sdk-ts streaming). 60s follows the heavy-op
+// convention already set by providers-client and api-client's second timeout;
+// 30s is the plain-API default and this is inference work.
+const ANALYZE_TIMEOUT_MS = 60_000;
+
 let _ImagePicker: any = null;
 function getImagePicker(): any {
   if (_ImagePicker) return _ImagePicker;
@@ -122,11 +129,14 @@ export async function analyzeImage(image: ImageResult): Promise<ImageAnalysis> {
     name: 'photo.jpg',
   } as any);
 
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ANALYZE_TIMEOUT_MS);
   try {
     const res = await fetch(`${baseUrl}/multimodal/analyze-image`, {
       method: 'POST',
       body: formData,
       headers: {'Content-Type': 'multipart/form-data'},
+      signal: ac.signal,
     });
 
     if (res.ok) {
@@ -139,6 +149,8 @@ export async function analyzeImage(image: ImageResult): Promise<ImageAnalysis> {
     }
   } catch {
     // backend unavailable
+  } finally {
+    clearTimeout(timer);
   }
 
   return {description: '', tags: [], caption: ''};
