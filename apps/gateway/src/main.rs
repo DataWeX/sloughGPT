@@ -263,9 +263,7 @@ fn build_router(state: AppState) -> Router {
         // without any Node process and with no dependency on the sidecar.
         // A miss falls through to `serve_document`, which routes by request
         // *kind* (navigation vs data) — see `wants_document`.
-        info!(
-            "serving site document root from {static_root} (SPA + API on one origin)"
-        );
+        info!("serving site document root from {static_root} (SPA + API on one origin)");
         let spa = Router::new()
             .fallback(serve_document)
             .with_state(state.clone());
@@ -280,8 +278,10 @@ fn build_router(state: AppState) -> Router {
             let mut serve_dir = serve_dir.clone();
             let st = gate_state.clone();
             async move {
-                let is_read =
-                    matches!(*req.method(), axum::http::Method::GET | axum::http::Method::HEAD);
+                let is_read = matches!(
+                    *req.method(),
+                    axum::http::Method::GET | axum::http::Method::HEAD
+                );
                 let resp = if is_read {
                     match serve_dir.call(req).await {
                         // ServeDir's body is its own type — erase it into the
@@ -303,9 +303,7 @@ fn build_router(state: AppState) -> Router {
             .nest_service("/static", ServeDir::new(&static_root))
             .fallback(proxy_http);
     } else {
-        info!(
-            "static dir {static_root} absent — no site files (frontend serves itself)"
-        );
+        info!("static dir {static_root} absent — no site files (frontend serves itself)");
         app = app.fallback(proxy_http);
     }
     app.with_state(state)
@@ -316,8 +314,12 @@ fn build_router(state: AppState) -> Router {
 const API_DOC_PATHS: [&str; 3] = ["/docs", "/redoc", "/openapi.json"];
 
 fn is_api_doc_path(path: &str) -> bool {
-    API_DOC_PATHS.iter().any(|p| path == *p
-        || path.strip_prefix(*p).map_or(false, |rest| rest.starts_with('/')))
+    API_DOC_PATHS.iter().any(|p| {
+        path == *p
+            || path
+                .strip_prefix(*p)
+                .is_some_and(|rest| rest.starts_with('/'))
+    })
 }
 
 /// True when the client is asking for the SPA shell rather than data.
@@ -335,7 +337,7 @@ fn wants_document(headers: &HeaderMap, path: &str) -> bool {
     headers
         .get(axum::http::header::ACCEPT)
         .and_then(|v| v.to_str().ok())
-        .map_or(false, |accept| accept.contains("text/html"))
+        .is_some_and(|accept| accept.contains("text/html"))
 }
 
 /// Serve the SPA shell, else relay to the sidecar.
@@ -680,10 +682,15 @@ mod tests {
     async fn navigation_gets_the_spa_shell_without_the_sidecar() {
         let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
         let app = build_router(test_state(&dir));
-        let resp = app.oneshot(get("/training", "text/html,application/xhtml+xml")).await.unwrap();
+        let resp = app
+            .oneshot(get("/training", "text/html,application/xhtml+xml"))
+            .await
+            .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            resp.headers().get(axum::http::header::CONTENT_TYPE).map(|v| v.to_str().unwrap()),
+            resp.headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .map(|v| v.to_str().unwrap()),
             Some("text/html; charset=utf-8")
         );
         assert!(body_text(resp).await.contains("SPA-SHELL"));
@@ -694,7 +701,10 @@ mod tests {
     async fn data_requests_relay_to_the_sidecar_never_the_shell() {
         let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
         let app = build_router(test_state(&dir));
-        let resp = app.oneshot(get("/models", "application/json")).await.unwrap();
+        let resp = app
+            .oneshot(get("/models", "application/json"))
+            .await
+            .unwrap();
         // Sidecar absent → the relay must be attempted (502), not shadowed by HTML.
         assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
         assert!(!body_text(resp).await.contains("SPA-SHELL"));
@@ -705,7 +715,10 @@ mod tests {
     async fn sse_requests_relay_to_the_sidecar() {
         let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
         let app = build_router(test_state(&dir));
-        let resp = app.oneshot(get("/health/stream", "text/event-stream")).await.unwrap();
+        let resp = app
+            .oneshot(get("/health/stream", "text/event-stream"))
+            .await
+            .unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -719,8 +732,12 @@ mod tests {
         let app = build_router(test_state(&dir));
         let resp = app.oneshot(get("/app.css", "*/*")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get(axum::http::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+        let ct = resp
+            .headers()
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
         assert!(ct.contains("text/css"), "got content-type {ct}");
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -757,16 +774,30 @@ mod tests {
     #[test]
     fn request_kind_decides_document_vs_api() {
         let mut headers = HeaderMap::new();
-        headers.insert(axum::http::header::ACCEPT, "text/html,application/xhtml+xml,image/webp".parse().unwrap());
+        headers.insert(
+            axum::http::header::ACCEPT,
+            "text/html,application/xhtml+xml,image/webp"
+                .parse()
+                .unwrap(),
+        );
         assert!(wants_document(&headers, "/training"));
 
         headers.insert(axum::http::header::ACCEPT, "*/*".parse().unwrap());
-        assert!(!wants_document(&headers, "/training"), "fetch must reach Python");
+        assert!(
+            !wants_document(&headers, "/training"),
+            "fetch must reach Python"
+        );
 
-        headers.insert(axum::http::header::ACCEPT, "application/json".parse().unwrap());
+        headers.insert(
+            axum::http::header::ACCEPT,
+            "application/json".parse().unwrap(),
+        );
         assert!(!wants_document(&headers, "/models"));
 
-        headers.insert(axum::http::header::ACCEPT, "text/event-stream".parse().unwrap());
+        headers.insert(
+            axum::http::header::ACCEPT,
+            "text/event-stream".parse().unwrap(),
+        );
         assert!(!wants_document(&headers, "/health/stream"));
 
         let empty = HeaderMap::new();
@@ -778,7 +809,6 @@ mod tests {
             assert!(!wants_document(&html, path), "{path} is API surface");
         }
     }
-
 
     #[tokio::test]
     async fn writes_relay_through_the_document_root() {
@@ -841,7 +871,7 @@ mod tests {
             "http://sub.localhost:5173",
             "http://192.168.1.10:5173",
             "http://[::1].evil.com:5173",
-            "null", // sandboxed frames send the literal string "null"
+            "null",                       // sandboxed frames send the literal string "null"
             "http://localhost:5173/path", // origins carry no path
             "not-a-url",
         ] {
