@@ -4,6 +4,22 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**LANDED 2026-10-16** — card `7cefbbcf` (World–Model Bridge Stage A): babies
+can be born with a `ModelBrain` (`domain/shell/_internal/model_brain.py`) —
+interface-identical to `Perceptron` (forward/update/`W`/`b`/`H`/`bh`/
+to_dict/from_dict), same RNG draw order (H, bh, W) and genome tensor
+inventory, but the hidden projection is **trained by backprop of the in-world
+reward** instead of frozen random. Opt-in: `WorldParams.brain_kind="model"` /
+`world_driver --brain model`; default `perceptron` leaves every locked proof
+bit-identical. Evolution/serialization/`decide_*` needed zero changes — the
+seam is the duck-typed brain contract. Gates: 22 new tests + 290
+evolution/simulation/world tests green post-merge; `scripts/benchmark_world_brain.py`
+PASS (throughput model 55.9 vs perceptron 53.3 ticks/s = -5.0%, gate <20%;
+emergence evolved 341.3 > frozen 216.6; in-life H drift 0.000168 vs 0.000000
+control); ruff clean. Known unrelated red on main:
+`test_world_render_router::test_image_returns_ppm` asserts PPM while the
+endpoint serves PNG — fails with this work stashed too (pre-existing).
+
 **2026-10-11 ~06:30 — PROVIDER ROUTER CHAT DRIFT FIXED (branch
 `fix/provider-processor-flakes`, card 9e0483b3 item 4).** The lone remaining
 failure the cleanup scan flagged as "needs owner": `test_chat_delegates_to_stream`
