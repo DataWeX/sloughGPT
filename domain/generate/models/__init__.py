@@ -24,8 +24,12 @@ from domain.generate.models._internal.provider import (
     ConsciousnessProcessor,
     KnowledgeProcessor,
     apply_processors,
+    attach_process_guard_to_provider,
+    clear_providers,
     get_provider,
     list_providers,
+    setup_providers,
+    update_personality_traits,
 )
 
 __all__ = [
@@ -41,6 +45,10 @@ __all__ = [
     "KnowledgeProcessor",
     "ConsciousnessProcessor",
     "apply_processors",
+    "attach_process_guard_to_provider",
+    "clear_providers",
     "get_provider",
     "list_providers",
+    "setup_providers",
+    "update_personality_traits",
 ]

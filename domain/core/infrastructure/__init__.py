@@ -9,6 +9,8 @@ Public API:
 
 from __future__ import annotations
 
+from domain.core.infrastructure._internal import artifact_registry
+from domain.core.infrastructure._internal.artifact_registry import try_register
 from domain.core.infrastructure._internal.config import (
     AppConfig,
     ConfigManager,
@@ -26,18 +28,21 @@ from domain.core.infrastructure._internal.errors import (
     AppError,
     ErrorCode,
     classify_exception,
+    emit_error_event,
 )
 from domain.core.infrastructure._internal.event_buffer import get_event_buffer
 from domain.core.infrastructure._internal.event_bus import (
     EventBus,
     get_event_bus,
 )
+from domain.core.infrastructure._internal.gateway_bandwidth import get_bandwidth_snapshot
 from domain.core.infrastructure._internal.lifecycle import (
     LifecycleManager,
     LifecyclePhase,
     get_lifecycle_manager,
 )
 from domain.core.infrastructure._internal.output_buffer import get_server_buffer
+from domain.core.infrastructure._internal.slnc.compiler import SLNCCompiler
 
 __all__ = [
     "AppConfig",
@@ -55,10 +60,15 @@ __all__ = [
     "AppError",
     "ErrorCode",
     "classify_exception",
+    "emit_error_event",
     "get_db",
     "get_lifecycle_manager",
     "get_knowledge_repository",
     "get_dataset_repository",
     "get_event_buffer",
     "get_server_buffer",
+    "SLNCCompiler",
+    "artifact_registry",
+    "try_register",
+    "get_bandwidth_snapshot",
 ]

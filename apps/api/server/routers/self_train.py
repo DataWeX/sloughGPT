@@ -23,7 +23,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.core.infrastructure._internal.errors import AppError
+from domain.core.infrastructure import AppError
 
 logger = logging.getLogger("slo.api.self_train")
 

@@ -97,7 +97,7 @@ class RegistryRouter:
         """List artifacts across all kinds (Stage 1: read-only index)."""
         import asyncio as _aio
 
-        from domain.core.infrastructure._internal import artifact_registry as _ar
+        from domain.core.infrastructure import artifact_registry as _ar
 
         if kind is not None and kind not in _ar.ARTIFACT_KINDS:
             raise_error(
@@ -124,7 +124,7 @@ class RegistryRouter:
         """Hash/size integrity check over artifacts (read-only, hashed in thread)."""
         import asyncio as _aio
 
-        from domain.core.infrastructure._internal import artifact_registry as _ar
+        from domain.core.infrastructure import artifact_registry as _ar
 
         if kind is not None and kind not in _ar.ARTIFACT_KINDS:
             raise_error(

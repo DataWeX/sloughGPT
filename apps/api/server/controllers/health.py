@@ -24,7 +24,7 @@ _health_start_time = datetime.now()
 def _get_executor_stats() -> dict[str, Any] | None:
     """Get TrainingExecutor pool stats if available."""
     try:
-        from domain.training._internal.executor import _instance, get_training_executor
+        from domain.training import _instance, get_training_executor
 
         if _instance is None:
             return None
@@ -262,7 +262,7 @@ def _get_model_device() -> str | None:
 def _get_lifecycle_info() -> dict[str, Any]:
     """Get lifecycle phase and profile info from the lifecycle manager."""
     try:
-        from domain.core.infrastructure._internal.lifecycle import get_lifecycle_manager
+        from domain.core.infrastructure import get_lifecycle_manager
 
         mgr = get_lifecycle_manager()
         return {
@@ -298,7 +298,7 @@ def _get_inference_stats() -> dict[str, Any]:
 def _get_quantization_info() -> dict[str, Any]:
     """Get quantization status from the active provider."""
     try:
-        from domain.generate.models._internal.provider import get_provider
+        from domain.generate.models import get_provider
 
         provider = get_provider("slonet-native")
         if provider is None:
@@ -328,7 +328,7 @@ def _get_kv_session_info() -> dict[str, Any]:
     tokens, TTL). Returns ``{"enabled": False}`` when no provider exposes it.
     """
     try:
-        from domain.generate.models._internal.provider import get_provider
+        from domain.generate.models import get_provider
 
         provider = get_provider("slonet-native")
         if provider is None:
@@ -421,7 +421,7 @@ def _get_bandwidth_stats() -> dict[str, Any] | None:
     deployments legitimately have no edge counters to report.
     """
     try:
-        from domain.core.infrastructure._internal.gateway_bandwidth import (
+        from domain.core.infrastructure import (
             get_bandwidth_snapshot,
         )
 
@@ -937,7 +937,7 @@ class HealthController:
         gpu_info: dict[str, Any] = {}
         degraded: list[str] = []
         try:
-            from domain.core.slolib._internal.gpu import get_accelerator
+            from domain.core.slolib import get_accelerator
 
             acc = get_accelerator()
             gpu_info = {

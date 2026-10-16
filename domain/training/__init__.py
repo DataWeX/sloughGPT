@@ -79,6 +79,17 @@ _LAZY_IMPORTS = {
     "BooksSearch": ("._internal.data_import", "BooksSearch"),
     "GitHubSearch": ("._internal.data_import", "GitHubSearch"),
     "import_from_sou": ("._internal.slonet", "import_from_sou"),
+    # cache_tags / executor / service / slonet names consumed by the training
+    # and datasets controllers (b22e878a facade port).
+    "classify_kind": ("._internal.cache_tags", "classify_kind"),
+    "entry_tags": ("._internal.cache_tags", "entry_tags"),
+    "find_corpus_file": ("._internal.cache_tags", "find_corpus_file"),
+    "get_cache_root": ("._internal.cache_tags", "get_cache_root"),
+    "guess_mime": ("._internal.cache_tags", "guess_mime"),
+    "write_entry_meta": ("._internal.cache_tags", "write_entry_meta"),
+    "_instance": ("._internal.executor", "_instance"),
+    "get_state": ("._internal.service", "get_state"),
+    "_get_accelerator": ("._internal.slonet", "_get_accelerator"),
 }
 
 
@@ -126,6 +137,13 @@ __all__ = [
     "VideoCaptionTrainer",
     "list_video_checkpoints",
     "get_training_executor",
+    "classify_kind",
+    "entry_tags",
+    "find_corpus_file",
+    "get_cache_root",
+    "guess_mime",
+    "write_entry_meta",
+    "get_state",
     "export_to_sou",
     "DistillConfig",
     "SloughGPTTrainer",

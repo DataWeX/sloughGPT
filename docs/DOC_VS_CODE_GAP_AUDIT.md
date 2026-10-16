@@ -123,7 +123,9 @@ as current.
 | this document, above          | G1/G2 open                                       | parity script **exit 0**                                                                                                                        |
 
 Seven of eight resolve the same way — **the docs lag the code**. The exception
-is the `_internal` row, where the code is _worse_ than the doc claims.
+was the `_internal` row, where the code was _worse_ than the doc claims; since
+closed (see the 2026-10-16 note below — in-scope routers and controllers are
+now at zero).
 
 ### Router → engine conformance (measured)
 
@@ -157,30 +159,41 @@ is the `_internal` row, where the code is _worse_ than the doc claims.
 # it 1 -> 3 lines — pure formatting. Re-measured independently per the 10-11
 # discipline: splitlines sum config 42 + datasets 661 + feedback 395 +
 # health 1119 + models 1081 = 3298 (5 files, __init__.py excluded per _py_files).
-routers_internal_files=11
-routers_internal_stmts=36
-routers_internal_in_scope_files=8
+# 2026-10-16 lowering (b22e878a port onto feat/generate-consolidation): the
+# executable gate tests/test_layer_conformance.py (ported verbatim from
+# 1066a6835, source of the port) surfaced that the 8 actionable routers and 4
+# controllers still reached _internal on this branch — the A/B/C fix had only
+# landed on side branches. All 52 statements repointed to the domain.<feature>
+# facades after live-process verification that every needed symbol resolves
+# (213/213; facades extended: agents, training, training.feedback,
+# core.infrastructure, generate.models — plus 2 pre-existing broken facade
+# imports fixed: infra emit_error_event, generate.models
+# update_personality_traits). Routers remaining = the 3 allowlisted shell/vm/
+# world_render files (15 statements), in_scope/controllers/combined all 0.
+# Lines/defs/files re-measured unchanged (3298/106/5).
+routers_internal_files=3
+routers_internal_stmts=15
+routers_internal_in_scope_files=0
 controllers_files=5
 controllers_lines=3298
 controllers_defs=106
-controllers_internal_files=4
-controllers_internal_stmts=31
-controllers_internal_modules=14
-combined_internal_files=15
-combined_internal_stmts=67
+controllers_internal_files=0
+controllers_internal_stmts=0
+controllers_internal_modules=0
+combined_internal_files=3
+combined_internal_stmts=15
 -->
 
 | Category                                         | Count / 57                               | Note                                                                                                                                                             |
 | ------------------------------------------------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | reaches core directly, 0 `_internal`             | 37                                       |                                                                                                                                                                  |
 | reaches core via `controllers/`                  | +1 (`feedback`)                          | `controllers/feedback.py` holds 6 domain imports                                                                                                                 |
-| imports `domain.*_internal.*`                    | **11** routers / **36** statements       | 8 routers in scope; `shell`/`vm`/`world_render` sit in a concurrent-refactor zone                                                                                |
-| **`controllers/` imports `domain.*_internal.*`** | **4 files / 31 statements / 14 modules** | `models.py` 12, `datasets.py` 8, `health.py` 6, `feedback.py` 5, `config.py` 0 — **counted here for the first time; the original audit only scanned `routers/`** |
+| imports `domain.*_internal.*`                    | **3** routers / **15** statements        | all 3 allowlisted (`shell`/`vm`/`world_render`, concurrent-refactor zone); in-scope routers now **0** — lowered 2026-10-16                                   |
+| **`controllers/` imports `domain.*_internal.*`** | **0 files / 0 statements / 0 modules**   | was 4/31/14; all repointed through facades 2026-10-16 (b22e878a port, gate `tests/test_layer_conformance.py`)                                                |
 | never touches core                               | 6                                        | `images`, `docstore`, `api_keys`, `security`, `ratelimit`, `config` — all infra/security                                                                         |
 
-**Combined: 67 `_internal` import statements across 15 files.** Worst targets:
-`domain.generate.models._internal.provider` ×9, `domain.training._internal.cache_tags` ×7,
-`domain.core.infrastructure._internal.artifact_registry` ×2.
+**Combined: 15 `_internal` import statements across 3 files** (all allowlisted
+shell/vm/world_render; was 67 across 15 before the 2026-10-16 facade port).
 
 The Router Playbook only forbids `_internal` in **routers**, so nothing in the
 documented rules covers the 30 statements in `controllers/`. An executable

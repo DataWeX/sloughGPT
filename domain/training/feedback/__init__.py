@@ -19,6 +19,7 @@ from domain.training.feedback._internal.database import (
     get_feedback_db,
 )
 from domain.training.feedback._internal.hf_dpo import HFDPOTrainer
+from domain.training.feedback._internal.lora_eval import get_lora_evaluator
 from domain.training.feedback._internal.message_feedback import get_message_feedback
 from domain.training.feedback._internal.meta_weights import (
     MetaWeightManager,
@@ -26,6 +27,7 @@ from domain.training.feedback._internal.meta_weights import (
     get_meta_weight_manager,
 )
 from domain.training.feedback._internal.model_health import get_health_monitor
+from domain.training.feedback._internal.online_train import get_online_lora_updater
 from domain.training.feedback._internal.per_user_lora import get_per_user_lora
 from domain.training.feedback._internal.response_tracker import (
     ResponseTracker,
@@ -50,6 +52,8 @@ __all__ = [
     "get_per_user_lora",
     "create_training_pipeline",
     "get_health_monitor",
+    "get_lora_evaluator",
     "get_message_feedback",
+    "get_online_lora_updater",
     "HFDPOTrainer",
 ]

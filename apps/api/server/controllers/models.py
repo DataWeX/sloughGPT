@@ -161,7 +161,7 @@ class ModelsController:
         )
         try:
             from config import ServerConfig
-            from domain.generate.models._internal.provider import setup_providers
+            from domain.generate.models import setup_providers
 
             cfg = ServerConfig.from_env()
 
@@ -187,7 +187,7 @@ class ModelsController:
                         f"Lazy load requested for {model_id} but ProcessGuard "
                         f"could not be started: {self._guard_failure or 'unknown reason'}"
                     )
-                from domain.generate._internal.slonet_provider import SloNetChatProvider
+                from domain.generate import SloNetChatProvider
 
                 lazy_provider = SloNetChatProvider.lazy_from_slnc(
                     str(_slnc),
@@ -240,7 +240,7 @@ class ModelsController:
 
             # Auto-select precision on GPU (fp16 benchmark)
             try:
-                from domain.core.slolib._internal.gpu import set_accelerator_precision
+                from domain.core.slolib import set_accelerator_precision
 
                 active = set_accelerator_precision("auto")
                 if active == "fp16":
@@ -260,7 +260,7 @@ class ModelsController:
         # readiness guards (``state.model is not None``) accept the loaded
         # model. state.py delegates to ServerState so only one write needed.
         try:
-            from domain.generate.models._internal.provider import get_provider
+            from domain.generate.models import get_provider
 
             slonet_provider = get_provider("slonet-native") or get_provider("slonet")
             # setup_providers() logs-and-continues when the requested model fails
@@ -329,7 +329,7 @@ class ModelsController:
                 ProcessGuard,
                 resolve_memory_limit_mb,
             )
-            from domain.generate.models._internal.provider import attach_process_guard_to_provider
+            from domain.generate.models import attach_process_guard_to_provider
 
             cfg = ServerConfig.from_env()
 
@@ -503,7 +503,7 @@ class ModelsController:
         self._stop_process_guard()
         self._process_guard = guard
         try:
-            from domain.generate.models._internal.provider import attach_process_guard_to_provider
+            from domain.generate.models import attach_process_guard_to_provider
 
             attach_process_guard_to_provider(guard)
         except Exception as e:
@@ -653,7 +653,7 @@ class ModelsController:
 
             cfg = ServerConfig.from_env()
 
-            from domain.core.infrastructure._internal.slnc.compiler import SLNCCompiler
+            from domain.core.infrastructure import SLNCCompiler
 
             slnc_path = target / "model.slnc"
             if not slnc_path.exists():
@@ -670,7 +670,7 @@ class ModelsController:
             model_id = identity or tokenizer_model_id
 
             try:
-                from domain.core.infrastructure._internal.artifact_registry import try_register
+                from domain.core.infrastructure import try_register
 
                 try_register("model", slnc_path, name=model_id)
             except Exception:
@@ -682,7 +682,7 @@ class ModelsController:
 
             process_guard = self._build_process_guard_for_path(slnc_path, model_id)
 
-            from domain.generate.models._internal.provider import setup_providers
+            from domain.generate.models import setup_providers
 
             setup_providers(
                 slonet_hf_id=tokenizer_model_id,
@@ -836,7 +836,7 @@ class ModelsController:
 
         # Drop cross-turn KV states — keys/values from the unloaded model are invalid
         try:
-            from domain.generate.models._internal.provider import get_provider
+            from domain.generate.models import get_provider
 
             provider = get_provider("slonet-native")
             if provider is None:
@@ -848,7 +848,7 @@ class ModelsController:
 
         # Clear all providers so chat/generation fail fast until a model reloads
         try:
-            from domain.generate.models._internal.provider import clear_providers
+            from domain.generate.models import clear_providers
 
             clear_providers()
         except Exception as e:
@@ -885,7 +885,7 @@ class ModelsController:
             self._tokenizer = None
 
         try:
-            from domain.training._internal.slonet import _get_accelerator
+            from domain.training import _get_accelerator
 
             acc = _get_accelerator()
             if acc is not None and hasattr(acc, "empty_cache"):
