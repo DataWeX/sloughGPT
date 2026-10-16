@@ -166,6 +166,29 @@ class TestConsciousnessAPI:
         assert data["data"]["reflection"] == "I am reflecting."
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_dream(self, _auth, client, mock_engine):
+        """POST /consciousness/dream delegates to engine.dream() — zero-input consolidation."""
+        mock_engine.dream.return_value = {
+            "dreamed": True,
+            "narrative": "I have processed 5 experiences.",
+            "episodes": 6,
+            "dreams": 1,
+        }
+        res = client.post("/consciousness/dream")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["data"]["dreamed"] is True
+        assert data["data"]["dreams"] == 1
+        mock_engine.dream.assert_called_once()
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_dream_noop_when_nothing_to_consolidate(self, _auth, client, mock_engine):
+        mock_engine.dream.return_value = {"dreamed": False, "episodes": 0}
+        res = client.post("/consciousness/dream")
+        assert res.status_code == 200
+        assert res.json()["data"]["dreamed"] is False
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_update_config(self, _auth, client):
         res = client.patch("/consciousness/config", json={"level": 2})
         assert res.status_code == 200

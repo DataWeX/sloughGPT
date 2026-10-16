@@ -153,6 +153,7 @@ class ConsciousnessRouter:
         self.router.add_api_route("/stats", self.get_stats, methods=["GET"])
         self.router.add_api_route("/clear/episodes", self.clear_episodes, methods=["POST"])
         self.router.add_api_route("/clear/beliefs", self.clear_beliefs, methods=["POST"])
+        self.router.add_api_route("/dream", self.dream, methods=["POST"])
 
     @endpoint("consciousness.status")
     async def get_status(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -212,6 +213,18 @@ class ConsciousnessRouter:
         else:
             data = {"reflection": reflection, "narrative": str(reflection)}
         return success_response(data=data)
+
+    @endpoint("consciousness.dream")
+    async def dream(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Consolidate inner state with zero input (dream cycle).
+
+        Cross-process boundary: the browser/operator triggers a dream in the
+        server process where the engine singleton lives, so transport is
+        justified; the dream itself touches no network — it reflects over
+        in-memory state and appends a dream episode.
+        """
+        engine = self._get_engine()
+        return success_response(data=engine.dream())
 
     @endpoint("consciousness.update_config")
     async def update_config(
@@ -298,6 +311,7 @@ class ConsciousnessRouter:
                     {
                         "timestamp": e.timestamp,
                         "input_text": e.input_text[:200],
+                        "is_dream": e.is_dream,
                         "self_insight": e.self_insight,
                         "growth_delta": round(e.growth_delta, 4),
                         "qualia": e.qualia,

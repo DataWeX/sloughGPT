@@ -67,7 +67,13 @@ class Reflection:
 
 @dataclass
 class SelfEpisode:
-    """A single self-reflective episode."""
+    """A single self-reflective episode.
+
+    ``is_dream`` marks consolidation episodes the engine writes itself
+    (zero-input reflection over its own state) — experience for the inner
+    loop rather than a response to the world. Default False, so stores
+    written before dream support load unchanged.
+    """
 
     timestamp: float
     input_text: str
@@ -75,6 +81,7 @@ class SelfEpisode:
     qualia: dict[str, float]
     self_insight: str
     growth_delta: float
+    is_dream: bool = False
 
 
 class SelfModel:
@@ -172,7 +179,11 @@ class SelfModel:
                 episode_count=0,
             )
 
-        recent = self.episodes[-5:]
+        # Growth math reads REAL experiences only: dream episodes (is_dream)
+        # carry growth_delta=0.0 and would dilute the trajectory to stagnation
+        # as the dream archive grows.
+        real = [e for e in self.episodes if not e.is_dream]
+        recent = real[-5:] if real else self.episodes[-5:]
         beliefs_str = ", ".join(f"{k}={v:.2f}" for k, v in self.self_beliefs.items())
         avg_growth = sum(e.growth_delta for e in recent) / len(recent)
 
@@ -209,6 +220,17 @@ class SelfModel:
             parts.append(random.choice(self._STAGNATION_STATEMENTS))
             belief_deltas = {}
             strategy_notes = []
+
+        # Self-reference: the reflection quotes its own last dream, so each
+        # reflection is built partly from the system's past reflections —
+        # the loop closes on itself instead of discarding its own narrative.
+        dreams = [e for e in self.episodes if e.is_dream]
+        if dreams:
+            last = dreams[-1].self_insight
+            excerpt = last if len(last) <= 160 else last[:160] + "…"
+            parts.append(
+                f"{len(dreams)} of those were dreams revisiting my own reflection: {excerpt}"
+            )
 
         # Curiosity/uncertainty flavor — does not affect deltas
         if len(self.episodes) > 10 and random.random() < 0.5:
@@ -295,6 +317,7 @@ class SelfModel:
                     "qualia": e.qualia,
                     "self_insight": e.self_insight,
                     "growth_delta": e.growth_delta,
+                    "is_dream": e.is_dream,
                 }
                 for e in self.episodes[-100:]  # keep last 100
             ],

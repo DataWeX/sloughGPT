@@ -252,6 +252,100 @@ class TestReflectionProposeCache:
 
 
 # ---------------------------------------------------------------------------
+# ConsciousnessEngine.dream()
+# ---------------------------------------------------------------------------
+
+
+class TestDreamCycle:
+    """dream(): zero-input consolidation; reflections become episodes.
+
+    The acceptance test for intrinsic consciousness: with no new input, the
+    inner state still moves — and the next reflection contains its own past.
+    """
+
+    def test_dream_noop_without_episodes(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        result = engine.dream()
+        assert result["dreamed"] is False
+        assert engine.self_model.episodes == []
+
+    def test_dream_moves_state_without_new_input(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
+        result = engine.dream()
+        assert result["dreamed"] is True
+        assert len(engine.self_model.episodes) == 2
+        dream = engine.self_model.episodes[-1]
+        assert dream.is_dream is True
+        assert dream.growth_delta == 0.0
+        assert dream.input_text == "(dream)"
+
+    def test_reflection_contains_its_own_last_dream(self, tmp_path: Path) -> None:
+        """Strange loop: reflection -> dream episode -> next reflection quotes it."""
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
+        engine.dream()
+        dream = engine.self_model.episodes[-1]
+        assert "I have processed 1 experiences" in dream.self_insight
+        r = engine.reflect(apply=False)
+        assert "dream" in r.narrative
+
+    def test_dream_never_commits_belief_deltas(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        for _ in range(5):
+            engine.self_model.episodes.append(_make_episode(growth_delta=0.1))
+        before = dict(engine.self_model.self_beliefs)
+        engine.dream()
+        assert dict(engine.self_model.self_beliefs) == before
+
+    def test_dreams_do_not_dilute_growth_trajectory(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        for _ in range(5):
+            engine.self_model.episodes.append(_make_episode(growth_delta=-0.1))
+        assert engine.self_model.reflect().trajectory == "decline"
+        for _ in range(5):
+            engine.dream()
+        # Without the real-only growth window the five 0.0-growth dreams
+        # would fill recent[-5:] and flatten decline into stagnation.
+        assert engine.self_model.reflect().trajectory == "decline"
+
+    def test_dream_survives_save_load_roundtrip(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode())
+        engine.dream()
+        engine.save()
+        reloaded = _make_engine(tmp_path)
+        assert any(e.is_dream for e in reloaded.self_model.episodes)
+
+    def test_old_store_without_is_dream_key_loads(self, tmp_path: Path) -> None:
+        """Stores written before dream support have no is_dream key."""
+        store = tmp_path / "old_store"
+        store.mkdir()
+        (store / "self_model.json").write_text(
+            json.dumps(
+                {
+                    "identity": {},
+                    "self_beliefs": {"competence": 0.7},
+                    "self_doubts": [],
+                    "episodes": [
+                        {
+                            "timestamp": 1.0,
+                            "input_text": "a",
+                            "response": "b",
+                            "qualia": {},
+                            "self_insight": "i",
+                            "growth_delta": 0.01,
+                        }
+                    ],
+                }
+            )
+        )
+        sm = SelfModel(store_path=str(store))
+        sm.load()
+        assert sm.episodes[0].is_dream is False
+
+
+# ---------------------------------------------------------------------------
 # ConsciousnessManager.apply()
 # ---------------------------------------------------------------------------
 

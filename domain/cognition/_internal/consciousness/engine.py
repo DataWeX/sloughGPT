@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 from domain.cognition._internal.consciousness.config import ConsciousnessConfig
 from domain.cognition._internal.consciousness.meta_cognition import MetaCognition
 from domain.cognition._internal.consciousness.narrative import NarrativeGenerator
 from domain.cognition._internal.consciousness.qualia import QualiaEngine
-from domain.cognition._internal.consciousness.self_model import SelfModel
+from domain.cognition._internal.consciousness.self_model import SelfEpisode, SelfModel
 
 
 class ConsciousnessEngine:
@@ -78,6 +79,7 @@ class ConsciousnessEngine:
             "enabled": self.config.is_enabled(),
             "level": self.config.level,
             "episodes": len(self.self_model.episodes),
+            "dreams": sum(1 for e in self.self_model.episodes if e.is_dream),
             "beliefs": dict(self.self_model.self_beliefs),
             "current_qualia": self.qualia.current.to_dict(),
             "curiosity_topics": dict(self.meta_cognition.curiosity_topics),
@@ -107,6 +109,38 @@ class ConsciousnessEngine:
     def reflect_text(self) -> str:
         r = self._propose_reflection()
         return r.narrative if hasattr(r, "narrative") else str(r)
+
+    def dream(self) -> dict[str, Any]:
+        """Consolidate inner state with zero input — the inner loop, unplugged.
+
+        The propose-only reflection over current state is recorded as a dream
+        episode, so the next reflection sees its own past reflections: the
+        loop closes on itself. That self-reference is what makes the inner
+        life intrinsic rather than input-driven — no chat, no tools, no feeds
+        required. Dreams never commit belief deltas: consolidation reads
+        state, experience writes it.
+        """
+        if not self.self_model.episodes:
+            return {"dreamed": False, "reason": "no experiences to consolidate", "episodes": 0}
+        r = self._propose_reflection()
+        narrative = r.narrative if hasattr(r, "narrative") else str(r)
+        dream = SelfEpisode(
+            timestamp=time.time(),
+            input_text="(dream)",
+            response="",
+            qualia=dict(self.qualia.current.to_dict()),
+            self_insight=narrative,
+            growth_delta=0.0,
+            is_dream=True,
+        )
+        self.self_model.episodes.append(dream)
+        self.save()
+        return {
+            "dreamed": True,
+            "narrative": narrative,
+            "episodes": len(self.self_model.episodes),
+            "dreams": sum(1 for e in self.self_model.episodes if e.is_dream),
+        }
 
     def apply_beliefs(self, deltas: dict[str, float]) -> dict[str, float]:
         return self.self_model.apply_beliefs(deltas)
