@@ -153,7 +153,7 @@ export function StartupOverlay() {
   // pointer-events-auto (Retry / Show timing); the ready path still fades it
   // away so it never lingers over a booted app.
   const overlayClassName = cn(
-    'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a]/80 backdrop-blur-sm transition-opacity duration-500 pointer-events-none',
+    'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-term-surface/80 backdrop-blur-sm transition-opacity duration-500 pointer-events-none',
     fadeOut ? 'opacity-0' : 'opacity-100',
   )
 
@@ -167,13 +167,13 @@ export function StartupOverlay() {
           <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
         </div>
 
-        <h2 className="text-[14px] font-medium text-[#c7c7cc] mb-3">Still connecting</h2>
+        <h2 className="text-[14px] font-medium text-term-text mb-3">Still connecting</h2>
 
         {/* Centred column with a readable measure: the warning wraps to two
             lines under the status instead of stretching edge-to-edge with the
             action pinned to the far side of the screen. */}
         <div role="alert" className="flex flex-col items-center gap-4">
-          <p className="max-w-[20rem] text-[11px] leading-relaxed text-[#febc2e]/70 text-center">
+          <p className="max-w-[20rem] text-[11px] leading-relaxed text-term-minimize/70 text-center">
             No response from the server yet — check that the backend is running
           </p>
           <button
@@ -186,7 +186,7 @@ export function StartupOverlay() {
               })
               window.location.reload()
             }}
-            className="pointer-events-auto px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
+            className="pointer-events-auto px-4 py-1.5 rounded-full bg-term-blue text-white text-[12px] font-medium transition-all duration-200 hover:bg-term-blue/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-blue focus-visible:ring-offset-2 focus-visible:ring-offset-term-surface"
           >
             Retry
           </button>
@@ -207,7 +207,7 @@ export function StartupOverlay() {
       </div>
 
       {/* Stage label */}
-      <h2 className="text-[14px] font-medium text-[#c7c7cc] mb-6">
+      <h2 className="text-[14px] font-medium text-term-text mb-6">
         {STAGE_LABELS[startupStage] || 'Starting up'}
       </h2>
 
@@ -218,20 +218,20 @@ export function StartupOverlay() {
         aria-valuemin={0}
         aria-valuemax={100}
         {...(isIndeterminate ? {} : { 'aria-valuenow': progressPct })}
-        className="w-48 h-1 rounded-full bg-[#0a7aff]/20 overflow-hidden mb-3"
+        className="w-48 h-1 rounded-full bg-term-blue/20 overflow-hidden mb-3"
       >
         {isIndeterminate ? (
-          <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-[#0a7aff]" />
+          <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-term-blue" />
         ) : (
           <div
-            className="h-full rounded-full bg-[#0a7aff] transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-term-blue transition-all duration-300 ease-out"
             style={{ width: `${progressPct}%` }}
           />
         )}
       </div>
 
       {/* Progress details */}
-      <div className="flex items-center gap-2 text-[11px] text-[#636366] mb-4" aria-live="polite">
+      <div className="flex items-center gap-2 text-[11px] text-term-text-dim mb-4" aria-live="polite">
         {!isIndeterminate && startupModelProgress > 0 && (
           <span className="font-mono">{Math.round(startupModelProgress * 100)}%</span>
         )}
@@ -249,8 +249,8 @@ export function StartupOverlay() {
         <div className="flex flex-col items-center gap-1.5 mb-4">
           {activeHooks.map((hook: HookStatus) => (
             <div key={hook.name} className="flex items-center gap-2 text-[10px]">
-              <span className="w-1 h-1 rounded-full bg-[#febc2e] animate-pulse" />
-              <span className="text-[#8e8e93]">{HOOK_LABELS[hook.name] ?? hook.name}</span>
+              <span className="w-1 h-1 rounded-full bg-term-minimize animate-pulse" />
+              <span className="text-term-text-muted">{HOOK_LABELS[hook.name] ?? hook.name}</span>
             </div>
           ))}
         </div>
@@ -261,7 +261,7 @@ export function StartupOverlay() {
         <button
           type="button"
           onClick={() => setShowDetails(!showDetails)}
-          className="pointer-events-auto text-[9px] text-[#636366] hover:text-[#8e8e93] transition-colors mb-4"
+          className="pointer-events-auto text-[9px] text-term-text-dim hover:text-term-text-muted transition-colors mb-4"
         >
           {showDetails ? 'Hide details' : 'Show timing'}
         </button>
@@ -271,8 +271,8 @@ export function StartupOverlay() {
         <div className="w-48 space-y-1 mb-4">
           {completedHooks.map((hook: HookStatus) => (
             <div key={hook.name} className="flex items-center justify-between text-[9px]">
-              <span className="text-[#8e8e93] truncate">{HOOK_LABELS[hook.name] ?? hook.name}</span>
-              <span className="text-[#636366] font-mono ml-2">{hook.duration_seconds}s</span>
+              <span className="text-term-text-muted truncate">{HOOK_LABELS[hook.name] ?? hook.name}</span>
+              <span className="text-term-text-dim font-mono ml-2">{hook.duration_seconds}s</span>
             </div>
           ))}
         </div>
@@ -304,10 +304,10 @@ export function StartupOverlay() {
               aria-label={`Stage ${i + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[stage]} (${stateLabel})`}
               className={cn(
                 'w-1.5 h-1.5 rounded-full transition-all duration-300',
-                state === 'done' && 'bg-[#28c840]',
-                state === 'active' && 'bg-[#0a7aff] scale-125 sl-dot-pulse',
-                state === 'pending' && 'bg-[#2c2c2e]',
-                state === 'unknown' && 'bg-[#0a7aff]/60 sl-dot-wave',
+                state === 'done' && 'bg-term-zoom',
+                state === 'active' && 'bg-term-blue scale-125 sl-dot-pulse',
+                state === 'pending' && 'bg-term-chip',
+                state === 'unknown' && 'bg-term-blue/60 sl-dot-wave',
               )}
               style={state === 'unknown' ? { animationDelay: `${i * 0.15}s` } : undefined}
             />

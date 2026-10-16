@@ -81,9 +81,9 @@ describe('StartupOverlay', () => {
     useLiveStatusMock.mockReturnValue(status({ startupStage: 'critical' }))
     const { container } = render(<StartupOverlay />)
     const dots = Array.from(container.querySelectorAll('[role="img"]'))
-    expect(dots[0].className).toContain('bg-[#28c840]')
+    expect(dots[0].className).toContain('bg-term-zoom')
     expect(dots[1].className).toContain('sl-dot-pulse')
-    expect(dots[2].className).toContain('bg-[#2c2c2e]')
+    expect(dots[2].className).toContain('bg-term-chip')
     expect(screen.getByRole('status').textContent).toBe('Stage 2 of 4: Starting core services')
   })
 
@@ -223,7 +223,7 @@ describe('StartupOverlay', () => {
     // The layer informs but does not gate: translucent, pass-through, up.
     const layer = container.firstChild as HTMLElement
     expect(layer.className).toContain('pointer-events-none')
-    expect(layer.className).toContain('bg-[#0a0a0a]/80')
+    expect(layer.className).toContain('bg-term-surface/80')
     expect(layer.className).not.toContain('opacity-0')
 
     // The overlay's own controls opt back in — pass-through never eats them.

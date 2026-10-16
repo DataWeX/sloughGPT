@@ -72,6 +72,35 @@
   --chart-5: 220 80 90;
 }
 
+/*
+ * Terminal chrome (dait shell + Dev/startup panels) — a deliberately FIXED
+ * dark ladder. The embedded terminal always renders dark, like a code-editor
+ * panel, independent of the light/dark app theme. These are NOT theme-switched:
+ * do NOT add html.dark overrides for them. Values are the extracted originals
+ * (macOS-echoing neutral grays + traffic lights), so this is a pure refactor.
+ *   Surfaces: panel → raised input → header → chip
+ *   Text:     strong → body → muted → dim → faint(placeholder)
+ *   Status:   traffic lights close/minimize/zoom double as error/warn/ok
+ *   Accents:  system blue (actions/progress) + HTTP-method purple/cyan
+ */
+:root {
+  --term-surface: 10 10 10;
+  --term-surface-raised: 17 17 17;
+  --term-header: 28 28 30;
+  --term-chip: 44 44 46;
+  --term-text-strong: 229 229 234;
+  --term-text: 199 199 204;
+  --term-text-muted: 142 142 147;
+  --term-text-dim: 99 99 102;
+  --term-text-faint: 72 72 74;
+  --term-close: 255 95 87;
+  --term-minimize: 254 188 46;
+  --term-zoom: 40 200 64;
+  --term-blue: 10 122 255;
+  --term-purple: 191 90 242;
+  --term-cyan: 90 200 250;
+}
+
 html.dark {
   color-scheme: dark;
   --chat-bg: 22 20 30;

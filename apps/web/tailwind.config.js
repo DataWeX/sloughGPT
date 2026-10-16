@@ -60,6 +60,26 @@ module.exports = {
           4: 'rgb(var(--chart-4) / <alpha-value>)',
           5: 'rgb(var(--chart-5) / <alpha-value>)',
         },
+        // Terminal chrome (dait shell + Dev/startup panels). Deliberately FIXED
+        // dark ladder — does NOT follow the light/dark theme switch. See the
+        // `--term-*` block in globals.css.
+        term: {
+          surface: 'rgb(var(--term-surface) / <alpha-value>)',
+          'surface-raised': 'rgb(var(--term-surface-raised) / <alpha-value>)',
+          header: 'rgb(var(--term-header) / <alpha-value>)',
+          chip: 'rgb(var(--term-chip) / <alpha-value>)',
+          'text-strong': 'rgb(var(--term-text-strong) / <alpha-value>)',
+          text: 'rgb(var(--term-text) / <alpha-value>)',
+          'text-muted': 'rgb(var(--term-text-muted) / <alpha-value>)',
+          'text-dim': 'rgb(var(--term-text-dim) / <alpha-value>)',
+          'text-faint': 'rgb(var(--term-text-faint) / <alpha-value>)',
+          close: 'rgb(var(--term-close) / <alpha-value>)',
+          minimize: 'rgb(var(--term-minimize) / <alpha-value>)',
+          zoom: 'rgb(var(--term-zoom) / <alpha-value>)',
+          blue: 'rgb(var(--term-blue) / <alpha-value>)',
+          purple: 'rgb(var(--term-purple) / <alpha-value>)',
+          cyan: 'rgb(var(--term-cyan) / <alpha-value>)',
+        },
       },
       borderRadius: {
         none: '0',
