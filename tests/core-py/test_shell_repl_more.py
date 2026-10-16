@@ -20334,7 +20334,7 @@ class TestCmdProtectDeeper2:
         # ImportError instead of asserting "Error" in the output.
         with patch(
             "builtins.__import__",
-            side_effect=_fail_import("domain.infrastructure._internal.model_protector"),
+            side_effect=_fail_import("domain.core.infrastructure._internal.model_protector"),
         ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
             assert "Error" in out
@@ -20347,7 +20347,7 @@ class TestCmdProtectDeeper2:
         # Selective, for the same reason as test_protect_import_error.
         with patch(
             "builtins.__import__",
-            side_effect=_fail_import("domain.infrastructure._internal.model_protector"),
+            side_effect=_fail_import("domain.core.infrastructure._internal.model_protector"),
         ):
             out = _run_with_io(repl, [], lambda: repl._cmd_unprotect("mymodel"))
             assert "Error" in out
