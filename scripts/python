@@ -22,24 +22,39 @@ case ":${PYTHONPATH:-}:" in
   *) PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" ;;
 esac
 
-# Repo packages must beat an installed site-packages snapshot (AGENTS
-# one-shared-copy rule: the shared tree copy is the only copy). `downcraft`
-# is pip-installed into the conda env as a Sep-18 snapshot whose "already
-# downloaded" branch is unconditional, so without this entry `python -m
-# downcraft` ran stale code: a dest missing from disk was reported as done,
-# the reget fix (6c626f043) never fired, and e2e section 3 failed (card
-# dd670ece). Only PYTHONPATH beats site-packages, so listing the repo path
-# here is what makes the shared copy win.
+# Repo packages must beat two different things (AGENTS one-shared-copy rule:
+# packages/* exists exactly once, in THIS working tree):
+#   1. a pip-installed site-packages snapshot. `downcraft` was installed as a
+#      Sep-18 copy whose "already downloaded" branch was unconditional, so
+#      `python -m downcraft` ran stale code, reported success for a download
+#      that wrote no file, and the reget fix (6c626f043) never fired
+#      (card dd670ece).
+#   2. the `sloughgpt` editable install, whose _EditableFinder MAPPING
+#      hardcodes the MAIN TREE checkout. From any worktree that silently
+#      resolves e.g. `mogdb` to the main tree's copy instead of the one you
+#      are editing (card aecf2bb1). A PYTHONPATH entry outranks the finder.
 #
-# Deliberately narrow: only packages/ names that actually have an installed
-# copy belong in this list. Adding the whole pytest.ini set would drag
-# pytest-only entries (.pytest-libs, tests/api-server) into every invocation.
-# tests/core-py/test_launcher_repo_copy.py ratchets it — it fails if any
-# other packages/ name gains a site-packages copy and is not listed here.
-case ":${PYTHONPATH:-}:" in
-  *":$ROOT/packages/downcraft:"*) ;;
-  *) PYTHONPATH="$ROOT/packages/downcraft${PYTHONPATH:+:$PYTHONPATH}" ;;
-esac
+# Each project root is listed explicitly — never bare $ROOT/packages, which is
+# a PEP 420 namespace portion and loses to an installed regular package
+# silently (a no-op that looks like a fix). Layout is detected per project:
+# src-layout (packages/<n>/src) and flat (packages/<n>).
+# Pure-shell basename: `$(basename …)` forks per project and added ~42ms to
+# every invocation, which is more than the interpreter startup itself.
+# tests/core-py/test_launcher_repo_copy.py ratchets the set: it fails if a
+# repo package stops resolving from this tree.
+for _proj in "$ROOT"/packages/*/; do
+  _path="${_proj%/}"
+  _name="${_path##*/}"
+  if [ -d "$_path/src/$_name" ]; then
+    _path="$_path/src"
+  elif [ ! -d "$_path/$_name" ]; then
+    continue
+  fi
+  case ":${PYTHONPATH:-}:" in
+    *":$_path:"*) ;;
+    *) PYTHONPATH="$_path${PYTHONPATH:+:$PYTHONPATH}" ;;
+  esac
+done
 export PYTHONPATH
 
 # Only reached when no python could run the resolver at all.
