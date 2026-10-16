@@ -238,6 +238,17 @@ class _Accelerator:
             self._fp16_mode = False
             return "fp32"
 
+    def array_module(self):
+        """The numpy-compatible array module this backend computes with.
+
+        Base/Metal/OpenCL compute with numpy. The CUDA backend returns
+        cupy, so callers can keep data device-resident across whole
+        operations — the high-level ops above return numpy per call,
+        which is right for NN layers but unusable for a per-bounce
+        tracer loop (every call would cross PCIe).
+        """
+        return np
+
     def is_available(self) -> bool:
         return True
 
@@ -934,6 +945,16 @@ class _CUDABackend(_Accelerator):
         except Exception as e:
             logger.debug("CUDA availability check failed: %s", e)
             return False
+
+    def array_module(self):
+        """cupy when the package imported AND a device is usable, else numpy.
+
+        ``is_available`` only proves the package imports (it may be
+        installed on a GPU-less machine) — callers that will launch
+        kernels must still probe, but this never hands back a module
+        that cannot even allocate.
+        """
+        return self._cp if self._cp is not None else np
 
     def sync(self) -> None:
         if self._cp:

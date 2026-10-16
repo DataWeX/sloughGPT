@@ -4,6 +4,40 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**LANDED 2026-10-16** — card `e4f15b5a` (cycles renders on the GPU):
+`cycles.py` is input-driven across the device boundary — hot helpers
+sniff their module (`_xp(a)`), host arrays in → host path out, device
+arrays in → device path out; only `render()` crosses (one upload, one
+download). `resolve_array_module(device|SLO_CYCLES_DEVICE|"auto")`
+probes the accelerator's `array_module()` with a real kernel launch.
+Two structural decisions made the GPU actually faster than CPU (the
+first CuPy translation was 2.6x SLOWER): (1) **all samples fuse into
+one trace** — `render()` stacks S×H×W rays into a single `_trace_batch`
+call, amortizing the walk's per-call host syncs across every sample
+(fused 2.95s vs 34.6s per-sample at 160x120x16); (2) **the fused
+Möller–Trumbore RawKernel** — every Python-level cupy call pays a
+~60us dispatch floor (measured), so the ~75-call operator translation
+burned ~4.5ms per leaf iteration; `_mt_cuda` compiles the identical
+math (same EPSILON rules, same 1e30 sentinel, same float32 cast) into
+one launch, and the walk dropped its redundant compactions (leaf subset
+via one nonzero; the dual-child push needs no subset — leaves' -1
+children self-exclude). Merging the leaf/inner prim block wholesale was
+measured and REVERTED: wasted inner-row pairs quadrupled CPU walk time.
+Also fixed: `generate_rays` broadcast int64 origins from int-typed
+`Camera.origin`, silently C-truncating every bounce position.
+Equivalence: CUDA walk **bit-identical** to numpy walk (t + face) and
+scalar-walk agreement ≤1e-6 (new `test_cycles_gpu.py`, 15 tests).
+Measured (`benchmark_world_render.py --frames 2`, PASS both tiers):
+device frame GPU 3.19s vs CPU 18.91s = **5.9x**; world frame GPU 7.05s
+vs CPU 9.67s (warm 4.15 vs 6.18 = 1.49x); vs the scalar baseline
+901x. Stream end-to-end at 160x120@16spp: 0.12 vs 0.07 fps (1.8x,
+incl. VM tick + PNG); below ~50K rays the CPU still wins — the walk's
+dispatch floor is ray-count-independent — so the tiny demo config stays
+on `SLO_CYCLES_DEVICE=cpu`. Known env quirk: `libcurand.so` is absent
+(harmless — renderer RNG is host-side by design). Next: batch-size-aware
+device auto-selection, and a full traversal RawKernel as the follow-up
+if the walk floor ever needs to drop further.
+
 **LANDED 2026-10-16** — card `a3b39114` (StreamDevice + asm streaming app):
 the world can be watched live **from machine code**. `world_stream.asm`
 loops `step-sim -> render -> encode_png -> stream write`; Python is kernel +

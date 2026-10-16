@@ -14,7 +14,9 @@ Baseline (pre-vectorization, measured 2026-10-16): one 128x96 @ 2spp frame
 took 140-320s through the per-pixel Python loops — extrapolated to the
 Gateway default of 160x120 @ 16spp that is ~2900s/frame. The batch tracer
 (frontier BVH walk + vectorized emission/BSDF) replaces every per-ray
-Python loop; real-time streaming is the follow-up GPU card.
+Python loop. The GPU tier (card e4f15b5a) then moved the walk's fused
+Möller–Trumbore into a single CUDA kernel and fused all samples into one
+trace; SLO_CYCLES_DEVICE picks the tier (auto asks the accelerator).
 
 Usage:
     python scripts/benchmark_world_render.py [--frames 3]
@@ -32,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-
 
 import numpy as np  # noqa: E402
 
+from domain.shell._internal.cycles import device_name  # noqa: E402
 from domain.shell._internal.cycles_device import CyclesDevice  # noqa: E402
 from domain.shell._internal.realm_view import make_live_scene  # noqa: E402
 from domain.shell._internal.world_render import RenderBridge, RenderConfig  # noqa: E402
@@ -78,6 +81,7 @@ def main() -> int:
     parser.add_argument("--frames", type=int, default=3, help="timed frames per path")
     args = parser.parse_args()
 
+    print(f"array module: {device_name()}  (SLO_CYCLES_DEVICE selects; auto asks the accelerator)")
     dev_s = bench_device(args.frames)
     print(f"device frame (160x120 @16spp): {dev_s:8.2f}s   gate < {GATE_DEVICE_S:.0f}s")
     world_s = bench_world(args.frames)
