@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from domain.collections._internal.baby_building import (
+from domain.training.collections._internal.baby_building import (
     BabyBuilding,
     BuildingConfig,
     BuildingRegistry,
@@ -10,7 +10,7 @@ from domain.collections._internal.baby_building import (
     Tool,
     ToolType,
 )
-from domain.collections._internal.baby_community import (
+from domain.training.collections._internal.baby_community import (
     BabyCommunity,
     BabyCommunitySystem,
     CommunityConfig,
@@ -19,7 +19,7 @@ from domain.collections._internal.baby_community import (
     Relation,
     RelationType,
 )
-from domain.collections._internal.baby_economy import (
+from domain.training.collections._internal.baby_economy import (
     BabyEconomy,
     EconomyConfig,
     MarketSystem,
@@ -28,14 +28,14 @@ from domain.collections._internal.baby_economy import (
     TradeOffer,
     TradeStatus,
 )
-from domain.collections._internal.baby_evolution import (
+from domain.training.collections._internal.baby_evolution import (
     EvolutionConfig,
     EvolutionEngine,
     FitnessTracker,
     Genome,
     SelectionOperator,
 )
-from domain.collections._internal.baby_social import (
+from domain.training.collections._internal.baby_social import (
     BabyCultural,
     BabySocial,
     BabySocialSystem,

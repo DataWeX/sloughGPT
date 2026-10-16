@@ -9,16 +9,21 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from domain.feedback._internal.database import Feedback, FeedbackDB, Message, SimilarPattern
-from domain.feedback._internal.lora_eval import (
+from domain.training.feedback._internal.database import (
+    Feedback,
+    FeedbackDB,
+    Message,
+    SimilarPattern,
+)
+from domain.training.feedback._internal.lora_eval import (
     BLEUScorer,
     EvalResult,
     LoRAEvaluator,
     PersonalityScore,
 )
-from domain.feedback._internal.online_train import LoRAConfig, OnlineLoRAUpdater
-from domain.feedback._internal.per_user_lora import PerUserLoRAStore, UserAdapter
-from domain.feedback._internal.workflow import FeedbackWorkflowManager, WorkflowConfig
+from domain.training.feedback._internal.online_train import LoRAConfig, OnlineLoRAUpdater
+from domain.training.feedback._internal.per_user_lora import PerUserLoRAStore, UserAdapter
+from domain.training.feedback._internal.workflow import FeedbackWorkflowManager, WorkflowConfig
 
 # =============================================================================
 # FeedbackDB Tests
@@ -1052,10 +1057,10 @@ class TestFeedbackWorkflowManager:
                 store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4
             )
             db_path = str(Path(tmp) / "feedback.db")
-            from domain.feedback._internal.database import FeedbackDB
+            from domain.training.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
-            from domain.feedback._internal.meta_weights import MetaWeightManager
+            from domain.training.feedback._internal.meta_weights import MetaWeightManager
 
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
@@ -1078,10 +1083,10 @@ class TestFeedbackWorkflowManager:
                 auto_aggregate_threshold=999,
             )
             db_path = str(Path(tmp) / "feedback.db")
-            from domain.feedback._internal.database import FeedbackDB
+            from domain.training.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
-            from domain.feedback._internal.meta_weights import MetaWeightManager
+            from domain.training.feedback._internal.meta_weights import MetaWeightManager
 
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
@@ -1110,10 +1115,10 @@ class TestFeedbackWorkflowManager:
                 auto_aggregate_threshold=999,
             )
             db_path = str(Path(tmp) / "feedback.db")
-            from domain.feedback._internal.database import FeedbackDB
+            from domain.training.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
-            from domain.feedback._internal.meta_weights import MetaWeightManager
+            from domain.training.feedback._internal.meta_weights import MetaWeightManager
 
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
@@ -1133,10 +1138,10 @@ class TestFeedbackWorkflowManager:
                 store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4
             )
             db_path = str(Path(tmp) / "feedback.db")
-            from domain.feedback._internal.database import FeedbackDB
+            from domain.training.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
-            from domain.feedback._internal.meta_weights import MetaWeightManager
+            from domain.training.feedback._internal.meta_weights import MetaWeightManager
 
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
@@ -1228,7 +1233,7 @@ class TestFeedbackWorkflowManager:
     def test_trigger_export(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = str(Path(tmp) / "feedback.db")
-            from domain.feedback._internal.database import FeedbackDB
+            from domain.training.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
             wfm = FeedbackWorkflowManager(

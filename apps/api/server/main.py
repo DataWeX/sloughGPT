@@ -423,7 +423,7 @@ def get_meta_weight_manager():
     global _meta_weight_manager
     if _meta_weight_manager is None:
         try:
-            from domain.feedback import get_meta_weight_manager as _get_manager
+            from domain.training.feedback import get_meta_weight_manager as _get_manager
 
             _meta_weight_manager = _get_manager()
         except ImportError:
@@ -459,7 +459,7 @@ VALID_API_KEYS = _sec.valid_api_keys
 def _start_feedback_workflow() -> None:
     """Start the automated feedback workflow at server startup."""
     try:
-        from domain.feedback import get_feedback_workflow
+        from domain.training.feedback import get_feedback_workflow
 
         auto_start = os.environ.get("SLO_AUTO_WORKFLOW", "true").lower() == "true"
         if not auto_start:
@@ -495,7 +495,7 @@ def _start_feedback_workflow() -> None:
 def _start_health_monitor() -> None:
     """Start the model health monitor background thread at server startup."""
     try:
-        from domain.feedback._internal.model_health import get_health_monitor
+        from domain.training.feedback._internal.model_health import get_health_monitor
 
         enabled = os.environ.get("SLO_HEALTH_MONITOR", "true").lower() == "true"
         if not enabled:

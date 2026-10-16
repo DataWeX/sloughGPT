@@ -1,6 +1,6 @@
 import json
 
-from domain.collections import (
+from domain.training.collections import (
     BatchCollector,
     CallableSource,
     CallableStore,

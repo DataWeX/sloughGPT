@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Protocol, runtime_checkable
 
-from domain.collections._internal.registry import CollectionRegistry, get_registry
-from domain.collections._internal.sources import Record
+from domain.training.collections._internal.registry import CollectionRegistry, get_registry
+from domain.training.collections._internal.sources import Record
 
 
 @runtime_checkable

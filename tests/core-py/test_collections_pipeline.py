@@ -1,4 +1,4 @@
-"""Tests for domain.collections — Record, sources, stores, filters, collector.
+"""Tests for domain.training.collections — Record, sources, stores, filters, collector.
 
 Covers: Record dataclass, FileSource, FileStore, MemoryStore, LengthFilter,
 DedupFilter, KeywordFilter, RegexFilter, FilterChain, Collector.
@@ -6,16 +6,16 @@ DedupFilter, KeywordFilter, RegexFilter, FilterChain, Collector.
 
 from __future__ import annotations
 
-from domain.collections._internal.collector import Collector
-from domain.collections._internal.filters import (
+from domain.training.collections._internal.collector import Collector
+from domain.training.collections._internal.filters import (
     DedupFilter,
     FilterChain,
     KeywordFilter,
     LengthFilter,
     RegexFilter,
 )
-from domain.collections._internal.sources import FileSource, Record
-from domain.collections._internal.stores import FileStore, MemoryStore
+from domain.training.collections._internal.sources import FileSource, Record
+from domain.training.collections._internal.stores import FileStore, MemoryStore
 
 # ── Record ───────────────────────────────────────────────────────────
 

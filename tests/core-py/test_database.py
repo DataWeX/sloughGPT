@@ -1,4 +1,4 @@
-"""Tests for domain.feedback._internal.database — SQLite feedback database with vector search."""
+"""Tests for domain.training.feedback._internal.database — SQLite feedback database with vector search."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domain.feedback._internal.database import (
+from domain.training.feedback._internal.database import (
     Feedback,
     FeedbackDB,
     Message,

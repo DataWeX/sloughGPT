@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from domain.learner._internal.knowledge import KnowledgeMemory
 from domain.memory._internal.config import MemoryConfig
 from domain.memory._internal.provider import KnowledgeMemoryProvider
 from domain.memory._internal.service import MemoryService, get_memory_service
+from domain.training.learner._internal.knowledge import KnowledgeMemory
 
 
 @pytest.fixture(autouse=True)

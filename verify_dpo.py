@@ -14,9 +14,9 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "packages", "core-py"))
 
-import domain.feedback._internal.database as database
-from domain.feedback._internal.hf_dpo import HFDPOTrainer
+import domain.training.feedback._internal.database as database
 from domain.training._internal.slonet import SloLSTM
+from domain.training.feedback._internal.hf_dpo import HFDPOTrainer
 
 
 class CharTokenizer:

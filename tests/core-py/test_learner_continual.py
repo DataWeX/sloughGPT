@@ -1,12 +1,13 @@
-"""Tests for domain.learner._internal.continual.py — ContinualLearner."""
+"""Tests for domain.training.learner._internal.continual.py — ContinualLearner."""
 
 import time
 from pathlib import Path
 
 import pytest
 
-from domain.learner._internal import continual
-from domain.learner._internal.continual import (
+from domain.training._internal.slonet import SloTransformer
+from domain.training.learner._internal import continual
+from domain.training.learner._internal.continual import (
     BUFFER_CAPACITY,
     CHAR_SET,
     ITOS,
@@ -18,8 +19,7 @@ from domain.learner._internal.continual import (
     _detokenize,
     _tokenize,
 )
-from domain.learner._internal.knowledge import KnowledgeFact
-from domain.training._internal.slonet import SloTransformer
+from domain.training.learner._internal.knowledge import KnowledgeFact
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +27,7 @@ def isolated_knowledge_paths(tmp_path, monkeypatch):
     """Keep ContinualLearner's KnowledgeMemory persistence off the real data dir.
 
     Canonical path constants and singletons live in domain.memory._internal.knowledge_store
-    (domain.learner._internal.knowledge is a thin re-export shim without those attrs).
+    (domain.training.learner._internal.knowledge is a thin re-export shim without those attrs).
     """
     from domain.memory._internal import knowledge_store as K
 
@@ -259,7 +259,7 @@ def test_search_knowledge_and_query_topic(learner):
 
 
 def test_get_learner_singleton(learner, monkeypatch):
-    from domain.learner._internal.continual import get_learner
+    from domain.training.learner._internal.continual import get_learner
 
     monkeypatch.setattr(continual, "_learner", None)
     monkeypatch.setattr(continual, "ContinualLearner", lambda **kw: learner)

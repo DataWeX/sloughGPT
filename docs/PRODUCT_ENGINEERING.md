@@ -138,7 +138,7 @@ Router: GET /tools, POST /tools/{id}/generate
 Frontend: tools-controller.ts → 1 page with tool selector
 ```
 
-**Collections** — `domain/collections/`:
+**Collections** — `domain/training/collections/`:
 
 ```
 Registry
@@ -175,7 +175,7 @@ Single router per engine, not per implementation module
 **Knowledge** — 1 monolith router, domain bypassed:
 
 ```
-kb.py (1399 lines) → imports from domain.learner._internal.knowledge (WRONG)
+kb.py (1399 lines) → imports from domain.training.learner._internal.knowledge (WRONG)
 7 features inline: CRUD, RAG, training, spaced repetition, files, categorization, adapter
 
 Should be:

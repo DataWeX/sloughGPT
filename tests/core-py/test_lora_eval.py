@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from domain.feedback._internal.lora_eval import (
+from domain.training.feedback._internal.lora_eval import (
     BLEUScorer,
     EvalResult,
     LoRAEvaluator,
@@ -892,7 +892,7 @@ class TestLoRAEvaluatorRun:
             counter["n"] += 1
             return f"2025-01-01T00-00-{counter['n']:02d}"
 
-        import domain.feedback._internal.lora_eval as mod
+        import domain.training.feedback._internal.lora_eval as mod
 
         with pytest.MonkeyPatch.context() as m:
             m.setattr(mod.time, "strftime", fake_strftime)
@@ -990,7 +990,7 @@ class TestLoRAEvaluatorGetHistory:
             counter["n"] += 1
             return f"2025-01-01T00-00-{counter['n']:02d}"
 
-        import domain.feedback._internal.lora_eval as mod
+        import domain.training.feedback._internal.lora_eval as mod
 
         with pytest.MonkeyPatch.context() as m:
             m.setattr(mod.time, "strftime", fake_strftime)
@@ -1010,7 +1010,7 @@ class TestLoRAEvaluatorGetHistory:
             counter["n"] += 1
             return f"2025-01-01T00-00-{counter['n']:02d}"
 
-        import domain.feedback._internal.lora_eval as mod
+        import domain.training.feedback._internal.lora_eval as mod
 
         with pytest.MonkeyPatch.context() as m:
             m.setattr(mod.time, "strftime", fake_strftime)
@@ -1138,7 +1138,7 @@ class TestLoRAEvaluatorExportConfig:
 
 class TestGetLoraEvaluatorSingleton:
     def test_returns_same_instance(self, tmp_path, monkeypatch):
-        import domain.feedback._internal.lora_eval as mod
+        import domain.training.feedback._internal.lora_eval as mod
 
         mod._global_eval = None
         ev1 = get_lora_evaluator()
@@ -1147,7 +1147,7 @@ class TestGetLoraEvaluatorSingleton:
         mod._global_eval = None
 
     def test_singleton_reset(self, monkeypatch):
-        import domain.feedback._internal.lora_eval as mod
+        import domain.training.feedback._internal.lora_eval as mod
 
         mod._global_eval = None
         ev1 = get_lora_evaluator()

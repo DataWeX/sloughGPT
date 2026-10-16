@@ -323,7 +323,7 @@ class TestDPO:
                 }
 
         with (
-            patch("domain.feedback.HFDPOTrainer", _FakeTrainer),
+            patch("domain.training.feedback.HFDPOTrainer", _FakeTrainer),
             patch(
                 "apps.api.server.routers.multimodal.MultimodalRouter._get_active_model_and_tokenizer",
                 return_value=(object(), object()),

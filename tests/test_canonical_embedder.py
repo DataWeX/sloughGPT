@@ -80,8 +80,8 @@ def test_memory_consolidation_agrees():
 
 
 def test_meta_weights_agrees(tmp_path):
-    from domain.feedback._internal.meta_weights import MetaWeightManager
     from domain.generate._internal.text_embedder import embed_text
+    from domain.training.feedback._internal.meta_weights import MetaWeightManager
 
     mwm = MetaWeightManager(db_path=str(tmp_path / "feedback.db"))
     emb = mwm._embed(TEXT)
@@ -108,7 +108,7 @@ def test_empty_input_is_zero_everywhere():
 
 
 def test_meta_weights_empty_zero(tmp_path):
-    from domain.feedback._internal.meta_weights import MetaWeightManager
+    from domain.training.feedback._internal.meta_weights import MetaWeightManager
 
     mwm = MetaWeightManager(db_path=str(tmp_path / "feedback.db"))
     assert np.linalg.norm(mwm._simple_embed("")) == 0.0

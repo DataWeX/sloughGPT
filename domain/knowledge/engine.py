@@ -2,7 +2,7 @@
 
 Wraps KnowledgeMemory, KnowledgeIngestor, and DataFilter into a single
 cohesive API. Routers should use this, not import from domain.knowledge._internal
-or domain.learner._internal directly.
+or domain.training.learner._internal directly.
 
 Usage:
     from domain.knowledge.engine import KnowledgeEngine

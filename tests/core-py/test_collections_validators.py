@@ -1,12 +1,12 @@
-"""Tests for domain.collections._internal.validators — pure logic, no network."""
+"""Tests for domain.training.collections._internal.validators — pure logic, no network."""
 
 from __future__ import annotations
 
 import threading
 import time
 
-from domain.collections._internal.sources import Record
-from domain.collections._internal.validators import (
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.validators import (
     CallableSource,
     CallableStore,
     CollectorRunner,

@@ -1,4 +1,4 @@
-"""Tests for domain.learner._internal.data_filter.py — quality scoring, config, gates."""
+"""Tests for domain.training.learner._internal.data_filter.py — quality scoring, config, gates."""
 
 import pytest
 

@@ -1,4 +1,4 @@
-"""Tests for domain.collections._internal.config — pipeline configuration dataclasses.
+"""Tests for domain.training.collections._internal.config — pipeline configuration dataclasses.
 
 Covers: SourceConfig, StoreConfig, FilterConfig, PipelineConfig defaults and custom values.
 """
@@ -12,7 +12,7 @@ _core_dir = str(Path(__file__).resolve().parents[2] / "packages")
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.collections._internal.config import (
+from domain.training.collections._internal.config import (
     FilterConfig,
     PipelineConfig,
     SourceConfig,

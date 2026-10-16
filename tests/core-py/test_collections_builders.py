@@ -1,4 +1,4 @@
-"""Tests for domain.collections._internal.builders — pure logic, no network."""
+"""Tests for domain.training.collections._internal.builders — pure logic, no network."""
 
 from __future__ import annotations
 
@@ -7,21 +7,21 @@ import tempfile
 
 import pytest
 
-from domain.collections._internal.builders import (
+from domain.training.collections._internal.builders import (
     CollectorBuilder,
     DataSink,
     DataSource,
     DataTransformer,
 )
-from domain.collections._internal.filters import (
+from domain.training.collections._internal.filters import (
     KeywordFilter,
 )
-from domain.collections._internal.sources import (
+from domain.training.collections._internal.sources import (
     GeneratorSource,
     Record,
     Source,
 )
-from domain.collections._internal.stores import (
+from domain.training.collections._internal.stores import (
     MemoryStore,
     StatsStore,
 )
@@ -182,7 +182,7 @@ class TestCollectorBuilder:
         b.source(_source([_r(str(i)) for i in range(10)]))
         b.batch(batch_size=3, max_retries=2)
         c = b.build()
-        from domain.collections._internal.collector import BatchCollector
+        from domain.training.collections._internal.collector import BatchCollector
 
         assert isinstance(c, BatchCollector)
         assert c.collect() == 10
@@ -207,7 +207,7 @@ class TestCollectorBuilder:
     def test_build_build_parallel(self):
         b1 = CollectorBuilder().source(_source([_r("a")]))
         b2 = CollectorBuilder().source(_source([_r("b")]))
-        from domain.collections._internal.collector import ParallelCollector
+        from domain.training.collections._internal.collector import ParallelCollector
 
         pc = CollectorBuilder().build_parallel([b1, b2])
         assert isinstance(pc, ParallelCollector)

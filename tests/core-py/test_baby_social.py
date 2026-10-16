@@ -1,6 +1,6 @@
 import numpy as np
 
-from domain.collections._internal.baby_social import (
+from domain.training.collections._internal.baby_social import (
     BabyCultural,
     BabySocial,
     BabySocialSystem,

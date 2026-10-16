@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.feedback._internal.per_user_lora import (
+from domain.training.feedback._internal.per_user_lora import (
     PerUserLoRAStore,
     UserAdapter,
 )

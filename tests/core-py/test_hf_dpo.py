@@ -1,10 +1,15 @@
-"""Tests for domain.feedback._internal.hf_dpo — HFDPOTrainer pure logic."""
+"""Tests for domain.training.feedback._internal.hf_dpo — HFDPOTrainer pure logic."""
 
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from domain.feedback._internal.hf_dpo import DEFAULT_EPOCHS, DEFAULT_LR, DPO_BETA, HFDPOTrainer
+from domain.training.feedback._internal.hf_dpo import (
+    DEFAULT_EPOCHS,
+    DEFAULT_LR,
+    DPO_BETA,
+    HFDPOTrainer,
+)
 
 # ── Constants ──────────────────────────────────────────────────────────
 
@@ -228,7 +233,7 @@ class TestPrepareDPOPairs:
 
     def test_empty_feedback(self):
         trainer = self._make_trainer()
-        with patch("domain.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
+        with patch("domain.training.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
             db = mock_db.return_value
             db.get_all_feedback.return_value = []
             pairs = trainer.prepare_dpo_pairs()
@@ -236,7 +241,7 @@ class TestPrepareDPOPairs:
 
     def test_pair_building_basic(self):
         trainer = self._make_trainer()
-        with patch("domain.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
+        with patch("domain.training.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
             db = mock_db.return_value
             db.get_all_feedback.side_effect = [
                 # thumbs_up
@@ -251,7 +256,7 @@ class TestPrepareDPOPairs:
 
     def test_same_conversation_preferred(self):
         trainer = self._make_trainer()
-        with patch("domain.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
+        with patch("domain.training.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
             db = mock_db.return_value
             db.get_all_feedback.side_effect = [
                 # thumbs_up: one from same conv, one from different
@@ -267,7 +272,7 @@ class TestPrepareDPOPairs:
 
     def test_skips_empty_content(self):
         trainer = self._make_trainer()
-        with patch("domain.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
+        with patch("domain.training.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
             db = mock_db.return_value
             db.get_all_feedback.side_effect = [
                 [{"content": "good", "conversation_id": "c1"}],
@@ -278,7 +283,7 @@ class TestPrepareDPOPairs:
 
     def test_skips_identical_content(self):
         trainer = self._make_trainer()
-        with patch("domain.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
+        with patch("domain.training.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
             db = mock_db.return_value
             db.get_all_feedback.side_effect = [
                 [{"content": "same text", "conversation_id": "c1"}],
@@ -289,7 +294,7 @@ class TestPrepareDPOPairs:
 
     def test_no_matching_chosen_skipped(self):
         trainer = self._make_trainer()
-        with patch("domain.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
+        with patch("domain.training.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
             db = mock_db.return_value
             db.get_all_feedback.side_effect = [
                 # all chosen have empty content
@@ -301,7 +306,7 @@ class TestPrepareDPOPairs:
 
     def test_max_pairs_cap(self):
         trainer = self._make_trainer()
-        with patch("domain.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
+        with patch("domain.training.feedback._internal.hf_dpo.get_feedback_db") as mock_db:
             db = mock_db.return_value
             db.get_all_feedback.side_effect = [
                 [{"content": f"good{i}", "conversation_id": "c1"} for i in range(5)],

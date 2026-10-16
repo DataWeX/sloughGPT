@@ -708,7 +708,7 @@ class HealthRouter:
             Envelope with ``status: "ok"`` plus monitor stats, or raises
             a classified error if the monitor is unavailable.
         """
-        from domain.feedback import get_health_monitor
+        from domain.training.feedback import get_health_monitor
 
         mon = get_health_monitor()
         import state as server_state

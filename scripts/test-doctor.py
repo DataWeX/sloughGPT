@@ -501,13 +501,13 @@ def cmd_flake() -> int:
 #
 # The bug class: a test patches the *definition* site
 #
-#     @patch("domain.feedback._internal.per_user_lora.get_per_user_lora")
+#     @patch("domain.training.feedback._internal.per_user_lora.get_per_user_lora")
 #
 # while production reads the *re-export* at package level
 #
-#     from domain.feedback import get_per_user_lora     # routers/user_adapters.py:54
+#     from domain.training.feedback import get_per_user_lora     # routers/user_adapters.py:54
 #
-# If `domain/feedback/__init__.py` binds that name EAGERLY (a plain
+# If `domain/training/feedback/__init__.py` binds that name EAGERLY (a plain
 # `from ... import ...` with no `__getattr__`), the package attribute is frozen
 # at import time and the patch never reaches the reader — the test silently runs
 # against live state. Lazy re-export (`__getattr__` that re-imports per access)
@@ -528,8 +528,8 @@ _MOCK_DRIFT_TEST_DIRS = ("tests",)
 _MOCK_DRIFT_PROD_ROOTS = ("domain", "apps/api/server", "apps/cli/src", "packages")
 # Longest-prefix-wins roots, mirroring pytest.ini's `pythonpath`.
 # NOTE: `domain` is deliberately NOT a root — it is a package directory under
-# the repo root (pytest.ini puts `.` on the path), so `domain/feedback/` maps
-# to `domain.feedback`. Treating it as a root dropped the prefix and broke
+# the repo root (pytest.ini puts `.` on the path), so `domain/training/feedback/` maps
+# to `domain.training.feedback`. Treating it as a root dropped the prefix and broke
 # relative-import resolution across all of `domain/`.
 _MOCK_DRIFT_PATH_ROOTS = (
     ("apps", "api", "server"),

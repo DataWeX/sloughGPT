@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from domain.learner._internal.knowledge_augmenter import (
+from domain.training.learner._internal.knowledge_augmenter import (
     _needs_web_search,
     enrich_with_knowledge,
 )
@@ -39,7 +39,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
+            "domain.training.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -56,7 +56,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
+            "domain.training.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -72,7 +72,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
+            "domain.training.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -93,7 +93,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
+            "domain.training.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -109,7 +109,7 @@ class TestImportPaths:
         assert callable(facade_export)
 
     def test_inference_enrich_helper_resolves_facade_import(self, monkeypatch):
-        """Regression: `from domain.learner import enrich_with_knowledge` never
+        """Regression: `from domain.training.learner import enrich_with_knowledge` never
         existed — every chat message logged 'Knowledge enrichment failed' and
         returned source='error' since 2026-05-21. The helper must import the
         canonical facade export."""

@@ -1,14 +1,14 @@
 import numpy as np
 
-from domain.collections._internal.perception import (
+from domain.shell._internal.simulation import WorldGrid
+from domain.training.collections._internal.perception import (
     PerceptionConfig,
     PerceptionFeed,
     PerceptionScheduler,
     RecordToMaterial,
     WorldPerception,
 )
-from domain.collections._internal.sources import GeneratorSource, Record
-from domain.shell._internal.simulation import WorldGrid
+from domain.training.collections._internal.sources import GeneratorSource, Record
 
 
 class TestRecordToMaterial:

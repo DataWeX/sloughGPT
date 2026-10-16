@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from domain.collections._internal.collector import BatchCollector, Collector, ParallelCollector
-from domain.collections._internal.filters import DedupFilter, LengthFilter
-from domain.collections._internal.sources import Record
+from domain.training.collections._internal.collector import (
+    BatchCollector,
+    Collector,
+    ParallelCollector,
+)
+from domain.training.collections._internal.filters import DedupFilter, LengthFilter
+from domain.training.collections._internal.sources import Record
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 

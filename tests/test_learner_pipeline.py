@@ -18,18 +18,18 @@ import pytest
 
 from domain.generate._internal.vector_store import InMemoryVectorStore
 from domain.knowledge._internal.knowledge import _extract_topics
-from domain.learner._internal.continual import ContinualLearner
-from domain.learner._internal.data_filter import DataFilter
-from domain.learner._internal.entity_extractor import (
+from domain.training.learner._internal.continual import ContinualLearner
+from domain.training.learner._internal.data_filter import DataFilter
+from domain.training.learner._internal.entity_extractor import (
     extract_entities,
     extract_facts_from_conversation,
     extract_relationships,
 )
-from domain.learner._internal.knowledge import (
+from domain.training.learner._internal.knowledge import (
     KnowledgeFact,
     KnowledgeMemory,
 )
-from domain.learner._internal.knowledge_augmenter import enrich_with_knowledge
+from domain.training.learner._internal.knowledge_augmenter import enrich_with_knowledge
 
 # ===== Entity Extraction → Storage =====
 
@@ -168,10 +168,10 @@ class TestKnowledgeAugmenter:
         )
 
         with patch(
-            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory", return_value=memory
+            "domain.training.learner._internal.knowledge_augmenter.get_knowledge_memory", return_value=memory
         ):
             with patch(
-                "domain.learner._internal.knowledge_augmenter.get_knowledge_ingestor"
+                "domain.training.learner._internal.knowledge_augmenter.get_knowledge_ingestor"
             ) as mock_ingestor:
                 mock_ingestor.return_value.search_and_ingest.return_value = {
                     "new_facts": 0,
@@ -190,10 +190,10 @@ class TestKnowledgeAugmenter:
         memory._visited.clear()
 
         with patch(
-            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory", return_value=memory
+            "domain.training.learner._internal.knowledge_augmenter.get_knowledge_memory", return_value=memory
         ):
             with patch(
-                "domain.learner._internal.knowledge_augmenter.get_knowledge_ingestor"
+                "domain.training.learner._internal.knowledge_augmenter.get_knowledge_ingestor"
             ) as mock_ingestor:
                 mock_ingestor.return_value.search_and_ingest.return_value = {
                     "new_facts": 0,
@@ -215,7 +215,7 @@ class TestLearnerPipeline:
         with (
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
-            patch("domain.learner._internal.continual.STATE_PATH", tmp_path / "continual.soul"),
+            patch("domain.training.learner._internal.continual.STATE_PATH", tmp_path / "continual.soul"),
         ):
             l = ContinualLearner()
             l._running = False
@@ -343,7 +343,7 @@ class TestFullPipeline:
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
             patch(
-                "domain.learner._internal.continual.STATE_PATH",
+                "domain.training.learner._internal.continual.STATE_PATH",
                 Path(tempfile.mkdtemp()) / "continual.soul",
             ),
         ):
@@ -365,7 +365,7 @@ class TestFullPipeline:
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
             patch(
-                "domain.learner._internal.continual.STATE_PATH",
+                "domain.training.learner._internal.continual.STATE_PATH",
                 Path(tempfile.mkdtemp()) / "continual.soul",
             ),
         ):

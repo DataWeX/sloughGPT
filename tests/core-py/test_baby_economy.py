@@ -1,4 +1,4 @@
-from domain.collections._internal.baby_economy import (
+from domain.training.collections._internal.baby_economy import (
     BabyEconomy,
     EconomyConfig,
     MarketSystem,

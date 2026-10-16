@@ -1,4 +1,4 @@
-"""Tests for domain.collections._internal.validators — Schema, DataValidator, DataEnricher,
+"""Tests for domain.training.collections._internal.validators — Schema, DataValidator, DataEnricher,
 RateLimiter, CallableSource, CallableStore, CollectorRunner.
 
 Covers: schema validation, enrichment rules, rate limiting, callable adapters,
@@ -15,8 +15,8 @@ _core_dir = str(Path(__file__).resolve().parents[2] / "packages")
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.collections._internal.sources import Record
-from domain.collections._internal.validators import (
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.validators import (
     CallableSource,
     CallableStore,
     CollectorRunner,

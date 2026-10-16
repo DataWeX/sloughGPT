@@ -186,7 +186,7 @@ class TestQuality:
 
 
 class TestLoggedResponses:
-    @patch("domain.feedback.get_response_tracker")
+    @patch("domain.training.feedback.get_response_tracker")
     def test_returns_responses(self, mock_get_tracker, client):
         tracker = mock_get_tracker.return_value
         tracker.get_responses.return_value = []
@@ -194,14 +194,14 @@ class TestLoggedResponses:
         assert resp.status_code == 200
         assert resp.json()["data"]["count"] == 0
 
-    @patch("domain.feedback.get_response_tracker")
+    @patch("domain.training.feedback.get_response_tracker")
     def test_returns_empty(self, mock_get_tracker, client):
         tracker = mock_get_tracker.return_value
         tracker.get_responses.return_value = []
         resp = client.get("/benchmark/responses?limit=50")
         assert resp.status_code == 200
 
-    @patch("domain.feedback.get_response_tracker")
+    @patch("domain.training.feedback.get_response_tracker")
     def test_serializes_tracker_entries(self, mock_get_tracker, client):
         class FakeResp:
             timestamp = "2026-01-01T00:00:00"
@@ -220,7 +220,7 @@ class TestLoggedResponses:
         assert data["responses"][0]["tokens_generated"] == 4
         assert data["responses"][0]["model"] == "gpt2"
 
-    @patch("domain.feedback.get_response_tracker")
+    @patch("domain.training.feedback.get_response_tracker")
     def test_forwards_model_filter(self, mock_get_tracker, client):
         tracker = mock_get_tracker.return_value
         tracker.get_responses.return_value = []
@@ -372,7 +372,7 @@ class TestErrorPaths:
         resp = client.get("/benchmark/quality")
         assert resp.status_code == 500
 
-    @patch("domain.feedback.get_response_tracker")
+    @patch("domain.training.feedback.get_response_tracker")
     def test_responses_error_raises_500(self, mock_get_tracker, client):
         mock_get_tracker.side_effect = RuntimeError("tracker down")
         resp = client.get("/benchmark/responses")

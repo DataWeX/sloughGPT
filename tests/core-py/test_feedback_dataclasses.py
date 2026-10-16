@@ -1,4 +1,4 @@
-"""Tests for domain.feedback — MessageData, MessageFeedback, ResponseLog, MetaWeights, HealthSnapshot."""
+"""Tests for domain.training.feedback — MessageData, MessageFeedback, ResponseLog, MetaWeights, HealthSnapshot."""
 
 import dataclasses
 import threading
@@ -7,15 +7,15 @@ import typing
 import numpy as np
 import pytest
 
-from domain.feedback._internal.database import Feedback, Message, SimilarPattern
-from domain.feedback._internal.message_feedback import (
+from domain.training.feedback._internal.database import Feedback, Message, SimilarPattern
+from domain.training.feedback._internal.message_feedback import (
     MessageData,
     MessageFeedback,
     get_message_feedback,
 )
-from domain.feedback._internal.meta_weights import MetaWeights
-from domain.feedback._internal.model_health import HealthSnapshot
-from domain.feedback._internal.response_tracker import ResponseLog
+from domain.training.feedback._internal.meta_weights import MetaWeights
+from domain.training.feedback._internal.model_health import HealthSnapshot
+from domain.training.feedback._internal.response_tracker import ResponseLog
 
 
 class TestMessageData:
@@ -308,7 +308,7 @@ class TestMessageFeedback:
 
 class TestMessageFeedbackSingleton:
     def test_get_message_feedback_singleton(self):
-        import domain.feedback._internal.message_feedback as mod
+        import domain.training.feedback._internal.message_feedback as mod
 
         old = mod._feedback_instance
         try:
@@ -321,7 +321,7 @@ class TestMessageFeedbackSingleton:
             mod._feedback_instance = old
 
     def test_singleton_not_none_after_first_call(self):
-        import domain.feedback._internal.message_feedback as mod
+        import domain.training.feedback._internal.message_feedback as mod
 
         old = mod._feedback_instance
         try:
@@ -332,7 +332,7 @@ class TestMessageFeedbackSingleton:
             mod._feedback_instance = old
 
     def test_singleton_returns_same_type(self):
-        import domain.feedback._internal.message_feedback as mod
+        import domain.training.feedback._internal.message_feedback as mod
 
         old = mod._feedback_instance
         try:
@@ -343,7 +343,7 @@ class TestMessageFeedbackSingleton:
             mod._feedback_instance = old
 
     def test_singleton_preserves_state_across_calls(self):
-        import domain.feedback._internal.message_feedback as mod
+        import domain.training.feedback._internal.message_feedback as mod
 
         old = mod._feedback_instance
         try:
@@ -358,7 +358,7 @@ class TestMessageFeedbackSingleton:
             mod._feedback_instance = old
 
     def test_singleton_resets_cleanly(self):
-        import domain.feedback._internal.message_feedback as mod
+        import domain.training.feedback._internal.message_feedback as mod
 
         old = mod._feedback_instance
         try:

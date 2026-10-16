@@ -80,7 +80,7 @@ class CollectionsRouter:
         records_count, last_run}`` per pipeline — the registry only stores
         names, so details are pulled from each pipeline's stats here.
         """
-        from domain.collections import get_registry
+        from domain.training.collections import get_registry
 
         registry = get_registry()
         pipelines = []
@@ -130,7 +130,7 @@ class CollectionsRouter:
     ) -> dict:
         """Create and register a new collection pipeline."""
         try:
-            from domain.collections import CollectionPipeline, get_registry
+            from domain.training.collections import CollectionPipeline, get_registry
 
             registry = get_registry()
             if req.source_config or req.store_config:
@@ -197,7 +197,7 @@ class CollectionsRouter:
 
         try:
             _t0 = _time.monotonic()
-            from domain.collections import get_registry
+            from domain.training.collections import get_registry
 
             registry = get_registry()
             count = registry.collect(name)
@@ -234,7 +234,7 @@ class CollectionsRouter:
 
         try:
             _t0 = _time.monotonic()
-            from domain.collections import (
+            from domain.training.collections import (
                 Collector,
                 DedupFilter,
                 LengthFilter,
@@ -279,7 +279,7 @@ class CollectionsRouter:
     @endpoint("collections.get_stats")
     async def get_stats(self) -> dict:
         """Get overall collection stats."""
-        from domain.collections import get_registry
+        from domain.training.collections import get_registry
 
         registry = get_registry()
         stats = registry.stats()
@@ -288,7 +288,7 @@ class CollectionsRouter:
     @endpoint("collections.get_pipeline")
     async def get_pipeline(self, pipeline_id: str) -> dict:
         """Get details of a specific pipeline."""
-        from domain.collections import get_registry
+        from domain.training.collections import get_registry
 
         registry = get_registry()
         pipeline = registry.get_pipeline(pipeline_id)
@@ -308,7 +308,7 @@ class CollectionsRouter:
     ) -> dict:
         """Delete a pipeline from the registry."""
         try:
-            from domain.collections import get_registry
+            from domain.training.collections import get_registry
 
             registry = get_registry()
             removed = registry.remove_pipeline(pipeline_id)
@@ -327,7 +327,7 @@ class CollectionsRouter:
     ) -> dict:
         """Run collection for a specific pipeline."""
         try:
-            from domain.collections import get_registry
+            from domain.training.collections import get_registry
 
             registry = get_registry()
             pipeline = registry.get_pipeline(pipeline_id)
@@ -356,7 +356,7 @@ class CollectionsRouter:
     ) -> dict:
         """Get records from a pipeline's store."""
         try:
-            from domain.collections import get_registry
+            from domain.training.collections import get_registry
 
             registry = get_registry()
             pipeline = registry.get_pipeline(pipeline_id)
@@ -382,7 +382,7 @@ class CollectionsRouter:
 
 def _build_source(source_type: str, config: dict):
     """Build a Source from type and config."""
-    from domain.collections import (
+    from domain.training.collections import (
         ApiSource,
         FileSource,
         GeneratorSource,
@@ -410,7 +410,7 @@ def _build_source(source_type: str, config: dict):
 
 def _build_store(store_type: str, config: dict):
     """Build a Store from type and config."""
-    from domain.collections import (
+    from domain.training.collections import (
         CallbackStore,
         ChainedStore,
         FileStore,
@@ -434,7 +434,7 @@ def _build_store(store_type: str, config: dict):
 
 def _build_filter(config: dict):
     """Build a Filter from config dict."""
-    from domain.collections import (
+    from domain.training.collections import (
         DedupFilter,
         KeywordFilter,
         LanguageFilter,

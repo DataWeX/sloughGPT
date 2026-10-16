@@ -18,7 +18,7 @@ class TestBenchmarkMetrics:
     """Test benchmark metric computation."""
 
     def test_perplexity_computation(self):
-        from domain.feedback._internal.lora_eval import LoRAEvaluator
+        from domain.training.feedback._internal.lora_eval import LoRAEvaluator
 
         evaluator = LoRAEvaluator()
         # Compute perplexity on known text
@@ -27,37 +27,37 @@ class TestBenchmarkMetrics:
         assert ppl is None or ppl > 0
 
     def test_bleu_perfect_match(self):
-        from domain.feedback._internal.lora_eval import BLEUScorer
+        from domain.training.feedback._internal.lora_eval import BLEUScorer
 
         score = BLEUScorer.score("hello world", "hello world")
         assert score == 100.0
 
     def test_bleu_partial_match(self):
-        from domain.feedback._internal.lora_eval import BLEUScorer
+        from domain.training.feedback._internal.lora_eval import BLEUScorer
 
         score = BLEUScorer.score("hello world", "hello there world")
         assert 0 < score < 100
 
     def test_bleu_no_match(self):
-        from domain.feedback._internal.lora_eval import BLEUScorer
+        from domain.training.feedback._internal.lora_eval import BLEUScorer
 
         score = BLEUScorer.score("foo bar", "baz qux")
         assert score == 0.0
 
     def test_bleu_empty_candidate(self):
-        from domain.feedback._internal.lora_eval import BLEUScorer
+        from domain.training.feedback._internal.lora_eval import BLEUScorer
 
         score = BLEUScorer.score("", "hello world")
         assert score == 0.0
 
     def test_bleu_empty_reference(self):
-        from domain.feedback._internal.lora_eval import BLEUScorer
+        from domain.training.feedback._internal.lora_eval import BLEUScorer
 
         score = BLEUScorer.score("hello world", "")
         assert score == 0.0
 
     def test_personality_scoring(self):
-        from domain.feedback._internal.lora_eval import LoRAEvaluator
+        from domain.training.feedback._internal.lora_eval import LoRAEvaluator
 
         evaluator = LoRAEvaluator()
         score = evaluator._score_personality("I'm happy to help you with that!")
@@ -65,7 +65,7 @@ class TestBenchmarkMetrics:
         assert score.warmth_score >= 0
 
     def test_eval_result_creation(self):
-        from domain.feedback._internal.lora_eval import EvalResult
+        from domain.training.feedback._internal.lora_eval import EvalResult
 
         result = EvalResult(
             timestamp="2024-01-01T00:00:00",
@@ -183,14 +183,14 @@ class TestBenchmarkIntegration:
     """Integration tests for the benchmark suite."""
 
     def test_evaluator_with_simulated_model(self):
-        from domain.feedback._internal.lora_eval import LoRAEvaluator
+        from domain.training.feedback._internal.lora_eval import LoRAEvaluator
 
         evaluator = LoRAEvaluator()
         # Should work without a real model (simulated)
         assert not evaluator.available()
 
     def test_evaluator_run_simulated(self):
-        from domain.feedback._internal.lora_eval import LoRAEvaluator
+        from domain.training.feedback._internal.lora_eval import LoRAEvaluator
 
         evaluator = LoRAEvaluator()
         result = evaluator.run(save=False)
@@ -198,7 +198,7 @@ class TestBenchmarkIntegration:
         assert result.inference_time_sec >= 0
 
     def test_compare_results(self):
-        from domain.feedback._internal.lora_eval import EvalResult, LoRAEvaluator
+        from domain.training.feedback._internal.lora_eval import EvalResult, LoRAEvaluator
 
         evaluator = LoRAEvaluator()
         baseline = EvalResult(
@@ -231,7 +231,7 @@ class TestBenchmarkIntegration:
         assert delta["bleu_delta"] > 0  # Higher is better
 
     def test_export_adapter_as_sou(self):
-        from domain.feedback._internal.lora_eval import LoRAEvaluator
+        from domain.training.feedback._internal.lora_eval import LoRAEvaluator
 
         evaluator = LoRAEvaluator()
         with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:

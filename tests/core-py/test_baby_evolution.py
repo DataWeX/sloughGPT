@@ -1,6 +1,6 @@
 import numpy as np
 
-from domain.collections._internal.baby_evolution import (
+from domain.training.collections._internal.baby_evolution import (
     EvolutionConfig,
     EvolutionEngine,
     FitnessTracker,

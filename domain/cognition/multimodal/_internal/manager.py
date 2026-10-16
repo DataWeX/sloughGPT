@@ -474,7 +474,7 @@ class MultimodalManager:
                 raw_text = ground_truth.strip()
                 result = engine.generate(img_np, max_len=16, temperature=0.8)
                 generated_text = result.text.strip()
-                from domain.feedback._internal.lora_eval import BLEUScorer
+                from domain.training.feedback._internal.lora_eval import BLEUScorer
 
                 accuracy = BLEUScorer.score(generated_text, raw_text)
                 self._accuracy_history.append(accuracy)

@@ -1,6 +1,6 @@
 """Meaningful tests for entity_extractor — entity extraction, relationship extraction, fact extraction from conversations."""
 
-from domain.learner._internal.entity_extractor import (
+from domain.training.learner._internal.entity_extractor import (
     _is_valid_entity,
     extract_entities,
     extract_facts_from_conversation,

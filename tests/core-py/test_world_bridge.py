@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-from domain.collections._internal.sources import Record
-from domain.collections._internal.world_bridge import (
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.world_bridge import (
     MATERIAL_SIGNAL,
     CollectionWorldPipeline,
     RecordToWorldMapper,
@@ -212,7 +212,7 @@ class TestCollectionWorldPipeline:
         assert pipeline.stats["total_injected"] == 2
 
     def test_run_filters(self):
-        from domain.collections._internal.filters import LengthFilter
+        from domain.training.collections._internal.filters import LengthFilter
 
         grid = MagicMock()
         src = self._make_source([Record(content="hi"), Record(content="long enough text")])

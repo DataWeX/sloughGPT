@@ -24,7 +24,7 @@ def _d(resp):
 
 
 def _cleanup_store():
-    from domain.learner._internal.knowledge import get_knowledge_memory
+    from domain.training.learner._internal.knowledge import get_knowledge_memory
 
     get_knowledge_memory().clear_all()
 

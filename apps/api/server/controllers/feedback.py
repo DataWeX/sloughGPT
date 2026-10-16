@@ -29,7 +29,7 @@ def _trigger_hf_dpo():
         tokenizer = getattr(server_state, "tokenizer", None)
         if model is None or tokenizer is None:
             return
-        from domain.feedback._internal.hf_dpo import HFDPOTrainer
+        from domain.training.feedback._internal.hf_dpo import HFDPOTrainer
 
         trainer = HFDPOTrainer(model=model, tokenizer=tokenizer)
         pairs = trainer.prepare_dpo_pairs()
@@ -141,7 +141,7 @@ class FeedbackController:
         """Lazy-load feedback workflow and wire the current model."""
         if self._workflow is None:
             try:
-                from domain.feedback._internal.workflow import get_feedback_workflow
+                from domain.training.feedback._internal.workflow import get_feedback_workflow
 
                 self._workflow = get_feedback_workflow()
                 self._wire_model()
@@ -172,7 +172,7 @@ class FeedbackController:
         """Lazy-load online LoRA updater."""
         if self._lora_updater is None:
             try:
-                from domain.feedback._internal.online_train import get_online_lora_updater
+                from domain.training.feedback._internal.online_train import get_online_lora_updater
 
                 self._lora_updater = get_online_lora_updater()
             except Exception as e:

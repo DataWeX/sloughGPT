@@ -87,7 +87,7 @@ def test_at_least_the_three_known_producers_are_wired() -> None:
     """
     expected = {
         "domain/core/_internal/soul.py",
-        "domain/feedback/_internal/lora_eval.py",
+        "domain/training/feedback/_internal/lora_eval.py",
         "domain/training/_internal/train_pipeline.py",
     }
     found = {str(py.relative_to(REPO_ROOT)) for py, _ in _save_soul_calls()}

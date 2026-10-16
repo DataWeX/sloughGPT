@@ -1,10 +1,10 @@
-"""Tests for domain.feedback._internal.message_feedback — in-memory feedback store."""
+"""Tests for domain.training.feedback._internal.message_feedback — in-memory feedback store."""
 
 from __future__ import annotations
 
 import threading
 
-from domain.feedback._internal.message_feedback import (
+from domain.training.feedback._internal.message_feedback import (
     MessageData,
     MessageFeedback,
     get_message_feedback,

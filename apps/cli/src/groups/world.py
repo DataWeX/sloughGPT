@@ -204,13 +204,16 @@ def register(cli):
     def world_ingest(source_type, source_value, radius, decay, verbose):
         import numpy as np
 
-        from domain.collections._internal.perception import PerceptionConfig, WorldPerception
-        from domain.collections._internal.sources import (
+        from domain.shell._internal.simulation import WorldGrid
+        from domain.training.collections._internal.perception import (
+            PerceptionConfig,
+            WorldPerception,
+        )
+        from domain.training.collections._internal.sources import (
             Record,
             RssSource,
             UrlSource,
         )
-        from domain.shell._internal.simulation import WorldGrid
 
         config = PerceptionConfig(radius=radius, decay_rate=decay)
         perception = WorldPerception(config)
@@ -225,12 +228,12 @@ def register(cli):
                         records.append(Record(content=line))
             events = perception.ingest_records(records)
         elif source_type == "url":
-            from domain.collections._internal.sources import UrlSource
+            from domain.training.collections._internal.sources import UrlSource
 
             source = UrlSource(source_value)
             events = perception.ingest_source(source)
         elif source_type == "rss":
-            from domain.collections._internal.sources import RssSource
+            from domain.training.collections._internal.sources import RssSource
 
             source = RssSource(source_value)
             events = perception.ingest_source(source)

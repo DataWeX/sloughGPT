@@ -4,7 +4,7 @@ Covers: UserAdaptersRouter CRUD, merge, aggregate-best, quality, prune, delete.
 All domain calls are mocked; only HTTP-level behavior is tested.
 
 Note: the user_adapters router imports get_per_user_lora INSIDE each handler,
-so we must patch at 'domain.feedback._internal.per_user_lora.get_per_user_lora'.
+so we must patch at 'domain.training.feedback._internal.per_user_lora.get_per_user_lora'.
 """
 
 from __future__ import annotations
@@ -72,19 +72,19 @@ def _app():
 
 
 # ---------------------------------------------------------------------------
-# Tests — patch at 'domain.feedback.get_per_user_lora'
+# Tests — patch at 'domain.training.feedback.get_per_user_lora'
 # ---------------------------------------------------------------------------
 #
-# The handler runs `from domain.feedback import get_per_user_lora` inside
+# The handler runs `from domain.training.feedback import get_per_user_lora` inside
 # _get_store(), so it resolves the PACKAGE attribute on every call.
-# domain/feedback/__init__.py:27 is an *eager* re-export
-#   from domain.feedback._internal.per_user_lora import get_per_user_lora
+# domain/training/feedback/__init__.py:27 is an *eager* re-export
+#   from domain.training.feedback._internal.per_user_lora import get_per_user_lora
 # which binds the name once at package-import time. Patching the _internal
 # module therefore never reaches the name the router reads, and these tests
 # were silently exercising the real store (live rows such as user_id
 # 'default' instead of the fake's u1/u2).
 
-MOCK_TARGET = "domain.feedback.get_per_user_lora"
+MOCK_TARGET = "domain.training.feedback.get_per_user_lora"
 
 
 @pytest.fixture(autouse=True)

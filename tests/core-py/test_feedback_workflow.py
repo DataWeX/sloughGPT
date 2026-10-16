@@ -1,4 +1,4 @@
-"""Tests for domain.feedback._internal.workflow — WorkflowConfig, FeedbackWorkflowManager."""
+"""Tests for domain.training.feedback._internal.workflow — WorkflowConfig, FeedbackWorkflowManager."""
 
 import time
 from dataclasses import fields
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from domain.feedback._internal.workflow import (
+from domain.training.feedback._internal.workflow import (
     FeedbackWorkflowManager,
     WorkflowConfig,
     get_feedback_workflow,
@@ -706,7 +706,7 @@ class TestStartStop:
 
 class TestGetFeedbackWorkflow:
     def test_returns_manager(self):
-        import domain.feedback._internal.workflow as mod
+        import domain.training.feedback._internal.workflow as mod
 
         original = mod._workflow_manager
         try:
@@ -717,7 +717,7 @@ class TestGetFeedbackWorkflow:
             mod._workflow_manager = original
 
     def test_returns_same_instance(self):
-        import domain.feedback._internal.workflow as mod
+        import domain.training.feedback._internal.workflow as mod
 
         original = mod._workflow_manager
         try:
@@ -729,7 +729,7 @@ class TestGetFeedbackWorkflow:
             mod._workflow_manager = original
 
     def test_accepts_config(self):
-        import domain.feedback._internal.workflow as mod
+        import domain.training.feedback._internal.workflow as mod
 
         original = mod._workflow_manager
         try:

@@ -28,7 +28,7 @@ Added missing exports to domain modules so CLI can use public API:
 **domain/cognition/__init__.py:**
 - Added: `KnowledgeGraph`, `ProductionRAG`
 
-**domain/collections/__init__.py:**
+**domain/training/collections/__init__.py:**
 - Added: `PerceptionConfig`, `WorldPerception`
 
 ### 3. Fixed All `_internal` Imports

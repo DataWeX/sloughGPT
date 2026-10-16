@@ -25,15 +25,15 @@ def _d(resp):
 @pytest.fixture(autouse=True)
 def _fresh_registry():
     """Reset the global registry singleton before each test."""
-    import domain.collections._internal.registry as reg_mod
-    from domain.collections._internal.registry import CollectionRegistry, get_registry
+    import domain.training.collections._internal.registry as reg_mod
+    from domain.training.collections._internal.registry import CollectionRegistry, get_registry
 
     reg_mod._default_registry = CollectionRegistry()
 
     registry = get_registry()
-    from domain.collections._internal.filters import LengthFilter
-    from domain.collections._internal.sources import GeneratorSource
-    from domain.collections._internal.stores import MemoryStore
+    from domain.training.collections._internal.filters import LengthFilter
+    from domain.training.collections._internal.sources import GeneratorSource
+    from domain.training.collections._internal.stores import MemoryStore
 
     registry.register_store("memory", MemoryStore())
     registry.register_source("generator", GeneratorSource(lambda: iter(["item1", "item2"])))
@@ -59,7 +59,7 @@ class TestListPipelines:
         assert data["counts"]["pipelines"] == 0
 
     def test_list_after_create(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("p1", "generator", "memory")
@@ -70,7 +70,7 @@ class TestListPipelines:
         assert data["counts"]["pipelines"] == 1
 
     def test_list_returns_enriched_pipeline_objects(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("p1", "generator", "memory")
@@ -200,7 +200,7 @@ class TestCreatePipeline:
 
 class TestRegistryDefaults:
     def test_fresh_registry_gets_stock_defaults(self):
-        import domain.collections._internal.registry as reg_mod
+        import domain.training.collections._internal.registry as reg_mod
 
         reg_mod._default_registry = None
         try:
@@ -218,7 +218,7 @@ class TestRunPipeline:
         self.client = get_test_client()
 
     def test_run_existing_pipeline(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("runner", "generator", "memory")
@@ -275,7 +275,7 @@ class TestGetStats:
         assert "pipelines" in data
 
     def test_stats_with_pipeline(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("s1", "generator", "memory")
@@ -290,7 +290,7 @@ class TestGetPipeline:
         self.client = get_test_client()
 
     def test_get_existing(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("my-pipe", "generator", "memory")
@@ -311,7 +311,7 @@ class TestDeletePipeline:
         self.client = get_test_client()
 
     def test_delete_existing(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("to-delete", "generator", "memory")
@@ -331,7 +331,7 @@ class TestCollectPipeline:
         self.client = get_test_client()
 
     def test_collect_existing(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("collected", "generator", "memory")
@@ -352,7 +352,7 @@ class TestGetRecords:
         self.client = get_test_client()
 
     def test_get_records_empty(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("empty-pipe", "generator", "memory")
@@ -369,7 +369,7 @@ class TestGetRecords:
         assert resp.status_code == 404
 
     def test_get_records_with_limit(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("limited", "generator", "memory")
@@ -379,7 +379,7 @@ class TestGetRecords:
         assert data["returned"] <= 1
 
     def test_get_records_limit_validation(self):
-        from domain.collections._internal.registry import get_registry
+        from domain.training.collections._internal.registry import get_registry
 
         registry = get_registry()
         registry.create_pipeline("val-pipe", "generator", "memory")

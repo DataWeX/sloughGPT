@@ -1,11 +1,11 @@
-"""Tests for domain.collections._internal.pipeline — CollectionPipeline."""
+"""Tests for domain.training.collections._internal.pipeline — CollectionPipeline."""
 
 from __future__ import annotations
 
-from domain.collections._internal.filters import Filter
-from domain.collections._internal.pipeline import CollectionPipeline
-from domain.collections._internal.sources import Record, Source
-from domain.collections._internal.stores import MemoryStore
+from domain.training.collections._internal.filters import Filter
+from domain.training.collections._internal.pipeline import CollectionPipeline
+from domain.training.collections._internal.sources import Record, Source
+from domain.training.collections._internal.stores import MemoryStore
 
 
 class DummySource(Source):

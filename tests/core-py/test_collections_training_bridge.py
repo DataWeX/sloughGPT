@@ -3,10 +3,10 @@ from pathlib import Path
 
 import numpy as np
 
-from domain.collections._internal.collector import Collector
-from domain.collections._internal.sources import FileSource, Record
-from domain.collections._internal.stores import MemoryStore
-from domain.collections._internal.training_bridge import (
+from domain.training.collections._internal.collector import Collector
+from domain.training.collections._internal.sources import FileSource, Record
+from domain.training.collections._internal.stores import MemoryStore
+from domain.training.collections._internal.training_bridge import (
     CollectorTrainingBridge,
     RecordToTrainingSource,
     TrainingDataAdapter,

@@ -75,7 +75,7 @@ def mock_chat_deps():
     with (
         # Split coverage: get_provider is read through TWO bindings in prod.
         #   domain.chat/_internal/{manager,domain}.py and
-        #   domain.feedback._internal.lora_eval.py import from
+        #   domain.training.feedback._internal.lora_eval.py import from
         #   domain.generate.models._internal.provider at CALL time  -> first patch
         #   routers/inference.py imports from domain.generate.models (eager __init__)
         #   at MODULE level and reads it at chat_stream:2353 -> second patch

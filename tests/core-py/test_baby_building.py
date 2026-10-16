@@ -1,6 +1,6 @@
 import numpy as np
 
-from domain.collections._internal.baby_building import (
+from domain.training.collections._internal.baby_building import (
     BabyBuilding,
     BuildingRegistry,
     Structure,

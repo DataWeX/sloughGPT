@@ -1,4 +1,4 @@
-"""Tests for domain.collections._internal.stores — pure logic, no network."""
+"""Tests for domain.training.collections._internal.stores — pure logic, no network."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import json
 import os
 import tempfile
 
-from domain.collections._internal.sources import Record
-from domain.collections._internal.stores import (
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.stores import (
     CallbackStore,
     ChainedStore,
     FileStore,

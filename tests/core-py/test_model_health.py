@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from domain.feedback._internal.model_health import HealthSnapshot, ModelHealthMonitor
+from domain.training.feedback._internal.model_health import HealthSnapshot, ModelHealthMonitor
 
 
 class TestModelHealthMonitor:

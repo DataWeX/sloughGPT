@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 
-from domain.feedback._internal.online_train import (
+from domain.training.feedback._internal.online_train import (
     LoRAConfig,
     OnlineLoRAUpdater,
     get_online_lora_updater,

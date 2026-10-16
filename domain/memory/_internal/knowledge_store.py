@@ -1609,7 +1609,7 @@ class KnowledgeIngestor:
 
     def __init__(self, memory: KnowledgeMemory | None = None, filter_instance=None):
         self.memory = memory or KnowledgeMemory()
-        from domain.learner._internal.data_filter import get_data_filter
+        from domain.training.learner._internal.data_filter import get_data_filter
 
         self.filter = filter_instance or get_data_filter()
         self._feeds: list[FeedSubscription] = self._load_feeds()

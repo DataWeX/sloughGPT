@@ -63,7 +63,7 @@ async def train_from_feedback(
     lora_alpha = req.lora_alpha
 
     try:
-        from domain.feedback._internal.training import FeedbackTrainer
+        from domain.training.feedback._internal.training import FeedbackTrainer
 
         trainer = FeedbackTrainer()
 

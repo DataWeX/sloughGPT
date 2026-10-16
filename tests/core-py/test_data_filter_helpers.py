@@ -1,6 +1,6 @@
-"""Tests for domain.learner._internal.data_filter — pure helper functions."""
+"""Tests for domain.training.learner._internal.data_filter — pure helper functions."""
 
-from domain.learner._internal.data_filter import (
+from domain.training.learner._internal.data_filter import (
     _hashed,
     _matches_blacklist,
     _matches_whitelist,

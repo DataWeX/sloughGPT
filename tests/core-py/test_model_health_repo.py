@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.feedback._internal.model_health_repo import (
+from domain.training.feedback._internal.model_health_repo import (
     HealthSnapshot,
     ModelHealthRepository,
 )

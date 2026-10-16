@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-from domain.collections._internal.sources import (
+from domain.training.collections._internal.sources import (
     ApiSource,
     FileSource,
     GeneratorSource,

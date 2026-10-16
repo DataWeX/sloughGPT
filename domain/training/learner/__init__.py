@@ -6,11 +6,11 @@ Public API:
 
 from __future__ import annotations
 
-from domain.learner._internal.continual import (
+from domain.training.learner._internal.continual import (
     ContinualLearner,
     get_learner,
 )
-from domain.learner._internal.entity_extractor import extract_and_store
+from domain.training.learner._internal.entity_extractor import extract_and_store
 
 __all__ = [
     "ContinualLearner",

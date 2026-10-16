@@ -1,4 +1,4 @@
-"""Tests for domain.feedback._internal.meta_weights — MetaWeights dataclass and MetaWeightManager logic."""
+"""Tests for domain.training.feedback._internal.meta_weights — MetaWeights dataclass and MetaWeightManager logic."""
 
 from dataclasses import fields
 from unittest.mock import MagicMock
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from domain.feedback._internal.meta_weights import MetaWeightManager, MetaWeights
+from domain.training.feedback._internal.meta_weights import MetaWeightManager, MetaWeights
 
 # ── MetaWeights dataclass ──────────────────────────────────────────────
 
@@ -93,7 +93,7 @@ class TestSimpleEmbed:
 
 class TestAggregatePatterns:
     def _make_pattern(self, rating, similarity):
-        from domain.feedback._internal.database import SimilarPattern
+        from domain.training.feedback._internal.database import SimilarPattern
 
         return SimilarPattern(content="x", rating=rating, similarity=similarity, pattern_type="msg")
 
@@ -421,7 +421,7 @@ class TestGetStats:
 
 class TestGlobalSingleton:
     def test_returns_manager(self):
-        import domain.feedback._internal.meta_weights as mod
+        import domain.training.feedback._internal.meta_weights as mod
 
         old = mod._meta_weight_manager
         mod._meta_weight_manager = None

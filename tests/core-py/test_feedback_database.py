@@ -6,7 +6,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.feedback._internal.database import (
+from domain.training.feedback._internal.database import (
     Feedback,
     FeedbackDB,
     Message,

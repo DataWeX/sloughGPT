@@ -654,7 +654,7 @@ class BulkProcessor:
         self._skipped = 0
         self._errors = 0
 
-        from domain.learner._internal.knowledge import KnowledgeFact
+        from domain.training.learner._internal.knowledge import KnowledgeFact
 
         facts = []
         vectors = []

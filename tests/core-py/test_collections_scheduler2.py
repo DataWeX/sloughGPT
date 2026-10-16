@@ -4,16 +4,16 @@ import json
 import time
 from pathlib import Path
 
-from domain.collections._internal.collector import Collector
-from domain.collections._internal.scheduler import (
+from domain.training.collections._internal.collector import Collector
+from domain.training.collections._internal.scheduler import (
     CollectorExporter,
     CollectorMonitor,
     JobConfig,
     JobScheduler,
 )
-from domain.collections._internal.sources import Record
-from domain.collections._internal.stores import MemoryStore
-from domain.collections._internal.validators import CollectorRunner
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.stores import MemoryStore
+from domain.training.collections._internal.validators import CollectorRunner
 
 # ---------------------------------------------------------------------------
 # Helpers

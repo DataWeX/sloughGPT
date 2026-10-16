@@ -2,7 +2,7 @@
 LoRA Evaluator — measures quality delta before/after adapter merge.
 
 Usage:
-    from domain.feedback._internal.lora_eval import LoRAEvaluator
+    from domain.training.feedback._internal.lora_eval import LoRAEvaluator
 
     eval = LoRAEvaluator(
         base_model="models/sloughgpt.safetensors",

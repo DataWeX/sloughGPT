@@ -22,7 +22,7 @@ def register(cli):
     @click.option("--min-length", default=10, type=int, help="Min record length")
     @click.option("--dedup/--no-dedup", default=True, help="Deduplicate records")
     def collect_file(path, output, min_length, dedup):
-        from domain.collections import (
+        from domain.training.collections import (
             Collector,
             DedupFilter,
             FileSource,
@@ -49,7 +49,13 @@ def register(cli):
     @click.option("--output", "-o", default=None, help="Output JSONL file")
     @click.option("--min-length", default=10, type=int, help="Min record length")
     def collect_url(url, output, min_length):
-        from domain.collections import Collector, FileStore, LengthFilter, MemoryStore, UrlSource
+        from domain.training.collections import (
+            Collector,
+            FileStore,
+            LengthFilter,
+            MemoryStore,
+            UrlSource,
+        )
 
         source = UrlSource(url)
         store = FileStore(output) if output else MemoryStore()
@@ -64,7 +70,7 @@ def register(cli):
     @click.argument("url")
     @click.option("--output", "-o", default=None, help="Output JSONL file")
     def collect_rss(url, output):
-        from domain.collections import Collector, FileStore, MemoryStore, RssSource
+        from domain.training.collections import Collector, FileStore, MemoryStore, RssSource
 
         source = RssSource(url)
         store = FileStore(output) if output else MemoryStore()

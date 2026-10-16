@@ -1,4 +1,4 @@
-from domain.collections._internal.filters import (
+from domain.training.collections._internal.filters import (
     DedupFilter,
     FilterChain,
     KeywordFilter,
@@ -11,10 +11,10 @@ from domain.collections._internal.filters import (
     TransformFilter,
     TruncateFilter,
 )
-from domain.collections._internal.pipeline import CollectionPipeline
-from domain.collections._internal.registry import CollectionRegistry, get_registry
-from domain.collections._internal.sources import Record
-from domain.collections._internal.stores import FileStore, MemoryStore
+from domain.training.collections._internal.pipeline import CollectionPipeline
+from domain.training.collections._internal.registry import CollectionRegistry, get_registry
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.stores import FileStore, MemoryStore
 
 # ── Record ─────────────────────────────────────────────────────────
 

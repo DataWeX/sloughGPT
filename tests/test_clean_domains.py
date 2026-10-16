@@ -47,7 +47,7 @@ class TestChatDomain:
     def _isolate_response_tracker(self, monkeypatch, tmp_path):
         """Point the global ResponseTracker at a scratch dir so assertions never
         see chat logs from prior server runs in the repo ``data/`` dir."""
-        from domain.feedback._internal import response_tracker as _rt
+        from domain.training.feedback._internal import response_tracker as _rt
 
         monkeypatch.setattr(_rt, "_response_tracker", _rt.ResponseTracker(log_dir=str(tmp_path)))
 

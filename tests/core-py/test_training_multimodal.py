@@ -1,8 +1,8 @@
-"""Tests for domain.feedback._internal.training — TrainingExample, DPOPair; domain.cognition.multimodal._internal.engine — MultimodalOutput; domain.cognition.multimodal._internal.speech — TranscriptionResult."""
+"""Tests for domain.training.feedback._internal.training — TrainingExample, DPOPair; domain.cognition.multimodal._internal.engine — MultimodalOutput; domain.cognition.multimodal._internal.speech — TranscriptionResult."""
 
 from domain.cognition.multimodal._internal.engine import MultimodalOutput
 from domain.cognition.multimodal._internal.speech import TranscriptionResult
-from domain.feedback._internal.training import DPOPair, TrainingExample
+from domain.training.feedback._internal.training import DPOPair, TrainingExample
 
 # ── TrainingExample ──────────────────────────────────────────────────────
 

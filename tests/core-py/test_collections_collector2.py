@@ -1,16 +1,20 @@
-"""Tests for domain.collections._internal.collector — pure logic, no network."""
+"""Tests for domain.training.collections._internal.collector — pure logic, no network."""
 
 from __future__ import annotations
 
-from domain.collections._internal.collector import BatchCollector, Collector, ParallelCollector
-from domain.collections._internal.filters import (
+from domain.training.collections._internal.collector import (
+    BatchCollector,
+    Collector,
+    ParallelCollector,
+)
+from domain.training.collections._internal.filters import (
     DedupFilter,
     FilterChain,
     KeywordFilter,
     LengthFilter,
 )
-from domain.collections._internal.sources import GeneratorSource, Record
-from domain.collections._internal.stores import MemoryStore
+from domain.training.collections._internal.sources import GeneratorSource, Record
+from domain.training.collections._internal.stores import MemoryStore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -99,7 +103,7 @@ class TestCollector:
         c.collect = lambda: counting_collect(c)
         import unittest.mock
 
-        with unittest.mock.patch("domain.collections._internal.collector.time.sleep"):
+        with unittest.mock.patch("domain.training.collections._internal.collector.time.sleep"):
             c.collect_continuous(interval=0, max_rounds=3)
         assert call_count == 3
 
@@ -226,7 +230,7 @@ class TestParallelCollector:
         pc.collect_threaded = lambda: counting_collect(pc)
         import unittest.mock
 
-        with unittest.mock.patch("domain.collections._internal.collector.time.sleep"):
+        with unittest.mock.patch("domain.training.collections._internal.collector.time.sleep"):
             pc.collect_continuous(interval=0, max_rounds=2)
         assert call_count == 2
 

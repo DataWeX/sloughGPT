@@ -889,7 +889,7 @@ def _cmd_user_adapters(args):
     user_id = getattr(args, "adapters_user", None) or getattr(args, "user", None)
     users_str = getattr(args, "adapters_users", None) or getattr(args, "users", None)
     try:
-        from domain.feedback import get_per_user_lora
+        from domain.training.feedback import get_per_user_lora
 
         store = get_per_user_lora()
 
@@ -949,7 +949,7 @@ def _cmd_feedback_train(args):
     output_dir = getattr(args, "feedback_output", None) or getattr(args, "output", None)
 
     try:
-        from domain.feedback import create_training_pipeline
+        from domain.training.feedback import create_training_pipeline
 
         trainer = create_training_pipeline()
         stats = trainer.get_training_stats()
@@ -995,7 +995,7 @@ def _cmd_feedback_export(args):
     fmt = getattr(args, "export_feedback_format", None) or getattr(args, "format", "jsonl")
 
     try:
-        from domain.feedback import get_meta_weight_manager
+        from domain.training.feedback import get_meta_weight_manager
 
         manager = get_meta_weight_manager()
         if manager is None:

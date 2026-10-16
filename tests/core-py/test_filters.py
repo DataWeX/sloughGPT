@@ -1,4 +1,4 @@
-"""Tests for domain.collections._internal.filters — all filter types and FilterChain.
+"""Tests for domain.training.collections._internal.filters — all filter types and FilterChain.
 
 Covers: LengthFilter, DedupFilter, KeywordFilter, RegexFilter, LanguageFilter,
 SamplerFilter, TransformFilter, TruncateFilter, PrefixFilter, MetadataFilter,
@@ -14,7 +14,7 @@ _core_dir = str(Path(__file__).resolve().parents[2] / "packages")
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.collections._internal.filters import (
+from domain.training.collections._internal.filters import (
     DedupFilter,
     FilterChain,
     KeywordFilter,
@@ -27,7 +27,7 @@ from domain.collections._internal.filters import (
     TransformFilter,
     TruncateFilter,
 )
-from domain.collections._internal.sources import Record
+from domain.training.collections._internal.sources import Record
 
 
 class TestLengthFilter:

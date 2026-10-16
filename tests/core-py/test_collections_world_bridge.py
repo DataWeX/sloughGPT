@@ -3,9 +3,9 @@ import json
 import numpy as np
 import pytest
 
-from domain.collections._internal.filters import LengthFilter
-from domain.collections._internal.sources import Record
-from domain.collections._internal.world_bridge import (
+from domain.training.collections._internal.filters import LengthFilter
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.world_bridge import (
     MATERIAL_FOOD,
     MATERIAL_SIGNAL,
     MATERIAL_TOXIC,

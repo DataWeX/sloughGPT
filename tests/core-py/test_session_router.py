@@ -95,7 +95,7 @@ class TestGetSessionInspector:
         with (
             patch("domain.infrastructure.session_core.SessionCore", mock_sc),
             patch(
-                "domain.feedback.get_message_feedback",
+                "domain.training.feedback.get_message_feedback",
                 return_value=mock_fb,
             ),
             patch("domain.knowledge.get_knowledge_memory", return_value=mock_km),

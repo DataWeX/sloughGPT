@@ -330,7 +330,9 @@ Be concise, accurate, and helpful."""
             import asyncio
 
             try:
-                from domain.learner._internal.knowledge_augmenter import enrich_with_knowledge
+                from domain.training.learner._internal.knowledge_augmenter import (
+                    enrich_with_knowledge,
+                )
 
                 def _query_aug():
                     result = enrich_with_knowledge(

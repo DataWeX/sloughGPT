@@ -135,7 +135,7 @@ class SessionRouter:
                 return SessionCore.get_messages(session_id)
 
             def _fetch_feedback():
-                from domain.feedback import get_message_feedback
+                from domain.training.feedback import get_message_feedback
 
                 fb = get_message_feedback()
                 return fb.get_stats()

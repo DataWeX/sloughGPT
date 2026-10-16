@@ -154,7 +154,7 @@ def extract_pairs_from_logs(
 
     # Try MogDB first
     try:
-        from domain.feedback._internal.response_tracker import get_response_tracker
+        from domain.training.feedback._internal.response_tracker import get_response_tracker
 
         tracker = get_response_tracker()
         if tracker._coll is not None:

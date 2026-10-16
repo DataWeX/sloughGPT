@@ -1,4 +1,4 @@
-"""Tests for domain.collections._internal.scheduler — JobConfig and JobScheduler."""
+"""Tests for domain.training.collections._internal.scheduler — JobConfig and JobScheduler."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from domain.collections._internal.scheduler import JobConfig, JobScheduler
+from domain.training.collections._internal.scheduler import JobConfig, JobScheduler
 
 # ---------------------------------------------------------------------------
 # JobConfig — construction & defaults

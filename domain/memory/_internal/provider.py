@@ -133,7 +133,7 @@ class KnowledgeMemoryProvider:
         if not content or not content.strip():
             return False
         try:
-            from domain.learner._internal.knowledge import KnowledgeFact
+            from domain.training.learner._internal.knowledge import KnowledgeFact
 
             return self._get_store().add_fact(
                 KnowledgeFact(content=content, topic=topic, source=source)
@@ -280,7 +280,7 @@ class KnowledgeMemoryProvider:
             return 0, 0
         store = self._get_store()
         try:
-            from domain.learner._internal.knowledge import KnowledgeFact
+            from domain.training.learner._internal.knowledge import KnowledgeFact
 
             built: list[Any] = []
             for fact in facts:

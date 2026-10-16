@@ -878,7 +878,7 @@ def user_adapters_client():
 class TestUserAdaptersAudit:
     """Per-user LoRA adapter mutations emit audit events."""
 
-    @patch("domain.feedback.get_per_user_lora")
+    @patch("domain.training.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_store, user_adapters_client):
         resp = user_adapters_client.post(
@@ -892,7 +892,7 @@ class TestUserAdaptersAudit:
         assert kwargs["resource"] == "user1"
         assert kwargs["detail"] == "rating=thumbs_up"
 
-    @patch("domain.feedback.get_per_user_lora")
+    @patch("domain.training.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_reset_logs_event(self, mock_logger, mock_store, user_adapters_client):
         resp = user_adapters_client.post("/user-adapters/user1/reset")
@@ -902,7 +902,7 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.reset"
         assert kwargs["resource"] == "user1"
 
-    @patch("domain.feedback.get_per_user_lora")
+    @patch("domain.training.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_merge_logs_event(self, mock_logger, mock_store, user_adapters_client):
         resp = user_adapters_client.post("/user-adapters/merge")
@@ -912,7 +912,7 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.merge"
         assert kwargs["resource"] == "all"
 
-    @patch("domain.feedback.get_per_user_lora")
+    @patch("domain.training.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_aggregate_best_logs_event(self, mock_logger, mock_store, user_adapters_client):
         store = mock_store.return_value
@@ -932,7 +932,7 @@ class TestUserAdaptersAudit:
         assert kwargs["resource"] == "best"
         assert kwargs["extra"] == {"user_count": 3, "total_feedback": 10}
 
-    @patch("domain.feedback.get_per_user_lora")
+    @patch("domain.training.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_logs_event(self, mock_logger, mock_store, user_adapters_client):
         resp = user_adapters_client.delete("/user-adapters/user1")
@@ -942,7 +942,7 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.delete"
         assert kwargs["resource"] == "user1"
 
-    @patch("domain.feedback.get_per_user_lora")
+    @patch("domain.training.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_prune_logs_event(self, mock_logger, mock_store, user_adapters_client):
         store = mock_store.return_value
@@ -971,7 +971,7 @@ def lora_eval_client():
 class TestLoraEvalAudit:
     """POST /lora-eval/aggregate emits an audit event."""
 
-    @patch("domain.feedback._internal.per_user_lora.get_per_user_lora")
+    @patch("domain.training.feedback._internal.per_user_lora.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_aggregate_logs_event(self, mock_logger, mock_store, lora_eval_client):
         store = mock_store.return_value

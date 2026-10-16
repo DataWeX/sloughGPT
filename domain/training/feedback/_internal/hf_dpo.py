@@ -17,7 +17,7 @@ import numpy as np
 
 logger = logging.getLogger("slo.feedback.hf_dpo")
 
-from domain.feedback._internal.database import get_feedback_db
+from domain.training.feedback._internal.database import get_feedback_db
 
 DPO_BETA = 0.1
 DEFAULT_LR = 1e-4

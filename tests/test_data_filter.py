@@ -4,7 +4,7 @@ Tests for DataFilter (domains/learner/data_filter.py).
 
 import pytest
 
-from domain.learner._internal.data_filter import (
+from domain.training.learner._internal.data_filter import (
     DataFilter,
     _matches_blacklist,
     _matches_whitelist,

@@ -40,7 +40,7 @@ REASONING_TYPE_MAP = {
 }
 
 try:
-    from domain.learner._internal.knowledge import get_knowledge_memory
+    from domain.training.learner._internal.knowledge import get_knowledge_memory
 except (ImportError, ModuleNotFoundError) as e:  # graceful degrade, as before
     get_knowledge_memory = None  # type: ignore[assignment]
     logger.debug("prompt_builder: knowledge memory unavailable: %s", e)

@@ -1,9 +1,9 @@
-"""Tests for domain.collections._internal.stores — MemoryStore, FileStore, CallbackStore, etc."""
+"""Tests for domain.training.collections._internal.stores — MemoryStore, FileStore, CallbackStore, etc."""
 
 from __future__ import annotations
 
-from domain.collections._internal.sources import Record
-from domain.collections._internal.stores import (
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.stores import (
     CallbackStore,
     ChainedStore,
     FileStore,

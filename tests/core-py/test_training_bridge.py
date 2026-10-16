@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from domain.collections._internal.collector import Collector
-from domain.collections._internal.sources import Record
-from domain.collections._internal.training_bridge import (
+from domain.training.collections._internal.collector import Collector
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.training_bridge import (
     CollectorTrainingBridge,
     RecordToTrainingSource,
     TrainingDataAdapter,

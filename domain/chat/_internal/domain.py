@@ -283,7 +283,7 @@ class ChatDomain:
     ) -> None:
         """Log response via ResponseTracker (MogDB + JSONL)."""
         try:
-            from domain.feedback._internal.response_tracker import get_response_tracker
+            from domain.training.feedback._internal.response_tracker import get_response_tracker
 
             get_response_tracker().log(
                 user_message=user_message[:500],
@@ -301,7 +301,7 @@ class ChatDomain:
     def get_recent_responses(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent logged responses from MogDB."""
         try:
-            from domain.feedback._internal.response_tracker import get_response_tracker
+            from domain.training.feedback._internal.response_tracker import get_response_tracker
 
             responses = get_response_tracker().get_responses(limit=limit)
             return [

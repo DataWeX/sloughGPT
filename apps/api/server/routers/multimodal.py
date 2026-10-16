@@ -542,7 +542,7 @@ class MultimodalRouter:
                 raise_error("DPO already in progress", "E_INFRA_BUSY")
             self._dpo_state["status"] = "running"
             self._dpo_state["result"] = None
-        from domain.feedback import HFDPOTrainer
+        from domain.training.feedback import HFDPOTrainer
 
         trainer = HFDPOTrainer(model=model, tokenizer=tokenizer, learning_rate=req.learning_rate)
         t0 = time.time()

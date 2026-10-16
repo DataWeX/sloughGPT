@@ -14,20 +14,24 @@ Public API:
 
 from __future__ import annotations
 
-from domain.collections._internal.builders import (
+from domain.training.collections._internal.builders import (
     CollectorBuilder,
     DataSink,
     DataSource,
     DataTransformer,
 )
-from domain.collections._internal.collector import BatchCollector, Collector, ParallelCollector
-from domain.collections._internal.config import (
+from domain.training.collections._internal.collector import (
+    BatchCollector,
+    Collector,
+    ParallelCollector,
+)
+from domain.training.collections._internal.config import (
     FilterConfig,
     PipelineConfig,
     SourceConfig,
     StoreConfig,
 )
-from domain.collections._internal.filters import (
+from domain.training.collections._internal.filters import (
     DedupFilter,
     Filter,
     FilterChain,
@@ -41,15 +45,15 @@ from domain.collections._internal.filters import (
     TransformFilter,
     TruncateFilter,
 )
-from domain.collections._internal.pipeline import CollectionPipeline
-from domain.collections._internal.registry import CollectionRegistry, get_registry
-from domain.collections._internal.scheduler import (
+from domain.training.collections._internal.pipeline import CollectionPipeline
+from domain.training.collections._internal.registry import CollectionRegistry, get_registry
+from domain.training.collections._internal.scheduler import (
     CollectorExporter,
     CollectorMonitor,
     JobConfig,
     JobScheduler,
 )
-from domain.collections._internal.sources import (
+from domain.training.collections._internal.sources import (
     ApiSource,
     FileSource,
     GeneratorSource,
@@ -60,7 +64,7 @@ from domain.collections._internal.sources import (
     UrlSource,
     WatchSource,
 )
-from domain.collections._internal.stores import (
+from domain.training.collections._internal.stores import (
     CallbackStore,
     ChainedStore,
     FileStore,
@@ -68,14 +72,14 @@ from domain.collections._internal.stores import (
     StatsStore,
     Store,
 )
-from domain.collections._internal.training_bridge import (
+from domain.training.collections._internal.training_bridge import (
     CollectorTrainingBridge,
     RecordToTrainingSource,
     TrainingDataAdapter,
     TrainingDataConfig,
     TrainingDatasetBuilder,
 )
-from domain.collections._internal.validators import (
+from domain.training.collections._internal.validators import (
     CallableSource,
     CallableStore,
     CollectorRunner,
@@ -85,7 +89,7 @@ from domain.collections._internal.validators import (
     RateLimiter,
     Schema,
 )
-from domain.collections._internal.world_bridge import (
+from domain.training.collections._internal.world_bridge import (
     CollectionWorldPipeline,
     RecordToWorldMapper,
     WorldFeedConfig,

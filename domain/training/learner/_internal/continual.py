@@ -134,7 +134,10 @@ class ContinualLearner:
         self.buffer: list[int] = []
 
         # Knowledge ingestion pipeline
-        from domain.learner._internal.knowledge import get_knowledge_ingestor, get_knowledge_memory
+        from domain.training.learner._internal.knowledge import (
+            get_knowledge_ingestor,
+            get_knowledge_memory,
+        )
 
         self.ingestor = get_knowledge_ingestor()
         self.knowledge = get_knowledge_memory()

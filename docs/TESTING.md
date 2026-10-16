@@ -170,12 +170,12 @@ tests/core-py/
 A test patches the **definition** site while production reads the **re-export**:
 
 ```python
-@patch("domain.feedback._internal.per_user_lora.get_per_user_lora")   # test
+@patch("domain.training.feedback._internal.per_user_lora.get_per_user_lora")   # test
 # but routers/user_adapters.py:54 does:
-from domain.feedback import get_per_user_lora                          # reader
+from domain.training.feedback import get_per_user_lora                          # reader
 ```
 
-If `domain/feedback/__init__.py` binds that name **eagerly** (plain
+If `domain/training/feedback/__init__.py` binds that name **eagerly** (plain
 `from ... import ...`, no `__getattr__`), the package attribute is frozen at
 import time — the patch never reaches the reader and the test silently runs
 against **live state** instead of the fake. A lazy re-export
@@ -188,7 +188,7 @@ target depends on the code under test, not on the symbol:
 # routers/memory.py imports _internal at call time -> this target is correct
 @patch("domain.memory._internal.task_memory.list_archive")
 # routers/user_adapters.py imports the package -> this one is required
-@patch("domain.feedback.get_per_user_lora")
+@patch("domain.training.feedback.get_per_user_lora")
 ```
 
 ```bash
@@ -206,8 +206,8 @@ It also reports **unresolvable** targets, where `patch()` itself raises and the
 test errors at setup:
 
 ```text
-✖ domain.learner._internal.get_learner
-      AttributeError: module 'domain.learner._internal' (namespace) … has no
+✖ domain.training.learner._internal.get_learner
+      AttributeError: module 'domain.training.learner._internal' (namespace) … has no
       attribute 'get_learner'
 ```
 

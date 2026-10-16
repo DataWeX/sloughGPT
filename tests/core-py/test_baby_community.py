@@ -1,6 +1,6 @@
 import numpy as np
 
-from domain.collections._internal.baby_community import (
+from domain.training.collections._internal.baby_community import (
     BabyCommunity,
     BabyCommunitySystem,
     CommunityConfig,

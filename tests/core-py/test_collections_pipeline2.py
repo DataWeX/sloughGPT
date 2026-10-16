@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from domain.collections._internal.filters import KeywordFilter, LengthFilter
-from domain.collections._internal.pipeline import CollectionPipeline
-from domain.collections._internal.sources import Record
-from domain.collections._internal.stores import MemoryStore
+from domain.training.collections._internal.filters import KeywordFilter, LengthFilter
+from domain.training.collections._internal.pipeline import CollectionPipeline
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.stores import MemoryStore
 
 
 class StubSource:

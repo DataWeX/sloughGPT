@@ -24,7 +24,7 @@ All six moved to the repo-root **`domain/`** package.
 |--------|---------|
 | `domain.training` | Training pipelines, executor, distillation |
 | `domain.generate` | Vector store, KV cache, providers |
-| `domain.feedback` | LoRA eval, per-user adapter |
+| `domain.training.feedback` | LoRA eval, per-user adapter |
 | `domain.cognition` | Reasoning, metacognition, RAG |
 | `domain.infrastructure` | ProcessGuard, ModelServer, TaskQueue, CancelManager |
 | `domain.cognition.multimodal` | Phoneme encoders, TTS, speech synthesis |

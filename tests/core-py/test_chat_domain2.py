@@ -15,7 +15,7 @@ from domain.chat._internal.domain import (
 from domain.chat._internal.domain import (
     __all__ as domain_all,
 )
-from domain.feedback._internal.response_tracker import ResponseTracker
+from domain.training.feedback._internal.response_tracker import ResponseTracker
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +23,7 @@ def _isolate_response_tracker(tmp_path):
     """Mock get_response_tracker to return a fresh tracker per test."""
     tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
     with patch(
-        "domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
+        "domain.training.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
     ):
         yield
 
@@ -304,11 +304,11 @@ class TestBuildPrompt:
 
 class TestLoggingRoundTrip:
     def test_log_writes_jsonl(self, tmp_path):
-        from domain.feedback._internal.response_tracker import ResponseTracker
+        from domain.training.feedback._internal.response_tracker import ResponseTracker
 
         tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
         with patch(
-            "domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
+            "domain.training.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
         ):
             domain = ChatDomain(log_dir=str(tmp_path / "logs"))
             domain._log("user msg", "assistant resp", "gpt2", 0.8, 256, "s1", "u1", 10, 50)
@@ -325,11 +325,11 @@ class TestLoggingRoundTrip:
         assert entry["user_id"] == "u1"
 
     def test_log_truncates_user_message_500(self, tmp_path):
-        from domain.feedback._internal.response_tracker import ResponseTracker
+        from domain.training.feedback._internal.response_tracker import ResponseTracker
 
         tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
         with patch(
-            "domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
+            "domain.training.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
         ):
             domain = ChatDomain(log_dir=str(tmp_path / "logs"))
             domain._log("A" * 600, "short", "m", 0.5, 100, "s", "u", 0, 0)

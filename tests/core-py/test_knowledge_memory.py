@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from domain.learner._internal.knowledge import KnowledgeFact, KnowledgeMemory
+from domain.training.learner._internal.knowledge import KnowledgeFact, KnowledgeMemory
 
 
 @pytest.fixture(autouse=True)
@@ -459,7 +459,7 @@ class TestAutoIngestFromChat:
     """Tests for auto_ingest_from_chat feature."""
 
     def test_extract_facts_from_text_with_facts(self):
-        from domain.learner._internal.knowledge import _extract_facts_from_text
+        from domain.training.learner._internal.knowledge import _extract_facts_from_text
 
         text = (
             "Python is a programming language. It has dynamic typing. The current version is 3.12."
@@ -470,21 +470,21 @@ class TestAutoIngestFromChat:
         assert any("Python" in f or "typing" in f or "version" in f for f in facts)
 
     def test_extract_facts_skips_questions(self):
-        from domain.learner._internal.knowledge import _extract_facts_from_text
+        from domain.training.learner._internal.knowledge import _extract_facts_from_text
 
         text = "What is Python? How does it work? Is it fast?"
         facts = _extract_facts_from_text(text)
         assert len(facts) == 0
 
     def test_extract_facts_skips_short(self):
-        from domain.learner._internal.knowledge import _extract_facts_from_text
+        from domain.training.learner._internal.knowledge import _extract_facts_from_text
 
         text = "Yes. No. Maybe."
         facts = _extract_facts_from_text(text)
         assert len(facts) == 0
 
     def test_extract_facts_empty(self):
-        from domain.learner._internal.knowledge import _extract_facts_from_text
+        from domain.training.learner._internal.knowledge import _extract_facts_from_text
 
         assert _extract_facts_from_text("") == []
         assert _extract_facts_from_text("short") == []

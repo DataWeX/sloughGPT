@@ -1,9 +1,9 @@
-"""Tests for domain.feedback._internal.response_tracker.py — response logging for benchmarking."""
+"""Tests for domain.training.feedback._internal.response_tracker.py — response logging for benchmarking."""
 
 import json
 from pathlib import Path
 
-from domain.feedback._internal.response_tracker import (
+from domain.training.feedback._internal.response_tracker import (
     ResponseLog,
     ResponseTracker,
     get_response_tracker,

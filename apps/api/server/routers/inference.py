@@ -34,7 +34,6 @@ from config import gen_config as _gen_config
 from domain.agents import get_agent_system, get_tool_registry
 from domain.core import get_rag_service
 from domain.core.shared import utc_now_iso
-from domain.feedback import MetaWeights, get_response_tracker
 from domain.generate.models import (
     ConsciousnessProcessor,
     KnowledgeProcessor,
@@ -47,8 +46,9 @@ from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
 from domain.infrastructure.server_state import get_server_state
 from domain.knowledge import KnowledgeFact, get_knowledge_memory
-from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
+from domain.training.feedback import MetaWeights, get_response_tracker
+from domain.training.learner import extract_and_store, get_learner
 
 logger = logging.getLogger("slo.inference")
 
@@ -550,7 +550,7 @@ def _apply_meta_weights(
 
     if adj is None:
         try:
-            from domain.feedback import get_meta_weight_manager
+            from domain.training.feedback import get_meta_weight_manager
 
             manager = get_meta_weight_manager()
             adj = manager.get_adjustment(

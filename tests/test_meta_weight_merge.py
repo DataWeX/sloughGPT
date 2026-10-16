@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from domain.feedback import MetaWeights
+from domain.training.feedback import MetaWeights
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +38,7 @@ def _apply(
 ):
     from apps.api.server.routers.inference import _apply_meta_weights
 
-    with patch("domain.feedback.get_meta_weight_manager") as mgr:
+    with patch("domain.training.feedback.get_meta_weight_manager") as mgr:
         mgr.return_value.get_adjustment.return_value = adj
         return _apply_meta_weights(
             temperature=temperature,

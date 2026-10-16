@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.feedback._internal.online_train import (
+from domain.training.feedback._internal.online_train import (
     LoRAConfig,
     OnlineLoRAUpdater,
     get_online_lora_updater,
@@ -220,7 +220,7 @@ class TestOnlineLoRAUpdater:
 
 class TestGetOnlineLoRAUpdater:
     def test_returns_singleton(self):
-        import domain.feedback._internal.online_train as mod
+        import domain.training.feedback._internal.online_train as mod
 
         original = mod._online_lora
         mod._online_lora = None

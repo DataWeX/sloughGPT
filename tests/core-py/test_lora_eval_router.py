@@ -84,9 +84,9 @@ def _app():
 # Tests — patch at domain module level (lazy imports inside handler body)
 # ---------------------------------------------------------------------------
 
-PATCH_EVALUATOR = "domain.feedback._internal.lora_eval.get_lora_evaluator"
-PATCH_STORE = "domain.feedback._internal.per_user_lora.get_per_user_lora"
-PATCH_PER_U_LORA = "domain.feedback._internal.per_user_lora.get_per_user_lora"
+PATCH_EVALUATOR = "domain.training.feedback._internal.lora_eval.get_lora_evaluator"
+PATCH_STORE = "domain.training.feedback._internal.per_user_lora.get_per_user_lora"
+PATCH_PER_U_LORA = "domain.training.feedback._internal.per_user_lora.get_per_user_lora"
 
 
 @pytest.fixture

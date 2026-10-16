@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from domain.learner._internal.continual import (
+from domain.training.learner._internal.continual import (
     VOCAB,
     ContinualLearner,
     _detokenize,

@@ -67,7 +67,7 @@ def test_targets_only_collects_internal_definition_sites(tool):
     # The retarget must have removed the dead target from the file it lived in.
     # (Other files -- including this one, which quotes targets as strings --
     # may still name it, so assert on the patcher set, not on presence.)
-    tgt = "domain.feedback._internal.model_health.get_health_monitor"
+    tgt = "domain.training.feedback._internal.model_health.get_health_monitor"
     patchers = targets.get(tgt, set())
     assert not any(p.name == "test_health_router.py" for p in patchers), (
         "test_health_router.py still patches a target production no longer reads"
@@ -77,26 +77,26 @@ def test_targets_only_collects_internal_definition_sites(tool):
 def test_path_module_maps_known_roots(tool):
     p = _REPO / "apps/api/server/routers/health.py"
     assert tool._md_path_module(p) == "routers.health"
-    assert tool._md_path_module(_REPO / "domain/feedback/__init__.py") == "domain.feedback"
+    assert tool._md_path_module(_REPO / "domain/training/feedback/__init__.py") == "domain.training.feedback"
 
 
 def test_relative_import_under_domain_keeps_its_prefix(tool):
     """`domain` must not be treated as a pythonpath root: dropping the prefix
     made `from .hf_dpo import X` resolve to an unimportable `feedback.*`."""
-    f = _REPO / "domain/feedback/_internal/workflow.py"
-    assert tool._md_path_module(f) == "domain.feedback._internal.workflow"
-    assert tool._md_resolve(".hf_dpo", f) == "domain.feedback._internal.hf_dpo"
+    f = _REPO / "domain/training/feedback/_internal/workflow.py"
+    assert tool._md_path_module(f) == "domain.training.feedback._internal.workflow"
+    assert tool._md_resolve(".hf_dpo", f) == "domain.training.feedback._internal.hf_dpo"
 
 
 # ── Empirical half: does the patch actually move the reader? ───────────
 
 
 def test_eager_reexport_does_not_follow_patch(tool):
-    """domain/feedback/__init__.py binds eagerly and defines no __getattr__,
+    """domain/training/feedback/__init__.py binds eagerly and defines no __getattr__,
     so patching _internal can never move the package attribute."""
     reached = tool._md_reaches(
-        "domain.feedback._internal.model_health.get_health_monitor",
-        "domain.feedback",
+        "domain.training.feedback._internal.model_health.get_health_monitor",
+        "domain.training.feedback",
         "get_health_monitor",
     )
     assert reached is False
@@ -115,8 +115,8 @@ def test_lazy_reexport_follows_patch(tool):
 def test_reaches_is_none_when_reader_has_no_such_attr(tool):
     assert (
         tool._md_reaches(
-            "domain.feedback._internal.model_health.get_health_monitor",
-            "domain.feedback",
+            "domain.training.feedback._internal.model_health.get_health_monitor",
+            "domain.training.feedback",
             "no_such_attr_anywhere",
         )
         is None
@@ -141,7 +141,7 @@ def test_cmd_mock_drift_returns_status(tool, capsys):
 def test_cmd_mock_drift_reports_a_confirmed_hit(tool, monkeypatch, capsys):
     """End-to-end: fake the two collectors so a hit is guaranteed, and check
     the report carries both the reader module and a concrete fix."""
-    target = "domain.feedback._internal.model_health.get_health_monitor"
+    target = "domain.training.feedback._internal.model_health.get_health_monitor"
     monkeypatch.setattr(
         tool,
         "_md_targets",
@@ -150,14 +150,14 @@ def test_cmd_mock_drift_reports_a_confirmed_hit(tool, monkeypatch, capsys):
     monkeypatch.setattr(
         tool,
         "_md_readers",
-        lambda: {"get_health_monitor": {"domain.feedback": {"routers.health"}}},
+        lambda: {"get_health_monitor": {"domain.training.feedback": {"routers.health"}}},
     )
     rc = tool.cmd_mock_drift()
     out = capsys.readouterr().out
     assert rc == 1
     assert target in out
-    assert "domain.feedback" in out
-    assert 'patch("domain.feedback.get_health_monitor")' in out
+    assert "domain.training.feedback" in out
+    assert 'patch("domain.training.feedback.get_health_monitor")' in out
 
 
 def test_reader_that_is_the_patched_module_is_not_a_hit(tool, monkeypatch, capsys):
@@ -166,7 +166,7 @@ def test_reader_that_is_the_patched_module_is_not_a_hit(tool, monkeypatch, capsy
     a dead one. Reporting it would be a false positive (seen with
     `<pkg>._internal.training.MogDB` where training.py does
     `from mogdb import MogDB`)."""
-    mod = "domain.feedback._internal.training"
+    mod = "domain.training.feedback._internal.training"
     target = f"{mod}.MogDB"
     monkeypatch.setattr(
         tool,
@@ -227,10 +227,10 @@ def test_unresolvable_accepts_a_real_target(tool, tmp_path):
     f = tmp_path / "test_ok.py"
     f.write_text(
         "from unittest.mock import patch\n\n"
-        'def t():\n    with patch("domain.feedback._internal.model_health.get_health_monitor"):\n'
+        'def t():\n    with patch("domain.training.feedback._internal.model_health.get_health_monitor"):\n'
         "        pass\n"
     )
-    tgt = "domain.feedback._internal.model_health.get_health_monitor"
+    tgt = "domain.training.feedback._internal.model_health.get_health_monitor"
     assert tool._md_unresolvable({tgt: {f}}) == []
 
 
@@ -319,7 +319,7 @@ def test_targets_pick_up_string_form_setattr(tool, monkeypatch, tmp_path):
     """`monkeypatch.setattr("pkg.mod.attr", v)` names a definition site exactly
     as `patch("pkg.mod.attr")` does, so it must be scanned too.  Before this the
     two spellings answered differently and 37 real targets were invisible."""
-    tgt = "domain.learner._internal.knowledge_augmenter.get_knowledge_memory"
+    tgt = "domain.training.learner._internal.knowledge_augmenter.get_knowledge_memory"
     f = _write_targets_root(
         tmp_path,
         f'def t(monkeypatch):\n    monkeypatch.setattr("{tgt}", 1)\n',
@@ -355,9 +355,9 @@ def test_targets_require_internal_definition_site(tool, monkeypatch, tmp_path):
 
 def test_real_repo_attrset_drift_is_now_visible(tool):
     """Regression: this exact drift existed while setattr was unscanned — the
-    test patches domain.learner...knowledge_augmenter.get_knowledge_memory while
+    test patches domain.training.learner...knowledge_augmenter.get_knowledge_memory while
     production reads it from domain.knowledge / domain.memory."""
-    tgt = "domain.learner._internal.knowledge_augmenter.get_knowledge_memory"
+    tgt = "domain.training.learner._internal.knowledge_augmenter.get_knowledge_memory"
     targets = tool._md_targets()
     assert tgt in targets, "setattr-scan regression: drift is invisible again"
     assert any(p.name == "test_knowledge_augmenter.py" for p in targets[tgt])
@@ -414,8 +414,8 @@ def test_static_status_lands_for_lazy_reexport(tool):
 def test_static_status_frozen_for_eager_reexport(tool):
     assert (
         tool._md_static_status(
-            "domain.feedback._internal.model_health.get_health_monitor",
-            {"get_health_monitor": {"domain.feedback": set()}},
+            "domain.training.feedback._internal.model_health.get_health_monitor",
+            {"get_health_monitor": {"domain.training.feedback": set()}},
         )
         == "frozen"
     )
@@ -440,14 +440,14 @@ def _load_plugin():
 def test_plugin_arms_callable_and_boom_raises(tool, monkeypatch, tmp_path):
     """The boom half must actually fire: armed means the symbol is replaced by
     something that raises when production reaches it."""
-    import domain.feedback._internal.model_health as mh
+    import domain.training.feedback._internal.model_health as mh
 
     plugin = _load_plugin()
     marker = tmp_path / "marker.txt"
     monkeypatch.setenv("SLO_DEAD_SEAM_MARKER", str(marker))
     monkeypatch.setenv(
         "SLO_DEAD_SEAM_TARGET",
-        "domain.feedback._internal.model_health.get_health_monitor",
+        "domain.training.feedback._internal.model_health.get_health_monitor",
     )
     # register the original so this module-scoped mutation cannot leak
     monkeypatch.setattr(mh, "get_health_monitor", mh.get_health_monitor)

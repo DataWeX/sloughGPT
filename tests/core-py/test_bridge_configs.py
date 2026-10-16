@@ -1,10 +1,13 @@
-"""Tests for domain.collections._internal.training_bridge — TrainingDataConfig, TrainingDataAdapter; domain.collections._internal.world_bridge — WorldFeedConfig, RecordToWorldMapper."""
+"""Tests for domain.training.collections._internal.training_bridge — TrainingDataConfig, TrainingDataAdapter; domain.training.collections._internal.world_bridge — WorldFeedConfig, RecordToWorldMapper."""
 
 import numpy as np
 
-from domain.collections._internal.sources import Record
-from domain.collections._internal.training_bridge import TrainingDataAdapter, TrainingDataConfig
-from domain.collections._internal.world_bridge import (
+from domain.training.collections._internal.sources import Record
+from domain.training.collections._internal.training_bridge import (
+    TrainingDataAdapter,
+    TrainingDataConfig,
+)
+from domain.training.collections._internal.world_bridge import (
     MATERIAL_FOOD,
     MATERIAL_SIGNAL,
     MATERIAL_TOXIC,
