@@ -27,6 +27,11 @@ cd apps/web && npm install && npm run dev
 
 # Or both in one command
 ./scripts/dev-stack.sh
+
+# Or the PGQ-supervised Python launcher — one entry point, waits for both
+# ports, prints the one URL (this is what the notebook's Serve section uses)
+python3 scripts/serve_ui.py
+# → http://localhost:5173  (web UI)   http://localhost:8000  (API)
 ```
 
 ## CLI
