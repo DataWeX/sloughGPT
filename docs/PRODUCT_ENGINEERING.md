@@ -108,7 +108,7 @@ only through the same stable interfaces:
 | #   | Feature              | Status           | Domain module          | Notes                                                              |
 | --- | -------------------- | ---------------- | ---------------------- | ------------------------------------------------------------------ |
 | 15  | **Consciousness**    | Wired           | `consciousness`        | Level-gated post-gen wiring (SloEngine hook + router `_run_post_gen_tasks`); narrative via reasoning_chain + `CONSCIOUSNESS` SSE; 27 sub-pages still need flow review |
-| 16  | **Voice**            | Partial          | `voice`                | TTS works, phoneme encode works; router imports the `domain.voice` facade |
+| 16  | **Voice**            | Partial          | `voice`                | TTS works, phoneme encode works; router imports the `domain.multimodal` facade |
 | 17  | **Phoneme Learning** | Over-built       | `voice` (phoneme)      | 47 components, 12 tabs — needs flow restructure                    |
 | 18  | **Tokenizer**        | Over-built       | `training` (tokenizer) | 9 tabs, 12 sub-cards — needs consolidation                         |
 | 19  | **Companion**        | Built            | `companion`            | AI companion with personality                                      |
@@ -165,7 +165,7 @@ tokenizer.py router → imports from domain.training._internal.tokenizer_manager
 token_tree.py router → imports from domain.training._internal.token_tree_manager (WRONG)
 
 Should be:
-VoiceEngine → wraps TTS + phoneme + recognition from domain.voice
+VoiceEngine → wraps TTS + phoneme + recognition from domain.multimodal
 TokenizerEngine → wraps tokenizer from domain.training
 Single router per engine, not per implementation module
 ```

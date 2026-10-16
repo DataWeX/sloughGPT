@@ -124,12 +124,12 @@ def __getattr__(name):
         "SelfEpisode": "domain.cognition",
         "SelfIdentity": "domain.cognition",
         # Voice
-        "VoiceEngine": "domain.voice",
-        "get_voice_engine": "domain.voice",
-        "TTSEngine": "domain.voice",
-        "SpeechRecognizer": "domain.voice",
-        "PhonemeEngine": "domain.voice",
-        "get_phoneme_engine": "domain.voice",
+        "VoiceEngine": "domain.multimodal",
+        "get_voice_engine": "domain.multimodal",
+        "TTSEngine": "domain.multimodal",
+        "SpeechRecognizer": "domain.multimodal",
+        "PhonemeEngine": "domain.multimodal",
+        "get_phoneme_engine": "domain.multimodal",
         # Multimodal
         "MultimodalManager": "domain.multimodal",
         "get_multimodal_manager": "domain.multimodal",

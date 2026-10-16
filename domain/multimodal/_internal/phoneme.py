@@ -44,14 +44,14 @@ class PhonemeEngine:
 
     def _get_encoder(self) -> Any:
         if self._encoder is None:
-            from domain.voice._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+            from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
 
             self._encoder = UnifiedPhonemeEncoder()
         return self._encoder
 
     def _get_voice(self) -> Any:
         if self._voice is None:
-            from domain.voice.engine import get_voice_engine
+            from domain.multimodal._internal.voice_engine import get_voice_engine
 
             self._voice = get_voice_engine()
         return self._voice

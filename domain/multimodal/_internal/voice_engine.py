@@ -2,10 +2,10 @@
 
 Wraps TTS, speech recognition, phoneme encoding, and audio filtering
 into a single cohesive API. Routers should use this, not import from
-domain.voice._internal directly.
+domain.multimodal._internal directly.
 
 Usage:
-    from domain.voice.engine import VoiceEngine
+    from domain.multimodal._internal.voice_engine import VoiceEngine
 
     engine = VoiceEngine()
     waveform = engine.synthesize("Hello world")
@@ -50,14 +50,14 @@ class VoiceEngine:
 
     def _get_tts(self) -> Any:
         if self._tts is None:
-            from domain.voice._internal.tts import TTSEngine
+            from domain.multimodal._internal.tts import TTSEngine
 
             self._tts = TTSEngine()
         return self._tts
 
     def _get_recognizer(self) -> Any:
         if self._recognizer is None:
-            from domain.voice._internal.speech import get_speech_recognizer
+            from domain.multimodal._internal.speech import get_speech_recognizer
 
             # Server-side engine: BrowserSpeechRecognizer has no recognize() —
             # it only exposes Web Speech API config for the frontend JS.
@@ -66,7 +66,7 @@ class VoiceEngine:
 
     def _get_encoder(self) -> Any:
         if self._encoder is None:
-            from domain.voice._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+            from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
 
             self._encoder = UnifiedPhonemeEncoder()
         return self._encoder
@@ -150,7 +150,7 @@ class VoiceEngine:
             VoiceResult with detected language code in data field.
         """
         try:
-            from domain.voice._internal.unified_phoneme_encoder import detect_language
+            from domain.multimodal._internal.unified_phoneme_encoder import detect_language
 
             lang = detect_language(text)
             return VoiceResult(

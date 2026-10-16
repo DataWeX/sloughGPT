@@ -161,7 +161,7 @@ class TestStatus:
 class TestTranscribe:
     """POST /multimodal/transcribe"""
 
-    @patch("domain.voice.get_voice_engine")
+    @patch("domain.multimodal.get_voice_engine")
     def test_transcribe_audio(self, mock_get_voice):
         ve = MagicMock()
         result = MagicMock()
@@ -462,7 +462,7 @@ class TestAnalyze:
 class TestSynthesizeSpeech:
     """POST /multimodal/synthesize-speech"""
 
-    @patch("domain.voice._internal.tts.TTSEngine")
+    @patch("domain.multimodal._internal.tts.TTSEngine")
     def test_synthesizes_waveform(self, mock_tts_cls):
         import numpy as np
 

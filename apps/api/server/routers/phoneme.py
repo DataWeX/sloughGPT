@@ -1,7 +1,7 @@
 """Phoneme Router — dedicated endpoints for phoneme operations.
 
 Phoneme encoding lives under voice (pronunciation is how the model speaks).
-Uses domain.voice.PhonemeEngine as the single source of truth.
+Uses domain.multimodal.PhonemeEngine as the single source of truth.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class PhonemeRouter:
 
     def _get_engine(self):
         if self._engine is None:
-            from domain.voice import get_phoneme_engine
+            from domain.multimodal import get_phoneme_engine
 
             self._engine = get_phoneme_engine()
         return self._engine

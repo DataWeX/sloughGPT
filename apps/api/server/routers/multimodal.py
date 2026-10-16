@@ -768,7 +768,7 @@ class MultimodalRouter:
             raise_error("Only audio files accepted", "E_BAD_REQUEST")
 
         if self._voice_engine is None:
-            from domain.voice import get_voice_engine
+            from domain.multimodal import get_voice_engine
 
             self._voice_engine = get_voice_engine()
 
@@ -802,7 +802,7 @@ class MultimodalRouter:
         import numpy as np
 
         if self._voice_engine is None:
-            from domain.voice import get_voice_engine
+            from domain.multimodal import get_voice_engine
 
             self._voice_engine = get_voice_engine()
 
