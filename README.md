@@ -77,12 +77,12 @@ sloughGPT/
 │   ├── gateway/               # API gateway
 │   └── data/                  # Data utilities
 ├── domain/                    # Core Python logic (canonical, import name `domain`)
-│   ├── training/                  # SloNet, training pipelines, distillation
-│   ├── inference/                 # Vector store, context, model loading
-│   ├── feedback/                  # LoRA adapters, DPO, workflow manager
-│   ├── multimodal/                # Vision encoder, cross-attention
-│   ├── shell/                     # Interactive REPL
-│   └── └── infrastructure/        # Config, errors, rate-limiter, lifecycle
+│   ├── training/              # SloNet, training pipelines, distillation (+ feedback/, collections/, learner/)
+│   ├── generate/              # Vector store, context, model loading (+ models/, voice/)
+│   ├── core/                  # Config, errors, rate-limiter, lifecycle (+ infrastructure/, shared/, logging/)
+│   ├── cognition/             # Perception & reasoning (+ multimodal/, context/, companion/)
+│   ├── shell/                 # Interactive REPL — core-domain, deliberately top-level (docs/DOMAIN_CONSOLIDATION.md §6.1)
+│   └── …                      # also top-level: agents/, chat/, knowledge/, memory/, search/, soul/, tools/
 ├── packages/
 │   ├── strui/                 # @sloughgpt/strui component library
 │   ├── mogdb/                 # Document database
