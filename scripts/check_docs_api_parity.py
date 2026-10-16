@@ -14,6 +14,14 @@ Cross-references three sources and reports the gaps:
 Findings (docs claim but code lacks / code has but docs lack / stale counts
 / untested routers) are what the gap-audit report turns into cards.
 
+4. **Caller reachability** — an AST import graph over tracked ``domain/``
+   modules (resolved the way Python resolves: relative imports, facade
+   re-exports, ancestor package inits) classifies modules with zero static
+   references against the ``CALLERLESS_BASELINE`` ratchet: a NEW orphan
+   fails the check, a baselined module that gains a caller is reported
+   stale (exit stays 0), untracked files are pending, never dead.
+   DOMAIN_CONSOLIDATION.md §7 method / §8 step 9.
+
 Usage::
 
     python scripts/check_docs_api_parity.py             # human summary
@@ -29,6 +37,7 @@ import argparse
 import ast
 import json
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -57,6 +66,89 @@ TEST_DIRS = (REPO / "tests" / "server", REPO / "tests" / "api-server")
 # Routers in a concurrent-refactor zone owned by another session — excluded from
 # the handler `_internal` assertions until that work lands.
 HANDLER_ALLOWLIST = frozenset({"shell", "vm", "world_render"})
+
+# --- caller-reachability ratchet (DOMAIN_CONSOLIDATION.md §7 method) ---------
+# Modules with ZERO static references, i.e. indegree 0 over an AST import graph
+# built the way Python resolves — §7 calibrated that grep-dotted-paths yields
+# 69% false positives (32 flagged vs 10 real), so the graph resolves:
+#   * relative imports against __package__ (from .base import X)
+#   * facade re-exports (from domain.x import NAME -> the module that actually
+#     binds NAME, read from each package's __init__ import table)
+#   * ancestor package inits, which load whenever any submodule is imported
+#   * `from pkg import sub`, which loads the submodule when one exists
+#   * string-literal dotted refs from non-test production code (importlib etc.)
+# tests/ are NOT roots (§7: "a test is a weak root" — math_rag.py has a
+# 421-line test and is still collectable), and untracked files are PENDING,
+# never dead (§7 rule: classify untracked code as pending).
+#
+# The ratchet: a baselined module that GAINS a caller leaves the callerless
+# set and is reported stale (cleanup nudge, exit 0); a module that LOSES all
+# callers is a NEW orphan and exits 1. Baseline sealed 2026-10-15 on
+# feat/generate-consolidation @ 0e03324c1; all 52 entries hand-verified against
+# the same probe run at 89d4e7cb1^ (before the §8 CCGT-four moves): 51 are
+# pre-existing debt carried through the renames, and domain.core.ops.__init__
+# is the one new orphan — step 5's deliberate wandb_server extraction
+# (ops -> training) left the pure-NumPy fused-ops facade with test-only roots.
+# Classes present: shell dynamic TUI commands (loaded by directory scan, so no
+# per-module reference exists anywhere), tested-but-unwired leaf modules
+# (§7's weak-root class), backward-compat shims, and the slolib.py stub whose
+# delete-or-keep decision is still pending with the user.
+CALLERLESS_BASELINE = frozenset(
+    {
+        "domain.agents._internal.devtools_follower",
+        "domain.cognition._internal.consciousness.training",
+        "domain.cognition._internal.math_rag",
+        "domain.cognition.multimodal._internal.phoneme_encoder_cli",
+        "domain.cognition.multimodal._internal.tts",
+        "domain.core._internal.base",
+        "domain.core._internal.core",
+        "domain.core._internal.grounding",
+        "domain.core._internal.knowledge_graph_v2",
+        "domain.core._internal.math_rag",
+        "domain.core.infrastructure._internal.cache",
+        "domain.core.infrastructure._internal.cache.__init__",
+        "domain.core.infrastructure._internal.deployment",
+        "domain.core.infrastructure._internal.deployment.__init__",
+        "domain.core.infrastructure._internal.gpu.compile_shaders",
+        "domain.core.infrastructure._internal.gpu.wgpu_be",
+        "domain.core.infrastructure._internal.rope",
+        "domain.core.infrastructure._internal.singleton",
+        "domain.core.infrastructure.safetensors_loader",
+        "domain.core.ops.__init__",
+        "domain.core.shared._internal.utils",
+        "domain.core.slolib._internal.slolib",
+        "domain.generate._internal.session_kv_manager",
+        "domain.shell._internal.addons.module_loader",
+        "domain.shell._internal.chart",
+        "domain.shell._internal.cmds.dashboard",
+        "domain.shell._internal.cmds.data_cmds",
+        "domain.shell._internal.cmds.health",
+        "domain.shell._internal.cmds.models_cmd",
+        "domain.shell._internal.cmds.souls_cmd",
+        "domain.shell._internal.cmds.status",
+        "domain.shell._internal.device_decorators",
+        "domain.shell._internal.realm_live",
+        "domain.shell._internal.term_screen",
+        "domain.shell._internal.widgets",
+        "domain.shell._internal.window",
+        "domain.shell._internal.world_driver",
+        "domain.training._internal.comprehensive_trainer",
+        "domain.training._internal.dataset",
+        "domain.training._internal.model_card",
+        "domain.training._internal.owned_objective",
+        "domain.training._internal.presets",
+        "domain.training._internal.sequence",
+        "domain.training._internal.status",
+        "domain.training.collections._internal.baby_building",
+        "domain.training.collections._internal.baby_community",
+        "domain.training.collections._internal.baby_economy",
+        "domain.training.collections._internal.baby_evolution",
+        "domain.training.collections._internal.baby_perception",
+        "domain.training.collections._internal.baby_social",
+        "domain.training.feedback._internal.model_health_repo",
+        "domain.training.learner._internal.knowledge_storage",
+    }
+)
 
 # docs/routers.md section title -> router file stem. Sections that map to no
 # single file (OpenAPI) or to main.py-registered routers are noted inline.
@@ -689,6 +781,209 @@ def _render_routers_md(findings: Findings) -> str:
     return "".join(out)
 
 
+def caller_reachability() -> tuple[set[str], set[str], set[str]]:
+    """Return ``(new_orphans, stale_baseline, pending)`` over tracked ``domain/``.
+
+    See ``CALLERLESS_BASELINE`` for the method and its calibration. Stdlib only
+    plus ``git ls-files`` for the tracked/untracked split — CI invokes this
+    script bare (no PYTHONPATH), and the split is what keeps in-flight work
+    from ever being classified dead.
+    """
+
+    def _git_files(*flags: str) -> list[Path]:
+        out = subprocess.run(
+            ["git", "ls-files", "-z", *flags, "--", "domain"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        return [REPO / p for p in out.split("\0") if p.endswith(".py")]
+
+    def _modname(path: Path) -> str:
+        return ".".join(path.relative_to(REPO).with_suffix("").parts)
+
+    def _package_of(path: Path) -> str:
+        parts = list(path.relative_to(REPO).with_suffix("").parts)
+        return ".".join(parts[:-1]) if len(parts) > 1 else ""
+
+    def _relative_base(pkg: str, level: int, module: str | None) -> str:
+        parts = pkg.split(".") if pkg else []
+        up = level - 1
+        if up:
+            parts = parts[: len(parts) - up] if up <= len(parts) else []
+        if module:
+            parts += module.split(".")
+        return ".".join(parts)
+
+    tracked = _git_files()
+    pending_files = _git_files("--others", "--exclude-standard")
+    file_nodes = {_modname(f) for f in tracked + pending_files}
+    refs: dict[str, set[str]] = {n: set() for n in file_nodes}
+
+    def _resolve(name: str | None) -> str | None:
+        """Module file node for a module path: file, or package -> its init."""
+        if not name:
+            return None
+        if name in file_nodes:
+            return name
+        init = f"{name}.__init__"
+        return init if init in file_nodes else None
+
+    def _add(target: str, source: str) -> None:
+        if target == source:
+            return
+        refs[target].add(source)
+        # importing X.y.z also loads every ancestor package init
+        parts = target.split(".")
+        for i in range(1, len(parts)):
+            anc = ".".join(parts[:i]) + ".__init__"
+            if anc in file_nodes and anc != source:
+                refs[anc].add(source)
+
+    def _bindings(init_file: Path) -> dict[str, str]:
+        """name -> module it is actually bound from (facade re-export resolution)."""
+        try:
+            tree = ast.parse(init_file.read_text(encoding="utf-8", errors="ignore"))
+        except (SyntaxError, OSError):
+            return {}
+        pkg = _package_of(init_file)
+        table: dict[str, str] = {}
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                base = (
+                    _relative_base(pkg, node.level, node.module)
+                    if node.level
+                    else (node.module or "")
+                )
+                for a in node.names:
+                    if a.name != "*":
+                        table[a.asname or a.name] = base
+            elif isinstance(node, ast.Import):
+                for a in node.names:
+                    if a.asname:
+                        table[a.asname] = a.name
+            elif isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name):
+                        table[t.id] = ""
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                table[node.target.id] = ""
+        return table
+
+    def _star_sources(init_file: Path) -> list[str]:
+        if init_file.name != "__init__.py":
+            return []
+        try:
+            tree = ast.parse(init_file.read_text(encoding="utf-8", errors="ignore"))
+        except (SyntaxError, OSError):
+            return []
+        return [
+            n.module
+            for n in tree.body
+            if isinstance(n, ast.ImportFrom)
+            and not n.level
+            and n.module
+            and any(a.name == "*" for a in n.names)
+        ]
+
+    def _scan_imports(path: Path, source: str) -> None:
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
+        except (SyntaxError, OSError):
+            return
+        pkg = _package_of(path)
+        bind_cache: dict[str, dict[str, str]] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for a in node.names:
+                    if a.name.startswith("domain"):
+                        target = _resolve(a.name)
+                        if target:
+                            _add(target, source)
+            elif isinstance(node, ast.ImportFrom):
+                base = (
+                    _relative_base(pkg, node.level, node.module)
+                    if node.level
+                    else (node.module or "")
+                )
+                if not base.startswith("domain"):
+                    continue
+                direct = _resolve(base)
+                if direct:
+                    _add(direct, source)
+                base_init = REPO.joinpath(*base.split(".")) / "__init__.py"
+                for a in node.names:
+                    if a.name == "*":
+                        for star in _star_sources(base_init):
+                            target = _resolve(star)
+                            if target:
+                                _add(target, source)
+                        continue
+                    tbl = bind_cache.get(base)
+                    if tbl is None:
+                        tbl = _bindings(base_init) if base_init.is_file() else {}
+                        bind_cache[base] = tbl
+                    target = _resolve(tbl.get(a.name))  # facade re-export hop
+                    if target:
+                        _add(target, source)
+                    sub = _resolve(f"{base}.{a.name}")  # `from pkg import sub`
+                    if sub:
+                        _add(sub, source)
+
+    # Importers: every tracked/pending domain module plus production code
+    # (apps/ scripts/ packages/ services/ and root-level .py). tests/ is NOT
+    # scanned — §7: a test is a weak root, so test-only modules stay flagged.
+    prod_files = list(tracked) + list(pending_files)
+    for root in ("apps", "scripts", "packages", "services"):
+        d = REPO / root
+        if d.exists():
+            prod_files += [
+                p
+                for p in d.rglob("*.py")
+                if "__pycache__" not in p.parts and "node_modules" not in p.parts
+            ]
+    prod_files += list(REPO.glob("*.py"))
+
+    string_ref_re = re.compile(r"(?<![\w.])domain(?:\.[A-Za-z_]\w*)+")
+    # This script AUTHORS CALLERLESS_BASELINE: its own source names every
+    # baselined module as a string literal, so scanning it would reference the
+    # baseline into clearing itself (measured: all 52 entries got their only
+    # edge from <scripts.check_docs_api_parity>). Exclude it from the string
+    # pass only — its AST imports (stdlib, no domain) still count.
+    self_source = Path(__file__).resolve()
+    for f in prod_files:
+        try:
+            rel = f.relative_to(REPO)
+        except ValueError:
+            continue
+        source = (
+            _modname(f)
+            if rel.parts[0] == "domain"
+            else "<" + ".".join(rel.with_suffix("").parts) + ">"
+        )
+        _scan_imports(f, source)
+        # string-literal dotted refs from non-test production code
+        if rel.parts[0] == "tests" or f == self_source:
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for ref in set(string_ref_re.findall(text)):
+            parts = ref.split(".")
+            for i in range(len(parts), 0, -1):
+                target = _resolve(".".join(parts[:i]))
+                if target:
+                    if target != source:
+                        refs[target].add(source)
+                    break
+
+    callerless = {n for n, r in refs.items() if not r}
+    pending = {_modname(f) for f in pending_files}
+    flagged = callerless - pending  # untracked = pending, never dead
+    return flagged - CALLERLESS_BASELINE, CALLERLESS_BASELINE - flagged, pending
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true", help="machine-readable output")
@@ -719,6 +1014,7 @@ def main() -> int:
     collect_tests(findings)
     collect_architecture(findings)
     diff(findings)
+    reach_new, reach_stale, reach_pending = caller_reachability()
 
     if args.render_routers:
         ROUTERS_MD.write_text(_render_routers_md(findings), encoding="utf-8")
@@ -736,12 +1032,13 @@ def main() -> int:
             or f2.collisions
             or f2.arch_mismatch
             or f2.arch_missing
+            or reach_new
         )
         print(
             f"rendered {ROUTERS_MD.name}: {len(f2.doc_claims)} rows, "
             f"{len(f2.doc_sections)} sections, dead={len(f2.doc_not_in_code)}, "
             f"no-section={len(f2.code_not_documented)}, untested={len(f2.untested)}, "
-            f"collisions={len(f2.collisions)}"
+            f"collisions={len(f2.collisions)}, new_orphans={len(reach_new)}"
         )
         return 1 if gaps2 else 0
 
@@ -755,6 +1052,7 @@ def main() -> int:
         or findings.collisions
         or findings.arch_mismatch
         or findings.arch_missing
+        or reach_new
     )
 
     if args.json:
@@ -782,6 +1080,12 @@ def main() -> int:
                         "measured": findings.arch_measured,
                         "mismatch": findings.arch_mismatch,
                         "missing": findings.arch_missing,
+                    },
+                    "reachability": {
+                        "baseline": len(CALLERLESS_BASELINE),
+                        "new_orphans": sorted(reach_new),
+                        "stale_baseline": sorted(reach_stale),
+                        "pending_untracked": sorted(reach_pending),
                     },
                 },
                 indent=2,
@@ -837,6 +1141,15 @@ def main() -> int:
         print(f"   ALARM  {row}")
     for row in findings.arch_missing:
         print(f"   ALARM  {row}")
+    print(
+        f"caller reachability:      baseline {len(CALLERLESS_BASELINE)}, "
+        f"{len(reach_new)} new orphans, {len(reach_stale)} stale, "
+        f"{len(reach_pending)} untracked pending"
+    )
+    for m in sorted(reach_new):
+        print(f"   ORPHAN  {m}  (gained zero callers — wire it, delete it, or baseline it)")
+    for m in sorted(reach_stale):
+        print(f"   stale   {m}  (gained a caller — remove from CALLERLESS_BASELINE)")
     return 1 if gaps else 0
 
 
