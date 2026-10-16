@@ -4,6 +4,29 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**LANDED 2026-10-16** — card `a3b39114` (StreamDevice + asm streaming app):
+the world can be watched live **from machine code**. `world_stream.asm`
+loops `step-sim -> render -> encode_png -> stream write`; Python is kernel +
+drivers + socket only. New pieces: `StreamDevice(frame_fn)` in `vm.py`
+(ConsoleDevice callback precedent — newest-wins ring, overrun counting,
+`read()` pull, `write(data, tag)` push; the future web socket attaches at
+`frame_fn`), `WorldDevice` in `vm_devices.py` (steps the real `Simulation`,
+renders via `RenderBridge` into a shared `TensorArena`, `stats`/`info`),
+the asm app `domain/shell/_internal/world_stream.asm`, and the runner
+`python3 -m domain.shell._internal.world_stream --frames N --out DIR`.
+Register file never holds an ndarray: world render puts a slot, `cycles
+encode_png` resolves the foreign slot, stream receives bytes tagged with
+the tick (Card A composability exercised end-to-end). Zero-frame runs are
+guarded in the kernel — `LOOP` decrements before it tests, so a zero
+counter would run away. Gates: new `test_world_stream.py` (18 tests)
++ 10 adjacent suites green except 5 stash-verified pre-existing failures
+(4× `TestNPUVMDevice`; `test_kernel::test_register_open_close` —
+`DeviceManager.open` returns int, test expects `.fd` handle, fails with
+this work stashed too). Measured: 3.98 fps at 64x48@2spp, 0.18 fps at
+128x96@4spp CPU; render cost stays gated by `benchmark_world_render.py`
+(Card B). ruff clean. Next: GPU tier for cycles (`get_accelerator()`,
+CuPy installed) to make the stream genuinely real-time.
+
 **LANDED 2026-10-16** — card `ce0ec0b7` (vectorize `cycles._trace_batch`):
 every per-pixel Python loop in the tracer is gone. `BVH.intersect_batch` is
 a frontier walk over all live rays (padded prim tables, precomputed edge

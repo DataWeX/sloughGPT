@@ -18,6 +18,7 @@ import logging
 import re
 import struct
 import zlib
+from collections import deque
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -482,6 +483,76 @@ class FileDevice(Device):
             import os
 
             return os.path.exists(args[0])
+        return super().call(method, *args)
+
+
+class StreamDevice(Device):
+    """Frame-stream sink/source — ConsoleDevice callback precedent.
+
+    The machine pushes frames here; the host attaches a consumer
+    (``frame_fn``) or pulls with ``read()``.  The ring keeps the NEWEST
+    frames: a slow consumer must not stall the machine — an overrun drops
+    the oldest frame and counts it in ``dropped``.
+
+    Commands (via DEV_CALL):
+      write(data, tag=None) -> bytes_written   push one frame (tag = e.g. tick)
+      read() -> (tag, bytes) | None            pop oldest pending frame
+      clear() -> int                           drop all pending frames
+
+    ``frame_fn(data, tag)`` runs synchronously on every write — it is the
+    seam where a web socket / SSE handler attaches later (Python stays
+    kernel + drivers + socket; the frame loop itself lives in asm).
+    """
+
+    def __init__(self, frame_fn=None, max_pending: int = 8):
+        self._frame_fn = frame_fn
+        self._max_pending = max(1, int(max_pending))
+        self._pending: deque = deque()
+        self._written = 0
+        self._dropped = 0
+
+    def info(self):
+        return {
+            "type": "stream",
+            "pending": len(self._pending),
+            "written": self._written,
+            "dropped": self._dropped,
+            "callback": self._frame_fn is not None,
+        }
+
+    def write(self, data, tag=None):
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        elif isinstance(data, (int, float)):
+            raise DeviceFault("stream: write expects bytes, got a number")
+        else:
+            data = bytes(data)
+        self._written += 1
+        self._pending.append((tag, data))
+        while len(self._pending) > self._max_pending:
+            self._pending.popleft()
+            self._dropped += 1
+        if self._frame_fn is not None:
+            self._frame_fn(data, tag)
+        return len(data)
+
+    def read(self):
+        if not self._pending:
+            return None
+        return self._pending.popleft()
+
+    def clear(self):
+        n = len(self._pending)
+        self._pending.clear()
+        return n
+
+    def call(self, method, *args):
+        if method == "write":
+            return self.write(*args)
+        if method == "read":
+            return self.read()
+        if method == "clear":
+            return self.clear()
         return super().call(method, *args)
 
 
