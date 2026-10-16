@@ -154,6 +154,9 @@ class TestStopSelfTrain:
 
         resp = client.post("/self-train/stop")
         assert resp.status_code == 503
-        assert resp.json()["error"] == "process gone"
+        # The wire carries the registered user_message, not the internal
+        # exception text (860deb44b wire-code sanitisation); "process gone"
+        # stays in the server log only.
+        assert resp.json()["error"] == "The training run did not stop cleanly and was force-killed."
         mock_proc.kill.assert_called_once()
         assert server_state._self_train_proc is None

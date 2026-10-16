@@ -716,7 +716,7 @@ class TestPushNotificationServiceMessageBuilding:
 # ---------------------------------------------------------------------------
 class TestNotificationServiceSingleton:
     def test_get_notification_service(self):
-        from domain.mobile._internal import notifications as mod
+        from services.mobile._internal import notifications as mod
 
         old = mod._service
         try:
