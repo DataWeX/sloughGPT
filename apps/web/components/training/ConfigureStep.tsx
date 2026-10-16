@@ -284,9 +284,17 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   onChange={(e) => form.setTrainingEpochs(Number(e.target.value))}
                   error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
                   aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
-                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
+                  aria-describedby={[
+                    hpErrors.length > 0 ? 'configure-hp-errors' : '',
+                    'gloss-epochs',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   className="h-7 text-[11px] font-mono"
                 />
+                <p id="gloss-epochs" className="text-[10px] text-muted-foreground">
+                  How many times the model reads the full dataset (10)
+                </p>
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="train-batch" variant="uppercase">
@@ -301,9 +309,17 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   onChange={(e) => form.setTrainingBatchSize(Number(e.target.value))}
                   error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
                   aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
-                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
+                  aria-describedby={[
+                    hpErrors.length > 0 ? 'configure-hp-errors' : '',
+                    'gloss-batch',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   className="h-7 text-[11px] font-mono"
                 />
+                <p id="gloss-batch" className="text-[10px] text-muted-foreground">
+                  How many examples the model learns from at once (32)
+                </p>
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="train-lr" variant="uppercase">
@@ -317,9 +333,14 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   onChange={(e) => form.setTrainingLR(Number(e.target.value) || 1e-3)}
                   error={form.trainingLR <= 0 || form.trainingLR > 1}
                   aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
-                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
+                  aria-describedby={[hpErrors.length > 0 ? 'configure-hp-errors' : '', 'gloss-lr']
+                    .filter(Boolean)
+                    .join(' ')}
                   className="h-7 text-[11px] font-mono"
                 />
+                <p id="gloss-lr" className="text-[10px] text-muted-foreground">
+                  How strongly each lesson adjusts the model (0.001)
+                </p>
               </div>
             </div>
             {hpErrors.length > 0 && (

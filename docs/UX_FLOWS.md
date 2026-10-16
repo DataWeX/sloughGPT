@@ -430,72 +430,54 @@ their own pages (`/chat`, `/training`).
 
 ## User Journeys
 
-### Training: 3-Click Flow
+### Training: 4-Step Flow
+
+<!-- ui-gate: must-see: "Teach me" | "Teach your agent from your data" | "Recommended Configuration" | "Quick Import" | "Train from scratch" | "Continue training" | "Start training"; must-not-see: "Show advanced options" -->
 
 **What the user sees:**
 
-- A page titled "Teach me" with a simple subtitle: "Teach your agent from your data"
-- Technical terms appear with a plain-language gloss, not hidden — "LoRA rank (how much new style the adapter learns)", "GRPO (training method)", "KL coefficient (how closely it stays to the base model)"
-- A 3-step pipeline: Pick data → Train → See results
+- A page titled "Teach me" with the subtitle "Teach your agent from your data"
+- Technical terms appear with a plain-language gloss, never renamed — "Epochs — how many times the model reads the full dataset", "LoRA rank — how much new style the adapter can learn", "KL coefficient — how closely it stays to the base model" (USER_PERSONA rule: euphemistic renaming is prohibited)
+- A 4-step pipeline: Pick data → Configure → Train → See results. Configure is separable from Train so config is validated before GPU time is committed; Results is async (jobs finish later), so it cannot be the tail of the same click.
 
 **User flow:**
 
-1. **Pick data** (click 1)
-   - User sees their datasets as simple chips with names and sample counts
-   - Can click a chip to select it, or use "Import" to add new data
-   - Quick import from HuggingFace (one-click, no setup required)
+1. **Pick data** (step 1)
+   - Datasets shown as chips with names and sample counts
+   - "+" Import and Quick Import (HuggingFace, one-click, no setup)
    - Can paste text directly if no dataset exists
-   - A preview shows a few lines so user knows what the data looks like
-   - "Next" button advances to configure
+   - A preview shows a few lines so the user knows what the data looks like
+   - "Next: Configure" advances
 
-2. **Configure & Train** (click 2)
-   - Top: Text or Vision toggle (simple choice, no jargon)
-   - Below: A "Recommended" banner appears automatically based on dataset size
-     - Shows: "Based on your data, we recommend: LR 0.001, Batch 32, 10 epochs"
-     - One "Apply" button to accept recommendations
-   - Expert settings are hidden behind a "Show advanced options" toggle:
-     - Only shows when user explicitly asks for it
-     - Contains: epochs, batch size, learning rate, LoRA rank, tokenizer
-   - "Start training" button (disabled until ready)
+2. **Configure** (step 2)
+   - Text / Vision toggle at the top
+   - A "Recommended Configuration" banner appears once a dataset is selected, with one "Apply" button to accept it
+   - Hyperparameters are VISIBLE on this surface — Epochs, Batch size and Learning rate each carry a one-line gloss under the field (decision 2026-10-15, card a1f95d79: the binding personas are infra builders who want control; hiding epochs/LR is friction, not safety — the Presets panel and the Recommended Configuration banner supply the good default instead)
 
-3. **See results** (click 3)
+3. **Train** (step 3)
+   - "Start training" runs the job; the only model options shown are "Train from scratch" / "Continue training"
+
+4. **See results** (step 4)
    - Live loss chart while training runs (visual: line going down = good)
-   - Progress bar with ETA
-   - When complete: "Training complete! Your AI now knows [dataset name]"
+   - Progress with ETA
    - Checkpoint cards showing saved versions with loss and quality scores
-   - "Load for chat" button to immediately use the trained model
+   - "Load for chat" to immediately use the trained model
    - "Train more" to go back and train again
 
 **What they should NOT see:**
 
 - Model names (GPT-2, Qwen, etc.) — just "Train from scratch" or "Continue training"
-- Parameter sliders for temperature, top-p, etc. on the _first_ pass — reachable one click deeper, with defaults preselected
-- Session IDs, job IDs, or technical identifiers
+- A "Show advanced options" hiding toggle — the hyperparameters stay visible on the configure step (re-adding the hidden toggle fails the ui-gate by design; revisit that decision deliberately, not by drift)
 - Unexplained jargon — "LoRA rank", "KL coefficient", "gradient accumulation" must each carry a gloss if shown
-- 15-parameter configuration forms
-- Grid search, checkpoint comparison, or model card pages (power-user features)
+- Session IDs, job IDs, or technical identifiers on the first pass
+- Separate sub-pages for trends, compare, model-card, or grid-search (power-user features)
 - Webhooks, recovery cards, or API logs (system features)
 
 **Progressive disclosure:**
 
-- Default view: 3-step pipeline with recommended settings
-- "Show advanced options" toggle reveals expert settings
-- Results tab shows checkpoints and jobs (simple list, not analytics dashboard)
+- Default view: 4-step pipeline with the Recommended Configuration banner
+- Results shows checkpoints and jobs (simple list, not an analytics dashboard)
 - No separate sub-pages for trends, compare, model-card, or grid-search
-
-**Plain language translations:**
-
-| Technical term  | What user sees                                  |
-| --------------- | ----------------------------------------------- |
-| Fine-tuning     | "Continue training"                             |
-| Distillation    | "Train from scratch"                            |
-| LoRA            | "Parameter-efficient mode" (hidden by default)  |
-| Learning rate   | "Learning speed" (hidden by default)            |
-| Batch size      | "Training batch size" (hidden by default)       |
-| Checkpoint      | "Saved version"                                 |
-| Loss            | "Learning progress" (visual chart, not numbers) |
-| Epoch           | "Training round"                                |
-| Hyperparameters | "Advanced options" (hidden by default)          |
 
 ---
 
