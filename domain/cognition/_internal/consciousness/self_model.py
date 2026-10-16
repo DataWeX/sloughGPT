@@ -90,6 +90,9 @@ class SelfModel:
     # The document is a window; the complete timeline lives in the
     # mind-state log (mind_log.jsonl), so trimming loses nothing.
     MAX_EPISODES: int = 100
+    # Identifies the feedback-evidence entry in self_doubts (idempotent
+    # rewrite: dissolve any old one, prepend the fresh count).
+    _EVIDENCE_DOUBT_MARKER: str = "rated down"
 
     def __init__(self, store_path: str = "data/consciousness") -> None:
         self.identity = SelfIdentity()
@@ -299,6 +302,22 @@ class SelfModel:
             self.update_belief(k, d)
         self.save()
         return dict(self.self_beliefs)
+
+    def set_evidence_doubt(self, downs: int, total: int) -> None:
+        """Voice the freshest evidence-backed doubt.
+
+        Born from feedback, sharpened as it accumulates, dissolved when the
+        recent window clears (downs == 0). Prepended while present — the
+        world-backed uncertainty is the sharper one, so it leads the voiced
+        doubts; the birth doubt is never lost, it leads again once the
+        evidence doubt dissolves. Marker-based: rewrite is idempotent.
+        """
+        self.self_doubts = [d for d in self.self_doubts if self._EVIDENCE_DOUBT_MARKER not in d]
+        if downs > 0:
+            self.self_doubts.insert(
+                0,
+                f"am I as accurate as I believe — rated down {downs} of the last {total}",
+            )
 
     def save(self) -> None:
         """Persist self-model to JSON."""

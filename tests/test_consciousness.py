@@ -443,6 +443,7 @@ class TestSelfReport:
         assert report["reflection"]["narrative"]
         assert report["reflection"]["strategy_notes"] == []
         assert "curiosity" in report
+        assert "doubts" in report
 
     def test_belief_trajectory_comes_from_the_log(self, tmp_path: Path) -> None:
         """'How it came to believe that' — rendered time from belief_delta records."""
@@ -671,6 +672,75 @@ class TestFeedbackCalibration:
             assert peek_consciousness() is created  # no second instance
         finally:
             reset_consciousness()
+
+
+# ---------------------------------------------------------------------------
+# Doubt evolution: uncertainty born, sharpened, dissolved by evidence
+# (card a67a20c9)
+# ---------------------------------------------------------------------------
+
+
+class TestDoubtEvolution:
+    def test_down_voices_evidence_doubt_first(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        birth = list(engine.self_model.self_doubts)
+        engine.observe_feedback("thumbs_down")
+        doubts = engine.self_model.self_doubts
+        assert "rated down 1 of the last 1" in doubts[0]
+        assert birth[0] in doubts  # birth doubt never lost
+
+    def test_counts_sharpen_with_more_downs(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.observe_feedback("thumbs_down")
+        engine.observe_feedback("thumbs_down")
+        assert "rated down 2 of the last 2" in engine.self_model.self_doubts[0]
+
+    def test_up_keeps_recent_down_in_window(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.observe_feedback("thumbs_down")
+        engine.observe_feedback("thumbs_up")
+        assert "rated down 1 of the last 2" in engine.self_model.self_doubts[0]
+
+    def test_doubt_dissolves_when_window_clears(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.observe_feedback("thumbs_down")
+        for _ in range(20):
+            engine.observe_feedback("thumbs_up")
+        doubts = engine.self_model.self_doubts
+        assert not any("rated down" in d for d in doubts)  # window slid past the down
+        assert doubts[0] == "am I truly understanding or just pattern-matching?"
+
+    def test_neutral_touches_nothing(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        before = list(engine.self_model.self_doubts)
+        engine.observe_feedback("neutral")
+        assert engine.self_model.self_doubts == before
+
+    def test_doubt_survives_save_load(self, tmp_path: Path) -> None:
+        from domain.cognition._internal.consciousness.self_model import SelfModel
+
+        engine = _make_engine(tmp_path)
+        engine.observe_feedback("thumbs_down")
+        engine.save()
+        fresh = SelfModel(store_path=str(tmp_path))
+        fresh.load()
+        assert "rated down" in fresh.self_doubts[0]
+
+    def test_int_rating_counts_as_down(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.observe_feedback(1)
+        assert "rated down 1" in engine.self_model.self_doubts[0]
+
+    def test_self_report_carries_doubts(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.observe_feedback("thumbs_down")
+        assert "rated down" in engine.self_report()["doubts"][0]
+
+    def test_disabled_engine_leaves_doubts_alone(self, tmp_path: Path) -> None:
+        engine = ConsciousnessEngine(ConsciousnessConfig(level=0, store_path=str(tmp_path)))
+        before = list(engine.self_model.self_doubts)
+        engine.observe_feedback("thumbs_down")
+        assert engine.self_model.self_doubts == before
 
 
 # ---------------------------------------------------------------------------

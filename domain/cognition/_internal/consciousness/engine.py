@@ -20,6 +20,13 @@ _FEEDBACK_BELIEFS = ("accuracy", "helpfulness")
 _FEEDBACK_POINTS: dict[str, int] = {"thumbs_up": 5, "thumbs_down": 1, "neutral": 3}
 
 
+def _is_down_rating(rating: object) -> bool:
+    """True for a logged negative evidence rating (string form or points)."""
+    if rating == "thumbs_down":
+        return True
+    return isinstance(rating, int) and not isinstance(rating, bool) and rating < 3
+
+
 class ConsciousnessEngine:
     """Unified consciousness engine combining all 4 modules."""
 
@@ -160,6 +167,7 @@ class ConsciousnessEngine:
             "strongest_belief": (
                 {"name": strongest, "value": beliefs[strongest]} if strongest else None
             ),
+            "doubts": list(sm.self_doubts),
             "reflection": {
                 "narrative": getattr(reflection, "narrative", str(reflection)),
                 "trajectory": getattr(reflection, "trajectory", "stagnation"),
@@ -364,6 +372,20 @@ class ConsciousnessEngine:
                 "source": "feedback",
             },
         )
+        # The voiced uncertainty follows the evidence: count logged feedback
+        # records (window of the last 20 — only events that CHANGED beliefs
+        # are logged, so saturated downs undercount by design) and rebuild
+        # the doubt: born on first down, sharpened per event, dissolved when
+        # the sliding window clears.
+        evidence_records = [
+            r
+            for r in self.mind_log.query(record_type="belief_delta", limit=0)
+            if r.payload.get("evidence")
+        ][-20:]
+        downs = sum(
+            1 for r in evidence_records if _is_down_rating(r.payload["evidence"].get("rating"))
+        )
+        self.self_model.set_evidence_doubt(downs, len(evidence_records))
         return {"observed": True, "delta": deltas}
 
     def clear_episodes(self) -> int:
