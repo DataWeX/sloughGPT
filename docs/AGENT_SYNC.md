@@ -4,6 +4,8 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-16 ~20:10 — DIVERGENCE PART 2 BATCH 12: planner date_str TZ fix ported (card ef64a931 wip).** `50bc3c99a` → `42425329d` (clean pick; origin core.py byte-identical to pick-parent). **Skipped `beb54fa46`**: origin's `load_board` already guards undeclared columns via a **richer same-card implementation** (b538ecbd — full docstring + `validate_column` write-half pairing; beb5's older body would regress it). Gates: app-planner suite **265 passed in default TZ AND `TZ=America/Los_Angeles`** (6 new TZ-forced tests), ruff check+format clean.
+
 **2026-10-16 ~19:50 — DIVERGENCE PART 2 BATCH 11: inference /providers 500s ported (card ef64a931 wip).** Chain members `148782c30`+`95dd65595` → `3ead861a4`+`2406cd799` (0 conflicts; origin's per-provider metadata guard absent, inference.py 4-line drift + zero test drift auto-merged; later `e66b90e02`/`f195196b8` chat-ownership follow-ups are a separate initiative, not ported). Gates: both inference router suites **117 passed**, ruff check+format clean. Voice + inference pairs complete the "500s" bucket (batch 10 + 11).
 
 **2026-10-16 ~19:35 — DIVERGENCE PART 2 BATCH 10: voice phoneme 500s ported (card ef64a931 wip).** Chain members `e56d383fe`+`e1ff46433` → `2ace0564e`+`022c136dd` (0 conflicts; disjoint from the inference pair so picked separately; verified origin still calls `encoder.supported_languages()` **with** parens — the `'list' object is not callable` 500 — and lacks the synthesize WAV data-URI; phoneme.py zero drift, test-file 12-line drift auto-merged). Gates: phoneme router+api+unified-encoder **122 passed**, ruff check+format clean.
