@@ -723,21 +723,21 @@ export default function PersonalityPage() {
                         ...p.voice,
                       }))}
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                       <XAxis
                         dataKey="time"
                         tick={{ fontSize: 9 }}
-                        stroke="hsl(var(--muted-foreground))"
+                        stroke="rgb(var(--muted-foreground))"
                       />
                       <YAxis
                         domain={[0, 1]}
                         tick={{ fontSize: 9 }}
-                        stroke="hsl(var(--muted-foreground))"
+                        stroke="rgb(var(--muted-foreground))"
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
+                          backgroundColor: 'rgb(var(--card))',
+                          border: '1px solid rgb(var(--border))',
                           borderRadius: '8px',
                           fontSize: '11px',
                         }}
@@ -788,21 +788,21 @@ export default function PersonalityPage() {
                         ...p.traits,
                       }))}
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                       <XAxis
                         dataKey="time"
                         tick={{ fontSize: 9 }}
-                        stroke="hsl(var(--muted-foreground))"
+                        stroke="rgb(var(--muted-foreground))"
                       />
                       <YAxis
                         domain={[0, 1]}
                         tick={{ fontSize: 9 }}
-                        stroke="hsl(var(--muted-foreground))"
+                        stroke="rgb(var(--muted-foreground))"
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
+                          backgroundColor: 'rgb(var(--card))',
+                          border: '1px solid rgb(var(--border))',
                           borderRadius: '8px',
                           fontSize: '11px',
                         }}
