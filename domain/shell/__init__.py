@@ -53,6 +53,8 @@ def __getattr__(name):
         "SimScene": "domain.shell._internal.simulation",
         "Simulation": "domain.shell._internal.simulation",
         "WorldParams": "domain.shell._internal.simulation",
+        "ModelBrain": "domain.shell._internal.model_brain",
+        "make_brain": "domain.shell._internal.simulation",
     }
     if name in _lazy:
         import importlib

@@ -299,6 +299,13 @@ def main(argv: list[str] | None = None) -> int:
         "--hidden-units", type=int, default=0, help="brain hidden units for --emergence"
     )
     parser.add_argument(
+        "--brain",
+        choices=("perceptron", "model"),
+        default="perceptron",
+        help="brain class for babies: perceptron (default) or model "
+        "(ModelBrain — trainable hidden projection, genome-compatible)",
+    )
+    parser.add_argument(
         "--social", action="store_true", help="run the social benchmark (trait-group vs individual)"
     )
     parser.add_argument(
@@ -410,6 +417,7 @@ def main(argv: list[str] | None = None) -> int:
         world_seed=args.seed,
         message_enabled=args.messages,
         structure_enabled=args.structures,
+        brain_kind=args.brain,
     )
 
     driver = WorldDriver(params, seed=args.seed)
