@@ -238,14 +238,41 @@ POST /models/load
 
 ## Testing Strategy
 
-| Component  | Framework   | Count    | Focus                                       |
-| ---------- | ----------- | -------- | ------------------------------------------- |
-| Core Logic | pytest      | 399+     | Training convergence, inference correctness |
-| API Server | pytest      | 100+     | Endpoint contracts, error handling          |
-| Web        | Vitest      | 3048+    | Components, controllers, hooks              |
-| Web E2E    | Cypress     | 6 specs  | Critical user flows                         |
-| CLI        | pytest      | 16 files | Command parsing, output formatting          |
-| Mobile     | Jest + RNTL | 25+      | Screens, services                           |
+| Component  | Framework   | Count    | Focus                                          |
+| ---------- | ----------- | -------- | ---------------------------------------------- |
+| Core Logic | pytest      | 399+     | Training convergence, inference correctness    |
+| API Server | pytest      | 100+     | Endpoint contracts, error handling             |
+| Web        | Vitest      | 3048+    | Components, controllers, hooks                 |
+| Web E2E    | Cypress     | 6 specs  | Critical user flows                            |
+| Journeys   | avion       | 99 tests | Live-stack UX flows (routes, tools, redirects) |
+| UX flows   | avion CLI   | 13 flows | Full-stack scripted flows (`run_ux_flows.py`)  |
+| CLI        | pytest      | 16 files | Command parsing, output formatting             |
+| Mobile     | Jest + RNTL | 25+      | Screens, services                              |
+
+### Three layers — one contract per layer
+
+Assertions belong at the cheapest layer that can prove them:
+
+1. **Component truth → Vitest.** "The textarea renders", "the button is
+   present", hover/focus/disabled states. Element-gating a _rendered string_
+   inside a journey is a mislayering — it is the shuffling-flake class
+   (cards `b015795b`, `0e58fb93`), not journey signal.
+2. **Journey truth → agent-entry integration.** A journey passes when an
+   **agent can enter the running system, bind a session, and complete the
+   user task by calling functions** — from its own package (avion) and our
+   session endpoints — not by parsing DOM text. Sessions are therefore
+   _structured_: all an agent needs is callable functions over a stable
+   contract (declared once, descriptor-first — see
+   `TRANSPORT_PROJECTIONS.md`), whose terminal state points are pugqeep's
+   swirls. This layer is the test infrastructure for **agentic usability
+   testing and development**.
+3. **Performance truth → benchmarks.** `scripts/benchmark_*.py` own
+   latency/throughput/regression numbers; journeys never assert timing.
+
+Deterministic model I/O at the journey layer comes from avion's **network
+mocker** (canned reply intercepted at the wire), so "prompt → streamed
+reply renders" is pinnable without a live model. Agent entry binds a
+**seeded sandbox session only** — never a real user's session or data.
 
 ---
 
