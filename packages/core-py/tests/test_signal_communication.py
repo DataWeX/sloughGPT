@@ -927,6 +927,18 @@ class TestEpisodicMemory:
         result = em.recall(-1)
         assert result == []
 
+    def test_recall_negative_k_by_reward(self):
+        em = EpisodicMemory(capacity=10)
+        em.record(np.zeros(3), (0.5,), 1.0)
+        assert em.recall(-1, by_reward=True) == []
+
+    def test_recall_zero_returns_all_sentinel(self):
+        em = EpisodicMemory(capacity=10)
+        em.record(np.zeros(3), (0.5,), 1.0)
+        em.record(np.zeros(3), (0.5,), 2.0)
+        assert len(em.recall(0)) == 2
+        assert len(em.recall(0, by_reward=True)) == 2
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Communication Loop (integration)
@@ -1069,6 +1081,19 @@ class TestWorldMemory:
         wm = WorldMemory()
         wm.record(np.zeros(3), (0.5,), 1.0)
         assert wm.recall(-1) == []
+
+    def test_recall_zero_is_empty_on_both_branches(self):
+        # regression: episodes[-0:] returned the whole reservoir (by_reward=False)
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0)
+        wm.record(np.zeros(3), (0.5,), 2.0)
+        assert wm.recall(0, by_reward=True) == []
+        assert wm.recall(0, by_reward=False) == []
+
+    def test_recall_negative_by_reward_false(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0)
+        assert wm.recall(-1, by_reward=False) == []
 
     def test_consolidate(self):
         wm = WorldMemory()
