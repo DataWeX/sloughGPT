@@ -222,12 +222,26 @@ class ConsciousnessEngine:
         return self.narrative.generate(input_text, response, level=lvl)
 
     def get_status(self) -> dict[str, Any]:
+        last = self.mind_log.latest()
         return {
             "enabled": self.config.is_enabled(),
             "level": self.config.level,
             "episodes": len(self.self_model.episodes),
             "dreams": sum(1 for e in self.self_model.episodes if e.is_dream),
             "state_key": self.reflection_state_key(),
+            # Summary pointer to the freshest inner event (O(1) tail read) —
+            # never the payload: episode records carry full input/response
+            # text, and status must stay a summary.
+            "last_record": (
+                {
+                    "id": last.id,
+                    "type": last.type,
+                    "provenance": last.provenance,
+                    "t": last.t,
+                }
+                if last
+                else None
+            ),
             "beliefs": dict(self.self_model.self_beliefs),
             "current_qualia": self.qualia.current.to_dict(),
             "curiosity_topics": dict(self.meta_cognition.curiosity_topics),

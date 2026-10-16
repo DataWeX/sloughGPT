@@ -118,6 +118,41 @@ class MindLog:
         out.sort(key=lambda r: r.t)
         return out[-limit:] if limit else out
 
+    def latest(self) -> MindRecord | None:
+        """The most recently appended record — O(1) byte-tail read.
+
+        The status/stream hot path polls this every tick, so it must not
+        scale with log size the way ``query()`` (full scan + sort) does:
+        read one bounded window off the end of the file and scan its lines
+        newest-first, returning the first that parses. Torn or foreign tail
+        lines step aside, mirroring ``query()``'s skip discipline — and a
+        line cut by the window boundary fails to parse the same way, so a
+        pathological over-long record escalates to one full read rather
+        than being silently missed.
+        """
+        if not self.path.exists() or self.path.stat().st_size == 0:
+            return None
+        with self.path.open("rb") as f:
+            size = f.seek(0, 2)
+
+            def _scan(window: bytes) -> MindRecord | None:
+                for raw in reversed(window.split(b"\n")):
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        return MindRecord.from_dict(json.loads(raw))
+                    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                        continue
+                return None
+
+            f.seek(max(size - 65536, 0))  # 64 KiB tail window: hundreds of records
+            found = _scan(f.read())
+            if found is None and size > 65536:
+                f.seek(0)  # pathological: window entirely torn/foreign/over-long
+                found = _scan(f.read())
+            return found
+
 
 def query_mind(
     store_path: str | Path,

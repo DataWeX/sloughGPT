@@ -94,6 +94,9 @@ class TestConsciousnessAPI:
         assert data["data"]["enabled"] is True
         assert data["data"]["level"] == 1
         assert "training" in data["data"]
+        # activity pointer: summary shape or None, never a payload dump
+        last = data["data"].get("last_record")
+        assert last is None or {"id", "type", "provenance", "t"} <= set(last)
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_get_status_lazy_trainer_builds_from_episodes(self, _auth):
@@ -948,6 +951,7 @@ class TestConsciousnessStream:
             "current_qualia": {"novelty": 0.5},
             "beliefs": {"competence": 0.8},
             "episodes": 1,
+            "last_record": {"id": "r1", "type": "dream", "provenance": "dream", "t": 1.0},
         }
 
         _, _, _, raw = self._collect_stream(router_obj)
@@ -958,6 +962,7 @@ class TestConsciousnessStream:
         assert "novelty" in payload["qualia"]
         assert "competence" in payload["beliefs"]
         assert payload["episodes"] == 1
+        assert payload["last_record"]["id"] == "r1"  # activity rides the stream
 
     def test_stream_emits_id_and_data_lines(self):
         router_obj = self._make_router()

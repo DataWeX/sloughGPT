@@ -19,6 +19,11 @@ every inference implementation — this is the lane's benchmark):
 5. feedback_observe -- observe_feedback('thumbs_up'): qualia + calibrated
                       belief deltas + self_model.json save (real per-event
                       disk cost, calibration card 449e1c81).
+6. mindlog_latest   -- MindLog.latest() over the SAME 1000-record log:
+                      the activity-poll read (one tail line, one parse)
+                      that status/SSE hit every tick (card c41a421a).
+                      latest_speedup vs query is REPORTED, not
+                      thresholded — same rule as cache_speedup.
 
 GOLD (deliberately generous: catch order-of-magnitude regressions —
 accidental O(n) scans, fsync-per-write, cache bypass — not scheduler jitter):
@@ -29,6 +34,9 @@ accidental O(n) scans, fsync-per-write, cache bypass — not scheduler jitter):
   - mindlog_append     <= 500 us
   - query 1000 records <= 100 ms
   - feedback_observe   <= 25 ms
+  - mindlog_latest     <= 500 us (a 5s-tick poll of one tail record must
+                       stay far under the tick; the complexity claim
+                       itself is sanity-checked by payload identity)
 
 cache_speedup (cold/cached) is REPORTED for context, never thresholded —
 both sides are microseconds at this scale and the ratio is noisy; the
@@ -74,6 +82,7 @@ GOLD = {
     "max_mindlog_append_us": 500.0,
     "max_query_us": 100_000.0,
     "max_feedback_observe_us": 25_000.0,
+    "max_latest_us": 500.0,
 }
 
 
@@ -150,6 +159,13 @@ def main() -> int:
 
         query_us = _median_us(_query, 20, args.reps)
 
+        # Identity sanity before timing: the tail read must return the
+        # LAST record of the same seed log the full scan walks.
+        tail = qlog.latest()
+        assert tail is not None and tail.payload == {"i": 999}, "tail read wrong?"
+        latest_us = _median_us(lambda: qlog.latest(), args.n, args.reps)
+        latest_speedup = query_us / max(latest_us, 1e-9)
+
         feedback_us = _median_us(
             lambda: engine.observe_feedback("thumbs_up"), max(20, args.n // 20), args.reps
         )
@@ -162,6 +178,7 @@ def main() -> int:
         ("mindlog_append <= 500us", mindlog_append_us <= GOLD["max_mindlog_append_us"]),
         ("query_1000_records <= 100ms", query_us <= GOLD["max_query_us"]),
         ("feedback_observe <= 25ms", feedback_us <= GOLD["max_feedback_observe_us"]),
+        ("mindlog_latest <= 500us (activity poll budget)", latest_us <= GOLD["max_latest_us"]),
     ]
     passed = all(ok for _, ok in checks)
 
@@ -173,6 +190,8 @@ def main() -> int:
         ("mindlog_append", mindlog_append_us, "us"),
         ("query_1000_records", query_us, "us"),
         ("feedback_observe", feedback_us, "us"),
+        ("mindlog_latest", latest_us, "us"),
+        ("latest_vs_query", latest_speedup, "x"),
     ):
         print(f"  {label:24} {value:>12.1f} {unit}")
     print("── GOLD ─────────────────────────────────────────────────")
@@ -192,6 +211,8 @@ def main() -> int:
                         "mindlog_append_us": round(mindlog_append_us, 2),
                         "query_1000_records_us": round(query_us, 2),
                         "feedback_observe_us": round(feedback_us, 2),
+                        "mindlog_latest_us": round(latest_us, 2),
+                        "latest_speedup": round(latest_speedup, 1),
                     },
                     "gold": GOLD,
                     "passed": passed,

@@ -675,6 +675,37 @@ class TestFeedbackCalibration:
 
 
 # ---------------------------------------------------------------------------
+# Activity projection: the freshest record of inner life in status
+# (card c41a421a)
+# ---------------------------------------------------------------------------
+
+
+class TestActivityProjection:
+    def test_fresh_store_reports_none(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        assert engine.get_status()["last_record"] is None
+
+    def test_dream_is_the_last_record(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("seed", "experience")  # a dream needs something to consolidate
+        engine.dream()
+        last = engine.get_status()["last_record"]
+        assert last is not None
+        assert last["type"] == "dream"
+        assert last["id"] == engine.mind_log.latest().id
+        assert set(last) == {"id", "type", "provenance", "t"}  # summary, no payload
+
+    def test_episode_is_the_last_record(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("hello", "world")
+        assert engine.get_status()["last_record"]["type"] == "episode"
+
+    def test_disabled_engine_reports_none(self, tmp_path: Path) -> None:
+        engine = ConsciousnessEngine(ConsciousnessConfig(level=0, store_path=str(tmp_path)))
+        assert engine.get_status()["last_record"] is None
+
+
+# ---------------------------------------------------------------------------
 # Doubt evolution: uncertainty born, sharpened, dissolved by evidence
 # (card a67a20c9)
 # ---------------------------------------------------------------------------

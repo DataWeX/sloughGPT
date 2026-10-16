@@ -15,6 +15,58 @@ from domain.cognition._internal.consciousness.mind_state import (
 )
 
 
+class TestLatestRecord:
+    """latest(): the freshest record by O(1) tail read (card c41a421a)."""
+
+    def test_empty_returns_none(self, tmp_path: Path):
+        assert MindLog(tmp_path).latest() is None
+
+    def test_returns_most_recent_append(self, tmp_path: Path):
+        log = MindLog(tmp_path)
+        first = log.append(MindRecord(type="episode", payload={"n": 1}, provenance="experience"))
+        third = log.append(
+            MindRecord(type="belief_delta", payload={"n": 3}, provenance="experience")
+        )
+        latest = log.latest()
+        assert latest is not None
+        assert latest.id == third.id
+        assert latest.type == "belief_delta"
+        assert latest.payload == {"n": 3}
+        assert latest.id != first.id
+
+    def test_skips_torn_tail(self, tmp_path: Path):
+        log = MindLog(tmp_path)
+        good = log.append(MindRecord(type="dream", payload={}, provenance="dream"))
+        with log.path.open("ab") as f:
+            f.write(b'{"id": "torn-')  # crash mid-append: no newline, invalid JSON
+        latest = log.latest()
+        assert latest is not None
+        assert latest.id == good.id
+
+    def test_all_garbage_returns_none(self, tmp_path: Path):
+        log = MindLog(tmp_path)
+        log.path.parent.mkdir(parents=True, exist_ok=True)
+        log.path.write_bytes(b"not json\nalso not json\n")
+        assert log.latest() is None
+
+    def test_overlong_last_record_escalates_to_full_read(self, tmp_path: Path):
+        # A record larger than the 64 KiB tail window: the window lands
+        # mid-record, its candidates all fail, one full read retrieves it.
+        log = MindLog(tmp_path)
+        big = log.append(
+            MindRecord(type="episode", payload={"text": "x" * 70_000}, provenance="experience")
+        )
+        latest = log.latest()
+        assert latest is not None
+        assert latest.id == big.id
+
+    def test_standalone_query_mind_unchanged(self, tmp_path: Path):
+        # latest() is a method of the substrate, not a new entry point
+        log = MindLog(tmp_path)
+        log.append(MindRecord(type="episode", payload={}, provenance="experience"))
+        assert len(query_mind(tmp_path, limit=10)) == 1
+
+
 class TestMindRecord:
     """Schema: typed, timed, attributed, edged."""
 

@@ -1060,6 +1060,7 @@ class ConsciousnessRouter:
                         "episodes": len(engine.self_model.episodes),
                         "dreams": status.get("dreams", 0),
                         "state_key": status.get("state_key", ""),
+                        "last_record": status.get("last_record"),
                         "training": training,
                         "enabled": status.get("enabled", False),
                     }
