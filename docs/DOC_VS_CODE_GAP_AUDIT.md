@@ -149,11 +149,19 @@ is the `_internal` row, where the code is _worse_ than the doc claims.
 # the line/def ratchet entirely (it alarms on every unrelated controller edit
 # and missed the 384-line GPU accelerator deletion). Refreshing was taken as
 # the conservative option — it keeps the guard and makes the claim true.
+# 2026-10-15 refresh (feat/generate-consolidation, §8 CCGT-four consolidation):
+# controllers_lines 3296 -> 3298, defs/files/stmts unchanged. Cause: the
+# domain.infrastructure -> domain.core.infrastructure and domain.models ->
+# domain.generate.models repointings lengthened one models.py import
+# (get_model_dir as _get_model_dir) past line length, and ruff isort re-wrapped
+# it 1 -> 3 lines — pure formatting. Re-measured independently per the 10-11
+# discipline: splitlines sum config 42 + datasets 661 + feedback 395 +
+# health 1119 + models 1081 = 3298 (5 files, __init__.py excluded per _py_files).
 routers_internal_files=11
 routers_internal_stmts=36
 routers_internal_in_scope_files=8
 controllers_files=5
-controllers_lines=3296
+controllers_lines=3298
 controllers_defs=106
 controllers_internal_files=4
 controllers_internal_stmts=31
