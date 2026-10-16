@@ -1,6 +1,6 @@
 'use client'
 
-import { cn } from '@sloughgpt/strui'
+import { cn, StatusDot } from '@sloughgpt/strui'
 import type { Card, Column } from './types'
 import { CardItem } from './CardItem'
 import { COLUMN_LABELS } from './types'
@@ -16,6 +16,11 @@ interface TrayProps {
   draggingId: string | null
 }
 
+/**
+ * Ledger column — the log-entry board's section header + entry list.
+ * WIP health is a StatusDot instrument, not a sticker: it pulses
+ * destructive when the column is over its limit.
+ */
 export function Tray({
   column,
   cards,
@@ -32,51 +37,36 @@ export function Tray({
     <div
       className={cn(
         'flex flex-col min-h-[200px] rounded-xl p-3',
-        'bg-[hsl(40,30%,95%)]',
-        'border border-[hsl(40,20%,85%)]',
-        'shadow-[4px_4px_0_0_hsl(40,20%,80%)]',
+        'bg-muted/40 border border-border shadow-sm',
         'relative overflow-hidden',
-        isOverWip && 'border-destructive/40 shadow-[4px_4px_0_0_hsl(0,60%,70%)]',
+        isOverWip && 'border-destructive/40',
       )}
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, column.name)}
     >
-      {/* Halftone dot pattern overlay */}
-      <div
-        className={cn(
-          'absolute inset-0 pointer-events-none opacity-30',
-          '[background-image:',
-            'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
-          ']',
-          '[background-size:12px_12px]',
-          '[background-position:0_0]',
-        )}
-        aria-hidden="true"
-      />
-
-      {/* Column header */}
+      {/* Column header — running head of the ledger section */}
       <div className="relative flex items-center justify-between mb-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(40,20%,40%)]">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {COLUMN_LABELS[column.name] || column.name}
         </h3>
         <span
           className={cn(
-            'text-[10px] font-medium px-1.5 py-0.5 rounded',
-            'bg-[hsl(40,20%,88%)] text-[hsl(40,20%,40%)]',
-            'border border-[hsl(40,20%,80%)]',
+            'inline-flex items-center gap-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded',
+            'bg-card text-muted-foreground border border-border',
             isOverWip && 'bg-destructive/15 text-destructive border-destructive/30',
           )}
         >
+          {isOverWip && <StatusDot tone="destructive" pulse aria-hidden />}
           {cards.length}
           {column.wip_limit > 0 && ` / ${column.wip_limit}`}
         </span>
       </div>
 
-      {/* Cards area */}
-      <div className="relative space-y-2 flex-1">
+      {/* Entries area */}
+      <div className="relative space-y-1.5 flex-1">
         {cards.length === 0 ? (
-          <div className="rounded-lg border-2 border-dashed border-[hsl(40,20%,78%)] p-4 text-center bg-[hsl(40,30%,92%)]">
-            <p className="text-xs text-[hsl(40,20%,55%)]">Drop cards here</p>
+          <div className="rounded-lg border-2 border-dashed border-border p-4 text-center">
+            <p className="text-xs text-muted-foreground/70">Drop cards here</p>
           </div>
         ) : (
           cards.map((card) => (

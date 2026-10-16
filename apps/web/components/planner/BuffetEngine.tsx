@@ -140,12 +140,12 @@ export function BuffetEngine() {
 
   if (loading && !board) {
     return (
-      <div className="relative min-h-screen bg-[hsl(40,30%,95%)] overflow-hidden">
+      <div className="relative min-h-screen bg-background overflow-hidden">
         <div
           className={cn(
             'absolute inset-0 pointer-events-none opacity-20',
             '[background-image:',
-            'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
+            'radial-gradient(circle,rgb(var(--border))_1.5px,transparent_1.5px)',
             ']',
             '[background-size:12px_12px]',
             '[background-position:0_0]',
@@ -154,7 +154,7 @@ export function BuffetEngine() {
         />
         <div className="relative sl-page mx-auto max-w-7xl">
           <div className="flex items-center justify-center min-h-[40vh]">
-            <div className="text-sm text-[hsl(40,20%,45%)]">Loading board...</div>
+            <div className="text-sm text-muted-foreground">Loading board...</div>
           </div>
         </div>
       </div>
@@ -163,12 +163,12 @@ export function BuffetEngine() {
 
   if (error) {
     return (
-      <div className="relative min-h-screen bg-[hsl(40,30%,95%)] overflow-hidden">
+      <div className="relative min-h-screen bg-background overflow-hidden">
         <div
           className={cn(
             'absolute inset-0 pointer-events-none opacity-20',
             '[background-image:',
-            'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
+            'radial-gradient(circle,rgb(var(--border))_1.5px,transparent_1.5px)',
             ']',
             '[background-size:12px_12px]',
             '[background-position:0_0]',
@@ -177,7 +177,7 @@ export function BuffetEngine() {
         />
         <div className="relative sl-page mx-auto max-w-7xl">
           <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
-            <p className="text-sm text-[hsl(0,50%,50%)]">{error}</p>
+            <p className="text-sm text-destructive">{error}</p>
             <Button size="sm" variant="outline" onClick={refresh}>
               <IconRefresh className="h-4 w-4 mr-1.5" />
               Retry
@@ -189,13 +189,13 @@ export function BuffetEngine() {
   }
 
   return (
-    <div className="relative min-h-screen bg-[hsl(40,30%,95%)] overflow-hidden">
-      {/* Halftone dot pattern overlay */}
+    <div className="relative min-h-screen bg-background overflow-hidden">
+      {/* Token-tinted dot pattern overlay */}
       <div
         className={cn(
           'absolute inset-0 pointer-events-none opacity-20',
           '[background-image:',
-          'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
+          'radial-gradient(circle,rgb(var(--border))_1.5px,transparent_1.5px)',
           ']',
           '[background-size:12px_12px]',
           '[background-position:0_0]',
@@ -207,8 +207,8 @@ export function BuffetEngine() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-[hsl(40,20%,20%)]">Planner</h1>
-            <p className="text-sm text-[hsl(40,20%,45%)]">Board</p>
+            <h1 className="text-base font-medium text-foreground">Planner</h1>
+            <p className="text-sm text-muted-foreground">Board</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -240,14 +240,14 @@ export function BuffetEngine() {
         {/* Toolbar */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-xs">
-            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(40,20%,50%)]" />
+            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search cards..."
               aria-label="Search cards"
-              className="w-full rounded-lg border border-[hsl(40,20%,80%)] bg-[hsl(40,25%,97%)] pl-8 pr-3 py-1.5 text-sm text-[hsl(40,20%,20%)] placeholder:text-[hsl(40,20%,55%)] focus:outline-none focus:ring-2 focus:ring-[hsl(270,50%,60%)]"
+              className="w-full rounded-lg border border-input bg-card pl-8 pr-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
           {uniqueTags.length > 0 && (
@@ -270,7 +270,7 @@ export function BuffetEngine() {
                 </Button>
               ))}
               {uniqueTags.length > 6 && (
-                <span className="text-xs text-[hsl(40,20%,50%)]">+{uniqueTags.length - 6}</span>
+                <span className="text-xs text-muted-foreground">+{uniqueTags.length - 6}</span>
               )}
             </div>
           )}
@@ -326,35 +326,35 @@ function CreateCardDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[hsl(40,25%,97%)] rounded-lg border border-[hsl(40,20%,80%)] shadow-[6px_6px_0_0_hsl(40,20%,78%)] p-6 w-full max-w-md">
-        <h2 className="text-lg font-semibold mb-4 text-[hsl(40,20%,20%)]">New Card</h2>
+      <div className="bg-card rounded-lg border border-border shadow-lg p-6 w-full max-w-md">
+        <h2 className="text-base font-medium mb-4 text-foreground">New Card</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-[hsl(40,20%,30%)]">Title</label>
+            <label className="text-sm font-medium text-foreground">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full mt-1 rounded-lg border border-[hsl(40,20%,80%)] bg-[hsl(40,30%,95%)] px-3 py-2 text-sm text-[hsl(40,20%,20%)]"
+              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
               autoFocus
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-[hsl(40,20%,30%)]">Description</label>
+            <label className="text-sm font-medium text-foreground">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full mt-1 rounded-lg border border-[hsl(40,20%,80%)] bg-[hsl(40,30%,95%)] px-3 py-2 text-sm text-[hsl(40,20%,20%)]"
+              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
               rows={3}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-[hsl(40,20%,30%)]">Column</label>
+              <label className="text-sm font-medium text-foreground">Column</label>
               <select
                 value={column}
                 onChange={(e) => setColumn(e.target.value)}
-                className="w-full mt-1 rounded-lg border border-[hsl(40,20%,80%)] bg-[hsl(40,30%,95%)] px-3 py-2 text-sm text-[hsl(40,20%,20%)]"
+                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
               >
                 <option value="todo">To Do</option>
                 <option value="wip">In Progress</option>
@@ -363,11 +363,11 @@ function CreateCardDialog({
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-[hsl(40,20%,30%)]">Priority</label>
+              <label className="text-sm font-medium text-foreground">Priority</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full mt-1 rounded-lg border border-[hsl(40,20%,80%)] bg-[hsl(40,30%,95%)] px-3 py-2 text-sm text-[hsl(40,20%,20%)]"
+                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>

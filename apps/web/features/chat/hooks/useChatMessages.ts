@@ -305,6 +305,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
               ),
             )
           },
+          onMeta: (meta) => {
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === assistantId ? { ...msg, metrics: meta } : msg)),
+            )
+          },
           onError: (status, text, opts) => {
             setCurrentError(getErrorInfo(status, text, opts))
             setMessages((prev) =>
@@ -409,6 +414,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
                   ? { ...msg, content: msg.content || '(empty response)' }
                   : msg,
               ),
+            )
+          },
+          onMeta: (meta) => {
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === assistantId ? { ...msg, metrics: meta } : msg)),
             )
           },
           onError: (_status, text, opts) => {
@@ -790,6 +800,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
                 prev.map((m) =>
                   m.id === assistantId && m.content === 'Thinking...' ? { ...m, content: '' } : m,
                 ),
+              )
+            },
+            onMeta: (meta) => {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, metrics: meta } : m)),
               )
             },
             onError: (

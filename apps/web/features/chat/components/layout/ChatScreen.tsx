@@ -254,7 +254,7 @@ export const ChatScreen = memo(function ChatScreen({
     const showDateDivider = !prevMsg || isDifferentDay(prevMsg.timestamp, message.timestamp)
 
     return (
-      <div className="px-4 sm:px-6">
+      <div className="px-4 sm:px-6 py-1.5">
         {showDateDivider && (
           <div className="relative flex items-center py-2" role="separator" aria-label={formatDateLabel(new Date(message.timestamp))}>
             <div className="flex-1 border-t border-border/40" />
@@ -272,6 +272,8 @@ export const ChatScreen = memo(function ChatScreen({
           showTimestamp={true}
           model={model}
           images={message.images}
+          turnNumber={index + 1}
+          metrics={message.metrics}
           onCopy={onCopy}
           onThumbsUp={onThumbsUp}
           onThumbsDown={onThumbsDown}
