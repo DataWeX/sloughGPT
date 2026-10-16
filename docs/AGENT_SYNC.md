@@ -26,6 +26,14 @@ this work stashed too). Measured: 3.98 fps at 64x48@2spp, 0.18 fps at
 128x96@4spp CPU; render cost stays gated by `benchmark_world_render.py`
 (Card B). ruff clean. Next: GPU tier for cycles (`get_accelerator()`,
 CuPy installed) to make the stream genuinely real-time.
+**PUSHED** `origin/feat/vm-bus-handles` (all three cards A/B/C) —
+re-merged with main (`d3df8179c`) and re-gated post-merge: identical
+5 stash-verified pre-existing red, ruff clean, benchmark PASS (155×).
+Main landing deferred: `main` is checked out at
+`~/Documents/sloughgpt-api-std` with active uncommitted edits (another
+session) — sync-recipe takeover needs a clean idle worktree; merge sha
+to follow. Also flagged: `origin/main` and local `main` have diverged
+(336 vs 164 commits) — repo-wide sync issue, not resolved here.
 
 **LANDED 2026-10-16** — card `ce0ec0b7` (vectorize `cycles._trace_batch`):
 every per-pixel Python loop in the tracer is gone. `BVH.intersect_batch` is
