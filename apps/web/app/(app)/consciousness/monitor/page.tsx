@@ -21,18 +21,18 @@ interface MonitorEvent {
 }
 
 const QUALIA_COLORS: Record<string, string> = {
-  valence: 'var(--chart-1)',
-  arousal: 'var(--chart-2)',
-  novelty: 'var(--chart-3)',
-  coherence: 'var(--chart-4)',
+  valence: 'rgb(var(--chart-1))',
+  arousal: 'rgb(var(--chart-2))',
+  novelty: 'rgb(var(--chart-3))',
+  coherence: 'rgb(var(--chart-4))',
 }
 
 const BELIEF_COLORS: Record<string, string> = {
-  competence: 'var(--chart-1)',
-  helpfulness: 'var(--chart-4)',
-  creativity: 'var(--chart-3)',
-  accuracy: 'var(--chart-5)',
-  empathy: 'var(--chart-2)',
+  competence: 'rgb(var(--chart-1))',
+  helpfulness: 'rgb(var(--chart-4))',
+  creativity: 'rgb(var(--chart-3))',
+  accuracy: 'rgb(var(--chart-5))',
+  empathy: 'rgb(var(--chart-2))',
 }
 
 const QUALIA_DIMS = ['valence', 'arousal', 'novelty', 'coherence']
@@ -205,7 +205,7 @@ export default function ConsciousnessMonitorPage() {
 
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-40">
-        <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} stroke="hsl(var(--border))" strokeDasharray="4" strokeWidth={0.5} />
+        <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} stroke="rgb(var(--border))" strokeDasharray="4" strokeWidth={0.5} />
         {paths.map(p => (
           <path key={p.dim} d={p.d} fill="none" stroke={p.color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
         ))}
@@ -263,7 +263,7 @@ export default function ConsciousnessMonitorPage() {
             <rect key={i} x={x} y={y} width={barW} height={barH} rx={2} fill={`color-mix(in srgb, rgb(var(--destructive)) ${100 - t}%, rgb(var(--success)) ${t}%)`} fillOpacity={0.8} />
           )
         })}
-        <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="hsl(var(--border))" strokeWidth={0.5} />
+        <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="rgb(var(--border))" strokeWidth={0.5} />
       </svg>
     )
   }, [ratingStream])

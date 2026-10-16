@@ -30,7 +30,10 @@ def get_device_name() -> str:
             import cupy as cp
 
             props = cp.cuda.runtime.getDeviceProperties(0)
-            return str(props["name"])
+            raw = props["name"]
+            # cupy returns the model name as bytes; str(b'...') would render
+            # the repr "b'NVIDIA …'" — decode instead (correctness bug fix).
+            return raw.decode() if isinstance(raw, bytes) else str(raw)
         except Exception:
             return "CUDA"
     if device == "mps":
@@ -119,6 +122,9 @@ class CUDAGraphManager:
         self._model = model
         self._config = config or InferenceOptimizations()
         self._captured = False
+        # Graph capture needs torch + a real CUDA device; this module is the
+        # numpy SloNet stack, so graphs are never enabled — capture() is False.
+        self._enabled = False
 
     def capture(self, batch_size: int = 1, seq_len: int = 128, hidden: int = 256) -> bool:
         """Capture a CUDA graph for the given input shape. Returns False (no GPU)."""
@@ -234,11 +240,17 @@ class FastInferenceSampler:
 
     @staticmethod
     def _apply_repetition_penalty_vectorized(logits, recent_tokens, penalty: float):
-        """Penalize recently generated tokens."""
+        """Penalize recently generated tokens.
+
+        HF semantics: positive logits divide by the penalty, negative
+        multiply — both move the token's probability down.  ``recent_tokens``
+        arrives as anything array-like (``sample()`` passes ``prev_tokens``
+        verbatim, e.g. a ``(1, 3)`` row), so ravel before iterating.
+        """
         import numpy as np
 
-        recent_tokens = np.asarray(recent_tokens)
-        if len(recent_tokens) == 0:
+        recent_tokens = np.asarray(recent_tokens).ravel()
+        if recent_tokens.size == 0:
             return logits
         result = logits.copy()
         for t in recent_tokens:
@@ -270,11 +282,13 @@ class PerformanceMonitor:
 
     @property
     def step_times(self):
-        return list(self._step_times[-self._window_size :])
+        # Live view of the backing window (tests/callers record into it);
+        # record_step() trims both lists to the window size.
+        return self._step_times
 
     @property
     def losses(self):
-        return list(self._losses[-self._window_size :])
+        return self._losses
 
     @property
     def tokens_processed(self) -> int:
@@ -374,11 +388,12 @@ def _collate(batch):
     """Collate a list of (x, y) tuples into batched arrays.
 
     If arrays have different shapes, pad shorter ones with zeros.
+    An empty batch collates to ``None`` (nothing to stack).
     """
     import numpy as np
 
     if not batch:
-        return np.array([]), np.array([])
+        return None
     if isinstance(batch[0], tuple):
         xs = [np.asarray(b[0]) for b in batch]
         ys = [np.asarray(b[1]) for b in batch]
@@ -398,21 +413,32 @@ def _collate(batch):
 
 
 def _pad_last(a, target_len: int = 0, pad_value=0):
-    """Pad 1D array to target length (or its own length = no-op)."""
+    """Pad the last axis to target length (or its own length = no-op).
+
+    Documented 1D contract: ``_pad_last([1, 2], 4) -> [1, 2, 0, 0]``.
+    Higher-rank inputs pad the trailing axis, so 1D behaviour is unchanged.
+    """
     import numpy as np
 
     a = np.asarray(a)
-    if target_len <= 0:
-        target_len = len(a)
-    if len(a) >= target_len:
+    if a.ndim == 0:
         return a
-    result = np.full(target_len, pad_value, dtype=a.dtype)
-    result[: len(a)] = a
-    return result
+    if target_len <= 0:
+        target_len = a.shape[-1]
+    if a.shape[-1] >= target_len:
+        return a
+    pad_width = [(0, 0)] * a.ndim
+    pad_width[-1] = (0, target_len - a.shape[-1])
+    return np.pad(a, pad_width, constant_values=pad_value)
 
 
 class _NumpyBatchIterator:
-    """Iterates over data (list or array) in batches."""
+    """Iterates over data (list or array) in batches.
+
+    A real iterator: ``next(it)`` works directly (not just ``next(iter(it))``),
+    and ``len()`` is the batch count — an empty dataset is one (empty) batch,
+    so ``len`` never reports 0 batches for a dataset that is being iterated.
+    """
 
     def __init__(self, data, batch_size: int, shuffle: bool = True):
         import numpy as np
@@ -422,6 +448,7 @@ class _NumpyBatchIterator:
         self._shuffle = shuffle
         self._rng = np.random.default_rng()
         self._indices = np.arange(len(data))
+        self._gen = None
 
     def __iter__(self):
         if self._shuffle:
@@ -430,25 +457,96 @@ class _NumpyBatchIterator:
             batch_indices = self._indices[start : start + self._batch_size]
             yield [self._data[int(i)] for i in batch_indices]
 
+    def __next__(self):
+        if self._gen is None:
+            self._gen = self.__iter__()
+        return next(self._gen)
+
     def __len__(self):
         import numpy as np
 
-        return int(np.ceil(len(self._data) / self._batch_size))
+        return max(1, int(np.ceil(len(self._data) / self._batch_size)))
+
+
+class _RestartingBatchIterator:
+    """Iterator that starts a fresh epoch whenever the source is exhausted.
+
+    ``OptimizedDataLoader`` must never terminate: one pass over the dataset
+    is one epoch, and the next ``next()`` continues into a new one.
+    """
+
+    def __init__(self, source):
+        self._source = source
+        self._gen = None
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._gen is None:
+            self._gen = self._source()
+            return next(self._gen)  # empty dataset -> StopIteration here
+        try:
+            return next(self._gen)
+        except StopIteration:
+            self._gen = self._source()
+            return next(self._gen)
 
 
 class OptimizedDataLoader:
-    """Simple data loader backed by numpy arrays."""
+    """Simple data loader backed by numpy arrays.
 
-    def __init__(self, dataset, batch_size: int = 32, shuffle: bool = True):
+    Batches are numpy arrays (``batch.tolist()`` works).  Iteration restarts
+    at end-of-dataset (infinite epoch stream), and ``prefetch()`` /
+    ``get_batch()`` expose a pull-style window over the same stream.
+    Default worker count comes from the resource manager.
+    """
+
+    def __init__(self, dataset, batch_size: int = 32, shuffle: bool = True, workers=None):
+        from domain.infrastructure._internal.resource_manager import ResourceManager
+
         self._dataset = dataset
         self._batch_size = batch_size
         self._shuffle = shuffle
+        # Underlying batch source — one object across epochs so shuffle order
+        # carries over; `self.dataloader` is the live handle callers poke at.
+        self.dataloader = _NumpyBatchIterator(dataset, batch_size, shuffle)
+        if workers is None:
+            workers = ResourceManager().dataloader_workers
+        self.workers = effective_dataloader_workers(workers)
+        self._stream = None
+        self._buffer = None
+
+    def _new_epoch(self):
+        """One epoch's worth of collated batches (ndarrays), shuffle-aware."""
+        for batch in iter(self.dataloader):
+            out = _collate(batch)
+            if out is None:
+                return
+            yield out
+
+    def _batch_array(self):
+        """Next batch from the pull stream (wraps at end of data)."""
+        if self._stream is None:
+            self._stream = _RestartingBatchIterator(self._new_epoch)
+        return next(self._stream)
 
     def __iter__(self):
-        return _NumpyBatchIterator(self._dataset, self._batch_size, self._shuffle).__iter__()
+        return _RestartingBatchIterator(self._new_epoch)
 
     def __len__(self):
-        return len(_NumpyBatchIterator(self._dataset, self._batch_size, self._shuffle))
+        return len(self.dataloader)
+
+    def prefetch(self):
+        """Fill the one-slot buffer with the next batch."""
+        self._buffer = self._batch_array()
+
+    def get_batch(self):
+        """Return the prefetched (or next) batch, wrapping at end of data."""
+        if self._buffer is not None:
+            batch, self._buffer = self._buffer, None
+            return batch
+        return self._batch_array()
 
 
 class PreallocatedBatchDataset:
@@ -550,18 +648,65 @@ class OptimizedInferenceEngine:
         return self._monitor
 
 
-def _as_array(x):
-    """Convert input to numpy array if needed."""
+def _as_array(x, dtype=None):
+    """Convert input to numpy array if needed.
+
+    slonet ``Tensor`` (and similar wrappers) carry their values in ``.data`` —
+    ``np.asarray()`` on them yields an object-dtype array of Tensor reprs, not
+    the numbers.  ``dtype`` converts the result when given.
+    """
     import numpy as np
 
     if isinstance(x, np.ndarray):
-        return x
-    return np.asarray(x)
+        out = x
+    else:
+        data = getattr(x, "data", None)
+        if isinstance(data, np.ndarray):
+            out = data
+        else:
+            out = np.asarray(x)
+    if dtype is not None:
+        out = out.astype(dtype, copy=False)
+    return out
 
 
-def _clip_grad_norm_(parameters, max_norm: float = 1.0):
-    """Clip gradient norms (no-op for numpy — stub for API compat)."""
-    return 0.0
+def _clip_grad_norm_(parameters, max_norm: float = 1.0) -> float:
+    """Clip the global gradient norm to ``max_norm``; return the pre-clip norm.
+
+    ``parameters`` may be a model (anything with ``.parameters()``) or an
+    iterable of parameters.  Gradients are scaled in place.  Returns 0.0 when
+    nothing carries a gradient.
+    """
+    import numpy as np
+
+    if hasattr(parameters, "parameters"):
+        params = list(parameters.parameters())
+    else:
+        params = list(parameters)
+
+    grads = []
+    for p in params:
+        g = getattr(p, "grad", None)
+        if g is None:
+            continue
+        arr = _as_array(g)
+        if arr.size == 0:
+            continue
+        grads.append(arr)
+
+    if not grads:
+        return 0.0
+
+    total_sq = 0.0
+    for arr in grads:
+        flat = arr.reshape(-1)
+        total_sq += float(np.dot(flat, flat))
+    total_norm = float(np.sqrt(total_sq))
+    if total_norm > max_norm:
+        clip_coef = max_norm / (total_norm + 1e-6)
+        for arr in grads:
+            arr *= clip_coef
+    return total_norm
 
 
 def effective_dataloader_workers(max_workers: int = 4) -> int:
@@ -596,101 +741,176 @@ def effective_prefetch_factor(workers: int = 2, default: int = 2) -> int | None:
     return max(1, d)
 
 
-def benchmark_inference(model, input_ids, n_tokens: int = 50, **kwargs) -> dict:
-    """Benchmark inference throughput with wall-clock timing."""
+def benchmark_inference(model, input_ids=None, n_tokens: int = 50, **kwargs) -> dict:
+    """Benchmark inference latency/throughput with wall-clock timing.
+
+    Runs ``num_runs`` timed greedy-decode windows of ``gen_len`` forward steps
+    each (real model work, not a stub).
+
+    Contract keys: ``avg_latency_ms``, ``p50_latency_ms``, ``p95_latency_ms``,
+    ``tokens_per_sec``, ``device`` — plus the legacy ``n_tokens`` /
+    ``latency_ms``.
+    """
     import time
 
-    try:
-        import numpy as np
+    import numpy as np
 
-        x = np.array(input_ids, dtype=np.int64).reshape(1, -1)
-        if x.shape[1] < 8:
-            x = np.pad(x, ((0, 0), (0, 8 - x.shape[1])), constant_values=0)
+    batch_size = int(kwargs.get("batch_size", 1))
+    seq_len = int(kwargs.get("seq_len", 8))
+    gen_len = int(kwargs.get("gen_len", max(1, min(int(n_tokens), 8))))
+    runs = max(1, int(kwargs.get("num_runs", kwargs.get("n_runs", 5))))
 
-        # Warmup
-        for _ in range(3):
-            try:
-                model.forward(x[:, :8])
-            except Exception:
-                break
+    device = get_optimal_device()
+    vocab = int(getattr(model, "vocab_size", 50257) or 50257)
 
-        # Timed runs
-        start = time.perf_counter()
-        total_generated = 0
-        for _ in range(n_tokens // 8 + 1):
-            try:
-                out = model.forward(x[:, -64:] if x.shape[1] > 64 else x)
-                if hasattr(out, "logits"):
-                    total_generated += out.logits.shape[-1] if hasattr(out.logits, "shape") else 8
-                x = np.concatenate([x, np.zeros((1, 1), dtype=np.int64)], axis=1)
-            except Exception:
-                break
-        elapsed = time.perf_counter() - start
-
-        tokens_per_sec = total_generated / elapsed if elapsed > 0 else 0.0
-        latency_ms = (elapsed / max(total_generated, 1)) * 1000
-
-        return {
-            "n_tokens": total_generated,
-            "tokens_per_sec": round(tokens_per_sec, 1),
-            "latency_ms": round(latency_ms, 2),
-        }
-    except Exception as e:
-        logger.warning("benchmark_inference failed: %s", e)
-        return {"n_tokens": 0, "tokens_per_sec": 0.0, "latency_ms": 0.0}
-
-
-def benchmark_training(model, dataset, n_steps: int = 10, **kwargs) -> dict:
-    """Benchmark training throughput with wall-clock timing."""
-    import time
-
-    try:
-        import numpy as np
-
-        block_size = kwargs.get("block_size", 64)
-        batch_size = kwargs.get("batch_size", 8)
-
-        if len(dataset) < block_size * batch_size:
-            return {"n_steps": 0, "steps_per_sec": 0.0, "loss": 0.0}
-
-        data = np.array(dataset[: block_size * batch_size], dtype=np.int64).reshape(
-            batch_size, block_size
+    if input_ids is not None:
+        x = np.asarray(input_ids, dtype=np.int64)
+        if x.ndim == 1:
+            x = x.reshape(1, -1)
+    else:
+        x = np.random.default_rng(0).integers(
+            0, max(vocab, 1), size=(max(batch_size, 1), max(seq_len, 1))
         )
-        np.roll(data, -1, axis=1)
+        x = x.astype(np.int64)
 
-        # Warmup
-        for _ in range(2):
+    limits = [
+        v for v in (getattr(model, "block_size", None), getattr(model, "max_seq_len", None)) if v
+    ]
+    limit = max(min(limits) if limits else 1024, x.shape[1])
+
+    def _step(ctx):
+        """One decode step: forward, take the greedy token, grow the context."""
+        out = model(ctx)
+        logits = out[0] if isinstance(out, (tuple, list)) else out
+        arr = _as_array(logits)
+        nxt = np.asarray(arr[:, -1, :], dtype=np.float64).argmax(axis=-1).reshape(-1, 1)
+        nxt = nxt.astype(np.int64)
+        if ctx.shape[1] + 1 > limit:
+            ctx = ctx[:, -(limit - 1) :] if limit > 1 else ctx
+        return np.concatenate([ctx, nxt], axis=1)
+
+    latencies: list[float] = []
+    generated = 0
+    started = time.perf_counter()
+    for _ in range(runs):
+        t0 = time.perf_counter()
+        ctx = x
+        try:
+            for _g in range(max(gen_len, 1)):
+                ctx = _step(ctx)
+                generated += ctx.shape[0]
+        except Exception as exc:
+            # Keep the wall time actually spent — a benchmark that swallows
+            # its failure must still report the time it burned.
+            latencies.append(time.perf_counter() - t0)
+            logger.warning("benchmark_inference step failed: %s", exc)
+            break
+        latencies.append(time.perf_counter() - t0)
+    elapsed = time.perf_counter() - started
+
+    if not latencies:
+        latencies = [elapsed]
+    latencies = [l if l > 0 else 1e-9 for l in latencies]
+    arr = np.asarray(latencies, dtype=np.float64) * 1000.0
+    avg_ms = float(arr.mean())
+    tokens_per_sec = generated / elapsed if elapsed > 0 else 0.0
+
+    return {
+        "avg_latency_ms": avg_ms,
+        "p50_latency_ms": float(np.percentile(arr, 50)),
+        "p95_latency_ms": float(np.percentile(arr, 95)),
+        "tokens_per_sec": round(tokens_per_sec, 1),
+        "device": device,
+        # legacy keys
+        "n_tokens": generated,
+        "latency_ms": round(avg_ms, 2),
+    }
+
+
+def benchmark_training(model, dataset=None, n_steps: int | None = None, **kwargs) -> dict:
+    """Benchmark training throughput with wall-clock timing.
+
+    Runs ``num_steps`` real forward(+loss) steps on a synthetic or supplied
+    token batch.
+
+    Contract keys: ``elapsed_sec``, ``tokens_per_sec``, ``steps_per_sec``,
+    ``device`` — plus the legacy ``n_steps`` / ``loss``.
+    """
+    import time
+
+    import numpy as np
+
+    batch_size = int(kwargs.get("batch_size", 8))
+    seq_len = int(kwargs.get("seq_len", kwargs.get("block_size", 64)))
+    if n_steps is None:
+        n_steps = kwargs.get("num_steps", kwargs.get("n_steps", 10))
+    n_steps = int(n_steps)
+
+    device = get_optimal_device()
+    vocab = int(getattr(model, "vocab_size", 0) or 50257)
+
+    x = None
+    if dataset is not None:
+        try:
+            flat = np.asarray(dataset, dtype=np.int64).reshape(-1)
+            if flat.size >= batch_size * seq_len:
+                x = flat[: batch_size * seq_len].reshape(batch_size, seq_len)
+        except Exception:
+            x = None
+    if x is None:
+        x = np.random.default_rng(0).integers(
+            0, max(vocab, 1), size=(max(batch_size, 1), max(seq_len, 1))
+        )
+        x = x.astype(np.int64)
+    y = np.roll(x, -1, axis=1)  # language-modelling targets: next token
+
+    # Warmup (not timed) so the first step doesn't pay one-time costs.
+    try:
+        model(x, y)
+    except Exception as exc:
+        logger.warning("benchmark_training warmup failed: %s", exc)
+
+    start = time.perf_counter()
+    completed = 0
+    last_loss = 0.0
+    for _ in range(max(n_steps, 0)):
+        try:
+            out = model(x, y)
+        except Exception as exc:
+            logger.warning("benchmark_training step failed: %s", exc)
+            break
+        completed += 1
+        if isinstance(out, (tuple, list)) and len(out) > 1 and out[1] is not None:
             try:
-                model.forward(data)
+                last_loss = float(np.asarray(_as_array(out[1])).reshape(-1)[0])
             except Exception:
-                break
-
-        # Timed training steps
-        start = time.perf_counter()
-        last_loss = 0.0
-        for step in range(n_steps):
+                last_loss = 0.0
+        zero_grad = getattr(model, "zero_grad", None)
+        if callable(zero_grad):
             try:
-                out = model.forward(data)
-                loss = out.loss if hasattr(out, "loss") else 0.0
-                last_loss = float(loss) if loss else 0.0
-                if hasattr(model, "zero_grad"):
-                    model.zero_grad()
+                zero_grad()
             except Exception:
-                break
-        elapsed = time.perf_counter() - start
+                pass
+    elapsed = time.perf_counter() - start
 
-        steps_per_sec = (step + 1) / elapsed if elapsed > 0 else 0.0
+    steps_per_sec = completed / elapsed if elapsed > 0 else 0.0
+    tokens_per_sec = completed * x.shape[0] * x.shape[1] / elapsed if elapsed > 0 else 0.0
 
-        return {
-            "n_steps": step + 1,
-            "steps_per_sec": round(steps_per_sec, 2),
-            "loss": round(last_loss, 4),
-        }
-    except Exception as e:
-        logger.warning("benchmark_training failed: %s", e)
-        return {"n_steps": 0, "steps_per_sec": 0.0, "loss": 0.0}
+    return {
+        "elapsed_sec": elapsed,
+        "tokens_per_sec": round(tokens_per_sec, 1),
+        "steps_per_sec": round(steps_per_sec, 2),
+        "device": device,
+        # legacy keys
+        "n_steps": completed,
+        "loss": round(last_loss, 4),
+    }
 
 
-def optimize_model_for_inference(model, config: InferenceOptimizations | None = None):
-    """Optimize model for inference (no-op stub — actual optimization is device-specific)."""
+def optimize_model_for_inference(model, config: InferenceOptimizations | None = None, **kwargs):
+    """Optimize model for inference (no-op stub — actual optimization is device-specific).
+
+    Accepts a legacy ``device=``/``use_…`` keyword set; the model is returned
+    unchanged.
+    """
     return model

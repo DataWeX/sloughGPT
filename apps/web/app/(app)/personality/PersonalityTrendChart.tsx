@@ -46,7 +46,7 @@ const SERIES_COLORS: Record<string, string> = {
   conscientiousness: 'rgb(var(--chart-4))',
 }
 
-const FALLBACK_COLOR = 'hsl(var(--muted-foreground))'
+const FALLBACK_COLOR = 'rgb(var(--muted-foreground))'
 
 function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`
@@ -132,7 +132,7 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
             dataKey="time"
             tick={{ fontSize: 10 }}
             tickLine={false}
-            stroke="hsl(var(--muted-foreground))"
+            stroke="rgb(var(--muted-foreground))"
             interval="preserveStartEnd"
             minTickGap={32}
           />
@@ -142,17 +142,17 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
             tickFormatter={(value: number) => formatPercent(value)}
             tick={{ fontSize: 10 }}
             tickLine={false}
-            stroke="hsl(var(--muted-foreground))"
+            stroke="rgb(var(--muted-foreground))"
             width={36}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
+              backgroundColor: 'rgb(var(--card))',
+              border: '1px solid rgb(var(--border))',
               borderRadius: '6px',
               fontSize: '12px',
             }}
-            labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+            labelStyle={{ color: 'rgb(var(--muted-foreground))' }}
             formatter={(value) => formatPercent(Number(value))}
           />
           {keys.map((key) => (

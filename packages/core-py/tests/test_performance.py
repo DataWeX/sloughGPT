@@ -85,7 +85,15 @@ class TestDeviceDetection:
         assert device in ("cpu", "cuda")
 
     def test_get_device_name_no_torch(self):
-        assert get_device_name() in ("CPU", "CUDA")
+        # Contract (module docstring "Get human-readable device name", and the
+        # sibling test_slonet_performance::test_get_device_name) allows real
+        # GPU/MPS names — it is NOT restricted to the pre-accelerator
+        # ("CPU", "CUDA") pair, which only holds on CPU-only runners.  What
+        # must never leak is CuPy's bytes repr: str(b'NVIDIA …') == "b'…'".
+        name = get_device_name()
+        assert isinstance(name, str)
+        assert name
+        assert not name.startswith("b'") and not name.startswith('b"')
 
     def test_setup_device_environment_no_torch(self):
         assert setup_device_environment() is None
@@ -335,12 +343,19 @@ class TestFastInferenceSampler:
         assert np.allclose(out, logits)
 
     def test_repetition_penalty_vectorized_applies(self):
+        # The docstring convention this module documents is "Penalize recently
+        # generated tokens": positive logits are DIVIDED by the penalty and
+        # negative MULTIPLIED, so both move the token's probability down
+        # (HF repetition-penalty semantics).  The old expectations
+        # (1.0 -> 2.0, -1.0 -> -0.5) inverted that and *rewarded* the
+        # penalized tokens — the contradiction is recorded on card
+        # dccac02d-e23f-4d1b-a2c3-8799fe025b22.
         logits = np.array([[1.0, -1.0, 2.0, 0.5]])
         out = FastInferenceSampler._apply_repetition_penalty_vectorized(
             logits, np.array([0, 1]), 2.0
         )
-        assert out[0, 0] == pytest.approx(2.0)
-        assert out[0, 1] == pytest.approx(-0.5)
+        assert out[0, 0] == pytest.approx(0.5)
+        assert out[0, 1] == pytest.approx(-2.0)
         assert out[0, 2] == pytest.approx(2.0)
         assert out[0, 3] == pytest.approx(0.5)
 
