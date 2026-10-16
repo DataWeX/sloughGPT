@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -66,22 +67,50 @@ def _open_child_log(log_path: str):
     return logf
 
 
+def _run_supervised(cmd: list[str], cwd: str, log_path: str) -> int:
+    """Run one server under this supervised child and forward signals to it.
+
+    The real-launch gate found the naive version (subprocess.run) lying:
+    SubprocessProcess.cancel SIGTERMs THIS wrapper, the default disposition
+    killed it instantly, and the actual server grandchild was orphaned with
+    the port still bound — cancel_all "succeeded" while :8000 stayed up.
+
+    So: start the server with start_new_session=True (it leads its own
+    process group, descendants included) and forward this child's SIGTERM/
+    SIGINT to that group before waiting — stop() reaps the whole stack.
+    """
+    _open_child_log(log_path)
+    proc = subprocess.Popen(cmd, cwd=cwd, env=dict(os.environ), start_new_session=True)
+
+    def _forward(signum, _frame):
+        try:
+            os.killpg(os.getpgid(proc.pid), signum)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+
+    old_term = signal.signal(signal.SIGTERM, _forward)
+    old_int = signal.signal(signal.SIGINT, _forward)
+    try:
+        return int(proc.wait().returncode)
+    finally:
+        signal.signal(signal.SIGTERM, old_term)
+        signal.signal(signal.SIGINT, old_int)
+
+
 def _serve_api(log_path: str) -> int:
     """Run the FastAPI server in this supervised child.
 
     Module form (``-m apps.api.server.main``) so the repo root lands on
     sys.path — the same invocation dev-stack.sh health-checks green.
     """
-    _open_child_log(log_path)
     cmd = [str(ROOT / "scripts" / "python"), "-m", "apps.api.server.main"]
-    return int(subprocess.run(cmd, cwd=str(ROOT), env=dict(os.environ)).returncode)
+    return _run_supervised(cmd, str(ROOT), log_path)
 
 
 def _serve_web(log_path: str, vite_bin: str) -> int:
     """Run the Vite dev server in this supervised child."""
-    _open_child_log(log_path)
     cmd = [vite_bin, "--host", "--strictPort", "--port", str(WEB_PORT)]
-    return int(subprocess.run(cmd, cwd=str(WEB_DIR), env=dict(os.environ)).returncode)
+    return _run_supervised(cmd, str(WEB_DIR), log_path)
 
 
 # --------------------------------------------------------------------------
@@ -163,12 +192,17 @@ def _announce(info: dict) -> None:
         lines.append(f"  Web UI: unavailable — {info['reason']}")
     if info.get("web"):
         lines.append(f"  API:   {info['api_url']}   (docs: {info['api_url']}/docs)")
-    lines.append("  Logs:  logs/serve_ui-api.log  logs/serve_ui-web.log")
+    if info.get("web"):
+        lines.append("  Logs:  logs/serve_ui-api.log  logs/serve_ui-web.log")
+    else:
+        lines.append("  Logs:  logs/serve_ui-api.log")
     lines.append("  Stop:  serve_ui.stop()  (notebook) / Ctrl-C (CLI)")
     if info.get("colab_note"):
         lines.append(f"  {info['colab_note']}")
     lines.append("")
-    print("\n".join(lines))
+    # flush: when the CLI's stdout is a redirected file the banner would sit
+    # in the block buffer until exit — the gate could not see the URL (gate 2).
+    print("\n".join(lines), flush=True)
 
 
 def start(ready_timeout: float = READY_TIMEOUT, with_web: bool = True) -> dict:
@@ -256,19 +290,34 @@ def start(ready_timeout: float = READY_TIMEOUT, with_web: bool = True) -> dict:
 
 
 def stop() -> int:
-    """Cancel every supervised child and halt the engine; returns count."""
+    """Cancel every supervised child, halt the engine, reap before returning.
+
+    The reap matters: cancel SIGTERMs each wrapper, which forwards to the
+    server's process group — waiting (bounded) means the notebook's stop cell
+    only reports "stopped" once the ports are actually released, never a
+    dishonest early return while uvicorn/vite are still winding down.
+    """
     global _ENGINE, _PROCS, _LAST_INFO
     if _ENGINE is None:
         return 0
-    cancelled = _ENGINE.cancel_all()
-    _ENGINE.stop()
+    engine, procs = _ENGINE, list(_PROCS.values())
     _ENGINE = None
     _PROCS = {}
     _LAST_INFO = {}
+    cancelled = engine.cancel_all()
+    engine.stop()
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and not all(p.is_done for p in procs):
+        time.sleep(0.1)
     return int(cancelled)
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError, OSError):
+        pass  # exotic streams (captured pipes) keep their own buffering
     parser = argparse.ArgumentParser(
         prog="serve_ui",
         description="One entry point -> PGQ-supervised API (:8000) + web UI (:5173) -> one URL.",
