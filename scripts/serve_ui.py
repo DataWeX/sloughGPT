@@ -80,17 +80,26 @@ def _run_supervised(cmd: list[str], cwd: str, log_path: str) -> int:
     SIGINT to that group before waiting — stop() reaps the whole stack.
     """
     _open_child_log(log_path)
-    proc = subprocess.Popen(cmd, cwd=cwd, env=dict(os.environ), start_new_session=True)
+    spawned: dict = {"pid": None}
 
     def _forward(signum, _frame):
+        pid = spawned["pid"]
+        if pid is None:
+            # Cancel landed before the server spawned: abort this wrapper
+            # cleanly instead of default-killing it mid-setup.
+            raise SystemExit(128 + signum)
         try:
-            os.killpg(os.getpgid(proc.pid), signum)
+            os.killpg(os.getpgid(pid), signum)
         except (ProcessLookupError, PermissionError, OSError):
             pass
 
+    # Handlers BEFORE Popen: no window where SIGTERM hits the default
+    # disposition and orphans a just-spawned server.
     old_term = signal.signal(signal.SIGTERM, _forward)
     old_int = signal.signal(signal.SIGINT, _forward)
     try:
+        proc = subprocess.Popen(cmd, cwd=cwd, env=dict(os.environ), start_new_session=True)
+        spawned["pid"] = proc.pid
         return int(proc.wait().returncode)
     finally:
         signal.signal(signal.SIGTERM, old_term)
@@ -180,6 +189,7 @@ def _tail(path: Path, lines: int = 12) -> str:
 
 _ENGINE = None
 _PROCS: dict[str, object] = {}
+_SUBS: list = []  # GuardTree SubprocessProcess handles (real SIGTERM targets)
 _LAST_INFO: dict = {}
 
 
@@ -212,7 +222,7 @@ def start(ready_timeout: float = READY_TIMEOUT, with_web: bool = True) -> dict:
     available). Raises RuntimeError with the child's log tail when a child
     dies before it becomes ready — never silently pretends to be up.
     """
-    global _ENGINE, _PROCS, _LAST_INFO
+    global _ENGINE, _PROCS, _SUBS, _LAST_INFO
     if _ENGINE is not None:
         return _LAST_INFO
 
@@ -226,14 +236,24 @@ def start(ready_timeout: float = READY_TIMEOUT, with_web: bool = True) -> dict:
         if extra not in sys.path:
             sys.path.insert(0, extra)
 
+    from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
     from domain.infrastructure._internal.pugqeep.engine import Engine
 
-    engine = Engine(name="serve_ui")
-    # Dispatch routes ungrouped processes into a tree; with zero trees
-    # dispatch() keeps returning 0 and children sit at CREATED forever (the
-    # real-launch gate caught this — engine tests always create a tree first).
-    # Plain Tree, not guarded: no auto-restart, the degrade must stay honest.
-    engine.tree("serve")
+    # EngineConfig(subprocess=...) + tree(guarded=True) is the ported pattern
+    # from the engine's own test (test_pugqeep_process_mgmt.py::
+    # test_run_subprocess_convenience). ONLY a GuardTree wraps procs in a
+    # SubprocessProcess (forkserver child). Gates 1-3 proved the alternatives:
+    # no tree -> procs stuck CREATED forever; plain Tree -> fn ran INLINE in
+    # THIS process, so _open_child_log's dup2 rebound the launcher's own
+    # fd 1/2 (URL banner landed in logs/serve_ui-api.log, gate file stayed
+    # empty) and cancel only set an event while the servers kept running.
+    engine = Engine(
+        config=EngineConfig(
+            name="serve_ui",
+            subprocess=SubprocessConfig(enabled=True),
+        )
+    )
+    tree = engine.tree("serve", guarded=True)
     if _under_ipython():
         # Engine.__init__ installs SIGINT/SIGTERM handlers; in a notebook the
         # kernel owns SIGINT — hand it straight back.
@@ -260,6 +280,27 @@ def start(ready_timeout: float = READY_TIMEOUT, with_web: bool = True) -> dict:
             capture_output=False,
         )
     engine.run_background()
+
+    # Wait for dispatch (GuardTree.branch wraps each proc at dispatch time),
+    # then bridge cancel: engine.cancel_all()/stop() fire base
+    # Process.cancel() (event + callbacks) and NOTHING in pugqeep delivers
+    # that to a forkserver child — SubprocessProcess.terminate() has no
+    # caller in any engine cancel path (only the timeout watchdog). Without
+    # this bridge, "stopped" would be a lie while uvicorn/vite keep serving.
+    _SUBS.clear()
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and len(tree._subprocesses) < len(_PROCS):
+        time.sleep(0.05)
+    if len(tree._subprocesses) < len(_PROCS):
+        raise RuntimeError(
+            f"dispatch did not wrap all processes ({len(tree._subprocesses)}/"
+            f"{len(_PROCS)}) — the stack would not be cancellable"
+        )
+    for proc in _PROCS.values():
+        sub = tree._subprocesses.get(proc.id)
+        if sub is not None:
+            proc.on_cancel(lambda _p, _s=sub: _s.terminate())
+            _SUBS.append(sub)
 
     if not _wait_port(API_PORT, _PROCS["api"], ready_timeout):
         tail = _tail(api_log)
@@ -297,17 +338,28 @@ def stop() -> int:
     only reports "stopped" once the ports are actually released, never a
     dishonest early return while uvicorn/vite are still winding down.
     """
-    global _ENGINE, _PROCS, _LAST_INFO
+    global _ENGINE, _PROCS, _SUBS, _LAST_INFO
     if _ENGINE is None:
         return 0
-    engine, procs = _ENGINE, list(_PROCS.values())
+    engine, procs, subs = _ENGINE, list(_PROCS.values()), list(_SUBS)
     _ENGINE = None
     _PROCS = {}
+    _SUBS = []
     _LAST_INFO = {}
+    # cancel_all() fires each proc's on_cancel bridge -> sub.terminate()
+    # (SIGTERM to the wrapper child -> _forward killpg -> server group).
     cancelled = engine.cancel_all()
+    for sub in subs:  # belt: paths that cancel without callbacks (idempotent)
+        if sub.is_alive:
+            sub.terminate()
     engine.stop()
+    # Reap BOTH layers: wrapper children dead (ports actually released) and
+    # base procs marked done — so the notebook stop cell never reports
+    # "stopped" while uvicorn/vite are still winding down.
     deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline and not all(p.is_done for p in procs):
+    while time.monotonic() < deadline and (
+        any(s.is_alive for s in subs) or any(not p.is_done for p in procs)
+    ):
         time.sleep(0.1)
     return int(cancelled)
 
