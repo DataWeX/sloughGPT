@@ -624,10 +624,17 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         })
 
         if (streamComplete) {
+          // Persist LIVE state, not the pre-stream `messagesWithNew` capture:
+          // token flushes replace message objects in state during streaming,
+          // so the capture still holds the empty assistant placeholder here.
+          // complete → cancelFlush() writes the final content synchronously
+          // before the stream promise resolves, so getState() at this point
+          // reads the finished transcript.
+          const finalMessages = useChatStore.getState().messages
           chatController
             .saveSessionContext(
               state.sessionId,
-              messagesWithNew.map((m) => ({ role: m.role, content: m.content })),
+              finalMessages.map((m) => ({ role: m.role, content: m.content })),
             )
             .catch(() => {})
           knowledgeController
