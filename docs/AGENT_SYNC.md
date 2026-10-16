@@ -104,6 +104,32 @@ tests), `TestPrecision::test_cpu_path_uses_suggestion` fails **identically on
 clean main** (pre-existing, unrelated), `ruff` clean; standalone e2e seeded a
 snapshot cache and drove both routes → `E2E_PEER_MANIFEST_OK`.
 
+**LANDED 2026-10-16** — cards `aecf2bb1` + follow-through on `dd670ece`: the
+launcher now makes **every** `packages/` project resolve from this checkout,
+not just `downcraft`. Scoping the card exposed a *second* competing resolver
+the original fix never addressed: the conda env's `sloughgpt-0.3.0` editable
+install registers an `_EditableFinder` whose `MAPPING` hardcodes the **main
+tree** checkout, so from any worktree `import mogdb` resolved to the main
+tree's copy rather than the one being edited — a worktree session would test
+its changes against the wrong code, silently. The card's stated premise did
+**not** hold, though: `mogdb` is not an installed snapshot (it resolves via the
+editable finder), and `planner`/`strui`/`avion`/`chargectl`/`aml`/`infra_lib`/
+`sloughgpt_sdk` are not installed at all — only `downcraft` ever had a real
+site-packages twin. So the right fix was not "pin three names" but "the working
+tree wins for every project", which covers both resolvers at once. Two details
+worth keeping: (1) never a bare `$ROOT/packages` — that is a PEP 420 namespace
+portion and loses to an installed regular package, a silent no-op that reads
+like a fix; (2) the first loop used `$(basename …)`, forking per project and
+costing **42ms on a 47ms baseline** — measured, then rewritten as pure-shell
+parameter expansion (46ms). The ratchet test is now **behavioural** rather than
+a regex over shell source: it runs `scripts/python` for every importable
+`packages/` project and asserts the module origin sits inside this checkout's
+`packages/` tree, which catches the editable-install redirect a string match
+never could. Landed `743da3851` under merge `f562ecd2a`. Gates: 4 passed;
+`mogdb` + `downcraft` both resolve to api-std (`mogdb` was the main tree
+before); `routers.models` and `domain.infrastructure` import cleanly with 12
+project roots injected; the downcraft reget guard still live.
+
 **Last update**: 2026-10-09 — card `ff9ef505` → review: **generic embedding
 provider config restored on main** — `api_key`/`base_url` + the
 `openai_api_key` alias sync on `EmbeddingConfig`, `OpenAIEmbedder`
