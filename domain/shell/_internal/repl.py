@@ -2111,6 +2111,7 @@ Most common commands (help [cmd] for details, help for full list):
   note <subcmd>           Note management (add/show/edit/delete)
   render                  Neural scene rendering
   clear                   Clear the terminal screen
+  help [cmd]              Show this help or help for a specific command
   exit                    Exit the shell
 Examples:
   models | head
@@ -3329,11 +3330,13 @@ Examples:
         chat                 — enter interactive mode
         chat /reset          — clear history and session
         chat /status         — show session info"""
-        if not self._require_api("chat"):
-            return
         parts = args.strip().split(maxsplit=1)
         subcmd = parts[0] if parts else ""
         rest = parts[1] if len(parts) > 1 else ""
+        # /reset and /status are pure local session state — they must work
+        # while the API server is down (resetting a stuck session offline is
+        # exactly when you need them). The gate guards only the paths that
+        # actually talk to the server.
         if subcmd == "/reset":
             self._chat_session_id = None
             self._chat_history = []
@@ -3345,6 +3348,8 @@ Examples:
                 self._print(f"  Messages: {len(self._chat_history)}")
             else:
                 self._print("  No active session")
+            return
+        if not self._require_api("chat"):
             return
         if not subcmd:
             self._cmd_chat_interactive()

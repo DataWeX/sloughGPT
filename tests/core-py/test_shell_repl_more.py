@@ -1073,7 +1073,9 @@ class TestPermitDeny:
 class TestHelp:
     def test_help_full_list(self, repl):
         out = capture_cmd(repl, repl._cmd_help, "")
-        assert "Built-in commands:" in out
+        # Sectioned format ("Navigation:", "File operations:", …) replaced the
+        # old single "Built-in commands:" header.
+        assert "Navigation:" in out
 
     def test_help_brief(self, repl):
         out = capture_cmd(repl, repl._cmd_help, "brief")
@@ -6207,7 +6209,13 @@ class TestCmdGen:
 
 class TestCmdChat:
     def test_chat_no_args(self, repl):
-        repl._cmd_chat("")
+        # Bare `chat` enters interactive mode (needs API); stdin EOF exits
+        # the loop cleanly with exit code 0.
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch("builtins.input", side_effect=EOFError),  # stdin Ctrl-D
+        ):
+            repl._cmd_chat("")
         assert repl._last_exit_code == 0
 
     def test_chat_reset(self, repl):
@@ -9116,7 +9124,7 @@ class TestCmdConfirmConfig:
         mock_config._config_dir.mkdir(parents=True, exist_ok=True)
         defaults = mock_config._config_dir / "defaults.yaml"
         defaults.write_text("features:\n  auto_download: false\n")
-        with patch("domain.core.infrastructure.config.get_config", return_value=mock_config):
+        with patch("domain.core.infrastructure._internal.config.get_config", return_value=mock_config):
             with patch.object(Path, "cwd", return_value=Path("/tmp/test_config").parent):
                 repl._cmd_confirm("on")
         assert repl._last_exit_code == 0
@@ -9297,7 +9305,7 @@ class TestCmdEventsExtra:
             ev.data = {"key": f"val_{i}"}
             events.append(ev)
         bus.history.return_value = events
-        with patch("domain.core.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("5")
         assert repl._last_exit_code == 0
 
@@ -9314,7 +9322,7 @@ class TestCmdEventsExtra:
         ev2.source = "monitor"
         ev2.data = {}
         bus.history.return_value = [ev1, ev2]
-        with patch("domain.core.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("model")
         assert repl._last_exit_code == 0
 
@@ -11465,7 +11473,13 @@ class TestCmdGenExtra:
 
 class TestCmdChatExtra:
     def test_chat_no_args(self, repl):
-        repl._cmd_chat("")
+        # Bare `chat` enters interactive mode (needs API); stdin EOF exits
+        # the loop cleanly with exit code 0.
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch("builtins.input", side_effect=EOFError),  # stdin Ctrl-D
+        ):
+            repl._cmd_chat("")
         assert repl._last_exit_code == 0
 
     def test_chat_reset(self, repl):
@@ -11483,7 +11497,7 @@ class TestCmdChatExtra:
     def test_chat_success(self, repl):
         with (
             patch.object(repl, "_require_api", return_value=True),
-            patch.object(repl, "_spinner_call", return_value={"message": "response text"}),
+            patch.object(repl.cmds, "chat_stream", return_value=iter(["response text"])),
         ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
@@ -12047,7 +12061,13 @@ class TestCmdGenExecution:
 
 class TestCmdChatExecution:
     def test_chat_no_args(self, repl):
-        repl._cmd_chat("")
+        # Bare `chat` enters interactive mode (needs API); stdin EOF exits
+        # the loop cleanly with exit code 0.
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch("builtins.input", side_effect=EOFError),  # stdin Ctrl-D
+        ):
+            repl._cmd_chat("")
         assert repl._last_exit_code == 0
 
     def test_chat_reset(self, repl):
@@ -12066,7 +12086,7 @@ class TestCmdChatExecution:
     def test_chat_new_session(self, repl):
         with (
             patch.object(repl, "_require_api", return_value=True),
-            patch.object(repl.cmds, "chat", return_value={"message": "hi there"}),
+            patch.object(repl.cmds, "chat_stream", return_value=iter(["hi there"])),
         ):
             repl._cmd_chat("hello")
         assert repl._chat_session_id is not None
@@ -12078,7 +12098,7 @@ class TestCmdChatExecution:
         repl._chat_history = [{"role": "user", "content": "prev"}]
         with (
             patch.object(repl, "_require_api", return_value=True),
-            patch.object(repl.cmds, "chat", return_value={"message": "response"}),
+            patch.object(repl.cmds, "chat_stream", return_value=iter(["response"])),
         ):
             repl._cmd_chat("hello")
         assert len(repl._chat_history) == 3
@@ -18381,8 +18401,13 @@ class TestCmdGenDeeper:
 
 class TestCmdChatDeeper:
     def test_chat_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_chat(""))
-        assert "Usage" in out
+        # Bare `chat` no longer prints usage — it enters interactive mode.
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch("builtins.input", side_effect=EOFError),  # stdin Ctrl-D
+        ):
+            out = _run_with_io(repl, [], lambda: repl._cmd_chat(""))
+        assert "Interactive chat mode" in out
 
 
 # ── _cmd_train deeper ────────────────────────────────────────────
@@ -27269,9 +27294,14 @@ class TestCmdGenDeeperV5:
 
 class TestCmdChatDeeperV5:
     def test_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_chat("")
-        assert "Usage" in cap.getvalue()
+        # Bare `chat` no longer prints usage — it enters interactive mode.
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch("builtins.input", side_effect=EOFError),  # stdin Ctrl-D
+        ):
+            with _CaptureOutput(repl) as cap:
+                repl._cmd_chat("")
+        assert "Interactive chat mode" in cap.getvalue()
 
     def test_reset_session(self, repl):
         repl._chat_session_id = "old-session"
@@ -27537,7 +27567,9 @@ class TestCmdHelpBranches:
     def test_help_no_args(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_help("")
-        assert "Built-in commands" in cap.getvalue()
+        # Sectioned format ("Navigation:", "File operations:", …) replaced the
+        # old single "Built-in commands" header.
+        assert "Navigation:" in cap.getvalue()
 
     def test_help_brief(self, repl):
         with _CaptureOutput(repl) as cap:
