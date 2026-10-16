@@ -195,6 +195,11 @@ def start(ready_timeout: float = READY_TIMEOUT, with_web: bool = True) -> dict:
     from domain.infrastructure._internal.pugqeep.engine import Engine
 
     engine = Engine(name="serve_ui")
+    # Dispatch routes ungrouped processes into a tree; with zero trees
+    # dispatch() keeps returning 0 and children sit at CREATED forever (the
+    # real-launch gate caught this — engine tests always create a tree first).
+    # Plain Tree, not guarded: no auto-restart, the degrade must stay honest.
+    engine.tree("serve")
     if _under_ipython():
         # Engine.__init__ installs SIGINT/SIGTERM handlers; in a notebook the
         # kernel owns SIGINT — hand it straight back.
