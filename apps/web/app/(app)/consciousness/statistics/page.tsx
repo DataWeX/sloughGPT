@@ -612,7 +612,7 @@ export default function ConsciousnessStatisticsPage() {
               <h4 className="text-sm font-medium mb-2">{t('consciousness_statistics.top_qualia')}</h4>
               <div className="flex flex-wrap gap-2">
                 {topQualia.length > 0 ? topQualia.map(([key, count]) => (
-                  <span key={key} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs" style={{ backgroundColor: `${QUALIA_COLORS[key]}20`, color: QUALIA_COLORS[key] }}>
+                  <span key={key} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs" style={{ backgroundColor: `rgb(${QUALIA_COLORS[key]} / 0.12)`, color: `rgb(${QUALIA_COLORS[key]})` }}>
                     {key} ({count})
                   </span>
                 )) : <span className="text-sm text-muted-foreground">{t('consciousness_statistics.no_data')}</span>}

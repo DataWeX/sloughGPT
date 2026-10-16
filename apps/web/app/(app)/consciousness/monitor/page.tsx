@@ -21,18 +21,18 @@ interface MonitorEvent {
 }
 
 const QUALIA_COLORS: Record<string, string> = {
-  valence: 'var(--chart-1)',
-  arousal: 'var(--chart-2)',
-  novelty: 'var(--chart-3)',
-  coherence: 'var(--chart-4)',
+  valence: 'rgb(var(--chart-1))',
+  arousal: 'rgb(var(--chart-2))',
+  novelty: 'rgb(var(--chart-3))',
+  coherence: 'rgb(var(--chart-4))',
 }
 
 const BELIEF_COLORS: Record<string, string> = {
-  competence: 'var(--chart-1)',
-  helpfulness: 'var(--chart-4)',
-  creativity: 'var(--chart-3)',
-  accuracy: 'var(--chart-5)',
-  empathy: 'var(--chart-2)',
+  competence: 'rgb(var(--chart-1))',
+  helpfulness: 'rgb(var(--chart-4))',
+  creativity: 'rgb(var(--chart-3))',
+  accuracy: 'rgb(var(--chart-5))',
+  empathy: 'rgb(var(--chart-2))',
 }
 
 const QUALIA_DIMS = ['valence', 'arousal', 'novelty', 'coherence']

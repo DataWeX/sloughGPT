@@ -78,18 +78,18 @@ interface EvalReport {
 // Chart series routed through the theme tokens — chart-N follows the active
 // theme/palette, so the dashboard never hardcodes a hue of its own.
 const BELIEF_COLORS: Record<string, string> = {
-  competence: 'var(--chart-1)',
-  helpfulness: 'var(--chart-2)',
-  creativity: 'var(--chart-3)',
-  accuracy: 'var(--chart-4)',
-  empathy: 'var(--chart-5)',
+  competence: 'rgb(var(--chart-1))',
+  helpfulness: 'rgb(var(--chart-2))',
+  creativity: 'rgb(var(--chart-3))',
+  accuracy: 'rgb(var(--chart-4))',
+  empathy: 'rgb(var(--chart-5))',
 }
 
 const QUALIA_COLORS: Record<string, string> = {
-  valence: 'var(--chart-1)',
-  arousal: 'var(--chart-5)',
-  novelty: 'var(--chart-3)',
-  coherence: 'var(--chart-2)',
+  valence: 'rgb(var(--chart-1))',
+  arousal: 'rgb(var(--chart-5))',
+  novelty: 'rgb(var(--chart-3))',
+  coherence: 'rgb(var(--chart-2))',
 }
 
 function formatTime(ts: number): string {
@@ -617,8 +617,8 @@ export default function ConsciousnessDashboardPage() {
                 <Area
                   type="monotone"
                   dataKey="cumulative"
-                  stroke="var(--chart-1)"
-                  fill="var(--chart-1)"
+                  stroke="rgb(var(--chart-1))"
+                  fill="rgb(var(--chart-1))"
                   fillOpacity={0.15}
                   strokeWidth={2}
                 />
@@ -741,7 +741,7 @@ export default function ConsciousnessDashboardPage() {
                           className="h-full rounded-full transition-all duration-500"
                           style={{
                             width: `${Math.max(0, Math.min(100, (v as number) * 100))}%`,
-                            backgroundColor: BELIEF_COLORS[k] || 'var(--chart-1)',
+                            backgroundColor: BELIEF_COLORS[k] || 'rgb(var(--chart-1))',
                           }}
                         />
                       </div>
@@ -765,7 +765,7 @@ export default function ConsciousnessDashboardPage() {
                           className="h-full rounded-full transition-all duration-500"
                           style={{
                             width: `${Math.max(0, Math.min(100, (((v as number) + 1) / 2) * 100))}%`,
-                            backgroundColor: QUALIA_COLORS[k] || 'var(--chart-1)',
+                            backgroundColor: QUALIA_COLORS[k] || 'rgb(var(--chart-1))',
                           }}
                         />
                       </div>
@@ -828,7 +828,7 @@ export default function ConsciousnessDashboardPage() {
                             className="h-full rounded-full transition-all duration-500"
                             style={{
                               width: `${Math.max(0, Math.min(100, (((v as number) + 1) / 2) * 100))}%`,
-                              backgroundColor: QUALIA_COLORS[k] || 'var(--chart-1)',
+                              backgroundColor: QUALIA_COLORS[k] || 'rgb(var(--chart-1))',
                             }}
                           />
                         </div>
