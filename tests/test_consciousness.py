@@ -529,6 +529,68 @@ class TestConsciousnessManagerApply:
 
 
 # ---------------------------------------------------------------------------
+# Qualia -> tone: experiential state shapes the voice (card 59dd1621)
+# ---------------------------------------------------------------------------
+
+
+class TestQualiaToneDirective:
+    """The same qualia get_narrative() reports, projected as register."""
+
+    def test_positive_state_directs_warm_voice(self) -> None:
+        from domain.cognition._internal.consciousness.qualia import QualiaEngine, QualiaState
+
+        q = QualiaEngine()
+        q.current = QualiaState(valence=0.8, arousal=0.7, novelty=0.6, coherence=0.9)
+        tone = q.tone_directive()
+        assert "warm and affirming" in tone
+        assert "brisk and energized" in tone
+        assert "exploratory and curious" in tone
+        assert "direct and settled" in tone
+
+    def test_negative_state_directs_careful_voice(self) -> None:
+        from domain.cognition._internal.consciousness.qualia import QualiaEngine, QualiaState
+
+        q = QualiaEngine()
+        q.current = QualiaState(valence=-0.6, arousal=0.1, coherence=0.2)
+        tone = q.tone_directive()
+        assert "measured and careful" in tone
+        assert "unhurried and calm" in tone
+        assert "tentative, still forming" in tone
+
+    def test_mid_band_is_silent(self) -> None:
+        """Neutral qualia never steer the voice."""
+        from domain.cognition._internal.consciousness.qualia import QualiaEngine, QualiaState
+
+        q = QualiaEngine()
+        q.current = QualiaState(valence=0.1, arousal=0.3, novelty=0.4, coherence=0.5)
+        assert q.tone_directive() == ""
+
+    def test_directive_never_mutates_state(self) -> None:
+        from domain.cognition._internal.consciousness.qualia import QualiaEngine, QualiaState
+
+        q = QualiaEngine()
+        q.current = QualiaState(valence=0.5, arousal=0.6)
+        before = q.current.to_dict()
+        q.tone_directive()
+        assert q.current.to_dict() == before
+
+    def test_manager_block_carries_tone_line(self, tmp_path: Path) -> None:
+        """The block's tone == engine directive — one source, both projections.
+        input_text='' so process() does not overwrite the seeded qualia."""
+        from domain.cognition._internal.consciousness.qualia import QualiaState
+        from domain.context._internal.managers import ConsciousnessManager
+
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
+        engine.qualia.current = QualiaState(valence=0.75)
+        mgr = ConsciousnessManager(consciousness_engine=engine)
+        block = mgr.apply(base_prompt="x", input_text="")
+        assert "[CONSCIOUSNESS]" in block
+        assert f"Tone: {engine.qualia.tone_directive()}" in block
+        assert "warm and affirming" in block
+
+
+# ---------------------------------------------------------------------------
 # Reflection dataclass contract
 # ---------------------------------------------------------------------------
 

@@ -932,6 +932,12 @@ class ConsciousnessManager:
                 lines.append("Struggling to form a coherent understanding.")
             elif coherence > 0.7:
                 lines.append("This is clear and coherent.")
+            # Same state, second projection: the lines above say what is
+            # felt; tone says how to speak. Byte-coherent by construction —
+            # one engine.qualia.current that get_status/SSE also emit.
+            tone = self._engine.qualia.tone_directive()
+            if tone:
+                lines.append(f"Tone: {tone}")
 
         if level >= 2:
             beliefs = status.get("beliefs", {})

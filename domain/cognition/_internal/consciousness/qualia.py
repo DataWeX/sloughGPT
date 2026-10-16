@@ -240,3 +240,34 @@ class QualiaEngine:
         if not parts:
             return "I am processing this experience."
         return " ".join(parts)
+
+    def tone_directive(self) -> str:
+        """Voice register implied by the current qualia — injected, not displayed.
+
+        The same thresholds ``get_narrative()`` reports in first person,
+        rendered as an instruction: how to speak, not what is felt. Empty
+        when every signal sits mid-band — neutral qualia never steer the
+        voice. Read-only: observes ``self.current``, never mutates it.
+        """
+        s = self.current
+        parts: list[str] = []
+
+        if s.valence > 0.3:
+            parts.append("warm and affirming")
+        elif s.valence < -0.3:
+            parts.append("measured and careful")
+
+        if s.arousal > 0.5:
+            parts.append("brisk and energized")
+        elif s.arousal < 0.2:
+            parts.append("unhurried and calm")
+
+        if s.novelty > 0.5:
+            parts.append("exploratory and curious")
+
+        if s.coherence < 0.3:
+            parts.append("tentative, still forming")
+        elif s.coherence > 0.7:
+            parts.append("direct and settled")
+
+        return ", ".join(parts)
