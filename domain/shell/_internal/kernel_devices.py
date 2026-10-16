@@ -78,6 +78,36 @@ class DeviceDriver:
         """Execute command on hardware. Subclass this."""
         raise NotImplementedError(f"{self._name}: ioctl '{command}' not implemented")
 
+    def call(self, method: str, *args: Any) -> Any:
+        """Name-based dispatch — the DeviceBus face of the ioctl contract.
+
+        A driver speaks ioctl; the VM's DeviceBus speaks call(). They are the
+        same operation with opposite conventions, so a driver gets both: this
+        unwraps ioctl() so the device is reachable from either seam instead of
+        only from the fd-based one.
+
+        The dialects differ in case — IoctlCommand and every kernel driver
+        match uppercase ("INFO", "LOAD"), the VM reaches devices by lowercase
+        name ("info") — so the name is translated here, once, rather than each
+        driver growing its own alias table.
+
+        Success returns the value; failure raises, because the caller of call()
+        is expected to act on it — handing back a SyscallResult nobody inspects
+        would turn a device fault into silence.
+        """
+        from .vm import DeviceFault  # deferred: vm.py imports this module
+
+        cmd = method.upper() if isinstance(method, str) else method
+        try:
+            result = self.ioctl(cmd, *args)
+        except DeviceFault:
+            raise
+        except Exception as exc:  # noqa: BLE001 - a leaking ioctl becomes a fault
+            raise DeviceFault(f"{self._name}: {method} raised: {exc}") from exc
+        if not result.success:
+            raise DeviceFault(f"{self._name}: {method} failed: {result.error}")
+        return result.value
+
     def info(self) -> dict:
         return {
             "name": self._name,
@@ -213,6 +243,17 @@ class DeviceTable:
             self._free_fd(fd)
             return True
 
+    def device_for_fd(self, fd: int) -> DeviceDriver | None:
+        """Resolve an open fd to its device, or None if it is not open.
+
+        The fd table's own lookup, exposed so a caller can dispatch by name on
+        an open fd without reaching into ``_fd_device`` and re-checking bounds
+        and the open bitmap itself.
+        """
+        if fd < 0 or fd >= self._max_fds or not self._fd_is_open(fd):
+            return None
+        return self._fd_device[fd]
+
     # ── ioctl dispatch ────────────────────────────────────────────────────
 
     def ioctl(self, fd: int, command: str, *args: Any) -> SyscallResult:
@@ -326,6 +367,26 @@ class DeviceManager:
     def ioctl(self, fd: int, command: str, *args) -> SyscallResult:
         """Issue ioctl on fd."""
         return self.table.ioctl(fd, command, *args)
+
+    def call(self, fd: int, method: str, *args) -> Any:
+        """Dispatch by name on an open fd — DeviceManager's DeviceBus face.
+
+        Mirrors DeviceBus.call(device, method, *args) in name and arity while
+        keeping this seam's handle (an fd, like ioctl(fd, ...)), so both seams
+        are driven the same way. Returns the value and raises DeviceFault on
+        failure, where ioctl() hands back a SyscallResult and never raises.
+        """
+        from .vm import DeviceFault  # deferred: vm.py imports this module
+
+        device = self.table.device_for_fd(fd)
+        if device is None:
+            raise DeviceFault(f"bad fd: {fd}")
+        return device.call(method, *args)
+
+    def info(self, fd: int) -> dict:
+        """Device info for an open fd — mirrors DeviceBus.info(handle)."""
+        device = self.table.device_for_fd(fd)
+        return device.info() if device is not None else {}
 
     def list_devices(self) -> list[dict]:
         """List all registered devices."""

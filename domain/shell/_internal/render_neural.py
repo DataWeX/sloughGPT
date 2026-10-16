@@ -24,6 +24,7 @@ from __future__ import annotations
 import numpy as np
 
 from .cycles_device import CyclesDevice
+from .device_ops import OpTable
 from .vm import Device, DeviceFault
 
 
@@ -50,7 +51,7 @@ class RenderNeuralDevice(Device):
         self._classify_w = rng.randn(32, num_classes).astype(np.float32) * np.sqrt(2.0 / 32)
         self._classify_b = np.zeros(num_classes, dtype=np.float32)
 
-        self._ops = {
+        self._ops = OpTable("RenderNeuralDevice", {
             "process": self._process,
             "embed": self._embed,
             "classify": self._classify,
@@ -58,13 +59,7 @@ class RenderNeuralDevice(Device):
             "info": self.info,
             "set_source": self._set_source,
             "forward": self._forward_raw,
-        }
-
-    def call(self, method, *args):
-        fn = self._ops.get(method)
-        if fn is None:
-            raise DeviceFault(f"RenderNeuralDevice: unknown op: {method}")
-        return fn(*args)
+        })
 
     def info(self):
         return {

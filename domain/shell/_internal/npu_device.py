@@ -87,11 +87,22 @@ class NPUDevice:
         }
 
     def call(self, method: str, *args: Any) -> Any:
-        """VM Device interface — delegates to ioctl."""
-        result = self.ioctl(method, *args)
-        if result.success:
-            return result.value
-        raise Exception(result.error)
+        """VM Device interface — delegates to ioctl.
+
+        ``ioctl`` speaks ``IoctlCommand`` (uppercase); the VM reaches devices by
+        lowercase name. Resolving case-insensitively makes ``call("info")`` and
+        ``ioctl("INFO")`` the same operation, so neither world has to know the
+        other's spelling. Failures raise :class:`DeviceFault` — the type the VM
+        reports — rather than a bare Exception that nothing upstream
+        distinguishes from a bug.
+        """
+        from .vm import DeviceFault  # deferred: vm.py imports this module
+
+        cmd = method.upper() if isinstance(method, str) else method
+        result = self.ioctl(cmd, *args)
+        if not result.success:
+            raise DeviceFault(result.error or str(method))
+        return result.value
 
     # ── ioctl interface ───────────────────────────────────────────────────
 

@@ -210,11 +210,13 @@ class TestDeviceManager:
 
     def test_default_devices(self):
         mgr = create_default_devices()
-        assert mgr.get("null") is not None
-        assert mgr.get("random") is not None
-        assert mgr.get("llm") is not None
-        assert mgr.get("proc") is not None
-        assert len(mgr.names) >= 7
+        # Shipped contract on main: create_default_devices registers the six
+        # hardware devices; the AI family (null/random/llm/proc/…) is registered
+        # by the kernel's own manager (kernel.py:134), not this factory.
+        # (The AI-family-in-factory expectation came from stranded 1a2fb8588.)
+        for hw in ("tensor", "npu", "storage", "network", "display", "input"):
+            assert mgr.get(hw) is not None, hw
+        assert len(mgr.names) >= 6
 
 
 class _Resp:

@@ -236,8 +236,43 @@ class Memory:
 class Device:
     """Generic device interface. Subclass to wrap any library."""
 
-    def call(self, method, *args):
-        raise DeviceFault(f"device does not support: {method}")
+    def call(self, method, *args, **kwargs):
+        """Name-based dispatch — the thin layer under every device interface.
+
+        A device declares its vocabulary as ``self._ops``; the lookup, the
+        unknown-op fault and the listing live in ``device_ops.OpTable``. So a
+        device gains an op by adding a table entry, not another copy of the
+        dispatch body — eight devices in this shell carried that body verbatim.
+
+        A device with no table falls through to the refusal below, which is
+        what the base class has always meant by "does not support".
+        """
+        ops = getattr(self, "_ops", None)
+        if ops is None:
+            raise DeviceFault(f"device does not support: {method}")
+        if hasattr(ops, "call"):
+            return ops.call(method, *args, **kwargs)
+
+        from .device_ops import dispatch_ops  # deferred: keep this module import-lean
+
+        return dispatch_ops(ops, type(self).__name__, method, *args, **kwargs)
+
+    def ioctl(self, command, *args):
+        """Kernel face of the same contract: SyscallResult, never raises.
+
+        Devices here implement call(); the fd-based DeviceTable/DeviceManager
+        only speak ioctl(). Wrapping call() means a device from either world
+        can be registered in either seam — one interface, two faces — instead
+        of each device being reachable from exactly one of them.
+        """
+        from .kernel_syscall import SyscallResult  # deferred: keep vm import-lean
+
+        try:
+            return SyscallResult.ok(self.call(command, *args))
+        except DeviceFault as exc:
+            return SyscallResult.fail(str(exc))
+        except Exception as exc:  # noqa: BLE001 - ioctl reports, it does not raise
+            return SyscallResult.fail(f"{command} failed: {exc}")
 
     def info(self):
         return {"type": "base", "methods": []}
@@ -2495,7 +2530,7 @@ class DeviceRegisterMap:
             if hasattr(result, "success"):
                 if result.success:
                     return result.value
-                raise Exception(result.error)
+                raise DeviceFault(result.error)
             return result
         elif hasattr(device, "call"):
             return device.call(command, arg0, arg1, arg2)

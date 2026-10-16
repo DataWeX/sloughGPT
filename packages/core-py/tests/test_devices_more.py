@@ -333,7 +333,9 @@ class TestDeviceManager:
         out = self._mgr().list_devices()
         assert "/dev/llm" in out
         assert "/dev/null" in out
-        assert "Discards all written data" in out
+        # Renders the info() face (type column), not free-text descriptions —
+        # the three-face device contract (41b095c93).
+        assert "ai" in out
 
     def test_get(self):
         mgr = self._mgr()
@@ -376,12 +378,8 @@ class TestDeviceManager:
 
     def test_create_default_devices(self):
         mgr = create_default_devices(_Kernel)
-        assert set(mgr.names) == {
-            "null",
-            "random",
-            "llm",
-            "embedding",
-            "knowledge",
-            "vision",
-            "proc",
-        }
+        # Shipped contract on main: six hardware devices. The AI family
+        # (null/random/llm/embedding/knowledge/vision/proc) is registered by
+        # the kernel's own manager, not this factory (stranded 1a2fb8588
+        # expected the unified set).
+        assert set(mgr.names) == {"tensor", "npu", "storage", "network", "display", "input"}
