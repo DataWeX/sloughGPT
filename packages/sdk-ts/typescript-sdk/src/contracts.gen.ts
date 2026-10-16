@@ -2,7 +2,7 @@
 // Regenerate after changing any descriptor:
 //   PYTHONPATH="$PWD:$PWD/packages/mogdb/src:$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" \
 //     python scripts/gen_ts_contracts.py
-// Freshness gate: tests/api-server/test_ts_contracts.py::test_ts_contract_projection_is_fresh
+// Freshness gate: apps/api/server/tests/test_ts_contracts.py::test_ts_contract_projection_is_fresh
 
 /** JSON Schema view of a capability's parameters (`ToolSpec.params` projection). */
 export interface JsonSchema {
@@ -29,18 +29,18 @@ export interface ContractDescriptor {
 }
 
 export const CONTRACTS = {
-  "contracts/list": {
-    "auth_scope": "public",
-    "description": "List every descriptor-projected HTTP contract registered at boot",
+  "contracts.list": {
+    "auth_scope": "authenticated",
+    "description": "List capability contracts registered through the descriptor mechanism.",
     "idempotent": true,
     "method": "GET",
     "module": "routers.contracts",
-    "name": "contracts/list",
-    "operation_id": "contracts/list.get",
+    "name": "contracts.list",
+    "operation_id": "contracts.list.get",
     "params": {
       "properties": {
-        "name": {
-          "description": "Case-insensitive substring to filter descriptor names",
+        "prefix": {
+          "description": "Only return contracts whose route path starts with this prefix.",
           "type": "string"
         }
       },
@@ -48,7 +48,20 @@ export const CONTRACTS = {
       "type": "object"
     },
     "path": "/contracts",
-    "result": null,
+    "result": {
+      "properties": {
+        "contracts": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "count": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "version": "1"
   },
 } as const satisfies Record<string, ContractDescriptor>

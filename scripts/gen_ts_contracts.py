@@ -26,7 +26,7 @@ dependencies:
         python scripts/gen_ts_contracts.py           # write every output
     python scripts/gen_ts_contracts.py --check       # freshness gate (exit 1 if stale)
 
-Freshness is enforced by ``tests/api-server/test_ts_contracts.py::test_ts_contract_projection_is_fresh``
+Freshness is enforced by ``apps/api/server/tests/test_ts_contracts.py::test_ts_contract_projection_is_fresh``
 — descriptors changed without regen => red.
 """
 
@@ -70,7 +70,7 @@ HEADER = """\
 // Regenerate after changing any descriptor:
 //   PYTHONPATH="$PWD:$PWD/packages/mogdb/src:$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" \\
 //     python scripts/gen_ts_contracts.py
-// Freshness gate: tests/api-server/test_ts_contracts.py::test_ts_contract_projection_is_fresh
+// Freshness gate: apps/api/server/tests/test_ts_contracts.py::test_ts_contract_projection_is_fresh
 
 /** JSON Schema view of a capability's parameters (`ToolSpec.params` projection). */
 export interface JsonSchema {
