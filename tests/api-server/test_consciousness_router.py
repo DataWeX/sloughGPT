@@ -189,6 +189,50 @@ class TestConsciousnessAPI:
         assert res.json()["data"]["dreamed"] is False
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_reflection_is_readonly_projection_of_injection_source(self, _auth, tmp_path):
+        """GET /reflection: byte-identical narrative to engine.reflect(apply=False)
+        (what the chat path injects), stable state_key, zero mutation."""
+        from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from domain.cognition._internal.consciousness.config import ConsciousnessConfig
+        from domain.cognition._internal.consciousness.engine import ConsciousnessEngine
+        from domain.cognition._internal.consciousness.self_model import SelfEpisode
+
+        engine = ConsciousnessEngine(ConsciousnessConfig(level=2, store_path=str(tmp_path)))
+        engine.self_model.episodes.append(
+            SelfEpisode(
+                timestamp=time.time(),
+                input_text="q",
+                response="a",
+                qualia={"novelty": 0.5},
+                self_insight="i",
+                growth_delta=0.08,
+            )
+        )
+        router_obj = ConsciousnessRouter()
+        router_obj._engine = engine
+        app = FastAPI()
+        register_app_error_handler(app)
+        app.include_router(router_obj.router)
+        client = TestClient(app)
+
+        before = dict(engine.self_model.self_beliefs)
+        d1 = client.get("/consciousness/reflection").json()["data"]
+        d2 = client.get("/consciousness/reflection").json()["data"]
+        # Stable while state is unchanged — no per-request dice roll.
+        assert d1["reflection"]["narrative"] == d2["reflection"]["narrative"]
+        assert d1["state_key"] == d2["state_key"]
+        # Byte-coherent with the injection source (single truth).
+        assert d1["reflection"]["narrative"] == engine.reflect(apply=False).narrative
+        # Zero mutation — a display must never steer the mind.
+        assert dict(engine.self_model.self_beliefs) == before
+        # Experience moves the state.
+        engine.process("new input", "new response", level=2)
+        d3 = client.get("/consciousness/reflection").json()["data"]
+        assert d3["state_key"] != d1["state_key"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_update_config(self, _auth, client):
         res = client.patch("/consciousness/config", json={"level": 2})
         assert res.status_code == 200

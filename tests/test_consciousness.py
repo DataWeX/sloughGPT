@@ -346,6 +346,86 @@ class TestDreamCycle:
 
 
 # ---------------------------------------------------------------------------
+# Mind-state substrate + idle-dream policy (engine integration)
+# ---------------------------------------------------------------------------
+
+
+class TestMindStateSubstrate:
+    """The engine writes the log at its mutation points; query is standalone."""
+
+    def test_process_writes_episode_record(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("hello", "world", level=2)
+        records = engine.mind_log.query(record_type="episode")
+        assert len(records) == 1
+        assert records[0].provenance == "experience"
+        assert records[0].payload["input_text"] == "hello"
+        assert "qualia" in records[0].payload
+
+    def test_dream_edges_to_last_episode_record(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("q", "a", level=2)
+        engine.dream()
+        dream = engine.mind_log.query(record_type="dream")[0]
+        episode = engine.mind_log.query(record_type="episode")[0]
+        assert dream.edges == [{"rel": "consolidates", "id": episode.id}]
+
+    def test_reflect_apply_logs_reflection_and_edged_delta(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        for _ in range(5):
+            engine.self_model.episodes.append(_make_episode(growth_delta=0.1))
+        engine.reflect(apply=True)
+        refl = engine.mind_log.query(record_type="reflection")[0]
+        delta = engine.mind_log.query(record_type="belief_delta")[0]
+        assert refl.payload["trajectory"] == "growth"
+        assert refl.payload["narrative"]
+        assert delta.edges == [{"rel": "applies", "id": refl.id}]
+
+    def test_propose_read_is_not_logged(self, tmp_path: Path) -> None:
+        """The hot-path injection read must never write."""
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode())
+        engine.reflect(apply=False)
+        assert engine.mind_log.query(record_type="reflection") == []
+
+    def test_query_mind_reads_engine_log_standalone(self, tmp_path: Path) -> None:
+        from domain.cognition._internal.consciousness.mind_state import query_mind
+
+        engine = _make_engine(tmp_path)
+        engine.process("standalone", "read", level=2)
+        records = query_mind(str(tmp_path), record_type="episode")
+        assert len(records) == 1
+        assert records[0].payload["input_text"] == "standalone"
+
+    def test_save_trims_memory_to_window(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        for _ in range(150):
+            engine.self_model.episodes.append(_make_episode())
+        engine.save()
+        assert len(engine.self_model.episodes) == 100
+
+
+class TestIdleDreamPolicy:
+    """maybe_dream(): nights happen when the world is quiet."""
+
+    def test_policy_lifecycle(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        assert engine.maybe_dream()["dreamed"] is False  # nothing yet
+        engine.self_model.episodes.append(_make_episode())
+        first = engine.maybe_dream()
+        assert first["dreamed"] is False  # world spoke since baseline
+        assert first["reason"] == "new experience since last tick"
+        second = engine.maybe_dream()
+        assert second["dreamed"] is True  # quiet: count matches baseline
+        third = engine.maybe_dream()
+        assert third["dreamed"] is True  # nights repeat while quiet
+
+    def test_disabled_engine_never_dreams(self, tmp_path: Path) -> None:
+        engine = ConsciousnessEngine(ConsciousnessConfig(level=0, store_path=str(tmp_path)))
+        assert engine.maybe_dream()["reason"] == "disabled"
+
+
+# ---------------------------------------------------------------------------
 # ConsciousnessManager.apply()
 # ---------------------------------------------------------------------------
 

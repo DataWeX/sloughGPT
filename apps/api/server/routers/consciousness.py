@@ -154,6 +154,7 @@ class ConsciousnessRouter:
         self.router.add_api_route("/clear/episodes", self.clear_episodes, methods=["POST"])
         self.router.add_api_route("/clear/beliefs", self.clear_beliefs, methods=["POST"])
         self.router.add_api_route("/dream", self.dream, methods=["POST"])
+        self.router.add_api_route("/reflection", self.get_reflection, methods=["GET"])
 
     @endpoint("consciousness.status")
     async def get_status(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -225,6 +226,30 @@ class ConsciousnessRouter:
         """
         engine = self._get_engine()
         return success_response(data=engine.dream())
+
+    @endpoint("consciousness.reflection")
+    async def get_reflection(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Read-only view of the current inner state (propose-cached).
+
+        A projection of the mind-state substrate, not a source: the narrative
+        is byte-identical to what the chat path injects
+        (``engine.reflect(apply=False)``) — zero mutation, unlike
+        ``POST /reflect``, which commits belief deltas.
+        """
+        engine = self._get_engine()
+        reflection = engine.reflect(apply=False)
+        data = {
+            "reflection": (
+                reflection.to_dict()
+                if hasattr(reflection, "to_dict")
+                else {"narrative": str(reflection)}
+            ),
+            "state_key": engine.reflection_state_key(),
+            "episodes": len(engine.self_model.episodes),
+            "dreams": sum(1 for e in engine.self_model.episodes if e.is_dream),
+            "qualia": engine.qualia.current.to_dict(),
+        }
+        return success_response(data=data)
 
     @endpoint("consciousness.update_config")
     async def update_config(
@@ -1021,6 +1046,8 @@ class ConsciousnessRouter:
                         "beliefs": status.get("beliefs", {}),
                         "growth": status.get("episodes", 0),
                         "episodes": len(engine.self_model.episodes),
+                        "dreams": status.get("dreams", 0),
+                        "state_key": status.get("state_key", ""),
                         "training": training,
                         "enabled": status.get("enabled", False),
                     }

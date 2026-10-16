@@ -87,6 +87,10 @@ class SelfEpisode:
 class SelfModel:
     """Processes experiences and maintains self-awareness."""
 
+    # The document is a window; the complete timeline lives in the
+    # mind-state log (mind_log.jsonl), so trimming loses nothing.
+    MAX_EPISODES: int = 100
+
     def __init__(self, store_path: str = "data/consciousness") -> None:
         self.identity = SelfIdentity()
         self.episodes: list[SelfEpisode] = []
@@ -299,6 +303,10 @@ class SelfModel:
     def save(self) -> None:
         """Persist self-model to JSON."""
         self._store_path.mkdir(parents=True, exist_ok=True)
+        # Trim in-memory to the window this document declares — the ambient
+        # dream loop appends unattended, and memory must not outgrow disk.
+        if len(self.episodes) > self.MAX_EPISODES:
+            self.episodes = self.episodes[-self.MAX_EPISODES :]
         data = {
             "identity": {
                 "name": self.identity.name,

@@ -477,12 +477,37 @@ class StartupOrchestrator:
 
             start_bandwidth_mirror()
 
+        async def _init_ambient_dreams():
+            """Ambient dream cycle — nights run in the host, not the domain.
+
+            Consumes the previously-dead ``config.reflection_interval``
+            (re-read each tick, so a runtime PATCH /consciousness/config
+            takes effect); the engine stays sync and timer-free — asyncio
+            host -> ``asyncio.to_thread`` seam.
+            """
+            from domain.cognition import get_consciousness
+
+            async def _loop() -> None:
+                while True:
+                    engine = await asyncio.to_thread(get_consciousness)
+                    interval = int(getattr(engine.config, "reflection_interval", 300) or 300)
+                    # Floor of 30s: idle ticks faster than that would spam
+                    # dream records while nobody is typing.
+                    await asyncio.sleep(max(30, interval))
+                    try:
+                        await asyncio.to_thread(engine.maybe_dream)
+                    except Exception as exc:
+                        logger.warning("Ambient dream failed: %s", exc)
+
+            self._ambient_dream_task = asyncio.create_task(_loop())
+
         loader.on(Stage.BACKGROUND, "wandb", _init_wandb, timeout=30.0)
         loader.on(Stage.BACKGROUND, "multimodal", _init_multimodal, timeout=30.0)
         loader.on(Stage.BACKGROUND, "metrics", _init_metrics, timeout=10.0)
         loader.on(Stage.BACKGROUND, "autotrainer", _init_autotrainer, timeout=10.0)
         loader.on(Stage.BACKGROUND, "rag_ingest", _init_rag, timeout=60.0)
         loader.on(Stage.BACKGROUND, "bandwidth", _init_bandwidth, timeout=5.0)
+        loader.on(Stage.BACKGROUND, "ambient_dreams", _init_ambient_dreams, timeout=5.0)
 
         # Stage 2 (READY) and Stage 3 (BACKGROUND) run *after* the socket binds.
         # uvicorn refuses connections until the lifespan yields, and READY blocks
