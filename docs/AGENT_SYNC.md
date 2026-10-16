@@ -4,6 +4,24 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**LANDED 2026-10-16** — card `1c64882c` (VM bus-value discipline +
+`encode_png`): the register file now holds machine-representable values
+only, the FileDevice fd precedent extended to arrays. `CyclesDevice.render`
+returns a **TensorArena slot id** (`domain/shell/_internal/tensor_arena.py`)
+instead of a live ndarray; `resolve()` at each driver boundary accepts
+legacy live arrays, so old Python callers pass through untouched. New ops:
+`encode_png` (PNG bytes for a slot — composes with `FileDevice.write` from
+assembly) and `free_slot`. `MultimodalDevice` takes the shared arena, so
+**assembly can now do `cycles render → multimodal embed` through a slot**
+(flagship test: pure-asm `render → encode_png → FileDevice.write` writes a
+valid PNG). All bus/repl call sites updated to the slot contract. Gates:
+new `test_vm_bus_handles.py` (36 tests) + 9 touched/adjacent suites green
+except 4 pre-existing `TestNPUVMDevice` failures (device calls
+`load_file`, test fake implements `load_model` — fails with this work
+stashed too; another lane's drift). Next up: card `ce0ec0b7` (vectorize
+`cycles._trace_batch` per-pixel loops), then `a3b39114` (StreamDevice +
+asm streaming app).
+
 **LANDED 2026-10-16** — card `7cefbbcf` (World–Model Bridge Stage A): babies
 can be born with a `ModelBrain` (`domain/shell/_internal/model_brain.py`) —
 interface-identical to `Perceptron` (forward/update/`W`/`b`/`H`/`bh`/

@@ -4,15 +4,23 @@ CyclesDevice — VM device wrapper for the Cycles path tracer.
 Bridges the RAM-resident rendering engine onto the VM device bus so
 assembly programs and the NPU can render scenes and process state tensors.
 
-Device bus protocol:
+Device bus protocol (bus values are machine-representable — the fd
+precedent: registers hold ints, drivers map int -> host object):
     DEV_OPEN   R0, cycles
-    DEV_CALL   R1, R0, render          # R1 = image tensor (H*W*3)
+    DEV_CALL   R1, R0, render          # R1 = image slot (TensorArena id)
+    DEV_CALL   R1, R0, encode_png, R1  # R1 = PNG bytes for a slot
+    DEV_CALL   R1, R0, free_slot, R1   # release a slot
     DEV_CALL   R1, R0, state_tensors   # R1 = dict of state tensors
     DEV_CALL   R1, R0, add_sphere, ...
     DEV_CALL   R1, R0, add_light, ...
     DEV_CALL   R1, R0, set_material, ...
     DEV_CALL   R1, R0, set_camera, ...
     DEV_CALL   R1, R0, info
+
+Share one ``TensorArena`` across devices that exchange images so slots
+compose across the bus (cycles render -> multimodal embed). ``render``
+stores the image on the device (``_last_image``) *and* puts it in the
+arena; Python callers may still read the live array directly.
 """
 
 from __future__ import annotations
@@ -29,13 +37,16 @@ from .cycles import (
     create_plane,
     create_sphere,
 )
+from .tensor_arena import TensorArena, resolve
 from .vm import Device, DeviceFault
 
 
 class CyclesDevice(Device):
     """VM device that wraps the Cycles path tracer."""
 
-    def __init__(self, width: int = 160, height: int = 120, samples: int = 16):
+    def __init__(
+        self, width: int = 160, height: int = 120, samples: int = 16, arena: TensorArena | None = None
+    ):
         self._scene = Scene()
         self._width = width
         self._height = height
@@ -43,9 +54,12 @@ class CyclesDevice(Device):
         self._renderer: CyclesRenderer | None = None
         self._last_image: np.ndarray | None = None
         self._last_state: dict[str, np.ndarray] | None = None
+        self._arena: TensorArena = arena if arena is not None else TensorArena()
 
         self._ops = {
             "render": self._render,
+            "encode_png": self._encode_png,
+            "free_slot": self._free_slot,
             "state_tensors": self._state_tensors,
             "add_sphere": self._add_sphere,
             "add_cube": self._add_cube,
@@ -66,6 +80,11 @@ class CyclesDevice(Device):
             raise DeviceFault(f"CyclesDevice: unknown op: {method}")
         return fn(*args)
 
+    @property
+    def arena(self) -> TensorArena:
+        """Slot arena backing render's bus values (share across devices)."""
+        return self._arena
+
     def info(self):
         return {
             "type": "cycles",
@@ -84,7 +103,27 @@ class CyclesDevice(Device):
         self._ensure_renderer()
         self._scene.build_bvh()
         self._last_image = self._renderer.render()
-        return self._last_image
+        return self._arena.put(self._last_image)
+
+    def _encode_png(self, slot=None):
+        """PNG bytes for a render slot (default: the last render)."""
+        if slot is None:
+            img = self._last_image
+            if img is None:
+                raise DeviceFault("cycles: nothing to encode — render first")
+        else:
+            img = resolve(slot, self._arena)
+        import io
+
+        from PIL import Image
+
+        arr = (np.clip(img, 0, 1) * 255).astype(np.uint8)
+        buf = io.BytesIO()
+        Image.fromarray(arr, "RGB").save(buf, format="PNG")
+        return buf.getvalue()
+
+    def _free_slot(self, slot):
+        self._arena.free(int(slot))
 
     def _state_tensors(self):
         self._ensure_renderer()

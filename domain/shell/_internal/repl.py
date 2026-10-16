@@ -3560,7 +3560,7 @@ Examples:
             dev.call("set_samples", spp)
             self._print(f"  Rendering {w}x{h} @ {spp} spp...")
             t0 = _time.time()
-            img = dev.call("render")
+            img = dev.arena.get(dev.call("render"))
             dt = _time.time() - t0
             nz = int((img.sum(axis=-1) > 0.01).sum())
             self._print(

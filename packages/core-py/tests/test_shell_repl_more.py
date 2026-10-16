@@ -7301,10 +7301,11 @@ class TestCmdRenderSubs:
                     "samples": 4,
                 }
             if method == "render":
-                return _np.zeros((60, 80, 3))
+                return 0
             return [0]
 
         dev.call.side_effect = _call
+        dev.arena.get.return_value = _np.zeros((60, 80, 3))
         repl._render_device = dev
         repl._render_neural = MagicMock()
         return dev
@@ -7671,10 +7672,11 @@ class TestCmdRenderGo:
                     "samples": 4,
                 }
             if method == "render":
-                return _np.zeros((60, 80, 3))
+                return 0
             return [0]
 
         dev.call.side_effect = _call
+        dev.arena.get.return_value = _np.zeros((60, 80, 3))
         repl._render_device = dev
 
         neural = MagicMock()
@@ -7814,10 +7816,11 @@ class TestCmdRenderExtra:
                     "samples": 4,
                 }
             if method == "render":
-                return _np.zeros((60, 80, 3))
+                return 0
             return [0]
 
         dev.call.side_effect = _call
+        dev.arena.get.return_value = _np.zeros((60, 80, 3))
         repl._render_device = dev
         repl._render_neural = MagicMock()
         return dev
@@ -13015,7 +13018,7 @@ class TestCmdRenderExecution:
         mock_dev, _ = self._setup_render(repl)
         import numpy as np
 
-        mock_dev.call.return_value = np.random.rand(60, 80, 3).astype(np.float32) * 0.5
+        mock_dev.arena.get.return_value = np.random.rand(60, 80, 3).astype(np.float32) * 0.5
         repl._cmd_render("go")
         assert repl._last_exit_code == 0
 
@@ -13023,7 +13026,7 @@ class TestCmdRenderExecution:
         mock_dev, _ = self._setup_render(repl)
         import numpy as np
 
-        mock_dev.call.return_value = np.random.rand(40, 50, 3).astype(np.float32) * 0.5
+        mock_dev.arena.get.return_value = np.random.rand(40, 50, 3).astype(np.float32) * 0.5
         repl._cmd_render("go 50 40 2")
         assert repl._last_exit_code == 0
 

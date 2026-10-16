@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from .tensor_arena import TensorArena, resolve
 from .vm import Device, DeviceFault
 
 # ---------------------------------------------------------------------------
@@ -404,11 +405,13 @@ class MultimodalDevice(Device):
         DEV_CALL   R2, R0, embed, R_img                   # R2 = feature vector
         DEV_CALL   R3, R0, info                            # R3 = model info
 
-    Image is passed as a numpy array (H×W×3, float32 [0,1]).
+    Image is passed as a numpy array (H×W×3, float32 [0,1]) or as a
+    TensorArena slot id from another device (e.g. ``cycles render``).
     """
 
-    def __init__(self, engine):
+    def __init__(self, engine, arena: TensorArena | None = None):
         self._engine = engine
+        self._arena: TensorArena = arena if arena is not None else TensorArena()
         self._ops = {
             "generate": self._generate,
             "embed": self._embed,
@@ -422,6 +425,7 @@ class MultimodalDevice(Device):
         return fn(*args)
 
     def _generate(self, image_np=None, max_len=20, temperature=1.0):
+        image_np = resolve(image_np, self._arena)
         img = np.asarray(image_np, dtype=np.float32) if image_np is not None else None
         if img is not None and img.ndim == 3:
             img = img[np.newaxis, ...]
@@ -433,6 +437,7 @@ class MultimodalDevice(Device):
         return result.text
 
     def _embed(self, image_np):
+        image_np = resolve(image_np, self._arena)
         img = np.asarray(image_np, dtype=np.float32)
         if img.ndim == 3:
             img = img[np.newaxis, ...]

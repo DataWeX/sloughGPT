@@ -34,6 +34,8 @@ class TestCyclesDeviceInfo:
         info = self.dev.info()
         expected_ops = [
             "render",
+            "encode_png",
+            "free_slot",
             "state_tensors",
             "add_sphere",
             "add_cube",
@@ -496,8 +498,10 @@ class TestRender:
     def test_render(self):
         self.dev._add_sphere(radius=0.5)
         self.dev._add_light(y=3.0)
-        result = self.dev.call("render")
-        assert result.shape == (24, 32, 3)
+        slot = self.dev.call("render")
+        assert isinstance(slot, int)
+        img = self.dev.arena.get(slot)
+        assert img.shape == (24, 32, 3)
 
     def test_render_stores_last_image(self):
         self.dev._add_sphere()
@@ -515,15 +519,15 @@ class TestRender:
     def test_render_returns_float_array(self):
         self.dev._add_sphere()
         self.dev._add_light()
-        result = self.dev.call("render")
-        assert result.dtype in (np.float32, np.float64)
+        img = self.dev.arena.get(self.dev.call("render"))
+        assert img.dtype in (np.float32, np.float64)
 
     def test_render_custom_resolution(self):
         dev = CyclesDevice(width=16, height=12, samples=2)
         dev._add_sphere()
         dev._add_light()
-        result = dev.call("render")
-        assert result.shape == (12, 16, 3)
+        img = dev.arena.get(dev.call("render"))
+        assert img.shape == (12, 16, 3)
 
     def test_render_overwrites_last_image(self):
         self.dev._add_sphere()
