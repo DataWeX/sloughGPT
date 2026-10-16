@@ -53,10 +53,10 @@ export default memo(function TraitRadarChart({ data, label, color }: TraitRadarC
       </span>
       <ResponsiveContainer width="100%" height={180}>
         <RadarChart data={chartData} cx="50%" cy="50%" outerRadius="65%">
-          <PolarGrid stroke="hsl(var(--border))" strokeOpacity={0.4} />
+          <PolarGrid stroke="rgb(var(--border))" strokeOpacity={0.4} />
           <PolarAngleAxis
             dataKey="trait"
-            tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }}
+            tick={{ fontSize: 8, fill: 'rgb(var(--muted-foreground))' }}
             tickLine={false}
           />
           <PolarRadiusAxis

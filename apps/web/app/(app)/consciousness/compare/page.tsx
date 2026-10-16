@@ -269,7 +269,7 @@ export default function ConsciousnessComparePage() {
                 <CardContent className="space-y-4">
                   <div className="flex justify-center">
                     <svg viewBox="0 0 100 100" className="w-28 h-28">
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="hsl(var(--border))" strokeWidth="6" />
+                      <circle cx="50" cy="50" r="40" fill="none" stroke="rgb(var(--border))" strokeWidth="6" />
                       <circle
                         cx="50" cy="50" r="40"
                         fill="none"
@@ -386,7 +386,7 @@ export default function ConsciousnessComparePage() {
                   </g>
                 )
               })}
-              <line x1="40" y1="140" x2="390" y2="140" stroke="hsl(var(--border))" strokeWidth="0.5" />
+              <line x1="40" y1="140" x2="390" y2="140" stroke="rgb(var(--border))" strokeWidth="0.5" />
             </svg>
             <div className="flex items-center justify-center gap-4 mt-2">
               <div className="flex items-center gap-1.5">
@@ -416,7 +416,7 @@ export default function ConsciousnessComparePage() {
                       return `${Math.cos(angle) * r * 100},${Math.sin(angle) * r * 100}`
                     }).join(' ')}
                     fill="none"
-                    stroke="hsl(var(--border))"
+                    stroke="rgb(var(--border))"
                     strokeWidth="0.5"
                   />
                 ))}
@@ -427,7 +427,7 @@ export default function ConsciousnessComparePage() {
                       key={k}
                       x1="0" y1="0"
                       x2={Math.cos(angle) * 100} y2={Math.sin(angle) * 100}
-                      stroke="hsl(var(--border))"
+                      stroke="rgb(var(--border))"
                       strokeWidth="0.5"
                     />
                   )

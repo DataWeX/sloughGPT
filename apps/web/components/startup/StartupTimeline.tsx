@@ -17,10 +17,10 @@ const HOOK_LABELS: Record<string, string> = {
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  init: 'hsl(var(--muted-foreground))',
-  critical: 'hsl(var(--warning))',
-  ready: 'hsl(var(--info))',
-  background: 'hsl(var(--success))',
+  init: 'rgb(var(--muted-foreground))',
+  critical: 'rgb(var(--warning))',
+  ready: 'rgb(var(--info))',
+  background: 'rgb(var(--success))',
 }
 
 interface TimelineBarProps {
@@ -34,11 +34,11 @@ function TimelineBar({ hook, maxDuration, startOffset }: TimelineBarProps) {
   const left = maxDuration > 0 ? (startOffset / maxDuration) * 100 : 0
 
   const statusColors: Record<string, string> = {
-    pending: 'hsl(var(--muted))',
-    running: 'hsl(var(--warning))',
-    ok: 'hsl(var(--success))',
-    timeout: 'hsl(var(--destructive))',
-    error: 'hsl(var(--destructive))',
+    pending: 'rgb(var(--muted))',
+    running: 'rgb(var(--warning))',
+    ok: 'rgb(var(--success))',
+    timeout: 'rgb(var(--destructive))',
+    error: 'rgb(var(--destructive))',
   }
 
   return (
@@ -52,7 +52,7 @@ function TimelineBar({ hook, maxDuration, startOffset }: TimelineBarProps) {
           style={{
             left: `${left}%`,
             width: `${Math.max(2, width)}%`,
-            backgroundColor: statusColors[hook.status] ?? 'hsl(var(--muted))',
+            backgroundColor: statusColors[hook.status] ?? 'rgb(var(--muted))',
           }}
         />
       </div>
