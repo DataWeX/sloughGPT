@@ -57,8 +57,6 @@ Registered pre-lifespan in `main.py`.
 | -------- | ----------------------------------- | -------------------------------- |
 | `POST`   | `/inference/generate`               | Non-streaming text generation.   |
 | `POST`   | `/inference/generate/stream`        | Streaming text generation (SSE). |
-| `POST`   | `/chat`                             | Chat (non-streaming).            |
-| `POST`   | `/chat/stream`                      | Chat (SSE streaming).            |
 | `GET`    | `/context/inspect`                  | Inspect context layers.          |
 | `POST`   | `/context/store-fact`               | Store a fact in context.         |
 | `GET`    | `/context/facts`                    | List context facts.              |

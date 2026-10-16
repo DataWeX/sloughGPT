@@ -3545,6 +3545,9 @@ class InferenceRouter:
         r.add_api_route("/info/soul", self.get_info_soul, methods=["GET"])
         r.add_api_route("/", self.root, methods=["GET"])
         r.add_api_route("/chat/tools", self.list_chat_tools, methods=["GET"])
+        # POST /chat and POST /chat/stream are owned by ChatRouter (routers/chat.py)
+        # — it delegates back to this router's kernel (`_instance.chat`/`chat_stream`).
+        # scripts/check_docs_api_parity.py fails on any duplicate path+method.
         r.add_api_route("/chat/control", self.chat_control, methods=["POST"])
         r.add_api_route("/context/inspect", self.inspect_context, methods=["GET"])
         r.add_api_route("/context/fact", self.store_fact, methods=["POST"])
