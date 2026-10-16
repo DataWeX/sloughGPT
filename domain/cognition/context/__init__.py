@@ -7,7 +7,7 @@ Public API:
 
 from __future__ import annotations
 
-from domain.context._internal.managers import (
+from domain.cognition.context._internal.managers import (
     ConsciousnessManager,
     MemoryManager,
     PersonalityManager,

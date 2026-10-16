@@ -7,7 +7,7 @@ function. Metal/CUDA backend tests require actual hardware.
 
 import numpy as np
 
-from domain.slolib._internal.gpu import (
+from domain.core.slolib._internal.gpu import (
     _Accelerator,
     get_accelerator,
     reset_accelerator,

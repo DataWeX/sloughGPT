@@ -377,7 +377,7 @@ stated confidence gate display behavior by itself.
 | `ToolSpec` (`domain/agents/_internal/tools.py`)                | Descriptor type; its `result` field references nodes of the response tree                      |
 | `soul.personality.curiosity` (`domain/core/_internal/soul.py`) | The existing _disposition_ trait — how readily it probes                                       |
 | `domain/core/_internal/prompt_builder.py`                      | Where the learner stance is written into the prompt (it already branches on `curiosity > 0.7`) |
-| `domain/context/_internal/managers.py`                         | Already weights `curiosity` among traits                                                       |
+| `domain/cognition/context/_internal/managers.py`                         | Already weights `curiosity` among traits                                                       |
 | Stream envelope + `streamSSE` ([API.md](API.md))               | Delivery (§5.4) — tree rides inside `data`                                                     |
 | `ServerState` read-model (one writer, `AtomicRef`)             | Floor + budget state; parses/validates the tree (§4.1, §6)                                     |
 | `apps/web/lib/sse-client.ts`                                   | Existing display-side client                                                                   |

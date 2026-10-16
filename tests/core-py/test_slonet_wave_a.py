@@ -70,19 +70,19 @@ class _FakeAcc:
 
 
 def _mount_accelerator_modules(monkeypatch, slolib_acc, old_acc=None):
-    """Mount fake `domain.slolib._internal.gpu` / legacy accelerator modules.
+    """Mount fake `domain.core.slolib._internal.gpu` / legacy accelerator modules.
 
     Mirrors the exact import paths used by slonet._get_accelerator (the
     `_internal` layout), so the fallback logic is exercised instead of the
     real (CPU) accelerator.
     """
-    slolib = types.ModuleType("domain.slolib")
-    slolib_internal = types.ModuleType("domain.slolib._internal")
-    slolib_gpu = types.ModuleType("domain.slolib._internal.gpu")
+    slolib = types.ModuleType("domain.core.slolib")
+    slolib_internal = types.ModuleType("domain.core.slolib._internal")
+    slolib_gpu = types.ModuleType("domain.core.slolib._internal.gpu")
     slolib_gpu.get_accelerator = slolib_acc
-    monkeypatch.setitem(sys.modules, "domain.slolib", slolib)
-    monkeypatch.setitem(sys.modules, "domain.slolib._internal", slolib_internal)
-    monkeypatch.setitem(sys.modules, "domain.slolib._internal.gpu", slolib_gpu)
+    monkeypatch.setitem(sys.modules, "domain.core.slolib", slolib)
+    monkeypatch.setitem(sys.modules, "domain.core.slolib._internal", slolib_internal)
+    monkeypatch.setitem(sys.modules, "domain.core.slolib._internal.gpu", slolib_gpu)
     if old_acc is not None:
         old_pkg = types.ModuleType("domain.training._internal.gpu")
         old_mod = types.ModuleType("domain.training._internal.gpu.accelerator")

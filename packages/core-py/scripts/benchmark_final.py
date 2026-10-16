@@ -8,7 +8,7 @@ import time
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from domain.slolib._internal.gpu import _CPUBackend
+from domain.core.slolib._internal.gpu import _CPUBackend
 from domain.training._internal.slonet import SloLSTM, Tensor
 
 cpu = _CPUBackend()

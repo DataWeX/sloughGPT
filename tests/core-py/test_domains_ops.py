@@ -1,9 +1,9 @@
-"""Tests for domain.ops — pure NumPy operations (no external dependencies)."""
+"""Tests for domain.core.ops — pure NumPy operations (no external dependencies)."""
 
 import numpy as np
 import pytest
 
-from domain.ops import (
+from domain.core.ops import (
     ChunkedOperation,
     FusedAttentionBias,
     FusedCrossEntropyLoss,

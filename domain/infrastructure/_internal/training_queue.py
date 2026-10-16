@@ -155,7 +155,7 @@ async def training_handler(task) -> dict:
         if cancel_event.is_set():
             raise InterruptedError("Training cancelled by user")
         loss = info.get("train_loss")
-        from domain.api._internal.sse_envelope import sse_event
+        from domain.core.api._internal.sse_envelope import sse_event
 
         enqueue(
             sse_event(
@@ -200,14 +200,14 @@ async def training_handler(task) -> dict:
             resume_path=payload.get("resume_path", ""),
         )
         if cancel_event.is_set():
-            from domain.api._internal.sse_envelope import sse_complete
+            from domain.core.api._internal.sse_envelope import sse_complete
 
             enqueue(
                 sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled")
             )
             return {"status": "cancelled"}
 
-        from domain.api._internal.sse_envelope import sse_complete
+        from domain.core.api._internal.sse_envelope import sse_complete
 
         enqueue(
             sse_complete(
@@ -218,12 +218,12 @@ async def training_handler(task) -> dict:
         )
         return result
     except InterruptedError:
-        from domain.api._internal.sse_envelope import sse_complete
+        from domain.core.api._internal.sse_envelope import sse_complete
 
         enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
         return {"status": "cancelled"}
     except Exception as e:
-        from domain.api._internal.sse_envelope import sse_error
+        from domain.core.api._internal.sse_envelope import sse_error
 
         enqueue(sse_error("auto-train", "FAILED", str(e)))
         return {"status": "failed", "error": str(e)}
@@ -323,7 +323,7 @@ async def training_sessions_handler(task) -> dict:
     def _on_step(step: int, loss: float, epoch: int, total_steps: int = 0) -> None:
         if cancel_event.is_set():
             raise InterruptedError("Training cancelled by user")
-        from domain.api._internal.sse_envelope import sse_event
+        from domain.core.api._internal.sse_envelope import sse_event
 
         elapsed = __import__("time").monotonic() - _step_start
         steps_per_sec = step / elapsed if elapsed > 0 else 0
@@ -348,7 +348,7 @@ async def training_sessions_handler(task) -> dict:
         )
 
     try:
-        from domain.api._internal.sse_envelope import sse_event
+        from domain.core.api._internal.sse_envelope import sse_event
 
         enqueue(
             sse_event(
@@ -366,13 +366,13 @@ async def training_sessions_handler(task) -> dict:
             cancel_event=cancel_event,
         )
         if cancel_event.is_set():
-            from domain.api._internal.sse_envelope import sse_complete
+            from domain.core.api._internal.sse_envelope import sse_complete
 
             enqueue(
                 sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled")
             )
             return {"status": "cancelled"}
-        from domain.api._internal.sse_envelope import sse_complete
+        from domain.core.api._internal.sse_envelope import sse_complete
 
         enqueue(
             sse_complete(
@@ -383,12 +383,12 @@ async def training_sessions_handler(task) -> dict:
         )
         return metadata
     except InterruptedError:
-        from domain.api._internal.sse_envelope import sse_complete
+        from domain.core.api._internal.sse_envelope import sse_complete
 
         enqueue(sse_complete("auto-train", data={"cancelled": True}, message="Training cancelled"))
         return {"status": "cancelled"}
     except Exception as e:
-        from domain.api._internal.sse_envelope import sse_error
+        from domain.core.api._internal.sse_envelope import sse_error
 
         enqueue(sse_error("auto-train", "FAILED", str(e)))
         return {"status": "failed", "error": str(e)}

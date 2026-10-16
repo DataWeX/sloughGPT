@@ -1,5 +1,5 @@
 """
-Tests for domain.ops.wandb_server: inference counters + background flush loop.
+Tests for domain.core.ops.wandb_server: inference counters + background flush loop.
 """
 
 import asyncio
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import domain.ops._internal.wandb_server as ws
+import domain.training._internal.wandb_server as ws
 from domain.infrastructure._internal.config import get_config
 
 

@@ -65,7 +65,7 @@ endpoint without a matching read-model consumer.
 ### SSE frame schema
 
 Every SSE endpoint (`/chat/stream`, `/system/stream`, */stream) yields frames as
-lines `data: {json}` with no `event:` name, framed per `domain/api` SSE envelope:
+lines `data: {json}` with no `event:` name, framed per `domain/core/api` SSE envelope:
 
 ```json
 { "stream": "...", "phase": "token|thinking|MEMORY|TOOL|CONTROL|status|error|...", "status": "...", "data": {...} }

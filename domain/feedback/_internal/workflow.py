@@ -147,7 +147,7 @@ class FeedbackWorkflowManager:
 
         # ── Trait weight update (context manager config) ──
         try:
-            from domain.context._internal.managers import get_trait_config
+            from domain.cognition.context._internal.managers import get_trait_config
 
             config = get_trait_config()
             config.update_from_feedback(

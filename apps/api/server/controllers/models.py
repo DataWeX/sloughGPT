@@ -238,7 +238,7 @@ class ModelsController:
 
             # Auto-select precision on GPU (fp16 benchmark)
             try:
-                from domain.slolib._internal.gpu import set_accelerator_precision
+                from domain.core.slolib._internal.gpu import set_accelerator_precision
 
                 active = set_accelerator_precision("auto")
                 if active == "fp16":

@@ -239,7 +239,7 @@ def _get_accelerator():
     if _ACCELERATOR is not None:
         return _ACCELERATOR if _ACCELERATOR != "none" else None
     try:
-        from domain.slolib._internal.gpu import get_accelerator as _get_slolib_acc
+        from domain.core.slolib._internal.gpu import get_accelerator as _get_slolib_acc
 
         acc = _get_slolib_acc()
         if acc is not None and acc.name != "cpu":
@@ -4425,7 +4425,7 @@ def _layernorm_state_dict(x: Tensor, weight: np.ndarray, eps: float = 1e-5) -> T
 
 def _invalidate_gpu_cache():
     try:
-        from domain.slolib._internal.gpu import get_accelerator
+        from domain.core.slolib._internal.gpu import get_accelerator
 
         acc = get_accelerator()
         if hasattr(acc, "clear_cache"):

@@ -21,7 +21,7 @@ echo "Checking required files..."
 files=(
     "package.json"
     "apps/api/server/main.py"
-    "domain/api/__init__.py"
+    "domain/core/api/__init__.py"
     "apps/web/package.json"
     "apps/web/app/(app)/page.tsx"
     "apps/web/app/(app)/chat/page.tsx"

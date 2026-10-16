@@ -12,6 +12,6 @@ Rules:
   * nothing under `domain/` may import `services.*` — that inverts the
     dependency direction this layer exists to enforce.
   * `services.*` may import `domain.*`.
-  * `domain/api` stays in `domain/`: `domain/infrastructure/_internal/`
+  * `domain/core/api` stays in `domain/`: `domain/infrastructure/_internal/`
     consumes its SSE envelope (12 cross-package refs).
 """

@@ -1679,7 +1679,7 @@ class MobileRouter:
         """
         from pathlib import Path
 
-        from domain.api import sse_complete, sse_error, sse_event
+        from domain.core.api import sse_complete, sse_error, sse_event
 
         t0 = _time.time()
 

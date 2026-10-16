@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from domain.api._internal.sse_envelope import (
+from domain.core.api._internal.sse_envelope import (
     CHAT_SEQUENCE,
     TRAINING_SEQUENCE,
     SSEEnvelope,

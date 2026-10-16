@@ -6,7 +6,7 @@ Public API:
 
 from __future__ import annotations
 
-from domain.api._internal.sse_envelope import (
+from domain.core.api._internal.sse_envelope import (
     SSEEnvelope,
     StreamPhase,
     StreamStatus,

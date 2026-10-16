@@ -125,7 +125,7 @@ class TestSSEEnvelopeIntegration:
     """Tests SSE envelope format for training progress events."""
 
     def test_sse_event_creation(self):
-        from domain.api._internal.sse_envelope import sse_event
+        from domain.core.api._internal.sse_envelope import sse_event
 
         event = sse_event(
             stream="training",
@@ -138,7 +138,7 @@ class TestSSEEnvelopeIntegration:
         assert "TRAINING" in event
 
     def test_sse_envelope_creation(self):
-        from domain.api._internal.sse_envelope import SSEEnvelope, StreamPhase, StreamStatus
+        from domain.core.api._internal.sse_envelope import SSEEnvelope, StreamPhase, StreamStatus
 
         env = SSEEnvelope(
             stream="training",
@@ -150,7 +150,7 @@ class TestSSEEnvelopeIntegration:
         assert env.phase == StreamPhase.TRAIN.value
 
     def test_sse_training_event_format(self):
-        from domain.api._internal.sse_envelope import sse_event
+        from domain.core.api._internal.sse_envelope import sse_event
 
         event = sse_event(
             stream="training",

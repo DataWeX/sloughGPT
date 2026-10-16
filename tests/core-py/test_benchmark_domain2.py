@@ -1,11 +1,11 @@
-"""Tests for domain.benchmark.domain — pure logic, no external mocks."""
+"""Tests for domain.training.benchmark.domain — pure logic, no external mocks."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from domain.benchmark._internal.domain import (
+from domain.training.benchmark._internal.domain import (
     _RESPONSES_DIR,
     BenchmarkDomain,
     BenchmarkResult,

@@ -162,21 +162,21 @@ class TestPerplexity:
 
 
 class TestQuality:
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_returns_quality(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.evaluate_latest.return_value = {"coherence": 0.8}
         resp = client.get("/benchmark/quality")
         assert resp.status_code == 200
 
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_quality_empty(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.evaluate_latest.return_value = {}
         resp = client.get("/benchmark/quality")
         assert resp.status_code == 200
 
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_quality_forwards_limit(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.evaluate_latest.return_value = {}
@@ -230,14 +230,14 @@ class TestLoggedResponses:
 
 
 class TestTrackerStats:
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_returns_stats(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.get_stats.return_value = {"total_responses": 5}
         resp = client.get("/benchmark/stats")
         assert resp.status_code == 200
 
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_stats_empty(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.get_stats.return_value = {}
@@ -246,18 +246,18 @@ class TestTrackerStats:
 
 
 class TestClearHistory:
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_clears_history(self, mock_get_bench, client):
         resp = client.post("/benchmark/history/clear")
         assert resp.status_code == 200
         assert resp.json()["data"]["cleared"] is True
 
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_clear_returns_success(self, mock_get_bench, client):
         resp = client.post("/benchmark/history/clear")
         assert resp.json()["status"] == "success"
 
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_clear_calls_history(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         client.post("/benchmark/history/clear")
@@ -366,7 +366,7 @@ class TestPerplexityPath:
 class TestErrorPaths:
     """Exception propagation in benchmark endpoints."""
 
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_quality_error_raises_500(self, mock_get_bench, client):
         mock_get_bench.side_effect = RuntimeError("bench down")
         resp = client.get("/benchmark/quality")
@@ -378,13 +378,13 @@ class TestErrorPaths:
         resp = client.get("/benchmark/responses")
         assert resp.status_code == 500
 
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_stats_error_raises_500(self, mock_get_bench, client):
         mock_get_bench.side_effect = RuntimeError("stats down")
         resp = client.get("/benchmark/stats")
         assert resp.status_code == 500
 
-    @patch("domain.benchmark.get_benchmark_domain")
+    @patch("domain.training.benchmark.get_benchmark_domain")
     def test_clear_error_raises_500(self, mock_get_bench, client):
         mock_get_bench.side_effect = RuntimeError("clear down")
         resp = client.post("/benchmark/history/clear")

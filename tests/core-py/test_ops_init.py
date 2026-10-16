@@ -27,7 +27,7 @@ _CORE_PY = Path(__file__).resolve().parents[2] / "packages" / "core-py"
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domain.ops import (
+from domain.core.ops import (
     ChunkedOperation,
     FusedAttentionBias,
     FusedCrossEntropyLoss,

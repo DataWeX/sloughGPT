@@ -18,9 +18,9 @@ import time
 from typing import Any, Protocol, runtime_checkable
 
 try:
-    from domain.benchmark._internal.domain import BenchmarkDomain, get_benchmark_domain
     from domain.chat._internal.domain import ChatDomain, get_chat_domain
     from domain.infrastructure._internal.errors import AppError
+    from domain.training.benchmark._internal.domain import BenchmarkDomain, get_benchmark_domain
 except (ImportError, ModuleNotFoundError):
     AppError = Exception
     ChatDomain = None

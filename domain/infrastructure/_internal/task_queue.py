@@ -288,7 +288,7 @@ class TaskQueue:
             return
         stream_name = task.metadata.get("sse_stream", "auto-train")
         try:
-            from domain.api._internal.sse_envelope import sse_error
+            from domain.core.api._internal.sse_envelope import sse_error
 
             if status == TaskStatus.CANCELLED:
                 message = task.error or "Training cancelled"

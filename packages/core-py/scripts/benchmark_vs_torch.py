@@ -144,7 +144,7 @@ def make_softmax(B=8, N=64, S=64):
 
     def sn():
         with no_grad():
-            from domain.slolib._internal.gpu import get_accelerator
+            from domain.core.slolib._internal.gpu import get_accelerator
 
             acc = get_accelerator()
             o = acc.scaled_dot_attention(q_np, k_np, v_np)
@@ -188,7 +188,7 @@ for B, N, S, E in [(4, 32, 32, 16), (8, 64, 64, 16)]:
     def make_fn(qn, kn, vn):
         def sn():
             with no_grad():
-                from domain.slolib._internal.gpu import get_accelerator
+                from domain.core.slolib._internal.gpu import get_accelerator
 
                 acc = get_accelerator()
                 acc.scaled_dot_attention(qn, kn, vn)
@@ -220,7 +220,7 @@ B = np.random.randn(768).astype(np.float32)
 
 
 def sn_separate():
-    from domain.slolib._internal.gpu import get_accelerator
+    from domain.core.slolib._internal.gpu import get_accelerator
 
     acc = get_accelerator()
     n = acc.layer_norm(X, W, B)
@@ -228,7 +228,7 @@ def sn_separate():
 
 
 def sn_fused():
-    from domain.slolib._internal.gpu import get_accelerator
+    from domain.core.slolib._internal.gpu import get_accelerator
 
     acc = get_accelerator()
     acc.fused_layer_norm_gelu(X, W, B)

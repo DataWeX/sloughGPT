@@ -1893,10 +1893,10 @@ class TestSloNetMiscMethods:
             def clear_cache(self):
                 return None
 
-        monkeypatch.setattr("domain.slolib._internal.gpu.get_accelerator", lambda: _HasClear())
+        monkeypatch.setattr("domain.core.slolib._internal.gpu.get_accelerator", lambda: _HasClear())
         slonet._invalidate_gpu_cache()
         monkeypatch.setattr(
-            "domain.slolib._internal.gpu.get_accelerator",
+            "domain.core.slolib._internal.gpu.get_accelerator",
             lambda: (_ for _ in ()).throw(RuntimeError("no gpu")),
         )
         slonet._invalidate_gpu_cache()

@@ -568,7 +568,7 @@ def get_context_core() -> ContextCore:
     if _context_core is None:
         with _context_core_lock:
             if _context_core is None:
-                from domain.context._internal.managers import (
+                from domain.cognition.context._internal.managers import (
                     ConsciousnessManager,
                     MemoryManager,
                     PersonalityManager,

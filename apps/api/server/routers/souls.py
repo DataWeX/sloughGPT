@@ -589,7 +589,7 @@ Be yourself — let your personality shape how you respond."""
             - does not modify soul files — only the live config overlay
         """
         try:
-            from domain.context import get_trait_config
+            from domain.cognition.context import get_trait_config
 
             config = get_trait_config()
             flat: dict[str, float] = {}
@@ -630,7 +630,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - reads current TraitWeightsConfig
         """
-        from domain.context import (
+        from domain.cognition.context import (
             MemoryManager,
             PersonalityManager,
             StyleManager,
@@ -686,7 +686,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls TraitWeightsConfig.list_snapshots()
         """
-        from domain.context import get_trait_config
+        from domain.cognition.context import get_trait_config
 
         config = get_trait_config()
         return success_response(data=config.list_snapshots())
@@ -708,7 +708,7 @@ Be yourself — let your personality shape how you respond."""
             - writes snapshot JSON to disk
         """
         try:
-            from domain.context import get_trait_config
+            from domain.cognition.context import get_trait_config
 
             config = get_trait_config()
             path = config.save_snapshot(name)
@@ -735,7 +735,7 @@ Be yourself — let your personality shape how you respond."""
             - overwrites current trait weights with snapshot values
         """
         try:
-            from domain.context import get_trait_config
+            from domain.cognition.context import get_trait_config
 
             config = get_trait_config()
             count = config.load_snapshot(name)
@@ -762,7 +762,7 @@ Be yourself — let your personality shape how you respond."""
             - removes snapshot file from disk
         """
         try:
-            from domain.context import get_trait_config
+            from domain.cognition.context import get_trait_config
 
             config = get_trait_config()
             ok = config.delete_snapshot(name)

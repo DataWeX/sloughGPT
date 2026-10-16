@@ -157,7 +157,7 @@ class TestModelAudit:
         assert kwargs["extra"] == {"layers_reset": 0}
 
     @patch("domain.models.get_provider", return_value=None)
-    @patch("domain.slolib._internal.gpu.get_accelerator")
+    @patch("domain.core.slolib._internal.gpu.get_accelerator")
     @patch("infrastructure.auth.get_audit_logger")
     def test_set_precision_logs_event(self, mock_logger, mock_acc, mock_provider, models_client):
         acc = MagicMock()
@@ -243,7 +243,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "friendly"
         assert kwargs["extra"] == {"checkpoint_name": ""}
 
-    @patch("domain.context.get_trait_config")
+    @patch("domain.cognition.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_save_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -257,7 +257,7 @@ class TestSoulAudit:
         assert args[0] == "weights.snapshot.save"
         assert kwargs["resource"] == "my-snap"
 
-    @patch("domain.context.get_trait_config")
+    @patch("domain.cognition.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_load_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -272,7 +272,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "my-snap"
         assert kwargs["detail"] == "traits_loaded=5"
 
-    @patch("domain.context.get_trait_config")
+    @patch("domain.cognition.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -287,7 +287,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "my-snap"
         assert kwargs["detail"] == "deleted=True"
 
-    @patch("domain.context.get_trait_config")
+    @patch("domain.cognition.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_save_trait_weights_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()

@@ -212,7 +212,7 @@ class TestConsciousnessEngineReflect:
 
 class TestConsciousnessManagerApply:
     def test_apply_returns_consciousness_block(self, tmp_path: Path) -> None:
-        from domain.context._internal.managers import ConsciousnessManager
+        from domain.cognition.context._internal.managers import ConsciousnessManager
 
         engine = _make_engine(tmp_path)
         engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
@@ -223,7 +223,7 @@ class TestConsciousnessManagerApply:
 
     def test_apply_uses_reflection_narrative(self, tmp_path: Path) -> None:
         """Regression: managers.py used reflection[:200] which would crash on Reflection dataclass."""
-        from domain.context._internal.managers import ConsciousnessManager
+        from domain.cognition.context._internal.managers import ConsciousnessManager
 
         engine = ConsciousnessEngine(ConsciousnessConfig(level=3, store_path=str(tmp_path)))
         for _ in range(3):
@@ -234,7 +234,7 @@ class TestConsciousnessManagerApply:
         assert "Self-reflection:" in result
 
     def test_apply_returns_empty_when_disabled(self, tmp_path: Path) -> None:
-        from domain.context._internal.managers import ConsciousnessManager
+        from domain.cognition.context._internal.managers import ConsciousnessManager
 
         engine = ConsciousnessEngine(ConsciousnessConfig(level=0, store_path=str(tmp_path)))
         mgr = ConsciousnessManager(consciousness_engine=engine)
@@ -242,7 +242,7 @@ class TestConsciousnessManagerApply:
         assert result == ""
 
     def test_apply_returns_empty_when_no_engine(self) -> None:
-        from domain.context._internal.managers import ConsciousnessManager
+        from domain.cognition.context._internal.managers import ConsciousnessManager
 
         mgr = ConsciousnessManager(consciousness_engine=None)
         result = mgr.apply(base_prompt="test", input_text="hello")

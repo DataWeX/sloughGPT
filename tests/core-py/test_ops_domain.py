@@ -1,9 +1,9 @@
-"""Tests for domain.ops — fused ops, activations, softmax, attention, embeddings."""
+"""Tests for domain.core.ops — fused ops, activations, softmax, attention, embeddings."""
 
 import numpy as np
 import pytest
 
-from domain.ops import (
+from domain.core.ops import (
     ChunkedOperation,
     FusedAttentionBias,
     FusedCrossEntropyLoss,

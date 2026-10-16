@@ -227,7 +227,7 @@ class TestWeightSnapshots:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domain.context.get_trait_config")
+    @patch("domain.cognition.context.get_trait_config")
     def test_list_snapshots(self, mock_get):
         mock_get.return_value = MagicMock(list_snapshots=MagicMock(return_value=["snap1", "snap2"]))
         resp = self.client.get("/souls/weights/snapshots")
@@ -236,7 +236,7 @@ class TestWeightSnapshots:
         assert isinstance(data, list)
         assert "snap1" in data
 
-    @patch("domain.context.get_trait_config")
+    @patch("domain.cognition.context.get_trait_config")
     def test_save_snapshot(self, mock_get):
         config = MagicMock()
         config.save_snapshot.return_value = "/snapshots/test.json"
@@ -245,7 +245,7 @@ class TestWeightSnapshots:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domain.context.get_trait_config")
+    @patch("domain.cognition.context.get_trait_config")
     def test_load_snapshot(self, mock_get):
         config = MagicMock()
         config.load_snapshot.return_value = 5
@@ -254,7 +254,7 @@ class TestWeightSnapshots:
         assert resp.status_code == 200
         assert _d(resp)["traits_loaded"] == 5
 
-    @patch("domain.context.get_trait_config")
+    @patch("domain.cognition.context.get_trait_config")
     def test_delete_snapshot(self, mock_get):
         config = MagicMock()
         config.delete_snapshot.return_value = True

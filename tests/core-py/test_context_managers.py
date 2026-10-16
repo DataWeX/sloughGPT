@@ -1,4 +1,4 @@
-"""Comprehensive tests for domain.context._internal.managers — TraitWeightsConfig lifecycle,
+"""Comprehensive tests for domain.cognition.context._internal.managers — TraitWeightsConfig lifecycle,
 PersonalityManager, MemoryManager, StyleManager, TaskManager, helpers."""
 
 import json
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domain.context._internal.managers import (
+from domain.cognition.context._internal.managers import (
     ALL_TRAITS,
     TRAIT_SCHEMA,
     MemoryManager,
@@ -673,6 +673,6 @@ class TestTaskManager:
 class TestResetTraitConfig:
     def test_reset_clears_singleton(self):
         reset_trait_config()
-        from domain.context._internal.managers import _trait_config
+        from domain.cognition.context._internal.managers import _trait_config
 
         assert _trait_config is None

@@ -937,7 +937,7 @@ class HealthController:
         gpu_info: dict[str, Any] = {}
         degraded: list[str] = []
         try:
-            from domain.slolib._internal.gpu import get_accelerator
+            from domain.core.slolib._internal.gpu import get_accelerator
 
             acc = get_accelerator()
             gpu_info = {

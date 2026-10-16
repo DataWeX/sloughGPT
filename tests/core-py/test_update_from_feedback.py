@@ -1,6 +1,6 @@
 """Meaningful tests for TraitWeightsConfig.update_from_feedback, TaskManager mode derivation."""
 
-from domain.context._internal.managers import (
+from domain.cognition.context._internal.managers import (
     TaskManager,
     TraitWeightsConfig,
 )

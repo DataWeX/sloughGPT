@@ -1566,7 +1566,7 @@ class ModelsRouter:
             """
             import numpy as np
 
-            from domain.slolib import get_accelerator, set_accelerator_precision
+            from domain.core.slolib import get_accelerator, set_accelerator_precision
 
             acc = get_accelerator()
             acc_mode = req.mode

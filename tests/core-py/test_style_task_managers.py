@@ -1,8 +1,8 @@
-"""Tests for domain.context._internal.managers — StyleManager, TaskManager, TraitWeightsConfig."""
+"""Tests for domain.cognition.context._internal.managers — StyleManager, TaskManager, TraitWeightsConfig."""
 
 import pytest
 
-from domain.context._internal.managers import (
+from domain.cognition.context._internal.managers import (
     ALL_TRAITS,
     TRAIT_SCHEMA,
     MemoryManager,

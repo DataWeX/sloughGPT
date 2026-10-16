@@ -1,10 +1,10 @@
-"""Tests for domain.context._internal.managers — TraitWeightsConfig, PersonalityManager."""
+"""Tests for domain.cognition.context._internal.managers — TraitWeightsConfig, PersonalityManager."""
 
 from __future__ import annotations
 
 import pytest
 
-from domain.context._internal.managers import (
+from domain.cognition.context._internal.managers import (
     TRAIT_SCHEMA,
     PersonalityManager,
     TraitWeightsConfig,

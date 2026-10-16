@@ -16,7 +16,7 @@ except for these documented differences:
   exists standalone).
 - EventBus: canonical auto-resolves ``get_event_bus()``; this fork receives
   one via ``set_event_bus()`` (injection only).
-- SSE terminal events: canonical uses ``domain.api``'s ``sse_error`` helper;
+- SSE terminal events: canonical uses ``domain.core.api``'s ``sse_error`` helper;
   this fork hand-rolls the equivalent JSON envelope.
 - Log records carry no ``extra={"tag": "INFRA"}`` here.
 

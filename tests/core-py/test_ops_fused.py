@@ -1,8 +1,8 @@
-"""Tests for domain.ops — FusedLayerNorm, FusedRMSNorm, FusedCrossEntropyLoss, FusedAttentionBias, ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding, and standalone functions."""
+"""Tests for domain.core.ops — FusedLayerNorm, FusedRMSNorm, FusedCrossEntropyLoss, FusedAttentionBias, ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding, and standalone functions."""
 
 import numpy as np
 
-from domain.ops import (
+from domain.core.ops import (
     ChunkedOperation,
     FusedAttentionBias,
     FusedCrossEntropyLoss,

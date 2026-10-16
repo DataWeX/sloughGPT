@@ -155,7 +155,7 @@ class SessionRouter:
             def _fetch_traits():
                 traits, modes = {}, {}
                 try:
-                    from domain.context import (
+                    from domain.cognition.context import (
                         MemoryManager,
                         PersonalityManager,
                         StyleManager,

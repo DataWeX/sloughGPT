@@ -385,7 +385,7 @@ class SloManager:
         soul = self.get_current_soul()
 
         # Always start with canonical defaults from TRAIT_SCHEMA
-        from domain.context._internal.managers import TRAIT_SCHEMA
+        from domain.cognition.context._internal.managers import TRAIT_SCHEMA
 
         result = {group: dict.fromkeys(traits, 0.5) for group, traits in TRAIT_SCHEMA.items()}
 
@@ -413,7 +413,7 @@ class SloManager:
 
         # Overlay live values from TraitWeightsConfig (feedback-driven)
         try:
-            from domain.context._internal.managers import get_trait_config
+            from domain.cognition.context._internal.managers import get_trait_config
 
             config = get_trait_config()
             live = config.all()

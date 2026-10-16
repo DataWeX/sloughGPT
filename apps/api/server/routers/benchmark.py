@@ -282,7 +282,7 @@ class BenchmarkRouter:
         """
         _t0 = _time.monotonic()
         try:
-            from domain.benchmark import get_benchmark_domain
+            from domain.training.benchmark import get_benchmark_domain
 
             bench = get_benchmark_domain()
             result = bench.evaluate_latest(limit=limit)
@@ -343,7 +343,7 @@ class BenchmarkRouter:
         """Get response tracker statistics - uses BenchmarkDomain."""
         _t0 = _time.monotonic()
         try:
-            from domain.benchmark import get_benchmark_domain
+            from domain.training.benchmark import get_benchmark_domain
 
             bench = get_benchmark_domain()
             result = bench.get_stats()
@@ -359,7 +359,7 @@ class BenchmarkRouter:
     @endpoint("benchmark.clear_history")
     async def clear_history(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Clear benchmark history and logged responses."""
-        from domain.benchmark import get_benchmark_domain
+        from domain.training.benchmark import get_benchmark_domain
 
         bench = get_benchmark_domain()
         bench.clear_history()
@@ -370,7 +370,7 @@ class BenchmarkRouter:
         """Return current weighted program (config/bench_weights.yaml)."""
         from pathlib import Path
 
-        from domain.benchmark.weighted import BenchProgram
+        from domain.training.benchmark.weighted import BenchProgram
 
         cfg = Path(__file__).resolve().parents[4] / "config" / "bench_weights.yaml"
         if not cfg.exists():
@@ -390,7 +390,7 @@ class BenchmarkRouter:
         """
         from pathlib import Path
 
-        from domain.benchmark.weighted import BenchProgram, score_benchmarks
+        from domain.training.benchmark.weighted import BenchProgram, score_benchmarks
 
         try:
             results = payload.get("results") or payload

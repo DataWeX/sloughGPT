@@ -6,13 +6,13 @@ Public API:
 
 from __future__ import annotations
 
-from domain.benchmark._internal.domain import (
+from domain.training.benchmark._internal.domain import (
     BenchmarkDomain,
     BenchmarkResult,
     get_benchmark_domain,
     reset_benchmark_domain,
 )
-from domain.benchmark.weighted import BenchProgram, MetricWeight, score_benchmarks
+from domain.training.benchmark.weighted import BenchProgram, MetricWeight, score_benchmarks
 
 __all__ = [
     "BenchmarkDomain",

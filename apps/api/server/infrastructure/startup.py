@@ -72,11 +72,11 @@ _PREWARM_MODEL_LOAD_IMPORTS = [
     "domain.infrastructure._internal.model_registry",
     "domain.models._internal.provider",
     "domain.generate._internal.slo_manager",
-    "domain.slolib._internal.gpu",
+    "domain.core.slolib._internal.gpu",
     "domain.infrastructure._internal.model_catalog",
     "domain.infrastructure._internal.task_queue",
     "domain.infrastructure._internal.training_queue",
-    "domain.api._internal.sse_envelope",
+    "domain.core.api._internal.sse_envelope",
     "pydantic.v1",
 ]
 
@@ -789,7 +789,7 @@ class StartupOrchestrator:
             logger.info("Phase: W&B skipped (enable with SLO_WANDB=1)", extra={"tag": "START"})
             return
         try:
-            from domain.ops._internal.wandb_server import start_wandb_server_background
+            from domain.training._internal.wandb_server import start_wandb_server_background
 
             async def _start():
                 try:
@@ -1654,7 +1654,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
 
     # Auto-select precision on GPU (fp16 benchmark)
     try:
-        from domain.slolib._internal.gpu import set_accelerator_precision
+        from domain.core.slolib._internal.gpu import set_accelerator_precision
 
         active = set_accelerator_precision("auto")
         if active == "fp16":

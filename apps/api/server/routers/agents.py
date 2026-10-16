@@ -20,7 +20,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.api._internal.sse_envelope import sse_complete, sse_error, sse_event
+from domain.core.api._internal.sse_envelope import sse_complete, sse_error, sse_event
 
 logger = logging.getLogger("slo.routers.agents")
 

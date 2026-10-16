@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from domain.benchmark._internal.domain import (
+from domain.training.benchmark._internal.domain import (
     BenchmarkDomain,
     BenchmarkResult,
     get_benchmark_domain,
@@ -17,7 +17,7 @@ from domain.benchmark._internal.domain import (
 @pytest.fixture
 def bench(tmp_path, monkeypatch):
     """Create a BenchmarkDomain using a temp directory."""
-    monkeypatch.setattr("domain.benchmark._internal.domain._RESPONSES_DIR", tmp_path)
+    monkeypatch.setattr("domain.training.benchmark._internal.domain._RESPONSES_DIR", tmp_path)
     reset_benchmark_domain()
     yield BenchmarkDomain()
     reset_benchmark_domain()
