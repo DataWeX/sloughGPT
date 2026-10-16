@@ -52,6 +52,15 @@ REGRESSION_THRESHOLDS = {
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
     },
+    "consciousness": {
+        # inner-life hot paths (scripts/benchmark_consciousness_hotpaths.py):
+        # lower-is-better per-event costs; deliberately generous 'abs' deltas
+        # (catch order-of-magnitude regressions, not scheduler jitter).
+        "reflect_cached_us": (200.0, "abs"),
+        "mindlog_append_us": (500.0, "abs"),
+        "query_1000_records_us": (100_000.0, "abs"),
+        "feedback_observe_us": (25_000.0, "abs"),
+    },
     "storage": {
         # MogDB journal durability (scripts/benchmark_mogdb_journal.py):
         # higher-is-better insert rate, lower-is-better replay/compact times.
@@ -501,6 +510,18 @@ def do_compare(args) -> int:
     return 0
 
 
+# argparse choices for the CLI — every recordable kind (registry above).
+KINDS = [
+    "stability",
+    "latency",
+    "execution",
+    "training",
+    "startup",
+    "storage",
+    "consciousness",
+]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -509,7 +530,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup", "storage"],
+        choices=KINDS,
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -519,16 +540,14 @@ def main() -> int:
     p_rec.set_defaults(fn=do_record)
 
     p_h = sub.add_parser("history", help="list stored runs")
-    p_h.add_argument(
-        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup", "storage"]
-    )
+    p_h.add_argument("--kind", default=None, choices=KINDS)
     p_h.set_defaults(fn=do_history)
 
     p_c = sub.add_parser("compare", help="compare newest vs prior run")
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup", "storage"],
+        choices=KINDS,
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
