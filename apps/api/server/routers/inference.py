@@ -3512,13 +3512,11 @@ class InferenceRouter:
         r.add_api_route("/info/soul", self.get_info_soul, methods=["GET"])
         r.add_api_route("/", self.root, methods=["GET"])
         r.add_api_route("/chat/tools", self.list_chat_tools, methods=["GET"])
-        r.add_api_route("/chat/stream", self.chat_stream, methods=["POST"])
         r.add_api_route("/chat/control", self.chat_control, methods=["POST"])
         r.add_api_route("/context/inspect", self.inspect_context, methods=["GET"])
         r.add_api_route("/context/fact", self.store_fact, methods=["POST"])
         r.add_api_route("/context/facts", self.get_facts, methods=["GET"])
         r.add_api_route("/context/reset", self.reset_context, methods=["POST"])
-        r.add_api_route("/chat", self.chat, methods=["POST"], response_model=ChatResponse)
         r.add_api_route("/chat/voice/{session_id}", self.send_voice_message, methods=["POST"])
         r.add_api_route(
             "/chat/audio/{session_id}/{message_id}", self.get_voice_audio, methods=["GET"]
@@ -3571,3 +3569,16 @@ async def handle_chat(req: ChatRequest) -> ChatResponse:
     into router internals.
     """
     return await _instance.chat(req)
+
+
+async def handle_chat_stream(
+    req: ChatRequest, request: Request, auth_user: dict | None = None
+) -> StreamingResponse:
+    """Public facade over the shared chat-stream handler (SSE).
+
+    ChatRouter (routers/chat.py) delegates POST /chat/stream through here,
+    so readiness gates, enrichment phases, reconnect replay and session
+    ownership stamping stay kernel-owned (shared-core contract: translate
+    at the edge, never into the core).
+    """
+    return await _instance.chat_stream(req, request, auth_user)
