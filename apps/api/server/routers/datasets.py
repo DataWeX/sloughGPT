@@ -561,7 +561,7 @@ class DatasetsRouter:
             try:
                 import threading
 
-                from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+                from domain.core.infrastructure.cancel_manager import OpType, get_cancel_manager
 
                 _cancel_event = threading.Event()
                 _cm = get_cancel_manager()
@@ -634,7 +634,7 @@ class DatasetsRouter:
 
                 if cm_op:
                     try:
-                        from domain.infrastructure.cancel_manager import get_cancel_manager
+                        from domain.core.infrastructure.cancel_manager import get_cancel_manager
 
                         get_cancel_manager().finish(cm_op)
                     except Exception as exc:
@@ -642,7 +642,7 @@ class DatasetsRouter:
             except Exception as e:
                 if cm_op:
                     try:
-                        from domain.infrastructure.cancel_manager import get_cancel_manager
+                        from domain.core.infrastructure.cancel_manager import get_cancel_manager
 
                         get_cancel_manager().finish(cm_op, error=str(e))
                     except Exception as exc:

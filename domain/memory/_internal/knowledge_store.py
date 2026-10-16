@@ -652,8 +652,8 @@ class KnowledgeMemory:
         if vector_store is not None:
             self._vector_store = vector_store
         else:
+            from domain.core.infrastructure._internal.embedding_service import get_embedding_service
             from domain.generate._internal.vector_store import InMemoryVectorStore
-            from domain.infrastructure._internal.embedding_service import get_embedding_service
 
             dim = get_embedding_service().dimension
             self._vector_store = InMemoryVectorStore(dimension=dim)
@@ -688,14 +688,14 @@ class KnowledgeMemory:
             logger.warning("Failed to initialize MogDB for knowledge: %s, using JSON fallback", e)
 
     def _zero_vec(self) -> list[float]:
-        from domain.infrastructure._internal.embedding_service import get_embedding_service
+        from domain.core.infrastructure._internal.embedding_service import get_embedding_service
 
         return [0.0] * get_embedding_service().dimension
 
     def _get_embedding(self, text: str) -> list[float]:
         if self._embed_fn:
             return self._embed_fn(text)
-        from domain.infrastructure._internal.embedding_service import get_embedding_service
+        from domain.core.infrastructure._internal.embedding_service import get_embedding_service
 
         return get_embedding_service().embed(text)
 

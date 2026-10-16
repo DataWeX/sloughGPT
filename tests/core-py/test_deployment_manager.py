@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from domain.infrastructure._internal.deployment import (
+from domain.core.infrastructure._internal.deployment import (
     ComponentException,
     Deployment,
     DeploymentEnvironment,

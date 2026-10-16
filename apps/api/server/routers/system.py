@@ -102,7 +102,7 @@ class SystemRouter:
 
             def _sample():
                 try:
-                    from domain.infrastructure.resource_manager import get_resource_manager
+                    from domain.core.infrastructure.resource_manager import get_resource_manager
 
                     rm = get_resource_manager()
                     logical = rm.topology.logical_cores
@@ -135,7 +135,7 @@ class SystemRouter:
 
             def _read():
                 try:
-                    from domain.infrastructure.resource_manager import get_resource_manager
+                    from domain.core.infrastructure.resource_manager import get_resource_manager
 
                     rm = get_resource_manager()
                     cpu_count = rm.topology.logical_cores
@@ -316,7 +316,7 @@ class SystemRouter:
     async def get_lifecycle_status(self) -> dict:
         """Get the current lifecycle manager state."""
         try:
-            from domain.infrastructure import get_lifecycle_manager
+            from domain.core.infrastructure import get_lifecycle_manager
 
             mgr = get_lifecycle_manager()
             return success_response(data=mgr.get_results())
@@ -333,7 +333,7 @@ class SystemRouter:
             Sends recent history first, then streams new lines as they arrive.
             Each event: {"text": "...", "level": "info|error|warning", "source": "...", "ts": 1234.5}
             """
-            from domain.infrastructure import get_server_buffer
+            from domain.core.infrastructure import get_server_buffer
 
             buf = get_server_buffer()
             sub = buf.subscribe("http-" + str(id(request)))
@@ -362,7 +362,7 @@ class SystemRouter:
     @endpoint("system.tail_output")
     async def tail_output(self, n: int = Query(100, ge=1, le=1000)) -> dict:
         """Get last N lines of server output."""
-        from domain.infrastructure import get_server_buffer
+        from domain.core.infrastructure import get_server_buffer
 
         buf = get_server_buffer()
         return success_response(

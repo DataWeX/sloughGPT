@@ -18,7 +18,7 @@ Refactor the specified code using OOP principles with QA verification.
 ## Examples
 
 ```
-/architect domain/infrastructure/_internal/model_server.py
+/architect domain/core/infrastructure/_internal/model_server.py
 /architect domain/generate/_internal/slonet_provider.py
 /architect apps/web/features/chat/components/ChatInput.tsx
 ```

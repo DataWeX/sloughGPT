@@ -165,7 +165,7 @@ async def start_lora_finetune(
         logger.warning("Training runtime registration failed for %s: %s", job_id, e)
 
     try:
-        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.core.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().register(
             op_type=OpType.TRAINING,
@@ -332,7 +332,7 @@ async def load_adapter(request: LoadAdapterRequest):
     adapter_path = _resolve_adapter_path(request.adapter_path)
 
     # Find the ProcessGuard — stored in the models controller (adopted during autoload)
-    from domain.infrastructure.server_state import get_server_state
+    from domain.core.infrastructure.server_state import get_server_state
 
     provider = get_server_state().model.get()
     if provider is None:
@@ -356,7 +356,7 @@ async def load_adapter(request: LoadAdapterRequest):
 @router.post("/training/unload-adapter")
 async def unload_adapter():
     """Unload the active LoRA adapter, reverting to base weights."""
-    from domain.infrastructure.server_state import get_server_state
+    from domain.core.infrastructure.server_state import get_server_state
 
     provider = get_server_state().model.get()
     if provider is None:

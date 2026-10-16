@@ -711,7 +711,7 @@ class TestExportExceptionBranch:
 
 class TestInt4QuantUnpack:
     def test_lazy_unpack_int4(self):
-        from domain.infrastructure._internal.quantization import QuantMeta, TensorInfo
+        from domain.core.infrastructure._internal.quantization import QuantMeta, TensorInfo
 
         lin = SloLinear(4, 2, "quant")
         original = np.array([[-8, 2, 3, -4], [5, -6, 7, 1]], dtype=np.int8)
@@ -747,8 +747,8 @@ class TestImportFromPoints:
         import base64
         import json as _json
 
-        from domain.infrastructure._internal.pugqeep.library import PointLibrary
-        from domain.infrastructure._internal.pugqeep.point import Point
+        from domain.core.infrastructure._internal.pugqeep.library import PointLibrary
+        from domain.core.infrastructure._internal.pugqeep.point import Point
 
         base = tmp_path / "soul_test.sou"
         arr = np.arange(256 * 64, dtype=np.float32).reshape(256, 64) / 1000.0
@@ -1834,7 +1834,7 @@ class TestNormAccAndNd:
 
 class TestQuantizedLinearForward:
     def test_int8_quantized_forward(self):
-        from domain.infrastructure._internal.quantization import Quantine
+        from domain.core.infrastructure._internal.quantization import Quantine
 
         lin = SloLinear(8, 4, "q8")
         info = Quantine(bits=8, mode="symmetric").quantize("w", lin.weight.data)
@@ -1846,7 +1846,7 @@ class TestQuantizedLinearForward:
         np.testing.assert_allclose(f, t.data, atol=1e-3)
 
     def test_int4_quantized_forward(self):
-        from domain.infrastructure._internal.quantization import Quantine
+        from domain.core.infrastructure._internal.quantization import Quantine
 
         lin = SloLinear(8, 4, "q4")
         info = Quantine(bits=4, mode="symmetric").quantize("w", lin.weight.data)

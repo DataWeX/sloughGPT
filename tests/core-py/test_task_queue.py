@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from domain.infrastructure._internal.task_queue import (
+from domain.core.infrastructure._internal.task_queue import (
     InProcessTaskQueue,
     Priority,
     Task,
@@ -478,7 +478,7 @@ class TestInProcessTaskQueue:
         assert queue._pending == []
 
     async def test_base_run_with_controls_raises(self):
-        from domain.infrastructure._internal.task_queue import TaskQueue
+        from domain.core.infrastructure._internal.task_queue import TaskQueue
 
         q = TaskQueue(num_workers=1)
         with pytest.raises(NotImplementedError):
@@ -488,8 +488,8 @@ class TestInProcessTaskQueue:
         import sys
         import types
 
-        fake = types.ModuleType("domain.infrastructure._internal.event_bus")
-        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.event_bus", fake)
+        fake = types.ModuleType("domain.core.infrastructure._internal.event_bus")
+        monkeypatch.setitem(sys.modules, "domain.core.infrastructure._internal.event_bus", fake)
         q = InProcessTaskQueue(num_workers=1)
         assert q._event_bus is None
 
@@ -499,7 +499,7 @@ class TestInProcessTaskQueue:
         assert get_task_queue() is q
 
     async def test_get_task_queue_initializes_singleton(self):
-        import domain.infrastructure._internal.task_queue as tq
+        import domain.core.infrastructure._internal.task_queue as tq
 
         old = tq._default_queue
         tq._default_queue = None
@@ -513,7 +513,7 @@ class TestInProcessTaskQueue:
 @pytest.mark.asyncio
 class TestWorkerPool:
     async def test_start_stop(self):
-        from domain.infrastructure._internal.task_queue import WorkerPool
+        from domain.core.infrastructure._internal.task_queue import WorkerPool
 
         pool = WorkerPool(num_workers=2)
         await pool.start()
@@ -522,7 +522,7 @@ class TestWorkerPool:
         assert pool.active_workers == 0
 
     async def test_handler_called(self):
-        from domain.infrastructure._internal.task_queue import Task, WorkerPool
+        from domain.core.infrastructure._internal.task_queue import Task, WorkerPool
 
         results = []
 
@@ -539,7 +539,7 @@ class TestWorkerPool:
         assert results == ["test"]
 
     async def test_start_twice_is_noop(self):
-        from domain.infrastructure._internal.task_queue import WorkerPool
+        from domain.core.infrastructure._internal.task_queue import WorkerPool
 
         pool = WorkerPool(num_workers=1)
         await pool.start()
@@ -548,7 +548,7 @@ class TestWorkerPool:
         assert pool.active_workers == 0
 
     async def test_handler_exception_is_logged(self):
-        from domain.infrastructure._internal.task_queue import Task, WorkerPool
+        from domain.core.infrastructure._internal.task_queue import Task, WorkerPool
 
         async def boom(task: Task):
             raise RuntimeError("boom")

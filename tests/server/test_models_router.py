@@ -15,7 +15,7 @@ from apps.api.server.routers.models import ModelsRouter
 @pytest.fixture(autouse=True)
 def _reset_download_state():
     """Isolate tests: the download manager is a process-global singleton."""
-    from domain.infrastructure._internal.download_manager import reset_download_manager
+    from domain.core.infrastructure._internal.download_manager import reset_download_manager
 
     reset_download_manager()
     yield
@@ -170,7 +170,7 @@ class TestLoadModel:
         ctrl.load_model.assert_called_once_with("gpt2", "cuda", None)
         assert resp.json()["data"]["device"] == "cpu"
 
-    @patch("domain.infrastructure.server_state.get_server_state")
+    @patch("domain.core.infrastructure.server_state.get_server_state")
     @patch("apps.api.server.routers.models.get_models_controller")
     def test_load_model_event_records_resolved_device(self, mock_get_ctrl, mock_ss, client):
         """The model load event must record the resolved device (e.g. cpu after
@@ -192,7 +192,7 @@ class TestLoadModel:
         assert args[1] == "gpt2"
         assert args[2] == "device=cpu"
 
-    @patch("domain.infrastructure.server_state.get_server_state")
+    @patch("domain.core.infrastructure.server_state.get_server_state")
     @patch("apps.api.server.routers.models.get_models_controller")
     def test_load_model_event_falls_back_to_requested_device(self, mock_get_ctrl, mock_ss, client):
         """If the controller response omits the resolved device, the event falls
@@ -229,7 +229,7 @@ class TestListHFModels:
     @patch("apps.api.server.routers.models.compute_model_size_gb")
     @patch("apps.api.server.routers.models.is_model_cached")
     @patch("apps.api.server.routers.models._hf_cache_dir")
-    @patch("domain.infrastructure._internal.resource_manager.get_resource_manager")
+    @patch("domain.core.infrastructure._internal.resource_manager.get_resource_manager")
     def test_list_hf_models(
         self, mock_rm, mock_cached, mock_size, mock_cache_dir, mock_get_ctrl, client
     ):
@@ -257,7 +257,7 @@ class TestListHFModels:
     @patch("apps.api.server.routers.models.get_models_controller")
     @patch("apps.api.server.routers.models.compute_model_size_gb")
     @patch("apps.api.server.routers.models.is_model_cached")
-    @patch("domain.infrastructure._internal.resource_manager.get_resource_manager")
+    @patch("domain.core.infrastructure._internal.resource_manager.get_resource_manager")
     def test_list_hf_models_search(self, mock_rm, mock_cached, mock_size, mock_get_ctrl, client):
         mock_rm.return_value = MagicMock(inference_pool_size=2)
         mock_cached.return_value = False
@@ -372,7 +372,7 @@ class TestUnloadFailure:
 class TestStartDownload:
     """POST /models/download"""
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_already_cached(self, mock_mgr, client):
         mgr = MagicMock()
         mgr.is_cached.return_value = True
@@ -381,7 +381,7 @@ class TestStartDownload:
         assert resp.status_code == 200
         assert resp.json()["message"] == "already_cached"
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_already_downloading(self, mock_mgr, client):
         mgr = MagicMock()
         mgr.is_cached.return_value = False
@@ -392,7 +392,7 @@ class TestStartDownload:
         assert resp.json()["message"] == "already_downloading"
 
     @patch("apps.api.server.routers.models.ModelsRouter._run_download")
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_started(self, mock_mgr, mock_run, client):
         mgr = MagicMock()
         mgr.is_cached.return_value = False
@@ -407,7 +407,7 @@ class TestStartDownload:
 class TestDownloadStatus:
     """GET /models/download/{model_id}"""
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_returns_progress(self, mock_mgr, client):
         mgr = MagicMock()
         mgr.get_progress.return_value = {"model_id": "gpt2", "pct": 42.0, "status": "downloading"}
@@ -416,7 +416,7 @@ class TestDownloadStatus:
         assert resp.status_code == 200
         assert resp.json()["data"]["pct"] == 42.0
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_not_found_reports_cached(self, mock_mgr, client):
         mgr = MagicMock()
         mgr.get_progress.return_value = None
@@ -432,7 +432,7 @@ class TestDownloadStatus:
 class TestListDownloads:
     """GET /models/downloads"""
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_returns_list_and_cleans_stale(self, mock_mgr, client):
         mgr = MagicMock()
         mgr.list_downloads.return_value = [{"model_id": "gpt2", "pct": 10}]
@@ -446,7 +446,7 @@ class TestListDownloads:
 class TestCancelDownload:
     """POST /models/download/{model_id}/cancel"""
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_cancel_true(self, mock_mgr, client):
         mgr = MagicMock()
         mgr.cancel.return_value = True
@@ -454,7 +454,7 @@ class TestCancelDownload:
         resp = client.post("/models/download/gpt2/cancel")
         assert resp.json()["message"] == "cancelled"
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_cancel_not_found(self, mock_mgr, client):
         mgr = MagicMock()
         mgr.cancel.return_value = False
@@ -467,9 +467,9 @@ class TestRetryDownload:
     """POST /models/download/{model_id}/retry"""
 
     @patch("apps.api.server.routers.models.ModelsRouter._run_download")
-    @patch("domain.infrastructure.download_manager.is_download_complete")
-    @patch("domain.infrastructure.download_manager.cleanup_incomplete")
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.is_download_complete")
+    @patch("domain.core.infrastructure.download_manager.cleanup_incomplete")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_retry_with_complete_cleanup(
         self, mock_mgr, mock_cleanup, mock_complete, mock_run, client
     ):
@@ -481,8 +481,8 @@ class TestRetryDownload:
         assert resp.json()["message"] == "started"
         mock_cleanup.assert_called_once_with("gpt2")
 
-    @patch("domain.infrastructure.download_manager.is_download_complete")
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.is_download_complete")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     def test_already_downloading(self, mock_mgr, mock_complete, client):
         mgr = MagicMock()
         mgr.is_downloading.return_value = True
@@ -555,7 +555,7 @@ class TestDequantize:
 class TestPrecision:
     """POST /models/precision"""
 
-    @patch("domain.infrastructure._internal.quantization.Quantine.suggest_format")
+    @patch("domain.core.infrastructure._internal.quantization.Quantine.suggest_format")
     @patch("domain.core.slolib._internal.gpu.get_accelerator")
     def test_cpu_path_uses_suggestion(self, mock_acc, mock_suggest, client):
         acc = MagicMock()
@@ -578,7 +578,7 @@ class TestPrecision:
 class TestCatalog:
     """GET /models/catalog & /models/catalog/stats"""
 
-    @patch("domain.infrastructure.model_catalog.get_model_catalog")
+    @patch("domain.core.infrastructure.model_catalog.get_model_catalog")
     def test_list_catalog(self, mock_catalog, client):
         cat = MagicMock()
         cat.list_all.return_value = [{"model_id": "gpt2"}]
@@ -587,7 +587,7 @@ class TestCatalog:
         assert resp.status_code == 200
         assert resp.json()["data"] == [{"model_id": "gpt2"}]
 
-    @patch("domain.infrastructure.model_catalog.get_model_catalog")
+    @patch("domain.core.infrastructure.model_catalog.get_model_catalog")
     def test_catalog_stats(self, mock_catalog, client):
         cat = MagicMock()
         cat.stats.return_value = {"count": 1}
@@ -600,7 +600,7 @@ class TestCatalog:
 class TestConversionStatus:
     """GET /models/conversion-status"""
 
-    @patch("domain.infrastructure.conversion_tracker.get_tracker")
+    @patch("domain.core.infrastructure.conversion_tracker.get_tracker")
     def test_no_model_id_returns_active(self, mock_tracker, client):
         tracker = MagicMock()
         tracker.get_active.return_value = []
@@ -609,7 +609,7 @@ class TestConversionStatus:
         assert resp.status_code == 200
         assert resp.json()["data"] == []
 
-    @patch("domain.infrastructure.conversion_tracker.get_tracker")
+    @patch("domain.core.infrastructure.conversion_tracker.get_tracker")
     def test_model_id_returns_idle_when_missing(self, mock_tracker, client):
         tracker = MagicMock()
         tracker.get.return_value = None

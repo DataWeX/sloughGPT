@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domain.infrastructure._internal.config import get_config
+from domain.core.infrastructure._internal.config import get_config
 from domain.training._internal.wandb_helpers import (
     create_training_tracker_for_api_job,
     default_wandb_project,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 
-from domain.infrastructure._internal.conversation_log import (
+from domain.core.infrastructure._internal.conversation_log import (
     ConversationLogger,
     capture,
     get_conversation_logger,
@@ -64,7 +64,7 @@ class TestCapture:
         reset_conversation_logger()
         # Redirect to tmp_path by creating logger manually
         logger = ConversationLogger(data_dir=tmp_path)
-        import domain.infrastructure._internal.conversation_log as mod
+        import domain.core.infrastructure._internal.conversation_log as mod
 
         mod._logger = logger
         try:

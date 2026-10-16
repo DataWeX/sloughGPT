@@ -2263,7 +2263,7 @@ Examples:
         if not arg:
             # Show current setting
             try:
-                from domain.infrastructure._internal.config import get_config
+                from domain.core.infrastructure._internal.config import get_config
 
                 cfg = get_config()
                 current = cfg.features.auto_download
@@ -2289,7 +2289,7 @@ Examples:
 
         # Update config file
         try:
-            from domain.infrastructure._internal.config import _REPO_ROOT, get_config
+            from domain.core.infrastructure._internal.config import _REPO_ROOT, get_config
 
             config_path = _REPO_ROOT / "config" / "defaults.yaml"
             if config_path.exists():
@@ -2391,7 +2391,7 @@ Examples:
             import threading
 
             from apps.cli.src.utils.progress import ProgressBar
-            from domain.infrastructure._internal.conversion_tracker import get_tracker
+            from domain.core.infrastructure._internal.conversion_tracker import get_tracker
 
             tracker = get_tracker()
             result_holder = [None]
@@ -2476,7 +2476,7 @@ Examples:
           events circuit 10    — filter by "circuit", show last 10
         """
         try:
-            from domain.infrastructure._internal.event_bus import get_event_bus
+            from domain.core.infrastructure._internal.event_bus import get_event_bus
 
             bus = get_event_bus()
         except Exception:
@@ -2745,7 +2745,7 @@ Examples:
             self._print("  Makes model files read-only + drops .nomodeldelete marker")
             return
         try:
-            from domain.infrastructure._internal.model_protector import protect_model
+            from domain.core.infrastructure._internal.model_protector import protect_model
 
             result = protect_model(model_id)
             n = len(result["protected"])
@@ -2767,7 +2767,7 @@ Examples:
             self._print("  Usage: unprotect <model_id>")
             return
         try:
-            from domain.infrastructure._internal.model_protector import unprotect_model
+            from domain.core.infrastructure._internal.model_protector import unprotect_model
 
             result = unprotect_model(model_id)
             n = result["unprotected"]

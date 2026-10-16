@@ -24,7 +24,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.infrastructure import AppError
+from domain.core.infrastructure import AppError
 
 
 def _numpy_perplexity(model, ids):
@@ -148,7 +148,7 @@ class BenchmarkRouter:
         try:
             from controllers.models import get_models_controller
 
-            from domain.infrastructure.server_state import get_server_state
+            from domain.core.infrastructure.server_state import get_server_state
 
             ctrl = get_models_controller()
             state = get_server_state()
@@ -232,7 +232,7 @@ class BenchmarkRouter:
         """
         _t0 = _time.monotonic()
         try:
-            from domain.infrastructure.server_state import get_server_state
+            from domain.core.infrastructure.server_state import get_server_state
 
             provider = get_server_state().model.get()
             if provider is None:

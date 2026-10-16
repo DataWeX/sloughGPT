@@ -229,7 +229,7 @@ class TestAutoIngestBulk:
     rebuilds are O(n^2): 150 startup files × full index rebuild each)."""
 
     def test_auto_ingest_rebuilds_index_once(self, monkeypatch, tmp_path):
-        import domain.infrastructure._internal.auto_ingest as ai
+        import domain.core.infrastructure._internal.auto_ingest as ai
         from domain.cognition._internal.rag_service import RAGService
 
         svc = RAGService()

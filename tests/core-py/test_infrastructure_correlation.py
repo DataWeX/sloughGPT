@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from domain.infrastructure._internal.correlation import get_correlation_id, set_correlation_id
+from domain.core.infrastructure._internal.correlation import get_correlation_id, set_correlation_id
 
 
 class TestCorrelationId:

@@ -224,7 +224,7 @@ class TestPhase5ModelRegistry:
     def test_registry_initialized(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with patch(
-            "domain.infrastructure.model_registry.get_model_registry",
+            "domain.core.infrastructure.model_registry.get_model_registry",
             return_value=object(),
         ) as mock_get:
             asyncio.run(orch._phase5_model_registry())
@@ -234,7 +234,7 @@ class TestPhase5ModelRegistry:
     def test_registry_failure_does_not_raise(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with patch(
-            "domain.infrastructure.model_registry.get_model_registry",
+            "domain.core.infrastructure.model_registry.get_model_registry",
             side_effect=RuntimeError("boom"),
         ):
             asyncio.run(orch._phase5_model_registry())
@@ -251,8 +251,8 @@ class TestPhaseTaskQueue:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         q = object()
         with (
-            patch("domain.infrastructure.task_queue.get_task_queue", return_value=q) as mock_q,
-            patch("domain.infrastructure.training_queue.register_training_handlers") as mock_reg,
+            patch("domain.core.infrastructure.task_queue.get_task_queue", return_value=q) as mock_q,
+            patch("domain.core.infrastructure.training_queue.register_training_handlers") as mock_reg,
             patch("domain.memory.register_memory_handlers") as mock_mem,
             patch("domain.memory._internal.maintenance.start_memory_maintenance") as mock_maint,
         ):
@@ -267,10 +267,10 @@ class TestPhaseTaskQueue:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with (
             patch(
-                "domain.infrastructure.task_queue.get_task_queue",
+                "domain.core.infrastructure.task_queue.get_task_queue",
                 side_effect=RuntimeError("boom"),
             ),
-            patch("domain.infrastructure.training_queue.register_training_handlers") as mock_reg,
+            patch("domain.core.infrastructure.training_queue.register_training_handlers") as mock_reg,
             patch("domain.memory.register_memory_handlers") as mock_mem,
             patch("domain.memory._internal.maintenance.start_memory_maintenance"),
         ):
@@ -288,8 +288,8 @@ class TestPhaseConfigReady:
     def test_config_validated(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with (
-            patch("domain.infrastructure._internal.config.get_config") as mock_cfg,
-            patch("domain.infrastructure.resource_manager.get_resource_manager") as mock_rm,
+            patch("domain.core.infrastructure._internal.config.get_config") as mock_cfg,
+            patch("domain.core.infrastructure.resource_manager.get_resource_manager") as mock_rm,
         ):
             rm = mock_rm.return_value
             rm.apply_blas_env.return_value = None
@@ -307,11 +307,11 @@ class TestPhaseConfigReady:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with (
             patch(
-                "domain.infrastructure._internal.config.get_config",
+                "domain.core.infrastructure._internal.config.get_config",
                 side_effect=RuntimeError("boom"),
             ),
             patch(
-                "domain.infrastructure.resource_manager.get_resource_manager",
+                "domain.core.infrastructure.resource_manager.get_resource_manager",
                 side_effect=RuntimeError("boom2"),
             ),
         ):
@@ -372,7 +372,7 @@ class TestShutdownHooks:
 
     def test_shutdown_registry_resets_metrics(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
-        with patch("domain.infrastructure.model_registry.get_model_registry") as mock_get:
+        with patch("domain.core.infrastructure.model_registry.get_model_registry") as mock_get:
             asyncio.run(orch._shutdown_registry())
         mock_get.return_value.reset_metrics.assert_called_once()
 
@@ -414,7 +414,7 @@ class TestModelLoadedGuard:
         with (
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.core.infrastructure._internal.model_resolver.get_model_dir",
                 return_value=Path("/nonexistent-dir"),
             ) as mock_dir,
             patch("os.path.exists", return_value=False),
@@ -428,15 +428,15 @@ class TestModelLoadedGuard:
         with (
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
+                "domain.core.infrastructure.process_guard.ProcessGuard", return_value=guard
             ) as mock_pg,
             patch(
-                "domain.infrastructure.model_resolver.get_model_dir",
+                "domain.core.infrastructure.model_resolver.get_model_dir",
                 return_value=Path("/fake/slnc-dir"),
             ),
             patch("os.path.exists", return_value=True),
             patch(
-                "domain.infrastructure.process_guard.resolve_memory_limit_mb",
+                "domain.core.infrastructure.process_guard.resolve_memory_limit_mb",
                 return_value=512.0,
             ),
             patch("controllers.models.get_models_controller") as mock_ctrl,
@@ -452,7 +452,7 @@ class TestModelLoadedGuard:
         with (
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure.process_guard.ProcessGuard",
+                "domain.core.infrastructure.process_guard.ProcessGuard",
                 side_effect=RuntimeError("boom"),
             ),
         ):
@@ -487,9 +487,9 @@ class TestInitLifecycle:
         lifecycle._startup_hooks = []
         lifecycle._shutdown_hooks = []
         with (
-            patch("domain.infrastructure._internal.event_bus.EventBus") as mock_bus,
+            patch("domain.core.infrastructure._internal.event_bus.EventBus") as mock_bus,
             patch(
-                "domain.infrastructure._internal.lifecycle.get_lifecycle_manager",
+                "domain.core.infrastructure._internal.lifecycle.get_lifecycle_manager",
                 return_value=lifecycle,
             ),
         ):
@@ -504,15 +504,15 @@ class TestInitLifecycle:
     def test_skips_when_already_initialized(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         orch._lifecycle = object()
-        with patch("domain.infrastructure._internal.lifecycle.get_lifecycle_manager") as mock_get:
+        with patch("domain.core.infrastructure._internal.lifecycle.get_lifecycle_manager") as mock_get:
             asyncio.run(orch._init_lifecycle())
         mock_get.assert_not_called()
 
     def test_invalid_profile_falls_back_to_full(self):
         orch = StartupOrchestrator(FastAPI(), ServerConfig(), profile="bogus")
         with (
-            patch("domain.infrastructure._internal.event_bus.EventBus"),
-            patch("domain.infrastructure._internal.lifecycle.get_lifecycle_manager"),
+            patch("domain.core.infrastructure._internal.event_bus.EventBus"),
+            patch("domain.core.infrastructure._internal.lifecycle.get_lifecycle_manager"),
         ):
             asyncio.run(orch._init_lifecycle())
         assert orch._profile_enum.value == "full"
@@ -559,7 +559,7 @@ class TestRun:
         )
 
     def test_runs_lifecycle_and_ready(self):
-        from domain.infrastructure._internal.lifecycle import StartupProfile
+        from domain.core.infrastructure._internal.lifecycle import StartupProfile
 
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         orch._profile_enum = StartupProfile.FULL
@@ -681,7 +681,7 @@ class TestAutoloadNativeSoul:
         result.provider = None
         with (
             patch.dict("sys.modules", {"state": state}),
-            patch("domain.infrastructure.model_loader.ModelLoader") as mock_loader,
+            patch("domain.core.infrastructure.model_loader.ModelLoader") as mock_loader,
         ):
             mock_loader.return_value.load.return_value = result
             from apps.api.server.infrastructure import startup as startup_mod
@@ -801,7 +801,7 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.core.infrastructure._internal.model_resolver.get_model_dir",
                 return_value=Path("/missing"),
             ),
             patch("os.path.exists", return_value=False),
@@ -816,7 +816,7 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.core.infrastructure._internal.model_resolver.get_model_dir",
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
@@ -832,22 +832,22 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.core.infrastructure._internal.model_resolver.get_model_dir",
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.generate._internal.slonet_provider": mock_slonet}),
             patch(
-                "domain.infrastructure.process_guard.ProcessGuard",
+                "domain.core.infrastructure.process_guard.ProcessGuard",
                 side_effect=RuntimeError("boom"),
             ),
             patch(
-                "domain.infrastructure.model_registry.get_model_registry",
+                "domain.core.infrastructure.model_registry.get_model_registry",
                 return_value=MagicMock(),
             ),
             patch("domain.generate.models._internal.provider.setup_providers"),
             patch("controllers.models.get_models_controller"),
-            patch("domain.infrastructure.server_state.get_server_state"),
+            patch("domain.core.infrastructure.server_state.get_server_state"),
         ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is True
 
@@ -863,25 +863,25 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": state}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.core.infrastructure._internal.model_resolver.get_model_dir",
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
             patch.dict("sys.modules", {"domain.generate._internal.slonet_provider": mock_slonet}),
             patch(
-                "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
+                "domain.core.infrastructure.process_guard.ProcessGuard", return_value=guard
             ) as mock_pg,
             patch(
-                "domain.infrastructure._internal.process_guard.resolve_memory_limit_mb",
+                "domain.core.infrastructure._internal.process_guard.resolve_memory_limit_mb",
                 return_value=64.0,
             ),
             patch(
-                "domain.infrastructure.model_registry.get_model_registry",
+                "domain.core.infrastructure.model_registry.get_model_registry",
                 return_value=MagicMock(),
             ),
             patch.dict("sys.modules", {"domain.generate.models._internal.provider": mock_models}),
             patch("controllers.models.get_models_controller") as mock_ctrl,
-            patch("domain.infrastructure.server_state.get_server_state"),
+            patch("domain.core.infrastructure.server_state.get_server_state"),
         ):
             result = mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2"))
         assert result is True

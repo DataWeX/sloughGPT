@@ -1,6 +1,6 @@
 """Tests for domains/infrastructure/health_flow.py — diagnostic pipeline."""
 
-from domain.infrastructure._internal.health_flow import (
+from domain.core.infrastructure._internal.health_flow import (
     HealthFlowResult,
     Severity,
     _check_errors,

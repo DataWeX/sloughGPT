@@ -22,13 +22,13 @@ from typing import Any
 
 import numpy as np
 
+from domain.core.infrastructure._internal.atomic_write import atomic_writer
+from domain.core.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.core.shared import (  # noqa: F401 — find_repo_root kept for compatibility
     find_repo_root,
     utc_now_iso,
 )
 from domain.generate._internal.forward_pass import ForwardPassResult
-from domain.infrastructure._internal.atomic_write import atomic_writer
-from domain.infrastructure._internal.kv_cache.native import NativeKVState
 
 logger = logging.getLogger("slo.slonet")
 
@@ -1853,7 +1853,7 @@ class SloLinear(SloLayer):
                 self._lock.acquire()
                 try:
                     if self._quant_unpacked is None:
-                        from domain.infrastructure._internal.quantization import _unpack_int4
+                        from domain.core.infrastructure._internal.quantization import _unpack_int4
 
                         signed = self._quant_info.meta.mode == "symmetric"
                         n_total = int(np.prod(self._quant_info.meta.original_shape))
@@ -1919,7 +1919,7 @@ class SloLinear(SloLayer):
         After compression, the Point replaces raw storage. The generated
         data is synced into self.weight for backward compatibility.
         """
-        from domain.infrastructure._internal.pugqeep.point_weight import PointWeight
+        from domain.core.infrastructure._internal.pugqeep.point_weight import PointWeight
 
         pw = PointWeight.from_array(
             self.weight.data,
@@ -1932,7 +1932,7 @@ class SloLinear(SloLayer):
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if self._quant_info is not None and self._quant_info.is_quantized:
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 int4_quantized_linear,
                 quantized_linear,
             )
@@ -1960,7 +1960,7 @@ class SloLinear(SloLayer):
 
     def forward(self, x: Tensor) -> Tensor:
         if self._quant_info is not None and self._quant_info.is_quantized:
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 int4_quantized_linear,
                 quantized_linear,
             )
@@ -2919,7 +2919,7 @@ def _fuse_quant_weights_int4(linears):
     zps = [qi.meta.zero_point for qi in infos]
     if any(z != zps[0] for z in zps):
         return None
-    from domain.infrastructure._internal.quantization import _ensure_2d_packed
+    from domain.core.infrastructure._internal.quantization import _ensure_2d_packed
 
     K = infos[0].meta.original_shape[-1]
     if K % 2 != 0:
@@ -3194,7 +3194,7 @@ class SloMultiHeadAttention(SloLayer):
         H, E, K_H = self.n_heads, self.head_dim, self.n_kv_head
         fused = self._fused_qkv()
         if fused is not None and q is k and k is v:
-            from domain.infrastructure._internal.quantization import quantized_linear
+            from domain.core.infrastructure._internal.quantization import quantized_linear
 
             W, S, B_f, qd, kd = fused
             qkv = quantized_linear(q, W, S, 0, B_f)  # (B, N, qd + 2*kd)
@@ -3507,7 +3507,7 @@ class SloFeedForward(SloLayer):
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         fused = self._fused_gate_up()
         if fused is not None:
-            from domain.infrastructure._internal.quantization import quantized_linear
+            from domain.core.infrastructure._internal.quantization import quantized_linear
 
             W, S, B, mid = fused
             gu = quantized_linear(x, W, S, 0, B)  # (..., mid + mid)
@@ -5003,7 +5003,7 @@ def import_from_sou(path: str) -> SloNet:
     if not p.exists():
         points_path = p.with_suffix(".points.json")
         if points_path.exists():
-            from domain.infrastructure._internal.pugqeep.tree import load_from_points
+            from domain.core.infrastructure._internal.pugqeep.tree import load_from_points
 
             tree, meta = load_from_points(str(p))
             net = SloTransformer(
@@ -5592,7 +5592,7 @@ class SloTransformer(SloNet):
         Returns:
             Number of layers whose float32 weights were released.
         """
-        from domain.infrastructure._internal.quantization import walk_slo_linears
+        from domain.core.infrastructure._internal.quantization import walk_slo_linears
 
         freed = 0
         for lin in walk_slo_linears(self).values():
@@ -5609,7 +5609,7 @@ class SloTransformer(SloNet):
         ``_freed_shape``.
         """
         total = sum(p.data.size for p in self.parameters())
-        from domain.infrastructure._internal.quantization import walk_slo_linears
+        from domain.core.infrastructure._internal.quantization import walk_slo_linears
 
         for lin in walk_slo_linears(self).values():
             shape = getattr(lin, "_freed_shape", None)
@@ -6127,10 +6127,10 @@ class SloTransformer(SloNet):
         # int8 KV cache: auto-enabled for quantized models, forceable either way.
         _use_kvq = _is_quantized if quantize_kv is None else bool(quantize_kv)
         if _use_kvq:
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 dequantize_kv_tensor as _dqkv_t,
             )
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 quantize_kv_tensor as _qkv_t,
             )
 
@@ -6284,10 +6284,10 @@ class SloTransformer(SloNet):
         f_qkv4 = []
         f_ff4 = []
         if _is_quantized:
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 int4_quantized_linear as _ql4,
             )
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 quantized_linear as _ql,
             )
 
@@ -6812,10 +6812,10 @@ class SloTransformer(SloNet):
         # int8 KV cache: auto-enabled for quantized models, forceable either way.
         _use_kvq = _is_quantized if quantize_kv is None else bool(quantize_kv)
         if _use_kvq:
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 dequantize_kv_tensor as _dqkv_t,
             )
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 quantize_kv_tensor as _qkv_t,
             )
 
@@ -6910,10 +6910,10 @@ class SloTransformer(SloNet):
         f_qkv4 = []
         f_ff4 = []
         if _is_quantized:
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 int4_quantized_linear as _ql4,
             )
-            from domain.infrastructure._internal.quantization import (
+            from domain.core.infrastructure._internal.quantization import (
                 quantized_linear as _ql,
             )
 

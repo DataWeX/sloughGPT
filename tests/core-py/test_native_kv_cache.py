@@ -11,8 +11,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.kv_cache import NativeKVState
-from domain.infrastructure._internal.kv_cache.native import _NumpyBackend
+from domain.core.infrastructure._internal.kv_cache import NativeKVState
+from domain.core.infrastructure._internal.kv_cache.native import _NumpyBackend
 
 
 def _kv(seq_len: int, n_kv_heads: int = 4, head_dim: int = 8) -> np.ndarray:

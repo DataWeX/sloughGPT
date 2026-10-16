@@ -7,8 +7,8 @@ without requiring a GPU or SLNC model file.
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP, ArchConfig
-from domain.infrastructure._internal.gpu.wgpu_be import WgpuBE, _load_metallib, _load_spirv
+from domain.core.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP, ArchConfig
+from domain.core.infrastructure._internal.gpu.wgpu_be import WgpuBE, _load_metallib, _load_spirv
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -718,7 +718,7 @@ class TestForwardPass:
         positional="rope",
         activation="swiglu",
     ):
-        from domain.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP
+        from domain.core.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP
 
         arch = _make_arch(
             n_head=n_head,

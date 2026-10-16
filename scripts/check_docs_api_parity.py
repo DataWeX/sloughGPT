@@ -49,7 +49,7 @@ CLAIMS_MD = REPO / "docs" / "DOC_VS_CODE_GAP_AUDIT.md"
 # always said `tests/api-server`; the constant was never updated to match.
 #
 # Do NOT add `tests/core-py` here: it looks like it clears the last finding, but
-# tests/core-py/test_metrics.py imports domain.infrastructure._internal.metrics
+# tests/core-py/test_metrics.py imports domain.core.infrastructure._internal.metrics
 # (the Prometheus collector), not the metrics ROUTER — its filename would erase
 # the one genuine coverage gap.
 TEST_DIRS = (REPO / "tests" / "server", REPO / "tests" / "api-server")

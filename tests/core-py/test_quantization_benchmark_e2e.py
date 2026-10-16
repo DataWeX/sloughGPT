@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 import benchmark_quantization as bq  # noqa: E402
 
-from domain.infrastructure._internal.quantization import walk_slo_linears  # noqa: E402
+from domain.core.infrastructure._internal.quantization import walk_slo_linears  # noqa: E402
 
 # Every test here builds a real QuantizationBenchmark and runs the tiny model
 # in-process, so the whole module is e2e-slow: 73 non-run_all tests alone need
@@ -628,7 +628,7 @@ class TestCachedModelDiscovery:
         cached = bq._list_cached_models()
         if cached:
             # Every returned id must resolve to an existing model.slnc
-            from domain.infrastructure._internal.model_resolver import get_model_dir
+            from domain.core.infrastructure._internal.model_resolver import get_model_dir
 
             for mid in cached:
                 assert (get_model_dir(mid) / "model.slnc").exists(), f"{mid} missing"

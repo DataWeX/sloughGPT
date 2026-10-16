@@ -88,7 +88,7 @@ raise ValueError(f"Cannot resume from '{resume_path}': checkpoint is unreadable 
 
 # Infrastructure — degrade gracefully
 try:
-    from domain.infrastructure._internal.output_buffer import install_log_bridge
+    from domain.core.infrastructure._internal.output_buffer import install_log_bridge
 
     install_log_bridge()
 except Exception as e:
@@ -620,7 +620,7 @@ display-width truncation. CJK characters count as 2 columns.
 
 ```bash
 # Core library
-PYTHONPATH=. /home/mana/miniconda3/envs/sloughgpt/bin/python -c "from domain.infrastructure._internal.pugqeep import Tree; print(1)"
+PYTHONPATH=. /home/mana/miniconda3/envs/sloughgpt/bin/python -c "from domain.core.infrastructure._internal.pugqeep import Tree; print(1)"
 
 # API server
 cd apps/api && .venv/bin/python -m uvicorn server.main:app --port 8000

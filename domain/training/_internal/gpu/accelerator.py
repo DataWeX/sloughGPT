@@ -43,7 +43,7 @@ class _MetalAccelerator:
     def _check_metal(self) -> bool:
         """Check if MPS is available without importing torch."""
         try:
-            from domain.infrastructure._internal.ml_types import _mps_available
+            from domain.core.infrastructure._internal.ml_types import _mps_available
 
             return _mps_available()
         except Exception:

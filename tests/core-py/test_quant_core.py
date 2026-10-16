@@ -20,7 +20,7 @@ _CORE_PY = Path(__file__).resolve().parents[2] / "packages" / "core-py"
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domain.infrastructure._internal.quant_core.wrapper import (
+from domain.core.infrastructure._internal.quant_core.wrapper import (
     HAS_AVX2,
     _fallback,
     _fallback_int4,
@@ -194,21 +194,21 @@ class TestHASAVX2:
 
 class TestHASAVX512:
     def test_flag_is_bool(self):
-        from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX512
+        from domain.core.infrastructure._internal.quant_core.wrapper import HAS_AVX512
 
         assert isinstance(HAS_AVX512, bool)
 
     def test_crossover_tracks_kernel(self):
         """Adaptive crossover must be lower when the AVX-512 kernel is active."""
-        from domain.infrastructure._internal import quantization as q
-        from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX512
+        from domain.core.infrastructure._internal import quantization as q
+        from domain.core.infrastructure._internal.quant_core.wrapper import HAS_AVX512
 
         expected = 512 if HAS_AVX512 else 1024
         assert q.QUANT_CROSSOVER_K == expected
 
     def test_avx512_path_correct(self):
         """The AVX-512 VNNI GEMM must match the numpy reference exactly."""
-        from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX512
+        from domain.core.infrastructure._internal.quant_core.wrapper import HAS_AVX512
 
         if not HAS_AVX512:
             pytest.skip("AVX-512 VNNI kernel not active on this host")

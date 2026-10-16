@@ -115,8 +115,8 @@ class SloTransformerProvider:
 
     @classmethod
     def load_from_sou(cls, path: str, model_id_str: str = "") -> SloTransformerProvider:
+        from domain.core.infrastructure._internal.weight_loader import infer_arch_from_state_dict
         from domain.generate import load_soul
-        from domain.infrastructure._internal.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(path)
         if isinstance(sd, dict) and "tok_emb.weight" not in sd:

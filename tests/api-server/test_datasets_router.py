@@ -18,7 +18,7 @@ from infrastructure.exception_handlers import register_app_error_handler
 from routers.datasets import DatasetsRouter
 from routers.datasets import router as datasets_router
 
-from domain.infrastructure._internal.errors import NotFoundError
+from domain.core.infrastructure._internal.errors import NotFoundError
 
 app = FastAPI()
 register_app_error_handler(app)

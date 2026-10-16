@@ -7,9 +7,9 @@ of real work is delegated to its existing owner, this class only wires them.
 Delegation map (no logic duplicated here):
 
 - messages      → ``ChatDomain.respond`` (``domain/chat/_internal/domain.py``)
-- conversations → ``SessionCore`` (``domain/infrastructure/_internal/session_core.py``)
+- conversations → ``SessionCore`` (``domain/core/infrastructure/_internal/session_core.py``)
 - queues        → provider's ``SloNetServer`` / ``PriorityRequestQueue``
-- operations    → ``CancelManager`` (``domain/infrastructure/_internal/cancel_manager.py``)
+- operations    → ``CancelManager`` (``domain/core/infrastructure/_internal/cancel_manager.py``)
 - model tooling → provider registry (``domain/generate/models/_internal/provider.py``)
 - settings      → ``PersistentSettings`` (``domain/settings/_internal/persistent.py``)
 - availability  → provider presence + server session stats
@@ -34,13 +34,13 @@ logger = logging.getLogger(__name__)
 
 
 def _load_sessions():
-    from domain.infrastructure._internal.session_core import SessionCore
+    from domain.core.infrastructure._internal.session_core import SessionCore
 
     return SessionCore
 
 
 def _load_cancel():
-    from domain.infrastructure._internal.cancel_manager import OpType, get_cancel_manager
+    from domain.core.infrastructure._internal.cancel_manager import OpType, get_cancel_manager
 
     return OpType, get_cancel_manager()
 

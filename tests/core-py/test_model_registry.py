@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure.model_registry — ModelRegistry, get_model_registry.
+"""Tests for domain.core.infrastructure.model_registry — ModelRegistry, get_model_registry.
 
 Covers: register, register_engine, unregister, get, list_models, default_id,
 generate, health_summary, reset_metrics, singleton pattern.
@@ -16,11 +16,11 @@ _core_dir = str(Path(__file__).resolve().parents[2] / "packages")
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.infrastructure._internal.model_registry import (
+from domain.core.infrastructure._internal.model_registry import (
     ModelRegistry,
     get_model_registry,
 )
-from domain.infrastructure._internal.model_server import ModelStatus
+from domain.core.infrastructure._internal.model_server import ModelStatus
 
 
 def _mock_server(model_id="m1", status=ModelStatus.READY):

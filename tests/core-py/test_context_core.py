@@ -1,6 +1,6 @@
-"""Tests for domain.infrastructure.context_core — ContextCore."""
+"""Tests for domain.core.infrastructure.context_core — ContextCore."""
 
-from domain.infrastructure._internal.context_core import (
+from domain.core.infrastructure._internal.context_core import (
     ContextCore,
     ContextFrame,
     ContextLayer,

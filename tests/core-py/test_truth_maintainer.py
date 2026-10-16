@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from domain.infrastructure._internal.anchor_store import MeaningTags
-from domain.infrastructure._internal.truth_labeler import LabelResult
-from domain.infrastructure._internal.truth_maintainer import (
+from domain.core.infrastructure._internal.anchor_store import MeaningTags
+from domain.core.infrastructure._internal.truth_labeler import LabelResult
+from domain.core.infrastructure._internal.truth_maintainer import (
     TruthMaintainer,
     _encode_tokens,
     get_truth_maintainer,

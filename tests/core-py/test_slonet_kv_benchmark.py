@@ -570,7 +570,7 @@ class TestStackCrossTurn:
 
     @pytest.fixture
     def stack(self, tiny_model):
-        from domain.infrastructure._internal.slonet_server import SloNetServer
+        from domain.core.infrastructure._internal.slonet_server import SloNetServer
 
         provider = self._StubProvider(tiny_model)
         server = SloNetServer(

@@ -36,7 +36,7 @@ ENV_METHOD = "SLO_VECTOR_START_METHOD"
 
 
 def _make_arch():
-    from domain.infrastructure._internal.arch_config import ArchConfig
+    from domain.core.infrastructure._internal.arch_config import ArchConfig
 
     arch = ArchConfig(
         name="bench_vector",
@@ -100,7 +100,7 @@ def _ms(t0: float) -> float:
 
 
 def bench_method(method: str, iters: int, watchdog_s: float) -> dict:
-    from domain.infrastructure._internal.vector_backend import VectorBE
+    from domain.core.infrastructure._internal.vector_backend import VectorBE
 
     prev = os.environ.get(ENV_METHOD)
     os.environ[ENV_METHOD] = method

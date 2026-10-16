@@ -1,8 +1,8 @@
-"""Tests for domain.infrastructure.model_server — Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker, IdleManager, SessionKVState."""
+"""Tests for domain.core.infrastructure.model_server — Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker, IdleManager, SessionKVState."""
 
 import time
 
-from domain.infrastructure._internal.model_server import (
+from domain.core.infrastructure._internal.model_server import (
     CircuitBreaker,
     CircuitBreakerState,
     IdleManager,

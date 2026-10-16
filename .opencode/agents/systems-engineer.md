@@ -281,7 +281,7 @@ from enum import IntEnum
 
 import numpy as np
 
-from domain.infrastructure._internal.structured_log import StructuredLogger
+from domain.core.infrastructure._internal.structured_log import StructuredLogger
 from .kernel_syscall import SyscallResult
 
 logger = StructuredLogger("slo.module.name")
@@ -290,7 +290,7 @@ logger = StructuredLogger("slo.module.name")
 ### Logging (use StructuredLogger, not print)
 
 ```python
-from domain.infrastructure._internal.structured_log import StructuredLogger
+from domain.core.infrastructure._internal.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.module.name")
 

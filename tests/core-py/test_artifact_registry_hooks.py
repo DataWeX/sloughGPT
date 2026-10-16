@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 sys.path.insert(0, str(REPO_ROOT))
 
-from domain.infrastructure._internal.artifact_registry import try_register  # noqa: E402
+from domain.core.infrastructure._internal.artifact_registry import try_register  # noqa: E402
 
 
 def _src(rel: str) -> str:
@@ -64,7 +64,7 @@ class TestTryRegister:
 
 class TestWriteSiteHooks:
     def test_download_site(self):
-        src = _src("domain/infrastructure/_internal/external_download.py")
+        src = _src("domain/core/infrastructure/_internal/external_download.py")
         assert 'try_register("download"' in src
         assert "artifact" in src  # completion response carries the record
 

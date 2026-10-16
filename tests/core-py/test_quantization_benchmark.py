@@ -13,7 +13,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.quantization import (
+from domain.core.infrastructure._internal.quantization import (
     Quantine,
     QuantMeta,
     TensorInfo,
@@ -34,7 +34,10 @@ from domain.infrastructure._internal.quantization import (
 
 def _require_c_matmul():
     """Skip if AVX2 C extension not available."""
-    from domain.infrastructure._internal.quantization import _c_matmul_int4, _int4_numpy_fallback
+    from domain.core.infrastructure._internal.quantization import (
+        _c_matmul_int4,
+        _int4_numpy_fallback,
+    )
 
     if _c_matmul_int4 is _int4_numpy_fallback:
         pytest.skip("AVX2 int4 C extension not available")
@@ -273,7 +276,7 @@ class TestQuantizationBenchmark:
         )
 
     def test_fused_int8_linear_faster_than_unfused(self, gpt2_weights):
-        import domain.infrastructure._internal.quantization as Q
+        import domain.core.infrastructure._internal.quantization as Q
 
         _require_c_matmul()
         assert Q.matmul_int8_f32_c is not None, "fused kernel not wired"

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.model_server import CircuitBreakerState
-from domain.infrastructure._internal.slonet_server import SloNetServer
+from domain.core.infrastructure._internal.model_server import CircuitBreakerState
+from domain.core.infrastructure._internal.slonet_server import SloNetServer
 
 # ---------------------------------------------------------------------------
 # Fixtures

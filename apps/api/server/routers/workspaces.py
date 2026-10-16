@@ -1331,7 +1331,7 @@ class WorkspacesRouter:
             # see card "un-dead workspace search" — so this stays global)
             dataset_entries = []
             try:
-                from domain.infrastructure import get_dataset_repository
+                from domain.core.infrastructure import get_dataset_repository
 
                 for ds in get_dataset_repository().list():
                     dataset_entries.append(
@@ -1350,7 +1350,7 @@ class WorkspacesRouter:
             # Search knowledge
             knowledge_entries = []
             try:
-                from domain.infrastructure import get_knowledge_repository
+                from domain.core.infrastructure import get_knowledge_repository
 
                 for fact in get_knowledge_repository().list_facts():
                     knowledge_entries.append(

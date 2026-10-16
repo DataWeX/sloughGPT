@@ -12,7 +12,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.kv_cache.kv_state import KVState
+from domain.core.infrastructure._internal.kv_cache.kv_state import KVState
 
 
 def _kv(seq_len: int, n_heads: int = 8, head_dim: int = 16, batch: int = 1) -> np.ndarray:

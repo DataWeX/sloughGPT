@@ -58,9 +58,9 @@ def test_all_entry_points_agree():
     assert Embedder(provider="n_gram").embed_single(TEXT) == canonical
     assert InMemoryEmbedder().embed(TEXT)[0] == canonical
 
-    from domain.infrastructure._internal.auto_ingest import simple_embed as ai_embed
-    from domain.infrastructure._internal.context_core import simple_embed as cc_embed
-    from domain.infrastructure._internal.embedding_service import get_embedding_service
+    from domain.core.infrastructure._internal.auto_ingest import simple_embed as ai_embed
+    from domain.core.infrastructure._internal.context_core import simple_embed as cc_embed
+    from domain.core.infrastructure._internal.embedding_service import get_embedding_service
 
     assert list(ai_embed(TEXT)) == canonical
     assert list(cc_embed(TEXT)) == canonical

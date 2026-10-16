@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.infrastructure._internal.auto_ingest import (
+from domain.core.infrastructure._internal.auto_ingest import (
     DEFAULT_IGNORE_DIRS,
     AutoIngester,
     CodeChunker,
@@ -366,7 +366,7 @@ class TestAutoIngester:
             parent = os.path.dirname(base)
             assert parent != base, "repo root with domain/ not found"
             base = parent
-        module_path = os.path.join(base, "domain", "infrastructure", "_internal", "auto_ingest.py")
+        module_path = os.path.join(base, "domain", "core", "infrastructure", "_internal", "auto_ingest.py")
         with open(module_path) as fh:
             source = fh.read()
         with caplog.at_level("INFO"):

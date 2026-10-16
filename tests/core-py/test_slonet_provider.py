@@ -370,7 +370,7 @@ class TestProviderConfig:
         assert p.get_server() is mock_server
 
     def test_to_server_returns_server_instance(self):
-        from domain.infrastructure._internal.slonet_server import SloNetServer
+        from domain.core.infrastructure._internal.slonet_server import SloNetServer
 
         p = _make_provider()
         server = p.to_server()

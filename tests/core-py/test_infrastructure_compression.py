@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from domain.infrastructure._internal.compression import CompressedWeight, LRUCache
+from domain.core.infrastructure._internal.compression import CompressedWeight, LRUCache
 
 
 class TestCompressedWeight:

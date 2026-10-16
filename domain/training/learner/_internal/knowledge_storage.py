@@ -11,7 +11,7 @@ import time
 import uuid
 from pathlib import Path
 
-from domain.infrastructure._internal.entity_repositories import (
+from domain.core.infrastructure._internal.entity_repositories import (
     FeedState,
     KnowledgeEntry,
     KnowledgeRepository,

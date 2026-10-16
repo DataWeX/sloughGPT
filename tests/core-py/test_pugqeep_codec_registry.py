@@ -10,15 +10,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from domain.infrastructure._internal.pugqeep.codecs import (
+
+from domain.core.infrastructure._internal.pugqeep.codecs import (
     BlockQ4Codec,
     BlockQ8Codec,
     CodecRegistry,
     codec_registry,
 )
-
-from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
-from domain.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.core.infrastructure._internal.pugqeep.point import Point
 
 
 def _make_block_points(seed: int = 0):
@@ -119,7 +119,7 @@ class TestLegacyByteCompatibility:
             shape=(5,),
         )
         # legacy layout: "LIN " + <ff> + has_res(0)
-        from domain.infrastructure._internal.pugqeep.point import Point as P
+        from domain.core.infrastructure._internal.pugqeep.point import Point as P
 
         blob = p.to_bytes()
         assert blob[:4] == b"LIN "

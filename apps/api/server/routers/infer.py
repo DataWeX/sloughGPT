@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log
 
 from config import ServerConfig
-from domain.infrastructure import AppError
+from domain.core.infrastructure import AppError
 
 logger = logging.getLogger("slo.infer")
 cfg = ServerConfig.from_env()
@@ -207,7 +207,7 @@ class InferRouter:
         """
         # Block inference under memory pressure
         try:
-            from domain.infrastructure.memory_pressure import (
+            from domain.core.infrastructure.memory_pressure import (
                 PressureLevel,
                 get_memory_pressure_monitor,
             )
@@ -256,7 +256,7 @@ class InferRouter:
             elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
             tokens = len(result.split())
             try:
-                from domain.infrastructure.server_state import get_server_state
+                from domain.core.infrastructure.server_state import get_server_state
 
                 get_server_state().record_inference(
                     tokens=tokens, elapsed_ms=elapsed_ms, model=req.model
@@ -297,7 +297,7 @@ class InferRouter:
         """
         # Block streaming inference under memory pressure
         try:
-            from domain.infrastructure.memory_pressure import (
+            from domain.core.infrastructure.memory_pressure import (
                 PressureLevel,
                 get_memory_pressure_monitor,
             )
@@ -401,7 +401,7 @@ class InferRouter:
                             )
                             return
                 except Exception as e:
-                    from domain.infrastructure import (
+                    from domain.core.infrastructure import (
                         classify_exception,
                         emit_error_event,
                     )
@@ -412,7 +412,7 @@ class InferRouter:
                     return
                 elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
                 try:
-                    from domain.infrastructure.server_state import get_server_state
+                    from domain.core.infrastructure.server_state import get_server_state
 
                     get_server_state().record_inference(
                         tokens=token_count, elapsed_ms=elapsed_ms, model=req.model

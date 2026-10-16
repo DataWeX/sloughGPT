@@ -22,7 +22,7 @@ class TestRegistryResolution:
     """A registered code must classify the way the registry says it does."""
 
     def test_code_resolves_its_registered_class_and_status(self):
-        from domain.infrastructure._internal.errors import AppError, ConflictError
+        from domain.core.infrastructure._internal.errors import AppError, ConflictError
 
         with pytest.raises(AppError) as excinfo:
             raise_error("resource is busy", "E_BUSY")
@@ -57,7 +57,7 @@ class TestRegistryResolution:
         A value-only lookup raises ValueError for it, which is exactly how the
         alias used to degrade to a generic AppError.
         """
-        from domain.infrastructure._internal.errors import ValidationError
+        from domain.core.infrastructure._internal.errors import ValidationError
 
         with pytest.raises(Exception) as excinfo:
             raise_error("creation failed", "E_CREATE_FAILED")
@@ -102,7 +102,7 @@ class TestHandlerWiring:
 
         @router.get("/internal-failure")
         async def _internal_failure():
-            from domain.infrastructure._internal.errors import AppError
+            from domain.core.infrastructure._internal.errors import AppError
 
             raise AppError(
                 message="raw: /models/secret.soul is corrupt (Errno 2)",
@@ -158,7 +158,7 @@ class TestTwoChannels:
     @staticmethod
     def test_classify_and_raise_fallback_does_not_ship_the_exception_text(monkeypatch):
         """The catch-all used to do ``raise_error(str(e), "E_DOMAIN", 500)``."""
-        import domain.infrastructure._internal.errors as err_mod
+        import domain.core.infrastructure._internal.errors as err_mod
 
         def _broken_classifier(_exc):
             raise TypeError("classifier exploded")

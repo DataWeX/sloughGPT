@@ -49,7 +49,7 @@ def _patch_server(provider):
     """Replace the ServerState singleton with a fake holding ``provider``."""
     fake_core = MagicMock()
     fake_core.model.get.return_value = provider
-    return patch("domain.infrastructure.server_state.get_server_state", return_value=fake_core)
+    return patch("domain.core.infrastructure.server_state.get_server_state", return_value=fake_core)
 
 
 @pytest.fixture
@@ -325,10 +325,10 @@ class TestPerplexityPath:
     def test_perplexity_error_returns_500(self, client):
         with (
             patch(
-                "domain.infrastructure.server_state.get_server_state",
+                "domain.core.infrastructure.server_state.get_server_state",
                 side_effect=RuntimeError("controller crash"),
             ),
-            patch("domain.infrastructure._internal.errors.emit_error_event"),
+            patch("domain.core.infrastructure._internal.errors.emit_error_event"),
         ):
             resp = client.post("/benchmark/perplexity?text=hello")
         assert resp.status_code == 500

@@ -50,7 +50,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from domain.infrastructure._internal.quant_core.wrapper import matmul_int8_c  # noqa: E402
+from domain.core.infrastructure._internal.quant_core.wrapper import matmul_int8_c  # noqa: E402
 
 # Qwen2.5-0.5B (the model the chat server serves): hidden 896,
 # intermediate 4864, vocab 151936, 2 kv-heads x 64 head_dim.

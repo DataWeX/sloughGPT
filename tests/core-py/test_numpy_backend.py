@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from domain.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP, ArchConfig
-from domain.infrastructure._internal.numpy_backend import NumpyBE
+from domain.core.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP, ArchConfig
+from domain.core.infrastructure._internal.numpy_backend import NumpyBE
 
 
 def _make_tiny_arch():

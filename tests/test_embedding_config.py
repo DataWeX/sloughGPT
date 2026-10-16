@@ -16,25 +16,25 @@ import pytest
 
 class TestEmbeddingConfigFields:
     def test_openai_api_key_back_compat_fills_generic_field(self):
-        from domain.infrastructure._internal.config import EmbeddingConfig
+        from domain.core.infrastructure._internal.config import EmbeddingConfig
 
         cfg = EmbeddingConfig(openai_api_key="sk-old")
         assert cfg.api_key == "sk-old"
 
     def test_generic_api_key_fills_legacy_alias(self):
-        from domain.infrastructure._internal.config import EmbeddingConfig
+        from domain.core.infrastructure._internal.config import EmbeddingConfig
 
         cfg = EmbeddingConfig(api_key="sk-new")
         assert cfg.openai_api_key == "sk-new"
 
     def test_base_url_field(self):
-        from domain.infrastructure._internal.config import EmbeddingConfig
+        from domain.core.infrastructure._internal.config import EmbeddingConfig
 
         cfg = EmbeddingConfig(base_url="http://localhost:11434/v1")
         assert cfg.base_url == "http://localhost:11434/v1"
 
     def test_env_overrides_map_generic_keys(self, monkeypatch):
-        from domain.infrastructure._internal.config import AppConfig, _apply_env_overrides
+        from domain.core.infrastructure._internal.config import AppConfig, _apply_env_overrides
 
         monkeypatch.setenv("SLO_EMBEDDING__API_KEY", "sk-env")
         monkeypatch.setenv("SLO_EMBEDDING__BASE_URL", "http://llm.local:8080/v1")
@@ -47,7 +47,7 @@ class TestEmbeddingConfigFields:
         # The env name .env.example documented BEFORE this change must keep
         # working end-to-end (old deployments): SLO_EMBEDDING__OPENAI_API_KEY
         # -> env walk -> post-env model_validate -> alias mirror -> api_key.
-        from domain.infrastructure._internal.config import AppConfig, _apply_env_overrides
+        from domain.core.infrastructure._internal.config import AppConfig, _apply_env_overrides
 
         monkeypatch.delenv("SLO_EMBEDDING__API_KEY", raising=False)
         monkeypatch.setenv("SLO_EMBEDDING__OPENAI_API_KEY", "sk-legacy-env")
@@ -56,7 +56,7 @@ class TestEmbeddingConfigFields:
         assert cfg.embedding.openai_api_key == "sk-legacy-env"
 
     def test_new_field_wins_when_both_set(self):
-        from domain.infrastructure._internal.config import EmbeddingConfig
+        from domain.core.infrastructure._internal.config import EmbeddingConfig
 
         cfg = EmbeddingConfig(api_key="sk-new", openai_api_key="sk-old")
         assert cfg.api_key == "sk-new"

@@ -5,7 +5,7 @@ grab-bag for "any file type". pugqeep compresses **arrays** (any component that
 reduces to a `numpy.ndarray`) into `Point`s, then stores, indexes, queues, and
 dispatches work over those Points.
 
-**Location:** `domain/infrastructure/_internal/pugqeep/`
+**Location:** `domain/core/infrastructure/_internal/pugqeep/`
 
 ## The three invariants
 
@@ -368,7 +368,7 @@ pipe.close()                   # Engine.stop() closes it; run()/dispatch() re-op
 - **Ownership** — standalone `Pool` mints its own pipe; `Engine.pool()` injects
   Engine's. `Pool.shutdown()` closes only a pipe it minted (`_owns_pipe`).
 - **`PipeClosed`** is raised once the pipe is closed — import it from
-  `domains.infrastructure.pugqeep`, never `domain.infrastructure._internal`.
+  `domains.infrastructure.pugqeep`, never `domain.core.infrastructure._internal`.
 
 ## Compression strategies
 
@@ -435,7 +435,7 @@ changed size during iteration`, and `dispatch()` therefore _merges_ into
 Long-running pugqeep operations wire into `CancelManager` for cancellation:
 
 ```python
-from domain.infrastructure._internal.cancel_manager import get_cancel_manager, OpType
+from domain.core.infrastructure._internal.cancel_manager import get_cancel_manager, OpType
 
 mgr = get_cancel_manager()
 op_id = mgr.register(OpType.TRAINING, "compress model")

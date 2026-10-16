@@ -1,4 +1,4 @@
-"""Loopback HTTP wire tests for domain.infrastructure._internal.compressed_transfer.
+"""Loopback HTTP wire tests for domain.core.infrastructure._internal.compressed_transfer.
 
 Serves real bytes over a live 127.0.0.1 socket (no mocking of the wire layer)
 and exercises the API that actually shipped: ``CompressedDownloader.download_from_url``
@@ -33,7 +33,7 @@ import urllib.parse
 
 import pytest
 
-from domain.infrastructure._internal.compressed_transfer import (
+from domain.core.infrastructure._internal.compressed_transfer import (
     MAGIC,
     CompressedDownloader,
     CompressedFileServer,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.infrastructure._internal.session_core import SessionCore
+from domain.core.infrastructure._internal.session_core import SessionCore
 
 
 class TestSessionCore:

@@ -14,8 +14,8 @@ import time
 import numpy as np
 import pytest
 
+from domain.core.infrastructure._internal.kv_cache.session import SessionKVManager
 from domain.generate._internal.slonet_provider import SloNetChatProvider
-from domain.infrastructure._internal.kv_cache.session import SessionKVManager
 from domain.training._internal.slonet import (
     NumpyKVState,
     SloTransformer,

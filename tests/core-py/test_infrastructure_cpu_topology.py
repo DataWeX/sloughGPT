@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.infrastructure._internal.cpu_topology import CpuTopology
+from domain.core.infrastructure._internal.cpu_topology import CpuTopology
 
 
 class TestCpuTopologyDefaults:

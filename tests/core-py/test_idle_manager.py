@@ -1,9 +1,9 @@
-"""Tests for domain.infrastructure.model_server — IdleManager."""
+"""Tests for domain.core.infrastructure.model_server — IdleManager."""
 
 import threading
 import time
 
-from domain.infrastructure._internal.model_server import IdleManager
+from domain.core.infrastructure._internal.model_server import IdleManager
 
 
 class TestIdleManager:

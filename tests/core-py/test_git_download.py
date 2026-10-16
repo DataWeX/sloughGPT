@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domain.infrastructure._internal.download_backend import DownloadBackend
-from domain.infrastructure._internal.git_download import GitBackend, _get_cache_root
+from domain.core.infrastructure._internal.download_backend import DownloadBackend
+from domain.core.infrastructure._internal.git_download import GitBackend, _get_cache_root
 
 
 class TestGitBackend:
@@ -106,7 +106,7 @@ class TestGitBackend:
 
 
 class TestGitBackendDownload:
-    @patch("domain.infrastructure._internal.git_download.subprocess.run")
+    @patch("domain.core.infrastructure._internal.git_download.subprocess.run")
     def test_download_clones_repo(self, mock_run, tmp_path):
         """download() clones repo and scans files."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -136,7 +136,7 @@ class TestGitBackendDownload:
                 assert len(files) == 1
                 assert "model.bin" in files[0]
 
-    @patch("domain.infrastructure._internal.git_download.subprocess.run")
+    @patch("domain.core.infrastructure._internal.git_download.subprocess.run")
     def test_download_clone_fails(self, mock_run, tmp_path):
         """download() returns error when clone fails."""
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="clone failed")
@@ -148,7 +148,7 @@ class TestGitBackendDownload:
             assert result["status"] == "error"
             assert "clone failed" in result["error"]
 
-    @patch("domain.infrastructure._internal.git_download.subprocess.run")
+    @patch("domain.core.infrastructure._internal.git_download.subprocess.run")
     def test_download_updates_existing(self, mock_run, tmp_path):
         """download() updates existing clone."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")

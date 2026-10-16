@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domain.infrastructure._internal.cancel_manager import CancelManager, OpStatus, OpType
+from domain.core.infrastructure._internal.cancel_manager import CancelManager, OpStatus, OpType
 
 
 @pytest.fixture()

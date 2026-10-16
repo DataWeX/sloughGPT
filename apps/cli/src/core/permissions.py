@@ -77,7 +77,7 @@ class PermissionsManager:
             self.auto_yes = True
         else:
             try:
-                from domain.infrastructure._internal.config import get_config
+                from domain.core.infrastructure._internal.config import get_config
 
                 self.auto_yes = get_config().features.auto_download
             except (ImportError, AttributeError):
@@ -93,7 +93,7 @@ class PermissionsManager:
             ModelSizeEstimate with total bytes and file list, or None on failure.
         """
         try:
-            from domain.infrastructure.hf_hub import fetch_model_info
+            from domain.core.infrastructure.hf_hub import fetch_model_info
 
             info = fetch_model_info(model_id)
             if info is None:
@@ -208,7 +208,7 @@ class PermissionsManager:
     def _is_cached(self, model_id: str) -> bool:
         """Check if model has weight files in HF cache."""
         try:
-            from domain.infrastructure.download_manager import (
+            from domain.core.infrastructure.download_manager import (
                 _cache_dir,
                 _has_complete_snapshot,
                 _has_weight_files,

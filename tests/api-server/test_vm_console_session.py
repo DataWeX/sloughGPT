@@ -784,7 +784,7 @@ class TestVMConsoleStream:
             _SESSIONS.pop(session_id, None)
 
     async def test_stream_rejects_unknown_session(self):
-        from domain.infrastructure._internal.errors import AppError
+        from domain.core.infrastructure._internal.errors import AppError
 
         _reset_sessions()
         try:

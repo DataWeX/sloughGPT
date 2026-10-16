@@ -1,8 +1,8 @@
-"""Tests for domain.infrastructure.hf_hub — HFFile, ResumeInfo, _matches_ignore, _strip_incomplete_suffix, _derive_model_id, _match_repo_file, IGNORED_PATTERNS."""
+"""Tests for domain.core.infrastructure.hf_hub — HFFile, ResumeInfo, _matches_ignore, _strip_incomplete_suffix, _derive_model_id, _match_repo_file, IGNORED_PATTERNS."""
 
 from pathlib import Path
 
-from domain.infrastructure._internal.hf_hub import (
+from domain.core.infrastructure._internal.hf_hub import (
     IGNORED_PATTERNS,
     HFFile,
     ResumeInfo,

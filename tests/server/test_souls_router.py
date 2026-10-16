@@ -108,7 +108,7 @@ class TestSwitchSoul:
     """POST /souls/switch"""
 
     @patch("domain.generate._internal.slo_manager.get_slo_manager")
-    @patch("domain.infrastructure._internal.context_core.get_context_core")
+    @patch("domain.core.infrastructure._internal.context_core.get_context_core")
     @patch("domain.core._internal.soul.SloEngine")
     @patch("domain.generate.models._internal.provider.update_personality_traits")
     def test_switch_soul_success(
@@ -454,7 +454,7 @@ class TestGetSoulErrorPath:
 
     @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_manager_error_raises_http(self, mock_get_mgr, client):
-        from domain.infrastructure._internal.errors import classify_exception
+        from domain.core.infrastructure._internal.errors import classify_exception
 
         err = classify_exception(RuntimeError("boom"))
         mock_get_mgr.side_effect = RuntimeError("boom")

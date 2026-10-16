@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.weight_loader import (
+from domain.core.infrastructure._internal.weight_loader import (
     _ARCH_TO_SLONET,
     _GELU_MAP,
     _NO_TRANSPOSE,
@@ -456,6 +456,6 @@ class TestLoadIntoModel:
 
 class TestIsIntelMac:
     def test_returns_bool(self):
-        from domain.infrastructure._internal.model_server import _is_intel_mac
+        from domain.core.infrastructure._internal.model_server import _is_intel_mac
 
         assert isinstance(_is_intel_mac(), bool)

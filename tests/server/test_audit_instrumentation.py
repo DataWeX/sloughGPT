@@ -110,7 +110,7 @@ class TestModelAudit:
         resp = models_client.post("/models/load", json={"model_id": "gpt2", "device": "cpu"})
         assert resp.status_code == 200
 
-    @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
+    @patch("domain.core.infrastructure._internal.quantization.walk_slo_linears", return_value={})
     @patch("domain.generate.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_quantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
@@ -135,7 +135,7 @@ class TestModelAudit:
             "model_type": "slonet",
         }
 
-    @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
+    @patch("domain.core.infrastructure._internal.quantization.walk_slo_linears", return_value={})
     @patch("domain.generate.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_dequantize_model_logs_event(
@@ -175,7 +175,7 @@ class TestModelAudit:
         assert kwargs["extra"] == {"mode": "auto"}
         assert kwargs["detail"] == resp.json()["data"]["precision"]
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_download_logs_event(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -196,7 +196,7 @@ class TestModelAudit:
         assert first_call_kwargs["detail"] == "started"
         assert first_call_kwargs["extra"] == {"total_bytes_hint": 1000}
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_download_logs_event(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -211,7 +211,7 @@ class TestModelAudit:
         assert kwargs["resource"] == "gpt2"
         assert kwargs["detail"] == "cancelled"
 
-    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("domain.core.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_missing_download_no_audit(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()

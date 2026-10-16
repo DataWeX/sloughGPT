@@ -18,15 +18,15 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from domain.core.infrastructure._internal.slnc.spec import (
+    compute_header_size,
+    compute_tensor_entry_size,
+)
 from domain.generate._internal.slonet_provider import (
     SloNetChatProvider,
     _get_slo_layernorm,
     _split_fused_qkv,
     convert_hf_to_slonet,
-)
-from domain.infrastructure._internal.slnc.spec import (
-    compute_header_size,
-    compute_tensor_entry_size,
 )
 
 N_EMBED, N_LAYER, N_HEAD, VOCAB, N_POS, N_INNER = 16, 1, 2, 50, 32, 64
@@ -338,7 +338,7 @@ class TestFromSlnc:
         rm = MagicMock()
         with (
             patch(
-                "domain.infrastructure._internal.resource_manager.get_resource_manager",
+                "domain.core.infrastructure._internal.resource_manager.get_resource_manager",
                 return_value=rm,
             ),
             patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()),
@@ -351,7 +351,7 @@ class TestFromSlnc:
     def test_from_slnc_resource_manager_error_tolerated(self, slnc_path):
         with (
             patch(
-                "domain.infrastructure._internal.resource_manager.get_resource_manager",
+                "domain.core.infrastructure._internal.resource_manager.get_resource_manager",
                 side_effect=RuntimeError("boom"),
             ),
             patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()),
@@ -417,7 +417,7 @@ class TestBuildPromptAndTokenizer:
 
     def test_load_tokenizer_success(self, real_provider):
         with patch(
-            "domain.infrastructure._internal.morph_tokenizer.MorphTokenizer.from_pretrained",
+            "domain.core.infrastructure._internal.morph_tokenizer.MorphTokenizer.from_pretrained",
             return_value=FakeTokenizer(),
         ) as mock_load:
             tok = real_provider._load_tokenizer(Path("."), _slnc_config())
@@ -426,7 +426,7 @@ class TestBuildPromptAndTokenizer:
 
     def test_load_tokenizer_failure_raises(self, real_provider):
         with patch(
-            "domain.infrastructure._internal.morph_tokenizer.MorphTokenizer.from_pretrained",
+            "domain.core.infrastructure._internal.morph_tokenizer.MorphTokenizer.from_pretrained",
             side_effect=RuntimeError("boom"),
         ):
             with pytest.raises(RuntimeError):

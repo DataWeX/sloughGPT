@@ -29,7 +29,7 @@ class TestHealthEndpoint:
     def test_health_check(self):
         """Test health check can be called."""
         # Simple test that the server state singleton exists
-        from domain.infrastructure._internal.server_state import get_server_state
+        from domain.core.infrastructure._internal.server_state import get_server_state
 
         state = get_server_state()
         assert state is not None
@@ -104,7 +104,11 @@ class TestQuantizationEndpoints:
 
     def test_quantization_type_validation(self):
         """Test quantization modes and dtypes exposed by Quantine."""
-        from domain.infrastructure._internal.quantization import QuantDtype, Quantine, QuantMode
+        from domain.core.infrastructure._internal.quantization import (
+            QuantDtype,
+            Quantine,
+            QuantMode,
+        )
 
         assert "symmetric" in [m.value for m in QuantMode]
         assert "asymmetric" in [m.value for m in QuantMode]
@@ -216,11 +220,11 @@ class TestAPIIntegration:
 
     def test_endpoints_exist(self):
         """Test that key domain functions exist."""
-        from domain.generate._internal.native.engine import NativeEngine
-        from domain.infrastructure._internal.quantization import (
+        from domain.core.infrastructure._internal.quantization import (
             quantize_state_dict,
             quantized_linear,
         )
+        from domain.generate._internal.native.engine import NativeEngine
 
         assert callable(quantize_state_dict)
         assert callable(quantized_linear)

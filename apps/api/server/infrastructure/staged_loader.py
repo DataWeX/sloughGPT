@@ -146,7 +146,7 @@ class StagedLoader:
         self._model_progress_message = message
         # Record metrics
         try:
-            from domain.infrastructure.metrics import get_metrics_collector
+            from domain.core.infrastructure.metrics import get_metrics_collector
 
             collector = get_metrics_collector()
             collector.record_startup_model_progress(progress)
@@ -253,7 +253,7 @@ class StagedLoader:
 
         # Record metrics
         try:
-            from domain.infrastructure.metrics import get_metrics_collector
+            from domain.core.infrastructure.metrics import get_metrics_collector
 
             collector = get_metrics_collector()
             collector.record_startup_stage(stage.name.lower(), int(stage), self.elapsed)
@@ -298,7 +298,7 @@ class StagedLoader:
                 viz.update_hook(name, "ok", info.duration * 1000)
                 # Record hook metrics
                 try:
-                    from domain.infrastructure.metrics import get_metrics_collector
+                    from domain.core.infrastructure.metrics import get_metrics_collector
 
                     collector = get_metrics_collector()
                     collector.record_startup_hook(name, info.duration)

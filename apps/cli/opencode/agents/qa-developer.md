@@ -22,7 +22,7 @@ core Python infrastructure in `domain/`.
 
 ## Scope
 
-- `domain/infrastructure/_internal/` — config, model loading,
+- `domain/core/infrastructure/_internal/` — config, model loading,
   quantization, process guard, event bus, task queue, lifecycle, etc.
 - `domain/training/_internal/` — SloNet, trainers, distillation,
   sequences, checkpoints.

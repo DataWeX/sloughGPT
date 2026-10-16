@@ -1,5 +1,5 @@
 """
-Registry Router - Proxies to the real ModelRegistry (domain.infrastructure.model_registry).
+Registry Router - Proxies to the real ModelRegistry (domain.core.infrastructure.model_registry).
 
 Previously used an in-memory dict that lost data on restart and was disconnected
 from the actual model serving layer. Now delegates to get_model_registry() so all
@@ -37,7 +37,7 @@ class RegistryRouter:
         self.router.add_api_route(path="/verify", endpoint=self.verify_artifacts, methods=["GET"])
 
     def _get_registry(self):
-        from domain.infrastructure.model_registry import get_model_registry
+        from domain.core.infrastructure.model_registry import get_model_registry
 
         return get_model_registry()
 
@@ -97,7 +97,7 @@ class RegistryRouter:
         """List artifacts across all kinds (Stage 1: read-only index)."""
         import asyncio as _aio
 
-        from domain.infrastructure._internal import artifact_registry as _ar
+        from domain.core.infrastructure._internal import artifact_registry as _ar
 
         if kind is not None and kind not in _ar.ARTIFACT_KINDS:
             raise_error(
@@ -124,7 +124,7 @@ class RegistryRouter:
         """Hash/size integrity check over artifacts (read-only, hashed in thread)."""
         import asyncio as _aio
 
-        from domain.infrastructure._internal import artifact_registry as _ar
+        from domain.core.infrastructure._internal import artifact_registry as _ar
 
         if kind is not None and kind not in _ar.ARTIFACT_KINDS:
             raise_error(

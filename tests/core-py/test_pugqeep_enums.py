@@ -1,11 +1,11 @@
-"""Tests for domain.infrastructure._internal.pugqeep — EvictionPolicy, Tier, ProcessStatus, StemStatus, PoolStatus, TaskStatus, TaskPriority, Task, CacheEntry, Process, etc."""
+"""Tests for domain.core.infrastructure._internal.pugqeep — EvictionPolicy, Tier, ProcessStatus, StemStatus, PoolStatus, TaskStatus, TaskPriority, Task, CacheEntry, Process, etc."""
 
 import time
 
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.pugqeep.cache import (
+from domain.core.infrastructure._internal.pugqeep.cache import (
     CacheEntry,
     CacheStats,
     DiskStore,
@@ -14,7 +14,7 @@ from domain.infrastructure._internal.pugqeep.cache import (
     MemoryStore,
     Tier,
 )
-from domain.infrastructure._internal.pugqeep.engine import (
+from domain.core.infrastructure._internal.pugqeep.engine import (
     EngineMetrics,
     Pool,
     PoolStatus,
@@ -24,7 +24,7 @@ from domain.infrastructure._internal.pugqeep.engine import (
     Stem,
     StemStatus,
 )
-from domain.infrastructure._internal.pugqeep.task_queue import (
+from domain.core.infrastructure._internal.pugqeep.task_queue import (
     Task,
     TaskPriority,
     TaskQueue,

@@ -224,8 +224,8 @@ module → module import graph out to **two hops**:
 
 ```text
   Suspects  reader reachable within 2 imports — verify, not verdicts
-  ✖ domain.infrastructure._internal.model_registry.get_model_registry
-      read via domain.infrastructure.model_registry
+  ✖ domain.core.infrastructure._internal.model_registry.get_model_registry
+      read via domain.core.infrastructure.model_registry
       controllers.models
       tests/test_training_distill.py
 ```

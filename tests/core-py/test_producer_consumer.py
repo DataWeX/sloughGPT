@@ -4,7 +4,7 @@ import asyncio
 import threading
 import time
 
-from domain.infrastructure._internal.producer_consumer import (
+from domain.core.infrastructure._internal.producer_consumer import (
     ProducerConsumerQueue,
     ShutdownMode,
     _PriorityItem,

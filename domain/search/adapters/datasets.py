@@ -23,7 +23,7 @@ class DatasetsAdapter:
 
     def _resolve(self):
         if self._repo is None:
-            from domain.infrastructure import get_dataset_repository
+            from domain.core.infrastructure import get_dataset_repository
 
             self._repo = get_dataset_repository()
         return self._repo

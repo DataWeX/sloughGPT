@@ -73,7 +73,7 @@ class SessionRouter:
         Existing code (e.g., ``main.py``) still calls this function. It now
         proxies to the unified ``SessionCore`` implementation.
         """
-        from domain.infrastructure.session_core import SessionCore
+        from domain.core.infrastructure.session_core import SessionCore
 
         return SessionCore.get_messages(session_id)
 
@@ -87,7 +87,7 @@ class SessionRouter:
         try:
             """Set session context (messages stored for regeneration)."""
             if ctx.messages:
-                from domain.infrastructure.session_core import SessionCore
+                from domain.core.infrastructure.session_core import SessionCore
 
                 result = SessionCore.store_context(session_id, ctx.messages)
                 safe_audit_log(
@@ -109,7 +109,7 @@ class SessionRouter:
 
         Used by the UI to load a chat history.
         """
-        from domain.infrastructure.session_core import SessionCore
+        from domain.core.infrastructure.session_core import SessionCore
 
         try:
             msgs = SessionCore.get_messages(session_id)
@@ -130,7 +130,7 @@ class SessionRouter:
         try:
 
             def _fetch_messages():
-                from domain.infrastructure.session_core import SessionCore
+                from domain.core.infrastructure.session_core import SessionCore
 
                 return SessionCore.get_messages(session_id)
 
@@ -178,7 +178,7 @@ class SessionRouter:
             def _fetch_workspace():
                 workspace = {"working_memory": [], "semantic_keys": [], "episodic_count": 0}
                 try:
-                    from domain.infrastructure.context_core import get_context_core
+                    from domain.core.infrastructure.context_core import get_context_core
 
                     cc = get_context_core()
                     insp = cc.get_context_inspector()
@@ -241,7 +241,7 @@ class SessionRouter:
         regenerate handler so there is one implementation.
         """
         try:
-            from domain.infrastructure.session_core import SessionCore
+            from domain.core.infrastructure.session_core import SessionCore
 
             if not SessionCore.get_messages(session_id):
                 return _sse_error_response("No session context found", "E_VAL_REQUEST", 400)

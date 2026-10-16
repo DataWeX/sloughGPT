@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "packages/core-py"))
 sys.path.insert(0, str(REPO_ROOT / "packages/mogdb/src"))
 
-from domain.infrastructure.training_pipeline import TrainingDataPipeline
+from domain.core.infrastructure.training_pipeline import TrainingDataPipeline
 
 # Start from a clean store so re-runs are deterministic
 DATA_DIR = Path("/tmp/demo_training")

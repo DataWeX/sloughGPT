@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.infrastructure._internal.metrics import (
+from domain.core.infrastructure._internal.metrics import (
     MetricsCollector,
     get_metrics_collector,
     reset_metrics_collector,

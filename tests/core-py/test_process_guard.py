@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domain.infrastructure._internal.process_guard import (
+from domain.core.infrastructure._internal.process_guard import (
     ProcessGuard,
     create_model_guard,
     create_slo_guard,
@@ -287,7 +287,7 @@ class TestProcessGuardGenerate:
         assert tokens == ["token1", "token2"]
 
     def test_generate_recover_from_stall(self):
-        from domain.infrastructure._internal.model_worker import WorkerStreamStalledError
+        from domain.core.infrastructure._internal.model_worker import WorkerStreamStalledError
 
         guard = ProcessGuard(max_restarts=3, restart_delay=0.0)
         mock_worker = MagicMock()
@@ -468,7 +468,7 @@ class TestProcessGuardProgressHeartbeat:
     def test_default_threshold_outlives_a_single_generate(self):
         """Must exceed DEFAULT_GENERATE_TIMEOUT, or a merely-slow request gets
         misreported as a livelock."""
-        from domain.infrastructure._internal.constants import (
+        from domain.core.infrastructure._internal.constants import (
             DEFAULT_GENERATE_TIMEOUT,
             DEFAULT_PROGRESS_STALL_TIMEOUT,
         )

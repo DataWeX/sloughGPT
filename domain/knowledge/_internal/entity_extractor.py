@@ -264,7 +264,7 @@ async def extract_facts_neural(user_msg: str, assistant_msg: str) -> list[str]:
     Returns a list of natural-language facts.
     """
     try:
-        from domain.infrastructure._internal.model_registry import get_model_registry
+        from domain.core.infrastructure._internal.model_registry import get_model_registry
 
         registry = get_model_registry()
         if not registry or not registry.list_models():

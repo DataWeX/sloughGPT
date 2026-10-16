@@ -33,6 +33,11 @@ from config import ServerConfig
 from config import gen_config as _gen_config
 from domain.agents import get_agent_system, get_tool_registry
 from domain.core import get_rag_service
+from domain.core.infrastructure import AppError
+from domain.core.infrastructure.cancel_manager import OpType, get_cancel_manager
+from domain.core.infrastructure.conversation_log import capture
+from domain.core.infrastructure.request_coalescer import get_coalescer
+from domain.core.infrastructure.server_state import get_server_state
 from domain.core.shared import utc_now_iso
 from domain.generate.models import (
     ConsciousnessProcessor,
@@ -40,11 +45,6 @@ from domain.generate.models import (
     apply_processors,
     get_provider,
 )
-from domain.infrastructure import AppError
-from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
-from domain.infrastructure.conversation_log import capture
-from domain.infrastructure.request_coalescer import get_coalescer
-from domain.infrastructure.server_state import get_server_state
 from domain.knowledge import KnowledgeFact, get_knowledge_memory
 from domain.memory import get_memory_service
 from domain.training.feedback import MetaWeights, get_response_tracker
@@ -83,7 +83,7 @@ def _model_ready() -> bool:
         return True
     # Lazy-guard path: provider lives in the core ServerState singleton
     # but state.__dict__["model"] stays None.
-    from domain.infrastructure.server_state import get_server_state
+    from domain.core.infrastructure.server_state import get_server_state
 
     core_model = get_server_state().model.get()
     if core_model is not None:
@@ -208,7 +208,7 @@ def _check_memory_pressure() -> str | None:
         if _memory_pressure_cache is not None and now - _memory_pressure_cache_ts < 2.0:
             return _memory_pressure_cache if _memory_pressure_cache else None
     try:
-        from domain.infrastructure.memory_pressure import (
+        from domain.core.infrastructure.memory_pressure import (
             PressureLevel,
             get_memory_pressure_monitor,
         )
@@ -617,7 +617,7 @@ def _search_sessions_sync(q: str, limit: int) -> list:
 
 
 # ── FileRepository-backed session store ──
-from domain.infrastructure.repository import FileRepository, Serializer
+from domain.core.infrastructure.repository import FileRepository, Serializer
 
 
 class _SessionDictSerializer(Serializer[dict]):
@@ -934,7 +934,7 @@ class InferenceRouter:
     def _get_context_core(self):
         if self._context_core is None:
             try:
-                from domain.infrastructure.context_core import get_context_core
+                from domain.core.infrastructure.context_core import get_context_core
 
                 self._context_core = get_context_core()
             except ImportError:
@@ -2816,7 +2816,7 @@ class InferenceRouter:
             except Exception as e:
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
-                from domain.infrastructure import classify_exception
+                from domain.core.infrastructure import classify_exception
 
                 classified = classify_exception(e)
                 err_code = classified.code or "E_INFRA_GENERATION"

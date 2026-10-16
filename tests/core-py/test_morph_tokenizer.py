@@ -2,8 +2,8 @@
 
 import pytest
 
-from domain.infrastructure._internal.model_resolver import get_model_dir
-from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+from domain.core.infrastructure._internal.model_resolver import get_model_dir
+from domain.core.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
 QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 

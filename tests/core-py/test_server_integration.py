@@ -19,16 +19,16 @@ from unittest.mock import patch
 import pytest
 
 pytestmark = pytest.mark.slow
-from domain.infrastructure._internal.event_bus import get_event_bus
-from domain.infrastructure._internal.model_registry import ModelRegistry, get_model_registry
-from domain.infrastructure._internal.model_server import (
+from domain.core.infrastructure._internal.event_bus import get_event_bus
+from domain.core.infrastructure._internal.model_registry import ModelRegistry, get_model_registry
+from domain.core.infrastructure._internal.model_server import (
     CircuitBreakerState,
     ModelServer,
     ModelStatus,
     Priority,
     PriorityRequestQueue,
 )
-from domain.infrastructure._internal.server_state import get_server_state
+from domain.core.infrastructure._internal.server_state import get_server_state
 
 # ── Mock model (torch-free) ──────────────────────────────────────────
 

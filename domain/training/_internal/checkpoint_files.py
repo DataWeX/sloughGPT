@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from domain.infrastructure._internal.atomic_write import is_temp_name
+from domain.core.infrastructure._internal.atomic_write import is_temp_name
 
 # Cap on a checkpoint stem. One number for every writer: the copies this
 # replaces disagreed (80 for feed stems, 120 everywhere else), and a reader

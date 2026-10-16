@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.pugqeep.generic import (
+from domain.core.infrastructure._internal.pugqeep.generic import (
     AutoStrategy,
     ClusterStrategy,
     CompressionStrategy,
@@ -21,7 +21,7 @@ from domain.infrastructure._internal.pugqeep.generic import (
     _FunctionTypeRegistry,
     registry,
 )
-from domain.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.pugqeep.point import Point
 
 
 class _CustomFunctionType(FunctionType):

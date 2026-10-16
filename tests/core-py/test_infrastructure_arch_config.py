@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.infrastructure._internal.arch_config import (
+from domain.core.infrastructure._internal.arch_config import (
     ArchConfig,
     build_arch,
 )

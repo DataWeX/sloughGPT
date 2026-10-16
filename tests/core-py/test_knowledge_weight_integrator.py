@@ -7,7 +7,7 @@ import types
 import numpy as np
 import pytest
 
-import domain.infrastructure._internal.knowledge_weight_integrator as ki
+import domain.core.infrastructure._internal.knowledge_weight_integrator as ki
 
 
 @pytest.fixture

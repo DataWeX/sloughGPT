@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.artifact_registry (Stage 1).
+"""Tests for domain.core.infrastructure._internal.artifact_registry (Stage 1).
 
 The registry is a read-only filesystem index. Tests redirect its roots
 into tmp dirs by patching ``scan_roots`` — no real repo layout needed.
@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from domain.infrastructure._internal import artifact_registry as reg
+from domain.core.infrastructure._internal import artifact_registry as reg
 
 
 def _roots(tmp: Path) -> dict[str, list[Path]]:

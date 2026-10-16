@@ -19,7 +19,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
 
-from domain.infrastructure.correlation import get_correlation_id
+from domain.core.infrastructure.correlation import get_correlation_id
 
 _audit_logger = logging.getLogger("audit")
 logger = logging.getLogger("slo.errors")
@@ -139,7 +139,7 @@ def raise_error(
 ) -> None:
     """Raise an AppError that the global exception handler converts to JSON.
 
-    Uses the unified ERROR_REGISTRY from domain.infrastructure._internal.errors to
+    Uses the unified ERROR_REGISTRY from domain.core.infrastructure._internal.errors to
     resolve the correct AppError subclass and HTTP status for each code.
 
     Two channels, per ``AppError``'s contract: ``message`` is developer detail
@@ -158,7 +158,7 @@ def raise_error(
     Raises:
         AppError (or subclass) — never returns.
     """
-    from domain.infrastructure._internal.errors import (
+    from domain.core.infrastructure._internal.errors import (
         ERROR_REGISTRY,
         AppError,
         ErrorCode,
@@ -192,7 +192,7 @@ def raise_error(
         class_name, default_status, _recoverable, _user_msg = info
 
     # Import the correct class dynamically
-    import domain.infrastructure._internal.errors as _err_mod
+    import domain.core.infrastructure._internal.errors as _err_mod
 
     exc_cls = getattr(_err_mod, class_name, AppError)
 
@@ -273,8 +273,8 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
     Raises:
         AppError (or subclass) — never returns.
     """
-    from domain.infrastructure._internal.errors import AppError as _AppError
-    from domain.infrastructure._internal.errors import classify_exception
+    from domain.core.infrastructure._internal.errors import AppError as _AppError
+    from domain.core.infrastructure._internal.errors import classify_exception
 
     try:
         err = classify_exception(e)

@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from domain.infrastructure._internal.watchdog import HealthWatchdog, get_watchdog
+from domain.core.infrastructure._internal.watchdog import HealthWatchdog, get_watchdog
 
 
 @pytest.fixture

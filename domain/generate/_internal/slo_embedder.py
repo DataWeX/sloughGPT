@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-from domain.infrastructure._internal.atomic_write import atomic_writer
+from domain.core.infrastructure._internal.atomic_write import atomic_writer
 
 logger = logging.getLogger(__name__)
 
@@ -557,7 +557,7 @@ def train_embedder(
     logger.info("Encoder params: %d tensors", len(params), extra={"tag": "INFRA"})
 
     # 2b. Load meaning tags (the stars — fixed semantic reference points)
-    from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+    from domain.core.infrastructure._internal.anchor_store import get_default_meaning_tags
 
     meaning_tags = get_default_meaning_tags(dimension=embed_dim)
     logger.info(
@@ -689,7 +689,7 @@ def train_embedder(
             )
 
         # Step B: Correct misclassified texts via TruthMaintainer
-        from domain.infrastructure._internal.truth_maintainer import get_truth_maintainer
+        from domain.core.infrastructure._internal.truth_maintainer import get_truth_maintainer
 
         maintainer = get_truth_maintainer()
         misclassified = maintainer.find_misclassified(texts, all_norm, meaning_tags)

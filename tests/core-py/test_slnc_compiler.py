@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.slnc.compiler — helper functions and SLNCCompiler."""
+"""Tests for domain.core.infrastructure._internal.slnc.compiler — helper functions and SLNCCompiler."""
 
 import struct
 import tempfile
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from domain.infrastructure._internal.slnc.compiler import (
+from domain.core.infrastructure._internal.slnc.compiler import (
     _ARCH_LAYOUTS,
     GPT2_BLOCK_LAYOUT,
     GPT2_NON_BLOCK_LAYOUT,
@@ -16,7 +16,7 @@ from domain.infrastructure._internal.slnc.compiler import (
     _crc32,
     _xxhash64,
 )
-from domain.infrastructure._internal.slnc.spec import (
+from domain.core.infrastructure._internal.slnc.spec import (
     ALIGNMENT,
     DTYPE_FLOAT32,
     DTYPE_MAP,
@@ -442,7 +442,7 @@ class TestSpecHelpers:
             dtype_to_code(np.float64)
 
     def test_code_to_dtype(self):
-        from domain.infrastructure._internal.slnc.spec import code_to_dtype
+        from domain.core.infrastructure._internal.slnc.spec import code_to_dtype
 
         assert code_to_dtype(0) == np.float32
         assert code_to_dtype(1) == np.float16
@@ -453,7 +453,7 @@ class TestSpecHelpers:
     def test_code_to_dtype_invalid(self):
         import pytest
 
-        from domain.infrastructure._internal.slnc.spec import code_to_dtype
+        from domain.core.infrastructure._internal.slnc.spec import code_to_dtype
 
         with pytest.raises(ValueError):
             code_to_dtype(999)

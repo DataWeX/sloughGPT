@@ -120,7 +120,7 @@ def test_optional_descriptor_param_defaults_in_query():
 
 
 def test_handler_error_is_classified_and_tagged_with_router_source():
-    from domain.infrastructure._internal.errors import AppError
+    from domain.core.infrastructure._internal.errors import AppError
 
     spec = _spec()
     with pytest.raises(AppError) as excinfo:

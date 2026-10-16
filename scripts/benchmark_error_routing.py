@@ -41,7 +41,7 @@ for _p in (REPO_ROOT, REPO_ROOT / "apps" / "api" / "server"):
 
 from schemas.common import error_response, raise_error  # noqa: E402
 
-from domain.infrastructure._internal.errors import (  # noqa: E402
+from domain.core.infrastructure._internal.errors import (  # noqa: E402
     ERROR_REGISTRY,
     AppError,
     ErrorCode,

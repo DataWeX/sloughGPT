@@ -1192,7 +1192,7 @@ def _create_file_handler(
 def _install_output_buffer_bridge(root: logging.Logger) -> Any | None:
     """Install the OutputBuffer log handler if available."""
     try:
-        from domain.infrastructure._internal.output_buffer import (
+        from domain.core.infrastructure._internal.output_buffer import (
             install_log_bridge,
             install_stdio_bridge,
         )

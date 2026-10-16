@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from domain.infrastructure._internal.repository import (
+from domain.core.infrastructure._internal.repository import (
     CachedRepository,
     FileRepository,
     JsonSerializer,

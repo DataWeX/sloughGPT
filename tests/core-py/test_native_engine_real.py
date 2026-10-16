@@ -18,6 +18,7 @@ import zlib
 import numpy as np
 import pytest
 
+from domain.core.infrastructure._internal.slnc.spec import compute_header_size
 from domain.generate._internal.ct_provider import CTransformProvider
 from domain.generate._internal.native import bindings as B
 from domain.generate._internal.native.engine import (
@@ -31,7 +32,6 @@ from domain.generate._internal.native.engine import (
     sample_token,
 )
 from domain.generate._internal.native.weight_mapper import map_slnc_to_native
-from domain.infrastructure._internal.slnc.spec import compute_header_size
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
 
@@ -643,7 +643,7 @@ class TestTokenizerWiring:
         assert tok == 0
 
     def test_load_from_slnc_hf_model_id_uses_real_tokenizer(self):
-        from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+        from domain.core.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
         try:
             real = MorphTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
@@ -832,7 +832,7 @@ class TestCTransformProvider:
         assert meta["has_tokenizer"] is True
 
     def test_from_slnc_roundtrip_slnc_parser(self, tmp_path):
-        from domain.infrastructure._internal.slnc.parser import SLNCParser
+        from domain.core.infrastructure._internal.slnc.parser import SLNCParser
 
         slnc_path = str(tmp_path / "tiny.slnc")
         w = _weights()

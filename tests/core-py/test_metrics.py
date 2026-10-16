@@ -4,7 +4,7 @@ Tests for the Prometheus metrics collector.
 
 import time
 
-from domain.infrastructure._internal.metrics import (
+from domain.core.infrastructure._internal.metrics import (
     MetricsCollector,
     get_metrics_collector,
     reset_metrics_collector,

@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.arch_config import ArchConfig
-from domain.infrastructure._internal.vector_backend import VectorBE
+from domain.core.infrastructure._internal.arch_config import ArchConfig
+from domain.core.infrastructure._internal.vector_backend import VectorBE
 
 
 def _make_arch():
@@ -210,12 +210,12 @@ class TestPoolStartMethod:
     """
 
     def test_helper_defaults_to_forkserver(self):
-        from domain.infrastructure._internal.vector_backend import _pool_start_method
+        from domain.core.infrastructure._internal.vector_backend import _pool_start_method
 
         assert _pool_start_method() == "forkserver"
 
     def test_helper_fork_escape_env(self, monkeypatch):
-        from domain.infrastructure._internal.vector_backend import _pool_start_method
+        from domain.core.infrastructure._internal.vector_backend import _pool_start_method
 
         monkeypatch.setenv("SLO_VECTOR_START_METHOD", "fork")
         assert _pool_start_method() == "fork"
@@ -226,7 +226,7 @@ class TestPoolStartMethod:
     def test_pool_context_fork_escape(self, monkeypatch):
         import multiprocessing as mp
 
-        from domain.infrastructure._internal.vector_backend import _pool_start_method
+        from domain.core.infrastructure._internal.vector_backend import _pool_start_method
 
         monkeypatch.setenv("SLO_VECTOR_START_METHOD", "fork")
         # Ctx-level only — no live Pool (see class docstring: live fork workers

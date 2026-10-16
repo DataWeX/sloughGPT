@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from threading import Thread
 
-from domain.infrastructure._internal.server_state import (
+from domain.core.infrastructure._internal.server_state import (
     AtomicRef,
     ServerState,
     get_server_state,

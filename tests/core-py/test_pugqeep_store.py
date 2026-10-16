@@ -1,10 +1,14 @@
-"""Tests for domain.infrastructure._internal.pugqeep.store — MemoryStore, JSONStore, DirectoryStore."""
+"""Tests for domain.core.infrastructure._internal.pugqeep.store — MemoryStore, JSONStore, DirectoryStore."""
 
 import tempfile
 from pathlib import Path
 
-from domain.infrastructure._internal.pugqeep.point import Point
-from domain.infrastructure._internal.pugqeep.store import DirectoryStore, JSONStore, MemoryStore
+from domain.core.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.pugqeep.store import (
+    DirectoryStore,
+    JSONStore,
+    MemoryStore,
+)
 
 
 def _make_point(identity="p1", function_type="periodic", params=None):

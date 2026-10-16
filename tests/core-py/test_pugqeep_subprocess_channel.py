@@ -15,14 +15,14 @@ import time
 
 import pytest
 
-from domain.infrastructure._internal.pugqeep import engine as engine_mod
-from domain.infrastructure._internal.pugqeep.config import SubprocessConfig
-from domain.infrastructure._internal.pugqeep.engine import (
+from domain.core.infrastructure._internal.pugqeep import engine as engine_mod
+from domain.core.infrastructure._internal.pugqeep.config import SubprocessConfig
+from domain.core.infrastructure._internal.pugqeep.engine import (
     Process,
     ProcessStatus,
     SubprocessProcess,
 )
-from domain.infrastructure._internal.pugqeep.frame import PROTOCOL_VERSION
+from domain.core.infrastructure._internal.pugqeep.frame import PROTOCOL_VERSION
 
 
 def _wait_done(proc: Process, timeout: float = 5.0) -> None:

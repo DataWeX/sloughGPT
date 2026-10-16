@@ -13,8 +13,8 @@ import types
 
 import pytest
 
-import domain.infrastructure._internal.metrics as _metrics
-from domain.infrastructure._internal.metrics import (
+import domain.core.infrastructure._internal.metrics as _metrics
+from domain.core.infrastructure._internal.metrics import (
     MetricsCollector,
     get_metrics_collector,
     reset_metrics_collector,

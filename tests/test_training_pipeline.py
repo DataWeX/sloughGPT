@@ -14,6 +14,7 @@ def load_module():
     path = (
         Path(__file__).resolve().parents[1]
         / "domain"
+        / "core"
         / "infrastructure"
         / "_internal"
         / "training_pipeline.py"

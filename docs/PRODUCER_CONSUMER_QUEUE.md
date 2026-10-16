@@ -15,7 +15,7 @@ Do not use for CPU-bound work that saturates cores — use `ProcessPoolExecutor`
 ## Quick start
 
 ```python
-from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue, ShutdownMode
+from domain.core.infrastructure._internal.producer_consumer import ProducerConsumerQueue, ShutdownMode
 
 # Create a queue with4 consumer threads
 q = ProducerConsumerQueue(
@@ -114,7 +114,7 @@ q.put(background_work, priority=2)  # processed last
 ## Global queue
 
 ```python
-from domain.infrastructure._internal.producer_consumer import get_producer_consumer_queue
+from domain.core.infrastructure._internal.producer_consumer import get_producer_consumer_queue
 
 q = get_producer_consumer_queue()  # lazy singleton, maxsize=256, 4 consumers
 ```

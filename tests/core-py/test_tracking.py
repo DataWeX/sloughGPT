@@ -37,7 +37,7 @@ def fake_config(monkeypatch):
         (),
         {"tracking": FakeTracking()},
     )
-    monkeypatch.setattr("domain.infrastructure._internal.config.get_config", lambda: cfg)
+    monkeypatch.setattr("domain.core.infrastructure._internal.config.get_config", lambda: cfg)
     monkeypatch.setattr("domain.training._internal.tracking.get_config", lambda: cfg)
 
 

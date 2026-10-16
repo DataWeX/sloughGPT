@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from domain.infrastructure._internal.numpy_ops import (
+from domain.core.infrastructure._internal.numpy_ops import (
     gelu,
     layer_norm,
     rmsnorm,

@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.pugqeep.dedup — PointDeduplicator and PointLibrarySync."""
+"""Tests for domain.core.infrastructure._internal.pugqeep.dedup — PointDeduplicator and PointLibrarySync."""
 
 import base64
 import json
@@ -7,9 +7,9 @@ from pathlib import Path
 
 import numpy as np
 
-from domain.infrastructure._internal.pugqeep.dedup import PointDeduplicator, PointLibrarySync
-from domain.infrastructure._internal.pugqeep.library import PointLibrary
-from domain.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.pugqeep.dedup import PointDeduplicator, PointLibrarySync
+from domain.core.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.core.infrastructure._internal.pugqeep.point import Point
 
 
 class TestPointDeduplicator:

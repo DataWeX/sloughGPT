@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from domain.infrastructure._internal.download_backend import DownloadBackend
-from domain.infrastructure._internal.local_download import LocalFileBackend
+from domain.core.infrastructure._internal.download_backend import DownloadBackend
+from domain.core.infrastructure._internal.local_download import LocalFileBackend
 
 
 class TestLocalFileBackend:

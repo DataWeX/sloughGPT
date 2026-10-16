@@ -35,7 +35,7 @@ class TestSetSessionContext:
         sr = SessionRouter()
         mock_sc = MagicMock()
         mock_sc.store_context.return_value = {"session_id": "s1", "message_count": 2}
-        with patch("domain.infrastructure.session_core.SessionCore", mock_sc):
+        with patch("domain.core.infrastructure.session_core.SessionCore", mock_sc):
             client = TestClient(_app(sr))
             resp = client.post(
                 "/session/s1/context", json={"messages": [{"role": "user", "content": "hi"}]}
@@ -56,7 +56,7 @@ class TestGetSessionMessages:
         sr = SessionRouter()
         mock_sc = MagicMock()
         mock_sc.get_messages.return_value = [{"role": "user", "content": "hi"}]
-        with patch("domain.infrastructure.session_core.SessionCore", mock_sc):
+        with patch("domain.core.infrastructure.session_core.SessionCore", mock_sc):
             client = TestClient(_app(sr))
             resp = client.get("/session/s1/messages")
         assert resp.status_code == 200
@@ -67,7 +67,7 @@ class TestGetSessionMessages:
         sr = SessionRouter()
         mock_sc = MagicMock()
         mock_sc.get_messages.return_value = []
-        with patch("domain.infrastructure.session_core.SessionCore", mock_sc):
+        with patch("domain.core.infrastructure.session_core.SessionCore", mock_sc):
             client = TestClient(_app(sr))
             resp = client.get("/session/s1/messages")
         assert resp.status_code == 200
@@ -93,7 +93,7 @@ class TestGetSessionInspector:
             "episodic_count": 0,
         }
         with (
-            patch("domain.infrastructure.session_core.SessionCore", mock_sc),
+            patch("domain.core.infrastructure.session_core.SessionCore", mock_sc),
             patch(
                 "domain.training.feedback.get_message_feedback",
                 return_value=mock_fb,
@@ -105,7 +105,7 @@ class TestGetSessionInspector:
             patch("domain.cognition.context.StyleManager"),
             patch("domain.cognition.context.TaskManager"),
             patch(
-                "domain.infrastructure.context_core.get_context_core",
+                "domain.core.infrastructure.context_core.get_context_core",
                 return_value=mock_cc,
             ),
         ):

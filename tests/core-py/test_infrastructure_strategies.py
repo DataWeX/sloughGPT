@@ -6,8 +6,8 @@ import base64
 
 import numpy as np
 
-from domain.infrastructure._internal.pugqeep.point import Point
-from domain.infrastructure._internal.pugqeep.strategies import RawStrategy
+from domain.core.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.pugqeep.strategies import RawStrategy
 
 
 class TestRawStrategy:

@@ -15,18 +15,18 @@ import time
 
 import pytest
 
-# One canonical root throughout. The domain.infrastructure._internal shim
+# One canonical root throughout. The domain.core.infrastructure._internal shim
 # re-executes each real module under its own name (its package __init__
 # overwrites __path__), so a class imported from there is NOT the class the
 # engine raises -- pytest.raises would silently fail to match.
-from domain.infrastructure._internal.pugqeep import (
+from domain.core.infrastructure._internal.pugqeep import (
     DEFAULT_CAPACITY,
     Pipe,
     PipeClosed,
     ProcessQueue,
 )
-from domain.infrastructure._internal.pugqeep.config import EngineConfig
-from domain.infrastructure._internal.pugqeep.engine import Engine, Pool, Process, Stem
+from domain.core.infrastructure._internal.pugqeep.config import EngineConfig
+from domain.core.infrastructure._internal.pugqeep.engine import Engine, Pool, Process, Stem
 
 
 class _Stub:

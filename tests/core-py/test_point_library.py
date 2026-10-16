@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.model_resolver import find_safetensors, get_model_dir
-from domain.infrastructure._internal.point_compressor import (
+from domain.core.infrastructure._internal.model_resolver import find_safetensors, get_model_dir
+from domain.core.infrastructure._internal.point_compressor import (
     ModelTree,
     Point,
     PointCompressor,
@@ -475,7 +475,7 @@ class TestNumpyEngineModelTree:
 
     def test_numpy_engine_with_model_tree(self):
         """NumpyEngine stores weights as Points via ModelTree."""
-        from domain.infrastructure._internal.numpy_engine import NumpyEngine
+        from domain.core.infrastructure._internal.numpy_engine import NumpyEngine
 
         config = {
             "architectures": ["GPT2LMHeadModel"],
@@ -519,7 +519,7 @@ class TestNumpyEngineModelTree:
     def test_numpy_engine_from_pretrained_with_points(self):
         """NumpyEngine.from_pretrained with use_points=True."""
         pytest.importorskip("safetensors")
-        from domain.infrastructure._internal.numpy_engine import NumpyEngine
+        from domain.core.infrastructure._internal.numpy_engine import NumpyEngine
 
         engine = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, n_clusters=8)
 
@@ -539,7 +539,7 @@ class TestNumpyEngineModelTree:
     def test_numpy_engine_from_pretrained_with_shared_library(self):
         """Two engines share the same PointLibrary via ModelTree."""
         pytest.importorskip("safetensors")
-        from domain.infrastructure._internal.numpy_engine import NumpyEngine
+        from domain.core.infrastructure._internal.numpy_engine import NumpyEngine
 
         lib = PointLibrary(name="shared")
         e1 = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, library=lib)
@@ -556,7 +556,7 @@ class TestNumpyEngineModelTree:
     def test_points_persistence(self):
         """Save PointLibrary from NumpyEngine, load and verify."""
         pytest.importorskip("safetensors")
-        from domain.infrastructure._internal.numpy_engine import NumpyEngine
+        from domain.core.infrastructure._internal.numpy_engine import NumpyEngine
 
         engine = NumpyEngine.from_pretrained(QWEN2_ID, use_points=True, n_clusters=8)
         lib = engine._model_tree.library
@@ -580,7 +580,7 @@ class TestNumpyEngineModelTree:
 
 class TestPointDeduplicator:
     def test_find_duplicates(self):
-        from domain.infrastructure._internal.point_compressor import PointDeduplicator
+        from domain.core.infrastructure._internal.point_compressor import PointDeduplicator
 
         centroids = np.array([0.1, 0.5, 0.9], dtype=np.float32)
         assignments = np.array([0, 1, 2, 0, 1], dtype=np.uint8)
@@ -610,7 +610,7 @@ class TestPointDeduplicator:
         assert len(groups[0]) == 2
 
     def test_deduplicate_merges(self):
-        from domain.infrastructure._internal.point_compressor import PointDeduplicator
+        from domain.core.infrastructure._internal.point_compressor import PointDeduplicator
 
         centroids = np.array([0.1, 0.5, 0.9], dtype=np.float32)
         assignments = np.array([0, 1, 2, 0, 1], dtype=np.uint8)
@@ -637,7 +637,7 @@ class TestPointDeduplicator:
         assert stats["groups"] == 1
 
     def test_no_duplicates(self):
-        from domain.infrastructure._internal.point_compressor import PointDeduplicator
+        from domain.core.infrastructure._internal.point_compressor import PointDeduplicator
 
         lib1 = PointLibrary("lib1")
         lib2 = PointLibrary("lib2")
@@ -663,7 +663,7 @@ class TestPointDeduplicator:
         assert len(groups) == 0
 
     def test_keep_first_occurrence(self):
-        from domain.infrastructure._internal.point_compressor import PointDeduplicator
+        from domain.core.infrastructure._internal.point_compressor import PointDeduplicator
 
         cents = np.array([0.1, 0.5, 0.9], dtype=np.float32)
         assns = np.array([0, 1, 2], dtype=np.uint8)
@@ -687,7 +687,7 @@ class TestPointDeduplicator:
         assert not lib2.has("remove_this")
 
     def test_different_types_not_duplicates(self):
-        from domain.infrastructure._internal.point_compressor import PointDeduplicator
+        from domain.core.infrastructure._internal.point_compressor import PointDeduplicator
 
         lib1 = PointLibrary("lib1")
         lib2 = PointLibrary("lib2")
@@ -702,7 +702,7 @@ class TestPointDeduplicator:
 
     def test_multi_model_sharing(self):
         """Two models sharing a library — dedup should find cross-model duplicates."""
-        from domain.infrastructure._internal.point_compressor import PointDeduplicator
+        from domain.core.infrastructure._internal.point_compressor import PointDeduplicator
 
         shared_cents = np.linspace(-1, 1, 16).astype(np.float32)
         shared_assns = np.random.randint(0, 16, size=512).astype(np.uint8)
@@ -728,7 +728,7 @@ class TestPointDeduplicator:
 
 class TestPointLibrarySync:
     def test_export_import_bytes(self):
-        from domain.infrastructure._internal.point_compressor import PointLibrarySync
+        from domain.core.infrastructure._internal.point_compressor import PointLibrarySync
 
         lib = PointLibrary("sync_test")
         lib.add(Point("p1", "linear", {"a": 1.0, "b": 0.0}, accuracy=0.9))
@@ -754,7 +754,7 @@ class TestPointLibrarySync:
         assert restored.get("p1").params["a"] == pytest.approx(1.0)
 
     def test_sync_to_directory(self):
-        from domain.infrastructure._internal.point_compressor import PointLibrarySync
+        from domain.core.infrastructure._internal.point_compressor import PointLibrarySync
 
         lib = PointLibrary("dir_sync_test")
         lib.add(Point("p1", "linear", {"a": 1.0, "b": 0.0}))
@@ -766,7 +766,7 @@ class TestPointLibrarySync:
             assert path.name == "dir_sync_test.points.json"
 
     def test_sync_from_directory(self):
-        from domain.infrastructure._internal.point_compressor import PointLibrarySync
+        from domain.core.infrastructure._internal.point_compressor import PointLibrarySync
 
         lib = PointLibrary("dir_load_test")
         lib.add(Point("p1", "linear", {"a": 1.0, "b": 0.0}))
@@ -779,7 +779,7 @@ class TestPointLibrarySync:
             assert loaded.stats()["total_points"] == 1
 
     def test_sync_from_directory_not_found(self):
-        from domain.infrastructure._internal.point_compressor import PointLibrarySync
+        from domain.core.infrastructure._internal.point_compressor import PointLibrarySync
 
         sync = PointLibrarySync()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -787,7 +787,7 @@ class TestPointLibrarySync:
             assert loaded is None
 
     def test_merge_libraries(self):
-        from domain.infrastructure._internal.point_compressor import PointLibrarySync
+        from domain.core.infrastructure._internal.point_compressor import PointLibrarySync
 
         lib1 = PointLibrary("merge_1")
         lib2 = PointLibrary("merge_2")
@@ -802,7 +802,7 @@ class TestPointLibrarySync:
         assert merged.stats()["total_points"] == 3
 
     def test_roundtrip_persistence(self):
-        from domain.infrastructure._internal.point_compressor import PointLibrarySync
+        from domain.core.infrastructure._internal.point_compressor import PointLibrarySync
 
         lib = PointLibrary("roundtrip")
         for i in range(5):
@@ -875,7 +875,7 @@ class TestPointBytes:
             Point.from_bytes(b"\x00\x00\x00\x00")
 
     def test_from_bytes_unknown_function_type_raises(self, monkeypatch):
-        import domain.infrastructure._internal.pugqeep.point as point_module
+        import domain.core.infrastructure._internal.pugqeep.point as point_module
 
         decode = dict(point_module.Point._TYPE_DECODE)
         decode[b"ZZZZ"] = "mystery"
@@ -931,7 +931,7 @@ class TestPointBytes:
 
 class TestPointLibraryCoverage:
     def test_remove_auto_save(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.config import LibraryConfig
+        from domain.core.infrastructure._internal.pugqeep.config import LibraryConfig
 
         cfg = LibraryConfig(name="autosave", auto_save=True, storage_dir=tmp_path)
         lib = PointLibrary(config=cfg)

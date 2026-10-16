@@ -1,8 +1,8 @@
-"""Tests for domain.infrastructure.spaced_repetition_engine."""
+"""Tests for domain.core.infrastructure.spaced_repetition_engine."""
 
 import time
 
-from domain.infrastructure._internal.spaced_repetition_engine import SpacedRepetitionScheduler
+from domain.core.infrastructure._internal.spaced_repetition_engine import SpacedRepetitionScheduler
 
 
 class TestSpacedRepetitionSchedulerInit:

@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.pugqeep.cache — CacheEntry, CacheStats, MemoryStore, DiskStore, TieredCache."""
+"""Tests for domain.core.infrastructure._internal.pugqeep.cache — CacheEntry, CacheStats, MemoryStore, DiskStore, TieredCache."""
 
 import tempfile
 import time
@@ -10,7 +10,7 @@ import pytest
 
 class TestCacheEntry:
     def test_touch(self):
-        from domain.infrastructure._internal.pugqeep.cache import CacheEntry, Tier
+        from domain.core.infrastructure._internal.pugqeep.cache import CacheEntry, Tier
 
         entry = CacheEntry(key="k", tier=Tier.MEMORY)
         assert entry.access_count == 0
@@ -20,20 +20,20 @@ class TestCacheEntry:
         assert entry.access_count == 2
 
     def test_is_expired_no_ttl(self):
-        from domain.infrastructure._internal.pugqeep.cache import CacheEntry, Tier
+        from domain.core.infrastructure._internal.pugqeep.cache import CacheEntry, Tier
 
         entry = CacheEntry(key="k", tier=Tier.MEMORY)
         assert entry.is_expired() is False
 
     def test_is_expired_with_ttl(self):
-        from domain.infrastructure._internal.pugqeep.cache import CacheEntry, Tier
+        from domain.core.infrastructure._internal.pugqeep.cache import CacheEntry, Tier
 
         entry = CacheEntry(key="k", tier=Tier.MEMORY, ttl=0.01)
         time.sleep(0.02)
         assert entry.is_expired() is True
 
     def test_is_not_expired_within_ttl(self):
-        from domain.infrastructure._internal.pugqeep.cache import CacheEntry, Tier
+        from domain.core.infrastructure._internal.pugqeep.cache import CacheEntry, Tier
 
         entry = CacheEntry(key="k", tier=Tier.MEMORY, ttl=10.0)
         assert entry.is_expired() is False
@@ -41,19 +41,19 @@ class TestCacheEntry:
 
 class TestCacheStats:
     def test_hit_rate_zero(self):
-        from domain.infrastructure._internal.pugqeep.cache import CacheStats
+        from domain.core.infrastructure._internal.pugqeep.cache import CacheStats
 
         stats = CacheStats()
         assert stats.hit_rate == 0.0
 
     def test_hit_rate(self):
-        from domain.infrastructure._internal.pugqeep.cache import CacheStats
+        from domain.core.infrastructure._internal.pugqeep.cache import CacheStats
 
         stats = CacheStats(hits=3, misses=1)
         assert stats.hit_rate == pytest.approx(0.75)
 
     def test_hit_rate_all_hits(self):
-        from domain.infrastructure._internal.pugqeep.cache import CacheStats
+        from domain.core.infrastructure._internal.pugqeep.cache import CacheStats
 
         stats = CacheStats(hits=10, misses=0)
         assert stats.hit_rate == 1.0
@@ -61,20 +61,20 @@ class TestCacheStats:
 
 class TestMemoryStore:
     def test_put_get(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore()
         store.put("a", "value_a")
         assert store.get("a") == "value_a"
 
     def test_get_miss(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore()
         assert store.get("missing") is None
 
     def test_remove(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore()
         store.put("a", 1)
@@ -82,13 +82,13 @@ class TestMemoryStore:
         assert store.get("a") is None
 
     def test_remove_nonexistent(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore()
         assert store.remove("nope") is False
 
     def test_exists(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore()
         store.put("x", 42)
@@ -96,7 +96,7 @@ class TestMemoryStore:
         assert store.exists("y") is False
 
     def test_list_keys(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore()
         store.put("b", 2)
@@ -105,7 +105,7 @@ class TestMemoryStore:
         assert set(keys) == {"a", "b"}
 
     def test_size_bytes(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore()
         store.put("a", 1, size_bytes=100)
@@ -113,7 +113,7 @@ class TestMemoryStore:
         assert store.size_bytes() == 300
 
     def test_lru_eviction(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore(max_size_bytes=300)
         store.put("a", 1, size_bytes=100)
@@ -126,7 +126,7 @@ class TestMemoryStore:
         assert store.get("a") is None
 
     def test_lfu_eviction(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore(max_size_bytes=300)
         store.put("a", 1, size_bytes=100)
@@ -143,7 +143,7 @@ class TestMemoryStore:
         assert store.exists("a") is True
 
     def test_lru_eviction_order(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore(max_size_bytes=300)
         store.put("a", 1, size_bytes=100)
@@ -156,7 +156,7 @@ class TestMemoryStore:
         assert evicted[0][0] == "a"
 
     def test_put_existing_moves_to_end(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore
+        from domain.core.infrastructure._internal.pugqeep.cache import MemoryStore
 
         store = MemoryStore(max_size_bytes=200)
         store.put("a", 1, size_bytes=100)
@@ -169,7 +169,7 @@ class TestMemoryStore:
 
 class TestDiskStore:
     def test_put_get_scalar(self):
-        from domain.infrastructure._internal.pugqeep.cache import DiskStore
+        from domain.core.infrastructure._internal.pugqeep.cache import DiskStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store = DiskStore(Path(tmp))
@@ -177,7 +177,7 @@ class TestDiskStore:
             assert store.get("key1") == "hello"
 
     def test_put_get_ndarray(self):
-        from domain.infrastructure._internal.pugqeep.cache import DiskStore
+        from domain.core.infrastructure._internal.pugqeep.cache import DiskStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store = DiskStore(Path(tmp))
@@ -187,14 +187,14 @@ class TestDiskStore:
             np.testing.assert_array_equal(result, arr)
 
     def test_get_miss(self):
-        from domain.infrastructure._internal.pugqeep.cache import DiskStore
+        from domain.core.infrastructure._internal.pugqeep.cache import DiskStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store = DiskStore(Path(tmp))
             assert store.get("missing") is None
 
     def test_remove(self):
-        from domain.infrastructure._internal.pugqeep.cache import DiskStore
+        from domain.core.infrastructure._internal.pugqeep.cache import DiskStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store = DiskStore(Path(tmp))
@@ -203,14 +203,14 @@ class TestDiskStore:
             assert store.get("k") is None
 
     def test_remove_nonexistent(self):
-        from domain.infrastructure._internal.pugqeep.cache import DiskStore
+        from domain.core.infrastructure._internal.pugqeep.cache import DiskStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store = DiskStore(Path(tmp))
             assert store.remove("nope") is False
 
     def test_exists(self):
-        from domain.infrastructure._internal.pugqeep.cache import DiskStore
+        from domain.core.infrastructure._internal.pugqeep.cache import DiskStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store = DiskStore(Path(tmp))
@@ -219,7 +219,7 @@ class TestDiskStore:
             assert store.exists("y") is False
 
     def test_list_keys(self):
-        from domain.infrastructure._internal.pugqeep.cache import DiskStore
+        from domain.core.infrastructure._internal.pugqeep.cache import DiskStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store = DiskStore(Path(tmp))
@@ -229,7 +229,7 @@ class TestDiskStore:
             assert set(keys) == {"a", "b"}
 
     def test_size_bytes(self):
-        from domain.infrastructure._internal.pugqeep.cache import DiskStore
+        from domain.core.infrastructure._internal.pugqeep.cache import DiskStore
 
         with tempfile.TemporaryDirectory() as tmp:
             store = DiskStore(Path(tmp))
@@ -239,20 +239,20 @@ class TestDiskStore:
 
 class TestTieredCache:
     def test_put_get_memory(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         cache.put("k", "value", tier=Tier.MEMORY)
         assert cache.get("k") == "value"
 
     def test_get_miss(self):
-        from domain.infrastructure._internal.pugqeep.cache import TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         assert cache.get("missing") is None
 
     def test_exists(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         cache.put("k", "v", tier=Tier.MEMORY)
@@ -260,7 +260,7 @@ class TestTieredCache:
         assert cache.exists("nope") is False
 
     def test_remove(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         cache.put("k", "v", tier=Tier.MEMORY)
@@ -269,13 +269,13 @@ class TestTieredCache:
         assert cache.exists("k") is False
 
     def test_remove_nonexistent(self):
-        from domain.infrastructure._internal.pugqeep.cache import TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         assert cache.remove("nope") is False
 
     def test_ttl_expiration(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         cache.put("k", "v", tier=Tier.MEMORY, ttl=0.01)
@@ -283,7 +283,7 @@ class TestTieredCache:
         assert cache.get("k") is None
 
     def test_list_keys_all(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         cache.put("a", 1, tier=Tier.MEMORY)
@@ -292,7 +292,7 @@ class TestTieredCache:
         assert set(keys) == {"a", "b"}
 
     def test_list_keys_by_tier(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         cache.put("a", 1, tier=Tier.MEMORY)
@@ -303,7 +303,7 @@ class TestTieredCache:
         assert hot_keys == ["b"]
 
     def test_stats(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         cache.put("a", 1, tier=Tier.MEMORY, size_bytes=100)
@@ -317,7 +317,7 @@ class TestTieredCache:
         assert stats["eviction_policy"] == "lru"
 
     def test_ndarray_size_auto(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         arr = np.zeros((10,), dtype=np.float32)
@@ -326,7 +326,7 @@ class TestTieredCache:
         assert stats["tier_sizes"]["memory"] == arr.nbytes
 
     def test_pinned_not_evicted(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1, disk_dir=Path(tempfile.mkdtemp()))
         # Put many small items to trigger eviction, one pinned
@@ -336,7 +336,7 @@ class TestTieredCache:
         assert cache.exists("pinned") is True
 
     def test_cleanup_expired(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         cache.put("a", 1, tier=Tier.MEMORY, ttl=0.01)
@@ -348,14 +348,14 @@ class TestTieredCache:
         assert cache.exists("b") is True
 
     def test_hot_store_put_get(self):
-        from domain.infrastructure._internal.pugqeep.cache import HotStore
+        from domain.core.infrastructure._internal.pugqeep.cache import HotStore
 
         store = HotStore()
         store.put("k", "v")
         assert store.get("k") == "v"
 
     def test_hot_store_remove(self):
-        from domain.infrastructure._internal.pugqeep.cache import HotStore
+        from domain.core.infrastructure._internal.pugqeep.cache import HotStore
 
         store = HotStore()
         store.put("k", "v")
@@ -363,7 +363,7 @@ class TestTieredCache:
         assert store.get("k") is None
 
     def test_hot_store_exists(self):
-        from domain.infrastructure._internal.pugqeep.cache import HotStore
+        from domain.core.infrastructure._internal.pugqeep.cache import HotStore
 
         store = HotStore()
         store.put("x", 1)
@@ -371,7 +371,7 @@ class TestTieredCache:
         assert store.exists("y") is False
 
     def test_hot_store_list_keys(self):
-        from domain.infrastructure._internal.pugqeep.cache import HotStore
+        from domain.core.infrastructure._internal.pugqeep.cache import HotStore
 
         store = HotStore()
         store.put("a", 1)
@@ -379,7 +379,7 @@ class TestTieredCache:
         assert set(store.list_keys()) == {"a", "b"}
 
     def test_hot_store_size_bytes(self):
-        from domain.infrastructure._internal.pugqeep.cache import HotStore
+        from domain.core.infrastructure._internal.pugqeep.cache import HotStore
 
         store = HotStore()
         store.put("a", 1, size_bytes=50)
@@ -387,7 +387,7 @@ class TestTieredCache:
         assert store.size_bytes() == 100
 
     def test_disk_tier(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         with tempfile.TemporaryDirectory() as tmp:
             cache = TieredCache(memory_max_mb=1, hot_max_mb=1, disk_dir=Path(tmp))
@@ -396,7 +396,11 @@ class TestTieredCache:
             assert result == "disk_value"
 
     def test_evict_memory_demotes_to_hot(self):
-        from domain.infrastructure._internal.pugqeep.cache import MemoryStore, Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import (
+            MemoryStore,
+            Tier,
+            TieredCache,
+        )
 
         with tempfile.TemporaryDirectory() as tmp:
             cache = TieredCache(memory_max_mb=1, hot_max_mb=1, disk_dir=Path(tmp))
@@ -413,7 +417,7 @@ class TestTieredCache:
             assert entry_k.tier == Tier.HOT
 
     def test_auto_promote_hot_to_memory(self):
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1, promote_threshold=2)
         cache.put("k", "v", tier=Tier.HOT)
@@ -425,7 +429,7 @@ class TestTieredCache:
     def test_thread_safety(self):
         import concurrent.futures
 
-        from domain.infrastructure._internal.pugqeep.cache import Tier, TieredCache
+        from domain.core.infrastructure._internal.pugqeep.cache import Tier, TieredCache
 
         cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
         errors = []

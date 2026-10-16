@@ -1042,10 +1042,10 @@ class TestCPUBackend:
         monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
         monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
         # Must match the path the implementation actually imports. The bare
-        # `domain.infrastructure.resource_manager` shim exists as well, but
+        # `domain.core.infrastructure.resource_manager` shim exists as well, but
         # openblas_threads imports the `_internal` module, so patching the shim
         # left the real lookup intact and the intended fallback never fired.
-        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.resource_manager", None)
+        monkeypatch.setitem(sys.modules, "domain.core.infrastructure._internal.resource_manager", None)
         n = cpu.openblas_threads()
         assert n == max(1, (os.cpu_count() or 1) - 1)
 
@@ -1093,12 +1093,12 @@ class TestCPUBackend:
 class TestGpuBackends:
     def test_metal_not_available_without_mps(self, monkeypatch):
         monkeypatch.setattr(
-            "domain.infrastructure._internal.ml_types._mps_available", lambda: False
+            "domain.core.infrastructure._internal.ml_types._mps_available", lambda: False
         )
         assert slib._MetalBackend().is_available() is False
 
     def test_metal_is_available_when_mps_detected(self, monkeypatch):
-        monkeypatch.setattr("domain.infrastructure._internal.ml_types._mps_available", lambda: True)
+        monkeypatch.setattr("domain.core.infrastructure._internal.ml_types._mps_available", lambda: True)
         backend = slib._MetalBackend()
         assert backend.is_available() is True
 
@@ -1488,13 +1488,13 @@ class TestMetalBackendNumpy:
         assert backend.is_available() is (sys.platform == "darwin")
 
     def test_metal_available_when_mps_detected(self, monkeypatch):
-        monkeypatch.setattr("domain.infrastructure._internal.ml_types._mps_available", lambda: True)
+        monkeypatch.setattr("domain.core.infrastructure._internal.ml_types._mps_available", lambda: True)
         backend = slib._MetalBackend()
         assert backend.is_available() is True
 
     def test_metal_unavailable_when_mps_absent(self, monkeypatch):
         monkeypatch.setattr(
-            "domain.infrastructure._internal.ml_types._mps_available", lambda: False
+            "domain.core.infrastructure._internal.ml_types._mps_available", lambda: False
         )
         backend = slib._MetalBackend()
         assert backend.is_available() is False

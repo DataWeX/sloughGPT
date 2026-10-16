@@ -236,7 +236,7 @@ class TestColdStartPrefixSuppression:
 
 class TestMetrics:
     def test_request_recorded(self):
-        from domain.infrastructure.metrics import get_metrics_collector
+        from domain.core.infrastructure.metrics import get_metrics_collector
 
         collector = get_metrics_collector()
         before = collector._request_count.get("/ok", 0)
@@ -246,7 +246,7 @@ class TestMetrics:
         assert collector._request_count.get("/ok", 0) == before + 1
 
     def test_error_recorded(self):
-        from domain.infrastructure.metrics import get_metrics_collector
+        from domain.core.infrastructure.metrics import get_metrics_collector
 
         collector = get_metrics_collector()
         before = collector._request_errors.get("/fail", 0)
@@ -256,7 +256,7 @@ class TestMetrics:
         assert collector._request_errors.get("/fail", 0) == before + 1
 
     def test_active_requests_returns_to_baseline(self):
-        from domain.infrastructure.metrics import get_metrics_collector
+        from domain.core.infrastructure.metrics import get_metrics_collector
 
         collector = get_metrics_collector()
         baseline = collector.get_active_requests()

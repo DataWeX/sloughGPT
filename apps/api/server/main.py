@@ -110,7 +110,7 @@ async def lifespan(app_inst: FastAPI):
 
         # Wire new typed config system (deferred from module level)
         try:
-            from domain.infrastructure._internal.config import get_config
+            from domain.core.infrastructure._internal.config import get_config
 
             _new_cfg = get_config()
             logger.info(
@@ -125,7 +125,7 @@ async def lifespan(app_inst: FastAPI):
 
         # Start PGQ core infra engine (background thread)
         try:
-            from domain.infrastructure.pugqeep import PGQ
+            from domain.core.infrastructure.pugqeep import PGQ
 
             _pgq_engine = PGQ("sloughgpt")
             logger.info("PGQ core engine created", extra={"tag": "START"})
@@ -168,7 +168,7 @@ async def lifespan(app_inst: FastAPI):
         # Start idle manager if configured
         if cfg.idle_timeout_seconds > 0:
             try:
-                from domain.infrastructure.model_server import get_idle_manager
+                from domain.core.infrastructure.model_server import get_idle_manager
 
                 idle_mgr = get_idle_manager()
                 idle_mgr._idle_timeout_s = cfg.idle_timeout_seconds
@@ -187,7 +187,7 @@ async def lifespan(app_inst: FastAPI):
 
         # Stop idle manager
         try:
-            from domain.infrastructure.model_server import get_idle_manager
+            from domain.core.infrastructure.model_server import get_idle_manager
 
             get_idle_manager().shutdown()
         except Exception as e:
@@ -522,7 +522,7 @@ def _start_health_monitor() -> None:
 def _start_watchdog() -> None:
     """Start the health watchdog that auto-recovers from server crashes."""
     try:
-        from domain.infrastructure.watchdog import get_watchdog
+        from domain.core.infrastructure.watchdog import get_watchdog
 
         enabled = os.environ.get("SLO_WATCHDOG", "true").lower() == "true"
         if not enabled:

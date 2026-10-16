@@ -58,7 +58,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.infrastructure._internal.pugqeep import Point, PointCompressor, PointLibrary
+from domain.core.infrastructure._internal.pugqeep import Point, PointCompressor, PointLibrary
 from domain.training._internal.tokenizer import default_pretokenize, gpt2_pretokenize
 
 logger = logging.getLogger("slo.token_tree")

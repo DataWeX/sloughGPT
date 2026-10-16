@@ -1,4 +1,4 @@
-"""Tests for domain/infrastructure/_internal/gateway_bandwidth.py.
+"""Tests for domain/core/infrastructure/_internal/gateway_bandwidth.py.
 
 Covers the mirror's four contracts:
   1. Delta math — baseline, idle silence, counter resets, expansion.
@@ -17,6 +17,11 @@ import time
 
 import pytest
 
+from domain.core.infrastructure._internal.gateway_bandwidth import (
+    DEFAULT_GATEWAY_URL,
+    GatewayBandwidthMirror,
+    get_bandwidth_mirror,
+)
 from domain.core.logging._internal.config import (
     _collect_domain_payload,
     _derive_op,
@@ -24,11 +29,6 @@ from domain.core.logging._internal.config import (
 from domain.core.logging._internal.dashboard_filter import (
     _WATCHED_OPS,
     _summarize_from_op,
-)
-from domain.infrastructure._internal.gateway_bandwidth import (
-    DEFAULT_GATEWAY_URL,
-    GatewayBandwidthMirror,
-    get_bandwidth_mirror,
 )
 
 LOGGER_NAME = "slo.infrastructure.gateway"
@@ -242,7 +242,7 @@ class TestAbsentGateway:
 
 class TestSchemaIntegration:
     def _emit(self, caplog) -> logging.LogRecord:
-        from domain.infrastructure._internal.structured_log import StructuredLogger
+        from domain.core.infrastructure._internal.structured_log import StructuredLogger
 
         mirror_log = StructuredLogger(LOGGER_NAME)
         with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
@@ -311,7 +311,7 @@ class TestPassthrough:
         assert mirror.snapshot["wire_bytes"] == 120
 
     def test_metrics_gauges_render_after_sample(self, gateway):
-        from domain.infrastructure._internal.metrics import get_metrics_collector
+        from domain.core.infrastructure._internal.metrics import get_metrics_collector
 
         gateway.set_payload({"bandwidth": _bandwidth(identity=4096, wire=1024)})
         mirror = GatewayBandwidthMirror(base_url=gateway.base_url)

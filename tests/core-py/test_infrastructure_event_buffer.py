@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.infrastructure._internal.event_buffer import (
+from domain.core.infrastructure._internal.event_buffer import (
     DashboardEvent,
     EventBuffer,
     get_event_buffer,

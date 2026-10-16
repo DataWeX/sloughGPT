@@ -137,7 +137,7 @@ class TrainingExecutor:
 
         def _wrapper() -> Any:
             # Switch RM to training mode for optimal pool sizing
-            from domain.infrastructure._internal.resource_manager import get_resource_manager
+            from domain.core.infrastructure._internal.resource_manager import get_resource_manager
 
             rm = get_resource_manager()
             prev_mode = rm.mode
@@ -207,7 +207,7 @@ class TrainingExecutor:
             # Auto-store trained weights as Points in the library
             if point_library is not None and isinstance(result, dict):
                 try:
-                    from domain.infrastructure._internal.pugqeep import PointCompressor
+                    from domain.core.infrastructure._internal.pugqeep import PointCompressor
 
                     compressor = PointCompressor()
                     for name, weights in result.items():
@@ -401,7 +401,7 @@ def get_training_executor() -> TrainingExecutor:
     with _instance_lock:
         if _instance is not None:
             return _instance
-        from domain.infrastructure._internal.resource_manager import get_resource_manager
+        from domain.core.infrastructure._internal.resource_manager import get_resource_manager
 
         rm = get_resource_manager()
         import os
@@ -442,8 +442,8 @@ def compress_checkpoint(
         return None
 
     try:
-        from domain.infrastructure._internal.pugqeep import PointCompressor
-        from domain.infrastructure._internal.pugqeep.library import PointLibrary
+        from domain.core.infrastructure._internal.pugqeep import PointCompressor
+        from domain.core.infrastructure._internal.pugqeep.library import PointLibrary
         from domain.training._internal.slonet import import_from_sou
     except ImportError as exc:
         logger.warning("Pugqeep/SloNet not available: %s", exc, extra={"tag": "TRAIN"})

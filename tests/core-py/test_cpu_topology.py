@@ -7,8 +7,8 @@ import subprocess
 
 import pytest
 
-from domain.infrastructure._internal import cpu_topology as ct
-from domain.infrastructure._internal.cpu_topology import CpuTopology, detect_topology
+from domain.core.infrastructure._internal import cpu_topology as ct
+from domain.core.infrastructure._internal.cpu_topology import CpuTopology, detect_topology
 
 
 @pytest.fixture(autouse=True)

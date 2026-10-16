@@ -1,11 +1,11 @@
-"""Tests for domain.infrastructure.model_server — SessionKVState."""
+"""Tests for domain.core.infrastructure.model_server — SessionKVState."""
 
 import threading
 import time
 
 import pytest
 
-from domain.infrastructure._internal.model_server import SessionKVState
+from domain.core.infrastructure._internal.model_server import SessionKVState
 
 
 class TestSessionKVState:

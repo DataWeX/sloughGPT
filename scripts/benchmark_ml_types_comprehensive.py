@@ -33,7 +33,7 @@ def bench(fn, n=1000):
 
 
 def run():
-    from domain.infrastructure import ml_types as ml
+    from domain.core.infrastructure import ml_types as ml
 
     print("=" * 78)
     print("ML Types Comprehensive Benchmark")
@@ -217,13 +217,13 @@ def run():
     for _ in range(100):
         import importlib
 
-        mod = sys.modules.get("domain.infrastructure._internal.ml_types")
+        mod = sys.modules.get("domain.core.infrastructure._internal.ml_types")
         if mod:
             importlib.reload(mod)
     ml_import_us = ((time.perf_counter() - start) / 100) * 1e6
 
     # Memory footprint of the module itself
-    import domain.infrastructure._internal.ml_types as ml_mod
+    import domain.core.infrastructure._internal.ml_types as ml_mod
 
     module_size = sys.getsizeof(ml_mod)
 

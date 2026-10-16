@@ -1,6 +1,6 @@
 """Tests for entity_repositories — typed wrappers for domain repositories."""
 
-from domain.infrastructure._internal.entity_repositories import (
+from domain.core.infrastructure._internal.entity_repositories import (
     DatasetMetadata,
     DatasetRepository,
     FeedbackRecord,

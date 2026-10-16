@@ -10,14 +10,14 @@ import json
 import numpy as np
 import pytest
 
-import domain.infrastructure._internal.pugqeep as pugqeep
-from domain.infrastructure._internal import point_compressor as pc
-from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
-from domain.infrastructure._internal.pugqeep.config import CompressorConfig, LibraryConfig
-from domain.infrastructure._internal.pugqeep.dedup import PointDeduplicator, PointLibrarySync
-from domain.infrastructure._internal.pugqeep.library import PointLibrary
-from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
-from domain.infrastructure._internal.pugqeep.point import Point
+import domain.core.infrastructure._internal.pugqeep as pugqeep
+from domain.core.infrastructure._internal import point_compressor as pc
+from domain.core.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.core.infrastructure._internal.pugqeep.config import CompressorConfig, LibraryConfig
+from domain.core.infrastructure._internal.pugqeep.dedup import PointDeduplicator, PointLibrarySync
+from domain.core.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.core.infrastructure._internal.pugqeep.model_tree import ModelTree
+from domain.core.infrastructure._internal.pugqeep.point import Point
 
 # ── Re-exports ───────────────────────────────────────────────────────────────
 
@@ -1084,7 +1084,7 @@ class TestModelTree:
 
 class TestModelTreeExtended:
     def test_init_with_config(self):
-        from domain.infrastructure._internal.pugqeep.config import TreeConfig
+        from domain.core.infrastructure._internal.pugqeep.config import TreeConfig
 
         cfg = TreeConfig(
             name="custom",
@@ -1190,7 +1190,7 @@ class TestModelTreeExtended:
 
 class TestLoadModelToPoints:
     def test_raises_when_model_not_cached(self):
-        from domain.infrastructure._internal.pugqeep.tree import load_model_to_points
+        from domain.core.infrastructure._internal.pugqeep.tree import load_model_to_points
 
         with pytest.raises(FileNotFoundError, match="not cached"):
             load_model_to_points("some_nonexistent_model_xyz")
@@ -1201,7 +1201,7 @@ class TestLoadModelToPoints:
 
 class TestLoadFromPoints:
     def test_load_from_points_basic(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.tree import load_from_points
+        from domain.core.infrastructure._internal.pugqeep.tree import load_from_points
 
         lib = PointLibrary("test_model")
         lib.add(Point(identity="test_model.w", function_type="linear", params={"a": 1.0, "b": 0.0}))
@@ -1211,13 +1211,13 @@ class TestLoadFromPoints:
         assert tree.is_loaded is True
 
     def test_load_from_points_not_found(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.tree import load_from_points
+        from domain.core.infrastructure._internal.pugqeep.tree import load_from_points
 
         with pytest.raises(FileNotFoundError):
             load_from_points(str(tmp_path / "nonexistent"))
 
     def test_load_from_points_with_meta(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.tree import load_from_points
+        from domain.core.infrastructure._internal.pugqeep.tree import load_from_points
 
         lib = PointLibrary("test_model")
         lib.add(Point(identity="test_model.w", function_type="linear", params={"a": 1.0, "b": 0.0}))
@@ -1228,7 +1228,7 @@ class TestLoadFromPoints:
         assert tree._weight_shapes.get("w") == (10,)
 
     def test_load_from_points_no_prefix_match(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.tree import load_from_points
+        from domain.core.infrastructure._internal.pugqeep.tree import load_from_points
 
         lib = PointLibrary("test_model")
         lib.add(Point(identity="other.w", function_type="linear", params={"a": 1.0, "b": 0.0}))
@@ -1242,7 +1242,7 @@ class TestLoadFromPoints:
 
 class TestDecompressTree:
     def test_decompress_sequential(self):
-        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
+        from domain.core.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("test", n_clusters=8)
         tree.load_weights({"a": np.ones(50, dtype=np.float32), "b": np.ones(50, dtype=np.float32)})
@@ -1252,14 +1252,14 @@ class TestDecompressTree:
         assert result["a"].shape == (50,)
 
     def test_decompress_tree_empty(self):
-        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
+        from domain.core.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("test")
         result = decompress_tree(tree)
         assert len(result) == 0
 
     def test_decompress_with_raw_point(self):
-        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
+        from domain.core.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("test", n_clusters=8, config=None)
         tree.load_weights({"w": np.array([1.0, 2.0, 3.0], dtype=np.float32)})
@@ -1650,7 +1650,7 @@ class TestDeduplicatorExtended:
 
 class TestConfigExtended:
     def test_point_config_defaults(self):
-        from domain.infrastructure._internal.pugqeep.config import PointConfig
+        from domain.core.infrastructure._internal.pugqeep.config import PointConfig
 
         cfg = PointConfig()
         assert cfg.function_type == "cluster"
@@ -1658,7 +1658,7 @@ class TestConfigExtended:
         assert cfg.residual_threshold == 0.99
 
     def test_compressor_config_custom(self):
-        from domain.infrastructure._internal.pugqeep.config import CompressorConfig
+        from domain.core.infrastructure._internal.pugqeep.config import CompressorConfig
 
         cfg = CompressorConfig(
             n_clusters=64, lloyd_iterations=20, gap_fill_iterations=8, gap_fill_max_elements=50_000
@@ -1667,28 +1667,28 @@ class TestConfigExtended:
         assert cfg.lloyd_iterations == 20
 
     def test_library_config_defaults(self):
-        from domain.infrastructure._internal.pugqeep.config import LibraryConfig
+        from domain.core.infrastructure._internal.pugqeep.config import LibraryConfig
 
         cfg = LibraryConfig()
         assert cfg.name == "default"
         assert cfg.auto_save is False
 
     def test_tree_config_custom(self):
-        from domain.infrastructure._internal.pugqeep.config import TreeConfig
+        from domain.core.infrastructure._internal.pugqeep.config import TreeConfig
 
         cfg = TreeConfig(n_clusters=32, method="function", skip_embeddings=False, skip_biases=False)
         assert cfg.n_clusters == 32
         assert cfg.method == "function"
 
     def test_queue_config_defaults(self):
-        from domain.infrastructure._internal.pugqeep.config import QueueConfig
+        from domain.core.infrastructure._internal.pugqeep.config import QueueConfig
 
         cfg = QueueConfig()
         assert cfg.max_trees == 10
         assert cfg.dedup is True
 
     def test_engine_config_defaults(self):
-        from domain.infrastructure._internal.pugqeep.config import EngineConfig
+        from domain.core.infrastructure._internal.pugqeep.config import EngineConfig
 
         cfg = EngineConfig()
         assert cfg.name == "main"

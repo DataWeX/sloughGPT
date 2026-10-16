@@ -3,7 +3,7 @@
 import json
 import struct
 
-from domain.infrastructure._internal.inference_protocol import (
+from domain.core.infrastructure._internal.inference_protocol import (
     HEADER_FMT,
     HEADER_SIZE,
     ErrorResponse,

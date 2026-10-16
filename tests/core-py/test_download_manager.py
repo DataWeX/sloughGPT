@@ -3,8 +3,8 @@
 import asyncio
 import time
 
-import domain.infrastructure._internal.download_manager as dm
-from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
+import domain.core.infrastructure._internal.download_manager as dm
+from domain.core.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
 # ---------------------------------------------------------------------------
 # Fake backend for testing
@@ -613,7 +613,7 @@ class TestVerify:
         """The backend-level verify() still checks sizes and checksums."""
         import hashlib
 
-        from domain.infrastructure._internal.download_backend import DownloadBackend
+        from domain.core.infrastructure._internal.download_backend import DownloadBackend
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):

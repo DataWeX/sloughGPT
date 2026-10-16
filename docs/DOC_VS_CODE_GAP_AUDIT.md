@@ -172,7 +172,7 @@ combined_internal_stmts=67
 
 **Combined: 67 `_internal` import statements across 15 files.** Worst targets:
 `domain.generate.models._internal.provider` ×9, `domain.training._internal.cache_tags` ×7,
-`domain.infrastructure._internal.artifact_registry` ×2.
+`domain.core.infrastructure._internal.artifact_registry` ×2.
 
 The Router Playbook only forbids `_internal` in **routers**, so nothing in the
 documented rules covers the 30 statements in `controllers/`. An executable
@@ -217,8 +217,8 @@ worktree edits convert facades _back_ to `_internal`:
 ```diff
 - from domain.generate.models import get_provider
 + from domain.generate.models._internal.provider import get_provider
-- from domain.infrastructure import get_lifecycle_manager
-+ from domain.infrastructure._internal.lifecycle import get_lifecycle_manager
+- from domain.core.infrastructure import get_lifecycle_manager
++ from domain.core.infrastructure._internal.lifecycle import get_lifecycle_manager
 ```
 
 `git commit` (index only) preserves the facade work; `git commit -a` would
@@ -327,7 +327,7 @@ of its numbers are cited:
 
 Four independent reasons, any one of which is fatal: `infrastructure.auth` and
 `training.jobs` written inside a router resolve relative to `apps/api/server/`,
-not the repo root; the `domain/infrastructure/*.py` facades are pure
+not the repo root; the `domain/core/infrastructure/*.py` facades are pure
 star-forwarders (`from domains.… import *`), so no downstream name survives
 without expanding them; `domain/generate/__init__.py` exports lazily through
 PEP 562 `__getattr__`; and optional dependencies sit behind

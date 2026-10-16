@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 import io
 
+from domain.core.infrastructure._internal.correlation import get_correlation_id, set_correlation_id
+from domain.core.infrastructure._internal.session_core import SessionCore
 from domain.core.logging._internal.base import LogLevel
 from domain.core.logging._internal.console_logger import ConsoleLogger, _default_color_enabled
-from domain.infrastructure._internal.correlation import get_correlation_id, set_correlation_id
-from domain.infrastructure._internal.session_core import SessionCore
 
 
 class TestCorrelationId:

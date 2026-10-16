@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from domain.infrastructure.server_state import get_server_state
+from domain.core.infrastructure.server_state import get_server_state
 
 # Names that map directly to ServerState AtomicRef fields
 _DIRECT_REFS = frozenset(

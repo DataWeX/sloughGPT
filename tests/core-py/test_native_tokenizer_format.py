@@ -253,7 +253,7 @@ class TestProvenanceTaxonomy:
     """Scheme names separate tokenizer families at a glance (card 85dedb7e)."""
 
     def test_one_scheme_per_family_and_uniform_attrs(self):
-        from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+        from domain.core.infrastructure._internal.morph_tokenizer import MorphTokenizer
         from domain.training._internal.tokenizer import SloBPE, SloUnigram
 
         native = NativeTokenizer.from_char_vocab({"a": 0}, {0: "a"})

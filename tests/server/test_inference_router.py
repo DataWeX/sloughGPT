@@ -537,7 +537,7 @@ class TestVoice:
     def test_audio_traversal_guard_direct(self):
         import asyncio
 
-        from domain.infrastructure._internal.errors import AuthError
+        from domain.core.infrastructure._internal.errors import AuthError
 
         with pytest.raises(AuthError):
             asyncio.run(_inference_router.get_voice_audio("../evil", "msg"))

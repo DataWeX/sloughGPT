@@ -22,7 +22,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.quantization import (
+from domain.core.infrastructure._internal.quantization import (
     Quantine,
     QuantizedLinear,
     QuantMeta,
@@ -1167,7 +1167,7 @@ class TestAdaptiveQuantization:
         # When the AVX2 kernel is not available, never vote to quantize.
         from unittest.mock import patch
 
-        from domain.infrastructure._internal import quantization as q
+        from domain.core.infrastructure._internal import quantization as q
 
         self._slo_linear(4, 2048)
         with patch.object(q, "_has_int8_kernel", return_value=False):
@@ -1186,7 +1186,7 @@ class TestAdaptiveQuantization:
 
         from unittest.mock import patch
 
-        from domain.infrastructure._internal import quantization as q
+        from domain.core.infrastructure._internal import quantization as q
 
         class FakeModel:
             pass
@@ -1215,7 +1215,7 @@ class TestAdaptiveQuantization:
 
         from unittest.mock import patch
 
-        from domain.infrastructure._internal import quantization as q
+        from domain.core.infrastructure._internal import quantization as q
 
         fm = SimpleNamespace()
         with patch.object(q, "walk_slo_linears", return_value=linears):
@@ -1235,7 +1235,7 @@ class TestAdaptiveQuantization:
         }
         from unittest.mock import patch
 
-        from domain.infrastructure._internal import quantization as q
+        from domain.core.infrastructure._internal import quantization as q
 
         fm = SimpleNamespace()
         with patch.object(q, "walk_slo_linears", return_value=linears):

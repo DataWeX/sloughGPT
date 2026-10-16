@@ -12,8 +12,8 @@ import struct
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.model_resolver import find_safetensors, get_model_dir
-from domain.infrastructure._internal.safetensors_loader import load_model_weights
+from domain.core.infrastructure._internal.model_resolver import find_safetensors, get_model_dir
+from domain.core.infrastructure._internal.safetensors_loader import load_model_weights
 
 QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -85,13 +85,13 @@ class TestLoadModelWeightsFlow:
     def test_converts_then_loads(self, tmp_path, monkeypatch):
         model_dir = _write_fake_safetensors(tmp_path / "model")
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader.get_model_dir",
+            "domain.core.infrastructure._internal.safetensors_loader.get_model_dir",
             lambda model_id: model_dir,
         )
 
         converted = {}
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._auto_convert",
+            "domain.core.infrastructure._internal.safetensors_loader._auto_convert",
             lambda st_path, slnc_path, model_id: converted.update(slnc=str(slnc_path)),
         )
         fake_weights = {
@@ -99,7 +99,7 @@ class TestLoadModelWeightsFlow:
             "b": np.array([0.5], dtype=np.float32),
         }
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._load_from_slnc",
+            "domain.core.infrastructure._internal.safetensors_loader._load_from_slnc",
             lambda slnc_path, dtype: fake_weights,
         )
 
@@ -111,17 +111,17 @@ class TestLoadModelWeightsFlow:
         model_dir = _write_fake_safetensors(tmp_path / "model")
         (tmp_path / "model" / "model.slnc").write_bytes(b"slnc-ready")
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader.get_model_dir",
+            "domain.core.infrastructure._internal.safetensors_loader.get_model_dir",
             lambda model_id: model_dir,
         )
         auto_convert = pytest.fail  # must not be called
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._auto_convert",
+            "domain.core.infrastructure._internal.safetensors_loader._auto_convert",
             auto_convert,
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._load_from_slnc",
+            "domain.core.infrastructure._internal.safetensors_loader._load_from_slnc",
             lambda slnc_path, dtype: {},
         )
 
@@ -131,7 +131,7 @@ class TestLoadModelWeightsFlow:
         model_dir = tmp_path / "empty"
         model_dir.mkdir()
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader.get_model_dir",
+            "domain.core.infrastructure._internal.safetensors_loader.get_model_dir",
             lambda model_id: model_dir,
         )
         with pytest.raises(FileNotFoundError):

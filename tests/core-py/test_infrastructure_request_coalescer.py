@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from domain.infrastructure._internal.request_coalescer import (
+from domain.core.infrastructure._internal.request_coalescer import (
     RequestCoalescer,
     _hash_key,
     get_coalescer,

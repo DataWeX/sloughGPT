@@ -1,4 +1,4 @@
-from domain.infrastructure._internal.correlation import get_correlation_id, set_correlation_id
+from domain.core.infrastructure._internal.correlation import get_correlation_id, set_correlation_id
 
 
 class TestCorrelation:

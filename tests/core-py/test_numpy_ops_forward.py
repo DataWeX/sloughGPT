@@ -3,16 +3,16 @@
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.arch_config import build_arch
-from domain.infrastructure._internal.numpy_engine import KVCache
-from domain.infrastructure._internal.numpy_forward import (
+from domain.core.infrastructure._internal.arch_config import build_arch
+from domain.core.infrastructure._internal.numpy_engine import KVCache
+from domain.core.infrastructure._internal.numpy_forward import (
     forward,
     forward_cached,
     forward_fast,
     norm_fn,
     pre_extract_weights,
 )
-from domain.infrastructure._internal.numpy_ops import (
+from domain.core.infrastructure._internal.numpy_ops import (
     gelu,
     layer_norm,
     rmsnorm,

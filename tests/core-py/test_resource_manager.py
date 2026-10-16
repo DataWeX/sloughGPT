@@ -6,8 +6,8 @@ import types
 
 import pytest
 
-from domain.infrastructure._internal.cpu_topology import CpuTopology
-from domain.infrastructure._internal.resource_manager import (
+from domain.core.infrastructure._internal.cpu_topology import CpuTopology
+from domain.core.infrastructure._internal.resource_manager import (
     ResourceAllocation,
     compute_allocation,
     get_resource_manager,
@@ -261,14 +261,14 @@ class TestResourceManager:
         rm.apply_compute_limits()  # must not raise
 
     def test_lazy_init_when_singleton_none(self, monkeypatch):
-        import domain.infrastructure._internal.resource_manager as rm_mod
+        import domain.core.infrastructure._internal.resource_manager as rm_mod
 
         monkeypatch.setattr(rm_mod, "_global_manager", None)
         rm = rm_mod.get_resource_manager()
         assert rm_mod._global_manager is rm
 
     def test_singleton_is_global_variable(self, monkeypatch):
-        import domain.infrastructure._internal.resource_manager as rm_mod
+        import domain.core.infrastructure._internal.resource_manager as rm_mod
 
         rm = get_resource_manager()
         assert rm_mod._global_manager is rm

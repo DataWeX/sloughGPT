@@ -49,7 +49,7 @@ class InferencePool:
         if cls._instance is None:
             async with cls._lock:
                 if cls._instance is None:
-                    from domain.infrastructure.resource_manager import get_resource_manager
+                    from domain.core.infrastructure.resource_manager import get_resource_manager
 
                     rm = get_resource_manager()
                     import os

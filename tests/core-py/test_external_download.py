@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-from domain.infrastructure._internal.download_backend import DownloadBackend
-from domain.infrastructure._internal.external_download import (
+from domain.core.infrastructure._internal.download_backend import DownloadBackend
+from domain.core.infrastructure._internal.external_download import (
     ExternalDownloadBackend,
 )
 
@@ -126,7 +126,7 @@ class TestExternalDownloadBackend:
         (incomplete / ".manifest.json").write_text(json.dumps(manifest2))
 
         with patch(
-            "domain.infrastructure._internal.external_download._get_cache_root", return_value=root
+            "domain.core.infrastructure._internal.external_download._get_cache_root", return_value=root
         ):
             result = backend.list_incomplete()
             assert "incomplete-model" in result
@@ -177,7 +177,7 @@ class TestExternalDownloadDownload:
             patch.object(backend, "_fetch_manifest", return_value=manifest),
             patch.object(backend, "_cache_dir", return_value=tmp_path / "out"),
             patch(
-                "domain.infrastructure._internal.compressed_transfer.CompressedDownloader"
+                "domain.core.infrastructure._internal.compressed_transfer.CompressedDownloader"
             ) as MockDL,
         ):
             mock_inst = MockDL.return_value

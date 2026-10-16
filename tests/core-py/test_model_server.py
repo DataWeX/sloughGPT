@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from domain.infrastructure._internal.model_server import (
+from domain.core.infrastructure._internal.model_server import (
     ModelMetrics,
     ModelStatus,
     Priority,

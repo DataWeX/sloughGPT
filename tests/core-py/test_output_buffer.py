@@ -8,7 +8,7 @@ import threading
 
 import pytest
 
-from domain.infrastructure._internal.output_buffer import (
+from domain.core.infrastructure._internal.output_buffer import (
     BufferLogHandler,
     OutputBuffer,
     OutputLine,
@@ -466,7 +466,7 @@ class TestNormLevel:
 
 class TestSingletons:
     def test_get_server_buffer_singleton(self, monkeypatch):
-        monkeypatch.setattr("domain.infrastructure._internal.output_buffer._server_buffer", None)
+        monkeypatch.setattr("domain.core.infrastructure._internal.output_buffer._server_buffer", None)
         b1 = get_server_buffer()
         b2 = get_server_buffer()
         assert b1 is b2

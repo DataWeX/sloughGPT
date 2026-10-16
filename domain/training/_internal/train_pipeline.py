@@ -1787,7 +1787,7 @@ class SloughGPTTrainer:
 
         # Record dashboard event
         try:
-            from domain.infrastructure._internal.event_buffer import get_event_buffer
+            from domain.core.infrastructure._internal.event_buffer import get_event_buffer
 
             epochs = self.config.epochs
             max_steps = self.config.max_steps or "unlimited"
@@ -2044,7 +2044,7 @@ class SloughGPTTrainer:
 
         # Record dashboard event
         try:
-            from domain.infrastructure._internal.event_buffer import get_event_buffer
+            from domain.core.infrastructure._internal.event_buffer import get_event_buffer
 
             final_loss_str = f"{final_loss:.4f}" if final_loss is not None else "n/a"
             get_event_buffer().record(

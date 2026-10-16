@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from domain.infrastructure._internal.inference_protocol import (
+from domain.core.infrastructure._internal.inference_protocol import (
     HEADER_SIZE,
     decode_header,
     encode_message,
@@ -58,7 +58,7 @@ class TestEngineDispatch:
     """Test InferenceEngine message handling without loading a real model."""
 
     def _make_engine(self):
-        from domain.infrastructure._internal.inference_engine import InferenceEngine
+        from domain.core.infrastructure._internal.inference_engine import InferenceEngine
 
         engine = InferenceEngine.__new__(InferenceEngine)
         engine.model_id = "test-model"
@@ -205,7 +205,7 @@ class TestEngineDispatch:
 
 class TestInferenceClient:
     def test_client_kv_properties(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         client = InferenceClient(host="127.0.0.1", port=9999)
         assert client.model_id == "unknown"
@@ -214,7 +214,7 @@ class TestInferenceClient:
         assert client._kv_ttl == 3600.0
 
     def test_client_capabilities(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         client = InferenceClient()
         caps = client.capabilities
@@ -223,14 +223,14 @@ class TestInferenceClient:
         assert caps.embedding is False
 
     def test_client_health_when_disconnected(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         client = InferenceClient(host="127.0.0.1", port=1)
         resp = client.health()
         assert resp.get("type") == "error" or resp == {}
 
     def test_client_disconnect_is_idempotent(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         client = InferenceClient()
         client.disconnect()
@@ -238,7 +238,7 @@ class TestInferenceClient:
         assert client._socket is None
 
     def test_send_recv_exact(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         client = InferenceClient()
         s1, s2 = socket.socketpair()
@@ -250,7 +250,7 @@ class TestInferenceClient:
         s2.close()
 
     def test_recv_exact_short_read(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         client = InferenceClient()
         s1, s2 = socket.socketpair()
@@ -262,7 +262,7 @@ class TestInferenceClient:
         s1.close()
 
     def test_recv_message(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         client = InferenceClient()
         msg = {"type": "health_ok", "model_id": "test"}
@@ -298,7 +298,7 @@ class TestInferenceClient:
 
 class TestEngineConcurrency:
     def _make_engine(self):
-        from domain.infrastructure._internal.inference_engine import InferenceEngine
+        from domain.core.infrastructure._internal.inference_engine import InferenceEngine
 
         engine = InferenceEngine.__new__(InferenceEngine)
         engine.model_id = "test-model"
@@ -400,7 +400,7 @@ class TestEngineConcurrency:
 
 class TestClientRestart:
     def test_restart_callback_called_on_failure(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         call_count = [0]
 
@@ -428,7 +428,7 @@ class TestClientRestart:
         assert call_count[0] == 1
 
     def test_no_restart_callback(self):
-        from domain.infrastructure._internal.inference_client import InferenceClient
+        from domain.core.infrastructure._internal.inference_client import InferenceClient
 
         client = InferenceClient(host="127.0.0.1", port=1)
         result = client._try_reconnect()
@@ -472,7 +472,7 @@ class TestFullIntegration:
     """Spin up an engine with a mock provider, connect a client, run requests."""
 
     def _start_engine_with_mock(self):
-        from domain.infrastructure._internal.inference_engine import InferenceEngine
+        from domain.core.infrastructure._internal.inference_engine import InferenceEngine
 
         engine = InferenceEngine.__new__(InferenceEngine)
         engine.model_id = "mock-model"
@@ -526,7 +526,7 @@ class TestFullIntegration:
     def test_health_roundtrip(self):
         engine, port = self._start_engine_with_mock()
         try:
-            from domain.infrastructure._internal.inference_client import InferenceClient
+            from domain.core.infrastructure._internal.inference_client import InferenceClient
 
             client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
             assert client.connect() is True
@@ -541,7 +541,7 @@ class TestFullIntegration:
     def test_generate_roundtrip(self):
         engine, port = self._start_engine_with_mock()
         try:
-            from domain.infrastructure._internal.inference_client import InferenceClient
+            from domain.core.infrastructure._internal.inference_client import InferenceClient
 
             client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
             client.connect()
@@ -561,7 +561,7 @@ class TestFullIntegration:
     def test_stream_roundtrip(self):
         engine, port = self._start_engine_with_mock()
         try:
-            from domain.infrastructure._internal.inference_client import InferenceClient
+            from domain.core.infrastructure._internal.inference_client import InferenceClient
 
             client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
             client.connect()
@@ -588,7 +588,7 @@ class TestFullIntegration:
         try:
             import asyncio
 
-            from domain.infrastructure._internal.inference_client import InferenceClient
+            from domain.core.infrastructure._internal.inference_client import InferenceClient
 
             results = []
 
@@ -617,7 +617,7 @@ class TestFullIntegration:
             engine.stop()
 
     def test_provider_none_raises(self):
-        from domain.infrastructure._internal.inference_engine import InferenceEngine
+        from domain.core.infrastructure._internal.inference_engine import InferenceEngine
 
         engine = InferenceEngine.__new__(InferenceEngine)
         engine.model_id = "test"

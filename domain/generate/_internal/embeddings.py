@@ -26,8 +26,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
+from domain.core.infrastructure._internal.config import get_config
 from domain.generate._internal.text_embedder import embed_text
-from domain.infrastructure._internal.config import get_config
 
 logger = logging.getLogger("slo.embeddings")
 

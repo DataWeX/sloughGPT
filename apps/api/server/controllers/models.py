@@ -59,7 +59,7 @@ class ModelsController:
         """
         if device is None or device == "auto":
             try:
-                from domain.infrastructure.ml_types import auto_device
+                from domain.core.infrastructure.ml_types import auto_device
 
                 return auto_device()
             except ImportError:
@@ -68,7 +68,7 @@ class ModelsController:
                 )
                 return "cpu"
         try:
-            from domain.infrastructure.ml_types import _cuda_available, _mps_available
+            from domain.core.infrastructure.ml_types import _cuda_available, _mps_available
         except ImportError:
             logger.warning("ml_types not available, device checks disabled", extra={"tag": "MODEL"})
             _cuda_available = _mps_available = None
@@ -100,7 +100,7 @@ class ModelsController:
 
     def _infer_config(self, state_dict: dict[str, Any]) -> dict[str, Any]:
         """Infer model config from state dict"""
-        from domain.infrastructure.weight_loader import infer_arch_from_state_dict
+        from domain.core.infrastructure.weight_loader import infer_arch_from_state_dict
 
         arch = infer_arch_from_state_dict(state_dict)
         return {
@@ -137,7 +137,7 @@ class ModelsController:
             return self._load_gguf_model(model_id, device)
 
         # Check if another load is in progress
-        from domain.infrastructure.model_loader import ModelLoader
+        from domain.core.infrastructure.model_loader import ModelLoader
 
         if ModelLoader.is_loading():
             return {
@@ -147,7 +147,7 @@ class ModelsController:
 
         # Memory pressure check — try to free idle resources before loading
         try:
-            from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
+            from domain.core.infrastructure.memory_pressure import get_memory_pressure_monitor
 
             monitor = get_memory_pressure_monitor()
             monitor.force_cleanup()
@@ -170,7 +170,9 @@ class ModelsController:
             # weights; the parent only loads on guard death (lazy _get_model).
             try:
                 from config import get_process_guard_enabled
-                from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+                from domain.core.infrastructure.model_resolver import (
+                    get_model_dir as _get_model_dir,
+                )
 
                 _slnc = _get_model_dir(model_id) / "model.slnc"
                 use_lazy = (
@@ -321,13 +323,13 @@ class ModelsController:
 
         try:
             from config import ServerConfig
-            from domain.generate.models._internal.provider import attach_process_guard_to_provider
-            from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
-            from domain.infrastructure.process_guard import (
+            from domain.core.infrastructure.model_resolver import get_model_dir as _get_model_dir
+            from domain.core.infrastructure.process_guard import (
                 ExecutionMode,
                 ProcessGuard,
                 resolve_memory_limit_mb,
             )
+            from domain.generate.models._internal.provider import attach_process_guard_to_provider
 
             cfg = ServerConfig.from_env()
 
@@ -407,7 +409,7 @@ class ModelsController:
         """
         # Block model loading under memory pressure to prevent OOM
         try:
-            from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
+            from domain.core.infrastructure.memory_pressure import get_memory_pressure_monitor
 
             if not get_memory_pressure_monitor().allow_load():
                 return {
@@ -460,7 +462,7 @@ class ModelsController:
         if self._current_model:
             return self._current_model
         try:
-            from domain.infrastructure.model_registry import get_model_registry
+            from domain.core.infrastructure.model_registry import get_model_registry
 
             mid = get_model_registry().default_id
             if mid:
@@ -631,7 +633,7 @@ class ModelsController:
         """
         # Block model loading under memory pressure to prevent OOM
         try:
-            from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
+            from domain.core.infrastructure.memory_pressure import get_memory_pressure_monitor
 
             if not get_memory_pressure_monitor().allow_load():
                 return {
@@ -651,7 +653,7 @@ class ModelsController:
 
             cfg = ServerConfig.from_env()
 
-            from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
+            from domain.core.infrastructure._internal.slnc.compiler import SLNCCompiler
 
             slnc_path = target / "model.slnc"
             if not slnc_path.exists():
@@ -668,7 +670,7 @@ class ModelsController:
             model_id = identity or tokenizer_model_id
 
             try:
-                from domain.infrastructure._internal.artifact_registry import try_register
+                from domain.core.infrastructure._internal.artifact_registry import try_register
 
                 try_register("model", slnc_path, name=model_id)
             except Exception:
@@ -706,7 +708,7 @@ class ModelsController:
             # from the registry so the health endpoint (registry-first) reflects
             # this model instead of a stale default.
             try:
-                from domain.infrastructure.model_registry import get_model_registry
+                from domain.core.infrastructure.model_registry import get_model_registry
 
                 registry = get_model_registry()
                 stale = registry.default_id
@@ -758,7 +760,7 @@ class ModelsController:
             return None
         try:
             from config import ServerConfig
-            from domain.infrastructure.process_guard import (
+            from domain.core.infrastructure.process_guard import (
                 ExecutionMode,
                 ProcessGuard,
                 resolve_memory_limit_mb,
@@ -807,7 +809,7 @@ class ModelsController:
         # Resolve the active model: controller state > registry default.
         model_id = self._current_model
         try:
-            from domain.infrastructure.model_registry import get_model_registry
+            from domain.core.infrastructure.model_registry import get_model_registry
 
             registry = get_model_registry()
             model_id = model_id or registry.default_id
@@ -865,7 +867,7 @@ class ModelsController:
 
         # Reset the core ServerState singleton to match
         try:
-            from domain.infrastructure.server_state import get_server_state
+            from domain.core.infrastructure.server_state import get_server_state
 
             core = get_server_state()
             core.model.set(None)

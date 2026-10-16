@@ -3,13 +3,13 @@
 import numpy as np
 import pytest
 
-import domain.infrastructure._internal.numpy_engine as numpy_engine
-import domain.infrastructure._internal.pugqeep.tree as tree_module
-from domain.infrastructure._internal.pugqeep.config import QueueConfig, TreeConfig
-from domain.infrastructure._internal.pugqeep.library import PointLibrary
-from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
-from domain.infrastructure._internal.pugqeep.queue import ModelQueue
-from domain.infrastructure._internal.pugqeep.tree import (
+import domain.core.infrastructure._internal.numpy_engine as numpy_engine
+import domain.core.infrastructure._internal.pugqeep.tree as tree_module
+from domain.core.infrastructure._internal.pugqeep.config import QueueConfig, TreeConfig
+from domain.core.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.core.infrastructure._internal.pugqeep.model_tree import ModelTree
+from domain.core.infrastructure._internal.pugqeep.queue import ModelQueue
+from domain.core.infrastructure._internal.pugqeep.tree import (
     decompress_tree,
     load_from_points,
     load_library,

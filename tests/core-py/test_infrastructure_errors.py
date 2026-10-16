@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from domain.infrastructure._internal.errors import (
+from domain.core.infrastructure._internal.errors import (
     AppError,
     AuthError,
     ConfigError,

@@ -87,11 +87,11 @@ def mock_chat_deps():
             return_value={"source": "none", "facts": [], "topics": []},
         ),
         patch(
-            "domain.infrastructure._internal.session_core.SessionCore.store_context",
+            "domain.core.infrastructure._internal.session_core.SessionCore.store_context",
             side_effect=fake_store_context,
         ),
         patch(
-            "domain.infrastructure._internal.session_core.SessionCore.get_messages",
+            "domain.core.infrastructure._internal.session_core.SessionCore.get_messages",
             side_effect=fake_get_messages,
         ),
         patch("controllers.feedback.get_feedback_controller") as mock_fb_ctrl,

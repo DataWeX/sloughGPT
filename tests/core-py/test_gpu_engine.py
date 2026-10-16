@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.gpu.gpu_engine — pure logic coverage.
+"""Tests for domain.core.infrastructure._internal.gpu.gpu_engine — pure logic coverage.
 
 Covers constants, ctypes structures, library search logic, wrapper class
 initialisation paths, and convenience functions. No real GPU hardware needed.
@@ -18,7 +18,7 @@ _CORE_PY = Path(__file__).resolve().parents[2] / "packages" / "core-py"
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domain.infrastructure._internal.gpu.gpu_engine import (
+from domain.core.infrastructure._internal.gpu.gpu_engine import (
     GPU_BUF_COPY_DST,
     GPU_BUF_COPY_SRC,
     GPU_BUF_STORAGE,
@@ -180,14 +180,14 @@ class TestGpuBindEntry:
 
 
 class TestFindLibrary:
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.os.path.exists")
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.os.path.exists")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL")
     def test_finds_dev_library_next_to_file(self, mock_cdll, mock_exists, tmp_path):
         lib_path = tmp_path / "libgpu_engine.so"
         mock_exists.side_effect = lambda p: p == str(lib_path)
 
         with patch(
-            "domain.infrastructure._internal.gpu.gpu_engine.os.path.dirname",
+            "domain.core.infrastructure._internal.gpu.gpu_engine.os.path.dirname",
             return_value=str(tmp_path),
         ):
             result = _find_library()
@@ -195,29 +195,29 @@ class TestFindLibrary:
         mock_cdll.assert_called_once_with(str(lib_path))
         assert result is mock_cdll.return_value
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.os.path.exists", return_value=False)
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.os.path.exists", return_value=False)
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL")
     def test_falls_back_to_system_name(self, mock_cdll, mock_exists):
         result = _find_library()
         mock_cdll.assert_called_with("gpu_engine")
         assert result is mock_cdll.return_value
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.os.path.exists", return_value=False)
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.os.path.exists", return_value=False)
     @patch(
-        "domain.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL", side_effect=OSError("no lib")
+        "domain.core.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL", side_effect=OSError("no lib")
     )
     def test_raises_when_not_found(self, mock_cdll, mock_exists):
         with pytest.raises(FileNotFoundError, match="gpu_engine shared library not found"):
             _find_library()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.os.path.exists")
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.os.path.exists")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL")
     def test_tries_dll_on_any_platform(self, mock_cdll, mock_exists, tmp_path):
         dll_path = tmp_path / "gpu_engine.dll"
         mock_exists.side_effect = lambda p: p == str(dll_path)
 
         with patch(
-            "domain.infrastructure._internal.gpu.gpu_engine.os.path.dirname",
+            "domain.core.infrastructure._internal.gpu.gpu_engine.os.path.dirname",
             return_value=str(tmp_path),
         ):
             _find_library()
@@ -321,7 +321,7 @@ def _make_mock_lib():
 
 
 class TestGpuDeviceWrapper:
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_init_default_backend(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -330,7 +330,7 @@ class TestGpuDeviceWrapper:
         lib.gpu_device_create.assert_called_once()
         lib.gpu_device_create_backend.assert_not_called()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_init_named_backend(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -338,7 +338,7 @@ class TestGpuDeviceWrapper:
         GpuDevice(backend="vulkan")
         lib.gpu_device_create_backend.assert_called_once_with(b"vulkan")
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_name_property(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -346,7 +346,7 @@ class TestGpuDeviceWrapper:
         device = GpuDevice()
         assert device.name == "MockGPU"
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_vram_property(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -354,7 +354,7 @@ class TestGpuDeviceWrapper:
         device = GpuDevice()
         assert device.vram == 4 * 1024 * 1024 * 1024
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_raises_on_null_device(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_device_create.return_value = GpuDeviceT(None)
@@ -363,7 +363,7 @@ class TestGpuDeviceWrapper:
         with pytest.raises(RuntimeError, match="Failed to create GPU device"):
             GpuDevice()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_buffer_create(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -373,7 +373,7 @@ class TestGpuDeviceWrapper:
         assert isinstance(buf, GpuBuffer)
         lib.gpu_buffer_create.assert_called_once_with(device._ptr, 1024, GPU_BUF_STORAGE)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_shader_create_wgsl(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -383,7 +383,7 @@ class TestGpuDeviceWrapper:
         assert isinstance(shader, GpuShader)
         lib.gpu_shader_create_wgsl.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_shader_create_wgsl_raises_on_null(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_shader_create_wgsl.return_value = GpuShaderT(None)
@@ -393,7 +393,7 @@ class TestGpuDeviceWrapper:
         with pytest.raises(RuntimeError, match="Failed to create WGSL shader"):
             device.shader_create_wgsl("fn main() {}")
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_shader_create_spirv(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -404,7 +404,7 @@ class TestGpuDeviceWrapper:
         assert isinstance(shader, GpuShader)
         lib.gpu_shader_create_spirv.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_shader_create_spirv_raises_on_null(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_shader_create_spirv.return_value = GpuShaderT(None)
@@ -415,7 +415,7 @@ class TestGpuDeviceWrapper:
         with pytest.raises(RuntimeError, match="Failed to create SPIR-V shader"):
             device.shader_create_spirv(code)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_pipeline_create(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -427,7 +427,7 @@ class TestGpuDeviceWrapper:
         assert isinstance(pipeline, GpuPipeline)
         lib.gpu_pipeline_create.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_pipeline_create_raises_on_null(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_pipeline_create.return_value = GpuPipelineT(None)
@@ -438,7 +438,7 @@ class TestGpuDeviceWrapper:
         with pytest.raises(RuntimeError, match="Failed to create pipeline"):
             device.pipeline_create(shader, [(0, 1, 2)])
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_compute_begin(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -448,7 +448,7 @@ class TestGpuDeviceWrapper:
         assert isinstance(ctx, GpuContext)
         lib.gpu_compute_begin.assert_called_once_with(device._ptr)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_destroys_device(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -457,7 +457,7 @@ class TestGpuDeviceWrapper:
         device.__del__()
         lib.gpu_device_destroy.assert_called_once_with(device._ptr)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_noop_without_ptr(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -472,7 +472,7 @@ class TestGpuDeviceWrapper:
 
 
 class TestGpuBufferWrapper:
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_init_creates_buffer(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -482,7 +482,7 @@ class TestGpuBufferWrapper:
         assert buf.size == 2048
         lib.gpu_buffer_create.assert_called_with(device._ptr, 2048, GPU_BUF_UNIFORM)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_raises_on_null_buffer(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_buffer_create.return_value = GpuBufferT(None)
@@ -492,7 +492,7 @@ class TestGpuBufferWrapper:
         with pytest.raises(RuntimeError, match="Failed to create buffer"):
             GpuBuffer(device, 1024, GPU_BUF_STORAGE)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_write_success(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_buffer_write.return_value = GPU_OK
@@ -504,7 +504,7 @@ class TestGpuBufferWrapper:
         buf.write(data)
         lib.gpu_buffer_write.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_write_with_offset(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_buffer_write.return_value = GPU_OK
@@ -516,7 +516,7 @@ class TestGpuBufferWrapper:
         buf.write(data, offset=16)
         lib.gpu_buffer_write.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_write_raises_on_error(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_buffer_write.return_value = GPU_ERROR_BUFFER
@@ -527,7 +527,7 @@ class TestGpuBufferWrapper:
         with pytest.raises(RuntimeError, match="Buffer write failed"):
             buf.write(np.array([1.0], dtype=np.float32))
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_read_success(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_buffer_read.return_value = GPU_OK
@@ -540,7 +540,7 @@ class TestGpuBufferWrapper:
         assert result.dtype == np.float32
         lib.gpu_buffer_read.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_read_with_offset(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_buffer_read.return_value = GPU_OK
@@ -552,7 +552,7 @@ class TestGpuBufferWrapper:
         assert result.shape == (2, 3)
         assert result.dtype == np.float64
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_read_raises_on_error(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_buffer_read.return_value = GPU_ERROR_NO_MEMORY
@@ -563,7 +563,7 @@ class TestGpuBufferWrapper:
         with pytest.raises(RuntimeError, match="Buffer read failed"):
             buf.read(shape=(4,))
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_destroys_buffer(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -573,7 +573,7 @@ class TestGpuBufferWrapper:
         buf.__del__()
         lib.gpu_buffer_destroy.assert_called_once_with(buf._ptr)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_noop_without_ptr(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -589,7 +589,7 @@ class TestGpuBufferWrapper:
 
 
 class TestGpuShaderWrapper:
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_destroys_shader(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -601,7 +601,7 @@ class TestGpuShaderWrapper:
         actual_ptr = lib.gpu_shader_destroy.call_args[0][0]
         assert actual_ptr.value == 0x3
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_noop_without_ptr(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -617,7 +617,7 @@ class TestGpuShaderWrapper:
 
 
 class TestGpuPipelineWrapper:
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_destroys_pipeline(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -629,7 +629,7 @@ class TestGpuPipelineWrapper:
         actual_ptr = lib.gpu_pipeline_destroy.call_args[0][0]
         assert actual_ptr.value == 0x4
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_noop_without_ptr(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -645,7 +645,7 @@ class TestGpuPipelineWrapper:
 
 
 class TestGpuContextWrapper:
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_bind_pipeline(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -659,7 +659,7 @@ class TestGpuContextWrapper:
         assert args[0].value == 0x5
         assert args[1].value == 0x4
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_bind_buffer(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -674,7 +674,7 @@ class TestGpuContextWrapper:
         assert args[1] == 0
         assert args[2] == buf._ptr
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_set_push(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -684,7 +684,7 @@ class TestGpuContextWrapper:
         ctx.set_push(b"\x01\x02\x03")
         lib.gpu_compute_set_push.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_dispatch_defaults(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -697,7 +697,7 @@ class TestGpuContextWrapper:
         assert args[0].value == 0x5
         assert args[1:] == (64, 1, 1)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_dispatch_custom_dims(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -710,7 +710,7 @@ class TestGpuContextWrapper:
         assert args[0].value == 0x5
         assert args[1:] == (64, 32, 16)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_end_returns_status(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_compute_end.return_value = GPU_OK
@@ -724,7 +724,7 @@ class TestGpuContextWrapper:
         actual_ptr = lib.gpu_compute_end.call_args[0][0]
         assert actual_ptr.value == 0x5
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_context_manager(self, mock_get_lib):
         lib = _make_mock_lib()
         lib.gpu_compute_end.return_value = GPU_OK
@@ -741,7 +741,7 @@ class TestGpuContextWrapper:
 
 
 class TestGpuBufferPoolWrapper:
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_init_creates_pool(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -750,7 +750,7 @@ class TestGpuBufferPoolWrapper:
         GpuBufferPool(device, capacity=32, min_size=512)
         lib.gpu_pool_create.assert_called_once_with(device._ptr, 32, 512)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_acquire_returns_buffer(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -761,7 +761,7 @@ class TestGpuBufferPoolWrapper:
         assert isinstance(buf, GpuBuffer)
         lib.gpu_pool_acquire.assert_called_once_with(pool._ptr, 2048)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_release_nullifies_buffer_ptr(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -774,7 +774,7 @@ class TestGpuBufferPoolWrapper:
         lib.gpu_pool_release.assert_called_once_with(pool._ptr, buf_ptr)
         assert buf._ptr is None
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_destroys_pool(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -784,7 +784,7 @@ class TestGpuBufferPoolWrapper:
         pool.__del__()
         lib.gpu_pool_destroy.assert_called_once_with(pool._ptr)
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine._get_lib")
     def test_del_noop_without_ptr(self, mock_get_lib):
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
@@ -800,25 +800,25 @@ class TestGpuBufferPoolWrapper:
 
 
 class TestConvenienceFunctions:
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.GpuDevice")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.GpuDevice")
     def test_auto_device_creates_device(self, mock_cls):
         result = auto_device()
         mock_cls.assert_called_once_with(None)
         assert result is mock_cls.return_value
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.GpuDevice")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.GpuDevice")
     def test_auto_device_passes_backend(self, mock_cls):
         auto_device(backend="metal")
         mock_cls.assert_called_once_with("metal")
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.GpuDevice")
+    @patch("domain.core.infrastructure._internal.gpu.gpu_engine.GpuDevice")
     def test_is_gpu_available_true(self, mock_cls):
         mock_cls.return_value = MagicMock()
         assert is_gpu_available() is True
         mock_cls.assert_called_once()
 
     @patch(
-        "domain.infrastructure._internal.gpu.gpu_engine.GpuDevice",
+        "domain.core.infrastructure._internal.gpu.gpu_engine.GpuDevice",
         side_effect=RuntimeError("no device"),
     )
     def test_is_gpu_available_false(self, mock_cls):

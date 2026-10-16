@@ -9,8 +9,8 @@ import threading
 import numpy as np
 import pytest
 
-import domain.infrastructure._internal.pugqeep.frame as frame_mod
-from domain.infrastructure._internal.pugqeep.frame import (
+import domain.core.infrastructure._internal.pugqeep.frame as frame_mod
+from domain.core.infrastructure._internal.pugqeep.frame import (
     HANDSHAKE_TIMEOUT,
     MAX_FRAME,
     PROTOCOL_VERSION,

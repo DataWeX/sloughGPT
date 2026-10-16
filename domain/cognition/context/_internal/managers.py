@@ -21,7 +21,7 @@ from domain.core.shared import utc_now_iso
 logger = logging.getLogger("slo.context.managers")
 import threading
 
-from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
+from domain.core.infrastructure._internal.repository import FileRepository, JsonSerializer
 
 _lock = threading.Lock()
 

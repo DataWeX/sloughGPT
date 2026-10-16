@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from domain.infrastructure._internal.model_server import Priority, PriorityRequestQueue
+from domain.core.infrastructure._internal.model_server import Priority, PriorityRequestQueue
 
 
 @pytest.fixture

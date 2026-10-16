@@ -23,7 +23,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
-from domain.infrastructure import AppError
+from domain.core.infrastructure import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -329,14 +329,14 @@ class MobileRouter:
             return build_session_metadata_index()
         except Exception as exc:
             logger.debug("Session list fallback to SessionCore: %s", exc)
-            from domain.infrastructure.session_core import SessionCore
+            from domain.core.infrastructure.session_core import SessionCore
 
             return SessionCore.list_sessions()
 
     @staticmethod
     def _get_session_messages(session_id: str):
         """Get session messages directly."""
-        from domain.infrastructure.session_core import SessionCore
+        from domain.core.infrastructure.session_core import SessionCore
 
         return SessionCore.get_messages(session_id)
 

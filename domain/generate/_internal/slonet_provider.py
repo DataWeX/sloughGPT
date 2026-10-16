@@ -32,9 +32,9 @@ from typing import Any
 
 import numpy as np
 
-from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
-from domain.infrastructure._internal.kv_cache.session import SessionKVManager
-from domain.infrastructure._internal.structured_log import StructuredLogger
+from domain.core.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
+from domain.core.infrastructure._internal.kv_cache.session import SessionKVManager
+from domain.core.infrastructure._internal.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.inference.slonet_provider")
 
@@ -334,7 +334,7 @@ def convert_hf_to_slonet(
     """
     import time as _time
 
-    from domain.infrastructure._internal.arch_config import build_arch
+    from domain.core.infrastructure._internal.arch_config import build_arch
 
     _t0 = _time.monotonic()
 
@@ -543,7 +543,7 @@ class SloNetChatProvider:
         Returns:
             SloNetServer bound to this provider's model/tokenizer.
         """
-        from domain.infrastructure._internal.slonet_server import SloNetServer
+        from domain.core.infrastructure._internal.slonet_server import SloNetServer
 
         # Lazy providers (created via lazy_from_slnc) keep _model == None until
         # first use. Hand the server a factory so it can load the weights in the
@@ -644,8 +644,8 @@ class SloNetChatProvider:
         """
         import time as _time
 
-        from domain.infrastructure._internal.slnc.parser import SLNCParser
-        from domain.infrastructure._internal.weight_loader import build_model_from_config
+        from domain.core.infrastructure._internal.slnc.parser import SLNCParser
+        from domain.core.infrastructure._internal.weight_loader import build_model_from_config
 
         _t0 = _time.monotonic()
         parser = SLNCParser(slnc_path)
@@ -658,7 +658,7 @@ class SloNetChatProvider:
 
         # Unified loading path: DirectWeightLoader (single-pass mmap→parameter)
         try:
-            from domain.infrastructure._internal.weight_loader import (
+            from domain.core.infrastructure._internal.weight_loader import (
                 DirectWeightLoader,
                 build_load_plan,
             )
@@ -681,7 +681,7 @@ class SloNetChatProvider:
                 extra={"tag": "INF"},
             )
             # Fallback: build plan + generic loader (same mapping, no mmap optimization)
-            from domain.infrastructure._internal.weight_loader import (
+            from domain.core.infrastructure._internal.weight_loader import (
                 build_load_plan,
                 load_into_model,
             )
@@ -725,8 +725,10 @@ class SloNetChatProvider:
         if quantize:
             from pathlib import Path as PathlibPath
 
-            from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
-            from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
+            from domain.core.infrastructure._internal.quant_core.wrapper import (
+                HAS_AVX2 as _HAS_AVX2,
+            )
+            from domain.core.infrastructure._internal.quantization import Quantine, walk_slo_linears
 
             if not bool(_HAS_AVX2):
                 logger.info(
@@ -885,7 +887,7 @@ class SloNetChatProvider:
 
         # Apply ResourceManager compute limits (BLAS threads, OMP_NUM_THREADS, etc.)
         try:
-            from domain.infrastructure._internal.resource_manager import get_resource_manager
+            from domain.core.infrastructure._internal.resource_manager import get_resource_manager
 
             rm = get_resource_manager()
             rm.apply_blas_env()
@@ -930,7 +932,7 @@ class SloNetChatProvider:
 
         # Record dashboard event
         try:
-            from domain.infrastructure._internal.event_buffer import get_event_buffer
+            from domain.core.infrastructure._internal.event_buffer import get_event_buffer
 
             get_event_buffer().record("MODEL", f"loaded {model_id} ({n_layer} layers)")
         except Exception as exc:
@@ -981,7 +983,7 @@ class SloNetChatProvider:
         Returns:
             Lazy SloNetChatProvider. ``_model`` is None until first use.
         """
-        from domain.infrastructure._internal.slnc.parser import SLNCParser
+        from domain.core.infrastructure._internal.slnc.parser import SLNCParser
 
         parser = SLNCParser(slnc_path)
         try:
@@ -1069,8 +1071,8 @@ class SloNetChatProvider:
             FileNotFoundError: If soul_path does not exist
             ValueError: If the .soul file is invalid or missing model config
         """
+        from domain.core.infrastructure._internal.weight_loader import build_model_from_config
         from domain.generate._internal.slo_format import load_soul
-        from domain.infrastructure._internal.weight_loader import build_model_from_config
 
         soul, state_dict = load_soul(soul_path)
         # Keep only real weight tensors (skip dict-valued state like _config).
@@ -1135,7 +1137,7 @@ class SloNetChatProvider:
 
         # Apply ResourceManager compute limits
         try:
-            from domain.infrastructure._internal.resource_manager import get_resource_manager
+            from domain.core.infrastructure._internal.resource_manager import get_resource_manager
 
             rm = get_resource_manager()
             rm.apply_blas_env()
@@ -1379,7 +1381,7 @@ class SloNetChatProvider:
                     logger.warning("Embedded tokenizer load failed: %s", e, extra={"tag": "INF"})
 
         try:
-            from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+            from domain.core.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
             if (
                 model_dir
@@ -1542,7 +1544,7 @@ class SloNetChatProvider:
         )
         # Record dashboard event
         try:
-            from domain.infrastructure._internal.event_buffer import get_event_buffer
+            from domain.core.infrastructure._internal.event_buffer import get_event_buffer
 
             get_event_buffer().record("MODEL", f"unloaded {self._model_id}")
         except Exception as exc:

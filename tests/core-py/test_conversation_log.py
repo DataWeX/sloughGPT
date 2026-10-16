@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.infrastructure._internal.conversation_log import (
+from domain.core.infrastructure._internal.conversation_log import (
     ConversationLogger,
     capture,
     get_conversation_logger,
@@ -301,7 +301,7 @@ class TestThreadSafety:
 
 class TestCapture:
     def test_capture_returns_true(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -312,7 +312,7 @@ class TestCapture:
 
     def test_capture_returns_false_when_disabled(self, tmp_log_dir, monkeypatch):
         monkeypatch.setenv("MAN_CAPTURE_CONVERSATIONS", "0")
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -322,7 +322,7 @@ class TestCapture:
             conversation_log._logger = old
 
     def test_capture_with_all_params(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -346,7 +346,7 @@ class TestCapture:
             conversation_log._logger = old
 
     def test_capture_returns_false_when_empty(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -485,7 +485,7 @@ class TestRecordEdgeCases:
 class TestCaptureEdgeCases:
     def test_capture_returns_false_on_exception(self, tmp_log_dir, monkeypatch):
         monkeypatch.setenv("MAN_CAPTURE_CONVERSATIONS", "1")
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -497,7 +497,7 @@ class TestCaptureEdgeCases:
             conversation_log._logger = old
 
     def test_capture_returns_false_when_none_prompt(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -507,7 +507,7 @@ class TestCaptureEdgeCases:
             conversation_log._logger = old
 
     def test_capture_returns_false_when_none_response(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -517,7 +517,7 @@ class TestCaptureEdgeCases:
             conversation_log._logger = old
 
     def test_capture_default_params(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -675,23 +675,23 @@ class TestThreadSafetyExtended:
 
 class TestModuleConstants:
     def test_default_dir_exists(self):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         # _DEFAULT_DIR is set at import time
         assert isinstance(conversation_log._DEFAULT_DIR, Path)
 
     def test_logger_lock_exists(self):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         assert isinstance(conversation_log._logger_lock, type(threading.Lock()))
 
     def test_singleton_lock_exists(self):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         assert hasattr(conversation_log, "_logger_lock")
 
     def test_capture_with_extra_meta(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -703,7 +703,7 @@ class TestModuleConstants:
             conversation_log._logger = old
 
     def test_capture_with_zero_tokens(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:
@@ -716,7 +716,7 @@ class TestModuleConstants:
             conversation_log._logger = old
 
     def test_capture_with_negative_elapsed(self, tmp_log_dir):
-        from domain.infrastructure._internal import conversation_log
+        from domain.core.infrastructure._internal import conversation_log
 
         old = conversation_log._logger
         try:

@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.server_state — AtomicRef and ServerState."""
+"""Tests for domain.core.infrastructure._internal.server_state — AtomicRef and ServerState."""
 
 import threading
 import time
@@ -257,7 +257,7 @@ class TestServerState:
     def test_singleton_get_server_state(self):
         from infra_lib.server_state import _server_state_lock, get_server_state
 
-        import domain.infrastructure._internal.server_state as mod
+        import domain.core.infrastructure._internal.server_state as mod
 
         with _server_state_lock:
             old = mod._server_state

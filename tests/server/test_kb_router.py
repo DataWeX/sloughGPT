@@ -116,7 +116,7 @@ class TestListKnowledge:
 
 class TestAddKnowledge:
     @patch("domain.knowledge.get_knowledge_memory")
-    @patch("domain.infrastructure._internal.truth_labeler.get_truth_labeler")
+    @patch("domain.core.infrastructure._internal.truth_labeler.get_truth_labeler")
     def test_adds_knowledge(self, mock_get_label, mock_get_mem, client):
         labeler = mock_get_label.return_value
         labeler.label.return_value = MagicMock(label="factual")
@@ -128,7 +128,7 @@ class TestAddKnowledge:
         assert data["status"] == "stored"
 
     @patch("domain.knowledge.get_knowledge_memory")
-    @patch("domain.infrastructure._internal.truth_labeler.get_truth_labeler")
+    @patch("domain.core.infrastructure._internal.truth_labeler.get_truth_labeler")
     def test_adds_knowledge_with_topic(self, mock_get_label, mock_get_mem, client):
         labeler = mock_get_label.return_value
         labeler.label.return_value = MagicMock(label="factual")
@@ -250,7 +250,7 @@ class TestSuggestTopic:
 
 
 class TestLabelText:
-    @patch("domain.infrastructure.truth_labeler.get_truth_labeler")
+    @patch("domain.core.infrastructure.truth_labeler.get_truth_labeler")
     def test_labels_text(self, mock_get_label, client):
         labeler = mock_get_label.return_value
         labeler.label.return_value = MagicMock(to_dict=lambda: {"label": "factual"})
@@ -354,7 +354,7 @@ class TestAddKnowledgeEdge:
         assert resp.json()["data"]["status"] == "duplicate"
 
     @patch("domain.knowledge.get_knowledge_memory")
-    @patch("domain.infrastructure._internal.truth_labeler.get_truth_labeler")
+    @patch("domain.core.infrastructure._internal.truth_labeler.get_truth_labeler")
     def test_auto_tag_always_along(self, mock_get_label, mock_get_mem, client):
         labeler = mock_get_label.return_value
         labeler.label.return_value = MagicMock(label="factual")
@@ -443,8 +443,8 @@ class TestIngestUrl:
         data = resp.json()["data"]
         assert data["new_facts"] == 3
 
-    @patch("domain.infrastructure._internal.errors.classify_exception")
-    @patch("domain.infrastructure._internal.errors.emit_error_event")
+    @patch("domain.core.infrastructure._internal.errors.classify_exception")
+    @patch("domain.core.infrastructure._internal.errors.emit_error_event")
     @patch("domain.knowledge.get_knowledge_ingestor")
     def test_ingestor_exception_maps_to_http(self, mock_get_ing, mock_emit, mock_classify, client):
         mock_get_ing.side_effect = RuntimeError("boom")
@@ -464,7 +464,7 @@ class TestLabelMethods:
         resp = client.get("/knowledge/label")
         assert resp.status_code == 422
 
-    @patch("domain.infrastructure.truth_labeler.get_truth_labeler")
+    @patch("domain.core.infrastructure.truth_labeler.get_truth_labeler")
     def test_label_text_error_returns_500(self, mock_get_label, client):
         mock_get_label.side_effect = RuntimeError("broken")
         resp = client.get("/knowledge/label?text=hello")

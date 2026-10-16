@@ -1,10 +1,10 @@
-"""Tests for domain.infrastructure._internal.atomic_write (single save owner)."""
+"""Tests for domain.core.infrastructure._internal.atomic_write (single save owner)."""
 
 from __future__ import annotations
 
 import pytest
 
-from domain.infrastructure._internal.atomic_write import (
+from domain.core.infrastructure._internal.atomic_write import (
     TEMP_SUFFIX,
     atomic_write,
     atomic_writer,

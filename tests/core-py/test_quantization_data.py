@@ -1,8 +1,8 @@
-"""Tests for domain.infrastructure.quantization — QuantMode, QuantDtype, QuantMeta, TensorInfo."""
+"""Tests for domain.core.infrastructure.quantization — QuantMode, QuantDtype, QuantMeta, TensorInfo."""
 
 import numpy as np
 
-from domain.infrastructure._internal.quantization import (
+from domain.core.infrastructure._internal.quantization import (
     QuantDtype,
     QuantMeta,
     QuantMode,

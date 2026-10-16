@@ -10,7 +10,7 @@ import time
 os.environ.setdefault("SLO_AUTO_WORKFLOW", "false")
 os.environ.setdefault("SLO_AUTOLOAD_MODEL", "")
 
-from domain.infrastructure._internal.pugqeep.engine import (
+from domain.core.infrastructure._internal.pugqeep.engine import (
     Pool,
     Process,
     ProcessStatus,

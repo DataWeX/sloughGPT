@@ -350,7 +350,7 @@ class TestMetalAccelerator:
         def boom():
             raise ImportError("mps unavailable")
 
-        monkeypatch.setattr("domain.infrastructure._internal.ml_types._mps_available", boom)
+        monkeypatch.setattr("domain.core.infrastructure._internal.ml_types._mps_available", boom)
         assert acc._MetalAccelerator()._available is False
 
     def test_scaled_dot_attention_explicit_scale_no_mask(self):

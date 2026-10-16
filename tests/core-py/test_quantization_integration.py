@@ -14,13 +14,13 @@ import time
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.quantization import Quantine
+from domain.core.infrastructure._internal.quantization import Quantine
 from domain.training._internal.slonet import SloTransformer, SloTransformerBlock
 
 
 def _walk_linear_layers(model):
     """Find all SloLinear layers — delegates to shared utility."""
-    from domain.infrastructure._internal.quantization import walk_slo_linears
+    from domain.core.infrastructure._internal.quantization import walk_slo_linears
 
     return walk_slo_linears(model)
 
@@ -337,7 +337,7 @@ class TestQuantizeEndpoint:
 
     def test_quantize_endpoint_smoke(self, tiny_model, sample_input):
         """Simulate the quantize endpoint logic directly."""
-        from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
+        from domain.core.infrastructure._internal.quantization import Quantine, walk_slo_linears
 
         # Walk layers
         layers = walk_slo_linears(tiny_model)
@@ -378,7 +378,7 @@ class TestQuantizeEndpoint:
         This test verifies every parameter finds its module. Prevents
         regression of the naming mismatch bug (q_proj vs W_q).
         """
-        from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
+        from domain.core.infrastructure._internal.quantization import Quantine, walk_slo_linears
 
         linear_map = walk_slo_linears(tiny_model)
         param_names = dict(tiny_model.named_parameters())
@@ -567,7 +567,7 @@ class TestInt8QuantizedKvCache:
 
     def test_kv_quantize_roundtrip_bound(self):
         """quantize_kv_tensor returns int8 + scale, dequant is loss-bounded."""
-        from domain.infrastructure._internal.quantization import (
+        from domain.core.infrastructure._internal.quantization import (
             dequantize_kv_tensor,
             quantize_kv_tensor,
         )
@@ -587,7 +587,7 @@ class TestInt8QuantizedKvCache:
 
     def test_kv_quantize_zero_vector_guard(self):
         """Zero rows don't divide by zero; they quantize and dequantize to zero."""
-        from domain.infrastructure._internal.quantization import (
+        from domain.core.infrastructure._internal.quantization import (
             dequantize_kv_tensor,
             quantize_kv_tensor,
         )

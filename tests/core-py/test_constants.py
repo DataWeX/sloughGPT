@@ -1,6 +1,6 @@
 """Tests for infrastructure constants — validates all shared constants exist and have sane values."""
 
-from domain.infrastructure._internal.constants import (
+from domain.core.infrastructure._internal.constants import (
     DEFAULT_GENERATE_TIMEOUT,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_LOAD_MAX_RETRIES,
@@ -146,7 +146,7 @@ class TestConstantsCrossChecks:
         assert total < DEFAULT_GENERATE_TIMEOUT
 
     def test_import_all_names(self):
-        import domain.infrastructure._internal.constants as c
+        import domain.core.infrastructure._internal.constants as c
 
         assert hasattr(c, "DEFAULT_GENERATE_TIMEOUT")
         assert hasattr(c, "DEFAULT_STALL_TIMEOUT")
@@ -156,7 +156,7 @@ class TestConstantsCrossChecks:
         assert hasattr(c, "DEFAULT_LOAD_RETRY_DELAY")
 
     def test_module_docstring(self):
-        import domain.infrastructure._internal.constants as c
+        import domain.core.infrastructure._internal.constants as c
 
         assert c.__doc__ is not None
         assert len(c.__doc__) > 0

@@ -19,7 +19,7 @@ _CORE_PY = Path(__file__).resolve().parents[2] / "packages" / "core-py"
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domain.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.pugqeep.point import Point
 
 # ── generate() ────────────────────────────────────────────────────────
 
@@ -237,7 +237,7 @@ class TestPointBytesRoundTrip:
         assert p2.function_type == "raw"
 
     def test_block_q4(self):
-        from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+        from domain.core.infrastructure._internal.pugqeep.compressor import PointCompressor
 
         w = np.random.RandomState(0).randn(64).astype(np.float32)
         p = PointCompressor().compress_block_q4(w, identity="q4")
@@ -251,7 +251,7 @@ class TestPointBytesRoundTrip:
         assert p2.params["block_size"] == p.params["block_size"]
 
     def test_block_q8(self):
-        from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+        from domain.core.infrastructure._internal.pugqeep.compressor import PointCompressor
 
         w = np.random.RandomState(1).randn(64).astype(np.float32)
         p = PointCompressor().compress_block_q8(w, identity="q8")

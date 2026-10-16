@@ -15,8 +15,8 @@ import types
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
-from domain.infrastructure._internal.numpy_engine import KVCache, NumpyEngine, _load_weights
+from domain.core.infrastructure._internal.morph_tokenizer import MorphTokenizer
+from domain.core.infrastructure._internal.numpy_engine import KVCache, NumpyEngine, _load_weights
 
 VOCAB = 64
 N_EMBD = 16
@@ -331,7 +331,7 @@ class TestNumpyEngineConstructor:
         assert engine._cache.get(name) is not None
 
     def test_get_weight_via_model_tree(self, tmp_path):
-        from domain.infrastructure._internal.point_compressor import ModelTree, PointLibrary
+        from domain.core.infrastructure._internal.point_compressor import ModelTree, PointLibrary
 
         library = PointLibrary(name="tiny-lib", storage_dir=tmp_path / "lib")
         tree = ModelTree(MODEL_ID, library, n_clusters=16)
@@ -354,7 +354,7 @@ class TestFromPretrained:
 
     def test_use_points(self, hf_cache, monkeypatch, tmp_path):
         _install_fake_safetensors(monkeypatch, fail=False)
-        from domain.infrastructure._internal.point_compressor import PointLibrary
+        from domain.core.infrastructure._internal.point_compressor import PointLibrary
 
         library = PointLibrary(name="tiny-lib", storage_dir=tmp_path / "lib")
         engine = NumpyEngine.from_pretrained(
@@ -372,7 +372,7 @@ class TestFromPretrained:
 
 class TestFromSlnc:
     def test_from_slnc_with_tokenizer(self, tmp_path):
-        from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
+        from domain.core.infrastructure._internal.slnc.compiler import SLNCCompiler
 
         slnc = tmp_path / "tiny.slnc"
         SLNCCompiler().compile_from_dict(_config(), _weights(), str(slnc))
@@ -382,7 +382,7 @@ class TestFromSlnc:
         assert engine._forward([1, 2, 3]).shape == (VOCAB,)
 
     def test_from_slnc_default_tokenizer(self, hf_cache, tmp_path):
-        from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
+        from domain.core.infrastructure._internal.slnc.compiler import SLNCCompiler
 
         slnc = tmp_path / "tiny.slnc"
         SLNCCompiler().compile_from_dict(_config(), _weights(), str(slnc))

@@ -2,13 +2,13 @@
 
 import numpy as np
 
-from domain.infrastructure._internal.arch_config import (
+from domain.core.infrastructure._internal.arch_config import (
     GPT2_WEIGHT_MAP,
     LLAMA_WEIGHT_MAP,
     ArchConfig,
 )
-from domain.infrastructure._internal.numpy_engine import KVCache
-from domain.infrastructure._internal.numpy_forward import (
+from domain.core.infrastructure._internal.numpy_engine import KVCache
+from domain.core.infrastructure._internal.numpy_forward import (
     forward,
     forward_cached,
     forward_fast,
@@ -144,7 +144,7 @@ class TestNormFn:
         arch = _make_gpt2_config()
         arch.norm = "rms_norm"
         fn = norm_fn(arch)
-        from domain.infrastructure._internal.numpy_ops import rmsnorm
+        from domain.core.infrastructure._internal.numpy_ops import rmsnorm
 
         assert fn is rmsnorm
 
@@ -152,7 +152,7 @@ class TestNormFn:
         arch = _make_gpt2_config()
         arch.norm = "layer_norm"
         fn = norm_fn(arch)
-        from domain.infrastructure._internal.numpy_ops import layer_norm
+        from domain.core.infrastructure._internal.numpy_ops import layer_norm
 
         assert fn is layer_norm
 
@@ -487,7 +487,7 @@ class TestForwardCached:
         np.testing.assert_allclose(logits_full, logits_cached, atol=1e-5)
 
     def test_start_pos_affects_rope(self):
-        from domain.infrastructure._internal.numpy_ops import rope
+        from domain.core.infrastructure._internal.numpy_ops import rope
 
         x = np.random.randn(3, 4, 8).astype(np.float32)
         r0 = rope(x, 0, 8, 10000.0)

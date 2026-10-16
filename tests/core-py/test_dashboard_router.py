@@ -63,7 +63,7 @@ class TestGetHealthSummary:
         ss.get_requests_per_minute.return_value = 25.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.core.infrastructure.server_state", {"get_server_state": lambda: ss})
 
         result = _get_health_summary()
         assert result["model_loaded"] is True
@@ -91,7 +91,7 @@ class TestGetHealthSummary:
         ss.get_requests_per_minute.return_value = 0.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.core.infrastructure.server_state", {"get_server_state": lambda: ss})
 
         result = _get_health_summary()
         assert result["model_loaded"] is False
@@ -158,7 +158,7 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 5.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.core.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
         _mock(
             "domain.training.outcome_tracker",
@@ -199,7 +199,7 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 0.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.core.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
         _mock(
             "domain.training.outcome_tracker",
@@ -239,7 +239,7 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 5.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.core.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
         _mock(
             "domain.training.outcome_tracker",
@@ -263,7 +263,7 @@ class TestDashboardSummary:
 class TestDashboardEvents:
     def test_returns_events_list(self):
         _mock(
-            "domain.infrastructure._internal.event_buffer",
+            "domain.core.infrastructure._internal.event_buffer",
             {
                 "get_event_buffer": MagicMock(
                     return_value=MagicMock(recent=lambda n: [{"type": "info", "msg": "test"}])

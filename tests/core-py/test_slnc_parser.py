@@ -7,8 +7,8 @@ import zlib
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.slnc.parser import SLNCParser
-from domain.infrastructure._internal.slnc.spec import (
+from domain.core.infrastructure._internal.slnc.parser import SLNCParser
+from domain.core.infrastructure._internal.slnc.spec import (
     ALIGNMENT,
     DTYPE_FLOAT16,
     DTYPE_FLOAT32,

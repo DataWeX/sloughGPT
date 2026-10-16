@@ -8,7 +8,7 @@ from domain.core.errors._internal.errors import (
     SloughGPTDomainError,
     require_non_empty_prompt,
 )
-from domain.infrastructure._internal.errors import AppError, ValidationError
+from domain.core.infrastructure._internal.errors import AppError, ValidationError
 
 
 class TestExceptionHierarchy:

@@ -22,8 +22,8 @@ from typing import Any
 
 import numpy as np
 
-from domain.infrastructure._internal.arch_config import ArchConfig, build_arch
-from domain.infrastructure._internal.numpy_forward import forward_fast, pre_extract_weights
+from domain.core.infrastructure._internal.arch_config import ArchConfig, build_arch
+from domain.core.infrastructure._internal.numpy_forward import forward_fast, pre_extract_weights
 from domain.training._internal.slonet import (
     SloAdam,
     SloTransformer,
@@ -131,7 +131,7 @@ class TextDataset:
 
 def _load_gpt2_numpy() -> tuple[dict, ArchConfig, dict]:
     """Load GPT-2 weights as numpy arrays + arch config + tokenizer vocab."""
-    from domain.infrastructure._internal.slnc.parser import SLNCParser
+    from domain.core.infrastructure._internal.slnc.parser import SLNCParser
 
     hf_path = Path.home() / ".cache/huggingface/hub/models--gpt2"
     snapshots = sorted((hf_path / "snapshots").glob("*"))
@@ -144,7 +144,7 @@ def _load_gpt2_numpy() -> tuple[dict, ArchConfig, dict]:
         raise RuntimeError(
             "No .slnc file for GPT-2. Convert first: "
             'SLNCCompiler().compile("gpt2", output="model.slnc") '
-            "(domain.infrastructure._internal.slnc.compiler)"
+            "(domain.core.infrastructure._internal.slnc.compiler)"
         )
 
     with SLNCParser(str(slnc_path)) as parser:

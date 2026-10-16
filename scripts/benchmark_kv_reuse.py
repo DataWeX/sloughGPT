@@ -222,7 +222,7 @@ class _StackProvider:
     """
 
     def __init__(self, model):
-        from domain.infrastructure._internal.kv_cache.session import SessionKVManager
+        from domain.core.infrastructure._internal.kv_cache.session import SessionKVManager
 
         self._model = model
         self._kv_manager = SessionKVManager(kv_ttl=3600.0, kv_max_sessions=64)
@@ -478,8 +478,8 @@ def _make_stack(model, model_id="bench", quantize_kv=False):
     """
     from types import MethodType
 
+    from domain.core.infrastructure._internal.slonet_server import SloNetServer
     from domain.generate._internal.slonet_provider import SloNetChatProvider
-    from domain.infrastructure._internal.slonet_server import SloNetServer
 
     tokenizer = _CharTokenizer()
     provider = _StackProvider(model)

@@ -146,7 +146,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
         # Register with CancelManager for cancellation support
         cancel_event = threading.Event()
         try:
-            from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+            from domain.core.infrastructure.cancel_manager import OpType, get_cancel_manager
 
             get_cancel_manager().register(
                 op_type=OpType.TRAINING,

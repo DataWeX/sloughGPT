@@ -1,8 +1,8 @@
-"""Tests for domain.infrastructure.health_flow — Severity, Diagnosis, HealthFlowResult; domain.infrastructure._internal.event_bus — EventPriority, Event, Subscription."""
+"""Tests for domain.core.infrastructure.health_flow — Severity, Diagnosis, HealthFlowResult; domain.core.infrastructure._internal.event_bus — EventPriority, Event, Subscription."""
 
 import time
 
-from domain.infrastructure._internal.event_bus import (
+from domain.core.infrastructure._internal.event_bus import (
     Event,
     EventBus,
     EventPriority,
@@ -11,7 +11,7 @@ from domain.infrastructure._internal.event_bus import (
     reset_event_bus,
     set_event_bus,
 )
-from domain.infrastructure._internal.health_flow import (
+from domain.core.infrastructure._internal.health_flow import (
     Diagnosis,
     HealthFlowResult,
     Severity,

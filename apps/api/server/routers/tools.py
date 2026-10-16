@@ -18,8 +18,8 @@ from infrastructure.sse_fallback import sse_error, sse_token
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, success_response
 
+from domain.core.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.generate.models._internal.provider import get_provider
-from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.tools import get_tools_engine
 
 logger = logging.getLogger("slo.tools")

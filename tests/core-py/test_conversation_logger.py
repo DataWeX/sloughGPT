@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.infrastructure._internal.conversation_log import ConversationLogger, capture
+from domain.core.infrastructure._internal.conversation_log import ConversationLogger, capture
 
 
 @pytest.fixture
@@ -183,7 +183,7 @@ class TestConversationLogger:
 class TestCaptureHelper:
     def test_capture_returns_true_and_writes(self, monkeypatch, tmp_path):
         logger = ConversationLogger(data_dir=tmp_path / "api_conversations")
-        monkeypatch.setattr("domain.infrastructure._internal.conversation_log._logger", logger)
+        monkeypatch.setattr("domain.core.infrastructure._internal.conversation_log._logger", logger)
         assert (
             capture("Q", "A", model="m", tokens_generated=1, elapsed_ms=2.0, temperature=0.9)
             is True
@@ -197,13 +197,13 @@ class TestCaptureHelper:
             raise RuntimeError("disk full")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.conversation_log.get_conversation_logger", boom
+            "domain.core.infrastructure._internal.conversation_log.get_conversation_logger", boom
         )
         assert capture("Q", "A") is False
 
     def test_capture_passes_all_params(self, monkeypatch, tmp_path):
         logger = ConversationLogger(data_dir=tmp_path / "api_conversations")
-        monkeypatch.setattr("domain.infrastructure._internal.conversation_log._logger", logger)
+        monkeypatch.setattr("domain.core.infrastructure._internal.conversation_log._logger", logger)
         capture(
             "Q",
             "A",
@@ -220,19 +220,19 @@ class TestCaptureHelper:
 
     def test_capture_returns_false_when_disabled(self, monkeypatch, tmp_path):
         logger = ConversationLogger(data_dir=tmp_path / "api_conversations")
-        monkeypatch.setattr("domain.infrastructure._internal.conversation_log._logger", logger)
+        monkeypatch.setattr("domain.core.infrastructure._internal.conversation_log._logger", logger)
         monkeypatch.setenv("MAN_CAPTURE_CONVERSATIONS", "0")
         assert capture("Q", "A") is False
 
     def test_capture_returns_false_on_empty(self, monkeypatch, tmp_path):
         logger = ConversationLogger(data_dir=tmp_path / "api_conversations")
-        monkeypatch.setattr("domain.infrastructure._internal.conversation_log._logger", logger)
+        monkeypatch.setattr("domain.core.infrastructure._internal.conversation_log._logger", logger)
         assert capture("", "A") is False
         assert capture("Q", "") is False
 
     def test_capture_with_none_response(self, monkeypatch, tmp_path):
         logger = ConversationLogger(data_dir=tmp_path / "api_conversations")
-        monkeypatch.setattr("domain.infrastructure._internal.conversation_log._logger", logger)
+        monkeypatch.setattr("domain.core.infrastructure._internal.conversation_log._logger", logger)
         # Should not raise
         result = capture("Q", None)
         assert result is False
@@ -244,7 +244,7 @@ class TestCaptureHelper:
 class TestGetConversationLogger:
     def test_get_conversation_logger_singleton(self, monkeypatch, tmp_path):
         """get_conversation_logger lazily creates and returns a singleton."""
-        import domain.infrastructure._internal.conversation_log as cl
+        import domain.core.infrastructure._internal.conversation_log as cl
 
         monkeypatch.setattr(cl, "_logger", None)
         logger = cl.get_conversation_logger()
@@ -253,14 +253,14 @@ class TestGetConversationLogger:
 
     def test_get_conversation_logger_returns_existing(self, monkeypatch, tmp_path):
         """get_conversation_logger returns the existing singleton."""
-        import domain.infrastructure._internal.conversation_log as cl
+        import domain.core.infrastructure._internal.conversation_log as cl
 
         logger = ConversationLogger(data_dir=tmp_path / "api_conversations")
         monkeypatch.setattr(cl, "_logger", logger)
         assert cl.get_conversation_logger() is logger
 
     def test_reset_clears_singleton(self, monkeypatch, tmp_path):
-        import domain.infrastructure._internal.conversation_log as cl
+        import domain.core.infrastructure._internal.conversation_log as cl
 
         logger = ConversationLogger(data_dir=tmp_path / "api_conversations")
         monkeypatch.setattr(cl, "_logger", logger)
@@ -268,7 +268,7 @@ class TestGetConversationLogger:
         assert cl._logger is None
 
     def test_reset_then_get_creates_new(self, monkeypatch, tmp_path):
-        import domain.infrastructure._internal.conversation_log as cl
+        import domain.core.infrastructure._internal.conversation_log as cl
 
         logger = ConversationLogger(data_dir=tmp_path / "api_conversations")
         monkeypatch.setattr(cl, "_logger", logger)
@@ -277,7 +277,7 @@ class TestGetConversationLogger:
         assert new_logger is not logger
 
     def test_reset_is_idempotent(self, monkeypatch):
-        import domain.infrastructure._internal.conversation_log as cl
+        import domain.core.infrastructure._internal.conversation_log as cl
 
         monkeypatch.setattr(cl, "_logger", None)
         cl.reset_conversation_logger()

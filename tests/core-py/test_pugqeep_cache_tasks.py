@@ -7,7 +7,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.pugqeep.cache import (
+from domain.core.infrastructure._internal.pugqeep.cache import (
     CacheEntry,
     CacheStats,
     DiskStore,
@@ -16,26 +16,26 @@ from domain.infrastructure._internal.pugqeep.cache import (
     Tier,
     TieredCache,
 )
-from domain.infrastructure._internal.pugqeep.cache import (
+from domain.core.infrastructure._internal.pugqeep.cache import (
     MemoryStore as CacheMemoryStore,
 )
-from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
-from domain.infrastructure._internal.pugqeep.config import (
+from domain.core.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.core.infrastructure._internal.pugqeep.config import (
     CompressorConfig,
     LibraryConfig,
 )
-from domain.infrastructure._internal.pugqeep.facade import PGQ
-from domain.infrastructure._internal.pugqeep.library import PointLibrary
-from domain.infrastructure._internal.pugqeep.point import Point
-from domain.infrastructure._internal.pugqeep.point_weight import PointWeight
-from domain.infrastructure._internal.pugqeep.store import (
+from domain.core.infrastructure._internal.pugqeep.facade import PGQ
+from domain.core.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.core.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.pugqeep.point_weight import PointWeight
+from domain.core.infrastructure._internal.pugqeep.store import (
     DirectoryStore,
     JSONStore,
 )
-from domain.infrastructure._internal.pugqeep.store import (
+from domain.core.infrastructure._internal.pugqeep.store import (
     MemoryStore as FunctionMemoryStore,
 )
-from domain.infrastructure._internal.pugqeep.task_queue import (
+from domain.core.infrastructure._internal.pugqeep.task_queue import (
     Task,
     TaskPriority,
     TaskQueue,
@@ -184,7 +184,9 @@ class _FakeModel:
 
 class TestCompressSlonetToPoints:
     def test_compresses_all_weights(self):
-        from domain.infrastructure._internal.pugqeep.point_weight import compress_slonet_to_points
+        from domain.core.infrastructure._internal.pugqeep.point_weight import (
+            compress_slonet_to_points,
+        )
 
         points = compress_slonet_to_points(_FakeModel(), method="cluster", n_clusters=4)
         assert len(points) == 5
@@ -192,7 +194,9 @@ class TestCompressSlonetToPoints:
             assert isinstance(pw, PointWeight)
 
     def test_tiny_arrays_stored_raw(self):
-        from domain.infrastructure._internal.pugqeep.point_weight import compress_slonet_to_points
+        from domain.core.infrastructure._internal.pugqeep.point_weight import (
+            compress_slonet_to_points,
+        )
 
         points = compress_slonet_to_points(_FakeModel(), method="cluster", n_clusters=4)
         assert points["tiny"].point.function_type == "raw"

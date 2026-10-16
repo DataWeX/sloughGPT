@@ -134,8 +134,8 @@ class SoulsRouter:
         """
         if SloughGPTModel is None:
             raise RuntimeError("SloughGPTModel not available — PyTorch model module not loaded")
+        from domain.core.infrastructure.weight_loader import infer_arch_from_state_dict
         from domain.generate import load_soul
-        from domain.infrastructure.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(checkpoint_path)
         if isinstance(sd, dict) and "tok_emb.weight" not in sd:
@@ -375,7 +375,7 @@ Be yourself — let your personality shape how you respond."""
             soul_info = manager.get_soul(req.name)
             if soul_info:
                 try:
-                    from domain.infrastructure.context_core import get_context_core
+                    from domain.core.infrastructure.context_core import get_context_core
 
                     ctx_core = get_context_core()
                     if ctx_core:
@@ -407,7 +407,7 @@ Be yourself — let your personality shape how you respond."""
                 )
                 result["checkpoint_loaded"] = loaded
                 try:
-                    from domain.infrastructure.server_state import get_server_state
+                    from domain.core.infrastructure.server_state import get_server_state
 
                     get_server_state().record_model_event(
                         "load", req.name, f"checkpoint={req.checkpoint_name}"
@@ -429,7 +429,7 @@ Be yourself — let your personality shape how you respond."""
                     logger.warning("Failed to set soul engine: %s", exc, extra={"tag": "SOUL"})
 
             try:
-                from domain.infrastructure.server_state import get_server_state
+                from domain.core.infrastructure.server_state import get_server_state
 
                 get_server_state().record_model_event("switch", req.name)
             except Exception:
@@ -437,7 +437,7 @@ Be yourself — let your personality shape how you respond."""
 
             # Record dashboard event
             try:
-                from domain.infrastructure.event_buffer import get_event_buffer
+                from domain.core.infrastructure.event_buffer import get_event_buffer
 
                 detail = f" checkpoint={req.checkpoint_name}" if req.checkpoint_name else ""
                 get_event_buffer().record("SOUL", f"switched to {req.name}{detail}")

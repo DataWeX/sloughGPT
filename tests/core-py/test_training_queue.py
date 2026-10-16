@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.task_queue import Task
-from domain.infrastructure._internal.training_queue import (
+from domain.core.infrastructure._internal.task_queue import Task
+from domain.core.infrastructure._internal.training_queue import (
     _json_safe_payload,
     _resolve_checkpoint,
     training_handler,

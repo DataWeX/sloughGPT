@@ -21,23 +21,23 @@ torch = pytest.importorskip("torch")
 
 class TestModelLoaderPlatformDetection:
     def test_mps_available_returns_bool(self):
-        from domain.infrastructure._internal.ml_types import _mps_available
+        from domain.core.infrastructure._internal.ml_types import _mps_available
 
         assert isinstance(_mps_available(), bool)
 
     def test_cuda_available_returns_bool(self):
-        from domain.infrastructure._internal.ml_types import _cuda_available
+        from domain.core.infrastructure._internal.ml_types import _cuda_available
 
         assert isinstance(_cuda_available(), bool)
 
     def test_mps_available_handles_exception(self):
-        from domain.infrastructure._internal.ml_types import _mps_available
+        from domain.core.infrastructure._internal.ml_types import _mps_available
 
         with patch("torch.backends.mps.is_available", side_effect=AttributeError("no mps")):
             assert _mps_available() is False
 
     def test_cuda_available_handles_exception(self):
-        from domain.infrastructure._internal.ml_types import _cuda_available
+        from domain.core.infrastructure._internal.ml_types import _cuda_available
 
         with patch("torch.cuda.is_available", side_effect=AttributeError("no cuda")):
             assert _cuda_available() is False

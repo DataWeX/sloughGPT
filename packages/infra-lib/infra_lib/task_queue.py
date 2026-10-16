@@ -6,7 +6,7 @@ Standalone library version — zero internal dependencies.
 Optional integrations (EventBus, SSE) are injected at runtime if available.
 
 DELIBERATE FORK (kanban card 9bdf83f2): this is the standalone twin of the
-canonical ``domain/infrastructure/_internal/task_queue.py``. It exists so the
+canonical ``domain/core/infrastructure/_internal/task_queue.py``. It exists so the
 queue can ship with zero internal dependencies — importing the canonical
 copy from here would defeat that purpose. The two stay behaviorally aligned
 except for these documented differences:

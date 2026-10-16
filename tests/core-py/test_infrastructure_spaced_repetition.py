@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from domain.infrastructure._internal.spaced_repetition_engine import SpacedRepetitionScheduler
+from domain.core.infrastructure._internal.spaced_repetition_engine import SpacedRepetitionScheduler
 
 
 class TestSpacedRepetitionScheduler:

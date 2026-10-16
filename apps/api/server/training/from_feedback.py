@@ -111,7 +111,7 @@ async def train_from_feedback(
 
         # Register with CancelManager
         try:
-            from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+            from domain.core.infrastructure.cancel_manager import OpType, get_cancel_manager
 
             _mgr = get_cancel_manager()
             op_id = _mgr.register(

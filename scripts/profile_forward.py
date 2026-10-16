@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 from safetensors import safe_open
 
-from domain.infrastructure._internal.arch_config import build_arch
-from domain.infrastructure._internal.numpy_ops import gelu, layer_norm, softmax
+from domain.core.infrastructure._internal.arch_config import build_arch
+from domain.core.infrastructure._internal.numpy_ops import gelu, layer_norm, softmax
 
 snap = sorted((Path.home() / ".cache/huggingface/hub/models--gpt2/snapshots").glob("*"))[0]
 weights = {}

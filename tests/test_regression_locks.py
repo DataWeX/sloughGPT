@@ -71,7 +71,7 @@ REGISTRY: list[tuple[str, str, list[str], list[str], str]] = [
     ),
     (
         "embedding-config-openai-alias",
-        "domain/infrastructure/_internal/config.py",
+        "domain/core/infrastructure/_internal/config.py",
         # The fields a 81616a6f7 sweep deleted and 61831dc4d restored — probed
         # as full declarations. Bare "api_key"/"base_url" probes are defeated
         # by wandb_api_key, api_keys_enabled and the field's own docstring,

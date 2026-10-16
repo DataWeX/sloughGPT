@@ -266,7 +266,7 @@ def _cmd_models_download(args):
     try:
         import asyncio
 
-        from domain.infrastructure.download_manager import get_download_manager
+        from domain.core.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
 

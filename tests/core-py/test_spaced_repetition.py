@@ -17,7 +17,7 @@ _CORE_PY = Path(__file__).resolve().parents[2] / "packages" / "core-py"
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domain.infrastructure._internal.spaced_repetition_engine import SpacedRepetitionScheduler
+from domain.core.infrastructure._internal.spaced_repetition_engine import SpacedRepetitionScheduler
 
 
 class TestSpacedRepetitionScheduler:

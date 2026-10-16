@@ -1,10 +1,10 @@
-"""Tests for domain.infrastructure.deployment — enums, dataclass, manager init."""
+"""Tests for domain.core.infrastructure.deployment — enums, dataclass, manager init."""
 
 import asyncio
 
 import pytest
 
-from domain.infrastructure._internal.deployment import (
+from domain.core.infrastructure._internal.deployment import (
     Deployment,
     DeploymentEnvironment,
     DeploymentManager,

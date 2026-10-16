@@ -108,7 +108,7 @@ def _get_active_processes() -> dict:
 
     # Active downloads
     try:
-        from domain.infrastructure.download_manager import get_download_manager
+        from domain.core.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         downloads = mgr.list_downloads()
@@ -150,7 +150,7 @@ def _get_health_summary() -> dict:
     try:
         import psutil
 
-        from domain.infrastructure.server_state import get_server_state
+        from domain.core.infrastructure.server_state import get_server_state
 
         ss = get_server_state()
         model_loaded = ss.model.get() is not None or ss.provider.get() is not None
@@ -189,7 +189,7 @@ def _get_health_summary() -> dict:
 
 def _build_snapshot() -> dict:
     """Build a single dashboard snapshot."""
-    from domain.infrastructure import get_event_buffer
+    from domain.core.infrastructure import get_event_buffer
 
     return {
         "stream": "dashboard",
@@ -297,7 +297,7 @@ class DashboardRouter:
         self, n: int = 20, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Return the last N dashboard events as JSON."""
-        from domain.infrastructure import get_event_buffer
+        from domain.core.infrastructure import get_event_buffer
 
         events = get_event_buffer().recent(n)
         return success_response(data={"events": events, "count": len(events)})

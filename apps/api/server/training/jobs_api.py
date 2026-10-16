@@ -166,7 +166,7 @@ async def stop_training_job(job_id: str):
     executor = get_training_executor()
     executor.cancel(job_id)
     try:
-        from domain.infrastructure.cancel_manager import get_cancel_manager
+        from domain.core.infrastructure.cancel_manager import get_cancel_manager
 
         get_cancel_manager().cancel(job_id)
     except Exception as exc:

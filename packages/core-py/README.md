@@ -10,11 +10,11 @@ These modules left `packages/core-py` for the repo-root **`domain/`** package â€
 
 | Module | Purpose | Docs |
 |--------|---------|------|
-| `domain.infrastructure._internal.producer_consumer` | General-purpose bounded work queue with priority, backpressure, consumer thread pools | [PRODUCER_CONSUMER_QUEUE.md](../../docs/PRODUCER_CONSUMER_QUEUE.md) |
+| `domain.core.infrastructure._internal.producer_consumer` | General-purpose bounded work queue with priority, backpressure, consumer thread pools | [PRODUCER_CONSUMER_QUEUE.md](../../docs/PRODUCER_CONSUMER_QUEUE.md) |
 | `domains.infrastructure.pugqeep` | Point-Graph-Queue system: compressed data points, model trees, task queues, engine | [PUGQEEP.md](../../docs/PUGQEEP.md) |
-| `domain.infrastructure._internal.cancel_manager` | Cancellation for long-running operations | [AGENTS.md](../../AGENTS.md) |
-| `domain.infrastructure._internal.model_server` | Model lifecycle, backends, circuit breaker | [AGENTS.md](../../AGENTS.md) |
-| `domain.infrastructure._internal.process_guard` | Subprocess crash isolation, auto-restart | [AGENTS.md](../../AGENTS.md) |
+| `domain.core.infrastructure._internal.cancel_manager` | Cancellation for long-running operations | [AGENTS.md](../../AGENTS.md) |
+| `domain.core.infrastructure._internal.model_server` | Model lifecycle, backends, circuit breaker | [AGENTS.md](../../AGENTS.md) |
+| `domain.core.infrastructure._internal.process_guard` | Subprocess crash isolation, auto-restart | [AGENTS.md](../../AGENTS.md) |
 
 ### Core domains
 
@@ -26,7 +26,7 @@ All six moved to the repo-root **`domain/`** package.
 | `domain.generate` | Vector store, KV cache, providers |
 | `domain.training.feedback` | LoRA eval, per-user adapter |
 | `domain.cognition` | Reasoning, metacognition, RAG |
-| `domain.infrastructure` | ProcessGuard, ModelServer, TaskQueue, CancelManager |
+| `domain.core.infrastructure` | ProcessGuard, ModelServer, TaskQueue, CancelManager |
 | `domain.cognition.multimodal` | Phoneme encoders, TTS, speech synthesis |
 
 ### Phoneme Encoder API

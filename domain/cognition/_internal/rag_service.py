@@ -383,7 +383,7 @@ class RAGService:
     def auto_ingest_directory(self, root_path: str, max_files: int = 200) -> int:
         """Scan a directory and ingest code/docs into RAG."""
         try:
-            from domain.infrastructure._internal.auto_ingest import RepoScanner
+            from domain.core.infrastructure._internal.auto_ingest import RepoScanner
         except ImportError:
             logger.debug("RepoScanner unavailable, skipping auto-ingest")
             return 0
@@ -490,7 +490,7 @@ class KGTrainingPipeline:
             TaskQueue instance, created on first call.
         """
         if self._queue is None:
-            from domain.infrastructure._internal.pugqeep.task_queue import TaskQueue
+            from domain.core.infrastructure._internal.pugqeep.task_queue import TaskQueue
 
             storage = Path("data/kg_pipeline")
             try:
@@ -533,7 +533,7 @@ class KGTrainingPipeline:
         if not triples:
             raise ValueError("triples list must not be empty")
 
-        from domain.infrastructure._internal.pugqeep.task_queue import Task, TaskPriority
+        from domain.core.infrastructure._internal.pugqeep.task_queue import Task, TaskPriority
 
         queue = self._get_queue()
         submitted = 0

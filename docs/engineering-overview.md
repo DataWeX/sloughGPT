@@ -174,7 +174,7 @@ cross untouched. CORS is allow-any (bearer-token auth, no cookies), matching
 ### Error Handling
 
 ```
-domain/infrastructure/_internal/errors.py  — ErrorCode enum, ERROR_REGISTRY, AppError
+domain/core/infrastructure/_internal/errors.py  — ErrorCode enum, ERROR_REGISTRY, AppError
   (re-exported as domains/infrastructure/errors.py — backward-compat shim)
 apps/api/server/schemas/common.py          — raise_error(), classify_and_raise()
 apps/api/server/infrastructure/            — exception_handlers.py (single emission point)

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import importlib as _importlib
 
-from domain.infrastructure import (
+from domain.core.infrastructure import (
     AppConfig,
     AppError,
     ErrorCode,
@@ -23,11 +23,11 @@ from domain.infrastructure import (
     get_lifecycle_manager,
     reload_config,
 )
-from domain.infrastructure._internal.arch_config import ArchConfig
-from domain.infrastructure._internal.model_loader import ModelLoader
-from domain.infrastructure._internal.numpy_engine import NumpyEngine
-from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
-from domain.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.arch_config import ArchConfig
+from domain.core.infrastructure._internal.model_loader import ModelLoader
+from domain.core.infrastructure._internal.numpy_engine import NumpyEngine
+from domain.core.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.core.infrastructure._internal.pugqeep.point import Point
 from domain.shell import (
     DaitRuntime,
     Kernel,

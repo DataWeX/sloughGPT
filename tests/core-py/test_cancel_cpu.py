@@ -1,7 +1,7 @@
-"""Tests for domain.infrastructure.cancel_manager — OpType, OpStatus, Operation; domain.infrastructure.cpu_topology — CpuTopology."""
+"""Tests for domain.core.infrastructure.cancel_manager — OpType, OpStatus, Operation; domain.core.infrastructure.cpu_topology — CpuTopology."""
 
-from domain.infrastructure._internal.cancel_manager import Operation, OpStatus, OpType
-from domain.infrastructure._internal.cpu_topology import CpuTopology
+from domain.core.infrastructure._internal.cancel_manager import Operation, OpStatus, OpType
+from domain.core.infrastructure._internal.cpu_topology import CpuTopology
 
 
 class TestOpType:

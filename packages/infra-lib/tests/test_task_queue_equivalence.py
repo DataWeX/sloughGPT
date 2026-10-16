@@ -2,7 +2,7 @@
 Equivalence contract between the standalone fork and the canonical copy.
 
 infra_lib.task_queue is a DELIBERATE fork of
-domain/infrastructure/_internal/task_queue.py so the library can ship with
+domain/core/infrastructure/_internal/task_queue.py so the library can ship with
 zero internal dependencies — see the fork's module docstring for the
 documented differences (num_workers default resolution, EventBus injection,
 SSE envelope shape, log extras).
@@ -17,7 +17,7 @@ import inspect
 import pytest
 
 canonical = pytest.importorskip(
-    "domain.infrastructure._internal.task_queue",
+    "domain.core.infrastructure._internal.task_queue",
     reason="canonical domain copy not importable (standalone install)",
 )
 

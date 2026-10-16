@@ -213,7 +213,7 @@ async def start_training(
                     details=_quality,
                 )
     except Exception as e:
-        from domain.infrastructure._internal.errors import AppError
+        from domain.core.infrastructure._internal.errors import AppError
 
         if isinstance(e, AppError):
             raise
@@ -265,7 +265,7 @@ async def start_training(
                         status_code=400,
                     )
     except Exception as e:
-        from domain.infrastructure._internal.errors import AppError
+        from domain.core.infrastructure._internal.errors import AppError
 
         if isinstance(e, AppError):
             raise
@@ -373,7 +373,7 @@ async def start_training(
     get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, req_snapshot)
 
     try:
-        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.core.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().register(
             op_type=OpType.TRAINING,

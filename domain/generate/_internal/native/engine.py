@@ -197,7 +197,7 @@ class NativeEngine:
         if not model_id:
             return None
         try:
-            from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+            from domain.core.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
             return MorphTokenizer.from_pretrained(model_id)
         except Exception as exc:
@@ -295,7 +295,7 @@ class NativeEngine:
         Side effects:
             - mmap-allocates the weight file and copies it into the C weight block
         """
-        from domain.infrastructure._internal.slnc.parser import SLNCParser
+        from domain.core.infrastructure._internal.slnc.parser import SLNCParser
 
         parser = SLNCParser(slnc_path)
         try:

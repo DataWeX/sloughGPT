@@ -26,8 +26,8 @@ from typing import Any
 
 import numpy as np
 
+from domain.core.infrastructure._internal.atomic_write import atomic_writer
 from domain.core.shared import repair_iso, utc_now_iso
-from domain.infrastructure._internal.atomic_write import atomic_writer
 
 logger = logging.getLogger("slo.inference.slo_format")
 

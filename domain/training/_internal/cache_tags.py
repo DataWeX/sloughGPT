@@ -3,7 +3,7 @@ classification (kind/tags), and per-file mime.
 
 The cache root is the existing external-download root
 (``SLO_CACHE_DIR/external``); the root logic lives in
-``domain.infrastructure._internal.external_download`` and is reused here,
+``domain.core.infrastructure._internal.external_download`` and is reused here,
 not duplicated. Tag/mime metadata is stored additively inside each entry's
 ``.manifest.json`` (plus the legacy ``.metadata.json`` sidecar when present),
 so old readers keep working.
@@ -91,7 +91,7 @@ _EXTENSION_MIME = {
 
 def get_cache_root() -> Path:
     """Return the just-cache root (existing external-download root)."""
-    from domain.infrastructure._internal.external_download import _get_cache_root
+    from domain.core.infrastructure._internal.external_download import _get_cache_root
 
     return _get_cache_root()
 
@@ -134,7 +134,7 @@ def find_corpus_file(entry_dir: Path) -> Path | None:
     implementation). Adds a raw-\*.csv last resort over the historic
     set; everything else resolves identically.
     """
-    from domain.infrastructure._internal.artifact_registry import (
+    from domain.core.infrastructure._internal.artifact_registry import (
         find_corpus_file as _registry_find_corpus,
     )
 

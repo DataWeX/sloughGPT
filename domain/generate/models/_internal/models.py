@@ -161,7 +161,7 @@ class ModelLoader:
 
     @classmethod
     def _load_sou(cls, path: str, device: str, **kwargs) -> ModelInterface:
-        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
+        from domain.core.infrastructure._internal.weight_loader import SoulWeightLoader
 
         loader = SoulWeightLoader(path)
         meta = loader.load_metadata()

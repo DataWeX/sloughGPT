@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.lifecycle — LifecyclePhase, StartupProfile, StartupHook, ShutdownHook, _HookResult, _topological_sort, _dependency_levels, LifecycleManager, ALL_PROFILES."""
+"""Tests for domain.core.infrastructure._internal.lifecycle — LifecyclePhase, StartupProfile, StartupHook, ShutdownHook, _HookResult, _topological_sort, _dependency_levels, LifecycleManager, ALL_PROFILES."""
 
 import asyncio
 import os
@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from domain.infrastructure._internal.lifecycle import (
+from domain.core.infrastructure._internal.lifecycle import (
     ALL_PROFILES,
     EVT_HOOK_COMPLETED,
     EVT_HOOK_FAILED,

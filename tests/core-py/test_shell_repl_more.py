@@ -2419,21 +2419,21 @@ class TestProtectUnprotect:
         assert "Usage" in out
 
     def test_protect_model(self, repl, monkeypatch):
-        import domain.infrastructure._internal.model_protector as mp
+        import domain.core.infrastructure._internal.model_protector as mp
 
         monkeypatch.setattr(mp, "protect_model", lambda mid: {"protected": ["f1"], "errors": []})
         out = capture_cmd(repl, repl._cmd_protect, "mymodel")
         assert "Protected 1" in out or "mymodel" in out
 
     def test_protect_no_files(self, repl, monkeypatch):
-        import domain.infrastructure._internal.model_protector as mp
+        import domain.core.infrastructure._internal.model_protector as mp
 
         monkeypatch.setattr(mp, "protect_model", lambda mid: {"protected": [], "errors": []})
         out = capture_cmd(repl, repl._cmd_protect, "mymodel")
         assert "No files found" in out
 
     def test_protect_with_errors(self, repl, monkeypatch):
-        import domain.infrastructure._internal.model_protector as mp
+        import domain.core.infrastructure._internal.model_protector as mp
 
         monkeypatch.setattr(
             mp,
@@ -2444,7 +2444,7 @@ class TestProtectUnprotect:
         assert "Warning" in out
 
     def test_protect_exception(self, repl, monkeypatch):
-        import domain.infrastructure._internal.model_protector as mp
+        import domain.core.infrastructure._internal.model_protector as mp
 
         monkeypatch.setattr(
             mp, "protect_model", lambda mid: (_ for _ in ()).throw(RuntimeError("boom"))
@@ -2457,21 +2457,21 @@ class TestProtectUnprotect:
         assert "Usage" in out
 
     def test_unprotect_model(self, repl, monkeypatch):
-        import domain.infrastructure._internal.model_protector as mp
+        import domain.core.infrastructure._internal.model_protector as mp
 
         monkeypatch.setattr(mp, "unprotect_model", lambda mid: {"unprotected": 3, "errors": []})
         out = capture_cmd(repl, repl._cmd_unprotect, "mymodel")
         assert "Unprotected 3" in out
 
     def test_unprotect_none(self, repl, monkeypatch):
-        import domain.infrastructure._internal.model_protector as mp
+        import domain.core.infrastructure._internal.model_protector as mp
 
         monkeypatch.setattr(mp, "unprotect_model", lambda mid: {"unprotected": 0, "errors": []})
         out = capture_cmd(repl, repl._cmd_unprotect, "mymodel")
         assert "No protected" in out
 
     def test_unprotect_with_errors(self, repl, monkeypatch):
-        import domain.infrastructure._internal.model_protector as mp
+        import domain.core.infrastructure._internal.model_protector as mp
 
         monkeypatch.setattr(
             mp, "unprotect_model", lambda mid: {"unprotected": 1, "errors": [{"error": "oops"}]}
@@ -2480,7 +2480,7 @@ class TestProtectUnprotect:
         assert "Warning" in out
 
     def test_unprotect_exception(self, repl, monkeypatch):
-        import domain.infrastructure._internal.model_protector as mp
+        import domain.core.infrastructure._internal.model_protector as mp
 
         monkeypatch.setattr(
             mp, "unprotect_model", lambda mid: (_ for _ in ()).throw(RuntimeError("fail"))
@@ -4459,7 +4459,7 @@ class TestCmdEvents:
         from unittest.mock import patch
 
         with patch(
-            "domain.infrastructure._internal.event_bus.get_event_bus",
+            "domain.core.infrastructure._internal.event_bus.get_event_bus",
             side_effect=Exception("no bus"),
         ):
             repl._cmd_events("")
@@ -4470,7 +4470,7 @@ class TestCmdEvents:
 
         bus = MagicMock()
         bus.history.return_value = []
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("")
             assert repl._last_exit_code == 0
 
@@ -4485,7 +4485,7 @@ class TestCmdEvents:
         ev.source = "api"
         ev.data = {"model": "gpt2"}
         bus.history.return_value = [ev]
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("")
             assert repl._last_exit_code == 0
 
@@ -4505,7 +4505,7 @@ class TestCmdEvents:
         ev2.source = "api"
         ev2.data = None
         bus.history.return_value = [ev1, ev2]
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("model")
             assert repl._last_exit_code == 0
 
@@ -4519,7 +4519,7 @@ class TestCmdEvents:
         ev.source = "api"
         ev.data = None
         bus.history.return_value = [ev]
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("nonexistent")
             assert repl._last_exit_code == 0
 
@@ -4537,7 +4537,7 @@ class TestCmdEvents:
             ev.data = None
             events.append(ev)
         bus.history.return_value = events
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events(" 3")
             assert repl._last_exit_code == 0
 
@@ -4700,7 +4700,7 @@ class TestCmdLoadFallback:
         repl.cmds.load_model.return_value = {"status": "loaded", "device": "cpu"}
         with patch.dict(
             "sys.modules",
-            {"domain.infrastructure.conversion_tracker": None, "apps.cli.src.utils.progress": None},
+            {"domain.core.infrastructure.conversion_tracker": None, "apps.cli.src.utils.progress": None},
         ):
             repl._cmd_load("gpt2")
             assert repl._last_exit_code == 0
@@ -6121,7 +6121,7 @@ class TestCmdLoad:
                 return_value={"available": True},
             ),
             patch(
-                "domain.infrastructure.conversion_tracker.get_tracker",
+                "domain.core.infrastructure.conversion_tracker.get_tracker",
                 side_effect=ImportError("no tracker"),
             ),
         ):
@@ -6142,7 +6142,7 @@ class TestCmdLoad:
                 new_callable=PropertyMock,
                 return_value={"available": True},
             ),
-            patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=tracker),
+            patch("domain.core.infrastructure.conversion_tracker.get_tracker", return_value=tracker),
             patch("apps.cli.src.utils.progress.ProgressBar"),
         ):
             repl._cmd_load("gpt2")
@@ -6167,7 +6167,7 @@ class TestCmdLoad:
                 new_callable=PropertyMock,
                 return_value={"available": True},
             ),
-            patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=tracker),
+            patch("domain.core.infrastructure.conversion_tracker.get_tracker", return_value=tracker),
             patch("apps.cli.src.utils.progress.ProgressBar"),
         ):
             repl._cmd_load("gpt2")
@@ -9100,7 +9100,7 @@ class TestCmdConfirmConfig:
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == "domain.infrastructure._internal.config":
+            if name == "domain.core.infrastructure._internal.config":
                 raise ImportError("not available")
             return real_import(name, *args, **kwargs)
 
@@ -9116,7 +9116,7 @@ class TestCmdConfirmConfig:
         mock_config._config_dir.mkdir(parents=True, exist_ok=True)
         defaults = mock_config._config_dir / "defaults.yaml"
         defaults.write_text("features:\n  auto_download: false\n")
-        with patch("domain.infrastructure.config.get_config", return_value=mock_config):
+        with patch("domain.core.infrastructure.config.get_config", return_value=mock_config):
             with patch.object(Path, "cwd", return_value=Path("/tmp/test_config").parent):
                 repl._cmd_confirm("on")
         assert repl._last_exit_code == 0
@@ -9134,7 +9134,7 @@ class TestCmdConfirmToggle:
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == "domain.infrastructure._internal.config":
+            if name == "domain.core.infrastructure._internal.config":
                 raise ImportError()
             return real_import(name, *args, **kwargs)
 
@@ -9177,7 +9177,7 @@ class TestCmdLoadTracker:
         with patch.dict(
             "sys.modules",
             {
-                "domain.infrastructure.conversion_tracker": MagicMock(
+                "domain.core.infrastructure.conversion_tracker": MagicMock(
                     get_tracker=MagicMock(return_value=mock_tracker)
                 ),
                 "apps.cli.src.utils.progress": MagicMock(ProgressBar=mock_progress),
@@ -9245,7 +9245,7 @@ class TestCmdLoadImportError:
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == "domain.infrastructure.conversion_tracker":
+            if name == "domain.core.infrastructure.conversion_tracker":
                 raise ImportError("no tracker")
             if name == "apps.cli.src.utils.progress":
                 raise ImportError("no progress")
@@ -9297,7 +9297,7 @@ class TestCmdEventsExtra:
             ev.data = {"key": f"val_{i}"}
             events.append(ev)
         bus.history.return_value = events
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("5")
         assert repl._last_exit_code == 0
 
@@ -9314,7 +9314,7 @@ class TestCmdEventsExtra:
         ev2.source = "monitor"
         ev2.data = {}
         bus.history.return_value = [ev1, ev2]
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.core.infrastructure.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("model")
         assert repl._last_exit_code == 0
 
@@ -12334,7 +12334,7 @@ class TestCmdLoadTrackerV2:
         with (
             patch.object(repl, "_require_api", return_value=True),
             patch(
-                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                "domain.core.infrastructure._internal.conversion_tracker.get_tracker",
                 return_value=mock_tracker,
             ),
             patch.dict(
@@ -12361,7 +12361,7 @@ class TestCmdLoadTrackerV2:
         with (
             patch.object(repl, "_require_api", return_value=True),
             patch(
-                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                "domain.core.infrastructure._internal.conversion_tracker.get_tracker",
                 return_value=mock_tracker,
             ),
             patch.dict(
@@ -12388,7 +12388,7 @@ class TestCmdLoadTrackerV2:
         with (
             patch.object(repl, "_require_api", return_value=True),
             patch(
-                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                "domain.core.infrastructure._internal.conversion_tracker.get_tracker",
                 return_value=mock_tracker,
             ),
             patch.dict(
@@ -12411,7 +12411,7 @@ class TestCmdLoadTrackerV2:
         with (
             patch.object(repl, "_require_api", return_value=True),
             patch(
-                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                "domain.core.infrastructure._internal.conversion_tracker.get_tracker",
                 return_value=mock_tracker,
             ),
             patch.dict(
@@ -12438,7 +12438,7 @@ class TestCmdLoadTrackerV2:
         with (
             patch.object(repl, "_require_api", return_value=True),
             patch(
-                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                "domain.core.infrastructure._internal.conversion_tracker.get_tracker",
                 return_value=mock_tracker,
             ),
             patch.dict(
@@ -12461,7 +12461,7 @@ class TestCmdLoadTrackerV2:
         with (
             patch.object(repl, "_require_api", return_value=True),
             patch(
-                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                "domain.core.infrastructure._internal.conversion_tracker.get_tracker",
                 return_value=mock_tracker,
             ),
             patch.dict(
@@ -12484,7 +12484,7 @@ class TestCmdLoadTrackerV2:
         with (
             patch.object(repl, "_require_api", return_value=True),
             patch(
-                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                "domain.core.infrastructure._internal.conversion_tracker.get_tracker",
                 return_value=mock_tracker,
             ),
             patch.dict(
@@ -12508,7 +12508,7 @@ class TestCmdLoadTrackerV2:
         with (
             patch.object(repl, "_require_api", return_value=True),
             patch(
-                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                "domain.core.infrastructure._internal.conversion_tracker.get_tracker",
                 return_value=mock_tracker,
             ),
             patch.dict(
@@ -13205,7 +13205,7 @@ class TestCmdConfirmConfigV2:
         assert repl._last_exit_code == 0
 
     def test_confirm_on(self, repl):
-        with patch("domain.infrastructure._internal.config.get_config") as mock_get_cfg:
+        with patch("domain.core.infrastructure._internal.config.get_config") as mock_get_cfg:
             mock_cfg = MagicMock()
             mock_cfg.features.auto_download = False
             mock_cfg.save = MagicMock()
@@ -13214,7 +13214,7 @@ class TestCmdConfirmConfigV2:
         assert repl._last_exit_code == 0
 
     def test_confirm_off(self, repl):
-        with patch("domain.infrastructure._internal.config.get_config") as mock_get_cfg:
+        with patch("domain.core.infrastructure._internal.config.get_config") as mock_get_cfg:
             mock_cfg = MagicMock()
             mock_cfg.features.auto_download = True
             mock_cfg.save = MagicMock()
@@ -13405,7 +13405,7 @@ class TestCmdProtectUnprotectV2:
 
     def test_protect_success(self, repl):
         with patch(
-            "domain.infrastructure._internal.model_protector.protect_model",
+            "domain.core.infrastructure._internal.model_protector.protect_model",
             return_value={"protected": ["file.bin"], "errors": []},
         ):
             repl._cmd_protect("gpt2")
@@ -13413,7 +13413,7 @@ class TestCmdProtectUnprotectV2:
 
     def test_protect_no_files(self, repl):
         with patch(
-            "domain.infrastructure._internal.model_protector.protect_model",
+            "domain.core.infrastructure._internal.model_protector.protect_model",
             return_value={"protected": [], "errors": []},
         ):
             repl._cmd_protect("nonexistent")
@@ -13421,7 +13421,7 @@ class TestCmdProtectUnprotectV2:
 
     def test_protect_with_errors(self, repl):
         with patch(
-            "domain.infrastructure._internal.model_protector.protect_model",
+            "domain.core.infrastructure._internal.model_protector.protect_model",
             return_value={"protected": ["f"], "errors": [{"error": "perm denied"}]},
         ):
             repl._cmd_protect("gpt2")
@@ -13429,7 +13429,7 @@ class TestCmdProtectUnprotectV2:
 
     def test_protect_exception(self, repl):
         with patch(
-            "domain.infrastructure._internal.model_protector.protect_model",
+            "domain.core.infrastructure._internal.model_protector.protect_model",
             side_effect=RuntimeError("fail"),
         ):
             repl._cmd_protect("gpt2")
@@ -13441,7 +13441,7 @@ class TestCmdProtectUnprotectV2:
 
     def test_unprotect_success(self, repl):
         with patch(
-            "domain.infrastructure._internal.model_protector.unprotect_model",
+            "domain.core.infrastructure._internal.model_protector.unprotect_model",
             return_value={"unprotected": 2, "errors": []},
         ):
             repl._cmd_unprotect("gpt2")
@@ -13449,7 +13449,7 @@ class TestCmdProtectUnprotectV2:
 
     def test_unprotect_with_errors(self, repl):
         with patch(
-            "domain.infrastructure._internal.model_protector.unprotect_model",
+            "domain.core.infrastructure._internal.model_protector.unprotect_model",
             return_value={"unprotected": 0, "errors": [{"error": "not found"}]},
         ):
             repl._cmd_unprotect("nonexistent")
@@ -13457,7 +13457,7 @@ class TestCmdProtectUnprotectV2:
 
     def test_unprotect_exception(self, repl):
         with patch(
-            "domain.infrastructure._internal.model_protector.unprotect_model",
+            "domain.core.infrastructure._internal.model_protector.unprotect_model",
             side_effect=RuntimeError("fail"),
         ):
             repl._cmd_unprotect("gpt2")
@@ -13494,13 +13494,13 @@ class TestCmdEventsExtraV2:
         assert repl._last_exit_code == 0
 
     def test_events_filter_match(self, repl):
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_bus:
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus") as mock_bus:
             mock_bus.return_value.get_recent.return_value = [{"type": "model.loaded", "data": {}}]
             repl._cmd_events("model")
         assert repl._last_exit_code == 0
 
     def test_events_empty(self, repl):
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_bus:
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus") as mock_bus:
             mock_bus.return_value.get_recent.return_value = []
             repl._cmd_events("")
         assert repl._last_exit_code == 0
@@ -16638,7 +16638,7 @@ class TestCmdProtectExtra:
 
         mock_result = {"protected": ["model.bin"], "errors": []}
         with mp(
-            "domain.infrastructure._internal.model_protector.protect_model",
+            "domain.core.infrastructure._internal.model_protector.protect_model",
             return_value=mock_result,
         ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
@@ -16649,7 +16649,7 @@ class TestCmdProtectExtra:
 
         mock_result = {"protected": [], "errors": []}
         with mp(
-            "domain.infrastructure._internal.model_protector.protect_model",
+            "domain.core.infrastructure._internal.model_protector.protect_model",
             return_value=mock_result,
         ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
@@ -16660,7 +16660,7 @@ class TestCmdProtectExtra:
 
         mock_result = {"protected": ["a.bin"], "errors": [{"error": "perm denied"}]}
         with mp(
-            "domain.infrastructure._internal.model_protector.protect_model",
+            "domain.core.infrastructure._internal.model_protector.protect_model",
             return_value=mock_result,
         ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
@@ -16677,7 +16677,7 @@ class TestCmdUnprotectExtra:
 
         mock_result = {"unprotected": 3, "errors": []}
         with mp(
-            "domain.infrastructure._internal.model_protector.unprotect_model",
+            "domain.core.infrastructure._internal.model_protector.unprotect_model",
             return_value=mock_result,
         ):
             out = _run_with_io(repl, [], lambda: repl._cmd_unprotect("mymodel"))
@@ -16688,7 +16688,7 @@ class TestCmdUnprotectExtra:
 
         mock_result = {"unprotected": 0, "errors": []}
         with mp(
-            "domain.infrastructure._internal.model_protector.unprotect_model",
+            "domain.core.infrastructure._internal.model_protector.unprotect_model",
             return_value=mock_result,
         ):
             out = _run_with_io(repl, [], lambda: repl._cmd_unprotect("mymodel"))
@@ -16760,7 +16760,7 @@ class TestCmdEventsExtraV3:
         from unittest.mock import patch as mp
 
         with mp(
-            "domain.infrastructure._internal.event_bus.get_event_bus",
+            "domain.core.infrastructure._internal.event_bus.get_event_bus",
             side_effect=Exception("no bus"),
         ):
             out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
@@ -16772,7 +16772,7 @@ class TestCmdEventsExtraV3:
 
         mock_bus = MagicMock()
         mock_bus.history.return_value = []
-        with mp("domain.infrastructure._internal.event_bus.get_event_bus", return_value=mock_bus):
+        with mp("domain.core.infrastructure._internal.event_bus.get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
             assert "No events" in out
 
@@ -20209,7 +20209,7 @@ class TestCmdDenyDeeper3:
 
 class TestCmdEventsDeeper2:
     def test_events_no_bus(self, repl):
-        import domain.infrastructure._internal.event_bus as eb
+        import domain.core.infrastructure._internal.event_bus as eb
 
         with patch.object(eb, "get_event_bus", side_effect=Exception("no bus")):
             out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
@@ -20218,7 +20218,7 @@ class TestCmdEventsDeeper2:
     def test_events_empty_history(self, repl):
         mock_bus = MagicMock()
         mock_bus.history.return_value = []
-        import domain.infrastructure._internal.event_bus as eb
+        import domain.core.infrastructure._internal.event_bus as eb
 
         with patch.object(eb, "get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
@@ -20232,7 +20232,7 @@ class TestCmdEventsDeeper2:
         mock_event.data = {"model": "gpt2"}
         mock_bus = MagicMock()
         mock_bus.history.return_value = [mock_event]
-        import domain.infrastructure._internal.event_bus as eb
+        import domain.core.infrastructure._internal.event_bus as eb
 
         with patch.object(eb, "get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events("model"))
@@ -20246,7 +20246,7 @@ class TestCmdEventsDeeper2:
         mock_event.data = {}
         mock_bus = MagicMock()
         mock_bus.history.return_value = [mock_event]
-        import domain.infrastructure._internal.event_bus as eb
+        import domain.core.infrastructure._internal.event_bus as eb
 
         with patch.object(eb, "get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events("nonexistent"))
@@ -20263,7 +20263,7 @@ class TestCmdEventsDeeper2:
             events.append(ev)
         mock_bus = MagicMock()
         mock_bus.history.return_value = events
-        import domain.infrastructure._internal.event_bus as eb
+        import domain.core.infrastructure._internal.event_bus as eb
 
         with patch.object(eb, "get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events("event 5"))
@@ -23248,7 +23248,7 @@ class TestCmdSvcDeeperV3:
 
 class TestCmdEventsDeeperV2:
     def test_events_no_args(self, repl):
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_eb:
+        with patch("domain.core.infrastructure._internal.event_bus.get_event_bus") as mock_eb:
             mock_bus = MagicMock()
             mock_bus.replay.return_value = []
             mock_eb.return_value = mock_bus

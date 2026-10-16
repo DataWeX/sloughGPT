@@ -113,7 +113,7 @@ def resolve_dataset_path(dataset_id: str) -> str:
     # Shared corpus priority via the artifact registry; roots stay local
     # so the REPO_ROOT seam (and per-caller bases) keep working.
     try:
-        from domain.infrastructure._internal.artifact_registry import (
+        from domain.core.infrastructure._internal.artifact_registry import (
             find_corpus_file as _find_corpus,
         )
     except Exception as exc:

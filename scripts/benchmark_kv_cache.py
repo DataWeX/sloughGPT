@@ -4,8 +4,8 @@ import time
 
 import numpy as np
 
-from domain.infrastructure._internal.kv_cache.kv_state import KVState
-from domain.infrastructure._internal.session_cache import SessionKVState
+from domain.core.infrastructure._internal.kv_cache.kv_state import KVState
+from domain.core.infrastructure._internal.session_cache import SessionKVState
 
 
 def bench_session_cache(n_sessions=100, prefix_len=100, new_tokens=10, n_iters=500):
@@ -94,7 +94,7 @@ def bench_append_strategy(n_tokens=1024, n_heads=12, head_dim=64):
 
 def bench_native_numpy(n_layers=12, n_heads=12, head_dim=64, n_tokens=512, n_iters=5):
     """Benchmark NativeKVState's numpy path across a decode (append + read)."""
-    from domain.infrastructure._internal.kv_cache.native import NativeKVState
+    from domain.core.infrastructure._internal.kv_cache.native import NativeKVState
 
     cache = NativeKVState(n_layers, n_kv_heads=n_heads, head_dim=head_dim, seq_capacity=n_tokens)
     start = time.perf_counter()

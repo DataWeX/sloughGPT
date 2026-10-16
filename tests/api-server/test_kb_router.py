@@ -37,7 +37,7 @@ def _add_item(client, content="test fact alpha", topic="testing", source="test")
 # ── CRUD ──────────────────────────────────────────────────
 
 
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_list_empty(_mock_tl):
     _cleanup()
     client = get_test_client()
@@ -48,7 +48,7 @@ def test_list_empty(_mock_tl):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_add_returns_stored(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -60,7 +60,7 @@ def test_add_returns_stored(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_add_then_list_has_item(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -71,7 +71,7 @@ def test_add_then_list_has_item(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_add_duplicate_is_idempotent(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -82,7 +82,7 @@ def test_add_duplicate_is_idempotent(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_update_knowledge(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -95,7 +95,7 @@ def test_update_knowledge(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_update_nonexistent_returns_404(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -104,7 +104,7 @@ def test_update_nonexistent_returns_404(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_delete_knowledge(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -123,7 +123,7 @@ def test_delete_knowledge(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_search_returns_results(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -136,7 +136,7 @@ def test_search_returns_results(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_search_empty_query_returns_empty(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -151,7 +151,7 @@ def test_search_empty_query_returns_empty(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_stats_returns_expected_keys(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -167,7 +167,7 @@ def test_stats_returns_expected_keys(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_list_topics(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -184,7 +184,7 @@ def test_list_topics(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_batch_ingest(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -203,7 +203,7 @@ def test_batch_ingest(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_batch_delete(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -226,7 +226,7 @@ def test_batch_delete(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_check_duplicate_found(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -238,7 +238,7 @@ def test_check_duplicate_found(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_check_duplicate_not_found(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()
@@ -252,7 +252,7 @@ def test_check_duplicate_not_found(_mock_tl, _mock_rag):
 
 
 @patch("domain.cognition._internal.rag_service.get_rag_service", side_effect=Exception("no rag"))
-@patch("domain.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
+@patch("domain.core.infrastructure.truth_labeler.get_truth_labeler", side_effect=Exception("no labeler"))
 def test_get_context(_mock_tl, _mock_rag):
     _cleanup()
     client = get_test_client()

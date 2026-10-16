@@ -1,10 +1,10 @@
-"""Tests for domain.infrastructure._internal.fire_and_forget — shared
+"""Tests for domain.core.infrastructure._internal.fire_and_forget — shared
 bounded fire-and-forget worker pool."""
 
 import threading
 import time
 
-from domain.infrastructure._internal.fire_and_forget import (
+from domain.core.infrastructure._internal.fire_and_forget import (
     FireAndForgetPool,
     get_pool,
 )

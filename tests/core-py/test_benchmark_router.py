@@ -58,7 +58,7 @@ class TestRunBenchmark:
         with (
             patch("controllers.models.get_models_controller", return_value=mock_ctrl),
             patch(
-                "domain.infrastructure.server_state.get_server_state",
+                "domain.core.infrastructure.server_state.get_server_state",
                 return_value=mock_state,
             ),
         ):

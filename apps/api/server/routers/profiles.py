@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, success_response
 
-from domain.infrastructure.serving_profiles import (
+from domain.core.infrastructure.serving_profiles import (
     apply_profile,
     detect_recommended_profile,
     get_active_profile_id,

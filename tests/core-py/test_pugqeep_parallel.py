@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from domain.infrastructure._internal.pugqeep.facade import PGQ
-from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
-from domain.infrastructure._internal.pugqeep.tree import decompress_tree
+from domain.core.infrastructure._internal.pugqeep.facade import PGQ
+from domain.core.infrastructure._internal.pugqeep.model_tree import ModelTree
+from domain.core.infrastructure._internal.pugqeep.tree import decompress_tree
 
 # -- ModelTree parallel compression --
 

@@ -32,8 +32,12 @@ from schemas.models import LoadModelRequest, ModelInfo, ModelStatus
 
 logger = logging.getLogger(__name__)
 
-from domain.infrastructure.compute_backend import get_backend
-from domain.infrastructure.model_size import compute_model_size_gb, format_size_gb, is_model_cached
+from domain.core.infrastructure.compute_backend import get_backend
+from domain.core.infrastructure.model_size import (
+    compute_model_size_gb,
+    format_size_gb,
+    is_model_cached,
+)
 
 # Module-level so tests can patch ``routers.models._hf_cache_dir``; resolved at call time.
 _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
@@ -390,7 +394,7 @@ class ModelsRouter:
             result = ctrl.load_model(req.model_id, req.device.value, req.quantize)
             _elapsed_ms = (time.monotonic() - _t0) * 1000
             try:
-                from domain.infrastructure.server_state import get_server_state
+                from domain.core.infrastructure.server_state import get_server_state
 
                 ss = get_server_state()
                 if result.get("status") == "loaded":
@@ -428,7 +432,7 @@ class ModelsRouter:
         model_id = ctrl.active_model_id()
         result = ctrl.unload_model()
         try:
-            from domain.infrastructure.server_state import get_server_state
+            from domain.core.infrastructure.server_state import get_server_state
 
             ss = get_server_state()
             ss.record_model_event("unload", model_id or "unknown")
@@ -515,7 +519,7 @@ class ModelsRouter:
                         _is_cached(mid),
                     )
 
-                from domain.infrastructure.resource_manager import get_resource_manager
+                from domain.core.infrastructure.resource_manager import get_resource_manager
 
                 rm = get_resource_manager()
                 max_workers = min(max(len(page_ids), rm.inference_pool_size * 2), 16)
@@ -627,7 +631,7 @@ class ModelsRouter:
     ) -> dict[str, Any]:
         """Start downloading a model from HuggingFace Hub with progress tracking."""
         try:
-            from domain.infrastructure.download_manager import get_download_manager
+            from domain.core.infrastructure.download_manager import get_download_manager
 
             mgr = get_download_manager()
 
@@ -656,8 +660,8 @@ class ModelsRouter:
 
         from controllers.models import get_models_controller
 
-        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
-        from domain.infrastructure.download_manager import get_download_manager
+        from domain.core.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.core.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         cm_op: str | None = None
@@ -748,7 +752,7 @@ class ModelsRouter:
     @endpoint("models.get_download_status")
     async def get_download_status(self, model_id: str) -> dict[str, Any]:
         """Get download progress for a specific model."""
-        from domain.infrastructure.download_manager import get_download_manager
+        from domain.core.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         progress = mgr.get_progress(model_id)
@@ -762,7 +766,7 @@ class ModelsRouter:
     @endpoint("models.list_downloads")
     async def list_downloads(self) -> dict[str, Any]:
         """List all active and recent downloads."""
-        from domain.infrastructure.download_manager import get_download_manager
+        from domain.core.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         mgr.cleanup_stale()
@@ -779,7 +783,7 @@ class ModelsRouter:
         Args:
             limit: Maximum number of entries to return (default 50).
         """
-        from domain.infrastructure.event_buffer import get_event_buffer
+        from domain.core.infrastructure.event_buffer import get_event_buffer
 
         event_buffer = get_event_buffer()
         downloads = []
@@ -819,7 +823,7 @@ class ModelsRouter:
     ) -> dict[str, Any]:
         """Cancel an in-progress download."""
         try:
-            from domain.infrastructure.download_manager import get_download_manager
+            from domain.core.infrastructure.download_manager import get_download_manager
 
             mgr = get_download_manager()
             if mgr.cancel(model_id):
@@ -835,7 +839,7 @@ class ModelsRouter:
     ) -> dict[str, Any]:
         """Pause an in-progress download."""
         try:
-            from domain.infrastructure.download_manager import get_download_manager
+            from domain.core.infrastructure.download_manager import get_download_manager
 
             mgr = get_download_manager()
             if mgr.pause(model_id):
@@ -851,7 +855,7 @@ class ModelsRouter:
     ) -> dict[str, Any]:
         """Resume a paused download."""
         try:
-            from domain.infrastructure.download_manager import get_download_manager
+            from domain.core.infrastructure.download_manager import get_download_manager
 
             mgr = get_download_manager()
             if mgr.resume(model_id):
@@ -867,7 +871,7 @@ class ModelsRouter:
     ) -> dict[str, Any]:
         """Verify a downloaded model's weight files against Hub SHA-256 checksums.
         Returns verification result and on-disk size."""
-        from domain.infrastructure.hf_hub import (
+        from domain.core.infrastructure.hf_hub import (
             get_cache_dir,
             list_missing_files,
             verify_model,
@@ -904,7 +908,7 @@ class ModelsRouter:
     ) -> dict[str, Any]:
         try:
             """Redownload a cached model (cleanup + fresh download)."""
-            from domain.infrastructure.download_manager import (
+            from domain.core.infrastructure.download_manager import (
                 cleanup_incomplete,
                 get_download_manager,
                 is_download_complete,
@@ -1112,7 +1116,7 @@ class ModelsRouter:
         if server not in self._external_servers:
             raise_error(f"Server not found: {server}", status_code=404)
 
-        from domain.infrastructure.external_download import ExternalDownloadBackend
+        from domain.core.infrastructure.external_download import ExternalDownloadBackend
 
         cfg = self._external_servers[server]
         ExternalDownloadBackend(cfg["url"], compressed=cfg.get("compressed", True))
@@ -1140,12 +1144,12 @@ class ModelsRouter:
         if req.server not in self._external_servers:
             raise_error(f"Server not found: {req.server}", status_code=404)
 
-        from domain.infrastructure.external_download import ExternalDownloadBackend
+        from domain.core.infrastructure.external_download import ExternalDownloadBackend
 
         cfg = self._external_servers[req.server]
         backend = ExternalDownloadBackend(cfg["url"], compressed=cfg.get("compressed", True))
 
-        from domain.infrastructure.download_manager import get_download_manager
+        from domain.core.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         if mgr.is_downloading(req.model_id):
@@ -1159,7 +1163,7 @@ class ModelsRouter:
 
     async def _run_external_download(self, backend, model_id: str):
         """Background task that runs the external download."""
-        from domain.infrastructure.download_manager import get_download_manager
+        from domain.core.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         try:
@@ -1192,7 +1196,7 @@ class ModelsRouter:
             },
         }
         try:
-            from domain.infrastructure.hf_hub import HFDownloadBackend  # noqa: F401
+            from domain.core.infrastructure.hf_hub import HFDownloadBackend  # noqa: F401
 
             hf_info["available"] = True
         except ImportError:
@@ -1211,7 +1215,7 @@ class ModelsRouter:
             },
         }
         try:
-            from domain.infrastructure.external_download import (
+            from domain.core.infrastructure.external_download import (
                 ExternalDownloadBackend,  # noqa: F401
             )
 
@@ -1232,7 +1236,7 @@ class ModelsRouter:
             },
         }
         try:
-            from domain.infrastructure.git_download import GitBackend  # noqa: F401
+            from domain.core.infrastructure.git_download import GitBackend  # noqa: F401
 
             git_info["available"] = True
         except ImportError:
@@ -1251,7 +1255,7 @@ class ModelsRouter:
             },
         }
         try:
-            from domain.infrastructure.local_download import LocalFileBackend  # noqa: F401
+            from domain.core.infrastructure.local_download import LocalFileBackend  # noqa: F401
 
             local_info["available"] = True
         except ImportError:
@@ -1269,7 +1273,7 @@ class ModelsRouter:
         backend_type = "hf"
 
         try:
-            from domain.infrastructure.external_download import (
+            from domain.core.infrastructure.external_download import (
                 ExternalDownloadBackend,  # noqa: F401
             )
 
@@ -1358,14 +1362,14 @@ class ModelsRouter:
                 Quantization report with per-tensor error metrics and aggregate summary.
             """
             try:
-                from domain.infrastructure.quantization import Quantine
+                from domain.core.infrastructure.quantization import Quantine
             except ImportError:
                 raise_error(
-                    "Quantization not available — domain.infrastructure.quantization missing",
+                    "Quantization not available — domain.core.infrastructure.quantization missing",
                     "E_BAD_REQUEST",
                 )
             try:
-                from domain.infrastructure.quant_core.wrapper import HAS_AVX2
+                from domain.core.infrastructure.quant_core.wrapper import HAS_AVX2
             except ImportError:
                 HAS_AVX2 = False
             import numpy as np
@@ -1397,11 +1401,11 @@ class ModelsRouter:
 
             # Walk linear layers using the appropriate walker
             if model_type == "slonet":
-                from domain.infrastructure.quantization import walk_slo_linears
+                from domain.core.infrastructure.quantization import walk_slo_linears
 
                 layers = walk_slo_linears(model)
             else:
-                from domain.infrastructure.quantization import walk_hf_linears
+                from domain.core.infrastructure.quantization import walk_hf_linears
 
                 layers = walk_hf_linears(model)
 
@@ -1421,7 +1425,7 @@ class ModelsRouter:
                         module.set_quantized_weight(info)
                     else:
                         # For HuggingFace models: monkey-patch forward with quantized path
-                        from domain.infrastructure.quantization import QuantizedLinear
+                        from domain.core.infrastructure.quantization import QuantizedLinear
 
                         module._quant_info = info
                         ql = QuantizedLinear.from_linear(module, info)
@@ -1458,7 +1462,7 @@ class ModelsRouter:
 
             # Check if AVX2 extension is available
             try:
-                from domain.infrastructure.quant_core.wrapper import HAS_AVX2
+                from domain.core.infrastructure.quant_core.wrapper import HAS_AVX2
 
                 report["avx2_enabled"] = bool(HAS_AVX2)
             except Exception as exc:
@@ -1508,13 +1512,13 @@ class ModelsRouter:
 
         # Clear quantization state
         if model_type == "slonet":
-            from domain.infrastructure.quantization import walk_slo_linears
+            from domain.core.infrastructure.quantization import walk_slo_linears
 
             layers = walk_slo_linears(model)
             for _name, module in layers.items():
                 module._quant_info = None
         else:
-            from domain.infrastructure.quantization import walk_hf_linears
+            from domain.core.infrastructure.quantization import walk_hf_linears
 
             layers = walk_hf_linears(model)
             for _name, module in layers.items():
@@ -1578,7 +1582,7 @@ class ModelsRouter:
 
             if acc.name == "cpu":
                 # CPU path: use Quantine to select best format
-                from domain.infrastructure.quantization import Quantine
+                from domain.core.infrastructure.quantization import Quantine
 
                 suggestion = Quantine.suggest_format()
                 result["precision"] = suggestion["format"]
@@ -1596,7 +1600,7 @@ class ModelsRouter:
                         model = getattr(provider, "_model", None)
                         if model is not None:
                             # Re-use existing quantize logic
-                            from domain.infrastructure.quantization import (
+                            from domain.core.infrastructure.quantization import (
                                 Quantine,
                                 walk_hf_linears,
                                 walk_slo_linears,
@@ -1642,7 +1646,7 @@ class ModelsRouter:
     @endpoint("models.get_catalog")
     async def get_catalog(self) -> dict:
         """Get the persistent model catalog."""
-        from domain.infrastructure.model_catalog import get_model_catalog
+        from domain.core.infrastructure.model_catalog import get_model_catalog
 
         catalog = get_model_catalog()
         return success_response(data=catalog.list_all())
@@ -1650,7 +1654,7 @@ class ModelsRouter:
     @endpoint("models.get_catalog_stats")
     async def get_catalog_stats(self) -> dict:
         """Get catalog statistics."""
-        from domain.infrastructure.model_catalog import get_model_catalog
+        from domain.core.infrastructure.model_catalog import get_model_catalog
 
         catalog = get_model_catalog()
         return success_response(data=catalog.stats())
@@ -1662,7 +1666,7 @@ class ModelsRouter:
         Without model_id: returns all active conversions.
         With model_id: returns status for that specific model.
         """
-        from domain.infrastructure.conversion_tracker import get_tracker
+        from domain.core.infrastructure.conversion_tracker import get_tracker
 
         tracker = get_tracker()
 
@@ -1718,7 +1722,7 @@ class ModelsRouter:
         proc = getattr(server_state, "_inference_engine_proc", None)
         provider = getattr(server_state, "provider", None)
         stderr_tail = list(getattr(server_state, "_inference_engine_stderr", []))
-        from domain.infrastructure.inference_client import InferenceClient
+        from domain.core.infrastructure.inference_client import InferenceClient
 
         is_client = isinstance(provider, InferenceClient)
         pid = proc.pid if proc is not None else None
@@ -1759,7 +1763,7 @@ class ModelsRouter:
             """
             import state as server_state
 
-            from domain.infrastructure.inference_client import InferenceClient
+            from domain.core.infrastructure.inference_client import InferenceClient
 
             provider = getattr(server_state, "provider", None)
             if not isinstance(provider, InferenceClient):
@@ -1844,7 +1848,7 @@ class ModelsRouter:
         releases idle model weights, runs malloc_trim, and stops guard
         subprocesses. Returns the cleanup result and current memory stats.
         """
-        from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
+        from domain.core.infrastructure.memory_pressure import get_memory_pressure_monitor
 
         monitor = get_memory_pressure_monitor()
         result = monitor.force_cleanup()
@@ -1855,7 +1859,7 @@ class ModelsRouter:
     @endpoint("models.memory_pressure")
     async def memory_pressure(auth_user: dict = Depends(require_auth_if_enabled)):
         """Return current memory pressure stats (level, thresholds, counters)."""
-        from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
+        from domain.core.infrastructure.memory_pressure import get_memory_pressure_monitor
 
         monitor = get_memory_pressure_monitor()
         return success_response(data=monitor.stats())

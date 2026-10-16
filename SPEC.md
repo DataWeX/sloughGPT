@@ -135,7 +135,7 @@ Deprecate:
 
 ### InferenceEngine
 
-**Canonical:** `domain/infrastructure/_internal/inference_engine.InferenceEngine`
+**Canonical:** `domain/core/infrastructure/_internal/inference_engine.InferenceEngine`
 
 **Deprecated:**
 

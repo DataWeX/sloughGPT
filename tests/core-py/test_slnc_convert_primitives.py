@@ -12,9 +12,9 @@ import struct
 
 import numpy as np
 
-from domain.infrastructure._internal.safetensors_loader import load_model_weights
-from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
-from domain.infrastructure._internal.slnc.parser import SLNCParser
+from domain.core.infrastructure._internal.safetensors_loader import load_model_weights
+from domain.core.infrastructure._internal.slnc.compiler import SLNCCompiler
+from domain.core.infrastructure._internal.slnc.parser import SLNCParser
 
 BF16_VALS = np.array([0.5, 1.0, 2.5], dtype=np.float32)
 

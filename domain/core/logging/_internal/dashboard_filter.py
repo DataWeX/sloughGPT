@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import re
 
-from domain.infrastructure._internal.event_buffer import get_event_buffer
+from domain.core.infrastructure._internal.event_buffer import get_event_buffer
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from domain.infrastructure._internal.rate_limiter import (
+from domain.core.infrastructure._internal.rate_limiter import (
     RATE_LIMIT_HEADER_LIMIT,
     RATE_LIMIT_HEADER_REMAINING,
     RATE_LIMIT_HEADER_RESET,

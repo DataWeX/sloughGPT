@@ -51,7 +51,7 @@ def model_not_ready():
     from infrastructure.middleware import ReadinessGateMiddleware as _RGM
     from startup_progress import STARTUP_PHASE
 
-    from domain.infrastructure.server_state import get_server_state
+    from domain.core.infrastructure.server_state import get_server_state
 
     core_state = get_server_state()
     saved_model = server_state.model

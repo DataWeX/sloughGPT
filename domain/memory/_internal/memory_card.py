@@ -40,7 +40,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from domain.infrastructure._internal.atomic_write import atomic_write
+from domain.core.infrastructure._internal.atomic_write import atomic_write
 
 logger = logging.getLogger(__name__)
 

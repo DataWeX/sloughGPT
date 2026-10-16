@@ -23,7 +23,7 @@ import logging
 import random
 import time
 
-from domain.infrastructure._internal.pugqeep.engine import Engine
+from domain.core.infrastructure._internal.pugqeep.engine import Engine
 
 logging.basicConfig(
     level=logging.INFO,

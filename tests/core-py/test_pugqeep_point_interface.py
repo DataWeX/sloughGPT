@@ -5,9 +5,9 @@ import threading
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.pugqeep.library import PointLibrary
-from domain.infrastructure._internal.pugqeep.point import Point
-from domain.infrastructure._internal.pugqeep.point_interface import (
+from domain.core.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.core.infrastructure._internal.pugqeep.point import Point
+from domain.core.infrastructure._internal.pugqeep.point_interface import (
     FunctionType,
     PointProtocol,
     PointView,

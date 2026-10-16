@@ -17,7 +17,7 @@ Tests:
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.quantization import (
+from domain.core.infrastructure._internal.quantization import (
     QuantDtype,
     Quantine,
     QuantMeta,
@@ -991,7 +991,7 @@ class TestSloLinearQuantized:
         info = engine.quantize(layer.name, layer.weight.data.copy())
         assert info.is_quantized
         layer.set_quantized_weight(info)
-        from domain.infrastructure._internal.quantization import quantized_linear
+        from domain.core.infrastructure._internal.quantization import quantized_linear
 
         bias_arr = layer.bias.data if layer.use_bias else None
         y_direct = quantized_linear(
@@ -1030,7 +1030,7 @@ class TestSloLinearQuantized:
 
 class TestQuantizedLinearWrapper:
     def test_dequantize(self):
-        from domain.infrastructure._internal.quantization import QuantizedLinear
+        from domain.core.infrastructure._internal.quantization import QuantizedLinear
 
         w = np.random.randn(8, 16).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
@@ -1048,7 +1048,7 @@ class TestQuantizedLinearWrapper:
         assert cosine > 0.95
 
     def test_forward_numpy(self):
-        from domain.infrastructure._internal.quantization import QuantizedLinear
+        from domain.core.infrastructure._internal.quantization import QuantizedLinear
 
         w = np.random.randn(8, 16).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
@@ -1066,7 +1066,7 @@ class TestQuantizedLinearWrapper:
         assert result.shape == (1, 8)
 
     def test_forward_numpy_with_bias(self):
-        from domain.infrastructure._internal.quantization import QuantizedLinear
+        from domain.core.infrastructure._internal.quantization import QuantizedLinear
 
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         bias = np.random.randn(4).astype(np.float32) * 0.01
@@ -1085,7 +1085,7 @@ class TestQuantizedLinearWrapper:
         assert result.shape == (2, 4)
 
     def test_call(self):
-        from domain.infrastructure._internal.quantization import QuantizedLinear
+        from domain.core.infrastructure._internal.quantization import QuantizedLinear
 
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
@@ -1103,7 +1103,7 @@ class TestQuantizedLinearWrapper:
         assert result.shape == (1, 4)
 
     def test_dequantize_cached(self):
-        from domain.infrastructure._internal.quantization import QuantizedLinear
+        from domain.core.infrastructure._internal.quantization import QuantizedLinear
 
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
@@ -1121,7 +1121,7 @@ class TestQuantizedLinearWrapper:
         assert w1 is w2  # cached
 
     def test_mode_stored(self):
-        from domain.infrastructure._internal.quantization import QuantizedLinear
+        from domain.core.infrastructure._internal.quantization import QuantizedLinear
 
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
@@ -1138,7 +1138,7 @@ class TestQuantizedLinearWrapper:
         assert ql.mode == "symmetric"
 
     def test_bits_stored(self):
-        from domain.infrastructure._internal.quantization import QuantizedLinear
+        from domain.core.infrastructure._internal.quantization import QuantizedLinear
 
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")

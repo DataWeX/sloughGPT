@@ -1,11 +1,11 @@
-"""Tests for domain.infrastructure._internal.slnc.spec — SLNC config, layout helpers, dtype conversion."""
+"""Tests for domain.core.infrastructure._internal.slnc.spec — SLNC config, layout helpers, dtype conversion."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.slnc.spec import (
+from domain.core.infrastructure._internal.slnc.spec import (
     ALIGNMENT,
     DTYPE_BFLOAT16,
     DTYPE_FLOAT16,

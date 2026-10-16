@@ -45,7 +45,7 @@ hardware**.
 **How they interact:**
 
 - 50% infra/repo (`registry`, `model-stack`, `executor`, `cache_tags`), 30% train/bench, 20% API
-- Lives in `domain/infrastructure` + `apps/api/server/routers/system.py` + `training/executor`
+- Lives in `domain/core/infrastructure` + `apps/api/server/routers/system.py` + `training/executor`
 - Expects `docs/PRODUCT_ENGINEERING.md:42` CCGT — infra is a domain, not plumbing
 - Reads benchmark and profiling output directly; tunes thresholds against
   measured crossover points rather than documented defaults

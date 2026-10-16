@@ -30,7 +30,7 @@ class TestDomainExceptions:
         assert e.code == "E_VAL_FIELD"
 
     def test_hierarchy(self):
-        from domain.infrastructure._internal.errors import AppError, ValidationError
+        from domain.core.infrastructure._internal.errors import AppError, ValidationError
 
         assert issubclass(InvalidGenerationInputError, ValidationError)
         assert issubclass(InvalidGenerationInputError, AppError)

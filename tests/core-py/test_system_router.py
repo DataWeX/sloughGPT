@@ -91,7 +91,7 @@ class TestLifecycle:
         sr = _make_system_router()
         mock_mgr = MagicMock()
         mock_mgr.get_results.return_value = {"phase": "ready", "profile": "default"}
-        with patch("domain.infrastructure.get_lifecycle_manager", return_value=mock_mgr):
+        with patch("domain.core.infrastructure.get_lifecycle_manager", return_value=mock_mgr):
             client = TestClient(_app(sr))
             resp = client.get("/system/lifecycle")
         assert resp.status_code == 200
@@ -100,7 +100,7 @@ class TestLifecycle:
     def test_lifecycle_unavailable(self):
         sr = _make_system_router()
         with patch(
-            "domain.infrastructure.get_lifecycle_manager",
+            "domain.core.infrastructure.get_lifecycle_manager",
             side_effect=RuntimeError("not init"),
         ):
             client = TestClient(_app(sr), raise_server_exceptions=False)
@@ -227,7 +227,7 @@ class TestTailOutput:
         mock_buf.tail_dicts.return_value = [{"text": "line1"}]
         mock_buf.count = 1
         mock_buf.seq = 1
-        with patch("domain.infrastructure.get_server_buffer", return_value=mock_buf):
+        with patch("domain.core.infrastructure.get_server_buffer", return_value=mock_buf):
             client = TestClient(_app(sr))
             resp = client.get("/system/output")
         assert resp.status_code == 200

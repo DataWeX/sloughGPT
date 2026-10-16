@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import time
 
-from domain.infrastructure._internal.watchdog import HealthWatchdog, get_watchdog, reset_watchdog
+from domain.core.infrastructure._internal.watchdog import (
+    HealthWatchdog,
+    get_watchdog,
+    reset_watchdog,
+)
 
 
 class TestHealthWatchdog:

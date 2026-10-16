@@ -8,11 +8,11 @@ import time
 
 import pytest
 
-from domain.infrastructure._internal.pugqeep.config import (
+from domain.core.infrastructure._internal.pugqeep.config import (
     EngineConfig,
     RestartPolicy,
 )
-from domain.infrastructure._internal.pugqeep.engine import (
+from domain.core.infrastructure._internal.pugqeep.engine import (
     Engine,
     EngineMetrics,
     Pool,

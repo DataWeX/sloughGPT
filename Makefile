@@ -62,7 +62,7 @@ test: test-py-fast test-web-lib
 # ── Build ────────────────────────────────────────────────
 build: quant-core
 
-QUANT_DIR := domain/infrastructure/_internal/quant_core
+QUANT_DIR := domain/core/infrastructure/_internal/quant_core
 ifeq ($(shell uname -s),Darwin)
 QUANT_EXT := dylib
 else

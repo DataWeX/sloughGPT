@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.infrastructure._internal.pugqeep.config import (
+from domain.core.infrastructure._internal.pugqeep.config import (
     CompressorConfig,
     EngineConfig,
     LibraryConfig,

@@ -21,7 +21,7 @@ sys.path.insert(0, str(_project_root / "packages" / "core-py"))
 
 from domain.cognition._internal.consciousness.config import ConsciousnessConfig
 from domain.cognition._internal.consciousness.engine import ConsciousnessEngine
-from domain.infrastructure._internal.numpy_engine import NumpyEngine
+from domain.core.infrastructure._internal.numpy_engine import NumpyEngine
 
 
 def divider(title: str) -> None:

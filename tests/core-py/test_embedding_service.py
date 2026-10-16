@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from domain.infrastructure._internal.embedding_service import (
+from domain.core.infrastructure._internal.embedding_service import (
     EmbeddingService,
     get_embedding_service,
 )

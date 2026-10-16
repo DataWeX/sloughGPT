@@ -501,7 +501,7 @@ class DatasetsController:
                 count += 1
         if count:
             try:
-                from domain.infrastructure._internal.artifact_registry import try_register
+                from domain.core.infrastructure._internal.artifact_registry import try_register
 
                 try_register("dataset", corpus_file, name=dataset_id)
             except Exception:

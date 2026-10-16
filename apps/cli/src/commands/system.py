@@ -34,7 +34,7 @@ def cmd_system(args):
     if psutil:
         log.section("CPU")
         try:
-            from domain.infrastructure.resource_manager import get_resource_manager
+            from domain.core.infrastructure.resource_manager import get_resource_manager
 
             rm = get_resource_manager()
             cores = f"{rm.topology.logical_cores} logical / {rm.topology.physical_cores} physical"
@@ -142,7 +142,7 @@ def cmd_optimize(args):
         log.blank()
         log.step("Applying optimizations...")
         try:
-            from domain.infrastructure.resource_manager import get_resource_manager
+            from domain.core.infrastructure.resource_manager import get_resource_manager
 
             rm = get_resource_manager()
             rm.apply_blas_env()

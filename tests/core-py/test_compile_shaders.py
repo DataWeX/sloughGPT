@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.gpu.compile_shaders — pure logic coverage.
+"""Tests for domain.core.infrastructure._internal.gpu.compile_shaders — pure logic coverage.
 
 Covers path constants, shader list, naga discovery logic, subprocess compile
 paths, and main() argument parsing. No real naga binary or GPU hardware needed.
@@ -17,8 +17,8 @@ _CORE_PY = Path(__file__).resolve().parents[2] / "packages" / "core-py"
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domain.infrastructure._internal.gpu import compile_shaders as _compile_shaders
-from domain.infrastructure._internal.gpu.compile_shaders import (
+from domain.core.infrastructure._internal.gpu import compile_shaders as _compile_shaders
+from domain.core.infrastructure._internal.gpu.compile_shaders import (
     COMPUTE_SHADERS,
     OUTPUT_DIR,
     SHADERS_DIR,
@@ -169,7 +169,7 @@ class TestCompileSpirv:
         mock_result.returncode = 0
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ):
             with patch.object(Path, "stat") as mock_stat:
@@ -190,7 +190,7 @@ class TestCompileSpirv:
 
         with caplog.at_level(logging.ERROR, logger="slo.gpu.compile_shaders"):
             with patch(
-                "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+                "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
                 return_value=mock_result,
             ):
                 result = compile_spirv("/usr/bin/naga", wgsl, out)
@@ -206,7 +206,7 @@ class TestCompileSpirv:
         mock_result.returncode = 0
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ) as mock_run:
             with patch.object(Path, "stat") as mock_stat:
@@ -227,7 +227,7 @@ class TestCompileSpirv:
         mock_result.returncode = 0
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ) as mock_run:
             with patch.object(Path, "stat") as mock_stat:
@@ -251,7 +251,7 @@ class TestCompileHlsl:
         mock_result.returncode = 0
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ):
             with patch.object(Path, "stat") as mock_stat:
@@ -269,7 +269,7 @@ class TestCompileHlsl:
         mock_result.stderr = "unsupported feature"
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ):
             with caplog.at_level("ERROR"):
@@ -286,7 +286,7 @@ class TestCompileHlsl:
         mock_result.returncode = 0
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ) as mock_run:
             with patch.object(Path, "stat") as mock_stat:
@@ -312,7 +312,7 @@ class TestCompileMsl:
         mock_result.returncode = 0
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ):
             with patch.object(Path, "stat") as mock_stat:
@@ -330,7 +330,7 @@ class TestCompileMsl:
         mock_result.stderr = "metal: unknown intrinsic"
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ):
             with caplog.at_level("ERROR"):
@@ -347,7 +347,7 @@ class TestCompileMsl:
         mock_result.returncode = 0
 
         with patch(
-            "domain.infrastructure._internal.gpu.compile_shaders.subprocess.run",
+            "domain.core.infrastructure._internal.gpu.compile_shaders.subprocess.run",
             return_value=mock_result,
         ) as mock_run:
             with patch.object(Path, "stat") as mock_stat:
@@ -365,10 +365,10 @@ class TestCompileMsl:
 
 
 class TestMain:
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_compiles_all_formats_when_no_flags(
         self, mock_naga, mock_spv, mock_hlsl, mock_msl, tmp_path, monkeypatch
     ):
@@ -378,10 +378,10 @@ class TestMain:
             (shaders_dir / f"{name}.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py"])
 
@@ -391,20 +391,20 @@ class TestMain:
         assert mock_hlsl.call_count == len(COMPUTE_SHADERS)
         assert mock_msl.call_count == len(COMPUTE_SHADERS)
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_spirv_only_flag(self, mock_naga, mock_spv, mock_hlsl, mock_msl, tmp_path, monkeypatch):
         shaders_dir = tmp_path / "shaders"
         shaders_dir.mkdir()
         (shaders_dir / "matmul.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py", "--spirv-only"])
 
@@ -414,20 +414,20 @@ class TestMain:
         mock_hlsl.assert_not_called()
         mock_msl.assert_not_called()
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_hlsl_only_flag(self, mock_naga, mock_spv, mock_hlsl, mock_msl, tmp_path, monkeypatch):
         shaders_dir = tmp_path / "shaders"
         shaders_dir.mkdir()
         (shaders_dir / "matmul.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py", "--hlsl-only"])
 
@@ -437,20 +437,20 @@ class TestMain:
         mock_hlsl.assert_called_once()
         mock_msl.assert_not_called()
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_msl_only_flag(self, mock_naga, mock_spv, mock_hlsl, mock_msl, tmp_path, monkeypatch):
         shaders_dir = tmp_path / "shaders"
         shaders_dir.mkdir()
         (shaders_dir / "matmul.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py", "--msl-only"])
 
@@ -460,11 +460,11 @@ class TestMain:
         mock_hlsl.assert_not_called()
         mock_msl.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
     @patch(
-        "domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="/custom/naga"
+        "domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="/custom/naga"
     )
     def test_naga_path_override(
         self, mock_naga, mock_spv, mock_hlsl, mock_msl, tmp_path, monkeypatch
@@ -474,10 +474,10 @@ class TestMain:
         (shaders_dir / "matmul.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py", "--naga", "/custom/naga"])
 
@@ -487,28 +487,28 @@ class TestMain:
         wgsl_path = shaders_dir / "matmul.wgsl"
         mock_spv.assert_called_with("/custom/naga", wgsl_path, shaders_dir / "matmul.spv")
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=False)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=False)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_exits_on_failure(self, mock_naga, mock_spv, tmp_path, monkeypatch):
         shaders_dir = tmp_path / "shaders"
         shaders_dir.mkdir()
         (shaders_dir / "matmul.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py"])
 
         with pytest.raises(SystemExit, match="1"):
             main()
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_skips_missing_wgsl_files(
         self, mock_naga, mock_spv, mock_hlsl, mock_msl, tmp_path, monkeypatch
     ):
@@ -518,10 +518,10 @@ class TestMain:
         (shaders_dir / "matmul.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py"])
 
@@ -532,10 +532,10 @@ class TestMain:
         assert mock_hlsl.call_count == 1
         assert mock_msl.call_count == 1
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_creates_output_dir(
         self, mock_naga, mock_spv, mock_hlsl, mock_msl, tmp_path, monkeypatch
     ):
@@ -544,10 +544,10 @@ class TestMain:
         (shaders_dir / "matmul.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py"])
 
@@ -555,8 +555,8 @@ class TestMain:
 
         assert shaders_dir.exists()
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_compiles_correct_shader_files(self, mock_naga, mock_spv, tmp_path, monkeypatch):
         shaders_dir = tmp_path / "shaders"
         shaders_dir.mkdir()
@@ -564,10 +564,10 @@ class TestMain:
         (shaders_dir / "softmax.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py", "--spirv-only"])
 
@@ -577,10 +577,10 @@ class TestMain:
         compiled_names = sorted([Path(a[1]).stem for a in call_args_list])
         assert compiled_names == ["matmul", "softmax"]
 
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
-    @patch("domain.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_msl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_hlsl", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.compile_spirv", return_value=True)
+    @patch("domain.core.infrastructure._internal.gpu.compile_shaders.find_naga", return_value="naga")
     def test_output_paths_correct(
         self, mock_naga, mock_spv, mock_hlsl, mock_msl, tmp_path, monkeypatch
     ):
@@ -589,10 +589,10 @@ class TestMain:
         (shaders_dir / "matmul.wgsl").write_text("fn main() {}")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.SHADERS_DIR", shaders_dir
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
+            "domain.core.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
         monkeypatch.setattr(sys, "argv", ["compile_shaders.py"])
 

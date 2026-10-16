@@ -316,7 +316,7 @@ class TestLoadModel:
     def test_load_records_load_event_on_success(self, mock_controller):
         mock_controller.load_model.return_value = self.LOADED
         ss = MagicMock()
-        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+        with patch("domain.core.infrastructure.server_state.get_server_state", return_value=ss):
             resp = client.post("/models/load", json={"model_id": "gpt2"})
         assert resp.status_code == 200
         ss.record_model_event.assert_called_once_with("load", "gpt2", "device=cpu")
@@ -326,7 +326,7 @@ class TestLoadModel:
         loaded["device"] = None
         mock_controller.load_model.return_value = loaded
         ss = MagicMock()
-        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+        with patch("domain.core.infrastructure.server_state.get_server_state", return_value=ss):
             resp = client.post("/models/load", json={"model_id": "gpt2"})
         assert resp.status_code == 200
         ss.record_model_event.assert_called_once_with("load", "gpt2", "device=auto")
@@ -334,7 +334,7 @@ class TestLoadModel:
     def test_load_records_error_event_on_failure(self, mock_controller):
         mock_controller.load_model.return_value = {"status": "error", "error": "boom"}
         ss = MagicMock()
-        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+        with patch("domain.core.infrastructure.server_state.get_server_state", return_value=ss):
             resp = client.post("/models/load", json={"model_id": "gpt2"})
         assert resp.status_code == 200
         ss.record_model_event.assert_called_once_with("error", "gpt2", "boom")
@@ -352,7 +352,7 @@ class TestUnloadModel:
     def test_unload_records_event_with_model_id(self, mock_controller):
         mock_controller.active_model_id.return_value = "Qwen/Qwen2.5-0.5B-Instruct"
         ss = MagicMock()
-        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+        with patch("domain.core.infrastructure.server_state.get_server_state", return_value=ss):
             resp = client.post("/models/unload")
         assert resp.status_code == 200
         ss.record_model_event.assert_called_once_with("unload", "Qwen/Qwen2.5-0.5B-Instruct")
@@ -360,7 +360,7 @@ class TestUnloadModel:
     def test_unload_falls_back_to_unknown_when_no_active_model(self, mock_controller):
         mock_controller.active_model_id.return_value = None
         ss = MagicMock()
-        with patch("domain.infrastructure.server_state.get_server_state", return_value=ss):
+        with patch("domain.core.infrastructure.server_state.get_server_state", return_value=ss):
             resp = client.post("/models/unload")
         assert resp.status_code == 200
         ss.record_model_event.assert_called_once_with("unload", "unknown")

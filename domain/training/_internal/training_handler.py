@@ -335,7 +335,7 @@ class SoulCheckpointSaver:
         export_to_sou(model, str(path), metadata=metadata)
         self._rotate()
         try:
-            from domain.infrastructure._internal.artifact_registry import try_register
+            from domain.core.infrastructure._internal.artifact_registry import try_register
 
             try_register("checkpoint", path, name=name)
         except Exception:
@@ -408,7 +408,7 @@ class NpzCheckpointSaver:
         if state:
             np.savez(str(path), **state)
             try:
-                from domain.infrastructure._internal.artifact_registry import try_register
+                from domain.core.infrastructure._internal.artifact_registry import try_register
 
                 try_register("checkpoint", path, name=name)
             except Exception:

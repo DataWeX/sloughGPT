@@ -12,7 +12,7 @@ import asyncio
 
 import pytest
 
-from domain.infrastructure._internal.lifecycle import (
+from domain.core.infrastructure._internal.lifecycle import (
     EVT_PHASE_CHANGED,
     LifecycleManager,
     LifecyclePhase,

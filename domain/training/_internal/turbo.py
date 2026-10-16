@@ -121,7 +121,7 @@ def start_turbo_training(config: dict) -> dict:
         )
 
     try:
-        from domain.infrastructure._internal.cancel_manager import OpType, get_cancel_manager
+        from domain.core.infrastructure._internal.cancel_manager import OpType, get_cancel_manager
 
         _mgr = get_cancel_manager()
         _cm_op_id = _mgr.register(
@@ -184,7 +184,7 @@ def run_turbo_worker(config: dict) -> None:
         op_id = _turbo_state.get("_cm_op_id")
         if op_id:
             try:
-                from domain.infrastructure._internal.cancel_manager import get_cancel_manager
+                from domain.core.infrastructure._internal.cancel_manager import get_cancel_manager
 
                 get_cancel_manager().finish(op_id, error=error if status != "completed" else "")
             except Exception as exc:

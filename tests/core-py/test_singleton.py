@@ -3,7 +3,7 @@
 import threading
 import time
 
-from domain.infrastructure._internal.singleton import SingletonMeta, make_singleton
+from domain.core.infrastructure._internal.singleton import SingletonMeta, make_singleton
 
 
 class TestMakeSingleton:

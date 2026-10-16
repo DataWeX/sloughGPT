@@ -18,7 +18,7 @@ class KnowledgeAdapter:
 
     def _resolve(self):
         if self._repo is None:
-            from domain.infrastructure import get_knowledge_repository
+            from domain.core.infrastructure import get_knowledge_repository
 
             self._repo = get_knowledge_repository()
         return self._repo

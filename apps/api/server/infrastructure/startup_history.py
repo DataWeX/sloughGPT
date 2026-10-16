@@ -160,7 +160,7 @@ class StartupHistory:
         # caller, but the import is the one that exists — `get_metrics` did
         # not, so this block raised ImportError every single time (silently).
         try:
-            from domain.infrastructure.metrics import get_metrics_collector
+            from domain.core.infrastructure.metrics import get_metrics_collector
 
             metrics = get_metrics_collector()
             for stage, dur in record.stage_durations.items():

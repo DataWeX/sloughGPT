@@ -295,11 +295,11 @@ class TestDistillSlonetTeacher:
             client = self._make_client()
             with (
                 patch(
-                    "domain.infrastructure._internal.model_registry.get_model_registry",
+                    "domain.core.infrastructure._internal.model_registry.get_model_registry",
                     return_value=None,
                 ),
                 patch(
-                    "domain.infrastructure._internal.server_state.get_server_state",
+                    "domain.core.infrastructure._internal.server_state.get_server_state",
                     return_value=fake_core,
                 ),
             ):
@@ -352,11 +352,11 @@ class TestDistillSlonetTeacher:
             client = self._make_client()
             with (
                 patch(
-                    "domain.infrastructure._internal.model_registry.get_model_registry",
+                    "domain.core.infrastructure._internal.model_registry.get_model_registry",
                     return_value=None,
                 ),
                 patch(
-                    "domain.infrastructure._internal.server_state.get_server_state",
+                    "domain.core.infrastructure._internal.server_state.get_server_state",
                     return_value=fake_core,
                 ),
             ):

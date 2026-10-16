@@ -18,7 +18,7 @@ import timeit
 from collections.abc import Callable
 from pathlib import Path
 
-from domain.infrastructure._internal.fire_and_forget import FireAndForgetPool, get_pool
+from domain.core.infrastructure._internal.fire_and_forget import FireAndForgetPool, get_pool
 
 N_BURST = 128
 N_DISPATCH = 20_000

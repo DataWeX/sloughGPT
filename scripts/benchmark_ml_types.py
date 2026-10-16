@@ -31,7 +31,7 @@ def run_benchmarks() -> dict[str, tuple[float, float, str]]:
     sys.path.insert(0, "packages/core-py")
     import torch
 
-    from domain.infrastructure import ml_types as ml
+    from domain.core.infrastructure import ml_types as ml
 
     results = {}
 

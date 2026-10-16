@@ -1,6 +1,6 @@
 """ErrorCode is the contract for every E_ code the system can put on the wire.
 
-``domain/infrastructure/_internal/errors.py`` documents ``ErrorCode`` as
+``domain/core/infrastructure/_internal/errors.py`` documents ``ErrorCode`` as
 "Every E_ code used in the system lives here", but nothing enforced it. A scan
 found 36 codes in active use that were absent, and ``raise_error()`` catches
 ``(ValueError, KeyError)`` and silently downgrades an unknown code to a generic
@@ -48,7 +48,7 @@ def _registered_codes() -> set[str]:
     Name matters: ``ErrorCode`` carries legacy aliases declared as
     ``E_CREATE_FAILED = "E_BAD_REQUEST"``, and callers write the member name.
     """
-    from domain.infrastructure._internal.errors import ErrorCode
+    from domain.core.infrastructure._internal.errors import ErrorCode
 
     names = set(ErrorCode.__members__)
     values = {member.value for member in ErrorCode}
@@ -215,7 +215,7 @@ def test_hand_built_envelope_codes_are_registered():
 
 def test_registry_covers_every_registered_code():
     """The enum and the registry must not drift apart from each other either."""
-    from domain.infrastructure._internal.errors import ERROR_REGISTRY, ErrorCode
+    from domain.core.infrastructure._internal.errors import ERROR_REGISTRY, ErrorCode
 
     missing = [code.name for code in ErrorCode if code not in ERROR_REGISTRY]
     assert not missing, f"ErrorCode members with no ERROR_REGISTRY entry: {missing}"
@@ -230,7 +230,7 @@ def test_every_registered_code_resolves_by_name():
     call sites, and a value-only lookup (``ErrorCode(code)``) misses them —
     which is how an alias silently degrades to a generic AppError.
     """
-    from domain.infrastructure._internal.errors import ErrorCode, get_error_info
+    from domain.core.infrastructure._internal.errors import ErrorCode, get_error_info
 
     unresolved = [name for name in ErrorCode.__members__ if get_error_info(name) is None]
     assert not unresolved, f"get_error_info() returned None for: {unresolved}"
@@ -238,7 +238,7 @@ def test_every_registered_code_resolves_by_name():
 
 def test_legacy_alias_classifies_like_the_canonical_code():
     """The alias must resolve to the same class and status as its target."""
-    from domain.infrastructure._internal.errors import get_error_info
+    from domain.core.infrastructure._internal.errors import get_error_info
 
     alias = get_error_info("E_CREATE_FAILED")
     canonical = get_error_info("E_BAD_REQUEST")

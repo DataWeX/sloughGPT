@@ -12,7 +12,7 @@ from __future__ import annotations
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from domain.infrastructure.rate_limiter import (
+from domain.core.infrastructure.rate_limiter import (
     RATE_LIMIT_HEADER_LIMIT,
     RATE_LIMIT_HEADER_REMAINING,
     RateLimiter,

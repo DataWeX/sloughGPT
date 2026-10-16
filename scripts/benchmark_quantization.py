@@ -189,8 +189,8 @@ class QuantizationBenchmark:
 
     def _load_slnc(self):
         """Load a real model via the SloNetChatProvider .slnc path."""
+        from domain.core.infrastructure.model_resolver import get_model_dir as _get_model_dir
         from domain.generate._internal.slonet_provider import SloNetChatProvider
-        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         print(f"  Loading {self.model_name}...")
         t0 = time.perf_counter()
@@ -230,7 +230,7 @@ class QuantizationBenchmark:
         Returns:
             Quantized model (same architecture, weights quantized in place).
         """
-        from domain.infrastructure.quantization import Quantine, walk_slo_linears
+        from domain.core.infrastructure.quantization import Quantine, walk_slo_linears
 
         if self.tiny:
             quant_model = _create_tiny_model(seq_len=512)
@@ -616,7 +616,7 @@ class QuantizationBenchmark:
         mem_q_mb = self._isolated_rss_mb(quantize=True)
 
         # Calculate model weight sizes
-        from domain.infrastructure.quantization import walk_slo_linears
+        from domain.core.infrastructure.quantization import walk_slo_linears
 
         nq_bytes = sum(m.weight.data.nbytes for m in walk_slo_linears(self.model).values())
         # Quantized: use the packed quantized data size, not the original float32 weights
@@ -1939,7 +1939,7 @@ def main():
     # Per-layer stats
     per_layer_data = {}
     if args.per_layer and run_data:
-        from domain.infrastructure.quantization import walk_slo_linears as _wsl
+        from domain.core.infrastructure.quantization import walk_slo_linears as _wsl
 
         for bench_obj, run in zip(bench_objs, run_data, strict=False):
             bits_val = run["bits"]

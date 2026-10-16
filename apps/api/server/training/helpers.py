@@ -31,7 +31,7 @@ def _run_async(coro: Coroutine) -> None:
             logger.debug("Fire-and-forget coroutine failed: %s", exc)
 
     try:
-        from domain.infrastructure._internal.fire_and_forget import get_pool
+        from domain.core.infrastructure._internal.fire_and_forget import get_pool
 
         get_pool().submit(_target)
     except Exception as exc:
@@ -73,7 +73,7 @@ def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
         if error:
             job["error"] = error
     try:
-        from domain.infrastructure.cancel_manager import OpStatus, get_cancel_manager
+        from domain.core.infrastructure.cancel_manager import OpStatus, get_cancel_manager
 
         mgr = get_cancel_manager()
         op = mgr.get(job_id)

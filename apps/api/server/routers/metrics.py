@@ -8,7 +8,7 @@ Prometheus text exposition format.
 from fastapi import APIRouter, Response
 from schemas.common import endpoint, success_response
 
-from domain.infrastructure.metrics import get_metrics_collector
+from domain.core.infrastructure.metrics import get_metrics_collector
 
 
 class MetricsRouter:

@@ -14,7 +14,7 @@ from infrastructure.error_handler import (
     create_default_error_handler,
 )
 
-from domain.infrastructure._internal.errors import (
+from domain.core.infrastructure._internal.errors import (
     ERROR_REGISTRY,
     AppError,
     AuthError,
