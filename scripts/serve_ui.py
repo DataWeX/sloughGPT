@@ -81,6 +81,7 @@ def _run_supervised(cmd: list[str], cwd: str, log_path: str) -> int:
     """
     _open_child_log(log_path)
     spawned: dict = {"pid": None}
+    forwarded: dict = {"term": False}
 
     def _forward(signum, _frame):
         pid = spawned["pid"]
@@ -92,6 +93,8 @@ def _run_supervised(cmd: list[str], cwd: str, log_path: str) -> int:
             os.killpg(os.getpgid(pid), signum)
         except (ProcessLookupError, PermissionError, OSError):
             pass
+        if signum == signal.SIGTERM:
+            forwarded["term"] = True
 
     # Handlers BEFORE Popen: no window where SIGTERM hits the default
     # disposition and orphans a just-spawned server.
@@ -100,7 +103,21 @@ def _run_supervised(cmd: list[str], cwd: str, log_path: str) -> int:
     try:
         proc = subprocess.Popen(cmd, cwd=cwd, env=dict(os.environ), start_new_session=True)
         spawned["pid"] = proc.pid
-        return int(proc.wait().returncode)
+        while True:
+            try:
+                return int(proc.wait(timeout=5.0))
+            except subprocess.TimeoutExpired:
+                if not forwarded["term"]:
+                    continue  # nobody asked us to stop yet; keep supervising
+                # Gate 4: the API server swallowed our group SIGTERM — its own
+                # PGQ("sloughgpt") engine installs _handle_signal during
+                # lifespan, AFTER uvicorn's capture_signals, and never sets
+                # should_exit. Escalate to SIGKILL so stop() can't lie.
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass  # already gone — the wait below harvests it
+                return int(proc.wait(timeout=5.0))
     finally:
         signal.signal(signal.SIGTERM, old_term)
         signal.signal(signal.SIGINT, old_int)
@@ -250,7 +267,7 @@ def start(ready_timeout: float = READY_TIMEOUT, with_web: bool = True) -> dict:
     engine = Engine(
         config=EngineConfig(
             name="serve_ui",
-            subprocess=SubprocessConfig(enabled=True),
+            subprocess=SubprocessConfig(enabled=True, terminate_grace=10.0),
         )
     )
     tree = engine.tree("serve", guarded=True)
@@ -356,7 +373,10 @@ def stop() -> int:
     # Reap BOTH layers: wrapper children dead (ports actually released) and
     # base procs marked done — so the notebook stop cell never reports
     # "stopped" while uvicorn/vite are still winding down.
-    deadline = time.monotonic() + 5.0
+    # 12s > terminate_grace(10) > wrapper's TERM->KILL escalation (5s): the
+    # reap only reports "stopped" once the wrappers exited, i.e. once every
+    # server port is actually released.
+    deadline = time.monotonic() + 12.0
     while time.monotonic() < deadline and (
         any(s.is_alive for s in subs) or any(not p.is_done for p in procs)
     ):
