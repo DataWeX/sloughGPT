@@ -205,6 +205,52 @@ class TestConsciousnessEngineReflect:
         assert r.belief_deltas == {}
 
 
+class TestReflectionProposeCache:
+    """reflect(apply=False) memoizes per state fingerprint — chat-path stability.
+
+    Without this, every streaming request re-rolled reflect()'s random pools
+    and injected a DIFFERENT system message for the SAME conversation state.
+    """
+
+    def test_repeated_propose_returns_identical_narrative(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
+        r1 = engine.reflect(apply=False)
+        r2 = engine.reflect(apply=False)
+        assert r1 is r2  # cache hit — no re-roll of the random pools
+        assert r1.narrative == r2.narrative
+
+    def test_propose_refreshes_after_new_episode(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
+        r1 = engine.reflect(apply=False)
+        engine.process("new input", "new response", level=2)
+        r2 = engine.reflect(apply=False)
+        assert r2 is not r1
+        assert r2.episode_count == r1.episode_count + 1
+
+    def test_propose_refreshes_after_direct_self_model_mutation(self, tmp_path: Path) -> None:
+        """Routers mutate engine.self_model directly (no engine call) — still invalidates."""
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
+        r1 = engine.reflect(apply=False)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.2))
+        engine.apply_beliefs({"competence": 0.05})
+        r2 = engine.reflect(apply=False)
+        assert r2 is not r1
+        assert r2.episode_count == r1.episode_count + 1
+        assert r2.narrative != r1.narrative  # belief string moved
+
+    def test_apply_true_stays_uncached(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
+        before = dict(engine.self_model.self_beliefs)
+        r1 = engine.reflect(apply=True)
+        r2 = engine.reflect(apply=True)
+        assert r1 is not r2  # explicit action reflects fresh each call
+        assert engine.self_model.self_beliefs["competence"] > before["competence"]
+
+
 # ---------------------------------------------------------------------------
 # ConsciousnessManager.apply()
 # ---------------------------------------------------------------------------
