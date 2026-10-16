@@ -245,9 +245,13 @@ export default function ConsciousnessDebugPage() {
         output.push(JSON.stringify(json, null, 2))
         setConnected(true)
       } else {
-        const json = await apiPost('/consciousness/process', { text: input }, { silent: true })
-        output.push(JSON.stringify(json, null, 2))
-        setConnected(true)
+        // No expression endpoint exists (verified against the live route
+        // table: POST /consciousness/process was never registered). Bare
+        // text gets the usage hint instead of a guaranteed 404 that the
+        // silent flag rendered as a mysterious error line.
+        output.push(
+          'Unsupported input. Start with a method (GET /consciousness/status), or use fetch <url> for an absolute URL.',
+        )
       }
     } catch (e) {
       output.push(`Error: ${extractErrorMessage(e)}`)
@@ -278,7 +282,9 @@ export default function ConsciousnessDebugPage() {
   const handleReset = useCallback(async () => {
     try {
       // http-client raises on a non-2xx, replacing the manual `res.ok` check.
-      await apiPost('/consciousness/reset', undefined, { silent: true })
+      // /consciousness/reset was never registered; the real reset-to-defaults
+      // route is /consciousness/personality/reset (routers/consciousness.py).
+      await apiPost('/consciousness/personality/reset', undefined, { silent: true })
       addToast(t('consciousness_debug.toast_reset'), 'success')
       fetchAllStates()
     } catch (e) {

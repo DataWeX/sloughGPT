@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import ConsciousnessDebugPage from './page'
 import { consciousnessController } from '@/lib/consciousness-controller'
+import { apiGet, apiPost, httpClient } from '@/lib/http-client'
 
 vi.mock('@/lib/consciousness-controller', () => ({
   consciousnessController: {
@@ -12,6 +13,12 @@ vi.mock('@/lib/consciousness-controller', () => ({
     evaluate: vi.fn(),
     seedData: vi.fn(),
   },
+}))
+
+vi.mock('@/lib/http-client', () => ({
+  apiGet: vi.fn().mockResolvedValue({}),
+  apiPost: vi.fn().mockResolvedValue({}),
+  httpClient: { request: vi.fn().mockResolvedValue({}) },
 }))
 
 vi.mock('@/lib/config', () => ({
@@ -26,9 +33,8 @@ vi.mock('@/hooks/useLocale', () => ({
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => ({
-    addToast: vi.fn(),
-  })),
+  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+    selector({ addToast: vi.fn() }),
 }))
 
 vi.mock('@/components/icons/NavIcons', () => ({
@@ -139,6 +145,49 @@ describe('ConsciousnessDebugPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('consciousness_debug.reset_defaults').length).toBeGreaterThan(0)
       expect(screen.getAllByText('consciousness_debug.seed_data').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('reset posts to the real /consciousness/personality/reset route', async () => {
+    render(<ConsciousnessDebugPage />)
+    const resetButton = await screen.findByText('consciousness_debug.reset_defaults')
+    fireEvent.click(resetButton)
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith(
+        '/consciousness/personality/reset',
+        undefined,
+        expect.anything(),
+      )
+    })
+    // The route that was here before never existed on the backend.
+    expect(apiPost).not.toHaveBeenCalledWith('/consciousness/reset', undefined, expect.anything())
+  })
+
+  it('console bare text prints a usage hint without any network call', async () => {
+    render(<ConsciousnessDebugPage />)
+    const input = await screen.findByPlaceholderText('consciousness_debug.console_placeholder')
+    fireEvent.change(input, { target: { value: 'process my thoughts' } })
+    fireEvent.click(screen.getByText('consciousness_debug.execute'))
+    await waitFor(() => {
+      expect(screen.getByText(/Unsupported input/)).toBeInTheDocument()
+    })
+    // No phantom /consciousness/process call, no generic request escape hatch.
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(httpClient.request).not.toHaveBeenCalled()
+  })
+
+  it('console METHOD prefix still routes through the API client', async () => {
+    render(<ConsciousnessDebugPage />)
+    const input = await screen.findByPlaceholderText('consciousness_debug.console_placeholder')
+    fireEvent.change(input, { target: { value: 'GET /consciousness/status' } })
+    fireEvent.click(screen.getByText('consciousness_debug.execute'))
+    await waitFor(() => {
+      expect(httpClient.request).toHaveBeenCalledWith(
+        'GET',
+        '/consciousness/status',
+        undefined,
+        expect.anything(),
+      )
     })
   })
 })
