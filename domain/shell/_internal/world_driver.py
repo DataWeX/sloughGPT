@@ -296,14 +296,51 @@ def main(argv: list[str] | None = None) -> int:
         "--emergence", action="store_true", help="run the emergence benchmark (evolved vs frozen)"
     )
     parser.add_argument(
-        "--hidden-units", type=int, default=0, help="brain hidden units for --emergence"
+        "--hidden-units",
+        type=int,
+        default=0,
+        help="hidden projection width for the behavior brains (perceptron/model) "
+        "and the fallback stack width for --brain slonet",
     )
     parser.add_argument(
         "--brain",
-        choices=("perceptron", "model"),
+        choices=("perceptron", "model", "slonet", "random"),
         default="perceptron",
-        help="brain class for babies: perceptron (default) or model "
-        "(ModelBrain — trainable hidden projection, genome-compatible)",
+        help="brain class for babies: perceptron (default), model (numpy "
+        "ModelBrain — trainable hidden projection, genome-compatible), slonet "
+        "(native SloNet stack trained in-world by backprop; breeds via "
+        "spawn_child, not the genome), random (coin-flip baseline)",
+    )
+    parser.add_argument(
+        "--brain-n-embed",
+        type=int,
+        default=0,
+        help="hidden width of the native stack for --brain slonet "
+        "(0 = derive from --hidden-units, else 16)",
+    )
+    parser.add_argument(
+        "--brain-n-layer",
+        type=int,
+        default=1,
+        help="hidden SloLinear blocks for --brain slonet",
+    )
+    parser.add_argument(
+        "--brain-decide-every",
+        type=int,
+        default=1,
+        help="reuse the last decision for N decide_* calls (tick-rate mitigation)",
+    )
+    parser.add_argument(
+        "--brain-learn-every",
+        type=int,
+        default=8,
+        help="rewards buffered into one batched backward() for --brain slonet",
+    )
+    parser.add_argument(
+        "--brain-optimizer",
+        choices=("sgd", "adam"),
+        default="sgd",
+        help="optimizer for --brain slonet updates",
     )
     parser.add_argument(
         "--social", action="store_true", help="run the social benchmark (trait-group vs individual)"
@@ -418,6 +455,12 @@ def main(argv: list[str] | None = None) -> int:
         message_enabled=args.messages,
         structure_enabled=args.structures,
         brain_kind=args.brain,
+        brain_hidden_units=args.hidden_units,
+        brain_n_embed=args.brain_n_embed,
+        brain_n_layer=args.brain_n_layer,
+        brain_decide_every=args.brain_decide_every,
+        brain_learn_every=args.brain_learn_every,
+        brain_optimizer=args.brain_optimizer,
     )
 
     driver = WorldDriver(params, seed=args.seed)

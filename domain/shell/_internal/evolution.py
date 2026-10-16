@@ -43,6 +43,7 @@ from dataclasses import replace
 import numpy as np
 
 from .memory import WorldMemory
+from .model_brain import SloNetBrain
 from .simulation import (
     MATERIAL_ORGANIC,
     SimBaby,
@@ -199,7 +200,21 @@ class Genome:
         Returns:
             Genome with copies of cells/body/entity W and b tensors and
             serializable inherited episodes.
+
+        Raises:
+            NotImplementedError: when a behavior brain is a ``SloNetBrain`` —
+                the genome's flat ``W``/``b``/``H``/``bh`` tensor format
+                cannot represent a native SloNet stack, and inventing a
+                tensor-inventory parity for it is out of scope (conservative
+                default, card 7ff49d20). ``slonet`` brains breed whole through
+                ``SimBaby.spawn_child`` instead of generational evolution.
         """
+        if isinstance(getattr(baby, "perceptron_cells", None), SloNetBrain):
+            raise NotImplementedError(
+                "Genome.from_baby does not support 'slonet' behavior brains: the flat "
+                "W/b[/H/bh] genome format cannot represent a native SloNet stack. "
+                "slonet brains inherit whole via SimBaby.spawn_child instead."
+            )
         tensors: dict[str, np.ndarray] = {}
         names = ("cells", "body", "entity", "move")
         if hasattr(baby, "perceptron_message") and baby.perceptron_message is not None:
@@ -340,7 +355,19 @@ class Genome:
         Side effects:
             - sets baby.perceptron_*.W and .b
             - records the genome's memories into baby.memory
+
+        Raises:
+            NotImplementedError: when a behavior brain is a ``SloNetBrain`` —
+                the genome's flat tensors cannot overwrite a native stack
+                without silently corrupting it (card 7ff49d20, conservative
+                default: fail loud rather than half-apply).
         """
+        if isinstance(getattr(baby, "perceptron_cells", None), SloNetBrain):
+            raise NotImplementedError(
+                "Genome.apply_to does not support 'slonet' behavior brains: the flat "
+                "W/b[/H/bh] genome format cannot overwrite a native SloNet stack. "
+                "slonet brains inherit whole via SimBaby.spawn_child instead."
+            )
         for name in ("cells", "body", "entity", "move"):
             p = getattr(baby, f"perceptron_{name}")
             p.W[:] = self.tensors[f"{name}.W"]
