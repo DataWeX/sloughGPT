@@ -322,11 +322,11 @@ export default function ConsciousnessAnalyticsPage() {
                 <text x={M.left - 40} y={M.top + PH / 2} textAnchor="middle" fontSize="10" className="fill-muted-foreground" transform={`rotate(-90, ${M.left - 40}, ${M.top + PH / 2})`}>Growth Delta</text>
                 <text x={M.left + PW / 2} y={SVG_H - 2} textAnchor="middle" fontSize="10" className="fill-muted-foreground">Episode Index</text>
                 <line x1={M.left} y1={M.top + PH / 2} x2={M.left + PW} y2={M.top + PH / 2} stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" strokeDasharray="4 2" />
-                <path d={buildAreaPath(growthData.values.map((v, i) => v >= 0 ? v : 0), -0.1, 0.1, 0)} fill="#22c55e" fillOpacity="0.15" />
-                <path d={buildAreaPath(growthData.values.map((v) => v <= 0 ? v : 0), -0.1, 0.1, 0)} fill="#ef4444" fillOpacity="0.15" />
+                <path d={buildAreaPath(growthData.values.map((v, i) => v >= 0 ? v : 0), -0.1, 0.1, 0)} fill="rgb(var(--success))" fillOpacity="0.15" />
+                <path d={buildAreaPath(growthData.values.map((v) => v <= 0 ? v : 0), -0.1, 0.1, 0)} fill="rgb(var(--destructive))" fillOpacity="0.15" />
                 <path d={buildLinePath(growthData.values, -0.1, 0.1)} fill="none" stroke="hsl(var(--foreground))" strokeWidth="1.5" />
                 {growthData.avg.some(v => v !== null) && (
-                  <path d={buildLinePath(growthData.avg.map(v => v ?? 0), -0.1, 0.1)} fill="none" stroke="#8b5cf6" strokeWidth="2" strokeDasharray="6 3" />
+                  <path d={buildLinePath(growthData.avg.map(v => v ?? 0), -0.1, 0.1)} fill="none" stroke="rgb(var(--chart-1))" strokeWidth="2" strokeDasharray="6 3" />
                 )}
                 {growthData.values.map((v, i) => {
                   const xStep = growthData.values.length > 1 ? PW / (growthData.values.length - 1) : PW / 2
@@ -343,7 +343,7 @@ export default function ConsciousnessAnalyticsPage() {
                 <g>
                   <line x1={M.left + PW - 120} y1={M.top + 8} x2={M.left + PW - 100} y2={M.top + 8} stroke="hsl(var(--foreground))" strokeWidth="1.5" />
                   <text x={M.left + PW - 96} y={M.top + 12} fontSize="10" className="fill-muted-foreground">Raw</text>
-                  <line x1={M.left + PW - 120} y1={M.top + 24} x2={M.left + PW - 100} y2={M.top + 24} stroke="#8b5cf6" strokeWidth="2" strokeDasharray="6 3" />
+                  <line x1={M.left + PW - 120} y1={M.top + 24} x2={M.left + PW - 100} y2={M.top + 24} stroke="rgb(var(--chart-1))" strokeWidth="2" strokeDasharray="6 3" />
                   <text x={M.left + PW - 96} y={M.top + 28} fontSize="10" className="fill-muted-foreground">SMA(5)</text>
                 </g>
               </svg>
