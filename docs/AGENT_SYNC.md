@@ -4,6 +4,27 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**LANDED 2026-10-16** — card `ce0ec0b7` (vectorize `cycles._trace_batch`):
+every per-pixel Python loop in the tracer is gone. `BVH.intersect_batch` is
+a frontier walk over all live rays (padded prim tables, precomputed edge
+tables, explicit-cross Möller–Trumbore, exact `tnear <= t_hit` cull);
+emission gathers per-material once; the BSDF bounce runs per-material groups
+with a fixed RNG draw count (deterministic per seed inside the new sampler —
+pixel-exact parity with the old scalar lobe-pairing is not expected);
+`_intersect_scene` batches per-mesh with grouped barycentric/normal gathers;
+`_refract` takes per-ray eta (columnarize eta AND cos_i — mixing (k,1) with
+(k,) broadcasts to (k,k)). Scalar paths (`intersect`, `_trace_single`) kept —
+`render_state_tensors` still runs them (follow-up candidate on the card).
+Measured `scripts/benchmark_world_render.py` PASS: Gateway-default device
+frame 22.8s, RenderBridge world frame 16.6s = **126×** vs the scalar
+baseline (2875s/frame extrapolated from the measured 140–320s at
+128×96@2spp); profile says the walk is now numpy's per-pop floor
+(~15 pops/ray × ~0.5µs), so real-time is the GPU card's job
+(`get_accelerator()`, CuPy installed). Gates: 275 tests across the 6
+cycles/render suites green + repl/vm/world suites green except the
+stash-verified pre-existing 4× `TestNPUVMDevice` and router PPM failures;
+ruff clean. Next up: card `a3b39114` (StreamDevice + asm streaming app).
+
 **LANDED 2026-10-16** — card `1c64882c` (VM bus-value discipline +
 `encode_png`): the register file now holds machine-representable values
 only, the FileDevice fd precedent extended to arrays. `CyclesDevice.render`

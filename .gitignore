@@ -260,6 +260,9 @@ y
 
 # Dev notes — derived from journal, not source of truth
 .dev-notes/*.md
+# app-planner transient lock files
+.dev-notes/.commit.lock
+.kanban/.commit.lock
 # Hoplite platform metadata (per-thread sandbox artifacts)
 .hoplite/
 
