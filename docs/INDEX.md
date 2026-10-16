@@ -47,6 +47,7 @@ Single source of truth for navigation. Read this first.
 | **ENVIRONMENT.md** | Environment setup |
 | **DEPLOYMENT.md** | Deployment guide |
 | **DEPLOYMENT_CHECKLIST.md** | Pre-deploy checks |
+| **scripts/systemd/** | systemd --user unit for the shared API (:8000) + install.sh |
 
 ## Integration
 
