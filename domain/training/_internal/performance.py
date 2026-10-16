@@ -30,7 +30,10 @@ def get_device_name() -> str:
             import cupy as cp
 
             props = cp.cuda.runtime.getDeviceProperties(0)
-            return str(props["name"])
+            name = props["name"]
+            # CuPy returns the device name as bytes; str(b'...') would render
+            # the repr "b'NVIDIA ...'" — decode first.
+            return name.decode() if isinstance(name, bytes) else str(name)
         except Exception:
             return "CUDA"
     if device == "mps":
@@ -237,8 +240,8 @@ class FastInferenceSampler:
         """Penalize recently generated tokens."""
         import numpy as np
 
-        recent_tokens = np.asarray(recent_tokens)
-        if len(recent_tokens) == 0:
+        recent_tokens = np.asarray(recent_tokens).ravel()
+        if recent_tokens.size == 0:
             return logits
         result = logits.copy()
         for t in recent_tokens:
@@ -556,6 +559,11 @@ def _as_array(x):
 
     if isinstance(x, np.ndarray):
         return x
+    # slonet Tensor (and similar wrappers) carry their buffer in .data —
+    # np.asarray() on them yields an object-dtype array, not the values
+    data = getattr(x, "data", None)
+    if isinstance(data, np.ndarray):
+        return data
     return np.asarray(x)
 
 
