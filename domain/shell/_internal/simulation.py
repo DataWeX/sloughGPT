@@ -35,6 +35,7 @@ from typing import Any
 import numpy as np
 
 from .memory import EpisodicMemory, WorldMemory
+from .model_brain import ModelBrain
 
 logger = logging.getLogger("slo.sim")
 
@@ -298,6 +299,12 @@ class WorldParams:
     move_cost: float = 0.2  # energy spent per grid step a baby takes
     move_threshold: float = 10.0  # babies below this energy stay still (like react)
     learning_enabled: bool = True  # in-life delta-rule weight updates (off = pure evolution)
+    # World–Model Bridge (Stage A) — brain class for the four behavior brains.
+    # "perceptron" (default) keeps the frozen-feature delta-rule brain; "model"
+    # births ModelBrain babies whose hidden projection is trained by backprop
+    # in-world. Same tensor inventory, same RNG draw order, same genome — the
+    # swap changes only who learns the features. Locked proofs run default.
+    brain_kind: str = "perceptron"
 
 
 # ── Data Structures ──────────────────────────────────────────────────────────
@@ -1117,6 +1124,48 @@ class Perceptron:
         return p
 
 
+def make_brain(kind: str, input_dim: int, output_dim: int, hidden_units: int = 0):
+    """
+    Birth a decision brain of the requested kind (World–Model Bridge seam).
+
+    Both classes draw RNG in the same order (H, bh, W) with the same scales,
+    so a seeded world consumes an identical noise stream regardless of
+    ``brain_kind`` — the swap changes who learns the features, never luck.
+
+    Args:
+        kind: "perceptron" (default brain) or "model" (ModelBrain — trainable
+            hidden projection, genome-compatible).
+        input_dim: perception feature count.
+        output_dim: decision gate count.
+        hidden_units: hidden projection width (0 = single layer).
+
+    Returns:
+        A Perceptron or ModelBrain with the shared interface
+        (forward/update/W/b/H/bh/to_dict/from_dict).
+    """
+    if kind == "model":
+        return ModelBrain(input_dim, output_dim, hidden_units=hidden_units)
+    return Perceptron(input_dim, output_dim, hidden_units=hidden_units)
+
+
+def brain_from_dict(data: dict[str, Any]) -> Perceptron | ModelBrain:
+    """
+    Rebuild a brain from serialized baby state without touching RNG.
+
+    Dispatches on the ``kind`` marker ModelBrain writes; perceptron payloads
+    predate the marker and rebuild as Perceptron.
+
+    Args:
+        data: a ``to_dict()`` output from either brain class.
+
+    Returns:
+        A Perceptron or ModelBrain with the stored weights.
+    """
+    if data.get("kind") == "model":
+        return ModelBrain.from_dict(data)
+    return Perceptron.from_dict(data)
+
+
 # ── SimBaby ──────────────────────────────────────────────────────────────────
 
 
@@ -1157,15 +1206,17 @@ class SimBaby:
             entity_type=EntityType.AGENT,
         )
 
-        # Perceptrons — random weights, no knowledge
+        # Perceptrons — random weights, no knowledge. brain_kind="model"
+        # births ModelBrain babies (World–Model Bridge); default unchanged.
         cells_input_dim = self.params.cells_input_dim
         body_input_dim = self.params.body_input_dim
         entity_input_dim = self.params.entity_input_dim
         hidden = self.params.brain_hidden_units
-        self.perceptron_cells = Perceptron(cells_input_dim, 3, hidden_units=hidden)
-        self.perceptron_body = Perceptron(body_input_dim, 2)
-        self.perceptron_entity = Perceptron(entity_input_dim, 2)
-        self.perceptron_move = Perceptron(cells_input_dim, 3, hidden_units=hidden)
+        _kind = self.params.brain_kind
+        self.perceptron_cells = make_brain(_kind, cells_input_dim, 3, hidden)
+        self.perceptron_body = make_brain(_kind, body_input_dim, 2)
+        self.perceptron_entity = make_brain(_kind, entity_input_dim, 2)
+        self.perceptron_move = make_brain(_kind, cells_input_dim, 3, hidden)
         self.perceptron_message: Perceptron | None = None
         if self.params.message_enabled:
             # Directed-signal brain: reads a target neighbor's entity features
@@ -2355,12 +2406,12 @@ class SimBaby:
         baby = object.__new__(cls)
         baby.params = params or WorldParams()
         baby.entity = entity or Entity.from_dict(data["entity"])
-        baby.perceptron_cells = Perceptron.from_dict(data["perceptron_cells"])
-        baby.perceptron_body = Perceptron.from_dict(data["perceptron_body"])
-        baby.perceptron_entity = Perceptron.from_dict(data["perceptron_entity"])
+        baby.perceptron_cells = brain_from_dict(data["perceptron_cells"])
+        baby.perceptron_body = brain_from_dict(data["perceptron_body"])
+        baby.perceptron_entity = brain_from_dict(data["perceptron_entity"])
         move_data = data.get("perceptron_move")
         if move_data and move_data.get("W"):
-            baby.perceptron_move = Perceptron.from_dict(move_data)
+            baby.perceptron_move = brain_from_dict(move_data)
         else:
             # Legacy payloads predate movement — mint a fresh move brain
             # (touches RNG only on the legacy path).
