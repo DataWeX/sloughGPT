@@ -10,6 +10,7 @@ from domain.cognition._internal.consciousness.config import ConsciousnessConfig
 from domain.cognition._internal.consciousness.engine import (
     ConsciousnessEngine,
     get_consciousness,
+    peek_consciousness,
     reset_consciousness,
 )
 from domain.cognition._internal.consciousness.evaluation import (
@@ -50,5 +51,6 @@ __all__ = [
     "SelfIdentity",
     "SelfModel",
     "get_consciousness",
+    "peek_consciousness",
     "reset_consciousness",
 ]

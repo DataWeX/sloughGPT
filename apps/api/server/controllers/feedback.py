@@ -248,6 +248,18 @@ class FeedbackController:
             executor = get_training_executor()
             executor.submit(_trigger_hf_dpo, f"dpo_{feedback_id}")
 
+        # Calibrate the self-model from the same signal the weights learn
+        # from — but only a mind that already exists hears it (peek: never
+        # birth the engine just to tell it something; no-op when disabled).
+        try:
+            from domain.cognition import peek_consciousness
+
+            mind = peek_consciousness()
+            if mind is not None:
+                mind.observe_feedback(rating)
+        except Exception as exc:
+            logger.debug("Consciousness feedback calibration skipped: %s", exc)
+
         return {
             "status": "recorded",
             "feedback_id": feedback_id,

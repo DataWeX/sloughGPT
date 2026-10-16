@@ -591,6 +591,89 @@ class TestQualiaToneDirective:
 
 
 # ---------------------------------------------------------------------------
+# Confidence calibration: feedback evidence (card 449e1c81)
+# ---------------------------------------------------------------------------
+
+
+class TestFeedbackCalibration:
+    def test_up_pulls_confidence_toward_one(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        before = dict(engine.self_model.self_beliefs)
+        result = engine.observe_feedback("thumbs_up")
+        assert result["observed"] is True
+        for name in ("accuracy", "helpfulness"):
+            step = round(0.05 * (1 - before[name]), 4)
+            assert step > 0
+            assert engine.self_model.self_beliefs[name] == pytest.approx(before[name] + step)
+            assert engine.self_model.self_beliefs[name] < 1.0
+
+    def test_down_pulls_toward_zero_with_stronger_step(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        before = dict(engine.self_model.self_beliefs)
+        engine.observe_feedback("thumbs_down")
+        for name in ("accuracy", "helpfulness"):
+            step = round(-0.08 * before[name], 4)
+            assert step < 0
+            assert engine.self_model.self_beliefs[name] == pytest.approx(before[name] + step)
+
+    def test_repeated_downs_clamp_at_zero(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        for _ in range(80):
+            engine.observe_feedback("thumbs_down")
+        for name in ("accuracy", "helpfulness"):
+            assert engine.self_model.self_beliefs[name] >= 0.0
+
+    def test_neutral_is_qualia_only(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        before = dict(engine.self_model.self_beliefs)
+        result = engine.observe_feedback("neutral")
+        assert result == {"observed": True, "delta": {}, "reason": "neutral rating"}
+        assert dict(engine.self_model.self_beliefs) == before
+        assert engine.qualia.current.valence == 0.0  # felt, not learned
+        assert engine.mind_log.query(record_type="belief_delta") == []
+
+    def test_evidence_logged_with_the_delta(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.observe_feedback("thumbs_down")
+        record = engine.mind_log.query(record_type="belief_delta")[0]
+        assert record.provenance == "experience"
+        assert record.payload["evidence"] == {"rating": "thumbs_down", "source": "feedback"}
+        assert "after" in record.payload
+
+    def test_int_rating_path(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        before = dict(engine.self_model.self_beliefs)
+        result = engine.observe_feedback(5)
+        assert result["observed"] is True
+        assert engine.self_model.self_beliefs["accuracy"] > before["accuracy"]
+
+    def test_calibration_appears_in_self_report_trajectory(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.observe_feedback("thumbs_up")
+        trajectory = engine.self_report()["belief_trajectory"]["accuracy"]
+        assert trajectory
+        assert trajectory[-1][1] == pytest.approx(
+            engine.self_model.self_beliefs["accuracy"], abs=1e-3
+        )
+
+    def test_disabled_engine_ignores_feedback(self, tmp_path: Path) -> None:
+        engine = ConsciousnessEngine(ConsciousnessConfig(level=0, store_path=str(tmp_path)))
+        assert engine.observe_feedback("thumbs_up") == {"observed": False, "reason": "disabled"}
+
+    def test_peek_returns_none_then_existing_without_birth(self, tmp_path: Path) -> None:
+        from domain.cognition import get_consciousness, peek_consciousness, reset_consciousness
+
+        reset_consciousness()
+        try:
+            assert peek_consciousness() is None
+            config = ConsciousnessConfig(level=0, store_path=str(tmp_path))
+            created = get_consciousness(config)
+            assert peek_consciousness() is created  # no second instance
+        finally:
+            reset_consciousness()
+
+
+# ---------------------------------------------------------------------------
 # Reflection dataclass contract
 # ---------------------------------------------------------------------------
 

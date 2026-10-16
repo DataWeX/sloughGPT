@@ -12,7 +12,7 @@ Public API:
     PersonalityManager, PersonalityProfile, QualiaEngine, QualiaState
     Reflection, SelfEpisode, SelfIdentity, SelfModel
     ConsciousnessTrainer, TrainingConfig (lazy)
-    get_consciousness, reset_consciousness
+    get_consciousness, peek_consciousness, reset_consciousness
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ from domain.cognition._internal.consciousness import (
     SelfIdentity,
     SelfModel,
     get_consciousness,
+    peek_consciousness,
     reset_consciousness,
 )
 from domain.cognition._internal.core import (
@@ -104,6 +105,7 @@ __all__ = [
     "SelfIdentity",
     "SelfModel",
     "get_consciousness",
+    "peek_consciousness",
     "reset_consciousness",
     "ConsciousnessTrainer",
     "TrainingConfig",

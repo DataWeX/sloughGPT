@@ -14,6 +14,11 @@ from domain.cognition._internal.consciousness.narrative import NarrativeGenerato
 from domain.cognition._internal.consciousness.qualia import QualiaEngine
 from domain.cognition._internal.consciousness.self_model import SelfEpisode, SelfModel
 
+# Feedback calibration: what the rating evidences, and the 1-5 points it
+# maps to (thumbs_up=5, thumbs_down=1, neutral=3).
+_FEEDBACK_BELIEFS = ("accuracy", "helpfulness")
+_FEEDBACK_POINTS: dict[str, int] = {"thumbs_up": 5, "thumbs_down": 1, "neutral": 3}
+
 
 class ConsciousnessEngine:
     """Unified consciousness engine combining all 4 modules."""
@@ -298,20 +303,68 @@ class ConsciousnessEngine:
         }
 
     def apply_beliefs(
-        self, deltas: dict[str, float], source: str | None = None
+        self,
+        deltas: dict[str, float],
+        source: str | None = None,
+        provenance: str = "reflection",
+        evidence: dict[str, Any] | None = None,
     ) -> dict[str, float]:
         """Commit belief deltas; log the fact, edged to its source record."""
         result = self.self_model.apply_beliefs(deltas)
         edges = [{"rel": "applies", "id": source}] if source else []
+        payload: dict[str, Any] = {"deltas": dict(deltas), "after": dict(result)}
+        if evidence:
+            payload["evidence"] = dict(evidence)
         self.mind_log.append(
             MindRecord(
                 type="belief_delta",
-                payload={"deltas": dict(deltas), "after": dict(result)},
-                provenance="reflection",
+                payload=payload,
+                provenance=provenance,
                 edges=edges,
             )
         )
         return result
+
+    def observe_feedback(self, rating: str | int) -> dict[str, Any]:
+        """Calibrate self-confidence from outcome evidence (user feedback).
+
+        Beliefs are confidence estimates: success pulls them toward 1,
+        failure toward 0 — asymptotically, so evidence accumulates instead
+        of oscillating (the rarer, stronger thumbs-down moves them further
+        per event). The rating enters through the same door as every other
+        experience: qualia feel it first, the belief deltas are logged with
+        their evidence. The world informs the mind; nothing steers it from
+        outside.
+        """
+        if not self.config.is_enabled():
+            return {"observed": False, "reason": "disabled"}
+        points = (
+            _FEEDBACK_POINTS.get(rating.lower(), 3)
+            if isinstance(rating, str)
+            else max(1, min(5, int(rating)))
+        )
+        self.qualia.experience_from_feedback(points)
+        if points == 3:
+            return {"observed": True, "delta": {}, "reason": "neutral rating"}
+        success = points > 3
+        eta = 0.05 if success else 0.08
+        deltas: dict[str, float] = {}
+        for name in _FEEDBACK_BELIEFS:
+            confidence = float(self.self_model.self_beliefs.get(name, 0.5))
+            step = eta * (1.0 - confidence) if success else -eta * confidence
+            if abs(step) > 1e-9:
+                deltas[name] = round(step, 4)
+        if not deltas:
+            return {"observed": True, "delta": {}, "reason": "confidence saturated"}
+        self.apply_beliefs(
+            deltas,
+            provenance="experience",
+            evidence={
+                "rating": rating if isinstance(rating, str) else points,
+                "source": "feedback",
+            },
+        )
+        return {"observed": True, "delta": deltas}
 
     def clear_episodes(self) -> int:
         count = self.self_model.clear_episodes()
@@ -344,3 +397,14 @@ def reset_consciousness() -> None:
     global _instance
     with _module_lock:
         _instance = None
+
+
+def peek_consciousness() -> ConsciousnessEngine | None:
+    """Return the existing engine singleton WITHOUT creating one.
+
+    For callers that inform the mind (e.g. feedback calibration): you speak
+    to a mind that already exists — you never birth one just to tell it
+    something. ``None`` means no mind has been instantiated yet.
+    """
+    with _module_lock:
+        return _instance
