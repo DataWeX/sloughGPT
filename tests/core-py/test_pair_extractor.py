@@ -4,6 +4,8 @@ import json
 import time
 from pathlib import Path
 
+import pytest
+
 from domain.training._internal.pair_extractor import (
     count_pairs_in_corpus,
     count_pairs_in_logs,
@@ -228,6 +230,26 @@ class TestExtractPairsFromSessions:
 
 
 class TestExtractPairsFromLogs:
+    @pytest.fixture(autouse=True)
+    def _no_mogdb(self, monkeypatch):
+        """Force the MogDB branch off so these tests exercise the JSONL
+        fallback deterministically.
+
+        ``extract_pairs_from_logs`` queries MogDB first and only falls back
+        to the JSONL dir these tests patch (``_RESPONSE_LOGS_DIR``). With a
+        reachable MogDB the DB path wins and returns real production docs,
+        so the fixture pins the tracker's collection to None (the impl's
+        own "MogDB unavailable" signal).
+        """
+        from unittest.mock import MagicMock
+
+        tracker = MagicMock()
+        tracker._coll = None
+        monkeypatch.setattr(
+            "domain.training.feedback._internal.response_tracker.get_response_tracker",
+            lambda: tracker,
+        )
+
     def test_basic_extraction(self, tmp_path, monkeypatch):
         """Extracts pairs from JSONL response logs."""
         monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
