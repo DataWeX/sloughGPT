@@ -86,7 +86,7 @@ export const CodeBlock = memo(function CodeBlock({ language, code, isStreaming }
   }, [highlighted, code])
 
   return (
-    <div className="relative my-3 rounded-xl border border-border/40 bg-[#1a1a2e]/60 overflow-hidden">
+    <div className="relative my-3 rounded-xl border border-border/40 bg-muted overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-white/[0.03]">
         <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">{language || 'code'}</span>
         <button
