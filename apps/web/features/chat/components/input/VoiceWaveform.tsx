@@ -175,7 +175,7 @@ export function ListeningIndicator({ micLevel, active }: { micLevel: number; act
     return Array.from({ length: count }, (_, i) => ({
       delay: i * 200,
       baseScale: 1.2 + i * 0.4,
-      color: `hsl(var(--primary) / ${0.15 - i * 0.02})`,
+      color: `rgb(var(--primary) / ${0.15 - i * 0.02})`,
     }))
   }, [])
 

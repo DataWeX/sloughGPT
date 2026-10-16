@@ -303,7 +303,7 @@ export default function ConsciousnessMasterDashboardPage() {
                       cy="18"
                       r="15.5"
                       fill="none"
-                      stroke="hsl(var(--muted))"
+                      stroke="rgb(var(--muted))"
                       strokeWidth="3"
                     />
                     <circle
@@ -392,10 +392,10 @@ export default function ConsciousnessMasterDashboardPage() {
               {Object.keys(currentQualia).length > 0 ? (
                 <ResponsiveContainer width="100%" height={280}>
                   <RadarChart data={qualiaRadarData}>
-                    <PolarGrid stroke="hsl(var(--border))" />
+                    <PolarGrid stroke="rgb(var(--border))" />
                     <PolarAngleAxis
                       dataKey="dimension"
-                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                      tick={{ fontSize: 10, fill: 'rgb(var(--muted-foreground))' }}
                     />
                     <PolarRadiusAxis angle={30} domain={[-1, 1]} tick={{ fontSize: 9 }} />
                     <Radar
@@ -424,24 +424,24 @@ export default function ConsciousnessMasterDashboardPage() {
               {beliefsBarData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={beliefsBarData} layout="vertical" margin={{ left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                     <XAxis
                       type="number"
                       domain={[0, 100]}
                       tick={{ fontSize: 10 }}
-                      stroke="hsl(var(--muted-foreground))"
+                      stroke="rgb(var(--muted-foreground))"
                     />
                     <YAxis
                       type="category"
                       dataKey="name"
                       tick={{ fontSize: 10 }}
-                      stroke="hsl(var(--muted-foreground))"
+                      stroke="rgb(var(--muted-foreground))"
                       width={80}
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
+                        backgroundColor: 'rgb(var(--card))',
+                        border: '1px solid rgb(var(--border))',
                         borderRadius: '8px',
                         fontSize: '12px',
                       }}
@@ -471,17 +471,17 @@ export default function ConsciousnessMasterDashboardPage() {
             <CardContent>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={ratingDist}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                   <XAxis
                     dataKey="rating"
                     tick={{ fontSize: 10 }}
-                    stroke="hsl(var(--muted-foreground))"
+                    stroke="rgb(var(--muted-foreground))"
                   />
-                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
+                      backgroundColor: 'rgb(var(--card))',
+                      border: '1px solid rgb(var(--border))',
                       borderRadius: '8px',
                       fontSize: '12px',
                     }}
@@ -501,17 +501,17 @@ export default function ConsciousnessMasterDashboardPage() {
               {growthData.length > 1 ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={growthData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                     <XAxis
                       dataKey="time"
                       tick={{ fontSize: 9 }}
-                      stroke="hsl(var(--muted-foreground))"
+                      stroke="rgb(var(--muted-foreground))"
                     />
-                    <YAxis tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 9 }} stroke="rgb(var(--muted-foreground))" />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
+                        backgroundColor: 'rgb(var(--card))',
+                        border: '1px solid rgb(var(--border))',
                         borderRadius: '8px',
                         fontSize: '12px',
                       }}
@@ -557,7 +557,7 @@ export default function ConsciousnessMasterDashboardPage() {
                         cy="18"
                         r="15.5"
                         fill="none"
-                        stroke="hsl(var(--muted))"
+                        stroke="rgb(var(--muted))"
                         strokeWidth="3"
                       />
                       <circle

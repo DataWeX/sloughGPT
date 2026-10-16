@@ -122,7 +122,7 @@ function GridLines({ yMin, yMax, steps }: { yMin: number; yMax: number; steps: n
     const val = yMax - (yMax - yMin) * (i / steps)
     lines.push(
       <g key={i}>
-        <line x1={M.left} y1={y} x2={M.left + PW} y2={y} stroke="hsl(var(--border))" strokeWidth="0.5" />
+        <line x1={M.left} y1={y} x2={M.left + PW} y2={y} stroke="rgb(var(--border))" strokeWidth="0.5" />
         <text x={M.left - 8} y={y + 3} textAnchor="end" fontSize="10" className="fill-muted-foreground">
           {val.toFixed(2)}
         </text>
@@ -147,7 +147,7 @@ function TooltipBox({ x, y, lines }: { x: number; y: number; lines: string[] }) 
   const by = clamp(y - boxH - 8, 0, SVG_H - boxH)
   return (
     <g>
-      <rect x={bx} y={by} width={boxW} height={boxH} rx="4" fill="hsl(var(--card))" stroke="hsl(var(--border))" strokeWidth="1" />
+      <rect x={bx} y={by} width={boxW} height={boxH} rx="4" fill="rgb(var(--card))" stroke="rgb(var(--border))" strokeWidth="1" />
       {lines.map((line, i) => (
         <text key={i} x={bx + 8} y={by + 14 + i * 16} fontSize="10" className="fill-foreground">{line}</text>
       ))}
@@ -321,10 +321,10 @@ export default function ConsciousnessAnalyticsPage() {
                 <XAxisLabels labels={growthData.labels} />
                 <text x={M.left - 40} y={M.top + PH / 2} textAnchor="middle" fontSize="10" className="fill-muted-foreground" transform={`rotate(-90, ${M.left - 40}, ${M.top + PH / 2})`}>Growth Delta</text>
                 <text x={M.left + PW / 2} y={SVG_H - 2} textAnchor="middle" fontSize="10" className="fill-muted-foreground">Episode Index</text>
-                <line x1={M.left} y1={M.top + PH / 2} x2={M.left + PW} y2={M.top + PH / 2} stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" strokeDasharray="4 2" />
+                <line x1={M.left} y1={M.top + PH / 2} x2={M.left + PW} y2={M.top + PH / 2} stroke="rgb(var(--muted-foreground))" strokeWidth="0.5" strokeDasharray="4 2" />
                 <path d={buildAreaPath(growthData.values.map((v, i) => v >= 0 ? v : 0), -0.1, 0.1, 0)} fill="rgb(var(--success))" fillOpacity="0.15" />
                 <path d={buildAreaPath(growthData.values.map((v) => v <= 0 ? v : 0), -0.1, 0.1, 0)} fill="rgb(var(--destructive))" fillOpacity="0.15" />
-                <path d={buildLinePath(growthData.values, -0.1, 0.1)} fill="none" stroke="hsl(var(--foreground))" strokeWidth="1.5" />
+                <path d={buildLinePath(growthData.values, -0.1, 0.1)} fill="none" stroke="rgb(var(--foreground))" strokeWidth="1.5" />
                 {growthData.avg.some(v => v !== null) && (
                   <path d={buildLinePath(growthData.avg.map(v => v ?? 0), -0.1, 0.1)} fill="none" stroke="rgb(var(--chart-1))" strokeWidth="2" strokeDasharray="6 3" />
                 )}
@@ -333,7 +333,7 @@ export default function ConsciousnessAnalyticsPage() {
                   const x = M.left + (growthData.values.length > 1 ? i * xStep : PW / 2)
                   const y = M.top + PH - ((v - (-0.1)) / (0.1 - (-0.1))) * PH
                   return (
-                    <circle key={i} cx={x} cy={y} r="3" fill={v >= 0 ? 'rgb(var(--success))' : 'rgb(var(--destructive))'} stroke="hsl(var(--background))" strokeWidth="1"
+                    <circle key={i} cx={x} cy={y} r="3" fill={v >= 0 ? 'rgb(var(--success))' : 'rgb(var(--destructive))'} stroke="rgb(var(--background))" strokeWidth="1"
                       onMouseEnter={() => setTooltip1({ x, y, lines: [`Episode ${i + 1}`, `Growth: ${(v * 100).toFixed(2)}%`] })}
                       onMouseLeave={() => setTooltip1(null)}
                     />
@@ -341,7 +341,7 @@ export default function ConsciousnessAnalyticsPage() {
                 })}
                 {tooltip1 && <TooltipBox x={tooltip1.x} y={tooltip1.y} lines={tooltip1.lines} />}
                 <g>
-                  <line x1={M.left + PW - 120} y1={M.top + 8} x2={M.left + PW - 100} y2={M.top + 8} stroke="hsl(var(--foreground))" strokeWidth="1.5" />
+                  <line x1={M.left + PW - 120} y1={M.top + 8} x2={M.left + PW - 100} y2={M.top + 8} stroke="rgb(var(--foreground))" strokeWidth="1.5" />
                   <text x={M.left + PW - 96} y={M.top + 12} fontSize="10" className="fill-muted-foreground">Raw</text>
                   <line x1={M.left + PW - 120} y1={M.top + 24} x2={M.left + PW - 100} y2={M.top + 24} stroke="rgb(var(--chart-1))" strokeWidth="2" strokeDasharray="6 3" />
                   <text x={M.left + PW - 96} y={M.top + 28} fontSize="10" className="fill-muted-foreground">SMA(5)</text>
@@ -380,7 +380,7 @@ export default function ConsciousnessAnalyticsPage() {
                     const x = M.left + (qualiaHistory.length > 1 ? i * xStep : PW / 2)
                     const y = M.top + PH - v * PH
                     return (
-                      <circle key={`${key}-${i}`} cx={x} cy={y} r="2.5" fill={color} stroke="hsl(var(--background))" strokeWidth="0.5"
+                      <circle key={`${key}-${i}`} cx={x} cy={y} r="2.5" fill={color} stroke="rgb(var(--background))" strokeWidth="0.5"
                         onMouseEnter={() => setTooltip2({ x, y, lines: [`${key}: ${v.toFixed(3)}`, `Point ${i + 1}`] })}
                         onMouseLeave={() => setTooltip2(null)}
                       />
@@ -468,7 +468,7 @@ export default function ConsciousnessAnalyticsPage() {
                       const x = M.left + (beliefsData.labels.length > 1 ? i * xStep : PW / 2)
                       const y = M.top + PH - clamp(v, 0, 1) * PH
                       return (
-                        <circle key={`${key}-${i}`} cx={x} cy={y} r="2" fill={BELIEF_COLORS[key]} stroke="hsl(var(--background))" strokeWidth="0.5"
+                        <circle key={`${key}-${i}`} cx={x} cy={y} r="2" fill={BELIEF_COLORS[key]} stroke="rgb(var(--background))" strokeWidth="0.5"
                           onMouseEnter={() => setTooltip4({ x, y, lines: [`${key}: ${(v * 100).toFixed(1)}%`, `Step ${i + 1}`] })}
                           onMouseLeave={() => setTooltip4(null)}
                         />

@@ -180,7 +180,7 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
                   labelLine={false}
                 >
                   {analytics.pieData.map((entry) => (
-                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? 'hsl(var(--muted-foreground))'} />
+                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? 'rgb(var(--muted-foreground))'} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -200,10 +200,10 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
                   <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '4px', fontSize: '11px' }}
+                    contentStyle={{ backgroundColor: 'rgb(var(--background))', border: '1px solid rgb(var(--border))', borderRadius: '4px', fontSize: '11px' }}
                     formatter={(value: number) => [value.toFixed(4), 'Loss']}
                   />
-                  <Bar dataKey="loss" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="loss" fill="rgb(var(--primary))" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -221,10 +221,10 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
                   <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '4px', fontSize: '11px' }}
+                    contentStyle={{ backgroundColor: 'rgb(var(--background))', border: '1px solid rgb(var(--border))', borderRadius: '4px', fontSize: '11px' }}
                     formatter={(value: number) => [`${value} min`, 'Duration']}
                   />
-                  <Bar dataKey="duration" fill="hsl(var(--accent))" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="duration" fill="rgb(var(--accent))" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

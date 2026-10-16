@@ -112,17 +112,17 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
         <XAxis
           dataKey="step"
           tick={{ fontSize: 10 }}
-          stroke="hsl(var(--muted-foreground))"
+          stroke="rgb(var(--muted-foreground))"
           tickLine={false}
-          label={{ value: 'Step', position: 'insideBottomRight', offset: -4, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }}
+          label={{ value: 'Step', position: 'insideBottomRight', offset: -4, style: { fontSize: 9, fill: 'rgb(var(--muted-foreground))' } }}
         />
           <YAxis
             yAxisId="loss"
             tick={{ fontSize: 10 }}
-            stroke="hsl(var(--muted-foreground))"
+            stroke="rgb(var(--muted-foreground))"
             tickLine={false}
             domain={['auto', 'auto']}
-            label={{ value: 'Loss', angle: -90, position: 'insideLeft', offset: 4, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }}
+            label={{ value: 'Loss', angle: -90, position: 'insideLeft', offset: 4, style: { fontSize: 9, fill: 'rgb(var(--muted-foreground))' } }}
           />
           {hasReward && (
             <YAxis
@@ -137,13 +137,13 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
           )}
           <Tooltip
             contentStyle={{
-              backgroundColor: 'hsl(var(--background))',
-              border: '1px solid hsl(var(--border))',
+              backgroundColor: 'rgb(var(--background))',
+              border: '1px solid rgb(var(--border))',
               borderRadius: '6px',
               fontSize: '11px',
               padding: '6px 8px',
             }}
-            labelStyle={{ color: 'hsl(var(--foreground))' }}
+            labelStyle={{ color: 'rgb(var(--foreground))' }}
             labelFormatter={(label) => `Step ${label}`}
             formatter={(value: number | string, name: string) => [Number(value).toFixed(4), name]}
           />
@@ -153,7 +153,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
               yAxisId="loss"
               type="monotone"
               dataKey="train"
-              stroke="hsl(var(--primary))"
+              stroke="rgb(var(--primary))"
               strokeWidth={1.5}
               dot={false}
               name="Train loss"
@@ -165,7 +165,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
               yAxisId="loss"
               type="monotone"
               dataKey="eval"
-              stroke="hsl(var(--warning))"
+              stroke="rgb(var(--warning))"
               strokeWidth={1.5}
               dot={false}
               name="Validation loss"
