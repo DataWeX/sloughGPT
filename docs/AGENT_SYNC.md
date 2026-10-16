@@ -394,6 +394,27 @@ server). Gates and benchmarks now run on conda `sloughgpt` + `PYTHONPATH` —
 the root `.venv` is NOT authoritative (its green was hiding 2 zstd failures;
 `zstandard` is now installed into conda, user-approved).
 
+**2026-10-16 — startup benchmark gains the launcher path (branch
+`feat/notebook-web-ui`, card `85e15cc4` follow-up).** The card's serve
+launcher was landing in a concurrent session (`22cb8d1c4` + fixes
+`2e09f1a70`, `dcc0165c0`, `e883379bf`) while this session independently
+rebuilt it — duplicate caught at the gate by a path-based check
+(`git log main -- <owned paths>`, not commit-message grep), this session's
+implementation **discarded**, theirs kept. What survives is the measurement:
+`scripts/benchmark_startup.py --via {uvicorn,serve_ui}` boots the API through
+either the raw-uvicorn baseline or `scripts/serve_ui.py` and reports
+`time_to_health_s` / `time_to_ready_s` / `stop_latency_s` (shared
+`benchmark_results record` history). Same load window: health **3.01 s**
+baseline vs **3.89 s** launcher, ready 123.0 vs 123.9 (the app's own warm-up
+dominates both), stop **25.11 s → SIGKILL** (baseline — the app lifespan's
+PGQ engine swallows SIGTERM) vs **2.23 s** (launcher: bounded TERM→KILL +
+reap). Gate = `stop_latency_s ≤ 14 s` on the launcher path only, i.e. its own
+contract (wrapper escalation 5 s, `terminate_grace` 10, `stop()` reap 12).
+Landed by ff from `~/Documents/sloughgpt-api-std` (see Sync recipe). Deltas
+deliberately **not** landed here — port/host overrides and reuse-ownership of
+an already-running stack — are handed off in the card note for whichever
+session owns `scripts/serve_ui.py`.
+
 ## Sync recipe
 
 ```bash
@@ -767,6 +788,21 @@ git push -u origin feat/<name>   # push your own branch when done
   Check it before treating a failure as yours.
 
 ## Gotchas that cost hours (add yours here)
+
+- **A child log opened with `open(path, "a")` poisons every log-derived
+  metric**: `scripts/serve_ui.py` appends to `logs/serve_ui-api.log`, so the
+  next reader of `Startup complete — server ready for requests` /
+  `Preload import failed` can measure a *previous* run's boot. Hit while
+  adding `benchmark_startup.py --via serve_ui`: time-to-ready read as 3.88 s
+  off a stale marker (honest value 126.4 s) and the 25→5 s marker diff hid a
+  real measurement bug. Fix: give the run its own log dir (the benchmark
+  re-points `serve_ui.LOG_DIR`) and delete this run's file before starting.
+- **Never force-update `main` to land your commit while another worktree sits
+  on it at the old tip**: `git fetch . HEAD:main` / `git branch -f main` are
+  refused for good reason — that worktree's next `git commit` re-points the
+  branch from *its* HEAD and would silently drop your commit from main's line.
+  Land from the worktree that owns `main` (`~/Documents/sloughgpt-api-std`,
+  see Sync recipe) after claiming it here first.
 
 - **`PYTHONNOUSERSITE=1` (AGENTS.md) breaks browser suites**: playwright is
   installed in `~/.local/lib/python3.12/site-packages/` (user site), not in
