@@ -439,7 +439,7 @@ export default function ConsciousnessComparePage() {
                     return `${Math.cos(angle) * clamped * 100},${Math.sin(angle) * clamped * 100}`
                   }).join(' ')}
                   fill="rgba(139, 92, 246, 0.15)"
-                  stroke="#8b5cf6"
+                  stroke="rgb(var(--chart-1))"
                   strokeWidth="1.5"
                 />
                 <polygon
@@ -449,7 +449,7 @@ export default function ConsciousnessComparePage() {
                     return `${Math.cos(angle) * clamped * 100},${Math.sin(angle) * clamped * 100}`
                   }).join(' ')}
                   fill="rgba(6, 182, 212, 0.15)"
-                  stroke="#06b6d4"
+                  stroke="rgb(var(--chart-4))"
                   strokeWidth="1.5"
                 />
                 {QUALIA_DIMS.map((dim, k) => {
