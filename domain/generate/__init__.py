@@ -15,7 +15,7 @@ Public API:
 
 from __future__ import annotations
 
-from domain.inference._internal.slo_format import (
+from domain.generate._internal.slo_format import (
     SOUL_PROVENANCE,
     SOUL_PROVENANCE_DISTILLATION,
     SOUL_PROVENANCE_EXPORT,
@@ -41,7 +41,7 @@ from domain.inference._internal.slo_format import (
     soul_read_candidates,
     write_v3_sou,
 )
-from domain.inference._internal.vector_store import (
+from domain.generate._internal.vector_store import (
     InMemoryVectorStore,
     MogDBVectorStore,
     QueryResult,
@@ -96,18 +96,18 @@ __all__ = [
 
 def __getattr__(name):
     _lazy = {
-        "train_embedder": "domain.inference._internal.slo_embedder",
-        "SloTextEmbedder": "domain.inference._internal.slo_embedder",
-        "_EMBEDDER_PATH": "domain.inference._internal.slo_embedder",
-        "create_vector_store": "domain.inference._internal.vector_store",
-        "_ngram_embed": "domain.inference._internal.vector_store",
-        "get_slo_manager": "domain.inference._internal.slo_manager",
-        "PDFVLMProcessor": "domain.inference._internal.pdf_vlm",
-        "SloNetChatProvider": "domain.inference._internal.slonet_provider",
-        "VectorEntry": "domain.inference._internal.vector_store",
-        "PineconeVectorStore": "domain.inference._internal.vector_stores.pinecone_store",
-        "configure_api_provider": "domain.inference._internal.api_provider",
-        "get_engine": "domain.inference._internal.native.engine",
+        "train_embedder": "domain.generate._internal.slo_embedder",
+        "SloTextEmbedder": "domain.generate._internal.slo_embedder",
+        "_EMBEDDER_PATH": "domain.generate._internal.slo_embedder",
+        "create_vector_store": "domain.generate._internal.vector_store",
+        "_ngram_embed": "domain.generate._internal.vector_store",
+        "get_slo_manager": "domain.generate._internal.slo_manager",
+        "PDFVLMProcessor": "domain.generate._internal.pdf_vlm",
+        "SloNetChatProvider": "domain.generate._internal.slonet_provider",
+        "VectorEntry": "domain.generate._internal.vector_store",
+        "PineconeVectorStore": "domain.generate._internal.vector_stores.pinecone_store",
+        "configure_api_provider": "domain.generate._internal.api_provider",
+        "get_engine": "domain.generate._internal.native.engine",
     }
     if name in _lazy:
         import importlib

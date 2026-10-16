@@ -60,7 +60,7 @@ class StatusRouter:
         # Check inference engine
         optional_checks = {}
         try:
-            from domain.inference import get_engine
+            from domain.generate import get_engine
 
             engine = get_engine()
             optional_checks["inference"] = engine is not None

@@ -109,7 +109,7 @@ class TestPatchProviderSettings:
         assert get_provider("api") is None
 
     def test_patch_enable_registers_runtime_provider(self, isolated_settings, clean_registry):
-        from domain.inference._internal.api_provider import ApiProvider
+        from domain.generate._internal.api_provider import ApiProvider
         from domain.models import get_provider
 
         TestClient(_build_app()).patch(

@@ -33,7 +33,7 @@ from domain.core._internal.prompt_builder import (
 from domain.core._internal.prompt_builder import (
     PromptBuilder,
 )
-from domain.inference import (
+from domain.generate import (
     SOUL_PROVENANCE_EXPORT,
     SloProfile,
     load_soul,
@@ -199,7 +199,7 @@ class SloEngine:
     def _init_semantic_cache(self) -> None:
         """Initialize semantic cache."""
         try:
-            from domain.inference._internal.semantic_cache import SemanticCache
+            from domain.generate._internal.semantic_cache import SemanticCache
 
             self._semantic_cache = SemanticCache(
                 dim=10000,
@@ -1100,7 +1100,7 @@ class SloEngine:
         """
         if not self._semantic_cache:
             try:
-                from domain.inference._internal.semantic_cache import SemanticCache
+                from domain.generate._internal.semantic_cache import SemanticCache
 
                 self._semantic_cache = SemanticCache(
                     dim=10000,

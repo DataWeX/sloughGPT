@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from domain.chat._internal.domain import ChatDomain
-from domain.inference._internal.response_cache import (
+from domain.generate._internal.response_cache import (
     bump_cache_generation,
     get_response_cache,
     reset_response_cache_for_tests,

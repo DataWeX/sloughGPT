@@ -1,6 +1,6 @@
 """Edge-case tests for SouParser.parse() not covered in test_slo_format.py."""
 
-from domain.inference._internal.slo_format import (
+from domain.generate._internal.slo_format import (
     SloProfile,
     SouParser,
 )

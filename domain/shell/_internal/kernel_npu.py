@@ -373,12 +373,12 @@ class NPUDevice(DeviceDriver):
                 return self._load_numpy(name, path)
 
     def _load_numpy(self, name: str, path: str):
-        from domain.inference._internal.slonet_provider import SlonetChatProvider
+        from domain.generate._internal.slonet_provider import SlonetChatProvider
 
         return SlonetChatProvider.from_slnc(path, model_id=name)
 
     def _load_c(self, name: str, path: str):
-        from domain.inference._internal.ct_provider import CTransformProvider
+        from domain.generate._internal.ct_provider import CTransformProvider
 
         return CTransformProvider.from_slnc(path, model_id=name)
 

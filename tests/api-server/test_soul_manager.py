@@ -7,7 +7,7 @@ import os
 import struct
 import tempfile
 
-from domain.inference._internal.slo_manager import SloManager
+from domain.generate._internal.slo_manager import SloManager
 
 
 def _make_binary_sou(tmpdir: str, name: str, traits: list[str] | None = None) -> str:

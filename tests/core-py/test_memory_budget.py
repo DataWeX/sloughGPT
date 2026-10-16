@@ -58,7 +58,7 @@ def provider():
     slnc = _slnc_path()
     if slnc is None:
         pytest.skip(f"{QWEN_ID} .slnc not cached locally")
-    from domain.inference._internal.slonet_provider import SloNetChatProvider
+    from domain.generate._internal.slonet_provider import SloNetChatProvider
 
     prov = SloNetChatProvider.from_slnc(
         str(slnc),

@@ -945,7 +945,7 @@ class InferenceRouter:
             and self._context_core._vector_store is None
         ):
             try:
-                from domain.inference import simple_embed
+                from domain.generate import simple_embed
 
                 self._context_core.set_vector_store(self._vector_store_ref, simple_embed)
             except Exception as e:

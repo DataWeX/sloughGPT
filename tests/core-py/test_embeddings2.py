@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from domain.inference._internal.embeddings import (
+from domain.generate._internal.embeddings import (
     BatchEmbedder,
     Embedder,
     EmbeddingProvider,

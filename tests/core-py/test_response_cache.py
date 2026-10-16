@@ -1,4 +1,4 @@
-"""Tests for domain.inference._internal.response_cache.py — unified LLM response cache."""
+"""Tests for domain.generate._internal.response_cache.py — unified LLM response cache."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from domain.inference._internal.response_cache import (
+from domain.generate._internal.response_cache import (
     DETERMINISTIC_TEMPERATURE,
     ResponseCache,
     bump_cache_generation,

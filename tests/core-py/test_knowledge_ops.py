@@ -145,7 +145,7 @@ def test_file_index_extension_filter():
 
 
 def test_duplicate_detector_exact():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -166,7 +166,7 @@ def test_duplicate_detector_exact():
 
 
 def test_duplicate_detector_different():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -194,7 +194,7 @@ def test_duplicate_detector_empty_store():
 
 
 def test_duplicate_detector_clusters():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -230,7 +230,7 @@ def test_find_clusters_store_without_entries():
 
 
 def test_find_clusters_single_entry():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -245,7 +245,7 @@ def test_find_clusters_single_entry():
 
 
 def test_find_clusters_skips_visited_inner():
-    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry
+    from domain.generate._internal.vector_store import InMemoryVectorStore, VectorEntry
     from domain.knowledge._internal.knowledge_ops import DuplicateDetector
 
     v0 = [1.0, 0.0] + [0.0] * 382
@@ -270,7 +270,7 @@ def test_find_clusters_skips_visited_inner():
 
 
 def test_auto_categorizer():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -341,7 +341,7 @@ def test_auto_categorizer_empty_topic_centroid():
 
 
 def test_auto_categorizer_low_score_returns_general():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -365,7 +365,7 @@ def test_auto_categorizer_low_score_returns_general():
 
 
 def test_auto_categorizer_suggest():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -414,7 +414,7 @@ def test_suggest_topics_empty_topic_centroid():
 
 
 def test_gap_detector():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -463,7 +463,7 @@ def test_gap_detector_zero_total():
 
 
 def test_gap_detector_rare_and_adequate():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
         VectorEntry,
         simple_embed,
@@ -496,7 +496,7 @@ def test_gap_detector_rare_and_adequate():
 
 
 def test_find_sparse_regions():
-    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry
+    from domain.generate._internal.vector_store import InMemoryVectorStore, VectorEntry
     from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
 
     store = InMemoryVectorStore(dimension=384)
@@ -513,7 +513,7 @@ def test_find_sparse_regions():
 
 
 def test_find_sparse_regions_too_few():
-    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry
+    from domain.generate._internal.vector_store import InMemoryVectorStore, VectorEntry
     from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
 
     store = InMemoryVectorStore(dimension=384)
@@ -537,7 +537,7 @@ def test_find_sparse_regions_no_entries():
 
 
 def test_smart_context_injector():
-    from domain.inference._internal.vector_store import (
+    from domain.generate._internal.vector_store import (
         InMemoryVectorStore,
     )
     from domain.knowledge._internal.knowledge import KnowledgeMemory
@@ -653,7 +653,7 @@ def test_should_inject_no_results():
 def test_smart_context_should_inject():
     import threading
 
-    from domain.inference._internal.vector_store import InMemoryVectorStore
+    from domain.generate._internal.vector_store import InMemoryVectorStore
     from domain.knowledge._internal.knowledge import KnowledgeFact, KnowledgeMemory
     from domain.knowledge._internal.knowledge_ops import SmartContextInjector
 
@@ -688,7 +688,7 @@ def _fresh_memory():
     """Create a KnowledgeMemory with a fresh in-memory store (no disk persistence)."""
     import threading
 
-    from domain.inference._internal.vector_store import InMemoryVectorStore
+    from domain.generate._internal.vector_store import InMemoryVectorStore
     from domain.knowledge._internal.knowledge import KnowledgeMemory
 
     mem = KnowledgeMemory.__new__(KnowledgeMemory)

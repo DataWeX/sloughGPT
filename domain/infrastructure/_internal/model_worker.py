@@ -308,7 +308,7 @@ def _slo_worker_main(
     provider = None
 
     try:
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.generate._internal.slonet_provider import SloNetChatProvider
 
         provider = SloNetChatProvider.from_slnc(
             slnc_path,
@@ -554,7 +554,7 @@ def _slo_worker_main(
         if slnc_path is None:
             raise RuntimeError("Cannot determine base model path.")
 
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.generate._internal.slonet_provider import SloNetChatProvider
 
         base_provider = SloNetChatProvider.from_slnc(slnc_path, model_id="base")
         provider._model = base_provider._model

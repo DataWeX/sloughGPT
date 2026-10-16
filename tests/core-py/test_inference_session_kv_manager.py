@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.inference._internal.session_kv_manager import SessionKVManager
+from domain.generate._internal.session_kv_manager import SessionKVManager
 
 
 class TestSessionKVManager:

@@ -579,7 +579,7 @@ class TestBuildLoadPlan:
 
 class TestDirectWeightLoader:
     def test_gpt2_direct_load_matches_fused(self, tmp_path):
-        from domain.inference._internal.slonet_provider import convert_hf_to_slonet
+        from domain.generate._internal.slonet_provider import convert_hf_to_slonet
 
         n_embed, n_layer = 64, 2
         sd = {}
@@ -641,7 +641,7 @@ class TestDirectWeightLoader:
         parser.close()
 
     def test_llama_direct_load_matches_fused(self, tmp_path):
-        from domain.inference._internal.slonet_provider import convert_hf_to_slonet
+        from domain.generate._internal.slonet_provider import convert_hf_to_slonet
 
         n_embed, n_layer = 64, 2
         sd = {}
@@ -1033,7 +1033,7 @@ class TestWeightLoaderRegistry:
 
 class TestSoulWeightLoader:
     def test_soul_loader_loads_weights(self, tmp_path):
-        from domain.inference._internal.slo_format import save_soul
+        from domain.generate._internal.slo_format import save_soul
         from domain.infrastructure._internal.weight_loader import SoulWeightLoader
 
         n_embed, n_layer = 32, 2
@@ -1084,7 +1084,7 @@ class TestSoulWeightLoader:
         assert reg.get_loader("model.slnc") is DirectWeightLoader
 
     def test_soul_load_metadata(self, tmp_path):
-        from domain.inference._internal.slo_format import save_soul
+        from domain.generate._internal.slo_format import save_soul
         from domain.infrastructure._internal.weight_loader import SoulWeightLoader
 
         n_embed, n_layer = 32, 2
@@ -1107,7 +1107,7 @@ class TestSoulWeightLoader:
         assert meta["vocab_size"] == 100
 
     def test_soul_load_timing_keys(self, tmp_path):
-        from domain.inference._internal.slo_format import save_soul
+        from domain.generate._internal.slo_format import save_soul
         from domain.infrastructure._internal.weight_loader import SoulWeightLoader
 
         n_embed, n_layer = 32, 1

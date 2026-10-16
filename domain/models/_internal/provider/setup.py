@@ -115,7 +115,7 @@ def setup_providers(
 
         native_on = is_enabled("native_c_inference")
         if native_on or native_slnc_path:
-            from domain.inference._internal.native.engine import (
+            from domain.generate._internal.native.engine import (
                 NativeTransformerProvider,
                 get_engine,
             )
@@ -155,7 +155,7 @@ def setup_providers(
         )
     elif slonet_path:
         try:
-            from domain.inference._internal.slonet_provider import SloNetChatProvider
+            from domain.generate._internal.slonet_provider import SloNetChatProvider
 
             slonet_provider = SloNetChatProvider.from_slnc(
                 slonet_path,
@@ -188,7 +188,7 @@ def setup_providers(
             )
     elif slonet_hf_id:
         try:
-            from domain.inference._internal.slonet_provider import SloNetChatProvider
+            from domain.generate._internal.slonet_provider import SloNetChatProvider
             from domain.infrastructure._internal.model_resolver import (
                 get_model_dir as _get_model_dir,
             )
@@ -241,7 +241,7 @@ def setup_providers(
                 _cache_dir = _get_model_dir(default_model)
                 _slnc = _cache_dir / "model.slnc"
                 if _slnc.exists():
-                    from domain.inference._internal.slonet_provider import SloNetChatProvider
+                    from domain.generate._internal.slonet_provider import SloNetChatProvider
 
                     auto_provider = SloNetChatProvider.from_slnc(
                         str(_slnc),

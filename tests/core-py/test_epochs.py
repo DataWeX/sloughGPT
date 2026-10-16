@@ -14,7 +14,7 @@ and _progress_denominator / _format_eta.
 import numpy as np
 import pytest
 
-from domain.inference._internal.slo_format import load_soul
+from domain.generate._internal.slo_format import load_soul
 from domain.training._internal.train_pipeline import (
     CheckpointManager,
     SloughGPTTrainer,

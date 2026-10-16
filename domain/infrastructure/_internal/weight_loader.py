@@ -575,7 +575,7 @@ class SoulWeightLoader:
 
     def load_metadata(self) -> dict:
         """Load just the metadata (no weights) for model construction."""
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         soul, _ = load_soul(self._soul_path)
         cfg = soul.metadata.get("config", {})
@@ -589,7 +589,7 @@ class SoulWeightLoader:
         }
 
     def load(self, model) -> WeightLoadResult:
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         _t0 = time.monotonic()
         soul, state_dict = load_soul(self._soul_path)

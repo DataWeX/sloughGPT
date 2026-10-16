@@ -1069,7 +1069,7 @@ class SloNetChatProvider:
             FileNotFoundError: If soul_path does not exist
             ValueError: If the .soul file is invalid or missing model config
         """
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
         from domain.infrastructure._internal.weight_loader import build_model_from_config
 
         soul, state_dict = load_soul(soul_path)

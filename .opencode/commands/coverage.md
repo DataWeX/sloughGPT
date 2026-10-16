@@ -20,7 +20,7 @@ Systematic test coverage improvement for Python modules.
 ```
 /coverage domain/training/_internal/export.py
 /coverage domain/infrastructure/_internal/task_queue.py
-/coverage domain/inference/_internal/slonet_provider.py
+/coverage domain/generate/_internal/slonet_provider.py
 ```
 
 ## What It Does

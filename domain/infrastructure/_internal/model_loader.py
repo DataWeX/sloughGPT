@@ -223,7 +223,7 @@ class ModelLoader:
 
         logger.info("Loading SloNet model from %s", slnc_path, extra={"tag": "MODEL"})
         try:
-            from domain.inference._internal.slonet_provider import SloNetChatProvider
+            from domain.generate._internal.slonet_provider import SloNetChatProvider
 
             provider = SloNetChatProvider.from_slnc(
                 str(slnc_path),
@@ -302,7 +302,7 @@ class ModelLoader:
         logger.info("Found native .soul checkpoint: %s", soul_path, extra={"tag": "MODEL"})
 
         try:
-            from domain.inference._internal.slonet_provider import SloNetChatProvider
+            from domain.generate._internal.slonet_provider import SloNetChatProvider
 
             provider = SloNetChatProvider.from_soul(
                 soul_path,

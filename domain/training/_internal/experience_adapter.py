@@ -137,7 +137,7 @@ def _build_experience_text(
     # Try PromptEngine for 100% train/serve parity when available
     if use_prompt_engine:
         try:
-            from domain.inference._internal.prompt_engine import render_prompt
+            from domain.generate._internal.prompt_engine import render_prompt
 
             # Build one text per pair via the same engine that serves inference.
             # render_prompt expects list[dict] messages; we render each pair as

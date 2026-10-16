@@ -467,7 +467,7 @@ class SettingsRouter:
         """Update external API provider settings and apply at runtime."""
         from dataclasses import asdict
 
-        from domain.inference import configure_api_provider
+        from domain.generate import configure_api_provider
         from domain.settings import get_settings as _get
 
         updates = {k: v for k, v in req.model_dump().items() if v is not None}

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domain.inference._internal.native.weight_mapper import map_slnc_to_native
+from domain.generate._internal.native.weight_mapper import map_slnc_to_native
 
 
 def _make_tensors(D, NH, NKV, HD, FF, V, n_layers, prefix="model.layers"):

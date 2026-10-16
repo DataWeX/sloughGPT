@@ -671,9 +671,9 @@ def export_to_sou(
         Path to exported file
 
     See Also:
-        :mod:`domain.inference._internal.slo_format`: Slo format details
+        :mod:`domain.generate._internal.slo_format`: Slo format details
     """
-    from domain.inference import save_soul as sou_export
+    from domain.generate import save_soul as sou_export
 
     written = sou_export(
         model=model,

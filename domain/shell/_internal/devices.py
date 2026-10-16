@@ -158,7 +158,7 @@ class EmbeddingDevice(AIDevice):
             return self._embed_fn(text)
         # Use the project's real embedder (sentence-transformers or n-gram fallback)
         try:
-            from domain.inference._internal.vector_store import simple_embed
+            from domain.generate._internal.vector_store import simple_embed
 
             return simple_embed(text)
         except Exception as e:

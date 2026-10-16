@@ -99,7 +99,7 @@ def test_every_provenance_constant_is_registered() -> None:
     """A constant defined but left out of SOUL_PROVENANCE would be rejected
     by save_soul at write time — i.e. discovered only after a checkpoint
     failed to save. Catch it at import-of-the-test instead."""
-    from domain.inference import SOUL_PROVENANCE
+    from domain.generate import SOUL_PROVENANCE
 
     declared = dict(
         re.findall(

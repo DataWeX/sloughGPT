@@ -24,7 +24,7 @@ const mockData = {
     },
     'slonet-native': {
       type: 'SloNetChatProvider',
-      module: 'domain.inference._internal.slonet_provider',
+      module: 'domain.generate._internal.slonet_provider',
       model_id: 'Qwen/Qwen2.5-0.5B-Instruct',
       server: { type: 'SloNetServer', has_circuit_breaker: true },
     },

@@ -31,7 +31,7 @@ from domain.memory import (
 def iso_store(tmp_path, monkeypatch):
     """KnowledgeMemory isolated from the repo data dir (paths -> tmp)."""
     import domain.memory._internal.knowledge_store as ks
-    from domain.inference._internal.vector_store import InMemoryVectorStore
+    from domain.generate._internal.vector_store import InMemoryVectorStore
 
     monkeypatch.setattr(ks, "ENTRIES_PATH", tmp_path / "entries.json")
     monkeypatch.setattr(ks, "VISITED_PATH", tmp_path / "visited.json")

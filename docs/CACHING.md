@@ -3,7 +3,7 @@
 Two response-level cache tiers over one key discipline, wired into the real
 chat serving path (`domain/chat/_internal/domain.py::ChatDomain.respond`).
 
-Module: `domain/inference/_internal/response_cache.py`
+Module: `domain/generate/_internal/response_cache.py`
 
 ## The invariant
 

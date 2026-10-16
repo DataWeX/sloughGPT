@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from domain.inference._internal.slo_format import (
+from domain.generate._internal.slo_format import (
     SOUL_TIER_POLICY,
     read_sidecar,
     soul_read_candidates,
@@ -62,7 +62,7 @@ def is_trained_checkpoint(name: str) -> bool:
     That decision used to be three separate ``endswith("_trained.soul")``
     checks, and every one of them rejected ``<stem>_trained.soul.soul`` —
     leaving four checkpoints invisible to the list, refused by download and
-    undeletable, even though :func:`domain.inference.load_soul` reads them
+    undeletable, even though :func:`domain.generate.load_soul` reads them
     without complaint. One predicate owns the decision now.
 
     Args:
@@ -78,14 +78,14 @@ def _probe_paths(base: Path, name: str) -> list[Path]:
     """Every file *name* could mean inside *base*, in probe order.
 
     The ordering — the spelling the caller NAMED first, then its sibling —
-    belongs to :func:`domain.inference._internal.slo_format.soul_read_candidates`,
+    belongs to :func:`domain.generate._internal.slo_format.soul_read_candidates`,
     the single owner of .soul filename grammar. This only walks that list
     across one root, so callers keep their root-major search order.
 
     Before this, ``find_checkpoint`` and ``load_soul`` each hand-appended
     ``.soul``/``.slo`` themselves and never probed the legacy double-append
     sibling: a canonical name for a file that exists only at ``x.soul.soul``
-    came back not-found while ``domain.inference.load_soul`` read it fine.
+    came back not-found while ``domain.generate.load_soul`` read it fine.
     Two owners, two answers.
     """
     return [Path(c) for c in soul_read_candidates(str(base / name))]
@@ -204,7 +204,7 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
 
         if meta is None and fp.suffix == ".slo":
             try:
-                from domain.inference._internal.slo_format import SouParser
+                from domain.generate._internal.slo_format import SouParser
 
                 profile = SouParser.parse(fp.read_text(encoding="utf-8"))
                 meta = {
@@ -594,7 +594,7 @@ def _describe_identity(info: dict) -> dict:
     if not path:
         return info
     try:
-        from domain.inference import classify_soul
+        from domain.generate import classify_soul
 
         ident = classify_soul(path)
     except Exception as e:  # never let identity enrichment mask the row

@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from domain.inference._internal.ops.layernorm import layernorm
-from domain.inference._internal.ops.rmsnorm import rmsnorm
+from domain.generate._internal.ops.layernorm import layernorm
+from domain.generate._internal.ops.rmsnorm import rmsnorm
 
 
 def _expected_layernorm(x, weight, bias, eps):

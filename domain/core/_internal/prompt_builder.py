@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from domain.core._internal.soul import GenerationContext
-    from domain.inference import SloProfile
+    from domain.generate import SloProfile
     from domain.soul._internal.hd_memory import HDMemoryStore
 
 # Same logger name as soul.py so existing log pipelines keep working.

@@ -23,7 +23,7 @@ All six moved to the repo-root **`domain/`** package.
 | Domain | Purpose |
 |--------|---------|
 | `domain.training` | Training pipelines, executor, distillation |
-| `domain.inference` | Vector store, KV cache, providers |
+| `domain.generate` | Vector store, KV cache, providers |
 | `domain.feedback` | LoRA eval, per-user adapter |
 | `domain.cognitive` | Soul engine, metacognition |
 | `domain.infrastructure` | ProcessGuard, ModelServer, TaskQueue, CancelManager |

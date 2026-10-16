@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.inference._internal.slonet_provider import (
+from domain.generate._internal.slonet_provider import (
     NATIVE_FORMAT_CHAR,
     NATIVE_FORMAT_TREE,
     NativeTokenizer,
@@ -221,7 +221,7 @@ class TestLegacySurface:
 
     def test_embedded_loader_raises_when_missing(self):
         with pytest.raises(ValueError, match="Embedded tokenizer missing"):
-            from domain.inference._internal.slonet_provider import SloNetChatProvider
+            from domain.generate._internal.slonet_provider import SloNetChatProvider
 
             SloNetChatProvider._tokenizer_from_embedded({})
 
@@ -230,7 +230,7 @@ class TestSaveLoadContract:
     """Save-side stamps and load-side constants must speak the same strings."""
 
     def test_format_literals_agree_between_save_and_load(self):
-        import domain.inference._internal.slonet_provider as sp
+        import domain.generate._internal.slonet_provider as sp
         import domain.training._internal.train_pipeline as tp
 
         load_src = Path(inspect.getsourcefile(sp)).read_text()

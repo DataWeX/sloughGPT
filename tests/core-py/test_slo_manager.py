@@ -1,4 +1,4 @@
-"""Tests for domain.inference._internal.slo_manager — SloInfo and SloManager."""
+"""Tests for domain.generate._internal.slo_manager — SloInfo and SloManager."""
 
 import json
 import struct
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.inference._internal.slo_manager import SloInfo, SloManager
+from domain.generate._internal.slo_manager import SloInfo, SloManager
 
 
 # ---------------------------------------------------------------------------
@@ -876,7 +876,7 @@ class TestSloManagerPreference:
 # ---------------------------------------------------------------------------
 class TestSloManagerModuleFunctions:
     def test_get_slo_manager_singleton(self, tmp_path):
-        from domain.inference._internal import slo_manager as mod
+        from domain.generate._internal import slo_manager as mod
 
         old = mod._slo_manager
         try:
@@ -888,7 +888,7 @@ class TestSloManagerModuleFunctions:
             mod._slo_manager = old
 
     def test_list_souls_function(self, tmp_path):
-        from domain.inference._internal import slo_manager as mod
+        from domain.generate._internal import slo_manager as mod
 
         old = mod._slo_manager
         try:
@@ -899,7 +899,7 @@ class TestSloManagerModuleFunctions:
             mod._slo_manager = old
 
     def test_switch_soul_function(self, tmp_path):
-        from domain.inference._internal import slo_manager as mod
+        from domain.generate._internal import slo_manager as mod
 
         old = mod._slo_manager
         try:

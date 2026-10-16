@@ -26,7 +26,7 @@ core Python infrastructure in `domain/`.
   quantization, process guard, event bus, task queue, lifecycle, etc.
 - `domain/training/_internal/` — SloNet, trainers, distillation,
   sequences, checkpoints.
-- `domain/inference/_internal/` — providers, vector store,
+- `domain/generate/_internal/` — providers, vector store,
   context core, model server.
 - `domain/feedback/_internal/` — LoRA, DPO, meta weights.
 - `domain/multimodal/_internal/` — vision, speech, engine.

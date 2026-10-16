@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from domain.core._internal.soul import GenerationContext, SloEngine
-from domain.inference import SloProfile
+from domain.generate import SloProfile
 
 CHARSET = "abcdefghijklmnopqrstuvwxyz "
 

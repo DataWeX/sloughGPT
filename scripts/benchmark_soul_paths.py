@@ -2,7 +2,7 @@
 Soul Filename-Grammar + Checkpoint I/O Benchmark
 
 Measures the cost the .soul filename grammar adds to the checkpoint path
-(domain/inference/_internal/slo_format.py: soul_path / soul_read_candidates /
+(domain/generate/_internal/slo_format.py: soul_path / soul_read_candidates /
 load_soul's candidate probe).
 
 What this is guarding:
@@ -139,8 +139,8 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     args = ap.parse_args()
 
-    from domain.inference import load_soul, save_soul, soul_path, soul_read_candidates
-    from domain.inference._internal.slo_format import read_sidecar
+    from domain.generate import load_soul, save_soul, soul_path, soul_read_candidates
+    from domain.generate._internal.slo_format import read_sidecar
     from domain.training._internal.checkpoints import _describe_identity
 
     results: list[BenchResult] = []

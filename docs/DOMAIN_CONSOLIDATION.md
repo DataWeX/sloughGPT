@@ -97,7 +97,7 @@ unrelated public surfaces under one name.
 in a single change. Creating `domain/generate/__init__.py` that re-exports from
 `domain.inference` would add a **47th** shim to the 46 we are driving to zero
 (§5), re-creating the very coupling the consolidation exists to remove. The
-90-line lazy barrel in `domain/inference/__init__.py` should be **dropped in the
+90-line lazy barrel in `domain/generate/__init__.py` should be **dropped in the
 move**, not reproduced: `generate` is a real top-level domain, not a re-export.
 
 ---
@@ -130,7 +130,7 @@ packages/core-py/domains/inference/native/
     transformer_forward.h           1,576 B   UNTRACKED
     libtransformer_forward.dylib   21,384 B   UNTRACKED   (macOS artifact)
 
-domain/inference/_internal/native/
+domain/generate/_internal/native/
     bindings.py · engine.py · weight_mapper.py · __init__.py   ← no native dir at all
 ```
 
@@ -150,7 +150,7 @@ Two independent problems, not one:
 
 **Gate before step 4 runs:** track and relocate
 `native/{transformer_forward.c,transformer_forward.h}` →
-`domain/inference/_internal/native/`, build `libtransformer_forward.so` there, and
+`domain/generate/_internal/native/`, build `libtransformer_forward.so` there, and
 make `bindings.py`'s failure message name the platform-correct compile command
 (it currently prints macOS-only `-dynamiclib -framework Accelerate` flags on Linux).
 
@@ -502,7 +502,7 @@ shared `.venv`, so it needs an owner's go-ahead.
 `domain/`**, not 1 —
 
 ```
-domain/inference/_internal/slonet_provider.py      domain/voice/engine.py
+domain/generate/_internal/slonet_provider.py      domain/voice/engine.py
 domain/infrastructure/_internal/model_config.py    domain/shell/__init__.py
 domain/infrastructure/_internal/process_guard.py   domain/shell/_internal/vm.py
 ```

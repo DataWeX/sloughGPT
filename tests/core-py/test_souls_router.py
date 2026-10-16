@@ -58,7 +58,7 @@ def _app(sr: SoulsRouter):
 
 
 class TestListSouls:
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_list(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -71,7 +71,7 @@ class TestListSouls:
 
 
 class TestGetCurrentSoul:
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_get_current(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -82,7 +82,7 @@ class TestGetCurrentSoul:
 
 
 class TestSwitchSoul:
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_switch(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -92,7 +92,7 @@ class TestSwitchSoul:
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "creative"
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_switch_with_checkpoint(self, mock_get):
         mgr = _mock_manager()
         mgr.load_checkpoint.return_value = {"name": "assistant", "loss": 1.5}

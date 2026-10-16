@@ -142,7 +142,7 @@ stem — one holds a 16:07 run at loss 4.10 while its legacy-spelled
 `.soul.soul` sibling holds a 16:38 run at 3.97 — so identity is read from the
 file, never from its name.
 
-**Filename grammar.** One owner, `domain/inference/_internal/slo_format.py`.
+**Filename grammar.** One owner, `domain/generate/_internal/slo_format.py`.
 
 | suffix  | role                                                |
 | ------- | --------------------------------------------------- |

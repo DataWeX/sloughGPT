@@ -115,7 +115,7 @@ class SloTransformerProvider:
 
     @classmethod
     def load_from_sou(cls, path: str, model_id_str: str = "") -> SloTransformerProvider:
-        from domain.inference import load_soul
+        from domain.generate import load_soul
         from domain.infrastructure._internal.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(path)

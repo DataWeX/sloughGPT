@@ -16,7 +16,7 @@ Added missing exports to domain modules so CLI can use public API:
 - Added: `evaluate_soul_char_lm`, `_get_accelerator`, `_ACCEL_THRESHOLD`, `export_to_sou`
 - Added: `ExperimentTracker`, `TrackerBackend`, `TrackingConfig`, `flatten_for_wandb_config`
 
-**domain/inference/__init__.py:**
+**domain/generate/__init__.py:**
 - Added: `SloNetChatProvider`, `VectorEntry`, `PineconeVectorStore`
 
 **domain/shell/__init__.py:**
@@ -46,11 +46,11 @@ Added missing exports to domain modules so CLI can use public API:
 ```python
 # BEFORE: users wrote implementation code
 from domain.training._internal.slonet import SloughGPTTrainer
-from domain.inference._internal.slonet_provider import SloNetChatProvider
+from domain.generate._internal.slonet_provider import SloNetChatProvider
 
 # AFTER: users just call the API
 from domain.training import SloughGPTTrainer
-from domain.inference import SloNetChatProvider
+from domain.generate import SloNetChatProvider
 ```
 
 All domain modules now expose clean public APIs. No `_internal` imports outside domain modules.

@@ -115,7 +115,7 @@ def test_soultransformer_train_export_load_generate():
     assert np.isfinite(final_loss), "Loss went NaN"
 
     # Export to .soul
-    from domain.inference._internal.slo_format import PersonalityCore, SloProfile
+    from domain.generate._internal.slo_format import PersonalityCore, SloProfile
     from domain.training._internal.export import export_to_sou
 
     with tempfile.TemporaryDirectory() as tmpdir:

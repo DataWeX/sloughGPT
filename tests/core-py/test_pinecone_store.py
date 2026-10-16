@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domain.inference._internal.vector_store import VectorEntry
-from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
+from domain.generate._internal.vector_store import VectorEntry
+from domain.generate._internal.vector_stores.pinecone_store import PineconeVectorStore
 
 
 class TestConstruction:

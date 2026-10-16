@@ -304,7 +304,7 @@ class CodeChunker:
 
 def simple_embed(text: str, dim: int = 384) -> list[float]:
     """Embed text using sentence-transformers (cached singleton) with hash fallback."""
-    from domain.inference._internal.vector_store import simple_embed as vs_embed
+    from domain.generate._internal.vector_store import simple_embed as vs_embed
 
     return vs_embed(text, dimension=dim)
 
@@ -332,7 +332,7 @@ class AutoIngester:
     async def get_vector_store(self):
         """Connect to vector store."""
         try:
-            from domain.inference._internal.vector_store import create_vector_store
+            from domain.generate._internal.vector_store import create_vector_store
 
             kwargs = {"dimension": 384}
             if self.provider == "chromadb":
@@ -392,7 +392,7 @@ class AutoIngester:
 
         # Upsert to vector store
         logger.info("  Ingesting to %s...", self.provider, extra={"tag": "INFRA"})
-        from domain.inference._internal.vector_store import VectorEntry
+        from domain.generate._internal.vector_store import VectorEntry
 
         entries = []
         for chunk in all_chunks:
@@ -428,7 +428,7 @@ class AutoIngester:
         if not store:
             return len(chunks)
 
-        from domain.inference._internal.vector_store import VectorEntry
+        from domain.generate._internal.vector_store import VectorEntry
 
         entries = [
             VectorEntry(

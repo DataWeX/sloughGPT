@@ -18,7 +18,7 @@ TEXT = "the quick brown fox jumps over the lazy dog"
 
 
 def test_shape_and_norm():
-    from domain.inference._internal.text_embedder import embed_text
+    from domain.generate._internal.text_embedder import embed_text
 
     vec = embed_text(TEXT)
     assert len(vec) == 384
@@ -26,7 +26,7 @@ def test_shape_and_norm():
 
 
 def test_custom_dimension():
-    from domain.inference._internal.text_embedder import embed_text
+    from domain.generate._internal.text_embedder import embed_text
 
     vec = embed_text(TEXT, dimension=128)
     assert len(vec) == 128
@@ -34,13 +34,13 @@ def test_custom_dimension():
 
 
 def test_deterministic():
-    from domain.inference._internal.text_embedder import embed_text
+    from domain.generate._internal.text_embedder import embed_text
 
     assert embed_text(TEXT) == embed_text(TEXT)
 
 
 def test_different_texts_differ():
-    from domain.inference._internal.text_embedder import embed_text
+    from domain.generate._internal.text_embedder import embed_text
 
     a = np.array(embed_text("hello world"))
     b = np.array(embed_text("goodbye moon"))
@@ -48,9 +48,9 @@ def test_different_texts_differ():
 
 
 def test_all_entry_points_agree():
-    from domain.inference._internal.embeddings import Embedder, InMemoryEmbedder
-    from domain.inference._internal.text_embedder import embed_text
-    from domain.inference._internal.vector_store import simple_embed
+    from domain.generate._internal.embeddings import Embedder, InMemoryEmbedder
+    from domain.generate._internal.text_embedder import embed_text
+    from domain.generate._internal.vector_store import simple_embed
 
     canonical = list(embed_text(TEXT))
 
@@ -72,7 +72,7 @@ def test_all_entry_points_agree():
 
 
 def test_memory_consolidation_agrees():
-    from domain.inference._internal.text_embedder import embed_text
+    from domain.generate._internal.text_embedder import embed_text
     from domain.memory._internal.embedding import ngram_embed
 
     canonical = np.asarray(embed_text(TEXT))
@@ -81,7 +81,7 @@ def test_memory_consolidation_agrees():
 
 def test_meta_weights_agrees(tmp_path):
     from domain.feedback._internal.meta_weights import MetaWeightManager
-    from domain.inference._internal.text_embedder import embed_text
+    from domain.generate._internal.text_embedder import embed_text
 
     mwm = MetaWeightManager(db_path=str(tmp_path / "feedback.db"))
     emb = mwm._embed(TEXT)
@@ -94,9 +94,9 @@ def test_meta_weights_agrees(tmp_path):
 
 
 def test_empty_input_is_zero_everywhere():
-    from domain.inference._internal.embeddings import Embedder, InMemoryEmbedder
-    from domain.inference._internal.text_embedder import embed_text
-    from domain.inference._internal.vector_store import simple_embed
+    from domain.generate._internal.embeddings import Embedder, InMemoryEmbedder
+    from domain.generate._internal.text_embedder import embed_text
+    from domain.generate._internal.vector_store import simple_embed
 
     for vec in (
         embed_text(""),
@@ -127,7 +127,7 @@ def test_canonical_never_imports_heavy_or_network_libs(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", guard)
 
-    from domain.inference._internal.text_embedder import embed_text
+    from domain.generate._internal.text_embedder import embed_text
 
     vec = embed_text(TEXT)
     assert len(vec) == 384

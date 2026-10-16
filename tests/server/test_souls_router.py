@@ -43,7 +43,7 @@ def _make_slo_info(name, description="A soul", traits=None):
 class TestListSouls:
     """GET /souls"""
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_list_souls(self, mock_get_mgr, client):
         mgr = MagicMock()
         mgr.list_souls.return_value = [
@@ -64,7 +64,7 @@ class TestListSouls:
         assert "friend" in names
         assert body["meta"]["current_soul"] == "sage"
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     @patch("apps.api.server.routers.souls._list_souls_cache", None)
     def test_list_souls_empty(self, mock_get_mgr, client):
         mgr = MagicMock()
@@ -80,7 +80,7 @@ class TestListSouls:
 class TestGetCurrentSoul:
     """GET /souls/current"""
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_get_current_soul(self, mock_get_mgr, client):
         mgr = MagicMock()
         mgr.get_current_soul.return_value = _make_slo_info("sage", "Wise advisor", ["analytical"])
@@ -93,7 +93,7 @@ class TestGetCurrentSoul:
         assert body["data"]["name"] == "sage"
         assert "analytical" in body["data"]["traits"]
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_get_current_soul_none(self, mock_get_mgr, client):
         mgr = MagicMock()
         mgr.get_current_soul.return_value = None
@@ -107,7 +107,7 @@ class TestGetCurrentSoul:
 class TestSwitchSoul:
     """POST /souls/switch"""
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     @patch("domain.infrastructure._internal.context_core.get_context_core")
     @patch("domain.core._internal.soul.SloEngine")
     @patch("domain.models._internal.provider.update_personality_traits")
@@ -210,7 +210,7 @@ class TestGetSoulStats:
 class TestGetSoul:
     """GET /souls/{soul_name}"""
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_get_existing_soul(self, mock_get_mgr, client):
         mgr = MagicMock()
         mgr.list_souls.return_value = [_make_slo_info("sage", "Wise advisor")]
@@ -219,7 +219,7 @@ class TestGetSoul:
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "sage"
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_get_nonexistent_soul(self, mock_get_mgr, client):
         mgr = MagicMock()
         mgr.list_souls.return_value = []
@@ -369,7 +369,7 @@ class TestListWeightSnapshotsPatched:
 class TestGetTraitWeightsPatched:
     """GET /souls/weights with manager patched."""
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_returns_full_weights(self, mock_get_mgr, client):
         mgr = MagicMock()
         mgr.get_trait_weights.return_value = {
@@ -382,7 +382,7 @@ class TestGetTraitWeightsPatched:
         assert resp.status_code == 200
         assert resp.json()["data"]["personality"] == {"warmth": 0.6}
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_error_propagates(self, mock_get_mgr, client):
         mock_get_mgr.side_effect = RuntimeError("boom")
         resp = client.get("/souls/weights")
@@ -394,7 +394,7 @@ class TestSwitchSoulCheckpoint:
     """POST /souls/switch with checkpoint_name."""
 
     @patch.object(SoulsRouter, "_load_checkpoint_into_model")
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_checkpoint_result_in_response(self, mock_get_mgr, mock_load, client):
         mgr = MagicMock()
         mgr.switch_soul.return_value = {"success": True}
@@ -416,7 +416,7 @@ class TestSwitchSoulCheckpoint:
         mock_load.assert_called_once_with("../evil")
 
     @patch.object(SoulsRouter, "_load_checkpoint_into_model")
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_switch_without_checkpoint(self, mock_get_mgr, mock_load, client):
         mgr = MagicMock()
         mgr.switch_soul.return_value = {"success": True}
@@ -430,7 +430,7 @@ class TestSwitchSoulCheckpoint:
 class TestGetSoulStatsPatched:
     """GET /souls/stats with manager patched."""
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_stats_forwarded(self, mock_get_mgr, client):
         mgr = MagicMock()
         mgr.get_stats.return_value = {"total_souls": 3, "last_switch": "2026-01-01"}
@@ -441,7 +441,7 @@ class TestGetSoulStatsPatched:
         assert data["total_souls"] == 3
         assert data["last_switch"] == "2026-01-01"
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_error_propagates(self, mock_get_mgr, client):
         mock_get_mgr.side_effect = RuntimeError("boom")
         resp = client.get("/souls/stats")
@@ -452,7 +452,7 @@ class TestGetSoulStatsPatched:
 class TestGetSoulErrorPath:
     """GET /souls/{soul_name} error propagation."""
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     def test_manager_error_raises_http(self, mock_get_mgr, client):
         from domain.infrastructure._internal.errors import classify_exception
 

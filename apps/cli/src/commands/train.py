@@ -1180,8 +1180,8 @@ def cmd_cloud_setup(args):
     sys.path.insert(0, ".")
 
     log.header("Cloud Setup")
-    from domain.inference._internal.vector_store import VectorEntry, simple_embed
-    from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
+    from domain.generate._internal.vector_store import VectorEntry, simple_embed
+    from domain.generate._internal.vector_stores.pinecone_store import PineconeVectorStore
 
     api_key = args.api_key or os.getenv("PINECONE_API_KEY")
     if not api_key:
@@ -1486,7 +1486,7 @@ def cmd_train_embed(args):
     # ── Test mode: retrieve against the collected corpus ─────────────
     test_query = getattr(args, "test", None)
     if test_query:
-        from domain.inference._internal.slo_embedder import SloTextEmbedder
+        from domain.generate._internal.slo_embedder import SloTextEmbedder
 
         embedder = SloTextEmbedder.load()
         if embedder is None:
@@ -1500,7 +1500,7 @@ def cmd_train_embed(args):
         return
 
     # ── Train ─────────────────────────────────────────────────────────
-    from domain.inference._internal.slo_embedder import train_embedder
+    from domain.generate._internal.slo_embedder import train_embedder
 
     total_epochs = getattr(args, "epochs", 20)
     from utils.training_progress import TrainingProgressBar
@@ -1541,7 +1541,7 @@ def cmd_train_embed(args):
     log.info("No sentence-transformers download needed.")
 
     # ── Retrieval sanity check: prove the saved artifact works ───────
-    from domain.inference._internal.slo_embedder import SloTextEmbedder
+    from domain.generate._internal.slo_embedder import SloTextEmbedder
 
     embedder = SloTextEmbedder.load(result["save_path"])
     if embedder is None:

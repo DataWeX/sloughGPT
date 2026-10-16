@@ -216,7 +216,7 @@ class TestAPIIntegration:
 
     def test_endpoints_exist(self):
         """Test that key domain functions exist."""
-        from domain.inference._internal.native.engine import NativeEngine
+        from domain.generate._internal.native.engine import NativeEngine
         from domain.infrastructure._internal.quantization import (
             quantize_state_dict,
             quantized_linear,

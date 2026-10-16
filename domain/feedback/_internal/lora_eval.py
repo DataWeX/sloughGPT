@@ -615,7 +615,7 @@ class LoRAEvaluator:
         Returns:
             Path to the exported .soul file
         """
-        from domain.inference import (
+        from domain.generate import (
             SOUL_PROVENANCE_DISTILLATION,
             BehavioralTraits,
             CognitiveSignature,

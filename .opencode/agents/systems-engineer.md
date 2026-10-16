@@ -50,7 +50,7 @@ and the Python backend.
 | Console        | `domain/shell/_internal/console.py`                                                                  | ANSI, spinner, progress, pagination               |
 | Kernel Addons  | `domain/shell/_internal/addons/`                                                                     | neural, filesystem, shell_ui                      |
 | Python Backend | `apps/api/server/`                                                                                   | FastAPI endpoints, routers                        |
-| Inference      | `domain/inference/_internal/`                                                                        | Model loading, SLN/SLNC parsers                   |
+| Inference      | `domain/generate/_internal/`                                                                        | Model loading, SLN/SLNC parsers                   |
 | VM API         | `apps/api/server/routers/vm.py`                                                                      | REST endpoints for VM operations                  |
 | v86 Browser    | `apps/web/lib/v86-controller.ts`                                                                     | V86Controller, state persistence                  |
 | v86 Hook       | `apps/web/hooks/useV86.ts`                                                                           | React hook for v86 lifecycle                      |

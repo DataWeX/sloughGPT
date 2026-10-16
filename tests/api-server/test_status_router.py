@@ -66,7 +66,7 @@ class TestReady:
         Linux hosts readiness would always be False through no fault of the
         endpoint. Tests here assert endpoint logic, not the host toolchain
         (same convention as test_support's noop readiness middleware)."""
-        from domain.inference._internal.native import engine as engine_mod
+        from domain.generate._internal.native import engine as engine_mod
 
         monkeypatch.setattr(engine_mod, "get_engine", lambda: object())
 
@@ -104,7 +104,7 @@ class TestReady:
 
     def test_ready_with_inference_down(self):
         with patch(
-            "domain.inference._internal.native.engine.get_engine",
+            "domain.generate._internal.native.engine.get_engine",
             side_effect=Exception("engine missing"),
         ):
             resp = client.get("/ready")

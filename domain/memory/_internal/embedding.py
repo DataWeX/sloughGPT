@@ -29,6 +29,6 @@ def ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
     ``vector_store.simple_embed`` so consolidation vectors are comparable
     with vectors stored anywhere else.
     """
-    from domain.inference._internal.text_embedder import ngram_embed as canonical
+    from domain.generate._internal.text_embedder import ngram_embed as canonical
 
     return canonical(text, dimension)

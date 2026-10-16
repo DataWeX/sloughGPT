@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from domain.inference._internal.vector_store import InMemoryVectorStore
+from domain.generate._internal.vector_store import InMemoryVectorStore
 from domain.knowledge._internal.knowledge import _extract_topics
 from domain.learner._internal.continual import ContinualLearner
 from domain.learner._internal.data_filter import DataFilter

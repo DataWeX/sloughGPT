@@ -304,11 +304,11 @@ class SloModel:
         """Drive the model from a local .soul checkpoint file.
 
         Imports the provider as an encapsulated package
-        (``domain.inference._internal.slonet_provider``) — no folder paths,
+        (``domain.generate._internal.slonet_provider``) — no folder paths,
         no sys.path tricks. Sampling runs locally via numpy.
         """
         try:
-            from domain.inference._internal.slonet_provider import SloNetChatProvider
+            from domain.generate._internal.slonet_provider import SloNetChatProvider
         except ImportError as e:
             raise ImportError(
                 "SloNet provider package not installed; "

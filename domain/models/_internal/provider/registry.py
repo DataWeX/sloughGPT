@@ -17,7 +17,7 @@ def register_provider(name: str, provider) -> None:
     # cached response so a stale reply from the previous model can never be
     # replayed under the new one (coherence by generation bump).
     try:
-        from domain.inference._internal.response_cache import bump_cache_generation
+        from domain.generate._internal.response_cache import bump_cache_generation
 
         bump_cache_generation()
     except Exception as e:  # pragma: no cover - cache must never block a load

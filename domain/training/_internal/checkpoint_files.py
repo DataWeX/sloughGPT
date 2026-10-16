@@ -23,7 +23,7 @@ with nothing to report. Both paths now go through :func:`stem_for`.
 
 The ``.soul`` *filename grammar* (suffix, legacy spellings, sidecar names) is
 **not** owned here — that is ``soul_path`` / ``soul_read_candidates`` /
-``soul_meta_path`` in ``domain.inference``. This module only decides ownership
+``soul_meta_path`` in ``domain.generate``. This module only decides ownership
 and hands naming to those functions via the callers.
 """
 

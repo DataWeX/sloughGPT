@@ -6,7 +6,7 @@ Supports:
 - OpenAI (text-embedding-ada-002, text-embedding-3-small, text-embedding-3-large)
 
 Usage:
-    from domain.inference._internal.embeddings import Embedder, EmbeddingModel
+    from domain.generate._internal.embeddings import Embedder, EmbeddingModel
 
     # Default: in-memory (zero-dependency)
     embedder = Embedder()
@@ -26,7 +26,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
-from domain.inference._internal.text_embedder import embed_text
+from domain.generate._internal.text_embedder import embed_text
 from domain.infrastructure._internal.config import get_config
 
 logger = logging.getLogger("slo.embeddings")

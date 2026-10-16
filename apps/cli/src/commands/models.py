@@ -39,7 +39,7 @@ def cmd_models(args):
         # share a stem (one holds a 16:07 run at loss 4.10, its legacy-spelled
         # sibling a 16:38 run at 3.97) and differ by ~1KB of size, so Name and
         # Size alone cannot tell them apart.
-        from domain.inference import classify_soul  # lazy: costs ~0.3s to import
+        from domain.generate import classify_soul  # lazy: costs ~0.3s to import
 
         rows = []
         for f in soul_files:
@@ -120,7 +120,7 @@ def _cmd_models_info(args):
     # Identity BEFORE the expensive load: what a file is comes from its header
     # and sidecar, not its weights — so this block still renders when
     # import_from_sou below throws, which is exactly when you need it.
-    from domain.inference import classify_soul  # lazy: ~0.3s to import
+    from domain.generate import classify_soul  # lazy: ~0.3s to import
 
     ident = classify_soul(str(model_path))
     log.key_value("Format", ident.format or "unknown")
@@ -590,7 +590,7 @@ def cmd_soul(args):
         return
 
     if args.info:
-        from domain.inference._internal.slo_format import SouParser
+        from domain.generate._internal.slo_format import SouParser
 
         try:
             soul = SouParser.load(args.info)
@@ -613,7 +613,7 @@ def cmd_soul(args):
         return
 
     if args.create:
-        from domain.inference._internal.slo_format import SouParser, create_soul_profile
+        from domain.generate._internal.slo_format import SouParser, create_soul_profile
         from domain.training._internal.slonet import export_to_sou, import_from_sou
 
         soul = create_soul_profile(
@@ -648,7 +648,7 @@ def cmd_benchmark(args):
 
     import numpy as np
 
-    from domain.inference._internal.slonet_provider import SloNetChatProvider
+    from domain.generate._internal.slonet_provider import SloNetChatProvider
     from domain.training._internal.slonet import _get_accelerator
 
     acc = _get_accelerator()

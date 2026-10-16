@@ -207,7 +207,7 @@ class ResponseCache:
     def _get_semantic_cache(self):
         if self._semantic is None:
             try:
-                from domain.inference._internal.semantic_cache import SemanticCache
+                from domain.generate._internal.semantic_cache import SemanticCache
 
                 # High threshold: only strong paraphrases qualify, keeping the
                 # opt-in semantic tier conservative.

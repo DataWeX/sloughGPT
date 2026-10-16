@@ -484,7 +484,7 @@ class InferRouter:
             try:
                 import numpy as np
 
-                from domain.inference import _ngram_embed
+                from domain.generate import _ngram_embed
 
                 vec = _ngram_embed(req.text)
                 if isinstance(vec, np.ndarray):

@@ -91,7 +91,7 @@ def local_soul_candidate_paths(
         # `tinyshakespeare_trained` (44MB) are indistinguishable by spelling —
         # as are `probe-test_trained`, `probe-test_1789943801` and
         # `bench_shakespeare`. Content settles it; the name cannot.
-        from domain.inference import classify_soul  # lazy: costs ~0.3s to import
+        from domain.generate import classify_soul  # lazy: costs ~0.3s to import
 
         return classify_soul(str(p)).format != "not-soul"
 

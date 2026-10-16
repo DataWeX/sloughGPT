@@ -101,7 +101,7 @@ class TestCmdModels:
         """
         from commands.models import cmd_models
 
-        from domain.inference._internal.slo_format import SOU_MAGIC
+        from domain.generate._internal.slo_format import SOU_MAGIC
 
         models_dir = tmp_path / "models"
         models_dir.mkdir()
@@ -221,7 +221,7 @@ class TestCmdModelsInfo:
         """
         from commands.models import _cmd_models_info
 
-        from domain.inference import save_soul
+        from domain.generate import save_soul
 
         soul = tmp_path / "identified.soul"
         save_soul(None, str(soul), weights_only=True, record="training")
@@ -246,7 +246,7 @@ class TestCmdModelsInfo:
         from commands.models import _cmd_models_info
 
         import domain.training._internal.slonet as slonet
-        from domain.inference import save_soul
+        from domain.generate import save_soul
 
         def unreadable(*_args, **_kwargs):
             raise RuntimeError("weights unreadable")

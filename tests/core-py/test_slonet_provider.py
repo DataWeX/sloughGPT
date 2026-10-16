@@ -10,7 +10,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.inference._internal.slonet_provider import (
+from domain.generate._internal.slonet_provider import (
     _ARCH_TO_SLONET_GELU,
     _ARCH_TO_SLONET_SHARED,
     _ARCH_TO_SLONET_SWIGLU,
@@ -66,7 +66,7 @@ class MockModel:
                 yield layer.weight
 
     def forward_pass(self, input_ids):
-        from domain.inference._internal.forward_pass import ForwardPassResult
+        from domain.generate._internal.forward_pass import ForwardPassResult
 
         batch, seq_len = input_ids.shape
         logits = np.random.randn(batch, seq_len, self.vocab_size)
@@ -129,7 +129,7 @@ from unittest.mock import MagicMock
 
 
 def _make_provider(**overrides):
-    from domain.inference._internal.session_kv_manager import SessionKVManager
+    from domain.generate._internal.session_kv_manager import SessionKVManager
 
     p = SloNetChatProvider.__new__(SloNetChatProvider)
     p._hf_model_id = overrides.get("_hf_model_id", "test-model")
@@ -878,6 +878,6 @@ class TestConvertHfToSlonet:
 
 class TestBackwardCompat:
     def test_alias_exists(self):
-        from domain.inference._internal.slonet_provider import SlonetChatProvider
+        from domain.generate._internal.slonet_provider import SlonetChatProvider
 
         assert SlonetChatProvider is SloNetChatProvider

@@ -11,7 +11,7 @@ decoding. Two backends, one API:
   (grown on demand) — O(T) copies over a decode where concat is O(T^2).
 
 When the C library is absent or unloadable (it ships as a macOS dylib next
-to ``domain.inference._internal.native.bindings``), the numpy backend serves
+to ``domain.generate._internal.native.bindings``), the numpy backend serves
 the same API. This is *native*; the modular default lives in :mod:`.kv_state`.
 """
 
@@ -291,7 +291,7 @@ class NativeKVState:
         self._fallback = _NumpyBackend(n_layers, cap=seq_capacity)
 
         try:
-            from domain.inference._internal.native.bindings import load_lib
+            from domain.generate._internal.native.bindings import load_lib
 
             lib = load_lib()
             cache = lib._KVCache()

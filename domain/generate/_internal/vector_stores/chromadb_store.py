@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from domain.inference._internal.vector_store import QueryResult, VectorEntry, VectorStore
+from domain.generate._internal.vector_store import QueryResult, VectorEntry, VectorStore
 
 logger = logging.getLogger("slo.inference.vector_stores.chromadb")
 

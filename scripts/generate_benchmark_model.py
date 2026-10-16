@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
 import numpy as np
-from domain.inference.slo_format import SloProfile, save_soul
+from domain.generate.slo_format import SloProfile, save_soul
 
 from domain.training._internal.slonet import (
     SloAdam,

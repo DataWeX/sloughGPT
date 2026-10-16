@@ -32,7 +32,7 @@ class FakeVectorStore:
         return len(entries)
 
     async def query(self, embedding, top_k=5):
-        from domain.inference._internal.vector_store import QueryResult
+        from domain.generate._internal.vector_store import QueryResult
 
         return [
             QueryResult(text=e.text, score=0.9, id=e.id or str(i))
@@ -97,7 +97,7 @@ class TestInitVectorStore:
     def test_init_in_memory(self, client):
         fake_store = FakeVectorStore()
         with patch(
-            "domain.inference._internal.vector_store.create_vector_store",
+            "domain.generate._internal.vector_store.create_vector_store",
             new_callable=AsyncMock,
             return_value=fake_store,
         ):
@@ -117,7 +117,7 @@ class TestInitVectorStore:
             return FakeVectorStore()
 
         with patch(
-            "domain.inference._internal.vector_store.create_vector_store", side_effect=fake_create
+            "domain.generate._internal.vector_store.create_vector_store", side_effect=fake_create
         ):
             resp = client.post("/vector/init", json={"provider": "chromadb"})
             assert resp.status_code == 200
@@ -154,7 +154,7 @@ class TestUpsertVectors:
 
 class TestSearchVectors:
     def test_search(self, client):
-        from domain.inference._internal.vector_store import QueryResult
+        from domain.generate._internal.vector_store import QueryResult
 
         fake_store = FakeVectorStore()
         fake_store._entries = [

@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domain.inference._internal.vector_store import QueryResult, VectorEntry
-from domain.inference._internal.vector_stores.chromadb_store import ChromaDBVectorStore
+from domain.generate._internal.vector_store import QueryResult, VectorEntry
+from domain.generate._internal.vector_stores.chromadb_store import ChromaDBVectorStore
 
 
 class TestConstruction:
@@ -561,7 +561,7 @@ class TestEdgeCases:
 
     @pytest.mark.asyncio
     async def test_store_inherits_vector_store_interface(self):
-        from domain.inference._internal.vector_store import VectorStore
+        from domain.generate._internal.vector_store import VectorStore
 
         store = ChromaDBVectorStore()
         assert isinstance(store, VectorStore)

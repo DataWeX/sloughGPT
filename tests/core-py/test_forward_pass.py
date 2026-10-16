@@ -1,4 +1,4 @@
-"""Tests for domain.inference._internal.forward_pass — ForwardPassResult, ForwardPassable, timed_forward.
+"""Tests for domain.generate._internal.forward_pass — ForwardPassResult, ForwardPassable, timed_forward.
 
 Covers: dataclass fields, shape property, protocol compliance, timed wrapper, edge cases.
 """
@@ -14,7 +14,7 @@ _core_dir = str(Path(__file__).resolve().parents[2] / "packages")
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.inference._internal.forward_pass import (
+from domain.generate._internal.forward_pass import (
     ForwardPassable,
     ForwardPassResult,
     timed_forward,

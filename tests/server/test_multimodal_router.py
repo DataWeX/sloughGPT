@@ -482,7 +482,7 @@ class TestAnalyzePdf:
     def _fake_pdf_bytes(self):
         return b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF"
 
-    @patch("domain.inference._internal.pdf_vlm.PDFVLMProcessor")
+    @patch("domain.generate._internal.pdf_vlm.PDFVLMProcessor")
     def test_analyzes_pdf_text_extract(self, mock_processor_cls):
         processor = mock_processor_cls.return_value
         processor.analyze.return_value = "extracted summary"
@@ -498,7 +498,7 @@ class TestAnalyzePdf:
         assert data["method"] == "text_extract"
         processor.analyze.assert_called_once()
 
-    @patch("domain.inference._internal.pdf_vlm.PDFVLMProcessor")
+    @patch("domain.generate._internal.pdf_vlm.PDFVLMProcessor")
     def test_analyzes_pdf_with_vlm(self, mock_processor_cls):
         processor = mock_processor_cls.return_value
         processor.analyze.return_value = "vlm summary"
@@ -511,7 +511,7 @@ class TestAnalyzePdf:
         assert resp.status_code == 200
         assert resp.json()["data"]["method"] == "vlm"
 
-    @patch("domain.inference._internal.pdf_vlm.PDFVLMProcessor")
+    @patch("domain.generate._internal.pdf_vlm.PDFVLMProcessor")
     def test_analyzes_pdf_per_page(self, mock_processor_cls):
         processor = mock_processor_cls.return_value
         processor.analyze_pages.return_value = [

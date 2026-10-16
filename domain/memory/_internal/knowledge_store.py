@@ -652,7 +652,7 @@ class KnowledgeMemory:
         if vector_store is not None:
             self._vector_store = vector_store
         else:
-            from domain.inference._internal.vector_store import InMemoryVectorStore
+            from domain.generate._internal.vector_store import InMemoryVectorStore
             from domain.infrastructure._internal.embedding_service import get_embedding_service
 
             dim = get_embedding_service().dimension
@@ -935,7 +935,7 @@ class KnowledgeMemory:
             return
 
         try:
-            from domain.inference._internal.vector_store import VectorEntry
+            from domain.generate._internal.vector_store import VectorEntry
 
             expected_dim = self._vector_store.dimension
             entries = []
@@ -1014,7 +1014,7 @@ class KnowledgeMemory:
                 return False
         try:
             vec = self._get_embedding(fact.content)
-            from domain.inference._internal.vector_store import VectorEntry
+            from domain.generate._internal.vector_store import VectorEntry
 
             metadata = {
                 "topic": fact.topic,
@@ -1072,7 +1072,7 @@ class KnowledgeMemory:
         if vectors is not None and len(vectors) != len(facts):
             raise ValueError("vectors must be aligned with facts")
 
-        from domain.inference._internal.vector_store import VectorEntry
+        from domain.generate._internal.vector_store import VectorEntry
 
         if vectors is None:
             vectors = [self._get_embedding(f.content) for f in facts]
@@ -1437,7 +1437,7 @@ class KnowledgeMemory:
                 if old_hash and old_hash in self._visited:
                     self._visited.discard(old_hash)
                 self._visited.add(new_hash)
-            from domain.inference._internal.vector_store import VectorEntry
+            from domain.generate._internal.vector_store import VectorEntry
 
             meta = dict(target.metadata)
             meta["content_hash"] = new_hash

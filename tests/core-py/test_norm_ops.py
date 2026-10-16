@@ -1,11 +1,11 @@
-"""Tests for domain.inference._internal.ops.layernorm and rmsnorm."""
+"""Tests for domain.generate._internal.ops.layernorm and rmsnorm."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from domain.inference._internal.ops.layernorm import layernorm
-from domain.inference._internal.ops.rmsnorm import rmsnorm
+from domain.generate._internal.ops.layernorm import layernorm
+from domain.generate._internal.ops.rmsnorm import rmsnorm
 
 
 class TestLayerNorm:

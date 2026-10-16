@@ -329,7 +329,7 @@ Four independent reasons, any one of which is fatal: `infrastructure.auth` and
 `training.jobs` written inside a router resolve relative to `apps/api/server/`,
 not the repo root; the `domain/infrastructure/*.py` facades are pure
 star-forwarders (`from domains.… import *`), so no downstream name survives
-without expanding them; `domain/inference/__init__.py` exports lazily through
+without expanding them; `domain/generate/__init__.py` exports lazily through
 PEP 562 `__getattr__`; and optional dependencies sit behind
 `except ImportError`. Grepping instead produces different wrong answers again
 — see the tokenizer docstring case in the parity check.

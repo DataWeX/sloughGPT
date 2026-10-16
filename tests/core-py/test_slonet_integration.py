@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from domain.inference._internal.slonet_provider import SloNetChatProvider
+from domain.generate._internal.slonet_provider import SloNetChatProvider
 from domain.infrastructure._internal.slonet_server import SloNetServer
 from domain.models._internal.provider import (
     ProviderRouter,
@@ -267,7 +267,7 @@ class TestSetupProvidersWiring:
                 return_value=tmp_path,
             ):
                 with patch(
-                    "domain.inference._internal.slonet_provider.SloNetChatProvider"
+                    "domain.generate._internal.slonet_provider.SloNetChatProvider"
                 ) as mock_cls:
                     mock_cls.from_slnc.return_value = mock_provider
                     setup_providers()

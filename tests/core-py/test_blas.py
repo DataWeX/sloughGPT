@@ -1,9 +1,9 @@
-"""Tests for domain.inference._internal.ops.blas — sgemm numpy fallback + is_available."""
+"""Tests for domain.generate._internal.ops.blas — sgemm numpy fallback + is_available."""
 
 import numpy as np
 import pytest
 
-from domain.inference._internal.ops.blas import is_available, sgemm
+from domain.generate._internal.ops.blas import is_available, sgemm
 
 
 class TestSgemm:
@@ -224,7 +224,7 @@ class TestSgemm:
 
 class TestSgemmExtended:
     def test_cblas_constants(self):
-        from domain.inference._internal.ops.blas import CBLAS_NO_TRANS, CBLAS_ROW_MAJOR, CBLAS_TRANS
+        from domain.generate._internal.ops.blas import CBLAS_NO_TRANS, CBLAS_ROW_MAJOR, CBLAS_TRANS
 
         assert CBLAS_ROW_MAJOR == 101
         assert CBLAS_NO_TRANS == 111
@@ -235,7 +235,7 @@ class TestSgemmExtended:
 
         if sys.platform != "linux":
             pytest.skip("not Linux")
-        from domain.inference._internal.ops.blas import _load_accelerate
+        from domain.generate._internal.ops.blas import _load_accelerate
 
         result = _load_accelerate()
         assert result is None
@@ -245,7 +245,7 @@ class TestSgemmExtended:
 
         if sys.platform != "linux":
             pytest.skip("not Linux")
-        import domain.inference._internal.ops.blas as blas_mod
+        import domain.generate._internal.ops.blas as blas_mod
 
         _load = blas_mod._load_accelerate()
         assert blas_mod._unavailable is True
@@ -399,7 +399,7 @@ class TestIsAvailable:
         assert r1 == r2
 
     def test_cached_result_matches(self):
-        import domain.inference._internal.ops.blas as blas_mod
+        import domain.generate._internal.ops.blas as blas_mod
 
         first = is_available()
         if blas_mod._unavailable:

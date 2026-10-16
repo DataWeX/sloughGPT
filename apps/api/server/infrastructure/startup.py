@@ -65,13 +65,13 @@ _PREWARM_MODEL_LOAD_IMPORTS = [
     "state",
     "config",
     "domain.infrastructure._internal.safetensors_loader",
-    "domain.inference._internal.slonet_provider",
+    "domain.generate._internal.slonet_provider",
     "domain.infrastructure._internal.process_guard",
     "domain.infrastructure._internal.server_state",
     "controllers.models",
     "domain.infrastructure._internal.model_registry",
     "domain.models._internal.provider",
-    "domain.inference._internal.slo_manager",
+    "domain.generate._internal.slo_manager",
     "domain.slolib._internal.gpu",
     "domain.infrastructure._internal.model_catalog",
     "domain.infrastructure._internal.task_queue",
@@ -900,7 +900,7 @@ class StartupOrchestrator:
                 # Pre-initialize SloManager so the first /souls request is
                 # instant (the scan runs here instead of blocking a request).
                 try:
-                    from domain.inference._internal.slo_manager import get_slo_manager
+                    from domain.generate._internal.slo_manager import get_slo_manager
 
                     get_slo_manager()
                 except Exception as e:
@@ -1235,7 +1235,7 @@ async def _restore_training_runtime():
 def _sync_soul_traits():
     """Sync current soul traits to the PersonalityProcessor (best-effort)."""
     try:
-        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.generate._internal.slo_manager import get_slo_manager
         from domain.models._internal.provider import update_personality_traits
 
         mgr = get_slo_manager()
@@ -1365,7 +1365,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         return False
 
     try:
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.generate._internal.slonet_provider import SloNetChatProvider
 
         provider = SloNetChatProvider.from_slnc(
             slnc_path,
@@ -1605,7 +1605,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     # Apply persisted external API provider (OpenRouter / OpenAI-compatible)
     # so chat can route to it from the first request.
     try:
-        from domain.inference._internal.api_provider import configure_api_provider
+        from domain.generate._internal.api_provider import configure_api_provider
         from domain.settings._internal.persistent import get_settings as _get_settings
 
         _p = _get_settings().settings.providers
@@ -1699,7 +1699,7 @@ def _autoload_model(cfg: ServerConfig):
         soul_path = Path(cfg.native_soul_path)
         if soul_path.exists():
             try:
-                from domain.inference._internal.slonet_provider import SloNetChatProvider
+                from domain.generate._internal.slonet_provider import SloNetChatProvider
 
                 provider = SloNetChatProvider.from_soul(str(soul_path), model_id="native-soul")
                 server_state.model = provider._model

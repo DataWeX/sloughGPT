@@ -24,7 +24,7 @@ import statistics
 import time
 from unittest.mock import AsyncMock, patch
 
-from domain.inference._internal.response_cache import (
+from domain.generate._internal.response_cache import (
     ResponseCache,
     reset_response_cache_for_tests,
 )

@@ -46,7 +46,7 @@ class EmbeddingService:
         2. SloNet trained model (if checkpoint exists)
         3. Word n-gram TF-IDF (zero downloads)
         """
-        from domain.inference._internal.vector_store import simple_embed
+        from domain.generate._internal.vector_store import simple_embed
 
         return simple_embed(text, dimension=self.dimension)
 

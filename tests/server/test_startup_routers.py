@@ -659,7 +659,7 @@ class TestAutoloadNativeSoul:
         state.provider = None
         with (
             patch.dict("sys.modules", {"state": state}),
-            patch("domain.inference._internal.slonet_provider.SloNetChatProvider") as mock_provider,
+            patch("domain.generate._internal.slonet_provider.SloNetChatProvider") as mock_provider,
         ):
             mock_provider.from_soul.return_value = provider
             from apps.api.server.infrastructure import startup as startup_mod
@@ -820,7 +820,7 @@ class TestTryLazyGuardAutoload:
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
-            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
+            patch.dict("sys.modules", {"domain.generate._internal.slonet_provider": mock_slonet}),
         ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
 
@@ -836,7 +836,7 @@ class TestTryLazyGuardAutoload:
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
-            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
+            patch.dict("sys.modules", {"domain.generate._internal.slonet_provider": mock_slonet}),
             patch(
                 "domain.infrastructure.process_guard.ProcessGuard",
                 side_effect=RuntimeError("boom"),
@@ -867,7 +867,7 @@ class TestTryLazyGuardAutoload:
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
-            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
+            patch.dict("sys.modules", {"domain.generate._internal.slonet_provider": mock_slonet}),
             patch(
                 "domain.infrastructure.process_guard.ProcessGuard", return_value=guard
             ) as mock_pg,

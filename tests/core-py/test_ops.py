@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from domain.inference._internal.ops.blas import _load_accelerate, is_available, sgemm
-from domain.inference._internal.ops.layernorm import layernorm
-from domain.inference._internal.ops.rmsnorm import rmsnorm
+from domain.generate._internal.ops.blas import _load_accelerate, is_available, sgemm
+from domain.generate._internal.ops.layernorm import layernorm
+from domain.generate._internal.ops.rmsnorm import rmsnorm
 
 # ── LayerNorm ────────────────────────────────────────────────────────────────
 
@@ -442,7 +442,7 @@ class TestBlasInternals:
         assert first is second
 
     def test_load_accelerate_when_unavailable(self):
-        import domain.inference._internal.ops.blas as blas_mod
+        import domain.generate._internal.ops.blas as blas_mod
 
         old = blas_mod._accelerate
         old_unavail = blas_mod._unavailable
@@ -456,7 +456,7 @@ class TestBlasInternals:
             blas_mod._unavailable = old_unavail
 
     def test_load_accelerate_cache_hit(self):
-        import domain.inference._internal.ops.blas as blas_mod
+        import domain.generate._internal.ops.blas as blas_mod
 
         old = blas_mod._accelerate
         old_unavail = blas_mod._unavailable

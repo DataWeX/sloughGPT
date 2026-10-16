@@ -131,9 +131,9 @@ class ModelLoader:
     def load(cls, path: str, device: str = "cpu", **kwargs) -> ModelInterface:
         from pathlib import Path
 
-        # Lazy, like Path above: domain.inference pulls a wider graph than
+        # Lazy, like Path above: domain.generate pulls a wider graph than
         # this method needs, and models.py is imported early.
-        from domain.inference._internal.slo_format import SOUL_SUFFIXES, is_soul_file
+        from domain.generate._internal.slo_format import SOUL_SUFFIXES, is_soul_file
 
         p = Path(path)
         suffix = p.suffix.lower()

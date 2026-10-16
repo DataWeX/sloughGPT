@@ -4,7 +4,7 @@ Every test uses real programmatic inputs only:
 - a hand-built real ``.slnc`` file (per the spec in ``slnc/spec.py``)
 - real tiny transformer weights mapped through ``map_slnc_to_native``
 - the compiled ``libtransformer_forward.so`` via ``bindings.load_lib()``
-- the real shared tokenizer via ``domain.inference._internal.tokenizer``
+- the real shared tokenizer via ``domain.generate._internal.tokenizer``
 
 No mocks, no stubs, no third-party installs.
 """
@@ -18,9 +18,9 @@ import zlib
 import numpy as np
 import pytest
 
-from domain.inference._internal.ct_provider import CTransformProvider
-from domain.inference._internal.native import bindings as B
-from domain.inference._internal.native.engine import (
+from domain.generate._internal.ct_provider import CTransformProvider
+from domain.generate._internal.native import bindings as B
+from domain.generate._internal.native.engine import (
     NativeEngine,
     NativeTransformerProvider,
     _detect_model_type,
@@ -30,7 +30,7 @@ from domain.inference._internal.native.engine import (
     get_engine,
     sample_token,
 )
-from domain.inference._internal.native.weight_mapper import map_slnc_to_native
+from domain.generate._internal.native.weight_mapper import map_slnc_to_native
 from domain.infrastructure._internal.slnc.spec import compute_header_size
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -487,7 +487,7 @@ class TestNativeEngine:
         assert isinstance(text, str)
 
     def test_detokenize_maps_non_ascii_to_placeholder(self, monkeypatch):
-        import domain.inference._internal.tokenizer as T
+        import domain.generate._internal.tokenizer as T
 
         monkeypatch.setattr(
             T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))
@@ -546,20 +546,20 @@ class TestNativeEngine:
         assert pieces == []
 
     def test_tokenize_uses_real_tokenizer(self):
-        from domain.inference._internal.tokenizer import get_tokenizer
+        from domain.generate._internal.tokenizer import get_tokenizer
 
         engine = _loaded_engine()
         assert engine._tokenize_simple("hi") == get_tokenizer().encode("hi")
 
     def test_detokenize_uses_real_tokenizer(self):
-        from domain.inference._internal.tokenizer import get_tokenizer
+        from domain.generate._internal.tokenizer import get_tokenizer
 
         engine = _loaded_engine()
         ids = engine._tokenize_simple("hi")
         assert engine._detokenize_simple(ids) == get_tokenizer().decode(ids)
 
     def test_tokenize_fallback_when_tokenizer_missing(self, monkeypatch):
-        import domain.inference._internal.tokenizer as T
+        import domain.generate._internal.tokenizer as T
 
         monkeypatch.setattr(
             T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))
@@ -568,7 +568,7 @@ class TestNativeEngine:
         assert engine._tokenize_simple("hi") == list(b"hi")
 
     def test_detokenize_fallback_when_tokenizer_missing(self, monkeypatch):
-        import domain.inference._internal.tokenizer as T
+        import domain.generate._internal.tokenizer as T
 
         monkeypatch.setattr(
             T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))
@@ -586,7 +586,7 @@ class TestTokenizerWiring:
         assert engine._detokenize_simple([72, 105]) == "Hi"
 
     def test_set_tokenizer_none_restores_fallback(self):
-        from domain.inference._internal.tokenizer import get_tokenizer
+        from domain.generate._internal.tokenizer import get_tokenizer
 
         engine = _loaded_engine()
         engine.set_tokenizer(_FakeTokenizer())
@@ -665,7 +665,7 @@ class TestTokenizerWiring:
         assert isinstance(out, str)
 
     def test_hf_id_from_slnc_path(self):
-        from domain.inference._internal.native.engine import _hf_id_from_slnc_path
+        from domain.generate._internal.native.engine import _hf_id_from_slnc_path
 
         assert (
             _hf_id_from_slnc_path(
@@ -849,7 +849,7 @@ class TestCTransformProvider:
         )
 
     def test_tokenize_detokenize_uses_real_tokenizer(self):
-        from domain.inference._internal.tokenizer import get_tokenizer
+        from domain.generate._internal.tokenizer import get_tokenizer
 
         engine = _loaded_engine()
         provider = CTransformProvider(engine)
@@ -859,7 +859,7 @@ class TestCTransformProvider:
         assert provider.detokenize(ids) == get_tokenizer().decode(ids)
 
     def test_init_tolerates_missing_tokenizer(self, monkeypatch):
-        import domain.inference._internal.tokenizer as T
+        import domain.generate._internal.tokenizer as T
 
         monkeypatch.setattr(
             T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))

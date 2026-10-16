@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from domain.inference._internal import slonet_provider as slonet_provider_module
-from domain.inference._internal.slonet_provider import SloNetChatProvider
+from domain.generate._internal import slonet_provider as slonet_provider_module
+from domain.generate._internal.slonet_provider import SloNetChatProvider
 
 
 class MockTokenizer:

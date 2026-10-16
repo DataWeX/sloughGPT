@@ -141,7 +141,7 @@ class HFLoraTrainer:
 
     def load_model(self) -> SloTransformer:
         """Load model from .slnc file."""
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.generate._internal.slonet_provider import SloNetChatProvider
 
         model_path = Path(self.config.model_path)
         if not model_path.exists():

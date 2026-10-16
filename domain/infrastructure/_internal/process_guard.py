@@ -244,7 +244,7 @@ class _ThreadWorker:
             self._alive = False
 
     def _run_slo(self) -> None:
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.generate._internal.slonet_provider import SloNetChatProvider
 
         provider = SloNetChatProvider.from_slnc(
             self._config.slnc_path,

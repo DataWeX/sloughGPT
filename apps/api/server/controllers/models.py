@@ -185,7 +185,7 @@ class ModelsController:
                         f"Lazy load requested for {model_id} but ProcessGuard "
                         f"could not be started: {self._guard_failure or 'unknown reason'}"
                     )
-                from domain.inference._internal.slonet_provider import SloNetChatProvider
+                from domain.generate._internal.slonet_provider import SloNetChatProvider
 
                 lazy_provider = SloNetChatProvider.lazy_from_slnc(
                     str(_slnc),

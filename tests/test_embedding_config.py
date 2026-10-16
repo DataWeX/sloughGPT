@@ -86,7 +86,7 @@ class TestOpenAIEmbedderProviderConfig:
         return SimpleNamespace(embedding=SimpleNamespace(**base))
 
     def test_base_url_taken_from_config(self, fake_openai, monkeypatch):
-        from domain.inference._internal import embeddings as emb_mod
+        from domain.generate._internal import embeddings as emb_mod
 
         monkeypatch.setattr(
             emb_mod,
@@ -98,7 +98,7 @@ class TestOpenAIEmbedderProviderConfig:
         assert embedder.client.base_url == "http://localhost:11434/v1"
 
     def test_legacy_openai_api_key_still_used(self, fake_openai, monkeypatch):
-        from domain.inference._internal import embeddings as emb_mod
+        from domain.generate._internal import embeddings as emb_mod
 
         monkeypatch.setattr(emb_mod, "get_config", lambda: self._config(openai_api_key="sk-legacy"))
         embedder = emb_mod.OpenAIEmbedder()
@@ -106,14 +106,14 @@ class TestOpenAIEmbedderProviderConfig:
         assert embedder.client.api_key == "sk-legacy"
 
     def test_missing_key_still_raises(self, fake_openai, monkeypatch):
-        from domain.inference._internal import embeddings as emb_mod
+        from domain.generate._internal import embeddings as emb_mod
 
         monkeypatch.setattr(emb_mod, "get_config", lambda: self._config())
         with pytest.raises(ValueError):
             emb_mod.OpenAIEmbedder()
 
     def test_embedder_factory_passes_base_url(self, fake_openai):
-        from domain.inference._internal import embeddings as emb_mod
+        from domain.generate._internal import embeddings as emb_mod
 
         embedder = emb_mod.Embedder(provider="openai", api_key="sk-x", base_url="http://host/v1")
         impl = embedder._impl
@@ -123,7 +123,7 @@ class TestOpenAIEmbedderProviderConfig:
     def test_no_base_url_config_means_none(self, fake_openai, monkeypatch):
         # Empty base_url must reach the OpenAI client as None (provider
         # default / OPENAI_BASE_URL env), never as "" or a fabricated URL.
-        from domain.inference._internal import embeddings as emb_mod
+        from domain.generate._internal import embeddings as emb_mod
 
         monkeypatch.setattr(emb_mod, "get_config", lambda: self._config(api_key="sk-cfg"))
         embedder = emb_mod.OpenAIEmbedder()

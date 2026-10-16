@@ -65,7 +65,7 @@ class MetaWeightManager:
         so similarity comparisons share one vector space. Local-only: no
         sentence-transformers, no network.
         """
-        from domain.inference._internal.text_embedder import embed_text
+        from domain.generate._internal.text_embedder import embed_text
 
         return np.asarray(embed_text(text, dimension=self.embedding_dim), dtype=np.float32)
 

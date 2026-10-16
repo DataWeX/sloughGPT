@@ -106,7 +106,7 @@ class TextEmbedder:
             return None
         if self._slo is None:
             try:
-                from domain.inference._internal.slo_embedder import SloTextEmbedder
+                from domain.generate._internal.slo_embedder import SloTextEmbedder
 
                 candidate = SloTextEmbedder.load()
                 if candidate is not None and not candidate.acceptable():

@@ -488,7 +488,7 @@ def _label_by_meaning(text: str, points_store=None) -> str | None:
     progresses the embedding space aligns such that texts semantically
     near each other land near the same meaning point.
     """
-    from domain.inference._internal.vector_store import simple_embed
+    from domain.generate._internal.vector_store import simple_embed
 
     if points_store is None:
         return None
@@ -920,7 +920,7 @@ def _compute_quality(
 
     # Reference: word n-gram TF-IDF (zero downloads, always available).
     try:
-        from domain.inference._internal.vector_store import _word_ngram_embed
+        from domain.generate._internal.vector_store import _word_ngram_embed
 
         ref = np.stack([_word_ngram_embed(t, 128) for t in probes])
         rn = np.linalg.norm(ref, axis=1, keepdims=True) + 1e-10
@@ -1089,7 +1089,7 @@ def _retrieval_benchmark_for(
         n = np.linalg.norm(v)
         return v / n if n > 0 else v
 
-    from domain.inference._internal.vector_store import _word_ngram_embed
+    from domain.generate._internal.vector_store import _word_ngram_embed
 
     return _retrieval_benchmark(
         texts,

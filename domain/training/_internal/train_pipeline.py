@@ -455,7 +455,7 @@ def _load_soul_checkpoint(path: str) -> dict[str, Any] | None:
         Dict with keys: model_state_dict, step, epoch, optimizer_state_dict (optional),
         scheduler_state_dict (optional), accumulation_step (optional).
     """
-    from domain.inference._internal.slo_format import load_soul
+    from domain.generate._internal.slo_format import load_soul
 
     soul_profile, state_dict = load_soul(path)
     result: dict[str, Any] = {
@@ -631,7 +631,7 @@ def _sidecars_of(checkpoint: Path) -> tuple[Path, ...]:
     Returns:
         Deduplicated sidecar paths, in that order, whether or not they exist.
     """
-    from domain.inference import soul_meta_path  # lazy: not a module-level dep
+    from domain.generate import soul_meta_path  # lazy: not a module-level dep
 
     try:
         canonical = Path(soul_meta_path(str(checkpoint)))
@@ -2181,7 +2181,7 @@ class SloughGPTTrainer:
             avg_quality=self._avg_quality,
             is_final=is_final,
         )
-        from domain.inference import soul_path
+        from domain.generate import soul_path
 
         self._last_checkpoint_path = soul_path(str(checkpoint_path))
         self._prune_stale_checkpoints(keep_final=is_final, stem=ds_name)
@@ -2386,8 +2386,8 @@ class SloughGPTTrainer:
         # Filename grammar is owned by soul_path — no local strip/append here.
         # The old one-level `endswith(".soul")` collapse left x.soul.soul
         # untouched (strip one, append one) and let .sou through unexamined.
-        from domain.inference import create_soul_profile, save_soul, soul_path
-        from domain.inference._internal.slo_format import (
+        from domain.generate import create_soul_profile, save_soul, soul_path
+        from domain.generate._internal.slo_format import (
             SOUL_PROVENANCE_TRAINING,
             PersonalityCore,
         )

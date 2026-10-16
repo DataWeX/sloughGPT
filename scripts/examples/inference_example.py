@@ -14,7 +14,7 @@ def main():
     print("=" * 60)
 
     try:
-        from domain.inference._internal.engine import InferenceEngine
+        from domain.generate._internal.engine import InferenceEngine
 
         print("\nInitializing engine...")
         engine = InferenceEngine()

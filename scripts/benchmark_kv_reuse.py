@@ -478,7 +478,7 @@ def _make_stack(model, model_id="bench", quantize_kv=False):
     """
     from types import MethodType
 
-    from domain.inference._internal.slonet_provider import SloNetChatProvider
+    from domain.generate._internal.slonet_provider import SloNetChatProvider
     from domain.infrastructure._internal.slonet_server import SloNetServer
 
     tokenizer = _CharTokenizer()

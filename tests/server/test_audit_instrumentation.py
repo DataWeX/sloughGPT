@@ -227,7 +227,7 @@ class TestModelAudit:
 class TestSoulAudit:
     """Soul switch and weight-snapshot operations emit audit events."""
 
-    @patch("domain.inference._internal.slo_manager.get_slo_manager")
+    @patch("domain.generate._internal.slo_manager.get_slo_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_switch_soul_logs_event(self, mock_logger, mock_manager, souls_client):
         manager = MagicMock()

@@ -68,7 +68,7 @@ class FileIndex:
     MAX_FILE_SIZE = 500_000  # 500KB
 
     def __init__(self, embedder=None):
-        from domain.inference._internal.vector_store import InMemoryVectorStore
+        from domain.generate._internal.vector_store import InMemoryVectorStore
 
         self._store = InMemoryVectorStore(dimension=384)
         self._embedder = embedder
@@ -77,7 +77,7 @@ class FileIndex:
     def _embed(self, text: str) -> list[float]:
         if self._embedder:
             return self._embedder.embed(text)
-        from domain.inference._internal.vector_store import simple_embed
+        from domain.generate._internal.vector_store import simple_embed
 
         return simple_embed(text)
 
@@ -114,7 +114,7 @@ class FileIndex:
         if not chunks:
             return 0
 
-        from domain.inference._internal.vector_store import VectorEntry
+        from domain.generate._internal.vector_store import VectorEntry
 
         entries = []
         for text, line_no in chunks:
@@ -247,7 +247,7 @@ class DuplicateDetector:
         elif embed_fn:
             q_vec = embed_fn(text)
         else:
-            from domain.inference._internal.vector_store import simple_embed
+            from domain.generate._internal.vector_store import simple_embed
 
             q_vec = simple_embed(text)
 
@@ -340,7 +340,7 @@ class AutoCategorizer:
         if not texts:
             return None
 
-        from domain.inference._internal.vector_store import simple_embed
+        from domain.generate._internal.vector_store import simple_embed
 
         vecs = [simple_embed(t) for t in texts[:20]]  # cap at 20 examples
         return np.mean(vecs, axis=0)
@@ -356,7 +356,7 @@ class AutoCategorizer:
         if embed_fn:
             q_vec = np.asarray(embed_fn(text), dtype=np.float64)
         else:
-            from domain.inference._internal.vector_store import simple_embed
+            from domain.generate._internal.vector_store import simple_embed
 
             q_vec = np.asarray(simple_embed(text), dtype=np.float64)
 
@@ -383,7 +383,7 @@ class AutoCategorizer:
         if not self._topic_examples:
             return []
 
-        from domain.inference._internal.vector_store import simple_embed
+        from domain.generate._internal.vector_store import simple_embed
 
         q_vec = np.asarray(simple_embed(text), dtype=np.float64)
 

@@ -1,8 +1,8 @@
-"""Tests for domain.inference._internal.semantic_cache.py."""
+"""Tests for domain.generate._internal.semantic_cache.py."""
 
 import time
 
-from domain.inference._internal.semantic_cache import (
+from domain.generate._internal.semantic_cache import (
     CachedSoulEngine,
     CacheEntry,
     SemanticCache,

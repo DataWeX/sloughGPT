@@ -316,7 +316,7 @@ class TestExportToSou:
         assert Path(out).exists()
 
     def test_with_soul_profile(self, tmp_path):
-        from domain.inference import create_soul_profile
+        from domain.generate import create_soul_profile
 
         model = FakeModel(state={"w": np.ones((1,))})
         profile = create_soul_profile(name="profile-name", lineage="base")

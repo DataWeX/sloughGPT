@@ -141,7 +141,7 @@ class TestFindCheckpoint:
     def test_finds_legacy_sibling_from_canonical_name(self):
         # A file that exists ONLY at the double-appended spelling. Asking for
         # the canonical name used to come back not-found here, while
-        # domain.inference.load_soul read it without complaint — two owners,
+        # domain.generate.load_soul read it without complaint — two owners,
         # two answers to "where is this checkpoint?".
         _make_soul_file(CHECKPOINTS_DIR / "orphan.soul.soul")
         result = find_checkpoint("orphan.soul")
@@ -454,7 +454,7 @@ class TestListAndDetailAgree:
             calls.append(str(path))
             raise AssertionError(f"classify_soul leaked into the scan path: {path}")
 
-        monkeypatch.setattr("domain.inference.classify_soul", _spy)
+        monkeypatch.setattr("domain.generate.classify_soul", _spy)
 
         assert find_checkpoint("probe_spy.soul") is not None
         rows = await list_checkpoints()

@@ -75,9 +75,9 @@ def main() -> int:
     parser.add_argument("--json-out", type=str, default=None, help="write results JSON")
     args = parser.parse_args()
 
-    from domain.inference._internal.embeddings import Embedder, InMemoryEmbedder
-    from domain.inference._internal.text_embedder import embed_text
-    from domain.inference._internal.vector_store import simple_embed
+    from domain.generate._internal.embeddings import Embedder, InMemoryEmbedder
+    from domain.generate._internal.text_embedder import embed_text
+    from domain.generate._internal.vector_store import simple_embed
 
     docs = build_corpus(args.docs)
 

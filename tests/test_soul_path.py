@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.inference import (
+from domain.generate import (
     SloProfile,
     classify_soul,
     load_soul,
@@ -17,7 +17,7 @@ from domain.inference import (
     soul_path,
     soul_read_candidates,
 )
-from domain.inference._internal.slo_format import (
+from domain.generate._internal.slo_format import (
     SOUL_SUFFIXES,
     SOUL_TIER_POLICY,
     read_sidecar,

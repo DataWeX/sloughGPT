@@ -1,11 +1,11 @@
 """
 Provider implementations for ``VectorStore`` ABC.
 
-Each module implements the interface defined in ``domain.inference._internal.vector_store.VectorStore``.
+Each module implements the interface defined in ``domain.generate._internal.vector_store.VectorStore``.
 
 Re-exports for backward compatibility::
-    from domain.inference._internal.vector_stores import PineconeVectorStore
-    from domain.inference._internal.vector_stores import ChromaDBVectorStore
+    from domain.generate._internal.vector_stores import PineconeVectorStore
+    from domain.generate._internal.vector_stores import ChromaDBVectorStore
 """
 
 from __future__ import annotations

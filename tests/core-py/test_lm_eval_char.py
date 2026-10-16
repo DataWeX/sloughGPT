@@ -44,7 +44,7 @@ def _bundle(model):
 
 class TestEvaluateSoulCharLm:
     def _write_soul(self, tmp_path, model, *, stoi=None, itos=None, chars=None):
-        from domain.inference._internal.slo_format import SloProfile, save_soul
+        from domain.generate._internal.slo_format import SloProfile, save_soul
 
         soul = SloProfile(name="eval-soul")
         cfg = {

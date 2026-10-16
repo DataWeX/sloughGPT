@@ -73,7 +73,7 @@ lora.train(dataset)
 # Just do: model = train("data.txt")
 
 # WRONG: writing inference logic when generate() exists
-from domain.inference._internal.slonet_provider import SloNetChatProvider
+from domain.generate._internal.slonet_provider import SloNetChatProvider
 
 provider = SloNetChatProvider(model_path)
 tokens = provider.generate(prompt, max_tokens=100)

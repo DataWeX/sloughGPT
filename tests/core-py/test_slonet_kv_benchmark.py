@@ -552,7 +552,7 @@ class TestStackCrossTurn:
         """Minimal provider exposing the session KV map used by the server."""
 
         def __init__(self, model):
-            from domain.inference._internal.session_kv_manager import SessionKVManager
+            from domain.generate._internal.session_kv_manager import SessionKVManager
 
             self._model = model
             self._kv_manager = SessionKVManager(kv_ttl=3600.0, kv_max_sessions=64)

@@ -283,7 +283,7 @@ class TestMakeJsonSafe:
 
 class TestLoadSoulCheckpoint:
     def _make_profile(self, metadata=None):
-        from domain.inference._internal.slo_format import SloProfile
+        from domain.generate._internal.slo_format import SloProfile
 
         p = SloProfile(name="assistant")
         if metadata is not None:
@@ -291,7 +291,7 @@ class TestLoadSoulCheckpoint:
         return p
 
     def test_full_training_state(self, monkeypatch, tmp_path):
-        from domain.inference._internal import slo_format
+        from domain.generate._internal import slo_format
 
         profile = self._make_profile(
             metadata={
@@ -314,7 +314,7 @@ class TestLoadSoulCheckpoint:
         assert result["scheduler_state_dict"] == {"last_lr": 0.0001}
 
     def test_no_metadata(self, monkeypatch, tmp_path):
-        from domain.inference._internal import slo_format
+        from domain.generate._internal import slo_format
 
         profile = self._make_profile()
         monkeypatch.setattr(slo_format, "load_soul", lambda p: (profile, {"w": 1}))
@@ -325,7 +325,7 @@ class TestLoadSoulCheckpoint:
         assert "scheduler_state_dict" not in result
 
     def test_training_state_not_dict(self, monkeypatch, tmp_path):
-        from domain.inference._internal import slo_format
+        from domain.generate._internal import slo_format
 
         profile = self._make_profile(metadata={"training_state": "nope"})
         monkeypatch.setattr(slo_format, "load_soul", lambda p: (profile, {"w": 1}))
@@ -1375,7 +1375,7 @@ class TestSaveCheckpoint:
         assert t._last_checkpoint_path is not None
         assert t._last_checkpoint_path.endswith(".soul")
         assert os.path.exists(t._last_checkpoint_path)
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         profile, _ = load_soul(t._last_checkpoint_path)
         assert profile.metadata["vocab_size"] == t.vocab_size
@@ -1392,7 +1392,7 @@ class TestSaveCheckpoint:
     def test_periodic_checkpoint_keeps_optimizer_state(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         t.save_checkpoint({"eval_loss": 1.5})
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         profile, _ = load_soul(t._last_checkpoint_path)
         ts = profile.metadata["training_state"]
@@ -1401,7 +1401,7 @@ class TestSaveCheckpoint:
     def test_final_checkpoint_strips_optimizer_state(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         t.save_checkpoint({"eval_loss": 0.1}, is_final=True)
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         profile, _ = load_soul(t._last_checkpoint_path)
         ts = profile.metadata["training_state"]
@@ -1418,7 +1418,7 @@ class TestSaveCheckpoint:
     def test_save_soul_meta_failure_leaves_no_partial_artifact(
         self, data_path, tmp_path, monkeypatch
     ):
-        import domain.inference._internal.slo_format as slo_format
+        import domain.generate._internal.slo_format as slo_format
 
         def boom(*args, **kwargs):
             raise RuntimeError("meta write failed")
@@ -1878,7 +1878,7 @@ class TestSave:
         t.current_epoch = 1
         out = str(tmp_path / "model_ts")
         t.save(out)
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
@@ -1891,7 +1891,7 @@ class TestSave:
         t._last_train_loss = 3.5
         out = str(tmp_path / "model_loss")
         t.save(out)
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         profile, _ = load_soul(out + ".soul")
         assert profile.final_train_loss == 3.5
@@ -1900,7 +1900,7 @@ class TestSave:
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "model_fresh")
         t.save(out)
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         profile, _ = load_soul(out + ".soul")
         assert profile.final_train_loss is None
@@ -1910,7 +1910,7 @@ class TestSave:
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "model_noopt")
         t.save(out, include_optimizer_state=False)
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
@@ -1923,7 +1923,7 @@ class TestSave:
         t.global_step = 5
         out = str(tmp_path / "model_fullopt")
         t.save(out)
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
@@ -1992,7 +1992,7 @@ class TestTokenizerTraining:
         assert len(text) > 0
 
     def test_save_embeds_tokenizer(self, data_path, tmp_path):
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
         from domain.training._internal.token_tree import TokenTree
 
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
@@ -2006,7 +2006,7 @@ class TestTokenizerTraining:
         assert profile.metadata["vocab_size"] == tree.vocab_size
 
     def test_save_without_tokenizer_no_key(self, data_path, tmp_path):
-        from domain.inference._internal.slo_format import load_soul
+        from domain.generate._internal.slo_format import load_soul
 
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "plain")
@@ -2015,7 +2015,7 @@ class TestTokenizerTraining:
         assert "tokenizer" not in profile.metadata
 
     def test_from_soul_round_trip_tree_tokenizer(self, data_path, tmp_path):
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.generate._internal.slonet_provider import SloNetChatProvider
         from domain.training._internal.token_tree import TokenTree
 
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)

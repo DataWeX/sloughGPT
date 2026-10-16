@@ -15,13 +15,13 @@ from typing import Any
 
 import numpy as np
 
-from domain.inference._internal.text_embedder import embed_text
+from domain.generate._internal.text_embedder import embed_text
 
 # Back-compat aliases — canonical n-gram embedder re-exported under the
-# historical private names (slo_embedder quality gate, domain.inference
+# historical private names (slo_embedder quality gate, domain.generate
 # lazy exports, infer router all import them from here).
-from domain.inference._internal.text_embedder import ngram_embed as _ngram_embed  # noqa: F401
-from domain.inference._internal.text_embedder import ngram_embed as _word_ngram_embed  # noqa: F401
+from domain.generate._internal.text_embedder import ngram_embed as _ngram_embed  # noqa: F401
+from domain.generate._internal.text_embedder import ngram_embed as _word_ngram_embed  # noqa: F401
 
 logger = logging.getLogger("slo.inference.vector_store")
 
@@ -453,7 +453,7 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
         await store.connect()
         return store
     if key == "chromadb":
-        from domain.inference._internal.vector_stores.chromadb_store import ChromaDBVectorStore
+        from domain.generate._internal.vector_stores.chromadb_store import ChromaDBVectorStore
 
         store = ChromaDBVectorStore(
             persist_directory=kwargs.get("persist_directory", "data/vector_store")
@@ -461,7 +461,7 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
         await store.connect()
         return store
     if key == "pinecone":
-        from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
+        from domain.generate._internal.vector_stores.pinecone_store import PineconeVectorStore
 
         store = PineconeVectorStore(
             api_key=kwargs.get("api_key"),
@@ -595,7 +595,7 @@ _STOPWORDS: frozenset = frozenset(
 def simple_embed(text: str, dimension: int = 384) -> list[float]:
     """Embed text into a vector using the canonical project embedder.
 
-    Thin shim over ``domain.inference._internal.text_embedder``:
+    Thin shim over ``domain.generate._internal.text_embedder``:
     SloNet checkpoint (quality-gated) → word n-gram TF-IDF, L2-normalized,
     local-only (no sentence-transformers/torch, no network).
     """

@@ -255,7 +255,7 @@ class TestMeaningTagsEdgeCases:
 
 class TestLabelByMeaning:
     def test_label_factual_statement(self):
-        from domain.inference._internal.slo_embedder import _label_by_meaning
+        from domain.generate._internal.slo_embedder import _label_by_meaning
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
 
         store = get_default_meaning_tags(dimension=128)
@@ -263,7 +263,7 @@ class TestLabelByMeaning:
         assert label in store.names()
 
     def test_label_question(self):
-        from domain.inference._internal.slo_embedder import _label_by_meaning
+        from domain.generate._internal.slo_embedder import _label_by_meaning
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
 
         store = get_default_meaning_tags(dimension=128)
@@ -271,7 +271,7 @@ class TestLabelByMeaning:
         assert label in store.names()
 
     def test_label_empty_text(self):
-        from domain.inference._internal.slo_embedder import _label_by_meaning
+        from domain.generate._internal.slo_embedder import _label_by_meaning
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
 
         store = get_default_meaning_tags(dimension=128)
@@ -280,7 +280,7 @@ class TestLabelByMeaning:
         assert label is None or label in store.names()
 
     def test_label_none_store(self):
-        from domain.inference._internal.slo_embedder import _label_by_meaning
+        from domain.generate._internal.slo_embedder import _label_by_meaning
 
         label = _label_by_meaning("Hello world", None)
         assert label is None

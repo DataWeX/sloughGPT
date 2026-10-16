@@ -923,7 +923,7 @@ class KBRouter:
             def _train():
                 from pathlib import Path
 
-                from domain.inference import train_embedder
+                from domain.generate import train_embedder
 
                 REPO = Path(__file__).resolve().parents[4]
                 texts = []
@@ -1006,11 +1006,11 @@ class KBRouter:
 
     async def embedder_status(self) -> dict:
         try:
-            from domain.inference import SloTextEmbedder
+            from domain.generate import SloTextEmbedder
 
             _embedder_path = None
             try:
-                from domain.inference import _EMBEDDER_PATH
+                from domain.generate import _EMBEDDER_PATH
 
                 _embedder_path = _EMBEDDER_PATH
             except ImportError:

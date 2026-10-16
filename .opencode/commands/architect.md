@@ -19,7 +19,7 @@ Refactor the specified code using OOP principles with QA verification.
 
 ```
 /architect domain/infrastructure/_internal/model_server.py
-/architect domain/inference/_internal/slonet_provider.py
+/architect domain/generate/_internal/slonet_provider.py
 /architect apps/web/features/chat/components/ChatInput.tsx
 ```
 

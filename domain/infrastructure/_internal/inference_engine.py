@@ -233,7 +233,7 @@ class InferenceEngine:
         logger.info("Inference engine: loading model %s ...", self.model_id)
         _st = _time.monotonic()
 
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.generate._internal.slonet_provider import SloNetChatProvider
 
         load_kwargs: dict[str, Any] = {
             "quantize": self.quantize,
@@ -515,7 +515,7 @@ class InferenceEngine:
         _st = _time.monotonic()
 
         try:
-            from domain.inference._internal.slonet_provider import SloNetChatProvider
+            from domain.generate._internal.slonet_provider import SloNetChatProvider
 
             load_kwargs: dict[str, Any] = {
                 "quantize": self.quantize,

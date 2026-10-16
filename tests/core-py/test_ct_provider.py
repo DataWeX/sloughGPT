@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from domain.inference._internal.ct_provider import CTransformProvider
+from domain.generate._internal.ct_provider import CTransformProvider
 
 
 class _FakeEngine:

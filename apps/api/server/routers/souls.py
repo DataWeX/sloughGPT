@@ -134,7 +134,7 @@ class SoulsRouter:
         """
         if SloughGPTModel is None:
             raise RuntimeError("SloughGPTModel not available — PyTorch model module not loaded")
-        from domain.inference import load_soul
+        from domain.generate import load_soul
         from domain.infrastructure.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(checkpoint_path)
@@ -366,7 +366,7 @@ Be yourself — let your personality shape how you respond."""
             import time as _time
 
             _switch_t0 = _time.monotonic()
-            from domain.inference import get_slo_manager
+            from domain.generate import get_slo_manager
 
             manager = get_slo_manager()
             result = manager.switch_soul(req.name)
@@ -478,7 +478,7 @@ Be yourself — let your personality shape how you respond."""
         try:
             import asyncio
 
-            from domain.inference import get_slo_manager
+            from domain.generate import get_slo_manager
 
             manager = get_slo_manager()
             souls = await asyncio.to_thread(manager.list_souls)
@@ -520,7 +520,7 @@ Be yourself — let your personality shape how you respond."""
         """Get details for a specific soul by name."""
         import asyncio
 
-        from domain.inference import get_slo_manager
+        from domain.generate import get_slo_manager
 
         manager = get_slo_manager()
         souls = await asyncio.to_thread(manager.list_souls)
@@ -567,7 +567,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_trait_weights()
         """
-        from domain.inference import get_slo_manager
+        from domain.generate import get_slo_manager
 
         manager = get_slo_manager()
         weights = manager.get_trait_weights()
@@ -659,7 +659,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_current_soul()
         """
-        from domain.inference import get_slo_manager
+        from domain.generate import get_slo_manager
 
         manager = get_slo_manager()
         current = manager.get_current_soul()
@@ -783,7 +783,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_stats()
         """
-        from domain.inference import get_slo_manager
+        from domain.generate import get_slo_manager
 
         return success_response(data=get_slo_manager().get_stats())
 

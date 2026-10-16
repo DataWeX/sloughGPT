@@ -19,7 +19,7 @@ logger = logging.getLogger("slo.infrastructure.context_core")
 # Lazy import to avoid heavy deps at module load
 def simple_embed(text: str) -> list[float]:
     """Embed text using sentence-transformers (cached model singleton)."""
-    from domain.inference._internal.vector_store import simple_embed as vs_embed
+    from domain.generate._internal.vector_store import simple_embed as vs_embed
 
     return vs_embed(text)
 
@@ -597,7 +597,7 @@ def get_context_core() -> ContextCore:
                 vs_provider = os.environ.get("MAN_VECTOR_STORE", "")
                 if vs_provider:
                     try:
-                        from domain.inference._internal.vector_store import create_vector_store
+                        from domain.generate._internal.vector_store import create_vector_store
 
                         kwargs = {}
                         if vs_provider == "pinecone":

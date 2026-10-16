@@ -22,7 +22,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.generate._internal.forward_pass import ForwardPassResult
 from domain.infrastructure._internal.atomic_write import atomic_writer
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.shared import (  # noqa: F401 — find_repo_root kept for compatibility
@@ -4927,7 +4927,7 @@ class SloAdamW(SloAdam):
 # =============================================================================
 
 SOU_MAGIC = b"SOUL"
-SOU_VERSION = 1  # shared with domain.inference._internal.slo_format
+SOU_VERSION = 1  # shared with domain.generate._internal.slo_format
 
 
 def _sanitize(obj):
@@ -4959,7 +4959,7 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
 
     # Same grammar as save_soul — one owner for the checkpoint name, and the
     # sidecar derived from the canonical path so the pair never splits.
-    from domain.inference import soul_meta_path, soul_path
+    from domain.generate import soul_meta_path, soul_path
 
     path = soul_path(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -4985,7 +4985,7 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
                 if not isinstance(v, (dict, list, tuple, str, bytes, bool))
             ]
         # Envelope owned by slo_format — single writer for the v3 layout.
-        from domain.inference._internal.slo_format import _write_soul_v3
+        from domain.generate._internal.slo_format import _write_soul_v3
 
         _write_soul_v3(
             f,

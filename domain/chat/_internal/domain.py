@@ -87,7 +87,7 @@ class ChatDomain:
                 break
 
         # --- unified response cache: exact-key lookup (deterministic only) ---
-        from domain.inference._internal.response_cache import (
+        from domain.generate._internal.response_cache import (
             get_response_cache,
         )
 

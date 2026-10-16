@@ -103,7 +103,7 @@ _INTERNAL_IMPORT = re.compile(r"^\s*(?:from|import)\s+(domain\.[\w.]*_internal(?
 
 # Pinned baseline (44 entries after rewiring tokenizer / token_tree /
 # cloud_training onto domain.training engines, settings.py onto the
-# domain.settings / domain.training / domain.inference facades, and
+# domain.settings / domain.training / domain.generate facades, and
 # consciousness.py onto the domain.cognition facade).
 # Re-generate when reducing:
 #   python -c "import re,pathlib; ..."
@@ -135,7 +135,7 @@ _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
         "shell.py|domain.shell._internal.io",
         "shell.py|domain.shell._internal.repl",
         "shell.py|domain.shell._internal.runtime",
-        "status.py|domain.inference._internal.native.engine",
+        "status.py|domain.generate._internal.native.engine",
         "system.py|domain.infrastructure._internal.output_buffer",
         "system.py|domain.training._internal",
         "tenants.py|services.auth._internal.models",
