@@ -40,7 +40,11 @@ class ProviderRouter:
 
     @property
     def metadata(self) -> dict[str, Any]:
-        return {"processors": [type(p).__name__ for p in self._processors], "text_provider": self._text_name, "max_tool_rounds": self._max_tool_rounds}
+        return {
+            "processors": [type(p).__name__ for p in self._processors],
+            "text_provider": self._text_name,
+            "max_tool_rounds": self._max_tool_rounds,
+        }
 
     def _find_tool_processor(self):
         from .processors.tool_use import ToolUseProcessor
@@ -50,13 +54,26 @@ class ProviderRouter:
                 return p
         return None
 
-    async def chat_stream(self, messages: list[ChatMessage], max_tokens: int = 512, temperature: float = 0.7, top_p: float = 0.85, top_k: int = 40, repetition_penalty: float = 1.15, cancel_event=None, session_id: str | None = None, **kwargs) -> AsyncIterator[str]:
+    async def chat_stream(
+        self,
+        messages: list[ChatMessage],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
+        cancel_event=None,
+        session_id: str | None = None,
+        **kwargs,
+    ) -> AsyncIterator[str]:
         msgs = list(messages)
         for processor in self._processors:
             try:
                 msgs = await processor.process(msgs)
             except Exception as e:
-                logger.warning("Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"})
+                logger.warning(
+                    "Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"}
+                )
         if not self._text_name:
             yield "No text model configured. Please load a model first."
             return
@@ -70,7 +87,17 @@ class ProviderRouter:
             if cancel_event is not None and cancel_event.is_set():
                 return
             generated = ""
-            async for token in text_provider.chat_stream(msgs, max_tokens=max_tokens, temperature=temperature, top_p=top_p, top_k=top_k, repetition_penalty=repetition_penalty, cancel_event=cancel_event, session_id=session_id, **kwargs):
+            async for token in text_provider.chat_stream(
+                msgs,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+                cancel_event=cancel_event,
+                session_id=session_id,
+                **kwargs,
+            ):
                 generated += token
                 yield token
             if tool_proc is None or tool_round >= self._max_tool_rounds:
@@ -81,10 +108,16 @@ class ProviderRouter:
             if cancel_event is not None and cancel_event.is_set():
                 return
             tool_name, tool_arg, match_text = match
-            logger.info("Tool call detected: %s(%s)", tool_name, tool_arg[:40], extra={"tag": "MODEL"})
+            logger.info(
+                "Tool call detected: %s(%s)", tool_name, tool_arg[:40], extra={"tag": "MODEL"}
+            )
             yield f"\n[Running tool: {tool_name}...]\n"
             tool_result = await self._execute_tool(tool_name, tool_arg, cancel_event=cancel_event)
-            logger.info("Tool result: %s", tool_result[:60] if tool_result else "empty", extra={"tag": "MODEL"})
+            logger.info(
+                "Tool result: %s",
+                tool_result[:60] if tool_result else "empty",
+                extra={"tag": "MODEL"},
+            )
             msgs.append({"role": "assistant", "content": generated.replace(match_text, "").strip()})
             msgs.append({"role": "system", "content": f"Tool {tool_name} returned: {tool_result}"})
             msgs.append({"role": "user", "content": "Continue where you left off."})
@@ -107,7 +140,17 @@ class ProviderRouter:
             if provider is not None:
                 try:
                     result = ""
-                    async for token in provider.chat_stream([{"role": "user", "content": [{"type": "image_url", "image_url": {"url": arg}}]}], max_tokens=30, temperature=0.7, cancel_event=cancel_event):
+                    async for token in provider.chat_stream(
+                        [
+                            {
+                                "role": "user",
+                                "content": [{"type": "image_url", "image_url": {"url": arg}}],
+                            }
+                        ],
+                        max_tokens=30,
+                        temperature=0.7,
+                        cancel_event=cancel_event,
+                    ):
                         result += token
                     return result.strip() or "[no description]"
                 except Exception as e:
@@ -129,13 +172,17 @@ class ProviderRouter:
         logger.warning("Unknown tool: %s", tool_name, extra={"tag": "MODEL"})
         return f"[unknown tool: {tool_name}]"
 
-    async def chat(self, messages: list[ChatMessage], max_tokens: int = 512, temperature: float = 0.7, **kwargs) -> str:
+    async def chat(
+        self, messages: list[ChatMessage], max_tokens: int = 512, temperature: float = 0.7, **kwargs
+    ) -> str:
         # Blocking adapter over chat_stream: one streaming primitive shared by both
         # paths (processors, tool rounds, error strings). Providers implement both
         # methods (ModelProvider protocol), and test_chat_delegates_to_stream pins
         # this contract — a direct provider.chat() call here reintroduces drift.
         chunks: list[str] = []
-        async for chunk in self.chat_stream(messages, max_tokens=max_tokens, temperature=temperature, **kwargs):
+        async for chunk in self.chat_stream(
+            messages, max_tokens=max_tokens, temperature=temperature, **kwargs
+        ):
             chunks.append(chunk)
         return "".join(chunks)
 
