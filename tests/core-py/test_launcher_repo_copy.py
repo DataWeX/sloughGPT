@@ -1,127 +1,131 @@
-"""scripts/python must make the repo's shared copy beat any installed snapshot.
+"""scripts/python must make THIS checkout's copy win for every packages/ project.
 
-AGENTS one-shared-copy rule: ``packages/*`` exists exactly once, in the tree.
-A pip-installed copy in site-packages silently shadows it, and a ``PYTHONPATH``
-entry is the only thing that beats site-packages — so the launcher has to list
-the repo path explicitly.
+AGENTS one-shared-copy rule: ``packages/*`` exists exactly once, in the working
+tree you are editing. Two different things compete with it, and only a
+``PYTHONPATH`` entry outranks either:
 
-This is not theoretical. Card ``dd670ece``: ``downcraft`` was pip-installed
-into the conda env as a Sep-18 snapshot whose "already downloaded" branch was
-unconditional, while the tree copy (``6c626f043``, an ancestor of main) re-
-downloads when a "complete" state entry has no file on disk. Because the
-launcher only put the repo *root* on ``PYTHONPATH`` — never ``packages/`` —
-``python -m downcraft`` resolved to site-packages, so every consumer (e2e,
-benchmarks, anything using ``scripts/python``) ran stale code, silently
-reported success for a download that wrote no file, and the merged reget fix
-was dead in practice.
+1. **A pip-installed site-packages snapshot.** Card ``dd670ece``: ``downcraft``
+   was installed into the conda env as a Sep-18 copy whose "already downloaded"
+   branch was unconditional, while the tree copy (``6c626f043``) re-downloads
+   when a "complete" state entry has no file on disk. Because the launcher only
+   put the repo *root* on ``PYTHONPATH`` — never ``packages/`` — every consumer
+   of ``scripts/python`` (e2e, benchmarks) silently ran stale code, reported
+   success for a download that wrote no file, and the merged reget fix was dead
+   in practice.
 
-The launcher's list is therefore a ratchet, not an optimisation: adding a
-``packages/`` entry when a new installed copy appears is the fix, and this
-test fails until it does.
+2. **The ``sloughgpt`` editable install.** Its ``_EditableFinder`` carries a
+   ``MAPPING`` of importable names to absolute paths, all hardcoded to the MAIN
+   TREE checkout. From any worktree, ``import mogdb`` therefore resolved to the
+   main tree's copy rather than the one being edited — testing a worktree's
+   changes against the wrong code (card ``aecf2bb1``).
+
+Both are silent, so the launcher's package list is a ratchet rather than an
+optimisation, and this module verifies the *behaviour* rather than parsing the
+shell: every importable ``packages/`` project must actually resolve from this
+tree. That holds regardless of how the launcher expresses the list.
 """
 
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
-LAUNCHER = Path(__file__).resolve().parents[2] / "scripts" / "python"
-PACKAGES_DIR = Path(__file__).resolve().parents[2] / "packages"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+LAUNCHER = REPO_ROOT / "scripts" / "python"
+PACKAGES_DIR = REPO_ROOT / "packages"
 
 
-def _launcher_repo_paths() -> set[str]:
-    """Repo package paths the launcher explicitly puts on PYTHONPATH."""
-    text = LAUNCHER.read_text()
-    # `$ROOT/packages/<name>` (flat) or `$ROOT/packages/<name>/src` (src layout).
-    # The class stops at shell metachars ($ { } : " ') so the capture is the
-    # path itself, not the `${PYTHONPATH:+…}` expansion that follows it.
-    return set(re.findall(r"\$ROOT/(packages/[A-Za-z0-9_./-]+)", text))
-
-
-def _python_packages() -> list[str]:
-    """``packages/`` entries that actually contain an importable package."""
+def _repo_packages() -> list[str]:
+    """Importable projects under ``packages/`` (flat or src layout)."""
     names = []
     for entry in sorted(PACKAGES_DIR.iterdir()):
         if not entry.is_dir():
             continue
-        if (entry / entry.name / "__init__.py").is_file():  # flat layout
+        if (entry / entry.name / "__init__.py").is_file():  # flat: packages/<n>/<n>
             names.append(entry.name)
         elif (entry / "src" / entry.name / "__init__.py").is_file():  # src layout
             names.append(entry.name)
     return names
 
 
-def _installed_site_packages() -> Path:
-    """site-packages of the interpreter the launcher resolves to."""
-    resolved = subprocess.run(
-        [str(LAUNCHER), "--resolve"], capture_output=True, text=True, check=True
-    ).stdout.strip()
-    probe = subprocess.run(
-        [resolved, "-c", "import site; print(site.getsitepackages()[0])"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    return Path(probe)
-
-
-def test_every_installed_repo_package_is_pinned_by_the_launcher():
-    """An installed copy must be shadowed by its tree path in scripts/python."""
-    listed = _launcher_repo_paths()
-    site_pkgs = _installed_site_packages()
-
-    missing = [
-        name
-        for name in _python_packages()
-        if (site_pkgs / name).exists() and f"packages/{name}" not in listed
-    ]
-
-    assert not missing, (
-        "scripts/python lets site-packages shadow the shared tree copy for: "
-        f"{missing}. The one-shared-copy rule makes the tree copy canonical, "
-        "and only a PYTHONPATH entry beats site-packages — add the repo path "
-        "to the launcher's list (see the module docstring, card dd670ece)."
-    )
-
-
-def test_listed_paths_exist_in_the_tree():
-    """The launcher's ratchet must not reference paths that were moved."""
-    for rel in _launcher_repo_paths():
-        assert (PACKAGES_DIR.parent / rel).exists(), (
-            f"scripts/python pins {rel}, which no longer exists — the package "
-            "moved or was renamed, so the pin is dead and its shadow is back."
+def _import_origin(name: str) -> Path | None:
+    """Where the launcher resolves ``name``, or None when not importable."""
+    try:
+        res = subprocess.run(
+            [str(LAUNCHER), "-c", f"import {name}; print({name}.__file__)"],
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if res.returncode != 0:
+        return None  # missing third-party deps: out of scope for this ratchet
+    out = res.stdout.strip().splitlines()
+    return Path(out[-1]) if out else None
 
 
-def test_repo_copy_actually_wins_at_runtime():
-    """The end-to-end invariant: the imported module comes from the tree."""
-    result = subprocess.run(
-        [str(LAUNCHER), "-c", "import downcraft; print(downcraft.__file__)"],
+def test_every_repo_package_resolves_from_this_tree():
+    """No packages/ project may resolve to site-packages or another checkout.
+
+    This is the whole point of the launcher list: a worktree must run the code
+    it contains. A stale installed snapshot and the editable install's
+    main-tree MAPPING both defeat that, and neither leaves a visible error.
+    """
+    stray: list[tuple[str, Path]] = []
+    checked = 0
+
+    for name in _repo_packages():
+        origin = _import_origin(name)
+        if origin is None:
+            continue
+        checked += 1
+        try:
+            origin.resolve().relative_to(PACKAGES_DIR.resolve())
+        except ValueError:
+            stray.append((name, origin))
+
+    assert checked, "no packages/ project imported — the ratchet is not exercising anything"
+    assert not stray, (
+        "scripts/python resolves these to something other than this checkout's "
+        f"packages/ tree: {stray}. An installed snapshot or the sloughgpt "
+        "editable install's main-tree MAPPING is winning; add the project root "
+        "to the launcher's list (see the module docstring, cards dd670ece "
+        "and aecf2bb1)."
+    )
+
+
+def test_repo_packages_are_present():
+    """The scan itself must keep finding projects, or it passes vacuously."""
+    assert _repo_packages(), "no importable project found under packages/"
+
+
+def test_launcher_is_idempotent():
+    """A pre-set PYTHONPATH must not gain duplicate entries."""
+    extra = str(PACKAGES_DIR / "downcraft")
+    res = subprocess.run(
+        [str(LAUNCHER), "-c", "import os, sys; print(os.environ['PYTHONPATH'])"],
         capture_output=True,
         text=True,
-        check=True,
+        env={"PYTHONPATH": f"/nonexistent:{extra}", "PATH": "/usr/bin:/bin"},
+        timeout=60,
     )
-    imported = Path(result.stdout.strip())
-    assert "site-packages" not in imported.parts, (
-        f"import downcraft resolved to {imported} — the installed snapshot "
-        "won over the tree copy (card dd670ece)."
-    )
-    assert imported.is_relative_to(PACKAGES_DIR), (
-        f"import downcraft resolved to {imported}, which is outside packages/."
-    )
+    if res.returncode != 0:
+        pytest.skip("launcher could not run in this stripped environment")
+    entries = res.stdout.strip().split(":")
+    assert len(entries) == len(set(entries)), f"duplicate PYTHONPATH entries: {entries}"
 
 
 @pytest.mark.skipif(
     not (PACKAGES_DIR / "downcraft" / "downcraft" / "__init__.py").is_file(),
     reason="tree copy of downcraft absent in this checkout",
 )
-def test_tree_copy_carries_the_reget_guard():
-    """The staleness the shadow hid must be gone from the tree copy too."""
+def test_downcraft_reget_guard_is_live():
+    """The staleness the snapshot hid must be gone from the tree copy too."""
     source = (PACKAGES_DIR / "downcraft" / "downcraft" / "__init__.py").read_text()
     assert "re-downloading" in source, (
-        "the tree copy lost its re-download guard; the launcher pin is now "
-        "pointing at code with the same defect the snapshot had."
+        "the tree copy lost its re-download guard; the launcher is now pointing "
+        "at code with the same defect the snapshot had."
     )
