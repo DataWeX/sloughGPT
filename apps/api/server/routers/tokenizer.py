@@ -20,10 +20,12 @@ from domain.training.tokenizer_engine import get_tokenizer_manager
 
 class TokenizeRequest(BaseModel):
     text: str = Field(max_length=50000)
+    checkpoint: str | None = Field(default=None, max_length=256)
 
 
 class DetokenizeRequest(BaseModel):
     ids: list[int] = Field(max_length=10000)
+    checkpoint: str | None = Field(default=None, max_length=256)
 
 
 class AnalyzeRequest(BaseModel):
@@ -80,10 +82,18 @@ class TokenizerRouter:
 
     @staticmethod
     @endpoint("tokenizer.stats")
-    async def get_tokenizer_stats() -> dict:
-        await TokenizerRouter._ensure_trained()
+    async def get_tokenizer_stats(checkpoint: str | None = None) -> dict:
         mgr = get_tokenizer_manager()
-        stats = await asyncio.to_thread(mgr.stats)
+        if checkpoint is None:
+            await TokenizerRouter._ensure_trained()
+            stats = await asyncio.to_thread(mgr.stats)
+            source = {"kind": "singleton"}
+        else:
+            try:
+                tok, source = await asyncio.to_thread(mgr.tokenizer_for, checkpoint)
+            except ValueError as e:
+                raise_error(str(e), "E_NOT_FOUND", status_code=404)
+            stats = await asyncio.to_thread(mgr.stats_for, tok, source)
         return success_response(
             data={
                 "vocab_size": stats["vocab_size"],
@@ -92,6 +102,7 @@ class TokenizerRouter:
                 "special_tokens": stats["special_tokens"],
                 "total_merges": stats.get("total_merges", stats.get("total_merges_learned", 0)),
                 "trained": stats.get("trained", True),
+                "source": source,
             }
         )
 
@@ -130,50 +141,128 @@ class TokenizerRouter:
     async def tokenize_text(
         req: TokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
-        await TokenizerRouter._ensure_trained()
         mgr = get_tokenizer_manager()
-        ids = await asyncio.to_thread(mgr.tokenize, req.text)
-        tok = mgr.get_tokenizer()
-        tokens = [tok.itos.get(i, "<?>") for i in ids]
-        return success_response(data={"tokens": tokens, "ids": ids})
+        if req.checkpoint is None:
+            await TokenizerRouter._ensure_trained()
+            # Singleton path: byte-identical to the historical contract —
+            # ids from mgr.tokenize, token text from tok.itos.
+            ids = await asyncio.to_thread(mgr.tokenize, req.text)
+            tok = mgr.get_tokenizer()
+            tokens = [tok.itos.get(i, "<?>") for i in ids]
+            source = {"kind": "singleton"}
+        else:
+            try:
+                tok, source = await asyncio.to_thread(mgr.tokenizer_for, req.checkpoint)
+            except ValueError as e:
+                raise_error(str(e), "E_NOT_FOUND", status_code=404)
+            ids = await asyncio.to_thread(tok.encode, req.text)
+            itos = getattr(tok, "itos", None) or getattr(getattr(tok, "tree", None), "itos", {})
+            tokens = [itos.get(i, "<?>") for i in ids]
+        text_back = await asyncio.to_thread(tok.decode, ids)
+        return success_response(
+            data={
+                "tokens": tokens,
+                "ids": ids,
+                "source": source,
+                # The honesty check: does this tokenizer's decode undo its encode?
+                "fidelity": {"round_trip": text_back == req.text},
+            }
+        )
 
     @staticmethod
     @endpoint("tokenizer.detokenize")
     async def detokenize_ids(
         req: DetokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
-        await TokenizerRouter._ensure_trained()
         mgr = get_tokenizer_manager()
-        text = await asyncio.to_thread(mgr.detokenize, req.ids)
-        return success_response(data={"text": text})
+        if req.checkpoint is None:
+            await TokenizerRouter._ensure_trained()
+            text = await asyncio.to_thread(mgr.detokenize, req.ids)
+            reencoded = await asyncio.to_thread(mgr.tokenize, text)
+            source = {"kind": "singleton"}
+        else:
+            try:
+                tok, source = await asyncio.to_thread(mgr.tokenizer_for, req.checkpoint)
+            except ValueError as e:
+                raise_error(str(e), "E_NOT_FOUND", status_code=404)
+            text = await asyncio.to_thread(tok.decode, req.ids)
+            reencoded = await asyncio.to_thread(tok.encode, text)
+        return success_response(
+            data={
+                "text": text,
+                "source": source,
+                # re-encoding the decoded text should reproduce the original ids
+                "fidelity": {"reencode_matches": list(reencoded) == list(req.ids)},
+            }
+        )
 
     @staticmethod
     @endpoint("tokenizer.vocab")
-    async def get_vocab(limit: int = 50, offset: int = 0) -> dict:
-        await TokenizerRouter._ensure_trained()
-        tok = get_tokenizer_manager().get_tokenizer()
-        total = tok.vocab_size
+    async def get_vocab(limit: int = 50, offset: int = 0, checkpoint: str | None = None) -> dict:
+        mgr = get_tokenizer_manager()
+        if checkpoint is None:
+            await TokenizerRouter._ensure_trained()
+            # Singleton path: historical contract — tok.vocab_size bounds the
+            # loop and tok.vocab is indexed BY INT (real SloBPE.vocab is a list).
+            tok = mgr.get_tokenizer()
+            total = tok.vocab_size
+            entries = []
+            for i in range(offset, min(offset + limit, total)):
+                token = tok.vocab[i]
+                entries.append({"id": i, "token": token, "is_special": token in tok.SPECIAL_TOKENS})
+            source = {"kind": "singleton"}
+            return success_response(
+                data={
+                    "entries": entries,
+                    "total": total,
+                    "offset": offset,
+                    "limit": limit,
+                    "source": source,
+                }
+            )
+        try:
+            tok, source = await asyncio.to_thread(mgr.tokenizer_for, checkpoint)
+        except ValueError as e:
+            raise_error(str(e), "E_NOT_FOUND", status_code=404)
+        vocab = mgr.vocab_for(tok)
+        specials = set(mgr.specials_for(tok))
+        total = len(vocab)
         entries = []
         for i in range(offset, min(offset + limit, total)):
-            token = tok.vocab[i]
-            entries.append({"id": i, "token": token, "is_special": token in tok.SPECIAL_TOKENS})
+            token = vocab[i]
+            entries.append({"id": i, "token": token, "is_special": token in specials})
         return success_response(
-            data={"entries": entries, "total": total, "offset": offset, "limit": limit}
+            data={
+                "entries": entries,
+                "total": total,
+                "offset": offset,
+                "limit": limit,
+                "source": source,
+            }
         )
 
     @staticmethod
     @endpoint("tokenizer.merges")
-    async def get_merges(limit: int = 30) -> dict:
-        await TokenizerRouter._ensure_trained()
-        tok = get_tokenizer_manager().get_tokenizer()
-        merges = getattr(tok, "merges", [])
+    async def get_merges(limit: int = 30, checkpoint: str | None = None) -> dict:
+        mgr = get_tokenizer_manager()
+        if checkpoint is None:
+            await TokenizerRouter._ensure_trained()
+            tok = mgr.get_tokenizer()
+            merges = list(getattr(tok, "merges", []))
+            source = {"kind": "singleton"}
+        else:
+            try:
+                tok, source = await asyncio.to_thread(mgr.tokenizer_for, checkpoint)
+            except ValueError as e:
+                raise_error(str(e), "E_NOT_FOUND", status_code=404)
+            merges = mgr.merges_for(tok)
         result = []
         for i, m in enumerate(merges[:limit]):
             if isinstance(m, tuple) and len(m) == 2:
                 result.append({"index": i, "left": m[0], "right": m[1], "token": m[0] + m[1]})
             else:
                 result.append({"index": i, "left": str(m), "right": "", "token": str(m)})
-        return success_response(data={"merges": result, "total": len(merges)})
+        return success_response(data={"merges": result, "total": len(merges), "source": source})
 
     @staticmethod
     @endpoint("tokenizer.train")

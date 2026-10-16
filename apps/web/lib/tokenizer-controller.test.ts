@@ -22,7 +22,14 @@ describe('tokenizerController', () => {
 
   describe('getStats', () => {
     it('fetches tokenizer stats', async () => {
-      mockApiGet.mockResolvedValue({ vocab_size: 256, base_chars: 128, merged_subwords: 128, special_tokens: 0, total_merges: 128, trained: true })
+      mockApiGet.mockResolvedValue({
+        vocab_size: 256,
+        base_chars: 128,
+        merged_subwords: 128,
+        special_tokens: 0,
+        total_merges: 128,
+        trained: true,
+      })
       const result = await tokenizerController.getStats()
       expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/stats')
       expect(result.vocab_size).toBe(256)
@@ -84,7 +91,9 @@ describe('tokenizerController', () => {
 
   describe('getSamples', () => {
     it('fetches sample words', async () => {
-      mockApiGet.mockResolvedValue({ samples: [{ word: 'hello', ids: [1], tokens: ['hel', 'lo'], count: 5 }] })
+      mockApiGet.mockResolvedValue({
+        samples: [{ word: 'hello', ids: [1], tokens: ['hel', 'lo'], count: 5 }],
+      })
       const result = await tokenizerController.getSamples()
       expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/sample')
       expect(result.samples).toHaveLength(1)
@@ -96,7 +105,10 @@ describe('tokenizerController', () => {
     it('trains tokenizer with params', async () => {
       mockApiPost.mockResolvedValue({ status: 'ok', corpus_size: 1000, stats: { vocab_size: 256 } })
       const result = await tokenizerController.train({ vocab_size: 256, texts: ['hello'] })
-      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/train', { vocab_size: 256, texts: ['hello'] })
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/train', {
+        vocab_size: 256,
+        texts: ['hello'],
+      })
       expect(result.status).toBe('ok')
       expect(result.corpus_size).toBe(1000)
     })
@@ -126,6 +138,66 @@ describe('tokenizerController', () => {
       const result = await tokenizerController.analyze(['hello', 'world'])
       expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/analyze', { texts: ['hello', 'world'] })
       expect(result).toEqual({ results: [{}] })
+    })
+  })
+
+  describe('checkpoint binding (card 07c4e10a)', () => {
+    it('forwards checkpoint on tokenize and surfaces source + fidelity', async () => {
+      mockApiPost.mockResolvedValue({
+        tokens: ['hello'],
+        ids: [1],
+        source: { kind: 'checkpoint', path: 'models/demo.soul' },
+        fidelity: { round_trip: true },
+      })
+      const result = await tokenizerController.tokenize('hello', 'demo.soul')
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/tokenize', {
+        text: 'hello',
+        checkpoint: 'demo.soul',
+      })
+      expect(result.source?.kind).toBe('checkpoint')
+      expect(result.fidelity?.round_trip).toBe(true)
+    })
+
+    it('omits checkpoint from the payload when not provided', async () => {
+      mockApiPost.mockResolvedValue({ tokens: [], ids: [], source: { kind: 'singleton' } })
+      await tokenizerController.tokenize('hello')
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/tokenize', { text: 'hello' })
+    })
+
+    it('forwards checkpoint on detokenize', async () => {
+      mockApiPost.mockResolvedValue({
+        text: 'hello',
+        source: { kind: 'checkpoint' },
+        fidelity: { reencode_matches: true },
+      })
+      const result = await tokenizerController.detokenize([1], 'demo.soul')
+      expect(mockApiPost).toHaveBeenCalledWith('/tokenizer/detokenize', {
+        ids: [1],
+        checkpoint: 'demo.soul',
+      })
+      expect(result.fidelity?.reencode_matches).toBe(true)
+    })
+
+    it('forwards checkpoint on getStats / getVocab / getMerges as a query param', async () => {
+      mockApiGet.mockResolvedValue({ vocab_size: 10, source: { kind: 'checkpoint' } })
+      await tokenizerController.getStats('demo.soul')
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/stats?checkpoint=demo.soul')
+
+      mockApiGet.mockResolvedValue({ entries: [], total: 0 })
+      await tokenizerController.getVocab(50, 0, 'demo.soul')
+      expect(mockApiGet).toHaveBeenCalledWith(
+        '/tokenizer/vocab?limit=50&offset=0&checkpoint=demo.soul',
+      )
+
+      mockApiGet.mockResolvedValue({ merges: [], total: 0 })
+      await tokenizerController.getMerges(30, 'demo.soul')
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/merges?limit=30&checkpoint=demo.soul')
+    })
+
+    it('keeps the singleton query when no checkpoint is given', async () => {
+      mockApiGet.mockResolvedValue({ vocab_size: 10 })
+      await tokenizerController.getStats()
+      expect(mockApiGet).toHaveBeenCalledWith('/tokenizer/stats')
     })
   })
 })

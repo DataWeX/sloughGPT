@@ -132,6 +132,7 @@ const {
   mockGetVocab,
   mockGetSamples,
   mockTrain,
+  mockListCheckpoints,
   mockAddToast,
   mockTreeGetStats,
   mockTreeGetVocab,
@@ -142,6 +143,7 @@ const {
   mockGetVocab: vi.fn(),
   mockGetSamples: vi.fn(),
   mockTrain: vi.fn(),
+  mockListCheckpoints: vi.fn((): Promise<string[]> => Promise.resolve([])),
   mockAddToast: vi.fn(),
   mockTreeGetStats: vi.fn(),
   mockTreeGetVocab: vi.fn(),
@@ -155,6 +157,7 @@ vi.mock('@/lib/tokenizer-controller', () => ({
     getVocab: mockGetVocab,
     getSamples: mockGetSamples,
     train: mockTrain,
+    listCheckpoints: mockListCheckpoints,
   },
 }))
 // TokenTreeVocabCard (rendered on this tab) talks to /token-tree/* through its
@@ -212,18 +215,21 @@ const treePage = {
 // above, so no test in this file may reach the network. Spying rather than
 // stubbing keeps real call behaviour intact while any attempt to talk to a live
 // backend (the old localhost:8000 dependency) fails the test instead of racing.
-const fetchSpy =
-  typeof globalThis.fetch === 'function' ? vi.spyOn(globalThis, 'fetch') : null
+const fetchSpy = typeof globalThis.fetch === 'function' ? vi.spyOn(globalThis, 'fetch') : null
 
 afterEach(() => {
   cleanup()
   if (fetchSpy) {
-    expect(fetchSpy, 'TokenizerPage test made a network call — it is not hermetic').not.toHaveBeenCalled()
+    expect(
+      fetchSpy,
+      'TokenizerPage test made a network call — it is not hermetic',
+    ).not.toHaveBeenCalled()
   }
 })
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetStats.mockResolvedValue(stats)
+  mockListCheckpoints.mockResolvedValue([])
   mockTreeGetStats.mockResolvedValue(treeStats)
   mockTreeGetVocab.mockResolvedValue(treePage)
   mockTreeLineage.mockResolvedValue(null)
@@ -323,6 +329,36 @@ describe('TokenizerPage', () => {
       expect(screen.getByText('hello')).toBeTruthy()
       expect(screen.getByText('world')).toBeTruthy()
       expect(screen.getByText('[100, 200]')).toBeTruthy()
+    })
+  })
+
+  it('forwards a selected checkpoint on tokenize and labels the source + fidelity', async () => {
+    mockListCheckpoints.mockResolvedValue(['demo.soul'])
+    mockTokenize.mockResolvedValue({
+      tokens: ['hi'],
+      ids: [1],
+      source: { kind: 'checkpoint', checkpoint: 'demo.soul' },
+      fidelity: { round_trip: true },
+    })
+    await renderLoaded()
+    const select = await screen.findByRole('combobox')
+    await act(async () => {
+      fireEvent.change(select, { target: { value: 'demo.soul' } })
+    })
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('Enter text to tokenize...'), {
+        target: { value: 'hello' },
+      })
+    })
+    await act(async () => {
+      screen.getByText('Tokenize').click()
+    })
+    await waitFor(() => {
+      expect(mockTokenize).toHaveBeenCalledWith('hello', 'demo.soul')
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Checkpoint: demo.soul')).toBeTruthy()
+      expect(screen.getByText('round-trip exact')).toBeTruthy()
     })
   })
 

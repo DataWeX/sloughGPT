@@ -30,6 +30,11 @@ logger = logging.getLogger("slo.training.tokenizer_manager")
 
 _TOKENIZER_ALGO_KEY = "_algo"
 
+# Special-token spellings shared by SloBPE/SloUnigram and the core TokenTree
+# (both put <PAD> <UNK> <BOS> <EOS> at the front of the vocab, in that order),
+# so a checkpoint view and the singleton agree on what counts as special.
+_SPECIAL_TOKENS = ("<PAD>", "<UNK>", "<BOS>", "<EOS>")
+
 
 class TokenizerManager:
     """Manages the global tokenizer singleton (BPE or Unigram LM).
@@ -293,6 +298,130 @@ class TokenizerManager:
 
         self._tokenizer = SloBPE()
         self._algo = "bpe"
+
+    # ------------------------------------------------------------------
+    # Checkpoint-bound inspection (card 07c4e10a)
+    # ------------------------------------------------------------------
+
+    def tokenizer_for(self, checkpoint: str | None = None) -> tuple[Any, dict]:
+        """The tokenizer to INSPECT — checkpoint-bound, else the singleton.
+
+        Resolving by checkpoint IDENTITY is the whole point: the process-global
+        singleton may have been trained on a toy corpus, so the inspector cannot
+        answer "how does THIS model break down this text" through it. With no
+        *checkpoint* the singleton is returned (source ``kind="singleton"``);
+        with one, the tokenizer embedded in that ``.soul``'s sidecar is
+        reconstructed — root-confined and traversal-safe via ``find_checkpoint``.
+
+        Args:
+            checkpoint: bare file name of a ``.soul`` (searched in ckpt_roots).
+
+        Returns:
+            ``(tokenizer, source)`` — *source* labels what was used
+            (``kind``/``checkpoint``/``path``/``variant``/``origin``) so no
+            caller can present singleton output as if it were a checkpoint's.
+
+        Raises:
+            ValueError: the named checkpoint is not found, or embeds no
+                tokenizer. It must NOT fall back to the singleton — silence
+                here would decorate toy output as a model's own.
+
+        Side effects: none — the singleton is never mutated.
+        """
+        if checkpoint is None:
+            return self.get_tokenizer(), {"kind": "singleton"}
+
+        from domain.training._internal.checkpoints import find_checkpoint
+
+        resolved = find_checkpoint(checkpoint)
+        if resolved is None or not Path(resolved).exists():
+            raise ValueError(f"checkpoint not found: {checkpoint}")
+        tok = load_from_soul(resolved)
+        return tok, {
+            "kind": "checkpoint",
+            "checkpoint": checkpoint,
+            "path": str(resolved),
+            "variant": getattr(tok, "variant", None),
+            "origin": getattr(tok, "origin", None),
+        }
+
+    def stats_for(self, tokenizer: Any, source: dict | None = None) -> dict:
+        """Vocabulary stats for ANY tokenizer (singleton or checkpoint view).
+
+        Keeps the ``stats()`` key shape (``base_chars``/``merged_subwords``/
+        ``special_tokens``/``total_merges``) so a checkpoint's stats render in
+        the same slot as the singleton's, with ``kind`` naming the source.
+        """
+        kind = (source or {}).get("kind", "singleton")
+        if hasattr(tokenizer, "vocab_stats"):  # SloBPE / SloUnigram
+            stats = dict(tokenizer.vocab_stats())
+            stats.setdefault("special_tokens", len(_SPECIAL_TOKENS))
+            stats["trained"] = True
+            stats["kind"] = kind
+            return stats
+        # NativeTokenizer (checkpoint view) — stats off the tree.
+        tree = getattr(tokenizer, "tree", None)
+        vocab = list(getattr(tree, "vocab", []) or [])
+        merges = list(getattr(tree, "merges", []) or [])
+        specials = sum(1 for t in vocab if t in _SPECIAL_TOKENS)
+        return {
+            "vocab_size": int(getattr(tokenizer, "vocab_size", len(vocab)) or len(vocab)),
+            "base_chars": max(len(vocab) - len(merges) - specials, 0),
+            "merged_subwords": len(merges),
+            "special_tokens": specials,
+            "total_merges": len(merges),
+            "trained": True,
+            "kind": kind,
+        }
+
+    def vocab_for(self, tokenizer: Any) -> list[str]:
+        """Dense vocab list for either a SloBPE (flat ``.vocab``) or a
+        checkpoint ``NativeTokenizer`` (``.tree.vocab``)."""
+        tree = getattr(tokenizer, "tree", None)
+        if tree is not None and hasattr(tree, "vocab"):
+            return list(tree.vocab)
+        return list(getattr(tokenizer, "vocab", []) or [])
+
+    def merges_for(self, tokenizer: Any) -> list[Any]:
+        """Ordered merges for either tokenizer shape (see :meth:`vocab_for`)."""
+        tree = getattr(tokenizer, "tree", None)
+        raw = getattr(tree, "merges", None)
+        if raw is None:
+            raw = getattr(tokenizer, "merges", []) or []
+        return [tuple(m) if isinstance(m, (list, tuple)) else m for m in raw]
+
+    def specials_for(self, tokenizer: Any) -> list[str]:
+        """Special-token spellings, normalized across both tokenizer shapes."""
+        sp = getattr(tokenizer, "SPECIAL_TOKENS", None)
+        return list(sp) if sp is not None else list(_SPECIAL_TOKENS)
+
+
+def load_from_soul(soul_path: Any) -> Any:
+    """Reconstruct the tokenizer embedded in a ``.soul`` checkpoint.
+
+    Reads ONLY the sidecar (``read_sidecar`` skips the large
+    ``training_state`` blob, so it stays fast on 69MB checkpoints) and rebuilds
+    via the ONE native-tokenizer loader, ``native_tokenizer_from_metadata`` —
+    never a second decoder, which is how writer/reader drift starts.
+
+    Args:
+        soul_path: path to the ``.soul`` file (its sidecar is ``<path>.meta.json``).
+
+    Returns:
+        the reconstructed ``NativeTokenizer`` (char or tree variant).
+
+    Raises:
+        ValueError: the sidecar is absent/unreadable or embeds no tokenizer.
+    """
+    from domain.inference._internal.slo_format import read_sidecar
+    from domain.inference._internal.slonet_provider import native_tokenizer_from_metadata
+
+    p = Path(soul_path)
+    metadata = read_sidecar(str(p)).get("metadata") or {}
+    tok = native_tokenizer_from_metadata(metadata, origin=f"checkpoint:{p.name}")
+    if tok is None:
+        raise ValueError(f"checkpoint {p.name!r} embeds no tokenizer")
+    return tok
 
 
 def get_tokenizer_manager() -> TokenizerManager:

@@ -172,3 +172,108 @@ class TestTokenizerManager:
         mgr2.from_dict(data)
         ids = mgr2.tokenize("hello world")
         assert len(ids) > 0
+
+
+# ── Checkpoint binding (card 07c4e10a) ──────────────────────────────────────
+
+
+def _write_soul_with_tree(tmp_path, corpus, vocab_size=64, name="demo"):
+    """Write a `.soul` + sidecar whose metadata embeds a trained TokenTree.
+
+    Mirrors exactly what ``train_pipeline`` writes:
+    ``metadata["tokenizer"] = {"type": "token_tree", "tree": <tree.to_dict()>}``
+    plus the ``tokenizer_format`` tag.
+    """
+    import json
+
+    from domain.training._internal.token_tree import TokenTree
+
+    tree = TokenTree()
+    tree.train(corpus, vocab_size=vocab_size)
+    soul = tmp_path / f"{name}.soul"
+    soul.write_bytes(b"not-a-real-soul-but-present")
+    sidecar = {
+        "soul_name": name,
+        "metadata": {
+            "vocab_size": tree.vocab_size,
+            "tokenizer": {"type": "token_tree", "tree": tree.to_dict()},
+            "tokenizer_format": "native/token-tree",
+        },
+    }
+    (tmp_path / f"{name}.soul.meta.json").write_text(json.dumps(sidecar), encoding="utf-8")
+    return soul, tree
+
+
+@pytest.fixture
+def root_confined(tmp_path, monkeypatch):
+    """Redirect the checkpoint search roots to tmp_path (traversal-safe path)."""
+    from domain.training._internal import checkpoints
+
+    monkeypatch.setattr(checkpoints, "ckpt_roots", lambda: (tmp_path,))
+    return tmp_path
+
+
+class TestCheckpointBinding:
+    """The inspector must resolve its tokenizer from a checkpoint's identity."""
+
+    def test_no_checkpoint_returns_singleton(self):
+        mgr = TokenizerManager.get_instance()
+        mgr.train(["hello world test"], vocab_size=50, min_frequency=1)
+        tok, source = mgr.tokenizer_for()
+        assert source["kind"] == "singleton"
+        assert tok is mgr.get_tokenizer()
+
+    def test_checkpoint_returns_embedded_tokenizer(self, root_confined):
+        soul, tree = _write_soul_with_tree(root_confined, ["hello world", "hello there"])
+        mgr = TokenizerManager.get_instance()
+        tok, source = mgr.tokenizer_for(soul.name)
+        assert source["kind"] == "checkpoint"
+        assert source["path"].endswith("demo.soul")
+        assert source["variant"] in ("tree", "char")
+        # It is the CHECKPOINT's tokenizer, byte-identical to the embedded one.
+        text = "hello world"
+        assert tok.encode(text) == tree.encode(text)
+        assert tok.decode(tree.encode(text)) == text
+
+    def test_checkpoint_does_not_mutate_singleton(self, root_confined):
+        soul, _ = _write_soul_with_tree(root_confined, ["hello world"])
+        mgr = TokenizerManager.get_instance()
+        mgr.train(["something else entirely"], vocab_size=50, min_frequency=1)
+        before = mgr.get_tokenizer()
+        mgr.tokenizer_for(soul.name)
+        assert mgr.get_tokenizer() is before
+
+    def test_missing_checkpoint_raises(self, root_confined):
+        mgr = TokenizerManager.get_instance()
+        with pytest.raises(ValueError, match="not found"):
+            mgr.tokenizer_for("nope.soul")
+
+    def test_sidecar_without_tokenizer_raises(self, root_confined):
+        import json
+
+        soul = root_confined / "bare.soul"
+        soul.write_bytes(b"present")
+        (root_confined / "bare.soul.meta.json").write_text(
+            json.dumps({"soul_name": "bare", "metadata": {"vocab_size": 10}}), encoding="utf-8"
+        )
+        mgr = TokenizerManager.get_instance()
+        with pytest.raises(ValueError, match="tokenizer"):
+            mgr.tokenizer_for("bare.soul")
+
+    def test_stats_for_checkpoint_tokenizer(self, root_confined):
+        soul, tree = _write_soul_with_tree(root_confined, ["hello world", "hello there"])
+        mgr = TokenizerManager.get_instance()
+        tok, source = mgr.tokenizer_for(soul.name)
+        stats = mgr.stats_for(tok, source)
+        assert stats["trained"] is True
+        assert stats["vocab_size"] == tree.vocab_size
+        assert stats["kind"] == "checkpoint"
+
+    def test_vocab_and_merges_normalized_for_checkpoint(self, root_confined):
+        soul, tree = _write_soul_with_tree(root_confined, ["hello world", "hello there"])
+        mgr = TokenizerManager.get_instance()
+        tok, _ = mgr.tokenizer_for(soul.name)
+        vocab = mgr.vocab_for(tok)
+        merges = mgr.merges_for(tok)
+        assert vocab == list(tree.vocab)
+        assert merges == [tuple(m) for m in tree.merges]

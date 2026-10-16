@@ -20,6 +20,7 @@ import { PageContainer } from '@/components/PageContainer'
 import {
   tokenizerController,
   type TokenizerStats,
+  type TokenizeResult,
   type SampleWord,
 } from '@/lib/tokenizer-controller'
 import { TokenizerEfficiencyCard } from '@/components/tokenizer/TokenizerEfficiencyCard'
@@ -41,7 +42,7 @@ export default function TokenizerPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [inputText, setInputText] = useState('')
-  const [tokenResult, setTokenResult] = useState<{ tokens: string[]; ids: number[] } | null>(null)
+  const [tokenResult, setTokenResult] = useState<TokenizeResult | null>(null)
   const [tokenizing, setTokenizing] = useState(false)
   const [vocabEntries, setVocabEntries] = useState<
     { id: number; token: string; is_special: boolean }[]
@@ -53,8 +54,19 @@ export default function TokenizerPage() {
   const [training, setTraining] = useState(false)
   const [trainResult, setTrainResult] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
+  const [checkpoint, setCheckpoint] = useState('')
+  const [checkpoints, setCheckpoints] = useState<string[]>([])
   const addToast = useToastStore((s) => s.addToast)
   useRefreshShortcut(() => router.refresh())
+
+  // Load the checkpoint list for the picker (best-effort — an empty list just
+  // leaves the inspector on the singleton, which stays labeled as such).
+  useEffect(() => {
+    tokenizerController
+      .listCheckpoints()
+      .then(setCheckpoints)
+      .catch(() => setCheckpoints([]))
+  }, [])
 
   useEffect(() => {
     tokenizerController
@@ -73,7 +85,11 @@ export default function TokenizerPage() {
     if (!inputText.trim()) return
     setTokenizing(true)
     try {
-      const res = await tokenizerController.tokenize(inputText)
+      // Only pass the checkpoint when one is chosen, so the default call shape
+      // stays exactly (text) — no stray undefined argument.
+      const res = checkpoint
+        ? await tokenizerController.tokenize(inputText, checkpoint)
+        : await tokenizerController.tokenize(inputText)
       setTokenResult(res)
     } catch {
       addToast('Could not tokenize', 'error')
@@ -177,6 +193,23 @@ export default function TokenizerPage() {
           <TokenizerEfficiencyCard stats={stats} samples={samples} />
           <Card>
             <CardContent className="px-3 pb-3 pt-4 space-y-3">
+              {checkpoints.length > 0 && (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  Inspect checkpoint
+                  <select
+                    value={checkpoint}
+                    onChange={(e) => setCheckpoint(e.target.value)}
+                    className="text-xs bg-background border border-border/40 rounded px-2 py-1"
+                  >
+                    <option value="">Default tokenizer (singleton)</option>
+                    {checkpoints.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <Textarea
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
@@ -188,6 +221,34 @@ export default function TokenizerPage() {
               </Button>
               {tokenResult && (
                 <div className="space-y-2">
+                  {tokenResult.source && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span
+                        className={cn(
+                          'px-1.5 py-0.5 rounded font-medium',
+                          tokenResult.source.kind === 'checkpoint'
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {tokenResult.source.kind === 'checkpoint'
+                          ? `Checkpoint: ${tokenResult.source.checkpoint ?? tokenResult.source.path ?? ''}`
+                          : 'Default tokenizer (not a checkpoint)'}
+                      </span>
+                      {tokenResult.fidelity && (
+                        <span
+                          className={cn(
+                            'px-1.5 py-0.5 rounded',
+                            tokenResult.fidelity.round_trip
+                              ? 'bg-emerald-500/10 text-emerald-500'
+                              : 'bg-amber-500/10 text-amber-500',
+                          )}
+                        >
+                          round-trip {tokenResult.fidelity.round_trip ? 'exact' : 'lossy'}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">
                       Tokens ({tokenResult.tokens.length})
