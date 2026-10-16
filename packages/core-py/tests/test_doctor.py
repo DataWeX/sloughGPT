@@ -1,8 +1,9 @@
 """Tests for the site doctor (domain/core/_internal/doctor) — Phase A.
 
 Hermetic by construction: no network, no browser, no live ports. The
-journey runner is stubbed via ``sys.modules``; http/sse probes take
-injected readers; env defaults are set (and torn down) by fixture.
+journey sweep is stubbed at the ``subprocess.run`` seam (the doctor reaches
+the harness only as a child process); http/sse probes take injected readers;
+env defaults are set (and torn down) by fixture.
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ import json
 import os
 import sys
 import time
-import types
 from pathlib import Path
 
 import pytest
@@ -231,6 +231,15 @@ class TestRankWorst:
 # ──────────────────────────────────────────────────────────────────
 
 
+# The harness may be reachable under either identity (repo-root `tests.ux_journeys`
+# when run as a module, bare `ux_journeys` if a tree puts `tests/` on sys.path).
+_HARNESS_MODULES = ("tests.ux_journeys", "ux_journeys")
+
+
+def _is_harness_module(name: str) -> bool:
+    return any(name == m or name.startswith(m + ".") for m in _HARNESS_MODULES)
+
+
 class TestJourneyProbe:
     def test_missing_report_is_info_and_probe_fails(self):
         result = journey_probe.run_probe(False)
@@ -283,33 +292,111 @@ class TestJourneyProbe:
         assert os.environ["SLO_WEB_URL"] == "http://localhost:5173"
         assert os.environ["SLO_API_URL"] == "http://localhost:8000"
 
-    def test_sweep_uses_stub_runner(self, monkeypatch, tmp_path):
-        # Import the real package first so its attributes bind to the REAL
-        # runner; then swap only sys.modules so the probe picks up the stub.
-        import domain.journeys  # noqa: F401
+    def _fake_completed(self, *, code: int, stdout: str = "", stderr: str = ""):
+        class _Completed:
+            pass
 
-        report_path = tmp_path / "sweep-report.json"
-        stub = types.ModuleType("domain.journeys.runner")
+        done = _Completed()
+        done.returncode = code
+        done.stdout = stdout
+        done.stderr = stderr
+        return done
+
+    def test_sweep_spawns_the_harness_process(self, monkeypatch):
+        """The sweep crosses a process boundary — a module, not a call."""
+        # Strip these first: if the ambient shell supplies them, the assertions
+        # below pass even when the code that sets them is deleted.
+        monkeypatch.delenv("PYTHONNOUSERSITE", raising=False)
+        monkeypatch.delenv("PYTHONPATH", raising=False)
         calls: dict = {}
 
-        def fake_run(flows, headed, strict_errors):
-            calls["flows"] = len(flows)
-            calls["headed"] = headed
-            calls["strict_errors"] = strict_errors
-            _journey_report(report_path, total=len(flows))
-            return 0
+        def fake_run(cmd, *, cwd, env, capture_output, text, timeout):
+            calls["cmd"] = cmd
+            calls["cwd"] = cwd
+            calls["pythonpath"] = env.get("PYTHONPATH", "")
+            calls["no_user_site"] = env.get("PYTHONNOUSERSITE")
+            calls["timeout"] = timeout
+            # Emulate the harness contract: write the report, exit 0.
+            _journey_report(Path(os.environ["SLO_JOURNEY_REPORT"]), total=13)
+            return self._fake_completed(code=0)
 
-        stub.run = fake_run
-        stub.REPORT = str(report_path)
-        stub.main = lambda *a, **k: 0
-        monkeypatch.setitem(sys.modules, "domain.journeys.runner", stub)
+        monkeypatch.setattr("subprocess.run", fake_run)
 
         result = journey_probe.run_probe(True)
 
-        assert report_path.exists()
-        assert calls == {"flows": 13, "headed": False, "strict_errors": False}
+        assert calls["cmd"][1:] == ["-m", "tests.ux_journeys"]
+        assert Path(os.environ["SLO_JOURNEY_REPORT"]).exists()
+        # The child runs from the repo root, which is what makes `tests` importable.
+        root = journey_probe._journeys_dir()
+        assert root is not None
+        assert calls["cwd"] == str(root)
+        assert calls["pythonpath"].split(os.pathsep)[0] == str(root)
+        # `tests` is shadowed by a stray user-site package — the child must skip it.
+        assert calls["no_user_site"] == "1"
+        assert calls["timeout"] == 3600
         assert result.ok is True
         assert _finding(result, "journey.flows").severity == Severity.OK
+
+    def test_sweep_never_imports_the_harness(self, monkeypatch):
+        """Separation of concerns: mole must not take a code dependency on it."""
+        monkeypatch.setattr(
+            "subprocess.run",
+            lambda *a, **k: self._fake_completed(code=0),
+        )
+        for name in [n for n in list(sys.modules) if _is_harness_module(n)]:
+            del sys.modules[name]
+
+        journey_probe.run_probe(True)
+
+        assert not any(_is_harness_module(n) for n in sys.modules)
+
+    def test_failed_flows_exit_code_is_data_not_an_error(self, monkeypatch):
+        """Exit 1 means flows failed — the report carries that, not the seam.
+
+        Asserted against ``_sweep``'s own return, because ``run_probe`` drops
+        ``sweep_error`` whenever a report loads (the report is authoritative);
+        checking only the probe outcome would let an exit-code regression
+        through unnoticed.
+        """
+
+        def fake_run(*a, **k):
+            _journey_report(Path(os.environ["SLO_JOURNEY_REPORT"]), total=13, failed=3)
+            return self._fake_completed(code=1)
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        path, error = journey_probe._sweep()
+        assert error == ""  # flows failed, but the harness itself is fine
+        assert path == journey_probe._report_path()
+
+        result = journey_probe.run_probe(True)
+
+        assert result.ok is True
+        flows = _finding(result, "journey.flows")
+        assert flows.severity == Severity.CRITICAL  # 3 failures
+        assert "3/13 journeys failed" in flows.message
+
+    def test_unreachable_stack_is_surfaced_as_the_sweep_error(self, monkeypatch):
+        """Exit 2 = no sweep ran, so no report — say why instead of 'stale'."""
+
+        def fake_run(*a, **k):
+            return self._fake_completed(
+                code=2, stderr="API not reachable at http://localhost:8000/health"
+            )
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        path, error = journey_probe._sweep()
+        assert path == journey_probe._report_path()
+        assert "sweep exited 2" in error
+        assert "API not reachable" in error
+
+        result = journey_probe.run_probe(True)
+
+        finding = _finding(result, "journey.report")
+        assert finding.severity == Severity.INFO
+        assert "sweep exited 2" in finding.detail
+        assert "API not reachable" in finding.detail
 
 
 # ──────────────────────────────────────────────────────────────────

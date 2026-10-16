@@ -32,9 +32,9 @@ def default_report_path() -> str:
 def default_targets() -> dict:
     """Probe targets from env — also applies the doctor-side :5173 fix.
 
-    Must run BEFORE ``domain.journeys`` is imported anywhere: the journey
-    runner freezes these values at import and its own web default is
-    stale (``:5175``).
+    Must run BEFORE the journey sweep hands env to its subprocess: the
+    report is produced by ``tests/ux_journeys`` in a child process that
+    inherits ``os.environ``, so these setdefaults are what the child sees.
     """
     web = os.environ.setdefault("SLO_WEB_URL", "http://localhost:5173")
     api = os.environ.setdefault("SLO_API_URL", "http://localhost:8000")

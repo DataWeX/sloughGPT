@@ -14,13 +14,13 @@ No remediation, no writes to the site.
 Probe seams:
     http      API self-diagnosis surface (/health, /errors/*)
     sse       /health/stream — payload-size + cadence watchdog
-    journey   UX sweep report (domain.journeys) — report-only unless swept
+    journey   UX sweep report (tests/ux_journeys) — report-only unless swept
     system    local host: thermal / load / uptime (environmental seam)
 
-The journey runner freezes ``SLO_WEB_URL``/``SLO_API_URL`` at *import*
-time with a stale ``:5175`` web default; this package sets
-``SLO_WEB_URL=http://localhost:5173`` (setdefault) doctor-side before any
-journey import. Journey files are never edited.
+The journey harness (``tests/ux_journeys``) resolves its stack URLs from
+``os.environ``; this package sets ``SLO_WEB_URL=http://localhost:5173``
+(setdefault) doctor-side before the sweep spawns, and reaches it only across
+a process boundary — never by import.
 
 Chat-stream probe: deferred to Phase B — it needs an authenticated
 session plus live model state that Phase A's read-only, no-auth surface
@@ -124,8 +124,8 @@ def run_doctor(
         The merged :class:`DoctorReport` (ranked findings, worst-first).
     """
     skipped = {s.strip() for s in skip if s.strip()}
-    # Freeze targets (and the doctor-side :5173 env default) BEFORE probes
-    # — the journey probe imports domain.journeys, which freezes env at import.
+    # Freeze targets (and the doctor-side :5173 env default) BEFORE probes —
+    # the journey probe hands its env to the sweep subprocess at run time.
     targets = default_targets()
     results: list[ProbeResult] = []
 
