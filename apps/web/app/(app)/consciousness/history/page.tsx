@@ -23,16 +23,16 @@ interface Episode {
 }
 
 const QUALIA_DIMS = [
-  { key: 'valence', color: 'var(--chart-1)' },
-  { key: 'arousal', color: 'var(--chart-2)' },
-  { key: 'novelty', color: 'var(--chart-3)' },
-  { key: 'coherence', color: 'var(--chart-4)' },
-  { key: 'salience', color: 'var(--chart-5)' },
-  { key: 'certainty', color: 'var(--chart-1)' },
-  { key: 'complexity', color: 'var(--chart-2)' },
+  { key: 'valence', color: 'rgb(var(--chart-1))' },
+  { key: 'arousal', color: 'rgb(var(--chart-2))' },
+  { key: 'novelty', color: 'rgb(var(--chart-3))' },
+  { key: 'coherence', color: 'rgb(var(--chart-4))' },
+  { key: 'salience', color: 'rgb(var(--chart-5))' },
+  { key: 'certainty', color: 'rgb(var(--chart-1))' },
+  { key: 'complexity', color: 'rgb(var(--chart-2))' },
 ]
 
-const RATING_CHART_VARS = ['var(--destructive)', 'var(--chart-2)', 'var(--warning)', 'var(--chart-4)', 'var(--success)'] as const
+const RATING_CHART_VARS = ['var(--destructive)', 'rgb(var(--chart-2))', 'var(--warning)', 'rgb(var(--chart-4))', 'var(--success)'] as const
 
 const PAGE_SIZE = 20
 
