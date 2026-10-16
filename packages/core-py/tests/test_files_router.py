@@ -21,6 +21,10 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, _server_dir)
 from routers.files import FilesRouter  # noqa: E402
 
+# Bind domain.cognition into the attr chain: py3.12 mock.patch resolves targets via
+# pkgutil.resolve_name (getattr-only), so the lazy package chain must be materialised.
+import domain.cognition  # noqa: E402,F401
+
 
 def _app(fr: FilesRouter) -> FastAPI:
     app = FastAPI()
@@ -142,7 +146,7 @@ class TestDelete:
         fid = r.json()["id"]
         resp = client.delete(f"/files/{fid}")
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == "deleted"
+        assert resp.json()["data"]["deleted"] == fid
 
     def test_delete_nonexistent(self, tmp_path):
         fr = _make_router(tmp_path)
@@ -162,8 +166,8 @@ class TestIngest:
             "/files/upload", files={"file": ("ingest.txt", io.BytesIO(long_text), "text/plain")}
         )
         fid = r.json()["id"]
-        with patch("domain.learner.knowledge.get_knowledge_memory") as mock_km:
-            mock_km.return_value.add_fact.return_value = True
+        with patch("domain.cognition.get_rag_service") as mock_rag:
+            mock_rag.return_value.add_document.return_value = ["c1"]
             resp = client.post(f"/files/{fid}/ingest")
         assert resp.status_code == 200
         assert resp.json()["facts_stored"] == 1
