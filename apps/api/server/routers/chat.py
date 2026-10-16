@@ -49,20 +49,38 @@ class ChatRouter:
         self.router.add_api_route("/health", self.health, methods=["GET"])
         self.router.add_api_route("/addons", self.addons, methods=["GET"])
 
+    async def _generate(
+        self,
+        request: ChatRequest,
+        *,
+        stream: bool,
+        http_request: Request | None = None,
+        auth_user: dict | None = None,
+    ) -> ChatResponse | StreamingResponse:
+        """Single chat-generation seam.
+
+        POST /chat and POST /chat/stream are two projections of one generation
+        path: both funnels through here, and `stream` is a mode rather than a
+        second, parallel handler. Prompting surface lives in this router;
+        readiness/circuit-breaker gates and the response shape are whatever the
+        chosen backend owns, and they are identical for every caller precisely
+        because there is only one place that decides.
+
+        Keeping this seam single is what makes the generation backend swappable
+        without touching either endpoint's contract.
+        """
+        if stream:
+            return await handle_chat_stream(request, http_request, auth_user)
+        return await handle_chat(request)
+
     @endpoint("chat.respond")
     async def respond(
         self,
         request: ChatRequest,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> ChatResponse:
-        """Non-streaming chat response.
-
-        Prompting surface lives here; generation runs in the shared inference
-        kernel via its public facade — the same entry the mobile BFF calls —
-        so readiness/circuit-breaker gates and the response shape are
-        identical for every caller.
-        """
-        return await handle_chat(request)
+        """Non-streaming chat response."""
+        return await self._generate(request, stream=False, auth_user=auth_user)
 
     @endpoint("chat.stream")
     async def stream(
@@ -71,8 +89,8 @@ class ChatRouter:
         http_request: Request,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> StreamingResponse:
-        """Streaming chat response (SSE) — delegates to the inference kernel facade."""
-        return await handle_chat_stream(request, http_request, auth_user)
+        """Streaming chat response (SSE) — the same generation path, streamed."""
+        return await self._generate(request, stream=True, http_request=http_request, auth_user=auth_user)
 
     @endpoint("chat.regenerate")
     async def regenerate(
