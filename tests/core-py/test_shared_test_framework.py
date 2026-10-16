@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.shared._internal.test_framework import (
+from domain.core.shared._internal.test_framework import (
     BenchmarkRunner,
     TestFramework,
     TestResult,

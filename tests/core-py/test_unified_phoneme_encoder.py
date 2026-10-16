@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from domain.multimodal._internal.unified_phoneme_encoder import (
+from domain.cognition.multimodal._internal.unified_phoneme_encoder import (
     UnifiedPhonemeEncoder,
     detect_language,
 )

@@ -26,7 +26,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.morph_tokenizer")
 

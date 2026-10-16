@@ -19,7 +19,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
-from domain.shared import find_repo_root, utc_now_iso
+from domain.core.shared import find_repo_root, utc_now_iso
 
 from .control import router as control_router
 from .controller import get_training_controller

@@ -58,7 +58,7 @@ sys.path.insert(0, str(_root))
 
 import numpy as np
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 # Force single-thread BLAS for best single-core performance
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")

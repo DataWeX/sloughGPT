@@ -1,10 +1,10 @@
-"""Tests for domain.shared timestamp helpers — the canonical time library."""
+"""Tests for domain.core.shared timestamp helpers — the canonical time library."""
 
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from domain.shared import (
+from domain.core.shared import (
     is_valid_iso,
     normalize_iso,
     normalize_local_iso,
@@ -168,20 +168,20 @@ class TestRepairIso:
     """repair_iso rewrites only timestamps JS cannot parse."""
 
     def test_repairs_duplicate_z(self):
-        from domain.shared import repair_iso
+        from domain.core.shared import repair_iso
 
         assert repair_iso("2026-09-24T08:48:15.788175+00:00Z") == "2026-09-24T08:48:15.788175Z"
         assert repair_iso("2026-09-24T10:00:00-05:00Z") == "2026-09-24T15:00:00.000000Z"
 
     def test_leaves_valid_values_verbatim(self):
-        from domain.shared import repair_iso
+        from domain.core.shared import repair_iso
 
         assert repair_iso("2026-09-24T09:47:33.835728Z") == "2026-09-24T09:47:33.835728Z"
         assert repair_iso("2026-09-24T09:47:33Z") == "2026-09-24T09:47:33Z"
         assert repair_iso("2024-06-01") == "2024-06-01"
 
     def test_leaves_non_strings_untouched(self):
-        from domain.shared import repair_iso
+        from domain.core.shared import repair_iso
 
         assert repair_iso(None) is None
         assert repair_iso("") == ""
@@ -190,8 +190,8 @@ class TestRepairIso:
         assert repair_iso("yesterday") == "yesterday"
 
     def test_exported_from_package_surface(self):
-        from domain.shared import repair_iso
-        from domain.shared._internal.utils import repair_iso as facade_repair
+        from domain.core.shared import repair_iso
+        from domain.core.shared._internal.utils import repair_iso as facade_repair
 
         assert repair_iso is facade_repair
 

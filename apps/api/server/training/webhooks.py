@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 from mogdb import MogDB
 
-from domain.shared import find_repo_root, parse_iso, utc_now_iso
+from domain.core.shared import find_repo_root, parse_iso, utc_now_iso
 
 logger = logging.getLogger("slo.webhooks")
 

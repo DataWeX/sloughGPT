@@ -168,7 +168,7 @@ def test_recover_400_when_status_not_interruptible(tmp_path, deps):
 
 
 def test_recover_400_when_recovering_with_fresh_heartbeat(tmp_path, deps):
-    from domain.shared import utc_now_iso
+    from domain.core.shared import utc_now_iso
 
     job = _base_job(str(tmp_path))
     job["status"] = "recovering"
@@ -182,7 +182,7 @@ def test_recover_400_when_recovering_with_fresh_heartbeat(tmp_path, deps):
 def test_recover_allows_stale_recovering_job(tmp_path, deps):
     from datetime import UTC, datetime, timedelta
 
-    from domain.shared import to_iso
+    from domain.core.shared import to_iso
 
     job = _base_job(str(tmp_path))
     job["status"] = "recovering"

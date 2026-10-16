@@ -17,18 +17,18 @@ import time
 
 import pytest
 
+from domain.core.logging._internal.config import (
+    _collect_domain_payload,
+    _derive_op,
+)
+from domain.core.logging._internal.dashboard_filter import (
+    _WATCHED_OPS,
+    _summarize_from_op,
+)
 from domain.infrastructure._internal.gateway_bandwidth import (
     DEFAULT_GATEWAY_URL,
     GatewayBandwidthMirror,
     get_bandwidth_mirror,
-)
-from domain.logging._internal.config import (
-    _collect_domain_payload,
-    _derive_op,
-)
-from domain.logging._internal.dashboard_filter import (
-    _WATCHED_OPS,
-    _summarize_from_op,
 )
 
 LOGGER_NAME = "slo.infrastructure.gateway"
@@ -289,7 +289,7 @@ class TestSchemaIntegration:
         assert "75.0% saved" in message
 
     def test_legacy_tag_maps_to_bandwidth_op(self):
-        from domain.logging._internal.config import _LEGACY_TAG_TO_OP
+        from domain.core.logging._internal.config import _LEGACY_TAG_TO_OP
 
         assert _LEGACY_TAG_TO_OP["BANDWIDTH"] == "bandwidth.interval"
 

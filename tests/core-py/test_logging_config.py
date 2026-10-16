@@ -1,5 +1,5 @@
 """
-Tests for domain.logging._internal.config — centralized logging configuration.
+Tests for domain.core.logging._internal.config — centralized logging configuration.
 
 Covers:
     - setup_logging() with all parameter combinations
@@ -34,7 +34,7 @@ _CORE_PY = Path(__file__).resolve().parents[2] / "packages" / "core-py"
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domain.logging._internal.config import (
+from domain.core.logging._internal.config import (
     ClientExtensionFilter,
     LogFormatter,
     RepeatSuppressionFilter,

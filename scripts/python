@@ -4,7 +4,7 @@
 #   scripts/python [args...]   run with the project interpreter
 #   scripts/python --resolve   print the interpreter path instead
 #
-# Single authority: domain.shared.find_server_python (conda env `sloughgpt`
+# Single authority: domain.core.shared.find_server_python (conda env `sloughgpt`
 # -> .venv -> the interpreter doing the query). This wrapper only supplies
 # what a shell needs — the SLO_PYTHON override, the repo root on PYTHONPATH
 # (`domain` lives there and is not installed as a package), and a last-resort
@@ -50,7 +50,7 @@ resolve() {
   # Ask the Python-side resolver — the same authority app code consults.
   for py in python3 python; do
     command -v "$py" >/dev/null 2>&1 || continue
-    resolved="$("$py" -c 'from domain.shared import find_server_python; print(find_server_python())' 2>/dev/null || true)"
+    resolved="$("$py" -c 'from domain.core.shared import find_server_python; print(find_server_python())' 2>/dev/null || true)"
     if [ -n "$resolved" ] && [ -x "$resolved" ]; then
       printf '%s\n' "$resolved"
       return 0

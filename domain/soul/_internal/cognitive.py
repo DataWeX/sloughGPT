@@ -23,7 +23,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 try:
     from .foundation import EvolutionStage, Experience, FoundationSLO, SLOConfig, Thought

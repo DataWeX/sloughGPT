@@ -327,7 +327,7 @@ class TestKnowledgeDeviceBranches:
 
 class TestVisionDeviceSuccess:
     def test_write_real_file_delegates_to_cnn(self):
-        fake_vision = types.ModuleType("domain.multimodal._internal.vision")
+        fake_vision = types.ModuleType("domain.cognition.multimodal._internal.vision")
 
         class _CNN:
             def caption(self, img):
@@ -348,7 +348,7 @@ class TestVisionDeviceSuccess:
         try:
             with patch.dict(
                 "sys.modules",
-                {"domain.multimodal._internal.vision": fake_vision, "PIL": _PIL},
+                {"domain.cognition.multimodal._internal.vision": fake_vision, "PIL": _PIL},
             ):
                 out = VisionDevice().write(path)
         finally:
@@ -361,7 +361,7 @@ class TestVisionDeviceSuccess:
             path = f.name
         size = os.path.getsize(path)
         try:
-            with patch.dict("sys.modules", {"domain.multimodal._internal.vision": None}):
+            with patch.dict("sys.modules", {"domain.cognition.multimodal._internal.vision": None}):
                 out = VisionDevice().write(path)
         finally:
             os.unlink(path)

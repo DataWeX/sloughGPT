@@ -34,7 +34,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.shared import normalize_local_iso, utc_now_iso
+from domain.core.shared import normalize_local_iso, utc_now_iso
 
 logger = logging.getLogger("slo.lora_eval")
 from dataclasses import dataclass
@@ -208,7 +208,7 @@ class LoRAEvaluator:
             return
 
         try:
-            from domain.models import ModelLoader
+            from domain.generate.models import ModelLoader
 
             model = ModelLoader.load(str(self.base_model), device="cpu")
             self._model = model
@@ -244,7 +244,7 @@ class LoRAEvaluator:
             return self._default_gen
 
         try:
-            from domain.models._internal.provider import get_provider
+            from domain.generate.models._internal.provider import get_provider
         except Exception as e:
             logger.debug("provider import failed: %s", e)
             return None

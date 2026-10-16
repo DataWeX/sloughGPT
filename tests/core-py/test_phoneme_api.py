@@ -7,8 +7,8 @@ pronunciation scoring, and TTS synthesis endpoints.
 import numpy as np
 import pytest
 
-from domain.multimodal._internal.tts import TTSEngine
-from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+from domain.cognition.multimodal._internal.tts import TTSEngine
+from domain.cognition.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
 
 
 class TestUnifiedPhonemeEncoderAPI:

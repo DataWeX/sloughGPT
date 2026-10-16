@@ -1343,7 +1343,7 @@ class SloNetChatProvider:
     @property
     def capabilities(self):
         """What this model supports."""
-        from domain.models._internal.provider import ModelCapabilities
+        from domain.generate.models._internal.provider import ModelCapabilities
 
         return ModelCapabilities(
             chat=True,

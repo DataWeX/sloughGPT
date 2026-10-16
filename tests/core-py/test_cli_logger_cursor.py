@@ -8,7 +8,7 @@ class TestCursorControl:
     """Tests for CLILogger cursor control methods."""
 
     def test_cursor_up_writes_ansi(self):
-        from domain.logging._internal.cli_logger import CLILogger
+        from domain.core.logging._internal.cli_logger import CLILogger
 
         stream = MagicMock()
         stream.isatty.return_value = True
@@ -24,7 +24,7 @@ class TestCursorControl:
         stream.write.assert_called_with("\033[3A")
 
     def test_cursor_down_writes_ansi(self):
-        from domain.logging._internal.cli_logger import CLILogger
+        from domain.core.logging._internal.cli_logger import CLILogger
 
         stream = MagicMock()
         stream.isatty.return_value = True
@@ -40,7 +40,7 @@ class TestCursorControl:
         stream.write.assert_called_with("\033[2B")
 
     def test_clear_line_writes_ansi(self):
-        from domain.logging._internal.cli_logger import CLILogger
+        from domain.core.logging._internal.cli_logger import CLILogger
 
         stream = MagicMock()
         stream.isatty.return_value = True
@@ -56,7 +56,7 @@ class TestCursorControl:
         stream.write.assert_called_with("\033[2K")
 
     def test_clear_lines_writes_multiple(self):
-        from domain.logging._internal.cli_logger import CLILogger
+        from domain.core.logging._internal.cli_logger import CLILogger
 
         stream = MagicMock()
         stream.isatty.return_value = True
@@ -74,7 +74,7 @@ class TestCursorControl:
         assert stream.write.call_count == 6
 
     def test_save_restore_position_write_ansi(self):
-        from domain.logging._internal.cli_logger import CLILogger
+        from domain.core.logging._internal.cli_logger import CLILogger
 
         stream = MagicMock()
         stream.isatty.return_value = True
@@ -93,7 +93,7 @@ class TestCursorControl:
         stream.write.assert_called_with("\033[u")
 
     def test_cursor_methods_skip_on_non_tty(self):
-        from domain.logging._internal.cli_logger import CLILogger
+        from domain.core.logging._internal.cli_logger import CLILogger
 
         stream = MagicMock()
         stream.isatty.return_value = False

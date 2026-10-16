@@ -111,7 +111,7 @@ class TestModelAudit:
         assert resp.status_code == 200
 
     @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
-    @patch("domain.models.get_provider")
+    @patch("domain.generate.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_quantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
         provider = MagicMock()
@@ -136,7 +136,7 @@ class TestModelAudit:
         }
 
     @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
-    @patch("domain.models.get_provider")
+    @patch("domain.generate.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_dequantize_model_logs_event(
         self, mock_logger, mock_provider, mock_walk, models_client
@@ -156,7 +156,7 @@ class TestModelAudit:
         assert kwargs["detail"] == "model_type=slonet"
         assert kwargs["extra"] == {"layers_reset": 0}
 
-    @patch("domain.models.get_provider", return_value=None)
+    @patch("domain.generate.models.get_provider", return_value=None)
     @patch("domain.core.slolib._internal.gpu.get_accelerator")
     @patch("infrastructure.auth.get_audit_logger")
     def test_set_precision_logs_event(self, mock_logger, mock_acc, mock_provider, models_client):

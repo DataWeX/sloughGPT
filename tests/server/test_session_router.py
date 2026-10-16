@@ -236,8 +236,8 @@ class TestRegenerateSession:
         assert "No session context found" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models.get_provider")
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.generate.models.get_provider")
+    @patch("domain.generate.models._internal.provider.get_provider")
     def test_regenerate_success(self, mock_inner_prov, mock_get_provider, mock_get, client):
         mock_get.return_value = [
             {"role": "user", "content": "Hello"},
@@ -257,7 +257,7 @@ class TestRegenerateSession:
         assert "Regenerated" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models.get_provider")
+    @patch("domain.generate.models.get_provider")
     def test_regenerate_no_provider(self, mock_get_provider, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_get_provider.return_value = None
@@ -266,8 +266,8 @@ class TestRegenerateSession:
         assert "Model not loaded" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models.get_provider")
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.generate.models.get_provider")
+    @patch("domain.generate.models._internal.provider.get_provider")
     def test_regenerate_streams_multiple_tokens(
         self, mock_inner_prov, mock_get_provider, mock_get, client
     ):
@@ -288,8 +288,8 @@ class TestRegenerateSession:
         assert "world" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models.get_provider")
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.generate.models.get_provider")
+    @patch("domain.generate.models._internal.provider.get_provider")
     def test_regenerate_stream_emits_errors_as_sse(
         self, mock_inner_prov, mock_get_provider, mock_get, client
     ):
@@ -380,8 +380,8 @@ class TestRegenerateDisconnect:
     """Regenerate streaming branch coverage."""
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models.get_provider")
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.generate.models.get_provider")
+    @patch("domain.generate.models._internal.provider.get_provider")
     @patch("fastapi.Request.is_disconnected")
     def test_regenerate_stops_on_disconnect(
         self, mock_disc, mock_inner_prov, mock_get_provider, mock_get, client
@@ -405,8 +405,8 @@ class TestRegenerateDisconnect:
         assert "Second" not in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models.get_provider")
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.generate.models.get_provider")
+    @patch("domain.generate.models._internal.provider.get_provider")
     def test_regenerate_emits_thinking_event(
         self, mock_inner_prov, mock_get_provider, mock_get, client
     ):

@@ -483,7 +483,7 @@ class ToolRunner:
             ext = os.path.splitext(image_path)[1].lower()
 
             try:
-                from domain.multimodal._internal.vision import VisionCNN
+                from domain.cognition.multimodal._internal.vision import VisionCNN
 
                 vision = VisionCNN()
                 caption_result = vision.caption(image_path)

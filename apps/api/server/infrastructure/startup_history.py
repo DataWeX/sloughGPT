@@ -54,7 +54,7 @@ def _import_mogdb():
     shared env does not install mogdb — the CLI db group uses this same
     self-serve path insert (apps/cli/src/groups/db.py).
     """
-    from domain.shared import find_repo_root
+    from domain.core.shared import find_repo_root
 
     src = find_repo_root(Path(__file__).resolve()) / "packages" / "mogdb" / "src"
     if str(src) not in sys.path:
@@ -114,7 +114,7 @@ class StartupHistory:
 
     @staticmethod
     def _default_db_path() -> Path:
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         return find_repo_root(Path(__file__).resolve()) / "data" / "startup_history_mogdb"
 

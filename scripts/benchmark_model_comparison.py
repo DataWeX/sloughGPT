@@ -42,7 +42,7 @@ def log(msg: str = ""):
 
 
 def _utc_iso() -> str:
-    """Current UTC time as RFC 3339 ``…Z`` — same shape as domain.shared.utc_now_iso."""
+    """Current UTC time as RFC 3339 ``…Z`` — same shape as domain.core.shared.utc_now_iso."""
     return datetime.now(UTC).isoformat().removesuffix("+00:00") + "Z"
 
 
@@ -384,7 +384,7 @@ def run_native_inference(net, lstm, encode, decode, prompt: str, max_new_tokens:
 def run_sou_inference(model, prompt: str, max_new_tokens: int = 50):
     tokenizer = getattr(model, "_tokenizer", None)
     if tokenizer is None:
-        from domain.multimodal.char_tokenizer import CharTokenizer
+        from domain.cognition.multimodal.char_tokenizer import CharTokenizer
 
         tokenizer = CharTokenizer()
         tokenizer.build_vocab(prompt)

@@ -33,7 +33,7 @@ def isolated_settings(tmp_path, monkeypatch):
 
 @pytest.fixture
 def clean_registry():
-    from domain.models._internal.provider import registry
+    from domain.generate.models._internal.provider import registry
 
     saved = dict(registry._providers)
     registry._providers.clear()
@@ -97,7 +97,7 @@ class TestPatchProviderSettings:
         assert isolated_settings.settings.providers.model == "gpt-4o-mini"
 
     def test_patch_enable_without_key_not_applied(self, isolated_settings, clean_registry):
-        from domain.models import get_provider
+        from domain.generate.models import get_provider
 
         resp = TestClient(_build_app()).patch(
             "/settings/providers/api",
@@ -110,7 +110,7 @@ class TestPatchProviderSettings:
 
     def test_patch_enable_registers_runtime_provider(self, isolated_settings, clean_registry):
         from domain.generate._internal.api_provider import ApiProvider
-        from domain.models import get_provider
+        from domain.generate.models import get_provider
 
         TestClient(_build_app()).patch(
             "/settings/providers/api",

@@ -105,7 +105,7 @@ class TestChatDomain:
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = "Hello there!"
 
-        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=mock_provider):
             resp = await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
                 model="gpt2",
@@ -117,7 +117,7 @@ class TestChatDomain:
     @pytest.mark.asyncio
     async def test_respond_no_provider(self):
         domain = ChatDomain()
-        with patch("domain.models._internal.provider.get_provider", return_value=None):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=None):
             resp = await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
             )
@@ -129,7 +129,7 @@ class TestChatDomain:
         mock_provider = AsyncMock()
         mock_provider.chat.side_effect = TimeoutError()
 
-        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=mock_provider):
             resp = await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
             )
@@ -142,7 +142,7 @@ class TestChatDomain:
         mock_provider.chat.return_value = "Hello there!"
         mock_provider.last_usage = {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
 
-        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=mock_provider):
             resp = await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
             )
@@ -158,7 +158,7 @@ class TestChatDomain:
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = "Hello there!"
 
-        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=mock_provider):
             resp = await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
             )

@@ -20,7 +20,7 @@ def _iso_mtime(path: Path) -> str | None:
     The UI renders this as the dataset's age; mtime of the content file is
     the closest honest signal to creation time on disk.
     """
-    from domain.shared import to_iso
+    from domain.core.shared import to_iso
 
     try:
         return to_iso(datetime.fromtimestamp(path.stat().st_mtime, tz=UTC))

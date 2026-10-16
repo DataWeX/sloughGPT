@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from domain.multimodal._internal.text_encoder import TextEncoder
+from domain.cognition.multimodal._internal.text_encoder import TextEncoder
 
 
 class TestTextEncoderInit:

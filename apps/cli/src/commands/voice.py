@@ -7,7 +7,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 

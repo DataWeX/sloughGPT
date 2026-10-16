@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 import click
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 from utils.formatting import format_size

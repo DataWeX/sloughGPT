@@ -26,7 +26,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
 

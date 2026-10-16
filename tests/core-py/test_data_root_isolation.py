@@ -1,4 +1,4 @@
-"""Tests for ``domain.shared.data_root`` and live data-tree isolation.
+"""Tests for ``domain.core.shared.data_root`` and live data-tree isolation.
 
 The live ``<repo>/data`` tree is production state, not scratch space. Before
 ``data_root()`` existed, ``domain/agents/_internal/system.py`` built
@@ -19,7 +19,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from domain.shared import data_root, find_repo_root
+from domain.core.shared import data_root, find_repo_root
 
 
 def test_data_root_defaults_to_the_repo_data_dir(monkeypatch) -> None:

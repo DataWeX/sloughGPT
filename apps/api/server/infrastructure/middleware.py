@@ -29,8 +29,8 @@ from fastapi.responses import JSONResponse
 from schemas.common import error_response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from domain.core.logging._internal.config import set_request_id
 from domain.infrastructure.correlation import set_correlation_id
-from domain.logging._internal.config import set_request_id
 
 logger = logging.getLogger("slo.middleware")
 
@@ -296,7 +296,7 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
             elapsed = time.monotonic() - start
             elapsed_str = f"{elapsed:.3f}s"
             try:
-                from domain.logging._internal.errors import format_concise
+                from domain.core.logging._internal.errors import format_concise
 
                 detail = format_concise(exc, source=f"{method} {path}")
             except Exception:

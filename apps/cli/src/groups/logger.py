@@ -29,8 +29,8 @@ from pathlib import Path
 from core.framework import click
 from core.helpers import api_get, output_json
 
-from domain.logging import get_global
-from domain.shared import utc_now_iso
+from domain.core.logging import get_global
+from domain.core.shared import utc_now_iso
 
 log = get_global()
 

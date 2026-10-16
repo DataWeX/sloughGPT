@@ -5,7 +5,7 @@ Inference Example - Generate text with trained model
 
 import torch
 
-from domain.models import SloughGPTModel
+from domain.generate.models import SloughGPTModel
 
 
 def main():

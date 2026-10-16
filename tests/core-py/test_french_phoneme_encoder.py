@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domain.multimodal._internal.french_phoneme_encoder import (
+from domain.cognition.multimodal._internal.french_phoneme_encoder import (
     BOS,
     EOS,
     NUM_FRENCH_PHONEMES,

@@ -73,7 +73,7 @@ All other `TrainingConfig` classes are deprecated.
 
 ### Model
 
-**Canonical:** `domain.models.SloughGPTModel`
+**Canonical:** `domain.generate.models.SloughGPTModel`
 
 Uses:
 

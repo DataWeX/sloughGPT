@@ -1,23 +1,23 @@
-"""Tests for domain.shared — utils, feature_flags, test_framework."""
+"""Tests for domain.core.shared — utils, feature_flags, test_framework."""
 
 import time
 
 import pytest
 
-from domain.shared._internal.feature_flags import (
+from domain.core.shared._internal.feature_flags import (
     FeatureFlag,
     FeatureFlags,
     FlagStatus,
     is_enabled,
 )
-from domain.shared._internal.test_framework import (
+from domain.core.shared._internal.test_framework import (
     BenchmarkRunner,
     TestFramework,
     TestResult,
     TestSuite,
     mark_test,
 )
-from domain.shared._internal.utils import (
+from domain.core.shared._internal.utils import (
     Cache,
     RateLimiter,
     Timer,

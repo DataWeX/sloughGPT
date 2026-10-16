@@ -139,7 +139,7 @@ def test_soultransformer_train_export_load_generate():
         assert os.path.exists(sou_path), f".soul not created: {sou_path}"
 
         # Load via SloTransformerProvider
-        from domain.models._internal.provider import SloTransformerProvider
+        from domain.generate.models._internal.provider import SloTransformerProvider
 
         provider = SloTransformerProvider.load_from_sou(sou_path, model_id_str="e2e-test")
         assert provider is not None
@@ -166,7 +166,7 @@ def test_soultransformer_train_export_load_generate():
 
 def test_soultransformer_provider_streaming():
     """Verify SloTransformerProvider streaming yields multiple tokens."""
-    from domain.models._internal.provider import SloTransformerProvider
+    from domain.generate.models._internal.provider import SloTransformerProvider
     from domain.training._internal.slonet import SloTransformer
 
     model = SloTransformer(

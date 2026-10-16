@@ -79,7 +79,7 @@
 > — a clean facade, no `_internal`. Do not treat `/status` or `/train/*` as
 > broken on the strength of this note; the gap closed without goal 15.
 
-11. ~~**Voice router cleanup** — TTS works, phoneme encode works, but router bypasses domain. Wire `domain/voice/` properly to `apps/api/server/routers/voice.py`.~~ **Done** — Both `voice.py` and `phoneme.py` routers properly delegate to `domain.voice` via `get_voice_engine()` and `get_phoneme_engine()`. No `_internal` imports.
+11. ~~**Voice router cleanup** — TTS works, phoneme encode works, but router bypasses domain. Wire `domain/generate/voice/` properly to `apps/api/server/routers/voice.py`.~~ **Done** — Both `voice.py` and `phoneme.py` routers properly delegate to `domain.generate.voice` via `get_voice_engine()` and `get_phoneme_engine()`. No `_internal` imports.
 
 ## Training delivery — two tracks (October 2026)
 

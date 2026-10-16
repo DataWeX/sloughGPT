@@ -109,8 +109,8 @@ only through the same stable interfaces:
 
 | #   | Feature              | Status     | Domain module          | Notes                                                                                                                                                                                                                                                                       |
 | --- | -------------------- | ---------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 15  | **Consciousness**    | Wired ✅   | `cognition`            | 27 sub-pages; `ConsciousnessProcessor` exported from `domain/models/__init__.py` and injected via the chat pipeline. _(row previously said "Built, not wired" — contradicted this doc's own Dead Code table, which recorded the wiring on 2026-09-29; verified 2026-10-01)_ |
-| 16  | **Voice**            | Wired ✅   | `voice`                | TTS + phoneme encode delegate to `domain.voice` via `get_voice_engine()`/`get_phoneme_engine()`; **0** `_internal` imports. _(row previously said "router bypasses domain" — stale; verified 2026-10-01)_                                                                   |
+| 15  | **Consciousness**    | Wired ✅   | `cognition`            | 27 sub-pages; `ConsciousnessProcessor` exported from `domain/generate/models/__init__.py` and injected via the chat pipeline. _(row previously said "Built, not wired" — contradicted this doc's own Dead Code table, which recorded the wiring on 2026-09-29; verified 2026-10-01)_ |
+| 16  | **Voice**            | Wired ✅   | `voice`                | TTS + phoneme encode delegate to `domain.generate.voice` via `get_voice_engine()`/`get_phoneme_engine()`; **0** `_internal` imports. _(row previously said "router bypasses domain" — stale; verified 2026-10-01)_                                                                   |
 | 17  | **Phoneme Learning** | Over-built | `voice` (phoneme)      | 47 components, 12 tabs — needs flow restructure                                                                                                                                                                                                                             |
 | 18  | **Tokenizer**        | Over-built | `training` (tokenizer) | 9 tabs, 12 sub-cards — needs consolidation                                                                                                                                                                                                                                  |
 | 19  | **Companion**        | Built      | `companion`            | AI companion with personality                                                                                                                                                                                                                                               |
@@ -162,12 +162,12 @@ Frontend: collections page (single page)
 **Voice** — 3 routers, domain bypassed:
 
 ```
-voice.py router → imports from domain.multimodal._internal.tts (WRONG)
+voice.py router → imports from domain.cognition.multimodal._internal.tts (WRONG)
 tokenizer.py router → imports from domain.training._internal.tokenizer_manager (WRONG)
 token_tree.py router → imports from domain.training._internal.token_tree_manager (WRONG)
 
 Should be:
-VoiceEngine → wraps TTS + phoneme + recognition from domain.voice
+VoiceEngine → wraps TTS + phoneme + recognition from domain.generate.voice
 TokenizerEngine → wraps tokenizer from domain.training
 Single router per engine, not per implementation module
 ```

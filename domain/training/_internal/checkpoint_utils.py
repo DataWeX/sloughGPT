@@ -19,7 +19,7 @@ from domain.training._internal.slonet import load_checkpoint_npz as _load_npz
 from domain.training._internal.slonet import save_checkpoint_npz as _save_npz
 
 try:
-    from domain.models import SloughGPTModel
+    from domain.generate.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):
     SloughGPTModel = None  # type: ignore[assignment,misc]
 
@@ -128,7 +128,7 @@ def load_sloughgpt_from_checkpoint(
         RuntimeError: If ``SloughGPTModel`` cannot be imported.
     """
     if SloughGPTModel is None:
-        raise RuntimeError("SloughGPTModel is not available — ensure domain.models is importable.")
+        raise RuntimeError("SloughGPTModel is not available — ensure domain.generate.models is importable.")
     bundle = normalize_raw_checkpoint(bundle)
     hp = resolve_sloughgpt_hyperparams(
         bundle,

@@ -52,7 +52,7 @@ def mock_provider():
     )
     provider.model_id = "test-model"
     with (
-        patch("domain.models._internal.provider.get_provider", return_value=provider),
+        patch("domain.generate.models._internal.provider.get_provider", return_value=provider),
         patch("apps.api.server.routers.inference.get_provider", return_value=provider),
         patch("apps.api.server.routers.inference._model_ready", return_value=True),
         patch(

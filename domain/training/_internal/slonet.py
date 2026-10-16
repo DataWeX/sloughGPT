@@ -22,13 +22,13 @@ from typing import Any
 
 import numpy as np
 
-from domain.generate._internal.forward_pass import ForwardPassResult
-from domain.infrastructure._internal.atomic_write import atomic_writer
-from domain.infrastructure._internal.kv_cache.native import NativeKVState
-from domain.shared import (  # noqa: F401 — find_repo_root kept for compatibility
+from domain.core.shared import (  # noqa: F401 — find_repo_root kept for compatibility
     find_repo_root,
     utc_now_iso,
 )
+from domain.generate._internal.forward_pass import ForwardPassResult
+from domain.infrastructure._internal.atomic_write import atomic_writer
+from domain.infrastructure._internal.kv_cache.native import NativeKVState
 
 logger = logging.getLogger("slo.slonet")
 

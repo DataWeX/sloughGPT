@@ -1,4 +1,4 @@
-"""Tests for domain.multimodal._internal.vision — ImageCaption, VisualObject, VisionCNN.
+"""Tests for domain.cognition.multimodal._internal.vision — ImageCaption, VisualObject, VisionCNN.
 
 Covers: dataclass creation, model building, get_vision_model factory,
 preprocessing, embedding, captioning, detection, training, forward pass.
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2] / "packages")
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.multimodal._internal.vision import (
+from domain.cognition.multimodal._internal.vision import (
     ImageCaption,
     VisionCNN,
     VisualObject,

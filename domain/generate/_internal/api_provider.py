@@ -36,7 +36,7 @@ from typing import Any
 
 import httpx
 
-from domain.models._internal.provider import ModelCapabilities
+from domain.generate.models._internal.provider import ModelCapabilities
 
 logger = logging.getLogger("slo.api_provider")
 
@@ -360,11 +360,11 @@ def configure_api_provider(
     Returns a status dict with ``registered``, ``text_provider`` and any
     ``error``. Never raises for missing credentials.
     """
-    from domain.models._internal.provider.registry import (
+    from domain.generate.models._internal.provider.registry import (
         _providers,
         register_provider,
     )
-    from domain.models._internal.provider.router import ProviderRouter
+    from domain.generate.models._internal.provider.router import ProviderRouter
 
     router = _providers.get("default")
     current = router._text_name if isinstance(router, ProviderRouter) else None

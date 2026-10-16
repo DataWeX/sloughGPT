@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 from domain.training._internal.executor import get_training_executor
 
 from .helpers import _finish_job

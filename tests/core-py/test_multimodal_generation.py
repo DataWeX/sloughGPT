@@ -10,11 +10,11 @@ from pathlib import Path
 # Add core-py to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "packages"))
 
-from domain.multimodal._internal.diffusion import LatentDiffusionModel, LatentUNet
-from domain.multimodal._internal.text_encoder import TextEncoder
-from domain.multimodal._internal.tts import GriffinLimVocoder, TTSEngine
-from domain.multimodal._internal.vae import SloVAE, SloVAEDecoder, SloVAEEncoder
-from domain.multimodal._internal.video import TemporalEncoder, VideoProcessor
+from domain.cognition.multimodal._internal.diffusion import LatentDiffusionModel, LatentUNet
+from domain.cognition.multimodal._internal.text_encoder import TextEncoder
+from domain.cognition.multimodal._internal.tts import GriffinLimVocoder, TTSEngine
+from domain.cognition.multimodal._internal.vae import SloVAE, SloVAEDecoder, SloVAEEncoder
+from domain.cognition.multimodal._internal.video import TemporalEncoder, VideoProcessor
 
 
 class TestSloVAE:
@@ -539,7 +539,7 @@ class TestTTSEngine:
 
     def test_spectrogram_decoder_encode_text(self):
         """Spectrogram decoder should encode text to hidden states."""
-        from domain.multimodal._internal.tts import SpectrogramDecoder
+        from domain.cognition.multimodal._internal.tts import SpectrogramDecoder
 
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         phoneme_ids = np.array([[65, 66, 67]], dtype=np.int32)
@@ -548,7 +548,7 @@ class TestTTSEngine:
 
     def test_spectrogram_decoder_generate(self):
         """Spectrogram decoder should generate mel spectrogram."""
-        from domain.multimodal._internal.tts import SpectrogramDecoder
+        from domain.cognition.multimodal._internal.tts import SpectrogramDecoder
 
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         phoneme_ids = np.array([[65, 66, 67]], dtype=np.int32)
@@ -558,7 +558,7 @@ class TestTTSEngine:
 
     def test_spectrogram_decoder_parameters(self):
         """Spectrogram decoder should have parameters."""
-        from domain.multimodal._internal.tts import SpectrogramDecoder
+        from domain.cognition.multimodal._internal.tts import SpectrogramDecoder
 
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         params = decoder.parameters()

@@ -255,7 +255,7 @@ class TestGetQuantizationInfo:
             "per_tensor": {"lm_head": {"scale": [0.0] * 50_000}},
         }
         with patch(
-            "domain.models._internal.provider.get_provider",
+            "domain.generate.models._internal.provider.get_provider",
             return_value=fat_provider,
         ):
             result = _get_quantization_info()

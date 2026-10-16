@@ -15,7 +15,7 @@ import json
 import logging
 from pathlib import Path
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.pair_extractor")
 

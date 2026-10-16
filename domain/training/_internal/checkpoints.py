@@ -11,12 +11,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+from domain.core.shared import is_valid_iso, repair_iso
 from domain.generate._internal.slo_format import (
     SOUL_TIER_POLICY,
     read_sidecar,
     soul_read_candidates,
 )
-from domain.shared import is_valid_iso, repair_iso
 
 from .helpers import (
     describe_checkpoint,
@@ -458,7 +458,7 @@ async def build_checkpoint_provider(name: str, path: str | None = None) -> tuple
     Registration decides which model the server serves, so inspection and
     compare paths must never touch it.
     """
-    from domain.models._internal.provider import SloTransformerProvider
+    from domain.generate.models._internal.provider import SloTransformerProvider
     from domain.training._internal.slonet import import_from_sou
 
     cp = await asyncio.to_thread(find_checkpoint, name, path)
@@ -508,7 +508,7 @@ async def build_checkpoint_provider(name: str, path: str | None = None) -> tuple
 
 
 async def load_checkpoint(name: str, path: str | None = None) -> dict:
-    from domain.models._internal.provider import register_provider
+    from domain.generate.models._internal.provider import register_provider
 
     provider, info = await build_checkpoint_provider(name, path)
     register_provider("slonet", provider)

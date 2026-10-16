@@ -161,7 +161,7 @@ class TestStatus:
 class TestTranscribe:
     """POST /multimodal/transcribe"""
 
-    @patch("domain.voice.get_voice_engine")
+    @patch("domain.generate.voice.get_voice_engine")
     def test_transcribe_audio(self, mock_get_voice):
         ve = MagicMock()
         result = MagicMock()
@@ -462,7 +462,7 @@ class TestAnalyze:
 class TestSynthesizeSpeech:
     """POST /multimodal/synthesize-speech"""
 
-    @patch("domain.voice._internal.tts.TTSEngine")
+    @patch("domain.generate.voice._internal.tts.TTSEngine")
     def test_synthesizes_waveform(self, mock_tts_cls):
         import numpy as np
 
@@ -544,7 +544,7 @@ class TestProcessVideo:
         return engine
 
     @patch(MGR_TARGET)
-    @patch("domain.multimodal.VideoProcessor")
+    @patch("domain.cognition.multimodal.VideoProcessor")
     def test_processes_video(self, mock_processor_cls, mock_get):
         import numpy as np
 
@@ -567,7 +567,7 @@ class TestProcessVideo:
         assert data["num_frames"] == 2
 
     @patch(MGR_TARGET)
-    @patch("domain.multimodal.VideoProcessor")
+    @patch("domain.cognition.multimodal.VideoProcessor")
     def test_returns_500_when_engine_missing(self, mock_processor_cls, mock_get):
         import numpy as np
 

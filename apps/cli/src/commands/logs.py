@@ -26,7 +26,7 @@ from pathlib import Path
 
 import click
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 

@@ -1,4 +1,4 @@
-"""Tests for domain.logging — factory functions, global logger, LogLevel, LogRecord, Logger ABC, ChildLogger, TaggedLogger, CompositeLogger, ErrorCode, LogTag."""
+"""Tests for domain.core.logging — factory functions, global logger, LogLevel, LogRecord, Logger ABC, ChildLogger, TaggedLogger, CompositeLogger, ErrorCode, LogTag."""
 
 import io
 import threading
@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from domain.logging import (
+from domain.core.logging import (
     CLILogger,
     ConsoleLogger,
     LogLevel,
@@ -16,14 +16,14 @@ from domain.logging import (
     get_logger,
     set_global,
 )
-from domain.logging._internal.base import (
+from domain.core.logging._internal.base import (
     CompositeLogger,
     ErrorCode,
     Logger,
     LogRecord,
     LogTag,
 )
-from domain.logging._internal.config import (
+from domain.core.logging._internal.config import (
     clear_log_context,
     get_log_context,
     get_request_id,
@@ -322,7 +322,7 @@ class TestGlobalLogger:
 
     def test_get_creates_default(self):
         set_global(None)
-        import domain.logging as pkg
+        import domain.core.logging as pkg
 
         pkg._global_logger = None
         log = get_global()
@@ -1565,7 +1565,7 @@ class TestConfigContextExtended:
         assert get_log_context()["a"] == 2
 
     def test_request_id_in_context(self):
-        from domain.logging._internal.base import Logger, LogLevel
+        from domain.core.logging._internal.base import Logger, LogLevel
 
         class _TestLogger(Logger):
             def __init__(self, **kw):
@@ -1582,7 +1582,7 @@ class TestConfigContextExtended:
         set_request_id(None)
 
     def test_log_context_in_record(self):
-        from domain.logging._internal.base import Logger, LogLevel
+        from domain.core.logging._internal.base import Logger, LogLevel
 
         class _TestLogger(Logger):
             def __init__(self, **kw):

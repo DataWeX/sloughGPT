@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 logger = logging.getLogger("slo.shell.state")
 
@@ -31,7 +31,7 @@ def _get_collection(db_path: str | None = None):
     from mogdb import MogDB
 
     if db_path is None:
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "shell_state_mogdb")

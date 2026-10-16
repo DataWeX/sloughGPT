@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = REPO_ROOT / "data" / "benchmark_results"

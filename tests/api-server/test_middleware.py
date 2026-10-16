@@ -509,7 +509,7 @@ class TestStormEndToEnd:
         return int(start["status"])
 
     def test_twenty_four_400s_emit_one_warn_line(self):
-        from domain.logging._internal.config import RepeatSuppressionFilter
+        from domain.core.logging._internal.config import RepeatSuppressionFilter
 
         app = self._storm_app()
         dedup = RepeatSuppressionFilter(window_s=60)

@@ -94,7 +94,7 @@ def test_parse_json_v1_envelope():
 def test_round_trip_formatter_to_parser():
     import logging
 
-    from domain.logging._internal.config import SyslogFormatter
+    from domain.core.logging._internal.config import SyslogFormatter
 
     fmt = SyslogFormatter()
     record = logging.LogRecord(

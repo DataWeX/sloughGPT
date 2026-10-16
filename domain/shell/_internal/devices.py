@@ -235,7 +235,7 @@ class VisionDevice(AIDevice):
             return f"  File not found: {path}"
         # Delegate to VisionCNN if available
         try:
-            from domain.multimodal._internal.vision import VisionCNN
+            from domain.cognition.multimodal._internal.vision import VisionCNN
 
             cnn = VisionCNN()
             from PIL import Image

@@ -5,8 +5,12 @@ from __future__ import annotations
 import pytest
 
 from domain.generate._internal.api_provider import ApiProvider, configure_api_provider
-from domain.models._internal.provider.registry import _providers, get_provider, register_provider
-from domain.models._internal.provider.router import ProviderRouter
+from domain.generate.models._internal.provider.registry import (
+    _providers,
+    get_provider,
+    register_provider,
+)
+from domain.generate.models._internal.provider.router import ProviderRouter
 
 
 @pytest.fixture

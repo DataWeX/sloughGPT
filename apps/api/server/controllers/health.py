@@ -14,7 +14,7 @@ from typing import Any
 
 import psutil
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ def _get_mogdb_health() -> dict[str, Any] | None:
     try:
         from pathlib import Path
 
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         data_root = find_repo_root(Path(__file__).resolve()) / "data"
         mogdb_dirs = list(data_root.glob("*_mogdb"))
@@ -298,7 +298,7 @@ def _get_inference_stats() -> dict[str, Any]:
 def _get_quantization_info() -> dict[str, Any]:
     """Get quantization status from the active provider."""
     try:
-        from domain.models._internal.provider import get_provider
+        from domain.generate.models._internal.provider import get_provider
 
         provider = get_provider("slonet-native")
         if provider is None:
@@ -328,7 +328,7 @@ def _get_kv_session_info() -> dict[str, Any]:
     tokens, TTL). Returns ``{"enabled": False}`` when no provider exposes it.
     """
     try:
-        from domain.models._internal.provider import get_provider
+        from domain.generate.models._internal.provider import get_provider
 
         provider = get_provider("slonet-native")
         if provider is None:

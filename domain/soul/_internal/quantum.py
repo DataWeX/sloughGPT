@@ -16,7 +16,7 @@ import math
 import random
 from typing import Any
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 logger = logging.getLogger("slo.soul.quantum")
 

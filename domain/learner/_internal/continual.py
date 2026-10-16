@@ -27,7 +27,7 @@ import threading
 import time
 from pathlib import Path
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 from domain.training._internal.slonet import (
     SloAdam,
     SloTransformer,

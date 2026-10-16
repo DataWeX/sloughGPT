@@ -233,7 +233,7 @@ class TestVisionDevice:
         real_import = builtins.__import__
 
         def _block(name, *a, **k):
-            if name == "domain.multimodal._internal.vision":
+            if name == "domain.cognition.multimodal._internal.vision":
                 raise ImportError("no vision")
             return real_import(name, *a, **k)
 

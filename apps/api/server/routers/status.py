@@ -9,7 +9,7 @@ from datetime import datetime
 from fastapi import APIRouter
 from schemas.common import endpoint, success_response
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 
 class StatusRouter:

@@ -2,7 +2,7 @@
 """
 SloughGPT Training Pipeline (SloNet-native)
 
-Trains :class:`domain.models.SloughGPTModel` on pure NumPy via SloNet. There is
+Trains :class:`domain.generate.models.SloughGPTModel` on pure NumPy via SloNet. There is
 no external framework dependency anywhere in the training path: the optimizer is
 ``SloAdamW`` (decoupled weight decay), scheduling is
 ``domain.training._internal.lr_schedulers``, and checkpoints are ``.soul``
@@ -42,8 +42,8 @@ if TYPE_CHECKING:
 from domain.training._internal.checkpoint_files import list_owned, stem_for
 
 try:
-    from domain.models import SloughGPTModel
-except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
+    from domain.generate.models import SloughGPTModel
+except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.generate.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.lora import LoRAConfig, apply_lora_to_model

@@ -38,7 +38,7 @@ class TestChatSeamCache:
         domain = ChatDomain()
         provider = _mock_provider("The capital of France is Paris.")
 
-        with patch("domain.models._internal.provider.get_provider", return_value=provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=provider):
             first = await domain.respond(
                 messages=[{"role": "user", "content": "capital of France?"}],
                 model="m",
@@ -63,7 +63,7 @@ class TestChatSeamCache:
         domain = ChatDomain()
         provider = _mock_provider("random reply")
 
-        with patch("domain.models._internal.provider.get_provider", return_value=provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=provider):
             await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
                 model="m",
@@ -86,7 +86,7 @@ class TestChatSeamCache:
         domain = ChatDomain()
         provider = _mock_provider("reply")
 
-        with patch("domain.models._internal.provider.get_provider", return_value=provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=provider):
             await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
                 model="m",
@@ -108,7 +108,7 @@ class TestChatSeamCache:
         domain = ChatDomain()
         provider = _mock_provider("reply")
 
-        with patch("domain.models._internal.provider.get_provider", return_value=provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=provider):
             await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
                 model="m",
@@ -132,7 +132,7 @@ class TestChatSeamCache:
         provider = AsyncMock()
         provider.chat.return_value = "[Error: Generation failed]"
 
-        with patch("domain.models._internal.provider.get_provider", return_value=provider):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=provider):
             await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
                 model="m",

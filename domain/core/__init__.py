@@ -120,16 +120,16 @@ def __getattr__(name):
         "SelfEpisode": "domain.cognition",
         "SelfIdentity": "domain.cognition",
         # Voice
-        "VoiceEngine": "domain.voice",
-        "get_voice_engine": "domain.voice",
-        "TTSEngine": "domain.voice",
-        "SpeechRecognizer": "domain.voice",
-        "PhonemeEngine": "domain.voice",
-        "get_phoneme_engine": "domain.voice",
+        "VoiceEngine": "domain.generate.voice",
+        "get_voice_engine": "domain.generate.voice",
+        "TTSEngine": "domain.generate.voice",
+        "SpeechRecognizer": "domain.generate.voice",
+        "PhonemeEngine": "domain.generate.voice",
+        "get_phoneme_engine": "domain.generate.voice",
         # Multimodal
-        "MultimodalManager": "domain.multimodal",
-        "get_multimodal_manager": "domain.multimodal",
-        "MultimodalCapabilities": "domain.multimodal",
+        "MultimodalManager": "domain.cognition.multimodal",
+        "get_multimodal_manager": "domain.cognition.multimodal",
+        "MultimodalCapabilities": "domain.cognition.multimodal",
     }
     if name in _lazy:
         mod = _importlib.import_module(_lazy[name])

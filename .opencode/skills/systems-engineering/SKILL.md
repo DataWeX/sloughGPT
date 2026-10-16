@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 # Local
-from domain.logging._internal.cli_logger import CLILogger
+from domain.core.logging._internal.cli_logger import CLILogger
 from .base import Logger, LogLevel
 ```
 
@@ -45,7 +45,7 @@ from .base import Logger, LogLevel
 - Lazy imports for optional deps (torch, etc.):
   ```python
   try:
-      from domain.models._internal.models import SloughGPTModel
+      from domain.generate.models._internal.models import SloughGPTModel
   except ImportError:
       SloughGPTModel = None
   ```

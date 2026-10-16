@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 

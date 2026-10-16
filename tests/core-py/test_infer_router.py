@@ -303,13 +303,13 @@ class TestInferGenerate:
         # _patch_state also opens the startup gate — without it the endpoint
         # answers E_STARTING (503) before the provider is ever consulted.
         #
-        # Provider target: infer.py does `from domain.models import get_provider`
+        # Provider target: infer.py does `from domain.generate.models import get_provider`
         # (function-level), so the binding actually read is
-        # domain.models.get_provider. Patching
-        # domain.models._internal.provider.get_provider moves a different object
+        # domain.generate.models.get_provider. Patching
+        # domain.generate.models._internal.provider.get_provider moves a different object
         # and the endpoint still answers "No provider available" (503).
         patches = _patch_state(model=fake) + [
-            patch("domain.models.get_provider", return_value=mock_provider),
+            patch("domain.generate.models.get_provider", return_value=mock_provider),
         ]
         for p in patches:
             p.start()

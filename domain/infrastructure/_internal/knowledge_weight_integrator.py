@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.knowledge_weight_integrator")
 
@@ -74,7 +74,7 @@ def _resolve_model(model, vocab_size: int):
     if model is not None:
         return model
     try:
-        from domain.models import SloughGPTModel
+        from domain.generate.models import SloughGPTModel
 
         return SloughGPTModel(
             vocab_size=vocab_size,

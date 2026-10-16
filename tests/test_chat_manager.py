@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-import domain.models._internal.provider as provmod
+import domain.generate.models._internal.provider as provmod
 from domain.chat import (
     ChatManager,
     get_chat_manager,

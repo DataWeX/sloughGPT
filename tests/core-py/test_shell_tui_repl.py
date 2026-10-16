@@ -1508,7 +1508,7 @@ def test_run_wraps_main_and_restores_io():
 
     with (
         _loop(tui, scr, term=term),
-        patch("domain.logging._internal.cli_logger.set_cli_terminal") as sct,
+        patch("domain.core.logging._internal.cli_logger.set_cli_terminal") as sct,
     ):
         tui.run()
     assert tui._running is False
@@ -1912,8 +1912,8 @@ def test_run_handles_cli_logger_import_error():
     with (
         # Entered before the module is masked, so the target resolves while it
         # is still importable; exits last, so the real attribute is restored.
-        patch("domain.logging._internal.cli_logger.set_cli_terminal") as sct,
-        patch.dict(sys.modules, {"domain.logging._internal.cli_logger": None}),
+        patch("domain.core.logging._internal.cli_logger.set_cli_terminal") as sct,
+        patch.dict(sys.modules, {"domain.core.logging._internal.cli_logger": None}),
         _loop(tui, scr, term=term),
     ):
         tui.run()

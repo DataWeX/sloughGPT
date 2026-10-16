@@ -33,7 +33,14 @@ from config import ServerConfig
 from config import gen_config as _gen_config
 from domain.agents import get_agent_system, get_tool_registry
 from domain.core import get_rag_service
+from domain.core.shared import utc_now_iso
 from domain.feedback import MetaWeights, get_response_tracker
+from domain.generate.models import (
+    ConsciousnessProcessor,
+    KnowledgeProcessor,
+    apply_processors,
+    get_provider,
+)
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
@@ -42,13 +49,6 @@ from domain.infrastructure.server_state import get_server_state
 from domain.knowledge import KnowledgeFact, get_knowledge_memory
 from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
-from domain.models import (
-    ConsciousnessProcessor,
-    KnowledgeProcessor,
-    apply_processors,
-    get_provider,
-)
-from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.inference")
 
@@ -3304,7 +3304,7 @@ class InferenceRouter:
     async def list_model_providers(self) -> dict:
         try:
             """list_model_providers."""
-            from domain.models import get_provider, list_providers
+            from domain.generate.models import get_provider, list_providers
 
             result = {}
             for name in list_providers():

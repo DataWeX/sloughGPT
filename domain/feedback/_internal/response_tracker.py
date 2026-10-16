@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root, utc_now_iso
+from domain.core.shared import find_repo_root, utc_now_iso
 
 logger = logging.getLogger("slo.response_tracker")
 

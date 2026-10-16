@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_app_error_handler
 
-from domain.shared import to_iso
+from domain.core.shared import to_iso
 
 jobs_api_mod = importlib.import_module("training.jobs_api")
 

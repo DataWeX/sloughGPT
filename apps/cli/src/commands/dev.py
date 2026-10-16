@@ -16,8 +16,8 @@ from pathlib import Path
 
 from utils.formatting import format_time
 
-from domain.logging import get_global
-from domain.shared import find_server_python
+from domain.core.logging import get_global
+from domain.core.shared import find_server_python
 
 log = get_global()
 
@@ -369,7 +369,7 @@ def _read_stream(
 
 def _repo_root() -> Path:
     """Get the repository root from this file's location."""
-    from domain.shared import find_repo_root
+    from domain.core.shared import find_repo_root
 
     return find_repo_root(str(Path(__file__).resolve()))
 
@@ -386,8 +386,8 @@ def cmd_dev(args):
     watch_web = getattr(args, "watch_web", False)
 
     # ── In-place status block during startup ──────────────
-    from domain.logging._internal.cli_logger import _A
-    from domain.logging._internal.cli_logger import _c as ansi_c
+    from domain.core.logging._internal.cli_logger import _A
+    from domain.core.logging._internal.cli_logger import _c as ansi_c
 
     status_block = StatusBlock(log)
     api_status = "starting"
@@ -664,8 +664,8 @@ def _cmd_api_only(args):
         api_port = _find_free_port(api_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domain.logging._internal.cli_logger import _A
-    from domain.logging._internal.cli_logger import _c as ansi_c
+    from domain.core.logging._internal.cli_logger import _A
+    from domain.core.logging._internal.cli_logger import _c as ansi_c
 
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
@@ -815,8 +815,8 @@ def _cmd_api_and_mobile(args):
         api_port = _find_free_port(api_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domain.logging._internal.cli_logger import _A
-    from domain.logging._internal.cli_logger import _c as ansi_c
+    from domain.core.logging._internal.cli_logger import _A
+    from domain.core.logging._internal.cli_logger import _c as ansi_c
 
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
@@ -1045,8 +1045,8 @@ def _cmd_api_and_web(args):
         web_port = _find_free_port(web_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domain.logging._internal.cli_logger import _A
-    from domain.logging._internal.cli_logger import _c as ansi_c
+    from domain.core.logging._internal.cli_logger import _A
+    from domain.core.logging._internal.cli_logger import _c as ansi_c
 
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"

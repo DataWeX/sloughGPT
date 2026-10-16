@@ -1,4 +1,4 @@
-"""Tests for domain.multimodal._internal.speech — TranscriptionResult, BrowserSpeechRecognizer,
+"""Tests for domain.cognition.multimodal._internal.speech — TranscriptionResult, BrowserSpeechRecognizer,
 ServerSpeechRecognizer, get_speech_recognizer.
 
 Covers: dataclass creation, browser config, server recognizer init, factory.
@@ -13,7 +13,7 @@ _core_dir = str(Path(__file__).resolve().parents[2] / "packages")
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.multimodal._internal.speech import (
+from domain.cognition.multimodal._internal.speech import (
     BrowserSpeechRecognizer,
     ServerSpeechRecognizer,
     TranscriptionResult,

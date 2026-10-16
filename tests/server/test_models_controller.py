@@ -165,7 +165,7 @@ class TestProcessGuard:
         guard = MagicMock()
         guard.device = "cpu"
         guard.worker_id = "w1"
-        with patch("domain.models._internal.provider.attach_process_guard_to_provider"):
+        with patch("domain.generate.models._internal.provider.attach_process_guard_to_provider"):
             ctrl.adopt_process_guard(guard, model_id="gpt2")
         assert ctrl._process_guard is guard
         assert ctrl._current_model == "gpt2"

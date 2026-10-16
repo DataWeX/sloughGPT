@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 _DEFAULT_LOG_DIR = Path.home() / ".config" / "sloughgpt"
 _DEFAULT_LOG_FILE = "shell_audit.jsonl"

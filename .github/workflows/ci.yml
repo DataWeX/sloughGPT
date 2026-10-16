@@ -176,7 +176,7 @@ jobs:
       - name: Check feature tags
         run: |
           # The repo root must be on PYTHONPATH: check_feature_tags imports
-          # domain.shared._internal.feature_flags, and `domain` lives at the
+          # domain.core.shared._internal.feature_flags, and `domain` lives at the
           # repo root. packages/core-py alone carries `domains/` (plural), a
           # different tree, so `import domain` failed outright and this job
           # went red at the ModuleNotFoundError rather than checking tags.

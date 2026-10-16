@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from domain.multimodal._internal.video import TemporalEncoder, VideoProcessor
+from domain.cognition.multimodal._internal.video import TemporalEncoder, VideoProcessor
 
 # ── TemporalEncoder ───────────────────────────────────────────────────────
 

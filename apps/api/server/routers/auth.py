@@ -17,7 +17,7 @@ import uuid
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, Field
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 logger = logging.getLogger(__name__)
 

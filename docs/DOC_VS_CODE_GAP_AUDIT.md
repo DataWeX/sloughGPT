@@ -116,7 +116,7 @@ as current.
 | `ROADMAP.md` g7               | Voyager "201 tests, 7 backends"                  | `packages/voyager/` is only `pyproject.toml`+`src` — **0 test files**                                                                           |
 | `ROADMAP.md` g8               | journeys run "using Voyager"                     | `scripts/run_journey_tests.py` runs **Arken**+Playwright (8 journeys, names correct)                                                            |
 | `ROADMAP.md` g10              | `_get_trainer()` 500s on `/status`, `/train/*`   | `domain/consciousness` deleted, **zero** live `domain.consciousness.*` imports; router does `from domain.cognition import ConsciousnessTrainer` |
-| `PRODUCT_ENGINEERING.md` r15  | consciousness "not wired"                        | `ConsciousnessProcessor` exported from `domain/models/__init__.py`                                                                              |
+| `PRODUCT_ENGINEERING.md` r15  | consciousness "not wired"                        | `ConsciousnessProcessor` exported from `domain/generate/models/__init__.py`                                                                              |
 | `PRODUCT_ENGINEERING.md` r16  | voice "router bypasses domain"                   | **0** `_internal` in `voice.py`/`phoneme.py`                                                                                                    |
 | `PRODUCT_ENGINEERING.md` l319 | `_internal` "remains only in `shell.py`/`vm.py`" | **11** routers import `domain.*_internal.*`                                                                                                     |
 | `USER_JOURNEYS.md`            | results → `tests/test_results/`                  | code writes `tests/core-py/test_results/`                                                                                                       |
@@ -171,7 +171,7 @@ combined_internal_stmts=67
 | never touches core                               | 6                                        | `images`, `docstore`, `api_keys`, `security`, `ratelimit`, `config` — all infra/security                                                                         |
 
 **Combined: 67 `_internal` import statements across 15 files.** Worst targets:
-`domain.models._internal.provider` ×9, `domain.training._internal.cache_tags` ×7,
+`domain.generate.models._internal.provider` ×9, `domain.training._internal.cache_tags` ×7,
 `domain.infrastructure._internal.artifact_registry` ×2.
 
 The Router Playbook only forbids `_internal` in **routers**, so nothing in the
@@ -215,8 +215,8 @@ Two causes:
 worktree edits convert facades _back_ to `_internal`:
 
 ```diff
-- from domain.models import get_provider
-+ from domain.models._internal.provider import get_provider
+- from domain.generate.models import get_provider
++ from domain.generate.models._internal.provider import get_provider
 - from domain.infrastructure import get_lifecycle_manager
 + from domain.infrastructure._internal.lifecycle import get_lifecycle_manager
 ```

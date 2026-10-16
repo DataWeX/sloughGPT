@@ -366,7 +366,7 @@ class MemoryPressureMonitor:
     def _release_all_idle_weights(self) -> None:
         """Release all idle model weights via the provider's release_model()."""
         try:
-            from domain.models._internal.provider import get_provider
+            from domain.generate.models._internal.provider import get_provider
 
             for name in ("slonet-native", "slonet"):
                 provider = get_provider(name)

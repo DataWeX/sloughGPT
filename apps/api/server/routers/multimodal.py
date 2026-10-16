@@ -23,8 +23,8 @@ from schemas.common import (
     success_response,
 )
 
-from domain.multimodal import get_multimodal_manager
-from domain.shared import utc_now_iso
+from domain.cognition.multimodal import get_multimodal_manager
+from domain.core.shared import utc_now_iso
 
 logger = logging.getLogger("slo.routers.multimodal")
 
@@ -725,7 +725,7 @@ class MultimodalRouter:
         """process_video."""
         import tempfile
 
-        from domain.multimodal import VideoProcessor
+        from domain.cognition.multimodal import VideoProcessor
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(await file.read())
@@ -769,7 +769,7 @@ class MultimodalRouter:
             raise_error("Only audio files accepted", "E_BAD_REQUEST")
 
         if self._voice_engine is None:
-            from domain.voice import get_voice_engine
+            from domain.generate.voice import get_voice_engine
 
             self._voice_engine = get_voice_engine()
 
@@ -803,7 +803,7 @@ class MultimodalRouter:
         import numpy as np
 
         if self._voice_engine is None:
-            from domain.voice import get_voice_engine
+            from domain.generate.voice import get_voice_engine
 
             self._voice_engine = get_voice_engine()
 
@@ -847,7 +847,7 @@ class MultimodalRouter:
         import numpy as np
         from PIL import Image
 
-        from domain.multimodal import LatentDiffusionModel, SloVAE, TextEncoder
+        from domain.cognition.multimodal import LatentDiffusionModel, SloVAE, TextEncoder
 
         if self._vae is None:
             self._vae = SloVAE(latent_dim=64)
@@ -1042,7 +1042,7 @@ class MultimodalRouter:
 
         Supports English, German, French, Spanish, Italian, and Portuguese with auto-detection.
         """
-        from domain.multimodal import UnifiedPhonemeEncoder
+        from domain.cognition.multimodal import UnifiedPhonemeEncoder
 
         text = request.get("text", "")
         language = request.get("language", None)
@@ -1073,7 +1073,7 @@ class MultimodalRouter:
         """
         import numpy as np
 
-        from domain.multimodal import UnifiedPhonemeEncoder
+        from domain.cognition.multimodal import UnifiedPhonemeEncoder
 
         ids = request.get("ids", [])
         language = request.get("language", "en")
@@ -1102,7 +1102,7 @@ class MultimodalRouter:
         Takes an array of texts and returns encoded results for each.
         """
         try:
-            from domain.multimodal import UnifiedPhonemeEncoder
+            from domain.cognition.multimodal import UnifiedPhonemeEncoder
 
             texts = request.get("texts", [])
             language = request.get("language", None)
@@ -1153,7 +1153,7 @@ class MultimodalRouter:
         Returns the detected language code and confidence.
         """
         try:
-            from domain.multimodal import UnifiedPhonemeEncoder
+            from domain.cognition.multimodal import UnifiedPhonemeEncoder
 
             text = request.get("text", "")
 
@@ -1180,7 +1180,7 @@ class MultimodalRouter:
 
         Compares target and spoken text at the phoneme level.
         """
-        from domain.multimodal import UnifiedPhonemeEncoder
+        from domain.cognition.multimodal import UnifiedPhonemeEncoder
 
         target = request.get("target", "")
         spoken = request.get("spoken", "")
@@ -1212,7 +1212,7 @@ class MultimodalRouter:
         Takes an array of target/spoken pairs and returns scores for each.
         """
         try:
-            from domain.multimodal import UnifiedPhonemeEncoder
+            from domain.cognition.multimodal import UnifiedPhonemeEncoder
 
             pairs = request.get("pairs", [])
             language = request.get("language", None)
@@ -1264,7 +1264,7 @@ class MultimodalRouter:
         mgr._caption_history = []
         mgr._accuracy_history = []
         if getattr(mgr, "_replay_buffer", None):
-            from domain.multimodal import ReplayBuffer
+            from domain.cognition.multimodal import ReplayBuffer
 
             mgr._replay_buffer = ReplayBuffer()
         mgr._multimodal_engine = None

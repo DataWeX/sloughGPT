@@ -7,7 +7,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
-from domain.multimodal.engine import MultimodalEngine
+from domain.cognition.multimodal.engine import MultimodalEngine
 
 # Load trained engine
 engine = MultimodalEngine.load("data/multimodal/multimodal_engine.npz")

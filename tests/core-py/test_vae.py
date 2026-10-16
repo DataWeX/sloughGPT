@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from domain.multimodal._internal.vae import (
+from domain.cognition.multimodal._internal.vae import (
     SloVAE,
     SloVAEDecoder,
     SloVAEEncoder,

@@ -15,7 +15,7 @@ from .schemas import TrainDatasetRef
 def _repo_root() -> Path:
     from pathlib import Path
 
-    from domain.shared import find_repo_root
+    from domain.core.shared import find_repo_root
 
     return find_repo_root(Path(__file__).resolve())
 

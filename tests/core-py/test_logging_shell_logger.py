@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import io
 
-from domain.logging._internal.base import LogLevel
-from domain.logging._internal.shell_logger import ShellLogger
+from domain.core.logging._internal.base import LogLevel
+from domain.core.logging._internal.shell_logger import ShellLogger
 
 
 class TestShellLogger:

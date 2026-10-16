@@ -133,7 +133,7 @@ class TestCompareNeverServesTheCheckpoints:
 
         with (
             patch.object(ckpt_mod, "build_checkpoint_provider", AsyncMock(side_effect=providers)),
-            patch("domain.models._internal.provider.register_provider") as mock_register,
+            patch("domain.generate.models._internal.provider.register_provider") as mock_register,
         ):
             result = await compare_checkpoints("cp-1.soul", "cp-2.soul", "Prompt", 32)
 
@@ -183,7 +183,7 @@ class TestLoadStillRegisters:
                 "build_checkpoint_provider",
                 AsyncMock(return_value=(provider, {"name": "cp-1.soul"})),
             ),
-            patch("domain.models._internal.provider.register_provider") as mock_register,
+            patch("domain.generate.models._internal.provider.register_provider") as mock_register,
         ):
             info = await load_checkpoint("cp-1.soul")
 

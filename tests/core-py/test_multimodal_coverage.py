@@ -1,7 +1,7 @@
 """Coverage-focused tests for the multimodal package.
 
 Raises statement coverage on previously untested public APIs across
-``domain.multimodal``: tokenizers, text encoder, vision CNN, video
+``domain.cognition.multimodal``: tokenizers, text encoder, vision CNN, video
 temporal encoder, VAE, latent diffusion, the multimodal engine, and the
 multimodal manager. Uses small model sizes to keep the suite fast.
 """
@@ -19,18 +19,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "packages"))
 
 from PIL import Image
 
-from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
-from domain.multimodal._internal.char_tokenizer import CharTokenizer
-from domain.multimodal._internal.diffusion import (
+from domain.cognition.multimodal._internal.bpe_tokenizer import BPETokenizer
+from domain.cognition.multimodal._internal.char_tokenizer import CharTokenizer
+from domain.cognition.multimodal._internal.diffusion import (
     LatentDiffusionModel,
     LatentUNet,
     TimestepEmbedder,
     _timestep_embedding,
 )
-from domain.multimodal._internal.diffusion import (
+from domain.cognition.multimodal._internal.diffusion import (
     _group_norm as diffusion_group_norm,
 )
-from domain.multimodal._internal.engine import (
+from domain.cognition.multimodal._internal.engine import (
     AudioEncoder,
     MultimodalEngine,
     ReplayBuffer,
@@ -42,22 +42,22 @@ from domain.multimodal._internal.engine import (
     get_multimodal_engine,
     replay_train_step,
 )
-from domain.multimodal._internal.manager import (
+from domain.cognition.multimodal._internal.manager import (
     MultimodalManager,
     get_multimodal_manager,
     initialize_multimodal,
 )
-from domain.multimodal._internal.text_encoder import TextEncoder
-from domain.multimodal._internal.vae import (
+from domain.cognition.multimodal._internal.text_encoder import TextEncoder
+from domain.cognition.multimodal._internal.vae import (
     SloVAE,
     SloVAEDecoder,
     SloVAEEncoder,
 )
-from domain.multimodal._internal.vae import (
+from domain.cognition.multimodal._internal.vae import (
     _group_norm as vae_group_norm,
 )
-from domain.multimodal._internal.video import TemporalEncoder, VideoProcessor
-from domain.multimodal._internal.vision import VisionCNN, get_vision_model
+from domain.cognition.multimodal._internal.video import TemporalEncoder, VideoProcessor
+from domain.cognition.multimodal._internal.vision import VisionCNN, get_vision_model
 from domain.training._internal.slonet import Tensor
 from domain.training._internal.slonet import tensor as _tensor
 
@@ -773,7 +773,7 @@ class TestMultimodalEngine:
         assert engine._extract_images([{"content": "no image here"}]) == []
 
     def test_causal_mask_shape(self):
-        from domain.multimodal._internal.engine import _causal_mask
+        from domain.cognition.multimodal._internal.engine import _causal_mask
 
         mask = _causal_mask(6)
         assert mask.data.shape == (1, 1, 6, 6)
@@ -889,7 +889,7 @@ class TestMultimodalEngine:
         img = np.zeros((8, 8), dtype=np.float32)
         buf.add(img, "a red circle")
         buf.add(img, "a blue square")
-        import domain.multimodal._internal.engine as engine_mod
+        import domain.cognition.multimodal._internal.engine as engine_mod
 
         with patch.object(engine_mod.ReplayBuffer, "sample", return_value=([img], ["bad caption"])):
             with patch.object(engine_mod.TextDecoder, "encode", side_effect=RuntimeError("boom")):
@@ -930,7 +930,7 @@ class TestMultimodalEngine:
                 return _Cap()
 
         with patch(
-            "domain.multimodal._internal.manager.get_multimodal_manager", return_value=_Mgr()
+            "domain.cognition.multimodal._internal.manager.get_multimodal_manager", return_value=_Mgr()
         ):
 
             async def _run():
@@ -1045,7 +1045,7 @@ class TestMultimodalManager:
         assert arr.min() >= 0.0 and arr.max() <= 1.0
 
     def test_count_trained_images(self, tmp_path, monkeypatch):
-        from domain.multimodal._internal import engine as engine_mod
+        from domain.cognition.multimodal._internal import engine as engine_mod
 
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         mgr = MultimodalManager()
@@ -1102,7 +1102,7 @@ class TestMultimodalManager:
         assert cap.confidence == 0.0
 
     def test_caption_image_auto_save_every_five(self, tmp_path, monkeypatch):
-        from domain.multimodal._internal import engine as engine_mod
+        from domain.cognition.multimodal._internal import engine as engine_mod
 
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         engine = _make_engine()
@@ -1139,7 +1139,7 @@ class TestMultimodalManager:
         assert isinstance(first, MultimodalManager)
 
     def test_initialize_multimodal(self, monkeypatch):
-        from domain.multimodal._internal import manager as manager_mod
+        from domain.cognition.multimodal._internal import manager as manager_mod
 
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
@@ -1150,7 +1150,7 @@ class TestMultimodalManager:
         assert fresh._speech_recognizer is not None
 
     def test_initialize_speech_server_mode(self, monkeypatch):
-        from domain.multimodal._internal import manager as manager_mod
+        from domain.cognition.multimodal._internal import manager as manager_mod
 
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
@@ -1162,7 +1162,7 @@ class TestMultimodalManager:
         assert caps.speech_model == "whisper" or caps.speech_model == "browser"
 
     def test_initialize_loads_saved_engine(self, tmp_path, monkeypatch):
-        from domain.multimodal._internal import engine as engine_mod
+        from domain.cognition.multimodal._internal import engine as engine_mod
 
         saved = _make_engine()
         saved._trained = True
@@ -1179,7 +1179,7 @@ class TestMultimodalManager:
         assert mgr._learning_count == 3
 
     def test_initialize_saved_engine_fails(self, tmp_path, monkeypatch):
-        from domain.multimodal._internal import engine as engine_mod
+        from domain.cognition.multimodal._internal import engine as engine_mod
 
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
 
@@ -1264,7 +1264,7 @@ class TestMultimodalManager:
         assert mgr._learning_count == 1
 
     def test_caption_image_replay_and_save_failure(self, tmp_path, monkeypatch):
-        from domain.multimodal._internal import engine as engine_mod
+        from domain.cognition.multimodal._internal import engine as engine_mod
 
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         engine = _make_engine()
@@ -1292,12 +1292,12 @@ class TestMultimodalManager:
         assert mgr._learning_count == 6
 
     def test_initialize_register_provider_failure(self, monkeypatch):
-        from domain.multimodal._internal import manager as manager_mod
+        from domain.cognition.multimodal._internal import manager as manager_mod
 
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
         monkeypatch.setattr(MultimodalManager, "_pretrain_engine", lambda self, **kw: 0.0)
-        import domain.models._internal.provider as provider_mod
+        import domain.generate.models._internal.provider as provider_mod
 
         def boom(*a, **kw):
             raise RuntimeError("no provider")

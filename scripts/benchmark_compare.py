@@ -115,14 +115,14 @@ def benchmark_sou(
         ckpt_dir = Path(checkpoint_path).parent
         tok_path = ckpt_dir / "tokenizer.json"
         if tok_path.exists():
-            from domain.multimodal.char_tokenizer import CharTokenizer
+            from domain.cognition.multimodal.char_tokenizer import CharTokenizer
 
             tokenizer = CharTokenizer()
             tokenizer.load(str(tok_path))
 
     if tokenizer is None:
         # Fallback: char tokenizer from checkpoint metadata
-        from domain.multimodal.char_tokenizer import CharTokenizer
+        from domain.cognition.multimodal.char_tokenizer import CharTokenizer
 
         tokenizer = CharTokenizer()
         tokenizer.build_vocab("".join(prompts))

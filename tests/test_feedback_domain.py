@@ -526,7 +526,7 @@ class TestLoRAEvaluatorCompare:
 
     def test_available_false_without_model_or_generator(self):
         evaluator = LoRAEvaluator()
-        with patch("domain.models._internal.provider.get_provider", return_value=None):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=None):
             assert evaluator.available() is False
 
     def test_available_true_with_injected_generator(self):
@@ -576,14 +576,14 @@ class TestLoRAEvaluatorLiveGenerator:
                 return "real provider text"
 
         evaluator = LoRAEvaluator()
-        with patch("domain.models._internal.provider.get_provider", return_value=FakeProvider()):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=FakeProvider()):
             gen = evaluator._resolve_live_generator()
         assert gen is not None
         assert gen("hi") == "real provider text"
 
     def test_resolve_live_generator_none_without_provider(self):
         evaluator = LoRAEvaluator()
-        with patch("domain.models._internal.provider.get_provider", return_value=None):
+        with patch("domain.generate.models._internal.provider.get_provider", return_value=None):
             assert evaluator._resolve_live_generator() is None
 
     def test_default_soul(self):

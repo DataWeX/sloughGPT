@@ -3,8 +3,8 @@
 import io
 import json
 
-from domain.logging._internal.base import LogLevel, LogRecord
-from domain.logging._internal.web_logger import WebLogger
+from domain.core.logging._internal.base import LogLevel, LogRecord
+from domain.core.logging._internal.web_logger import WebLogger
 
 
 def _record(

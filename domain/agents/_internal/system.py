@@ -9,8 +9,8 @@ import logging
 from typing import Any
 
 from domain.agents._internal.agents import Agent, AgentConfig, ToolCapability, get_agent
+from domain.core.shared import data_root
 from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
-from domain.shared import data_root
 
 logger = logging.getLogger("slo.agents")
 

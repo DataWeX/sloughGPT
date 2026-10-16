@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 import domain.training._internal.lm_eval_char as ev
-from domain.models import SloughGPTModel
+from domain.generate.models import SloughGPTModel
 
 VOCAB = 64
 EMBED = 32

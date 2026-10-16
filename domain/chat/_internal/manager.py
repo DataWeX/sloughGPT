@@ -10,7 +10,7 @@ Delegation map (no logic duplicated here):
 - conversations → ``SessionCore`` (``domain/infrastructure/_internal/session_core.py``)
 - queues        → provider's ``SloNetServer`` / ``PriorityRequestQueue``
 - operations    → ``CancelManager`` (``domain/infrastructure/_internal/cancel_manager.py``)
-- model tooling → provider registry (``domain/models/_internal/provider.py``)
+- model tooling → provider registry (``domain/generate/models/_internal/provider.py``)
 - settings      → ``PersistentSettings`` (``domain/settings/_internal/persistent.py``)
 - availability  → provider presence + server session stats
 - engine        → ``SloNetChatProvider`` / ``InferenceEngine`` behind the provider
@@ -46,7 +46,7 @@ def _load_cancel():
 
 
 def _resolve_provider(name: str):
-    from domain.models._internal.provider import get_provider
+    from domain.generate.models._internal.provider import get_provider
 
     return get_provider(name)
 
@@ -272,11 +272,11 @@ class ChatManager:
         """Chat addons: registered message processors + provider capabilities.
 
         Read-only registry probe (Vision/Knowledge/ToolUse/Personality/Style
-        processors live in ``domain/models/_internal/provider.py`` and run
+        processors live in ``domain/generate/models/_internal/provider.py`` and run
         inside the provider — nothing is duplicated here).
         """
         try:
-            from domain.models._internal.provider import list_processors
+            from domain.generate.models._internal.provider import list_processors
 
             processors = sorted(list_processors())
         except Exception as exc:

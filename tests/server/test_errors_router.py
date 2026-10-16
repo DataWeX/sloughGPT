@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.errors import ErrorsRouter
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 
 @pytest.fixture

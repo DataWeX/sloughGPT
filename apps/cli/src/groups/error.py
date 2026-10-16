@@ -5,7 +5,7 @@ Error command group — error monitoring.
 from core.framework import click
 from core.helpers import api_delete, api_get, confirm, output_json
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 

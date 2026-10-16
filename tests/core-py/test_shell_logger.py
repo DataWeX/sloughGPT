@@ -6,8 +6,8 @@ from datetime import datetime
 
 import pytest
 
-from domain.logging._internal.base import ErrorCode, LogLevel, LogRecord, LogTag
-from domain.logging._internal.shell_logger import ShellLogger
+from domain.core.logging._internal.base import ErrorCode, LogLevel, LogRecord, LogTag
+from domain.core.logging._internal.shell_logger import ShellLogger
 
 
 def _record(
@@ -34,7 +34,7 @@ def _record(
 
 @pytest.fixture
 def ansi_on(monkeypatch):
-    import domain.logging._internal.config as cfg
+    import domain.core.logging._internal.config as cfg
 
     codes = {
         "RESET": "\033[0m",
@@ -458,7 +458,7 @@ class TestEdgeCases:
         assert msg in line
 
     def test_colors_none_defaults_to_auto(self):
-        import domain.logging._internal.shell_logger as sh
+        import domain.core.logging._internal.shell_logger as sh
 
         log = ShellLogger("slo.shell", colors=None)
         assert log._colors == sh._COLOR_ENABLED

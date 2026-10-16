@@ -1,4 +1,4 @@
-"""Tests for domain.models — ModelInterface, ModelLoader, SloughGPTModel."""
+"""Tests for domain.generate.models — ModelInterface, ModelLoader, SloughGPTModel."""
 
 import numpy as np
 import pytest
@@ -6,7 +6,7 @@ import pytest
 
 class TestModelLoader:
     def test_register_and_load_external(self):
-        from domain.models import ModelLoader
+        from domain.generate.models import ModelLoader
 
         class DummyModel:
             def __init__(self, **kwargs):
@@ -18,7 +18,7 @@ class TestModelLoader:
         assert result.kwargs["foo"] == "bar"
 
     def test_register_loader_dispatch(self):
-        from domain.models import ModelLoader
+        from domain.generate.models import ModelLoader
 
         def my_loader(path, device, **kwargs):
             return {"path": path, "device": device}
@@ -29,13 +29,13 @@ class TestModelLoader:
         assert result["device"] == "cpu"
 
     def test_unknown_external_model_raises(self):
-        from domain.models import ModelLoader
+        from domain.generate.models import ModelLoader
 
         with pytest.raises(ValueError, match="Unknown model_type"):
             ModelLoader._load_external_model("nonexistent_type", {})
 
     def test_gguf_without_llama_cpp_raises(self):
-        from domain.models import ModelLoader
+        from domain.generate.models import ModelLoader
 
         try:
             import llama_cpp  # noqa: F401
@@ -49,7 +49,7 @@ class TestModelLoader:
 class TestSloughGPTModel:
     @pytest.fixture
     def small_model(self):
-        from domain.models import SloughGPTModel
+        from domain.generate.models import SloughGPTModel
 
         return SloughGPTModel(
             vocab_size=256,
@@ -82,7 +82,7 @@ class TestSloughGPTModel:
 
     def test_state_dict_load_state_dict_roundtrip(self, small_model):
         sd = small_model.state_dict()
-        from domain.models import SloughGPTModel
+        from domain.generate.models import SloughGPTModel
 
         new_model = SloughGPTModel(
             vocab_size=256,
@@ -148,35 +148,35 @@ class TestSloughGPTModel:
 
 class TestAliases:
     def test_rmsnorm_alias(self):
-        from domain.models import RMSNorm
+        from domain.generate.models import RMSNorm
         from domain.training._internal.slonet import SloRMSNorm
 
         assert RMSNorm is SloRMSNorm
 
     def test_attention_alias(self):
-        from domain.models import SloughGPTAttention
+        from domain.generate.models import SloughGPTAttention
         from domain.training._internal.slonet import SloMultiHeadAttention
 
         assert SloughGPTAttention is SloMultiHeadAttention
 
     def test_block_alias(self):
-        from domain.models import SloughGPTBlock
+        from domain.generate.models import SloughGPTBlock
         from domain.training._internal.slonet import SloTransformerBlock
 
         assert SloughGPTBlock is SloTransformerBlock
 
     def test_swiglu_alias(self):
-        from domain.models import SwiGLU
+        from domain.generate.models import SwiGLU
         from domain.training._internal.slonet import SloFeedForward
 
         assert SwiGLU is SloFeedForward
 
     def test_rotate_half_callable(self):
-        from domain.models import rotate_half
+        from domain.generate.models import rotate_half
 
         assert callable(rotate_half)
 
     def test_apply_rotary_pos_emb_callable(self):
-        from domain.models import apply_rotary_pos_emb
+        from domain.generate.models import apply_rotary_pos_emb
 
         assert callable(apply_rotary_pos_emb)

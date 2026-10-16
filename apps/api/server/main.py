@@ -34,10 +34,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 
 # ── Path bootstrapping (must happen before any domain imports) ────────
-# NOTE: `domain.shared.find_repo_root` is NOT importable yet — importing it
+# NOTE: `domain.core.shared.find_repo_root` is NOT importable yet — importing it
 # here is exactly the chicken-and-egg that made `make api` die with
 # `ModuleNotFoundError: No module named 'domain'`. Walk up inline instead
-# (same marker rule as domain.shared._internal.paths.find_repo_root).
+# (same marker rule as domain.core.shared._internal.paths.find_repo_root).
 def _bootstrap_repo_root(start: Path) -> Path:
     for parent in start.resolve().parents:
         if (parent / "apps").is_dir() and (parent / "packages").is_dir():
@@ -74,7 +74,7 @@ warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*"
 warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 
 # ── Structured logging (centralized) ─────────────────────────────────
-from domain.logging._internal.config import setup_logging  # noqa: E402
+from domain.core.logging._internal.config import setup_logging  # noqa: E402
 
 _log_setup = setup_logging()
 logger = logging.getLogger("slo")
@@ -543,7 +543,7 @@ def _start_watchdog() -> None:
                     return True
                 if server_state.training_active:
                     return True
-                from domain.models._internal.provider import get_provider
+                from domain.generate.models._internal.provider import get_provider
 
                 router = get_provider("default")
                 if router is None:
@@ -757,7 +757,7 @@ if __name__ == "__main__":
     if args.web:
         web_root = _REPO_ROOT / "apps" / "web"
         standalone_dir = web_root / ".next" / "standalone"
-        from domain.shared import find_available_port as _find_available_port
+        from domain.core.shared import find_available_port as _find_available_port
 
         web_port = _find_available_port(host="", start_port=3000)
         web_env = {**os.environ, "PORT": str(web_port)}

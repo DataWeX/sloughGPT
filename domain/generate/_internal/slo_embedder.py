@@ -68,7 +68,7 @@ QUALITY_NN_K = 3  # nearest-neighbour count for n-gram agreement diagnostic
 
 from contextlib import contextmanager
 
-from domain.shared import find_repo_root, utc_now_iso
+from domain.core.shared import find_repo_root, utc_now_iso
 
 
 @contextmanager
@@ -265,7 +265,7 @@ def _tokenize_simple(text: str) -> list[str]:
 def _build_bpe_tokenizer(texts: list[str], vocab_size: int = 2048):
     """Train a BPE tokenizer on the corpus and return (bpe, encode_fn)."""
     try:
-        from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
+        from domain.cognition.multimodal._internal.bpe_tokenizer import BPETokenizer
 
         bpe = BPETokenizer(vocab_size=vocab_size)
         bpe.train(texts)
@@ -1293,7 +1293,7 @@ class SloTextEmbedder:
             # Try loading BPE tokenizer
             bpe_tokenizer = None
             try:
-                from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
+                from domain.cognition.multimodal._internal.bpe_tokenizer import BPETokenizer
 
                 bpe_path = os.path.splitext(path)[0] + "-bpe.json"
                 if os.path.exists(bpe_path):

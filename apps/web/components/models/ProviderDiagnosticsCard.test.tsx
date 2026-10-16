@@ -18,7 +18,7 @@ const mockData = {
   providers: {
     'default': {
       type: 'ProviderRouter',
-      module: 'domain.models._internal.provider',
+      module: 'domain.generate.models._internal.provider',
       text_provider: 'slonet-native',
       processors: ['VisionProcessor', 'ToolUseProcessor'],
     },
@@ -144,7 +144,7 @@ describe('ProviderDiagnosticsCard', () => {
       providers: {
         'default': {
           type: 'ProviderRouter',
-          module: 'domain.models._internal.provider',
+          module: 'domain.generate.models._internal.provider',
           processors: [],
         },
       },

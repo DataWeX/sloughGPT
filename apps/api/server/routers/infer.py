@@ -170,7 +170,7 @@ class InferRouter:
         model = self._get_model()
         if model is None:
             return None
-        from domain.models import ModelInterface
+        from domain.generate.models import ModelInterface
 
         if isinstance(model, ModelInterface):
             return model
@@ -221,7 +221,7 @@ class InferRouter:
         except ImportError as exc:
             logger.debug("Memory pressure guard unavailable: %s", exc)
 
-        from domain.models import get_provider
+        from domain.generate.models import get_provider
         from routers.inference import _get_model_status
 
         ms = _get_model_status()
@@ -338,7 +338,7 @@ class InferRouter:
 
             async def generate() -> AsyncIterator[str]:
                 """generate."""
-                from domain.models import get_provider
+                from domain.generate.models import get_provider
 
                 provider = get_provider("default")
                 if provider is None:

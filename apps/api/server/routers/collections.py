@@ -21,8 +21,8 @@ from schemas.common import (
     success_response,
 )
 
+from domain.core.shared import utc_now_iso
 from domain.infrastructure import AppError
-from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.api.collections")
 

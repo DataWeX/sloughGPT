@@ -70,7 +70,7 @@ _PREWARM_MODEL_LOAD_IMPORTS = [
     "domain.infrastructure._internal.server_state",
     "controllers.models",
     "domain.infrastructure._internal.model_registry",
-    "domain.models._internal.provider",
+    "domain.generate.models._internal.provider",
     "domain.generate._internal.slo_manager",
     "domain.core.slolib._internal.gpu",
     "domain.infrastructure._internal.model_catalog",
@@ -621,12 +621,12 @@ class StartupOrchestrator:
                 except Exception as e:
                     logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
                 try:
-                    from domain.models._internal.provider import setup_providers
+                    from domain.generate.models._internal.provider import setup_providers
 
                     # Native C path: wire slnc for fused AVX2 if flag enabled.
                     _native_slnc = None
                     try:
-                        from domain.shared._internal.feature_flags import is_enabled
+                        from domain.core.shared._internal.feature_flags import is_enabled
 
                         if is_enabled("native_c_inference"):
                             from domain.infrastructure.model_resolver import get_model_dir as _gmd
@@ -1236,7 +1236,7 @@ def _sync_soul_traits():
     """Sync current soul traits to the PersonalityProcessor (best-effort)."""
     try:
         from domain.generate._internal.slo_manager import get_slo_manager
-        from domain.models._internal.provider import update_personality_traits
+        from domain.generate.models._internal.provider import update_personality_traits
 
         mgr = get_slo_manager()
         current = mgr.get_current_soul()
@@ -1445,12 +1445,12 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"tag": "START"})
 
     try:
+        from domain.generate.models._internal.provider import setup_providers
         from domain.infrastructure.model_registry import get_model_registry
-        from domain.models._internal.provider import setup_providers
 
         _native_slnc2 = None
         try:
-            from domain.shared._internal.feature_flags import is_enabled as _is_en
+            from domain.core.shared._internal.feature_flags import is_enabled as _is_en
 
             if _is_en("native_c_inference"):
                 _native_slnc2 = slnc_path  # from outer scope, already validated
@@ -1559,9 +1559,9 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     """Register a fully-loaded (eager) model with registry + providers."""
     import state as server_state
 
+    from domain.generate.models._internal.provider import setup_providers
     from domain.infrastructure.model_registry import get_model_registry
     from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
-    from domain.models._internal.provider import setup_providers
 
     registry = get_model_registry()
 

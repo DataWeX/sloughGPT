@@ -1,4 +1,4 @@
-"""Tests for domain.logging — LogLevel, LogRecord, Logger ABC, formatters, config, and serialization."""
+"""Tests for domain.core.logging — LogLevel, LogRecord, Logger ABC, formatters, config, and serialization."""
 
 import json
 import logging
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domain.logging._internal.base import (
+from domain.core.logging._internal.base import (
     CompositeLogger,
     ErrorCode,
     Logger,
@@ -16,9 +16,9 @@ from domain.logging._internal.base import (
     LogRecord,
     LogTag,
 )
-from domain.logging._internal.bridge import BridgeHandler, record_extra_context
-from domain.logging._internal.cli_logger import CLILogger
-from domain.logging._internal.config import (
+from domain.core.logging._internal.bridge import BridgeHandler, record_extra_context
+from domain.core.logging._internal.cli_logger import CLILogger
+from domain.core.logging._internal.config import (
     _LEGACY_TAG_TO_OP,
     ClientExtensionFilter,
     LogFormatter,
@@ -29,9 +29,9 @@ from domain.logging._internal.config import (
     set_log_context,
     set_request_id,
 )
-from domain.logging._internal.console_logger import ConsoleLogger
-from domain.logging._internal.shell_logger import ShellLogger
-from domain.logging._internal.web_logger import WebLogger
+from domain.core.logging._internal.console_logger import ConsoleLogger
+from domain.core.logging._internal.shell_logger import ShellLogger
+from domain.core.logging._internal.web_logger import WebLogger
 
 # ── LogLevel comparisons ─────────────────────────────────────────────────
 
@@ -524,7 +524,7 @@ class TestCLILogger:
         assert "-" in output
 
     def test_terminal_disabled(self):
-        import domain.logging._internal.cli_logger as cli_mod
+        import domain.core.logging._internal.cli_logger as cli_mod
 
         original = cli_mod._TERMINAL_ENABLED
         try:
@@ -1039,7 +1039,7 @@ class TestDeriveOp:
 
 # ── __init__.py: factory and global logger ────────────────────────────────
 
-from domain.logging import (
+from domain.core.logging import (
     get_global,
     get_logger,
     set_global,

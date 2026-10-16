@@ -23,7 +23,7 @@ for _sys_path in [_CLI_DIR, str(_ROOT_DIR), str(_CORE_PY_DIR), str(_MOGDB_DIR)]:
         sys.path.insert(0, str(_sys_path))
 
 # ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
-from domain.logging import (  # noqa: E402
+from domain.core.logging import (  # noqa: E402
     BridgeHandler,
     CLILogger,
     set_global,

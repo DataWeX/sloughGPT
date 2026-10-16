@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from domain.logging._internal.bridge import record_extra_context
+from domain.core.logging._internal.bridge import record_extra_context
 
 logger = logging.getLogger("slo.infrastructure.output_buffer")
 

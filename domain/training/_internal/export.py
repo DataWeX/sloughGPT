@@ -58,7 +58,7 @@ import logging
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 logger = logging.getLogger("slo.export")
 

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domain.multimodal._internal.phoneme_encoder import (
+from domain.cognition.multimodal._internal.phoneme_encoder import (
     BOS,
     EOS,
     NUM_PHONEMES,

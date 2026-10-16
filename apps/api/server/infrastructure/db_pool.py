@@ -29,7 +29,7 @@ def _get_repo_root() -> Path:
     """
     global _REPO_ROOT
     if _REPO_ROOT is None:
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         _REPO_ROOT = find_repo_root(Path(__file__).resolve())
     return _REPO_ROOT

@@ -43,7 +43,7 @@ from domain.generate import (
 )
 
 try:
-    from domain.models import ModelInterface, ModelLoader
+    from domain.generate.models import ModelInterface, ModelLoader
 except (ImportError, ModuleNotFoundError):
     ModelInterface = Any  # type: ignore[misc,assignment]
     ModelLoader = None  # type: ignore[assignment]

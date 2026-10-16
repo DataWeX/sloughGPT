@@ -23,8 +23,8 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, safe_audit_log, success_response
 
+from domain.core.logging import LogTag
 from domain.infrastructure.output_buffer import get_server_buffer
-from domain.logging import LogTag
 
 logger = logging.getLogger("slo.errors")
 

@@ -15,7 +15,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller

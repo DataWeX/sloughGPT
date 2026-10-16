@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
@@ -192,7 +192,7 @@ async def start_distillation(
             itos = {i: c for c, i in stoi.items()}
             vocab_size = len(stoi)
 
-            from domain.models import SloughGPTModel
+            from domain.generate.models import SloughGPTModel
 
             student = SloughGPTModel(
                 vocab_size=vocab_size,

@@ -77,8 +77,8 @@ class TestTrainKnowledgeAdapter:
         assert result == {"status": "no_facts", "fact_count": 0}
 
     def test_model_unavailable_when_build_fails(self, adapter_paths, monkeypatch):
-        fake = types.ModuleType("domain.models")
-        monkeypatch.setitem(sys.modules, "domain.models", fake)
+        fake = types.ModuleType("domain.generate.models")
+        monkeypatch.setitem(sys.modules, "domain.generate.models", fake)
         result = ki.train_knowledge_adapter([{"content": "some knowledge fact here"}])
         assert result == {"status": "model_unavailable", "fact_count": 1}
 

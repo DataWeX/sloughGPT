@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from domain.multimodal._internal.engine import (
+from domain.cognition.multimodal._internal.engine import (
     MultimodalEngine,
     MultimodalOutput,
     TextDecoder,

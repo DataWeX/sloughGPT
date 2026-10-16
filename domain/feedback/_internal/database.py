@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 from mogdb import MogDB
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 logger = logging.getLogger("slo.feedback.database")
 

@@ -29,7 +29,7 @@ core Python infrastructure in `domain/`.
 - `domain/generate/_internal/` — providers, vector store,
   context core, model server.
 - `domain/feedback/_internal/` — LoRA, DPO, meta weights.
-- `domain/multimodal/_internal/` — vision, speech, engine.
+- `domain/cognition/multimodal/_internal/` — vision, speech, engine.
 - `tests/core-py/` — unit and integration tests.
 
 Layout note: core logic lives in `domain/…` — the legacy plural

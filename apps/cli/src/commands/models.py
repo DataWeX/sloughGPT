@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 from utils.formatting import format_number, format_size

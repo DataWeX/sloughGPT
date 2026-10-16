@@ -1379,7 +1379,7 @@ class ModelsRouter:
                 raise_error(f"mode must be symmetric or asymmetric, got {mode}", "E_BAD_REQUEST")
 
             # Find the active provider (try SloNet first, then HuggingFace)
-            from domain.models import get_provider
+            from domain.generate.models import get_provider
 
             provider = get_provider("slonet")
             model_type = "slonet"
@@ -1490,7 +1490,7 @@ class ModelsRouter:
         Returns:
             Status report with number of layers reset.
         """
-        from domain.models import get_provider
+        from domain.generate.models import get_provider
 
         provider = get_provider("slonet")
         model_type = "slonet"
@@ -1589,7 +1589,7 @@ class ModelsRouter:
 
                 # If int8/int4 selected, apply quantization
                 if suggestion["format"] in ("int8", "int4"):
-                    from domain.models import get_provider
+                    from domain.generate.models import get_provider
 
                     provider = get_provider("slonet") or get_provider("hf-default")
                     if provider is not None:
@@ -1788,7 +1788,7 @@ class ModelsRouter:
         """
         import state as server_state
 
-        from domain.models import get_provider, list_providers
+        from domain.generate.models import get_provider, list_providers
 
         providers = {}
         for name in list_providers():

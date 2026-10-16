@@ -1,10 +1,10 @@
-"""Tests for domain.models._internal.provider.py."""
+"""Tests for domain.generate.models._internal.provider.py."""
 
 import threading
 
 import pytest
 
-from domain.models._internal.provider import (
+from domain.generate.models._internal.provider import (
     KnowledgeProcessor,
     MessageProcessor,
     ModelCapabilities,
@@ -34,13 +34,13 @@ from domain.models._internal.provider import (
 
 
 def _clear_providers():
-    import domain.models._internal.provider as p
+    import domain.generate.models._internal.provider as p
 
     p._providers.clear()
 
 
 def _clear_processors():
-    import domain.models._internal.provider as p
+    import domain.generate.models._internal.provider as p
 
     p._processors.clear()
 

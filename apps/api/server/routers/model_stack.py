@@ -57,7 +57,7 @@ class ModelStackRouter:
             model_id = payload.get("model_id") or payload.get("name") or "base"
             path = Path(payload.get("path") or payload.get("model_path") or "")
             if not path:
-                from domain.shared import find_repo_root
+                from domain.core.shared import find_repo_root
 
                 path = find_repo_root() / "models" / f"{model_id}.soul"
             base = ModelBase(model_id=model_id, path=path, sha256=payload.get("sha256"))

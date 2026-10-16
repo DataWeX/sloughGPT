@@ -15,7 +15,7 @@ These tests close that hole by scanning every path that can emit a code:
 3. class-level ``code = "E_X"`` on AppError subclasses — the typed layer
 4. ``{"code": "E_X"}`` dict literals — readiness/status payloads built by hand
 
-Out of scope on purpose: ``domain/logging`` keeps its own log-event codespace
+Out of scope on purpose: ``domain/core/logging`` keeps its own log-event codespace
 (``E_MODEL_LOAD``, ``E_AUTH_EXPIRED`` …) which merely shares the ``E_``
 prefix, and tests/ may use invented codes to exercise fallback behaviour.
 """
@@ -116,7 +116,7 @@ def _class_level_codes() -> dict[str, list[str]]:
     found: dict[str, list[str]] = {}
     for path in _python_sources():
         rel = str(path.relative_to(REPO_ROOT))
-        if any(part in f"/{rel}/" for part in ("/tests/", "/domain/logging/")):
+        if any(part in f"/{rel}/" for part in ("/tests/", "/domain/core/logging/")):
             continue
         text = path.read_text(errors="ignore")
         for match in re.finditer(r'^\s+code(?::\s*str)?\s*=\s*(["\']E_[A-Z_]+["\'])', text, re.M):

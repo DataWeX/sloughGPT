@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domain.multimodal._internal.diffusion import (
+from domain.cognition.multimodal._internal.diffusion import (
     LatentDiffusionModel,
     LatentUNet,
     ResBlock,

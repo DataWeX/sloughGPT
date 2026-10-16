@@ -30,7 +30,7 @@ def _get_devices_col(db_path: str | None = None):
     if _devices_col is not None:
         return _devices_col
     if db_path is None:
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "mogdb" / "mobile_notifications")
@@ -46,7 +46,7 @@ def _get_history_col(db_path: str | None = None):
     if _history_col is not None:
         return _history_col
     if db_path is None:
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "mogdb" / "mobile_notifications")

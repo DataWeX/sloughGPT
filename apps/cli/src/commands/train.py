@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 from utils.formatting import format_number, format_size, format_time, truncate
@@ -1117,7 +1117,7 @@ def cmd_demo(args):
 
     if args.component in ("all", "ewc"):
         log.section("EWC - Catastrophic Forgetting Prevention")
-        from domain.models import SloughGPTModel
+        from domain.generate.models import SloughGPTModel
 
         model = SloughGPTModel(vocab_size=50, n_embed=32, n_layer=2, n_head=2, block_size=16)
         ewc = EwcContinualLearner(model)
@@ -1138,7 +1138,7 @@ def cmd_rlhf(args):
     sys.path.insert(0, ".")
 
     log.header("RLHF Demo")
-    from domain.models import SloughGPTModel
+    from domain.generate.models import SloughGPTModel
     from domain.training._internal.rlhf import RLHFConfig
 
     device = "cpu"

@@ -198,7 +198,7 @@ class TestHealthRouter:
 
     def test_basic_health_kv_sessions_reflects_provider(self):
         """A provider exposing session_stats surfaces stats in /health."""
-        from domain.models._internal.provider import register_provider
+        from domain.generate.models._internal.provider import register_provider
 
         class _FakeProvider:
             def session_stats(self):
@@ -217,7 +217,7 @@ class TestHealthRouter:
             assert kv["active_sessions"] == 2
             assert kv["cached_tokens"] == 128
         finally:
-            from domain.models._internal.provider import _providers
+            from domain.generate.models._internal.provider import _providers
 
             _providers.pop("slonet-native", None)
 

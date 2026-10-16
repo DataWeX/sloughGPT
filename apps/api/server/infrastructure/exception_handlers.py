@@ -325,7 +325,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
 
     source = f"{request.method} {request.url.path}"
     try:
-        from domain.logging._internal.errors import log_error
+        from domain.core.logging._internal.errors import log_error
 
         log_error(
             logger,

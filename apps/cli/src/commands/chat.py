@@ -8,7 +8,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 from utils.formatting import truncate
@@ -90,7 +90,7 @@ def cmd_chat(args):
         log_f.close()
 
         server_dir = repo / "apps" / "api" / "server"
-        from domain.shared import find_server_python
+        from domain.core.shared import find_server_python
 
         cmd = [
             find_server_python(repo),

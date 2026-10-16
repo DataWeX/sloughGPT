@@ -21,7 +21,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
-from domain.multimodal.engine import (
+from domain.cognition.multimodal.engine import (
     MultimodalEngine,
     ReplayBuffer,
     contrastive_step,

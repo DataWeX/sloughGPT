@@ -83,7 +83,7 @@ async def bench_chat_turn(turns: int, cacheable: bool) -> float:
     temp = 0.0 if cacheable else 0.9
 
     latencies: list[float] = []
-    with patch("domain.models._internal.provider.get_provider", return_value=provider):
+    with patch("domain.generate.models._internal.provider.get_provider", return_value=provider):
         for _ in range(turns):
             t0 = time.perf_counter()
             await domain.respond(

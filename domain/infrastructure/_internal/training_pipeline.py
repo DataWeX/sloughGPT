@@ -32,8 +32,8 @@ from typing import Any
 
 from mogdb import MogDB
 
+from domain.core.shared import utc_now_iso
 from domain.infrastructure._internal.atomic_write import atomic_writer
-from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.infrastructure.training_pipeline")
 

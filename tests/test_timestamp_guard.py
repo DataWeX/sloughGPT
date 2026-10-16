@@ -17,7 +17,7 @@ comments, and string literals mentioning them do not trip the guard):
    viewer). Bucket-key formats without ``%M`` (``%Y-%m-%dT%H:00``) are
    grouping labels, not instants, and do not trip this rule.
 
-Every timestamp must come from :func:`domain.shared.utc_now_iso` (or ``to_iso``),
+Every timestamp must come from :func:`domain.core.shared.utc_now_iso` (or ``to_iso``),
 which always emits ``...Z``.
 """
 
@@ -213,7 +213,7 @@ def test_no_bare_isoformat_plus_z_writers():
 
     assert not offenders, (
         "datetime.isoformat() + 'Z' writes '+00:00Z', which JS renders as "
-        "'Invalid Date'. Use domain.shared.utc_now_iso() / to_iso() instead. "
+        "'Invalid Date'. Use domain.core.shared.utc_now_iso() / to_iso() instead. "
         f"Offenders: {offenders}"
     )
 
@@ -224,7 +224,7 @@ def test_no_naive_now_isoformat_writers():
     assert not offenders, (
         "datetime.now().isoformat() emits a naive local timestamp with no "
         "offset; JS parses it as the viewer's local time and every non-matching "
-        "zone sees a shifted clock. Use domain.shared.utc_now_iso() instead. "
+        "zone sees a shifted clock. Use domain.core.shared.utc_now_iso() instead. "
         f"Offenders: {offenders}"
     )
 
@@ -235,7 +235,7 @@ def test_no_naive_fromtimestamp_isoformat_writers():
     assert not offenders, (
         "datetime.fromtimestamp(t).isoformat() without tz= serializes naive "
         "local time; JS reads it as the viewer's zone. Pass tz=UTC or use "
-        "domain.shared.to_iso() instead. "
+        "domain.core.shared.to_iso() instead. "
         f"Offenders: {offenders}"
     )
 
@@ -246,6 +246,6 @@ def test_no_naive_iso_strftime_writers():
     assert not offenders, (
         "strftime with an ISO date-time format and no UTC source writes naive "
         "local wall time (and '…%SZ' lies about UTC). Use "
-        "domain.shared.utc_now_iso() / to_iso() instead. "
+        "domain.core.shared.utc_now_iso() / to_iso() instead. "
         f"Offenders: {offenders}"
     )

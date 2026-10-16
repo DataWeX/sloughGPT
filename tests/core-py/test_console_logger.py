@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from domain.logging._internal.base import LogLevel, LogRecord
-from domain.logging._internal.console_logger import ConsoleLogger
+from domain.core.logging._internal.base import LogLevel, LogRecord
+from domain.core.logging._internal.console_logger import ConsoleLogger
 
 
 def _record(
@@ -49,7 +49,7 @@ _ANSI_CODES = {
 
 @pytest.fixture
 def ansi_on(monkeypatch):
-    from domain.logging._internal import config as log_config
+    from domain.core.logging._internal import config as log_config
 
     for name, code in _ANSI_CODES.items():
         monkeypatch.setattr(log_config._A, name, code)

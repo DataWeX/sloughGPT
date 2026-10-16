@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 from domain.training._internal.slonet import (
     SloAdam,
     Tensor,
@@ -72,8 +72,11 @@ class VideoCaptionTrainer:
         self.max_seq_len = max_seq_len
         self.lr = lr
 
-        from domain.multimodal._internal.engine import SloTransformerDecoder, VisionEncoder
-        from domain.multimodal._internal.video import TemporalEncoder
+        from domain.cognition.multimodal._internal.engine import (
+            SloTransformerDecoder,
+            VisionEncoder,
+        )
+        from domain.cognition.multimodal._internal.video import TemporalEncoder
 
         self.vision_encoder = VisionEncoder(embed_dim, n_heads, n_vision_layers)
         self.temporal_encoder = TemporalEncoder(embed_dim, n_heads, n_temporal_layers, max_frames)
@@ -165,7 +168,7 @@ class VideoCaptionTrainer:
         Returns (1, N, 224, 224, 3) or None on failure.
         """
         try:
-            from domain.multimodal._internal.video import VideoProcessor
+            from domain.cognition.multimodal._internal.video import VideoProcessor
 
             proc = VideoProcessor(max_frames=self.max_frames)
             frames = proc.extract_frames(video_path, self.max_frames)

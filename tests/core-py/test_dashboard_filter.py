@@ -1,11 +1,11 @@
-"""Tests for packages/core-py/domain.logging._internal.dashboard_filter.py — pure logic only."""
+"""Tests for packages/core-py/domain.core.logging._internal.dashboard_filter.py — pure logic only."""
 
 from __future__ import annotations
 
 import logging
 import re
 
-from domain.logging._internal.dashboard_filter import (
+from domain.core.logging._internal.dashboard_filter import (
     _PATTERNS,
     _WATCHED_OPS,
     _WATCHED_TAGS,

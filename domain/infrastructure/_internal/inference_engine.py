@@ -586,7 +586,7 @@ def main():
     parser.add_argument("--quant-clip", type=float, default=0.999)
     args = parser.parse_args()
 
-    from domain.logging._internal.config import setup_logging
+    from domain.core.logging._internal.config import setup_logging
 
     setup_logging()
 

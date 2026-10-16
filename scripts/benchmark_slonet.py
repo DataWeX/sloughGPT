@@ -21,8 +21,8 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
+from domain.core.shared import utc_now_iso
 from domain.generate import SloProfile, save_soul
-from domain.shared import utc_now_iso
 from domain.training._internal.slonet import (
     SloAdam,
     SloEmbedding,

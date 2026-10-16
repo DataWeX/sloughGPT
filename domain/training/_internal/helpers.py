@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 from .state import REPO_ROOT, SOU_MAGIC
 

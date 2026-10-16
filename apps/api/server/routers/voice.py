@@ -1,6 +1,6 @@
 """Voice Router — TTS and voice status via VoiceEngine.
 
-All voice operations delegate to domain.voice.VoiceEngine.
+All voice operations delegate to domain.generate.voice.VoiceEngine.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ class VoiceRouter:
 
     def _get_engine(self):
         if self._engine is None:
-            from domain.voice import get_voice_engine
+            from domain.generate.voice import get_voice_engine
 
             self._engine = get_voice_engine()
         return self._engine

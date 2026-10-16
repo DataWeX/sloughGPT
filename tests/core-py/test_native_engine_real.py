@@ -717,7 +717,7 @@ class TestRealModelEndToEnd:
 class TestNativeProviderWiring:
     @pytest.fixture(autouse=True)
     def _clean_registries(self):
-        import domain.models._internal.provider as mod
+        import domain.generate.models._internal.provider as mod
 
         mod._providers.clear()
         mod._processors.clear()
@@ -726,7 +726,7 @@ class TestNativeProviderWiring:
         mod._processors.clear()
 
     def test_setup_providers_native_slnc_path(self, tmp_path):
-        from domain.models._internal.provider import get_provider, setup_providers
+        from domain.generate.models._internal.provider import get_provider, setup_providers
 
         slnc_path = str(tmp_path / "tiny.slnc")
         _build_slnc(slnc_path, _weights(), _config())
@@ -739,7 +739,7 @@ class TestNativeProviderWiring:
         assert provider.metadata["loaded"] is True
 
     def test_setup_providers_missing_slnc_degrades_gracefully(self):
-        from domain.models._internal.provider import get_provider, setup_providers
+        from domain.generate.models._internal.provider import get_provider, setup_providers
 
         setup_providers(native_slnc_path="/nonexistent/model.slnc")
         default = get_provider("default")

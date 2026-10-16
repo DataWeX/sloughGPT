@@ -14,13 +14,13 @@ import numpy as np
 import pytest
 
 from domain.generate._internal.slonet_provider import SloNetChatProvider
-from domain.infrastructure._internal.slonet_server import SloNetServer
-from domain.models._internal.provider import (
+from domain.generate.models._internal.provider import (
     ProviderRouter,
     get_provider,
     list_providers,
     setup_providers,
 )
+from domain.infrastructure._internal.slonet_server import SloNetServer
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -29,7 +29,7 @@ from domain.models._internal.provider import (
 
 @pytest.fixture(autouse=True)
 def _clean_registries():
-    import domain.models._internal.provider as mod
+    import domain.generate.models._internal.provider as mod
 
     mod._providers.clear()
     mod._processors.clear()

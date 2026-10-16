@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.multimodal._internal.char_tokenizer import CharTokenizer
+from domain.cognition.multimodal._internal.char_tokenizer import CharTokenizer
 
 
 class TestCharTokenizer:

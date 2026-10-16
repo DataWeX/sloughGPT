@@ -2,8 +2,8 @@
 
 import pytest
 
-from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
-from domain.multimodal._internal.char_tokenizer import CharTokenizer
+from domain.cognition.multimodal._internal.bpe_tokenizer import BPETokenizer
+from domain.cognition.multimodal._internal.char_tokenizer import CharTokenizer
 
 # ── CharTokenizer ──────────────────────────────────────────────────────
 

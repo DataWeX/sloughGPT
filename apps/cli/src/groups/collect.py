@@ -4,7 +4,7 @@ Collect command group — collect data from files, URLs, RSS feeds, and APIs.
 
 from core.framework import click
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 

@@ -20,7 +20,7 @@ import os
 import threading
 from pathlib import Path
 
-from domain.shared import find_repo_root, utc_now_iso
+from domain.core.shared import find_repo_root, utc_now_iso
 
 logger = logging.getLogger("slo.infrastructure.conversation_log")
 

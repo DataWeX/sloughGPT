@@ -1,4 +1,4 @@
-"""Tests for domain.shared._internal.utils — utility functions, Cache, Timer, RateLimiter."""
+"""Tests for domain.core.shared._internal.utils — utility functions, Cache, Timer, RateLimiter."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from domain.shared._internal.utils import (
+from domain.core.shared._internal.utils import (
     Cache,
     RateLimiter,
     Timer,

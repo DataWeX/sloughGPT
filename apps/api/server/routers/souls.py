@@ -35,7 +35,7 @@ _LIST_SOULS_CACHE_TTL = 30.0
 _list_souls_lock = threading.Lock()
 
 try:
-    from domain.models import SloughGPTModel
+    from domain.generate.models import SloughGPTModel
 except ImportError:
     SloughGPTModel = None
 
@@ -390,7 +390,7 @@ Be yourself — let your personality shape how you respond."""
 
                 # Update PersonalityProcessor with soul traits
                 try:
-                    from domain.models import update_personality_traits
+                    from domain.generate.models import update_personality_traits
 
                     personality = getattr(soul_info, "personality", {})
                     if personality:

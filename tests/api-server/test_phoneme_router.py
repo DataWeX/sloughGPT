@@ -17,7 +17,7 @@ client = get_test_client()
 
 
 class _FakeEngine:
-    """Deterministic stand-in for domain.voice.get_phoneme_engine()."""
+    """Deterministic stand-in for domain.generate.voice.get_phoneme_engine()."""
 
     def encode(self, text, language=None):
         return SimpleNamespace(success=True, data={"text": text, "ids": [1, 2, 3]}, error=None)

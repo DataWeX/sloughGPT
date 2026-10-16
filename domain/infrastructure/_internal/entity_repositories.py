@@ -452,7 +452,7 @@ def get_knowledge_repository(data_dir: str | Path | None = None) -> KnowledgeRep
     if _knowledge_repo is None:
         from pathlib import Path as _Path
 
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         base = (
             _Path(data_dir)
@@ -468,7 +468,7 @@ def get_session_repository(persist_dir: str | Path | None = None) -> SessionRepo
     if _session_repo is None:
         from pathlib import Path as _Path
 
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         base = (
             _Path(persist_dir)
@@ -484,7 +484,7 @@ def get_feedback_repository(db_path: str | None = None) -> FeedbackRepository:
     if _feedback_repo is None:
         from pathlib import Path as _Path
 
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         path = db_path or str(find_repo_root(_Path(__file__).resolve()) / "data" / "feedback.db")
         _feedback_repo = FeedbackRepository(path)
@@ -496,7 +496,7 @@ def get_dataset_repository(data_dir: str | Path | None = None) -> DatasetReposit
     if _dataset_repo is None:
         from pathlib import Path as _Path
 
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         base = (
             _Path(data_dir)

@@ -14,7 +14,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, success_response
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 from services.auth import Role, Tenant, TenantRepository, User, UserRepository
 
 logger = logging.getLogger("slo.tenants")

@@ -12,8 +12,8 @@ from pathlib import Path
 # Add core-py to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "packages"))
 
-from domain.multimodal._internal.char_tokenizer import CharTokenizer
-from domain.multimodal._internal.engine import (
+from domain.cognition.multimodal._internal.char_tokenizer import CharTokenizer
+from domain.cognition.multimodal._internal.engine import (
     AudioEncoder,
     MultimodalEngine,
     SloTransformerDecoder,

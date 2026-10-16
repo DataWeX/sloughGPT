@@ -2,7 +2,7 @@
 
 import pytest
 
-from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
+from domain.cognition.multimodal._internal.bpe_tokenizer import BPETokenizer
 
 
 @pytest.fixture

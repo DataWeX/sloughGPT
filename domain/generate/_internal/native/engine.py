@@ -540,7 +540,7 @@ class NativeTransformerProvider:
 
     @property
     def capabilities(self):
-        from domain.models._internal.provider import ModelCapabilities
+        from domain.generate.models._internal.provider import ModelCapabilities
 
         return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=False)
 

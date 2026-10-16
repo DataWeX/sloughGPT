@@ -22,8 +22,8 @@ from typing import Any
 import numpy as np
 
 from domain.cognition._internal.rag import ProductionRAG
+from domain.core.shared import find_repo_root
 from domain.generate._internal.vector_store import simple_embed
-from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.rag_service")
 

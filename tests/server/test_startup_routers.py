@@ -845,7 +845,7 @@ class TestTryLazyGuardAutoload:
                 "domain.infrastructure.model_registry.get_model_registry",
                 return_value=MagicMock(),
             ),
-            patch("domain.models._internal.provider.setup_providers"),
+            patch("domain.generate.models._internal.provider.setup_providers"),
             patch("controllers.models.get_models_controller"),
             patch("domain.infrastructure.server_state.get_server_state"),
         ):
@@ -879,7 +879,7 @@ class TestTryLazyGuardAutoload:
                 "domain.infrastructure.model_registry.get_model_registry",
                 return_value=MagicMock(),
             ),
-            patch.dict("sys.modules", {"domain.models._internal.provider": mock_models}),
+            patch.dict("sys.modules", {"domain.generate.models._internal.provider": mock_models}),
             patch("controllers.models.get_models_controller") as mock_ctrl,
             patch("domain.infrastructure.server_state.get_server_state"),
         ):

@@ -15,7 +15,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error, safe_audit_log, success_response
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 from services.auth import (
     Role,
     User,

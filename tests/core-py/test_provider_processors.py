@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from domain.models._internal.provider import (
+from domain.generate.models._internal.provider import (
     ConsciousnessProcessor,
     KnowledgeProcessor,
     ModelCapabilities,
@@ -31,7 +31,7 @@ from domain.models._internal.provider import (
 @pytest.fixture(autouse=True)
 def _clean_registries():
     """Clear provider/processor registries before each test."""
-    import domain.models._internal.provider as mod
+    import domain.generate.models._internal.provider as mod
 
     mod._providers.clear()
     mod._processors.clear()
@@ -719,7 +719,7 @@ class TestUpdatePersonalityTraits:
         assert style._directness == 0.5
 
     def test_noop_when_no_default_router(self):
-        import domain.models._internal.provider as prov
+        import domain.generate.models._internal.provider as prov
 
         old = prov._providers.pop("default", None)
         try:

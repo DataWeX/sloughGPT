@@ -27,7 +27,7 @@ All six moved to the repo-root **`domain/`** package.
 | `domain.feedback` | LoRA eval, per-user adapter |
 | `domain.cognition` | Reasoning, metacognition, RAG |
 | `domain.infrastructure` | ProcessGuard, ModelServer, TaskQueue, CancelManager |
-| `domain.multimodal` | Phoneme encoders, TTS, speech synthesis |
+| `domain.cognition.multimodal` | Phoneme encoders, TTS, speech synthesis |
 
 ### Phoneme Encoder API
 
@@ -37,16 +37,16 @@ The phoneme encoder system supports 6 languages: English, German, French, Spanis
 
 ```bash
 # Single text encoding
-python -m domain.multimodal._internal.phoneme_encoder_cli "hello world"
+python -m domain.cognition.multimodal._internal.phoneme_encoder_cli "hello world"
 
 # Batch encoding
-python -m domain.multimodal._internal.phoneme_encoder_cli --batch "hello" "world" "test"
+python -m domain.cognition.multimodal._internal.phoneme_encoder_cli --batch "hello" "world" "test"
 
 # Language-specific encoding
-python -m domain.multimodal._internal.phoneme_encoder_cli --lang it "ciao mondo"
+python -m domain.cognition.multimodal._internal.phoneme_encoder_cli --lang it "ciao mondo"
 
 # Language detection
-python -m domain.multimodal._internal.phoneme_encoder_cli --detect "hello world"
+python -m domain.cognition.multimodal._internal.phoneme_encoder_cli --detect "hello world"
 ```
 
 #### REST API Endpoints

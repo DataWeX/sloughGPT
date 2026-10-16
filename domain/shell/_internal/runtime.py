@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root, find_server_python
+from domain.core.shared import find_repo_root, find_server_python
 
 logger = logging.getLogger("slo.shell.runtime")
 

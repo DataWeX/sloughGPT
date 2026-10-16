@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.logging._internal.base import (
+from domain.core.logging._internal.base import (
     CompositeLogger,
     ErrorCode,
     Logger,

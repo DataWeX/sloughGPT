@@ -31,7 +31,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from domain.shared import repair_iso  # stdlib-only, no third-party imports
+from domain.core.shared import repair_iso  # stdlib-only, no third-party imports
 
 logger = logging.getLogger("slo.artifact_registry")
 
@@ -62,7 +62,7 @@ ARTIFACT_KINDS = (
 
 def repo_root() -> Path:
     """Repo root, resolved from this file (correct for any CWD)."""
-    from domain.shared import find_repo_root
+    from domain.core.shared import find_repo_root
 
     return find_repo_root(Path(__file__).resolve())
 

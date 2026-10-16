@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 from .database import SimilarPattern, get_feedback_db
 

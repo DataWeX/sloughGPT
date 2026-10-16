@@ -6,7 +6,7 @@ import enum
 import uuid
 from dataclasses import dataclass, field
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 
 def _now_iso() -> str:

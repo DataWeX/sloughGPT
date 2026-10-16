@@ -188,7 +188,7 @@ class ResponseCache:
         if not self.is_deterministic(temperature):
             return None
         try:
-            from domain.shared import is_enabled as _flag_enabled
+            from domain.core.shared import is_enabled as _flag_enabled
 
             if not _flag_enabled("semantic_cache"):
                 return None

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domain.multimodal._internal.audio_filter import (
+from domain.cognition.multimodal._internal.audio_filter import (
     AudioFilterConfig,
     FilterMode,
     FilterResult,

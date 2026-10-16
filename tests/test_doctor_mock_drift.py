@@ -256,11 +256,11 @@ def test_reachable_tolerates_unknown_modules(tool):
 
 
 def test_import_graph_pins_the_split_coverage_edge(tool):
-    """routers/inference.py imports get_provider from domain.models at module
+    """routers/inference.py imports get_provider from domain.generate.models at module
     level (line 45) — that edge is what makes the _internal patch dead there."""
     graph = tool._md_import_graph()
     assert "routers.inference" in graph
-    assert "domain.models" in graph["routers.inference"]
+    assert "domain.generate.models" in graph["routers.inference"]
 
 
 def test_suspects_are_reported_but_never_block(tool, monkeypatch, capsys):

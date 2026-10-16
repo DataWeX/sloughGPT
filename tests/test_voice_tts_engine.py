@@ -10,7 +10,7 @@ catches this class of drift.
 
 import numpy as np
 
-from domain.voice._internal.tts import TTSEngine, _get_slonet
+from domain.generate.voice._internal.tts import TTSEngine, _get_slonet
 
 
 def test_slonet_tuple_order():

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from core.framework import click, echo
 
-from domain.logging import get_global
+from domain.core.logging import get_global
 
 log = get_global()
 

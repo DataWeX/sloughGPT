@@ -6,7 +6,7 @@ Why this exists
 ``db_pool._get_repo_root`` used ``parents[5]``, one level above the repo, so
 every pooled MogDB wrote to ``<repo-parent>/data/`` while ``FilesRouter`` and
 friends wrote to ``<repo>/data/`` — file bytes and file metadata lived in
-different trees (card 812cf351). The root was fixed (``domain.shared
+different trees (card 812cf351). The root was fixed (``domain.core.shared
 .find_repo_root``), but the data was never moved, so the pre-fix history
 stayed stranded: e.g. ``uploads_mogdb`` held 3851 records out-of-repo against
 1363 in-repo.

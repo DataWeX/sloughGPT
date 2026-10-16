@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domain.multimodal._internal.tts import (
+from domain.cognition.multimodal._internal.tts import (
     GriffinLimVocoder,
     SpectrogramDecoder,
     TTSEngine,
@@ -271,14 +271,14 @@ class TestTextToWaveform:
 
 class TestSSMLParsing:
     def test_parse_simple_text(self):
-        from domain.multimodal._internal.tts import parse_ssml
+        from domain.cognition.multimodal._internal.tts import parse_ssml
 
         text, events = parse_ssml("hello world")
         assert text == "hello world"
         assert events == []
 
     def test_parse_break_tag(self):
-        from domain.multimodal._internal.tts import parse_ssml
+        from domain.cognition.multimodal._internal.tts import parse_ssml
 
         text, events = parse_ssml("hello<break time='500ms'/>world")
         assert text == "helloworld"
@@ -287,14 +287,14 @@ class TestSSMLParsing:
         assert events[0]["duration_ms"] == 500
 
     def test_parse_break_tag_seconds(self):
-        from domain.multimodal._internal.tts import parse_ssml
+        from domain.cognition.multimodal._internal.tts import parse_ssml
 
         text, events = parse_ssml("hello<break time='1s'/>world")
         assert text == "helloworld"
         assert events[0]["duration_ms"] == 1000
 
     def test_parse_prosody_tag(self):
-        from domain.multimodal._internal.tts import parse_ssml
+        from domain.cognition.multimodal._internal.tts import parse_ssml
 
         text, events = parse_ssml("<prosody rate='slow' pitch='low'>hello</prosody>")
         assert text == "hello"
@@ -304,7 +304,7 @@ class TestSSMLParsing:
         assert events[0]["pitch"] == "low"
 
     def test_parse_emphasis_tag(self):
-        from domain.multimodal._internal.tts import parse_ssml
+        from domain.cognition.multimodal._internal.tts import parse_ssml
 
         text, events = parse_ssml("<emphasis level='strong'>hello</emphasis>")
         assert text == "hello"
@@ -313,7 +313,7 @@ class TestSSMLParsing:
         assert events[0]["level"] == "strong"
 
     def test_parse_multiple_tags(self):
-        from domain.multimodal._internal.tts import parse_ssml
+        from domain.cognition.multimodal._internal.tts import parse_ssml
 
         ssml = "hello<break time='200ms'/><emphasis level='strong'>world</emphasis>"
         text, events = parse_ssml(ssml)

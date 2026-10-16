@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 
 _TAG_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "models"
 _TAG_PATH = _TAG_DIR / "meaning_tags.json"

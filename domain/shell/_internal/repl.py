@@ -334,8 +334,8 @@ class ShellREPL(LinuxCommandsMixin):
 
         self.console = Console(self.io, has_readline=_HAS_READLINE)
 
-        # Structured logger — inherit from domain.logging
-        from domain.logging import LogLevel, ShellLogger
+        # Structured logger — inherit from domain.core.logging
+        from domain.core.logging import LogLevel, ShellLogger
 
         self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
 
@@ -997,7 +997,7 @@ class ShellREPL(LinuxCommandsMixin):
 
     def _log_ok(self, msg: str, **ctx) -> None:
         """Log a success message (green checkmark)."""
-        from domain.logging import LogLevel
+        from domain.core.logging import LogLevel
 
         self.log.emit(self.log._make_record(LogLevel.INFO, msg, ctx))
 

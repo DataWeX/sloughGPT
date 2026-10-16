@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 
 logger = logging.getLogger("slo.routers.plugins")
 

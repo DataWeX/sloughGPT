@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from domain.shared import find_repo_root
+    from domain.core.shared import find_repo_root
 except ImportError:
-    from domain.shared import find_repo_root
+    from domain.core.shared import find_repo_root
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ class ChatDomain:
             chat_messages = [{"role": "system", "content": system_prompt}] + chat_messages
 
         try:
-            from domain.models._internal.provider import get_provider
+            from domain.generate.models._internal.provider import get_provider
 
             provider = get_provider("default")
             if provider is None:

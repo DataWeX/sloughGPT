@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root, repair_iso
+from domain.core.shared import find_repo_root, repair_iso
 
 logger = logging.getLogger("slo.soul_manager")
 

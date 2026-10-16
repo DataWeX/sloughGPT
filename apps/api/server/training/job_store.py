@@ -22,7 +22,7 @@ JOB_STORE_ENV_VAR = "SLO_TRAINING_JOBS_DB"
 
 from mogdb import MogDB
 
-from domain.shared import find_repo_root, parse_iso, utc_now_iso
+from domain.core.shared import find_repo_root, parse_iso, utc_now_iso
 
 logger = logging.getLogger("slo.job_store")
 

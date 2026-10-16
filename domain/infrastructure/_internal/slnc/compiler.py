@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
+from domain.core.shared import find_repo_root
 from domain.infrastructure._internal.slnc.spec import (
     FLAG_QUANTIZED_INT8,
     MAGIC,
@@ -41,7 +42,6 @@ from domain.infrastructure._internal.slnc.spec import (
     compute_tensor_table_size,
     dtype_to_code,
 )
-from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.slnc.compiler")
 

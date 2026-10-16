@@ -13,14 +13,14 @@ Covers:
 import logging
 from unittest.mock import MagicMock
 
-from domain.logging._internal.base import (
+from domain.core.logging._internal.base import (
     ErrorCode,
     Logger,
     LogLevel,
     LogRecord,
     LogTag,
 )
-from domain.logging._internal.bridge import _LEVEL_MAP, BridgeHandler
+from domain.core.logging._internal.bridge import _LEVEL_MAP, BridgeHandler
 
 
 class TestLogLevel:

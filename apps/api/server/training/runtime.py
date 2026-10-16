@@ -156,7 +156,7 @@ class TrainingRuntime:
         rec = self._get_job(job_id)
         if rec is None:
             return
-        from domain.shared import utc_now_iso
+        from domain.core.shared import utc_now_iso
 
         store = self._get_store()
         if store.get(job_id) is None:

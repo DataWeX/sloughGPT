@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from training.job_store import JobStore
 
-from domain.shared import to_iso, utc_now_iso
+from domain.core.shared import to_iso, utc_now_iso
 
 
 def _mk_store(tmp_path):

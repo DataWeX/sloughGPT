@@ -25,7 +25,7 @@ by convention.
 ## Invalidation: generation bump
 
 `bump_cache_generation()` advances the process-wide token and is called from
-`register_provider()` (`domain/models/_internal/provider/registry.py`) — the
+`register_provider()` (`domain/generate/models/_internal/provider/registry.py`) — the
 single choke point for every model load/unload/swap. Because the token is part
 of every key, a bump invalidates both tiers coherently at once. No lazy
 per-entry revalidation, no stale-model replay.

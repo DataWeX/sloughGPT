@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 from domain.training._internal.slonet import load_checkpoint_npz as _load_npz
 from domain.training._internal.slonet import save_checkpoint_npz as _save_npz
 

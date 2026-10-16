@@ -1,6 +1,6 @@
-"""Tests for domain.multimodal._internal.manager — MultimodalCapabilities."""
+"""Tests for domain.cognition.multimodal._internal.manager — MultimodalCapabilities."""
 
-from domain.multimodal._internal.manager import MultimodalCapabilities
+from domain.cognition.multimodal._internal.manager import MultimodalCapabilities
 
 
 class TestMultimodalCapabilitiesDefaults:

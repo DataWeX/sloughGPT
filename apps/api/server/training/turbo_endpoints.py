@@ -88,7 +88,7 @@ async def start_from_sessions_unified(req: FromSessionsRequest):
 async def start_turbo_training_unified(req: TurboStartRequest):
     """Start turbo training."""
     try:
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
         from domain.training._internal.service import run_turbo_worker, start_turbo_training
 
         # Pre-flight validation

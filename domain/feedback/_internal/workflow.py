@@ -19,8 +19,8 @@ from typing import Any
 
 logger = logging.getLogger("slo.feedback")
 
+from domain.core.shared import find_repo_root
 from domain.infrastructure._internal.training_pipeline import TrainingDataPipeline, get_pipeline
-from domain.shared import find_repo_root
 
 from .database import FeedbackDB, get_feedback_db
 from .meta_weights import MetaWeightManager, get_meta_weight_manager

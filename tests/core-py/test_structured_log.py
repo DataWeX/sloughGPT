@@ -11,6 +11,7 @@ from threading import Thread
 
 import pytest
 
+from domain.core.logging._internal.config import SyslogFormatter
 from domain.infrastructure._internal.structured_log import (
     JSONFormatter,
     LogContext,
@@ -23,7 +24,6 @@ from domain.infrastructure._internal.structured_log import (
     tagged,
     timed,
 )
-from domain.logging._internal.config import SyslogFormatter
 
 # ── Helpers ────────────────────────────────────────────────────────────
 

@@ -25,7 +25,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from domain.shared import utc_now_iso
+from domain.core.shared import utc_now_iso
 
 # --- Tunables ---------------------------------------------------------------
 

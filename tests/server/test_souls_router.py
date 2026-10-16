@@ -110,7 +110,7 @@ class TestSwitchSoul:
     @patch("domain.generate._internal.slo_manager.get_slo_manager")
     @patch("domain.infrastructure._internal.context_core.get_context_core")
     @patch("domain.core._internal.soul.SloEngine")
-    @patch("domain.models._internal.provider.update_personality_traits")
+    @patch("domain.generate.models._internal.provider.update_personality_traits")
     def test_switch_soul_success(
         self, mock_update_traits, mock_engine_cls, mock_get_ctx, mock_get_mgr, client
     ):

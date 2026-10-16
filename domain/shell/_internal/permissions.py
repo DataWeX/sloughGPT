@@ -206,7 +206,7 @@ def _get_collection(db_path: str | None = None):
     from mogdb import MogDB
 
     if db_path is None:
-        from domain.shared import find_repo_root
+        from domain.core.shared import find_repo_root
 
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "shell_permissions_mogdb")

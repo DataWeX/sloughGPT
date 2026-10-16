@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from domain.shared import find_repo_root
+from domain.core.shared import find_repo_root
 
 from .jobs import training_jobs
 

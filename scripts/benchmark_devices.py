@@ -148,7 +148,7 @@ def save_baseline(data: dict) -> None:
 
 
 def main() -> None:
-    from domain.shared import utc_now_iso
+    from domain.core.shared import utc_now_iso
 
     args = set(sys.argv[1:])
     update = "--update" in args
