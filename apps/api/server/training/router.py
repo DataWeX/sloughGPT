@@ -5,6 +5,7 @@ Trainer ``*.soul`` checkpoint charset maps: ``docs/policies/CONTRIBUTING.md`` (*
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import shutil
@@ -118,6 +119,12 @@ def _resolve_finetuned(name: str) -> Path:
 _finetuned_models_cache: tuple[float, dict] | None = None
 _FINETUNED_CACHE_TTL = 30.0
 
+# load_model_path mutates the shared SloNet provider registry (and compiles
+# .slnc on first use). Running it inline on the event loop used to serialise
+# concurrent POSTs by accident; now that the load is threaded (card ff81b07a,
+# site 2), this lock preserves that serialisation deliberately.
+_load_finetuned_lock = asyncio.Lock()
+
 
 @router.get("/training/finetuned-models")
 async def list_finetuned_models():
@@ -165,7 +172,12 @@ async def load_finetuned_model(name: str):
     target = _resolve_finetuned(name)
     from controllers.models import get_models_controller
 
-    result = get_models_controller().load_model_path(str(target), "cpu", identity=name)
+    # Full model load, unbounded — thread it so it cannot stall the single
+    # uvicorn event loop (card ff81b07a, site 2).
+    async with _load_finetuned_lock:
+        result = await asyncio.to_thread(
+            get_models_controller().load_model_path, str(target), "cpu", identity=name
+        )
     if result.get("status") != "loaded":
         raise_error(
             result.get("error", "Failed to load fine-tuned model"),

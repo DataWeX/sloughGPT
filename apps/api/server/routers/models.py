@@ -1124,11 +1124,17 @@ class ModelsRouter:
         import urllib.error
         import urllib.request
 
-        try:
+        def _fetch_external() -> list:
             url = f"{cfg['url']}/models"
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=10) as resp:
-                models = json.loads(resp.read())
+                return json.loads(resp.read())
+
+        try:
+            # Blocking network I/O — thread it so a slow external server (up
+            # to the 10s urlopen timeout) cannot stall the single uvicorn
+            # event loop (card ff81b07a, site 1).
+            models = await asyncio.to_thread(_fetch_external)
         except Exception as e:
             raise_error(f"Failed to list models from {server}: {e}", status_code=502)
 
