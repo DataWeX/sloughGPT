@@ -4,7 +4,7 @@ Every durable writer in the tree used to hand-roll this: ``mkstemp`` in the
 target directory, write, rename, unlink the temp on failure. Copying it around
 produced five different temp-name conventions (``x.tmp``, ``x.card.json.tmp``,
 ``.x.tmp``, ``x.tmp.npz``, ad-hoc ``suffix=".tmp"``) and — worse — five
-different cleanup behaviours, because the ``except: unlink`` tail is the part
+different cleanup behaviours, because the bare-except ``unlink`` tail is the part
 people forget. A writer that forgets it leaves a partial temp behind, and the
 checkpoint scanner then has to know how to skip that temp.
 
