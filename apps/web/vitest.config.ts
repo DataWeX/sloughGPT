@@ -23,6 +23,7 @@ export default defineConfig({
       ['lib/cache/api-hooks.test.ts', 'jsdom'],
       ['lib/soulnet-webgpu/**/*.test.ts', 'jsdom'],
       ['lib/protocol/useEndpoint.test.tsx', 'jsdom'],
+      ['vite/**/*.test.tsx', 'jsdom'],
     ],
     include: [
       'proxy.test.ts',
@@ -34,6 +35,7 @@ export default defineConfig({
       'app/**/*.test.{ts,tsx}',
       'features/**/*.test.{ts,tsx}',
       'vite/**/*.test.ts',
+      'vite/**/*.test.tsx',
     ],
     passWithNoTests: true,
     exclude: ['app/(app)/model/[id]/ModelDetailPage.test.tsx'],
