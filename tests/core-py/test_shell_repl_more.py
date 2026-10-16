@@ -80,6 +80,22 @@ def _hermetic_api(monkeypatch):
     monkeypatch.setattr("domain.shell._internal.config.get_api_base", lambda: dead_base)
 
 
+@pytest.fixture(autouse=True)
+def _restore_cwd():
+    """_cmd_cd changes the PROCESS cwd, and several tests drive it directly.
+
+    Observed 2026-10-16: test_pwd_after_cd cd'd into tmp_path and never came
+    back, so the next suite in the batch (test_lora_eval_router) resolved its
+    relative adapter path against the leaked cwd and failed its
+    import-time-anchored ``data/user_adapters/`` check with 422 — three tests
+    polluted, all passing in isolation. Same ambient-state class as
+    _hermetic_api above: scope the mutation, restore after every test.
+    """
+    old = os.getcwd()
+    yield
+    os.chdir(old)
+
+
 class TestHermeticApi:
     """Regression guards for card 4eefc74c (tests hitting the live server)."""
 
