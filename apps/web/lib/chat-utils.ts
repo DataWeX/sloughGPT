@@ -16,6 +16,8 @@ export interface ChatMessage {
   isError?: boolean
   pinned?: boolean
   toolCalls?: Array<{ id?: string; name?: string; arguments?: string; status?: string }>
+  /** Per-turn stream metrics, set when the assistant turn completes. */
+  metrics?: { tokens?: number; elapsedMs?: number }
 }
 
 export interface ImageAttachment {

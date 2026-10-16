@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { cn, IconStar } from '@sloughgpt/strui'
+import { cn, IconStar, StatusDot } from '@sloughgpt/strui'
 import { formatRelativeTime } from '@/lib/time-format'
 import { ConsciousnessMessageBadge } from '../ConsciousnessMessageBadge'
 
@@ -46,9 +46,27 @@ export interface MessageBubbleProps {
   onAddNote?: (messageId: string) => void
   hasThread?: boolean
   onThread?: (messageId: string) => void
+  /** Position of this turn in the transcript (1-based). Renders in the gutter. */
+  turnNumber?: number
+  /** Per-turn stream metrics for the margin (tok/s, token count, latency). */
+  metrics?: { tokens?: number; elapsedMs?: number }
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
+function formatMetrics(m?: { tokens?: number; elapsedMs?: number }): string | null {
+  if (!m || m.tokens == null || m.elapsedMs == null || m.elapsedMs <= 0) return null
+  const tps = m.tokens / (m.elapsedMs / 1000)
+  const secs = (m.elapsedMs / 1000).toFixed(1)
+  return `${tps.toFixed(1)} tok/s · ${m.tokens} tok · ${secs}s`
+}
+
+/**
+ * Transcript turn — the log-entry primitive (see DESIGN_SYSTEM.md "The Log Entry").
+ *
+ * Anatomy: gutter (turn number, monospace) | content (document-like: assistant
+ * prose flows with no bubble chrome, user turns are compact tinted cards) |
+ * margin (living metadata: role, model, per-turn stream metrics, StatusDot).
+ */
 export const MessageBubble = memo(function MessageBubble({
   content,
   role,
@@ -77,6 +95,8 @@ export const MessageBubble = memo(function MessageBubble({
   onAddNote,
   hasThread,
   onThread,
+  turnNumber,
+  metrics,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -86,6 +106,7 @@ export const MessageBubble = memo(function MessageBubble({
   const hasContent = content && content.trim().length > 0
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
   const id = messageId || 'msg'
+  const metricsText = formatMetrics(metrics)
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -134,111 +155,109 @@ export const MessageBubble = memo(function MessageBubble({
         aria-live={isStreaming ? 'polite' : ariaLive}
         onKeyDown={handleKeyDown}
         className={cn(
-          'group flex flex-col transition-all duration-300 ease-out',
-          role === 'user' ? 'items-end' : 'items-start',
+          'group grid transition-all duration-300 ease-out',
+          'grid-cols-[minmax(0,1fr)] sm:grid-cols-[2.5rem_minmax(0,1fr)_auto]',
+          'items-start',
         )}
       >
-        {/* Role label — outside bubble for clear separation */}
+        {/* Gutter — stable turn number, like a transcript or lab log */}
         <span
-          className={cn(
-            'text-[10px] font-semibold tracking-wider uppercase mb-0.5 block',
-            role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70',
-          )}
+          className="hidden sm:block pt-1 text-right font-mono text-[10px] leading-5 text-muted-foreground/50 select-none"
+          aria-hidden="true"
         >
-          {role === 'user' ? 'You' : 'Assistant'}
-          {isBookmarked && (
-            <span className="ml-1.5 text-warning" aria-label="Bookmarked">
-              <IconStar className="h-2.5 w-2.5 inline" filled />
-            </span>
-          )}
-          {role === 'assistant' && model && !isError && (
-            <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
-              {model}
-            </span>
-          )}
-          {isError && (
-            <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
-              Interrupted
-            </span>
-          )}
+          {turnNumber != null ? String(turnNumber).padStart(2, '0') : ''}
         </span>
 
-        <div
-          className={cn(
-            'relative rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 max-w-full transition-all duration-200 leading-relaxed',
-            role === 'user'
-              ? 'bg-primary text-primary-foreground rounded-br-md shadow-md max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] ml-auto'
-              : 'bg-card text-foreground rounded-bl-md shadow-sm',
-            isStreaming && role === 'assistant' && 'ring-1 ring-primary/20',
-            isError &&
-              role === 'assistant' &&
-              'ring-1 ring-destructive/40 border border-destructive/30',
+        {/* Content — the words are the interface */}
+        <div className={cn('min-w-0', role === 'user' && !isEditing && 'flex justify-end')}>
+          <div
+            className={cn(
+              'transition-all duration-200 leading-relaxed',
+              role === 'user'
+                ? isEditing
+                  ? 'w-full bg-muted text-foreground rounded-lg px-4 py-2.5'
+                  : 'bg-primary text-primary-foreground rounded-lg px-4 py-2.5 max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] shadow-sm'
+                : 'text-foreground max-w-[70ch] py-0.5',
+              isError && role === 'assistant' && 'text-destructive',
+            )}
+          >
+            {images && images.length > 0 && <MessageImages images={images} role={role} />}
+
+            <MessageContent
+              content={content}
+              role={role}
+              searchQuery={searchQuery}
+              messageId={messageId}
+              isStreaming={isStreaming}
+              isError={isError}
+              collapsibleLength={collapsibleLength}
+              isEditing={isEditing}
+              onEdit={onEdit}
+              onEditStart={handleEditStart}
+              onEditCancel={handleEditCancel}
+            />
+          </div>
+
+          {(showActions || isError) && (
+            <MessageActions
+              content={content}
+              messageId={id}
+              role={role}
+              onCopy={onCopy}
+              onRegenerate={onRegenerate}
+              onThumbsUp={onThumbsUp}
+              onThumbsDown={onThumbsDown}
+              onSuggestionClick={onSuggestionClick}
+              isBookmarked={isBookmarked}
+              onBookmark={onBookmark}
+              onDelete={onDelete}
+              onSaveToKnowledge={onSaveToKnowledge}
+              onReact={onReact}
+            />
           )}
-        >
-          {images && images.length > 0 && <MessageImages images={images} role={role} />}
 
-          <MessageContent
-            content={content}
-            role={role}
-            searchQuery={searchQuery}
-            messageId={messageId}
-            isStreaming={isStreaming}
-            isError={isError}
-            collapsibleLength={collapsibleLength}
-            isEditing={isEditing}
-            onEdit={onEdit}
-            onEditStart={handleEditStart}
-            onEditCancel={handleEditCancel}
-          />
-
-          {showTimestamp && (
-            <p
-              className={cn(
-                'mt-1 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity',
-                role === 'user'
-                  ? 'text-primary-foreground/50 text-right'
-                  : 'text-muted-foreground/40',
-              )}
-            >
-              {formatRelativeTime(timestamp)}
-              {role === 'assistant' && messageId && (
-                <span className="ml-1.5">
-                  <ConsciousnessMessageBadge messageId={messageId} />
-                </span>
-              )}
-            </p>
+          {role === 'user' && hasContent && !isEditing && (
+            <MessageActions
+              content={content}
+              messageId={id}
+              role={role}
+              onCopy={onCopy}
+              onEdit={handleEditStart}
+              onSuggestionClick={onSuggestionClick}
+              onDelete={onDelete}
+            />
           )}
         </div>
 
-        {(showActions || isError) && (
-          <MessageActions
-            content={content}
-            messageId={id}
-            role={role}
-            onCopy={onCopy}
-            onRegenerate={onRegenerate}
-            onThumbsUp={onThumbsUp}
-            onThumbsDown={onThumbsDown}
-            onSuggestionClick={onSuggestionClick}
-            isBookmarked={isBookmarked}
-            onBookmark={onBookmark}
-            onDelete={onDelete}
-            onSaveToKnowledge={onSaveToKnowledge}
-            onReact={onReact}
-          />
-        )}
-
-        {role === 'user' && hasContent && !isEditing && (
-          <MessageActions
-            content={content}
-            messageId={id}
-            role={role}
-            onCopy={onCopy}
-            onEdit={handleEditStart}
-            onSuggestionClick={onSuggestionClick}
-            onDelete={onDelete}
-          />
-        )}
+        {/* Margin — living metadata in monospace: the log's instrumentation */}
+        <div
+          className={cn(
+            'hidden sm:flex flex-col items-end gap-0.5 pt-1 pl-4',
+            'font-mono text-[10px] leading-5 text-muted-foreground/60 select-none',
+          )}
+        >
+          <span className="flex items-center gap-1.5">
+            {isStreaming && <StatusDot tone="primary" pulse aria-hidden />}
+            {isError && <StatusDot tone="destructive" aria-hidden />}
+            {role === 'user' ? 'You' : 'Assistant'}
+            {isBookmarked && (
+              <span className="text-warning" aria-label="Bookmarked">
+                <IconStar className="h-2.5 w-2.5 inline" filled />
+              </span>
+            )}
+          </span>
+          {role === 'assistant' && model && !isError && <span>{model}</span>}
+          {metricsText && <span>{metricsText}</span>}
+          {isError && <span className="text-destructive">Interrupted</span>}
+          {showTimestamp && (
+            <span className="flex items-center gap-1.5">
+              {formatRelativeTime(timestamp)}
+              {role === 'assistant' && messageId && (
+                <ConsciousnessMessageBadge messageId={messageId} />
+              )}
+            </span>
+          )}
+        </div>
       </div>
     </MessageContextMenu>
   )

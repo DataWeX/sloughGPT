@@ -16,6 +16,11 @@ vi.mock('@sloughgpt/strui', () => ({
   IconChat: (props: any) => <span data-testid="icon-chat" {...props} />,
 
   Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  StatusDot: ({ tone, pulse, label, className }: any) => (
+    <span data-testid="status-dot" data-tone={tone} data-pulse={String(!!pulse)} className={className}>
+      {label}
+    </span>
+  ),
   Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
   ActionCard: ({ title, children }: any) => (
@@ -386,6 +391,79 @@ describe('MessageBubble', () => {
     )
     const article = container.querySelector('[role="article"]')
     expect(article).toHaveAttribute('aria-live', 'assertive')
+  })
+
+  describe('transcript anatomy (log-entry primitive)', () => {
+    it('renders the gutter turn number, zero-padded', () => {
+      const { container } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp turnNumber={7} />,
+      )
+      expect(container.textContent).toContain('07')
+    })
+
+    it('hides the gutter when no turnNumber is given', () => {
+      const { container } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      expect(container.textContent).not.toMatch(/\b00\b/)
+    })
+
+    it('renders per-turn metrics in the margin as tok/s · tokens · seconds', () => {
+      const { container } = render(
+        <MessageBubble
+          content="hi"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          metrics={{ tokens: 100, elapsedMs: 2000 }}
+        />,
+      )
+      expect(container.textContent).toContain('50.0 tok/s · 100 tok · 2.0s')
+    })
+
+    it('omits metrics text when metrics are absent or zero-elapsed', () => {
+      const { container: none } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      expect(none.textContent).not.toContain('tok/s')
+      cleanup()
+      const { container: zero } = render(
+        <MessageBubble
+          content="hi"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          metrics={{ tokens: 5, elapsedMs: 0 }}
+        />,
+      )
+      expect(zero.textContent).not.toContain('tok/s')
+    })
+
+    it('shows a pulsing primary StatusDot while streaming', () => {
+      render(
+        <MessageBubble content="streaming" role="assistant" timestamp={new Date()} showTimestamp isStreaming />,
+      )
+      const dot = screen.getByTestId('status-dot')
+      expect(dot).toHaveAttribute('data-tone', 'primary')
+      expect(dot).toHaveAttribute('data-pulse', 'true')
+    })
+
+    it('does not render a bubble tail class (bubble-free transcript)', () => {
+      const { container } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      const article = container.querySelector('[role="article"]') as HTMLElement
+      expect(article.className).not.toMatch(/rounded-(br|bl)-md/)
+    })
+
+    it('renders the user turn as a tinted card, not a tail bubble', () => {
+      const { container } = render(
+        <MessageBubble content="question" role="user" timestamp={new Date()} showTimestamp />,
+      )
+      const article = container.querySelector('[role="article"]') as HTMLElement
+      expect(article.className).not.toMatch(/rounded-br-md/)
+      expect(container.textContent).toContain('question')
+    })
   })
 
   describe('message folding', () => {

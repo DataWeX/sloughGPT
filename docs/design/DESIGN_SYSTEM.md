@@ -248,6 +248,45 @@ import { Badge } from '@anthropic/strui/badge'
 <Badge variant="destructive">Error</Badge>
 ```
 
+### The Log Entry — signature layout primitive
+
+sloughGPT's visual signature is **one strong layout primitive, repeated**:
+the annotated log entry. Every list of things a user reads turn-by-turn —
+chat transcripts, the kanban board, later anything else — composes through
+the same three-zone anatomy, so the silhouette (gutter + flowing text +
+metadata margin) is recognizably sloughGPT even shrunk to black and white.
+
+```
+┌ gutter ┐ content (document-like)              ┐ margin (mono metadata) ┐
+│  07    │ The words are the interface.         │ role · model · 2.1 t/s │
+│        │ Assistant prose has NO bubble chrome.│ ● live · 148 tok       │
+```
+
+- **Gutter** (`font-mono text-[10px] text-muted-foreground/50`): stable
+  position marker — turn number in chat, hash/id prefix on board entries.
+- **Content**: assistant turns are flowing prose with no card or bubble;
+  user turns are the only contained element (right-aligned tinted card in
+  chat). Board entries sit in their column like ledger lines, not floating
+  rounded cards.
+- **Margin** (`font-mono text-[10px] text-muted-foreground/60`): metadata as
+  first-class typography beside the content it describes (Tufte sidenote
+  model) — per-turn tok/s, token count, latency, model; card priority,
+  assignee, due date. Live/in-flight state is a `StatusDot tone="primary"
+  pulse`; WIP overflow is `StatusDot tone="destructive" pulse`.
+
+Reference implementations: `features/chat/components/messages/MessageBubble.tsx`
+(chat turn), `components/planner/CardItem.tsx` + `Tray.tsx` (board entry +
+column). Per-turn chat metrics arrive via `streamChatResponse`'s `onMeta`
+(`{tokens, elapsedMs}`) and live on `ChatMessage.metrics`.
+
+Rules for new surfaces adopting the primitive:
+
+1. Three zones, always — never re-introduce a bubble/bubble pair.
+2. Metadata goes in the margin, never as badges stacked under the content.
+3. One margin annotation per fact; no icon+label pairs (icon-only with
+   `aria-label`/`title` is fine).
+4. Gutter is `aria-hidden`; the margin carries the accessible text.
+
 ### Page Template
 
 ```tsx
@@ -507,4 +546,10 @@ grep -rn '#[0-9a-fA-F]\{3,8\}' apps/web/ --include='*.tsx' | grep -v '.test.\|st
 
 # Hex chart/list constants at top of a component (forbidden)
 grep -rn "': '#" apps/web/components apps/web/app --include='*.tsx' | grep -v '.test.'
+
+# Chat transcript must stay bubble-free (the log-entry primitive)
+grep -rnE 'rounded-(br|bl)-md|chat-bubble' apps/web/features/chat/components/messages/ --include='*.tsx' | grep -v '.test.'   # must be zero
+
+# Planner must not pin hues (non-negotiable #1)
+grep -rn 'hsl(' apps/web/components/planner --include='*.tsx' | grep -v '.test.'   # must be zero
 ```
