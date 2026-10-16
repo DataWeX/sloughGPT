@@ -415,6 +415,29 @@ deliberately **not** landed here — port/host overrides and reuse-ownership of
 an already-running stack — are handed off in the card note for whichever
 session owns `scripts/serve_ui.py`.
 
+**2026-10-16 — MogDB full-sync mirror encode 2.6× faster (branch
+`feat/mogdb-sync-perf`, card `223f8de1`, source card
+`20260916_100007_mogdb-performance`).** `MogDB(sync_dir=...)` wraps every
+collection in `SyncableCollection` with the default `sync_mode="full"` — i.e.
+**every insert/update/delete rewrites the whole JSON mirror** — and the encode
+was `json.dump(docs, f, indent=2)`: incremental Python-level streaming plus
+pretty-printing, on the per-write hot path. Now one
+`json.dumps(docs, separators=(",", ":"))` + a single `f.write` in both the
+plain and gzip branches; semantics unchanged (temp file + atomic `replace`,
+`json.load` contract — every reader is parse-based, no pretty-text consumer).
+Measured interleaved A/B (3 pairs, stash-swapping only this file, normalized
+to the benchmark's own `JSON write` machine reference because load swung 2–4×
+inside the window): full-single single-write **47/51/56 → 197/159/137 ops/s —
+ranges non-overlapping, 2.6× normalized**; encode micro 63.7 → 25.2 ms per
+1000-doc mirror, file 226,625 → 164,624 B (−27%). Gated by 3 new deterministic
+contract tests (compact single-line mirror; encode-once counted **through the
+`json_sync` module binding only** — the collection's own journal writes go
+through the shared `json`, so a global counter lies; one atomic replace per
+write): `packages/mogdb` **283/283**, consumer `tests/test_api_keys.py`
+green, `ruff check`/`format` clean on both files. NOT mine, pre-existing on
+main: `test_slonet_provider_real.py` 2 failures (`ImportError: LayerNorm`) and
+`collection.py` `ruff format` dirt.
+
 ## Sync recipe
 
 ```bash
@@ -849,3 +872,12 @@ git push -u origin feat/<name>   # push your own branch when done
   board, then `move_card(<full-uuid>, <col>)` + `compute_chains()`), and
   `move_card` matches the id **exactly** (an 8-hex prefix returns `False`
   silently; resolve the full uuid first).
+- **`.kanban/board.json` is a retired legacy snapshot — the live board is
+  `.kanban/board.jsonl`.** They sit in the same dir with the same size class,
+  so triaging the queue from `board.json` silently reads a stale card set
+  (it showed 10 todo cards vs the canonical 82). The CLI cannot address
+  legacy date-style ids either: `board show/move 20260916_100007_…` →
+  "Card not found" (it resolves app-planner 8-hex ids). Read the queue with
+  `app_planner board ls` or by parsing `board.jsonl`; claim a legacy card by
+  `board add`-ing a fresh card that references the legacy id in its
+  description (`board add` appends exactly one line — no chain cascade).
