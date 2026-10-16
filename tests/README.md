@@ -4,7 +4,6 @@ Pytest collection lives under this directory (see **`pytest.ini`** at the repo r
 
 - **Top-level** — `test_*.py` modules by area (API, SDK, training, inference, security, etc.).
 - **`server/`** — additional HTTP/API coverage (`test_server_api.py`).
-- **`ux_journeys/`** — the spec-linked UX journey harness behind **`docs/UX_FLOWS.md`** (13 flows, each `Flow.spec`-anchored to a heading; avion step builders; runner `python -m tests.ux_journeys` from the repo root, exit `0`/`1`/`2`). Writes the JSON report that **Mole** consumes — mole reads that file and *spawns* the harness across a process boundary, so no product code imports it. `scripts/run_ux_flows.py` forwards here rather than keeping a second registry. Covered by **`test_ux_flows_library.py`** (registry integrity, spec links, static copy gate).
 - **Markers** — `unit`, `integration`, `e2e`, `slow` (see `pytest.ini`).
 - **`test_domains_errors.py`** — `domain.errors` (`SloughGPTDomainError`, `require_non_empty_prompt`); shared by core inference engines and FastAPI mapping.
 - **`test_code_hygiene.py`** — code-hygiene ratchet (f-string logs, bare `except:`, in-tree task markers, library `print()` — zero-tolerance with reviewed exemptions); see card `0d4ad67b`.

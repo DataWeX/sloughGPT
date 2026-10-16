@@ -1,16 +1,13 @@
 """Runner for the UX_FLOWS journeys — boots avion against a live stack.
 
-Usage (from the repo root):
-    python -m tests.ux_journeys                # all journeys
-    python -m tests.ux_journeys --flow 2-write
-    python -m tests.ux_journeys --list
-    python -m tests.ux_journeys --strict-errors
-
-Exit codes: 0 all passed, 1 some flows failed (report still written),
-2 stack unreachable or no --flow id matched (no sweep).
+Usage:
+    .venv/bin/python -m domain.journeys                # all journeys
+    .venv/bin/python -m domain.journeys --flow 2-write
+    .venv/bin/python -m domain.journeys --list
+    .venv/bin/python -m domain.journeys --strict-errors
 
 Env:
-    SLO_WEB_URL         default http://localhost:5173
+    SLO_WEB_URL         default http://localhost:5175
     SLO_API_URL         default http://localhost:8000
     SLO_JOURNEY_BROWSER firefox (default) | chromium
     SLO_JOURNEY_SHOTS   screenshot dir (default ~/.cache/slog-journeys/shots/ux)
@@ -27,9 +24,9 @@ import time
 import urllib.request
 from typing import Any
 
-from .flows import FLOWS, Flow
+from domain.journeys.flows import FLOWS, Flow
 
-WEB = os.environ.get("SLO_WEB_URL", "http://localhost:5173")
+WEB = os.environ.get("SLO_WEB_URL", "http://localhost:5175")
 API = os.environ.get("SLO_API_URL", "http://localhost:8000")
 BROWSER = os.environ.get("SLO_JOURNEY_BROWSER", "firefox")
 _SHOTS_DEFAULT = os.path.join(

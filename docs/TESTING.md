@@ -283,7 +283,7 @@ detail under the grandfather rule until the unified `mole` CLI lands.
 
 - **What it probes:** API health/errors (`/health*`, `/errors/*`),
   `/health/stream` cadence + payload size (flags >256 KB frames and >8s
-  stalls), and the UX journey sweep report (`tests/ux_journeys`).
+  stalls), and the UX journey sweep report (`domain/journeys`).
 - **Placement:** wiring lives in `domain/core/_internal/doctor/` (the
   "body of the system" — system-level ops); probes are seams onto the
   core components.
