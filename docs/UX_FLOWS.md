@@ -432,7 +432,7 @@ their own pages (`/chat`, `/training`).
 
 ### Training: 4-Step Flow
 
-<!-- ui-gate: must-see: "Teach me" | "Teach your agent from your data" | "Recommended Configuration" | "Quick Import" | "Train from scratch" | "Continue training" | "Start training"; must-not-see: "Show advanced options" -->
+<!-- ui-gate: scope: components/training | app/(app)/training; must-see: "Teach me" | "Teach your agent from your data" | "Recommended Configuration" | "Quick Import" | "Train from scratch" | "Continue training" | "Start training" | "Next: Configure" | "Load for chat" | "LoRA rank — how much new style the adapter can learn"; must-not-see: "Show advanced options" -->
 
 **What the user sees:**
 

@@ -285,14 +285,14 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
                   aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
                   aria-describedby={[
-                    hpErrors.length > 0 ? 'configure-hp-errors' : '',
+                    hpErrors.some((e) => e.startsWith('Epochs')) ? 'configure-error-epochs' : '',
                     'gloss-epochs',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   className="h-7 text-[11px] font-mono"
                 />
-                <p id="gloss-epochs" className="text-[10px] text-muted-foreground">
+                <p id="gloss-epochs" className="text-xs text-muted-foreground">
                   How many times the model reads the full dataset (10)
                 </p>
               </div>
@@ -310,14 +310,14 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
                   aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
                   aria-describedby={[
-                    hpErrors.length > 0 ? 'configure-hp-errors' : '',
+                    hpErrors.some((e) => e.startsWith('Batch')) ? 'configure-error-batch' : '',
                     'gloss-batch',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   className="h-7 text-[11px] font-mono"
                 />
-                <p id="gloss-batch" className="text-[10px] text-muted-foreground">
+                <p id="gloss-batch" className="text-xs text-muted-foreground">
                   How many examples the model learns from at once (32)
                 </p>
               </div>
@@ -333,12 +333,15 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   onChange={(e) => form.setTrainingLR(Number(e.target.value) || 1e-3)}
                   error={form.trainingLR <= 0 || form.trainingLR > 1}
                   aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
-                  aria-describedby={[hpErrors.length > 0 ? 'configure-hp-errors' : '', 'gloss-lr']
+                  aria-describedby={[
+                    hpErrors.some((e) => e.startsWith('Learning rate')) ? 'configure-error-lr' : '',
+                    'gloss-lr',
+                  ]
                     .filter(Boolean)
                     .join(' ')}
                   className="h-7 text-[11px] font-mono"
                 />
-                <p id="gloss-lr" className="text-[10px] text-muted-foreground">
+                <p id="gloss-lr" className="text-xs text-muted-foreground">
                   How strongly each lesson adjusts the model (0.001)
                 </p>
               </div>
@@ -346,7 +349,9 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
             {hpErrors.length > 0 && (
               <div id="configure-hp-errors" className="text-[11px] text-destructive space-y-0.5">
                 {hpErrors.map((e) => (
-                  <div key={e}>{e}</div>
+                  <div key={e} id={`configure-error-${e.split(' ')[0].toLowerCase()}`}>
+                    {e}
+                  </div>
                 ))}
               </div>
             )}
@@ -418,8 +423,12 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                         max={128}
                         value={form.loraRank}
                         onChange={(e) => form.setLoraRank(Number(e.target.value) || 8)}
+                        aria-describedby="gloss-lora-rank"
                         className="h-7 text-[11px] font-mono"
                       />
+                      <p id="gloss-lora-rank" className="text-xs text-muted-foreground">
+                        LoRA rank — how much new style the adapter can learn (8)
+                      </p>
                     </div>
                     <div className="flex flex-col gap-1">
                       <Label htmlFor="lora-alpha" variant="uppercase">
@@ -432,8 +441,12 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                         max={256}
                         value={form.loraAlpha}
                         onChange={(e) => form.setLoraAlpha(Number(e.target.value) || 16)}
+                        aria-describedby="gloss-lora-alpha"
                         className="h-7 text-[11px] font-mono"
                       />
+                      <p id="gloss-lora-alpha" className="text-xs text-muted-foreground">
+                        Scales how strongly the rank applies (16)
+                      </p>
                     </div>
                   </div>
                 )}

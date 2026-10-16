@@ -26,22 +26,31 @@ WEB = REPO / "apps" / "web"
 
 GATE_RE = re.compile(r"<!--\s*ui-gate:\s*(?P<body>.*?)\s*-->", re.S)
 CLAUSE_RE = re.compile(
-    r"(?P<kind>must-see|must-not-see):\s*(?P<items>.*?)(?=;?\s*(?:must-see|must-not-see)\s*:|$)",
+    r"(?P<kind>must-see|must-not-see):\s*(?P<items>.*?)(?=;?\s*(?:must-see|must-not-see|scope)\s*:|$)",
     re.S,
 )
+SCOPE_RE = re.compile(r"scope:\s*(?P<paths>[^;]+)")
 ITEM_RE = re.compile(r'"([^"]+)"')
 HEADING_RE = re.compile(r"^###\s+(.*)$", re.M)
 
 SKIP_SUBSTRINGS = ("node_modules", "/dist/", ".test.", ".gen.", "__snapshots__")
 
 
-def _web_source() -> str:
+def _web_source(scope: list[str] | None = None) -> str:
+    """Concatenate non-test web source, optionally scoped to feature dirs.
+
+    Scoping matters: a gate for the training wizard must not go green because
+    the phrase 'Start training' happens to appear on an unrelated page (it
+    does — consciousness/api-explorer uses it as an API description).
+    """
+    roots = [WEB / s.strip() for s in scope] if scope else [WEB]
     chunks: list[str] = []
-    for path in sorted(WEB.rglob("*.ts*")):
-        text = str(path)
-        if any(s in text for s in SKIP_SUBSTRINGS):
-            continue
-        chunks.append(path.read_text(errors="ignore"))
+    for root in roots:
+        for path in sorted(root.rglob("*.ts*")):
+            text = str(path)
+            if any(s in text for s in SKIP_SUBSTRINGS):
+                continue
+            chunks.append(path.read_text(errors="ignore"))
     return "\n".join(chunks)
 
 
@@ -53,13 +62,25 @@ def _spec_gates() -> list[dict]:
         section = next((h for pos, h in reversed(headings) if pos < m.start()), "<no heading>")
         must_see: list[str] = []
         must_not_see: list[str] = []
-        for clause in CLAUSE_RE.finditer(m.group("body")):
+        body = m.group("body")
+        must_see: list[str] = []
+        must_not_see: list[str] = []
+        for clause in CLAUSE_RE.finditer(body):
             items = ITEM_RE.findall(clause.group("items"))
             if clause.group("kind") == "must-see":
                 must_see.extend(items)
             else:
                 must_not_see.extend(items)
-        gates.append({"section": section, "must_see": must_see, "must_not_see": must_not_see})
+        scope_match = SCOPE_RE.search(body)
+        scope = [p.strip() for p in scope_match.group("paths").split("|")] if scope_match else None
+        gates.append(
+            {
+                "section": section,
+                "must_see": must_see,
+                "must_not_see": must_not_see,
+                "scope": scope,
+            }
+        )
     return gates
 
 
@@ -74,9 +95,9 @@ def test_the_spec_actually_declares_gates() -> None:
 
 
 def test_declared_must_see_copy_exists_in_the_app() -> None:
-    source = _web_source()
     missing: list[str] = []
     for gate in _spec_gates():
+        source = _web_source(gate["scope"])
         for item in gate["must_see"]:
             if item not in source:
                 missing.append(f"{gate['section']}: missing {item!r}")
@@ -88,9 +109,9 @@ def test_declared_must_see_copy_exists_in_the_app() -> None:
 
 
 def test_declared_must_not_see_copy_is_absent() -> None:
-    source = _web_source()
     present: list[str] = []
     for gate in _spec_gates():
+        source = _web_source(gate["scope"])
         for item in gate["must_not_see"]:
             if item in source:
                 present.append(f"{gate['section']}: forbidden {item!r} is back")
