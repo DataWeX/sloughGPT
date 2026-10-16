@@ -2,6 +2,7 @@
 
 import gzip
 import json
+import pathlib
 import time
 
 import pytest
@@ -523,3 +524,63 @@ class TestLazyAsync:
                     raise ValueError("boom")
         data = json.loads((sync_dir / "test.json").read_text())
         assert {d["_id"] for d in data} == {"pre", "outer"}
+
+
+# ── Full-sync hot-path contract (perf guard) ─────────────────────────────────
+
+
+class TestFullSyncHotPathContract:
+    """Guards for the per-write mirror rewrite.
+
+    ``sync_mode="full"`` (the default, and what ``MogDB(sync_dir=...)`` gets)
+    rewrites the entire mirror file on every single write, so the encode is
+    the hot path. It must stay ONE compact ``json.dumps`` call: pretty-printing
+    (``indent=2``) and incremental ``json.dump`` streaming were the measured
+    cost of full-sync running ~2.5x slower than it needs to
+    (``scripts/benchmark_mogdb_sync.py``, full-single writes).
+    """
+
+    def test_mirror_is_compact_single_line(self, sync_col, sync_dir):
+        sync_col.insert_one({"_id": "perf1", "x": 1})
+        raw = (sync_dir / "test.json").read_text()
+        assert "\n" not in raw, "mirror must not pretty-print on every write"
+        data = json.loads(raw)
+        assert data[0]["x"] == 1
+
+    def test_sync_encodes_exactly_once_per_write(self, sync_col, monkeypatch):
+        import mogdb.json_sync as json_sync_mod
+
+        counts = {"dumps": 0, "dump": 0}
+        real = json_sync_mod.json
+
+        class _CountingJson:
+            """Counts encode calls made through the json_sync module only —
+            the collection's own journal writes use a different binding."""
+
+            def __getattr__(self, name):
+                return getattr(real, name)
+
+            def dumps(self, *args, **kwargs):
+                counts["dumps"] += 1
+                return real.dumps(*args, **kwargs)
+
+            def dump(self, *args, **kwargs):
+                counts["dump"] += 1
+                return real.dump(*args, **kwargs)
+
+        monkeypatch.setattr(json_sync_mod, "json", _CountingJson())
+        sync_col.insert_one({"_id": "perf2", "x": 2})
+        assert counts["dumps"] == 1, f"mirror must encode exactly once per write, got {counts}"
+        assert counts["dump"] == 0, "incremental json.dump is the slow path"
+
+    def test_sync_replaces_atomically_once_per_write(self, sync_col, monkeypatch):
+        real_replace = pathlib.Path.replace
+        calls: list[str] = []
+
+        def counting_replace(self, target):
+            calls.append(str(self))
+            return real_replace(self, target)
+
+        monkeypatch.setattr(pathlib.Path, "replace", counting_replace)
+        sync_col.insert_one({"_id": "perf3", "x": 3})
+        assert len(calls) == 1, f"one atomic temp-file replace per write, got {calls}"
