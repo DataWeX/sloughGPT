@@ -1,16 +1,18 @@
 /** @type {import('eslint').Linter.Config} */
 module.exports = {
-  extends: [
-    './index.js',
-    'plugin:react/recommended',
-    'plugin:react-hooks/recommended',
-  ],
+  extends: ['./index.js', 'plugin:react/recommended', 'plugin:react-hooks/recommended'],
   settings: {
     react: { version: 'detect' },
   },
+  plugins: ['@sloughgpt/ui'],
   rules: {
     'react/react-in-jsx-scope': 'off',
     'react/prop-types': 'off',
+    // Design-system projector — warn-only, site-wide: the Python CI floor
+    // (tests/contract/test_web_design_system.py + its baseline JSON) is the
+    // single count authority; this rule never compares counts, it only puts
+    // an editor-visible whisper next to every ad-hoc <button>/<input>/<a>.
+    '@sloughgpt/ui/no-ad-hoc-ui': 'warn',
     // Phase 6: legacy surface — keep errors for real bugs only
     '@typescript-eslint/consistent-type-imports': 'off',
     '@typescript-eslint/no-require-imports': 'off',

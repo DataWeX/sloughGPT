@@ -10,7 +10,8 @@
     "apps/web",
     "packages/strui",
     "packages/sdk-ts/typescript-sdk",
-    "packages/eslint-config"
+    "packages/eslint-config",
+    "packages/eslint-plugin-ui"
   ],
   "scripts": {
     "dev": "turbo run dev",
