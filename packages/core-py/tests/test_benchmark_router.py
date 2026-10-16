@@ -96,7 +96,7 @@ class TestGetLoggedResponses:
         )
         mock_tracker.get_responses.return_value = [r1]
         with patch(
-            "domain.feedback._internal.response_tracker.get_response_tracker",
+            "domain.feedback.get_response_tracker",
             return_value=mock_tracker,
         ):
             client = TestClient(_app(br))

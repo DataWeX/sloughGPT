@@ -184,24 +184,29 @@ class TestLabelFactual:
         assert isinstance(result.label, str)
         assert result.confidence > 0
 
+    # NOTE: factual indicators win only when no stronger rule claims the
+    # sentence first — the dedicated suite (test_truth_labeler.py) pins that
+    # descriptive starters (the/a/this/...) and "X is Y" definitions outrank
+    # them. These sentences use non-starter subjects so the indicator path
+    # itself is what decides the label.
     def test_factual_contains(self):
         tl = TruthLabeler()
-        result = tl.label("This function contains a bug")
+        result = tl.label("Paris contains dozens of museums")
         assert result.label == "factual"
 
     def test_factual_measures(self):
         tl = TruthLabeler()
-        result = tl.label("The file measures 1024 bytes")
+        result = tl.label("War and Peace measures 1200 pages")
         assert result.label == "factual"
 
     def test_factual_has(self):
         tl = TruthLabeler()
-        result = tl.label("This module has three classes")
+        result = tl.label("Python has three core modules")
         assert result.label == "factual"
 
     def test_factual_will(self):
         tl = TruthLabeler()
-        result = tl.label("This will take about 5 minutes")
+        result = tl.label("March will bring the release")
         assert result.label == "factual"
 
 

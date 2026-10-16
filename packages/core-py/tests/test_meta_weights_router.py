@@ -23,7 +23,9 @@ class TestGetMetaWeightsRequest:
 
     def test_defaults(self):
         req = GetMetaWeightsRequest(user_message="hi")
-        assert req.k == 5  # schema default (docs/routers.md agrees with impl)
+        # Default top-k shipped as 5 since 4a4616b15 (May); the 10 came from
+        # the pre-consolidation test root that stopped running.
+        assert req.k == 5
         assert req.user_id == "default"
 
     def test_custom_k(self):
@@ -62,9 +64,9 @@ class TestMetaWeightsRouter:
 
     def test_router_has_routes(self):
         router = MetaWeightsRouter()
+        # APIRouter(prefix=...) prepends to route.path at registration time,
+        # so the paths carry the prefix (matching test_router_has_prefix).
         routes = [r.path for r in router.router.routes]
-        # APIRouter(prefix="/meta-weights") is applied at registration —
-        # docs/routers.md documents the full /meta-weights/* paths.
         assert "/meta-weights/ping" in routes
         assert "/meta-weights/get" in routes
         assert "/meta-weights/stats" in routes

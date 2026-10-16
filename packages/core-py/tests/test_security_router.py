@@ -105,9 +105,9 @@ class TestAuditLogs:
 class TestKeys:
     def _client_with_keys(self, keys):
         sr = SecurityRouter()
-        mock_mgr = MagicMock()
-        mock_mgr.list.return_value = keys
-        with patch("routers.security._get_key_manager", return_value=mock_mgr):
+        # Keys are stored in MogDB via ApiKeyManager now; the route no longer
+        # reads settings.get_security_settings (storage refactor).
+        with patch("routers.api_keys.ApiKeyManager.list", return_value=["key1", "key2"]):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
         return resp
@@ -120,16 +120,27 @@ class TestKeys:
         assert data["configured"] is True
 
     def test_keys_not_configured(self):
-        resp = self._client_with_keys([])
+        sr = SecurityRouter()
+        with patch("routers.api_keys.ApiKeyManager.list", return_value=[]):
+            client = TestClient(_app(sr))
+            resp = client.get("/security/keys")
         assert resp.status_code == 200
         assert resp.json()["data"]["configured"] is False
 
     def test_single_key(self):
-        resp = self._client_with_keys(["only-one-key"])
+        sr = SecurityRouter()
+        with patch("routers.api_keys.ApiKeyManager.list", return_value=["only-one-key"]):
+            client = TestClient(_app(sr))
+            resp = client.get("/security/keys")
         data = resp.json()["data"]
         assert data["count"] == 1
         assert data["configured"] is True
 
     def test_many_keys(self):
-        resp = self._client_with_keys([f"key_{i}" for i in range(50)])
+        sr = SecurityRouter()
+        with patch(
+            "routers.api_keys.ApiKeyManager.list", return_value=[f"key_{i}" for i in range(50)]
+        ):
+            client = TestClient(_app(sr))
+            resp = client.get("/security/keys")
         assert resp.json()["data"]["count"] == 50
