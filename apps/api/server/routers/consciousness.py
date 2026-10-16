@@ -155,6 +155,7 @@ class ConsciousnessRouter:
         self.router.add_api_route("/clear/beliefs", self.clear_beliefs, methods=["POST"])
         self.router.add_api_route("/dream", self.dream, methods=["POST"])
         self.router.add_api_route("/reflection", self.get_reflection, methods=["GET"])
+        self.router.add_api_route("/self", self.get_self, methods=["GET"])
 
     @endpoint("consciousness.status")
     async def get_status(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -250,6 +251,17 @@ class ConsciousnessRouter:
             "qualia": engine.qualia.current.to_dict(),
         }
         return success_response(data=data)
+
+    @endpoint("consciousness.self")
+    async def get_self(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Structured self-report — 'what do you know about me' as data.
+
+        A projection of the mind-state log (timeline and belief trajectory
+        survive the document window): identity, beliefs + how they formed,
+        curiosity, strategy notes, last dream. Read-only.
+        """
+        engine = self._get_engine()
+        return success_response(data=engine.self_report())
 
     @endpoint("consciousness.update_config")
     async def update_config(

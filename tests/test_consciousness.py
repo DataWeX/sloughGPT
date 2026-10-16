@@ -426,6 +426,65 @@ class TestIdleDreamPolicy:
 
 
 # ---------------------------------------------------------------------------
+# Self-report fold — the mind-state log rendered as data
+# ---------------------------------------------------------------------------
+
+
+class TestSelfReport:
+    def test_report_basics(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        for _ in range(5):
+            engine.self_model.episodes.append(_make_episode(growth_delta=0.1))
+        engine.reflect(apply=True)
+        report = engine.self_report()
+        assert report["identity"]["name"]
+        assert report["strongest_belief"]["value"] == max(report["beliefs"].values())
+        assert report["reflection"]["trajectory"] == "growth"
+        assert report["reflection"]["narrative"]
+        assert report["reflection"]["strategy_notes"] == []
+        assert "curiosity" in report
+
+    def test_belief_trajectory_comes_from_the_log(self, tmp_path: Path) -> None:
+        """'How it came to believe that' — rendered time from belief_delta records."""
+        engine = _make_engine(tmp_path)
+        for _ in range(5):
+            engine.self_model.episodes.append(_make_episode(growth_delta=0.1))
+        engine.reflect(apply=True)  # growth deltas: competence +0.03 -> 0.73
+        report = engine.self_report()
+        traj = report["belief_trajectory"]["competence"]
+        assert len(traj) == 1
+        assert traj[0][1] == pytest.approx(0.73)
+
+    def test_timeline_survives_the_document_window(self, tmp_path: Path) -> None:
+        """105 experiences: save() trims the document to 100; the log does not forget."""
+        engine = _make_engine(tmp_path)
+        for i in range(105):
+            engine.process(f"q{i}", f"a longer answer {i}", level=2)
+        engine.save()
+        assert len(engine.self_model.episodes) == 100  # window
+        report = engine.self_report()
+        assert report["timeline"]["experiences"] == 105  # memory
+        assert report["timeline"]["first_experience"] is not None
+
+    def test_last_dream_reported(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode())
+        engine.dream()
+        report = engine.self_report()
+        assert report["last_dream"] is not None
+        assert report["timeline"]["dreams"] == 1
+
+    def test_report_is_readonly(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode(growth_delta=0.1))
+        before = dict(engine.self_model.self_beliefs)
+        key_before = engine.reflection_state_key()
+        engine.self_report()
+        assert dict(engine.self_model.self_beliefs) == before
+        assert engine.reflection_state_key() == key_before
+
+
+# ---------------------------------------------------------------------------
 # ConsciousnessManager.apply()
 # ---------------------------------------------------------------------------
 

@@ -233,6 +233,30 @@ class TestConsciousnessAPI:
         assert d3["state_key"] != d1["state_key"]
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_self_report_projection(self, _auth, client, mock_engine):
+        """GET /self projects engine.self_report() — the fold, unshaped."""
+        report = {
+            "identity": {"name": "SloughGPT"},
+            "beliefs": {"competence": 0.73},
+            "strongest_belief": {"name": "competence", "value": 0.73},
+            "reflection": {"narrative": "n", "trajectory": "growth", "strategy_notes": []},
+            "curiosity": {},
+            "timeline": {
+                "experiences": 5,
+                "dreams": 1,
+                "first_experience": 1.0,
+                "last_experience": 2.0,
+            },
+            "belief_trajectory": {"competence": [[1.5, 0.73]]},
+            "last_dream": None,
+        }
+        mock_engine.self_report.return_value = report
+        res = client.get("/consciousness/self")
+        assert res.status_code == 200
+        assert res.json()["data"] == report
+        mock_engine.self_report.assert_called_once()
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_update_config(self, _auth, client):
         res = client.patch("/consciousness/config", json={"level": 2})
         assert res.status_code == 200

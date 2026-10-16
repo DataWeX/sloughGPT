@@ -124,6 +124,63 @@ class ConsciousnessEngine:
         self._dream_baseline = len(self.self_model.episodes)
         return result
 
+    def self_report(self) -> dict[str, Any]:
+        """Fold the mind-state log into the structured self-report.
+
+        The 'what do you know about me' surface as data — rendered time:
+        current beliefs plus the trajectory that produced them, what pulls
+        attention (curiosity), the experience timeline counted from the log
+        (so it survives the document window), and the last dream. Read-only:
+        a report observes the mind, it never steers it.
+        """
+        sm = self.self_model
+        beliefs = {k: round(float(v), 4) for k, v in sm.self_beliefs.items()}
+        strongest = max(beliefs, key=beliefs.get) if beliefs else None
+        reflection = self._propose_reflection()
+
+        episodes = self.mind_log.query(record_type="episode", limit=0)
+        dreams = self.mind_log.query(record_type="dream", limit=0)
+        deltas = self.mind_log.query(record_type="belief_delta", limit=0)
+
+        # How it came to believe that: belief name -> [[t, value_after], ...]
+        trajectory: dict[str, list[list[float]]] = {}
+        for d in deltas:
+            for name, value in (d.payload.get("after") or {}).items():
+                trajectory.setdefault(name, []).append([d.t, round(float(value), 4)])
+
+        last_dream = dreams[-1] if dreams else None
+        return {
+            "identity": {"name": sm.identity.name},
+            "beliefs": beliefs,
+            "strongest_belief": (
+                {"name": strongest, "value": beliefs[strongest]} if strongest else None
+            ),
+            "reflection": {
+                "narrative": getattr(reflection, "narrative", str(reflection)),
+                "trajectory": getattr(reflection, "trajectory", "stagnation"),
+                "strategy_notes": list(getattr(reflection, "strategy_notes", []) or []),
+                "state_key": self.reflection_state_key(),
+            },
+            "curiosity": {
+                k: round(float(v), 4) for k, v in self.meta_cognition.curiosity_topics.items()
+            },
+            "timeline": {
+                "experiences": len(episodes),
+                "dreams": len(dreams),
+                "first_experience": episodes[0].t if episodes else None,
+                "last_experience": episodes[-1].t if episodes else None,
+            },
+            "belief_trajectory": trajectory,
+            "last_dream": (
+                {
+                    "t": last_dream.t,
+                    "narrative": (last_dream.payload.get("narrative") or "")[:400],
+                }
+                if last_dream is not None
+                else None
+            ),
+        }
+
     def process(self, input_text: str, response: str, level: int | None = None) -> str:
         lvl = level if level is not None else self.config.level
         if lvl == 0:
