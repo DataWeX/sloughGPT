@@ -1,4 +1,15 @@
-"""Coverage tests for domain.shell.kernel_devices.py."""
+"""Coverage tests for domain.shell._internal.kernel_devices.
+
+Rewritten for the baseboard contract introduced by 96b0d69d1 ("bit-based
+DeviceTable + DeviceDriver gates"): drivers expose ``ioctl`` + ``info`` only —
+open/close/read/write are the table's job over integer fds, ``DeviceType``
+members are bit flags, and ioctl answers with a ``SyscallResult`` instead of
+raising. The previous revision of this file still asserted the pre-rewrite API
+(``DeviceDriver.open``, ``read_fd``, ``write_fd``, ``ioctl_fd``, ``close_fd``,
+``device_count``) and failed 24/24 on AttributeError.
+"""
+
+from __future__ import annotations
 
 import pytest
 
@@ -11,37 +22,32 @@ from domain.shell._internal.kernel_devices import (
     DeviceType,
     NullDevice,
 )
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 
 class FakeDevice(DeviceDriver):
+    """Minimal driver under the current contract: implement ioctl, nothing else."""
+
     def __init__(self, name="fake", device_type=DeviceType.CUSTOM):
         super().__init__(name, device_type)
 
-    def read(self, offset=0, size=-1):
-        return b"payload"
-
-    def write(self, data):
-        return True
-
     def ioctl(self, command, *args):
-        return ("ok", command)
+        return SyscallResult.ok({"cmd": command, "args": args})
 
 
-class FailingOpenDevice(DeviceDriver):
-    def open(self):
-        with self._lock:
-            self._state = DeviceState.ERROR
-            return False
+# ── Enum / dataclass contracts ─────────────────────────────────────────────
 
 
-def test_device_type_values():
-    assert DeviceType.INFERENCE == 0
-    assert DeviceType.TRAINING == 1
-    assert DeviceType.STORAGE == 2
-    assert DeviceType.NETWORK == 3
-    assert DeviceType.DISPLAY == 4
-    assert DeviceType.INPUT == 5
-    assert DeviceType.CUSTOM == 6
+def test_device_type_values_are_bit_flags():
+    assert DeviceType.INFERENCE == 0b000001
+    assert DeviceType.TRAINING == 0b000010
+    assert DeviceType.STORAGE == 0b000100
+    assert DeviceType.NETWORK == 0b001000
+    assert DeviceType.DISPLAY == 0b010000
+    assert DeviceType.INPUT == 0b100000
+    assert DeviceType.CUSTOM == 0  # "no type"
+    # masks compose — a device may be several categories at once
+    assert DeviceType.INFERENCE | DeviceType.TRAINING == 0b000011
 
 
 def test_device_state_values():
@@ -57,52 +63,23 @@ def test_device_handle_dataclass():
     assert h.offset == 2
 
 
+# ── Driver (gates) ─────────────────────────────────────────────────────────
+
+
 def test_device_driver_properties():
     d = FakeDevice("d1", DeviceType.INFERENCE)
     assert d.name == "d1"
     assert d.device_type == DeviceType.INFERENCE
     assert d.state == DeviceState.CLOSED
-    assert d.is_open is False
 
 
-def test_device_driver_open_close():
+def test_device_driver_defers_io_state_to_the_table():
+    # DeviceDriver: "Only ioctl. No open/close — that's DeviceTable's job."
+    # The pre-baseboard driver tracked is_open/_open_count/read/write itself;
+    # letting that back in would fork fd bookkeeping out of the bitmap again.
     d = FakeDevice()
-    assert d.open() is True
-    assert d.state == DeviceState.OPEN
-    assert d.is_open is True
-    d.close()
-    assert d.state == DeviceState.CLOSED
-    assert d._open_count == 0
-
-
-def test_device_driver_open_count_refcount():
-    d = FakeDevice()
-    d.open()
-    d.open()
-    assert d._open_count == 2
-    d.close()
-    assert d._open_count == 1
-    assert d.state == DeviceState.OPEN
-    d.close()
-    assert d.state == DeviceState.CLOSED
-
-
-def test_device_driver_open_error_state_returns_false():
-    d = FakeDevice()
-    d._state = DeviceState.ERROR
-    assert d.open() is False
-
-
-def test_device_driver_base_read_not_implemented():
-    d = DeviceDriver("base")
-    with pytest.raises(NotImplementedError, match="read not implemented"):
-        d.read(0, 10)
-
-
-def test_device_driver_base_write_not_implemented():
-    d = DeviceDriver("base")
-    with pytest.raises(NotImplementedError, match="write not implemented"):
-        d.write(b"x")
+    for attr in ("open", "close", "is_open", "read", "write"):
+        assert not hasattr(d, attr), f"{attr} belongs to DeviceTable now"
 
 
 def test_device_driver_base_ioctl_not_implemented():
@@ -113,19 +90,23 @@ def test_device_driver_base_ioctl_not_implemented():
 
 def test_device_driver_info():
     d = FakeDevice("d1", DeviceType.STORAGE)
-    d.open()
     info = d.info()
     assert info["name"] == "d1"
-    assert info["type"] == "STORAGE"
-    assert info["state"] == "OPEN"
-    assert info["open_count"] == 1
+    assert info["type"] == DeviceType.STORAGE
+    assert info["state"] == "CLOSED"
+    # open-count is fd-table state now, not driver state
+    assert "open_count" not in info
+
+
+# ── Table registration ─────────────────────────────────────────────────────
 
 
 def test_table_register():
     t = DeviceTable()
     assert t.register(FakeDevice("d1")) is True
     assert t.register(FakeDevice("d1")) is False
-    assert t.device_count == 1
+    assert t.stats()["total_devices"] == 1
+    assert len(t.list_devices()) == 1
 
 
 def test_table_get():
@@ -143,102 +124,103 @@ def test_table_unregister():
     t.register(dev)
     assert t.unregister("d1") is True
     assert t.get("d1") is None
+    assert t.unregister("d1") is False  # already gone
 
 
-def test_table_unregister_closes_open_device():
+def test_table_unregister_frees_open_fds():
     t = DeviceTable()
-    dev = FakeDevice("d1")
-    t.register(dev)
-    dev.open()
+    t.register(FakeDevice("d1"))
+    fd = t.open("d1")
+    assert fd >= 0
+    assert t.stats()["open_fds"] == 1
     assert t.unregister("d1") is True
-    assert dev.state == DeviceState.CLOSED
+    # a dangling fd must not dispatch into a device the table no longer manages
+    assert t.stats()["open_fds"] == 0
+    res = t.ioctl(fd, "CMD")
+    assert res.success is False
+    assert res.error == "fd not open"
+
+
+def test_table_unregister_keeps_fds_alive_while_an_alias_survives():
+    t = DeviceTable()
+    t.register(FakeDevice("ai"))
+    assert t.alias("llm", "ai") is True
+    fd = t.open("llm")
+    assert fd >= 0
+    assert t.unregister("llm") is True
+    # same driver instance is still reachable as "ai" — the fd stays valid
+    assert t.stats()["open_fds"] == 1
+    assert t.ioctl(fd, "CMD").success is True
+    # ...until the last name goes
+    assert t.unregister("ai") is True
+    assert t.stats()["open_fds"] == 0
+
+
+# ── Table fd operations ────────────────────────────────────────────────────
 
 
 def test_table_open_and_close_fd():
     t = DeviceTable()
-    dev = FakeDevice("d1")
-    t.register(dev)
-    h = t.open("d1", mode="rw")
-    assert h is not None
-    assert h.fd == 1
-    assert h.device_name == "d1"
-    assert h.mode == "rw"
-    assert t.open_fd_count == 1
-    assert dev.is_open is True
-    assert t.close_fd(h.fd) is True
-    assert t.open_fd_count == 0
-    assert dev.state == DeviceState.CLOSED
+    t.register(FakeDevice("d1"))
+    fd = t.open("d1", mode=0)
+    assert isinstance(fd, int)
+    assert fd >= 0
+    assert t.stats()["open_fds"] == 1
+    assert t.close(fd) is True
+    assert t.close(fd) is False  # double close is not success
+    assert t.stats()["open_fds"] == 0
 
 
 def test_table_open_missing_device():
     t = DeviceTable()
-    assert t.open("nope") is None
+    assert t.open("nope") == -1
 
 
-def test_table_open_failing_device():
-    t = DeviceTable()
-    t.register(FailingOpenDevice("f"))
-    assert t.open("f") is None
-    assert t.open_fd_count == 0
+def test_table_open_fd_exhaustion():
+    t = DeviceTable(max_fds=4)
+    t.register(FakeDevice("d1"))
+    fds = [t.open("d1") for _ in range(4)]
+    assert fds == [0, 1, 2, 3]  # bitmap hands out the first free bits
+    assert t.open("d1") == -1  # bitmap full
+    assert t.stats()["open_fds"] == 4
 
 
 def test_table_close_fd_missing():
     t = DeviceTable()
-    assert t.close_fd(999) is False
+    assert t.close(999) is False
 
 
-def test_table_read_fd():
+# ── Table ioctl dispatch ───────────────────────────────────────────────────
+
+
+def test_table_ioctl_dispatch():
     t = DeviceTable()
     t.register(FakeDevice("d1"))
-    h = t.open("d1")
-    assert t.read_fd(h.fd, offset=1, size=2) == b"payload"
-    assert t.ioctl_fd(h.fd, "FLUSH", 1, 2) == ("ok", "FLUSH")
-    assert t.write_fd(h.fd, b"x") is True
+    fd = t.open("d1")
+    res = t.ioctl(fd, "FLUSH", 1, 2)
+    assert res.success is True
+    assert res.value == {"cmd": "FLUSH", "args": (1, 2)}
+    assert t.close(fd) is True
 
 
-def test_table_read_fd_bad_fd():
+def test_table_ioctl_bad_fd():
     t = DeviceTable()
-    with pytest.raises(ValueError, match="Bad file descriptor"):
-        t.read_fd(999)
+    res = t.ioctl(999, "CMD")
+    assert res.success is False
+    assert res.error == "bad fd"
 
 
-def test_table_read_fd_disconnected():
-    t = DeviceTable()
-    t.register(FakeDevice("d1"))
-    h = t.open("d1")
-    t.unregister("d1")
-    with pytest.raises(ValueError, match="Device disconnected"):
-        t.read_fd(h.fd)
-
-
-def test_table_write_fd_bad_fd():
-    t = DeviceTable()
-    with pytest.raises(ValueError, match="Bad file descriptor"):
-        t.write_fd(999, b"x")
-
-
-def test_table_write_fd_disconnected():
+def test_table_ioctl_closed_fd():
     t = DeviceTable()
     t.register(FakeDevice("d1"))
-    h = t.open("d1")
-    t.unregister("d1")
-    with pytest.raises(ValueError, match="Device disconnected"):
-        t.write_fd(h.fd, b"x")
+    fd = t.open("d1")
+    t.close(fd)
+    res = t.ioctl(fd, "CMD")
+    assert res.success is False
+    assert res.error == "fd not open"
 
 
-def test_table_ioctl_fd_bad_fd():
-    t = DeviceTable()
-    with pytest.raises(ValueError, match="Bad file descriptor"):
-        t.ioctl_fd(999, "CMD")
-
-
-def test_table_ioctl_fd_disconnected():
-    t = DeviceTable()
-    t.register(FakeDevice("d1"))
-    h = t.open("d1")
-    t.unregister("d1")
-    with pytest.raises(ValueError, match="Device disconnected"):
-        t.ioctl_fd(h.fd, "CMD")
+# ── Table info ─────────────────────────────────────────────────────────────
 
 
 def test_table_list_and_stats():
@@ -254,26 +236,33 @@ def test_table_list_and_stats():
     assert stats["devices"][0]["name"] == "d1"
 
 
+# ── Manager (DeviceTable wrapper) ──────────────────────────────────────────
+
+
 def test_device_manager_delegates():
     m = DeviceManager()
-    assert m.register(FakeDevice("d1")) is True
+    first = FakeDevice("d1")
+    assert m.register(first) is True
     assert m.register(FakeDevice("d1")) is False
-    assert m.get("d1").name == "d1"
-    h = m.open("d1", mode="rw")
-    assert h is not None
-    assert m.read(h.fd) == b"payload"
-    assert m.write(h.fd, b"x") is True
-    assert m.ioctl(h.fd, "CMD") == ("ok", "CMD")
+    # a rejected duplicate must not clobber the manager's registry
+    assert m.get("d1") is first
+    fd = m.open("d1")
+    assert fd >= 0
+    assert m.ioctl(fd, "CMD").success is True
     assert m.list_devices()[0]["name"] == "d1"
     assert m.stats()["total_devices"] == 1
-    assert m.close(h.fd) is True
+    assert m.close(fd) is True
     assert m.unregister("d1") is True
     assert m.unregister("d1") is False
+
+
+# ── Null device ────────────────────────────────────────────────────────────
 
 
 def test_null_device():
     d = NullDevice()
     assert d.name == "null"
     assert d.device_type == DeviceType.CUSTOM
-    assert d.read() == b""
-    assert d.write(b"anything") is True
+    res = d.ioctl("ANY")
+    assert res.success is True
+    assert res.value == b""  # writes discarded, reads come back empty
