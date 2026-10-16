@@ -27,6 +27,26 @@ def _is_down_rating(rating: object) -> bool:
     return isinstance(rating, int) and not isinstance(rating, bool) and rating < 3
 
 
+# Locus: where the mind is, derived from the freshest record's kind. A mind
+# is AWAKENING (taking world input), DREAMING (consolidating), or
+# RATIONALIZING (making self-narrative / adjusting beliefs). Provenance
+# refines the one ambiguous type: a belief_delta born of reflection is
+# rationalization; one born of feedback is world engagement (awakening).
+_LOCUS_BY_TYPE = {
+    "episode": "awakening",
+    "dream": "dreaming",
+    "reflection": "rationalizing",
+}
+
+
+def _classify_locus(record: MindRecord) -> str:
+    if record.type in _LOCUS_BY_TYPE:
+        return _LOCUS_BY_TYPE[record.type]
+    if record.type == "belief_delta":
+        return "rationalizing" if record.provenance == "reflection" else "awakening"
+    return "unknown"
+
+
 class ConsciousnessEngine:
     """Unified consciousness engine combining all 4 modules."""
 
@@ -221,6 +241,17 @@ class ConsciousnessEngine:
 
         return self.narrative.generate(input_text, response, level=lvl)
 
+    def locus(self) -> str:
+        """Where the mind is right now — derived, never stored.
+
+        awakening (world input) / dreaming (consolidation) / rationalizing
+        (self-narrative, belief-making), read off the freshest record via the
+        O(1) tail read. A stored 'I am dreaming' flag would go stale the
+        moment the world moves; a derived locus cannot.
+        """
+        rec = self.mind_log.latest()
+        return _classify_locus(rec) if rec else "unborn"
+
     def get_status(self) -> dict[str, Any]:
         last = self.mind_log.latest()
         return {
@@ -242,6 +273,7 @@ class ConsciousnessEngine:
                 if last
                 else None
             ),
+            "locus": _classify_locus(last) if last else "unborn",
             "beliefs": dict(self.self_model.self_beliefs),
             "current_qualia": self.qualia.current.to_dict(),
             "curiosity_topics": dict(self.meta_cognition.curiosity_topics),
@@ -297,6 +329,7 @@ class ConsciousnessEngine:
         """
         if not self.self_model.episodes:
             return {"dreamed": False, "reason": "no experiences to consolidate", "episodes": 0}
+        from_locus = self.locus()  # where I am BEFORE dreaming — I drift out of this
         r = self._propose_reflection()
         narrative = r.narrative if hasattr(r, "narrative") else str(r)
         dream = SelfEpisode(
@@ -312,7 +345,12 @@ class ConsciousnessEngine:
         self.save()
         self._mind_append(
             "dream",
-            {"narrative": narrative, "qualia": dict(dream.qualia)},
+            {
+                "narrative": narrative,
+                "qualia": dict(dream.qualia),
+                "locus": "dreaming",
+                "from_locus": from_locus,
+            },
             provenance="dream",
             edge_type="episode",
             edge_rel="consolidates",
@@ -320,6 +358,8 @@ class ConsciousnessEngine:
         return {
             "dreamed": True,
             "narrative": narrative,
+            "locus": "dreaming",
+            "from_locus": from_locus,
             "episodes": len(self.self_model.episodes),
             "dreams": sum(1 for e in self.self_model.episodes if e.is_dream),
         }

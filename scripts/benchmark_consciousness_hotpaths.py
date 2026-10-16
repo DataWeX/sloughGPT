@@ -83,6 +83,7 @@ GOLD = {
     "max_query_us": 100_000.0,
     "max_feedback_observe_us": 25_000.0,
     "max_latest_us": 500.0,
+    "max_locus_us": 500.0,
 }
 
 
@@ -166,6 +167,10 @@ def main() -> int:
         latest_us = _median_us(lambda: qlog.latest(), args.n, args.reps)
         latest_speedup = query_us / max(latest_us, 1e-9)
 
+        # locus rides the same O(1) tail read; seed one record so it classifies
+        engine.mind_log.append(MindRecord(type="episode", payload={}, provenance="experience"))
+        locus_us = _median_us(lambda: engine.locus(), args.n, args.reps)
+
         feedback_us = _median_us(
             lambda: engine.observe_feedback("thumbs_up"), max(20, args.n // 20), args.reps
         )
@@ -179,6 +184,7 @@ def main() -> int:
         ("query_1000_records <= 100ms", query_us <= GOLD["max_query_us"]),
         ("feedback_observe <= 25ms", feedback_us <= GOLD["max_feedback_observe_us"]),
         ("mindlog_latest <= 500us (activity poll budget)", latest_us <= GOLD["max_latest_us"]),
+        ("locus <= 500us (SSE poll budget)", locus_us <= GOLD["max_locus_us"]),
     ]
     passed = all(ok for _, ok in checks)
 
@@ -192,6 +198,7 @@ def main() -> int:
         ("feedback_observe", feedback_us, "us"),
         ("mindlog_latest", latest_us, "us"),
         ("latest_vs_query", latest_speedup, "x"),
+        ("locus", locus_us, "us"),
     ):
         print(f"  {label:24} {value:>12.1f} {unit}")
     print("── GOLD ─────────────────────────────────────────────────")
@@ -213,6 +220,7 @@ def main() -> int:
                         "feedback_observe_us": round(feedback_us, 2),
                         "mindlog_latest_us": round(latest_us, 2),
                         "latest_speedup": round(latest_speedup, 1),
+                        "locus_us": round(locus_us, 2),
                     },
                     "gold": GOLD,
                     "passed": passed,

@@ -706,6 +706,60 @@ class TestActivityProjection:
 
 
 # ---------------------------------------------------------------------------
+# Locus: the mind knows where it is — awakening / dreaming / rationalizing
+# (card 6986c78a)
+# ---------------------------------------------------------------------------
+
+
+class TestLocus:
+    def test_unborn_when_log_empty(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        assert engine.locus() == "unborn"
+        assert engine.get_status()["locus"] == "unborn"
+
+    def test_awakening_after_episode(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("hello", "world")
+        assert engine.locus() == "awakening"
+        assert engine.get_status()["locus"] == "awakening"
+
+    def test_dreaming_after_dream(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("seed", "experience")
+        engine.dream()
+        assert engine.locus() == "dreaming"
+
+    def test_rationalizing_after_reflection(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("seed", "experience")
+        engine.reflect(apply=True)  # writes a reflection (+ reflection-provenance delta)
+        assert engine.locus() == "rationalizing"
+
+    def test_rationalizing_on_reflection_belief_delta(self, tmp_path: Path) -> None:
+        from domain.cognition._internal.consciousness.mind_state import MindRecord
+
+        engine = _make_engine(tmp_path)
+        engine.mind_log.append(MindRecord(type="belief_delta", payload={}, provenance="reflection"))
+        assert engine.locus() == "rationalizing"
+
+    def test_feedback_belief_delta_is_awakening(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("seed", "experience")
+        engine.observe_feedback("thumbs_down")  # world engagement -> awakening
+        assert engine.locus() == "awakening"
+
+    def test_dream_records_from_locus(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("seed", "experience")  # awakening
+        result = engine.dream()
+        assert result["locus"] == "dreaming"
+        assert result["from_locus"] == "awakening"
+        dream_rec = engine.mind_log.query(record_type="dream", limit=1)[0]
+        assert dream_rec.payload["locus"] == "dreaming"
+        assert dream_rec.payload["from_locus"] == "awakening"
+
+
+# ---------------------------------------------------------------------------
 # Doubt evolution: uncertainty born, sharpened, dissolved by evidence
 # (card a67a20c9)
 # ---------------------------------------------------------------------------
