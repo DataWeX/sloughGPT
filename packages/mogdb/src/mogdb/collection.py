@@ -90,6 +90,13 @@ class Collection:
                 except json.JSONDecodeError:
                     continue
                 if not is_journal:
+                    # {"_mogdb_meta": ...} is snapshot framing / engine
+                    # bookkeeping, never data: Document() would mint it an _id
+                    # and every load would surface a fresh key-less document
+                    # through find() (card a3a6569f — GET /companion/presets
+                    # returned a raw meta row, breaking p["id"] clients).
+                    if isinstance(entry, dict) and "_mogdb_meta" in entry:
+                        continue
                     doc = Document(entry)
                     self._docs[doc.id] = doc
                     count += 1
@@ -100,6 +107,8 @@ class Collection:
                 if not isinstance(data, dict):
                     continue
                 if op == "insert":
+                    if "_mogdb_meta" in data:
+                        continue
                     doc = Document(data)
                     self._docs[doc.id] = doc
                     count += 1

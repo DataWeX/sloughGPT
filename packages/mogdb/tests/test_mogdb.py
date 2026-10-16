@@ -508,6 +508,76 @@ class TestPersistence:
             assert c.compact() == 0
             c.drop()
 
+    def test_snapshot_framing_not_loaded_as_document(self):
+        """A ``{"_mogdb_meta": ...}`` first line is snapshot framing, not data.
+
+        Document() would mint it an _id and every load would surface a fresh
+        key-less document through find() (card a3a6569f: GET /companion/presets
+        returned a raw meta row and broke clients doing p["id"]).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            snapshot = path / "frame.mogdb"
+            snapshot.write_text(
+                '{"_mogdb_meta": {"seq": 1000000000222, "v": 1}}\n'
+                + json.dumps({"id": "warm", "name": "Warm Friend"}) + "\n"
+                + json.dumps({"id": "curious", "name": "Curious Friend"}) + "\n"
+            )
+
+            c = Collection("frame", path)
+            assert c.count() == 2
+            assert all("_mogdb_meta" not in d for d in c.find())
+            assert all("_id" in d for d in c.find())
+            c.drop()
+
+    def test_snapshot_minted_meta_doc_skipped_anywhere(self):
+        """A meta row already minted into a snapshot (carrying _id) is dropped too.
+
+        compact() rewrites every in-memory document, so a meta row minted by an
+        earlier buggy load can freeze into the snapshot at an arbitrary line.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            snapshot = path / "poison.mogdb"
+            snapshot.write_text(
+                json.dumps({"id": "real", "v": 1}) + "\n"
+                + json.dumps(
+                    {
+                        "_mogdb_meta": {"seq": 7, "v": 1},
+                        "_id": "leaked",
+                        "_created": 1.0,
+                        "_updated": 1.0,
+                    }
+                )
+                + "\n"
+            )
+
+            c = Collection("poison", path)
+            assert c.count() == 1
+            assert c.find_one({"_id": "leaked"}) is None
+            c.drop()
+
+    def test_journal_replay_skips_meta_insert(self):
+        """A journaled insert of engine framing must not re-materialize it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            journal = path / "jmeta.journal.jsonl"
+            journal.write_text(
+                json.dumps({"op": "insert", "data": {"id": "real", "v": 1}}) + "\n"
+                + json.dumps(
+                    {
+                        "op": "insert",
+                        "data": {"_mogdb_meta": {"seq": 3, "v": 1}, "_id": "leaked"},
+                    }
+                )
+                + "\n"
+            )
+
+            c = Collection("jmeta", path)
+            assert c.count() == 1
+            assert c.find_one({"_id": "leaked"}) is None
+            c.drop()
+
 
 # =========================================================================
 # MogDB
