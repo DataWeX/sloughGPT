@@ -1605,8 +1605,8 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     # Apply persisted external API provider (OpenRouter / OpenAI-compatible)
     # so chat can route to it from the first request.
     try:
+        from domain.core.settings._internal.persistent import get_settings as _get_settings
         from domain.generate._internal.api_provider import configure_api_provider
-        from domain.settings._internal.persistent import get_settings as _get_settings
 
         _p = _get_settings().settings.providers
         if _p.enabled:

@@ -24,7 +24,7 @@ def _build_app():
 @pytest.fixture
 def isolated_settings(tmp_path, monkeypatch):
     """Point the persistent settings singleton at a temp file."""
-    from domain.settings._internal import persistent
+    from domain.core.settings._internal import persistent
 
     ps = persistent.PersistentSettings(settings_path=tmp_path / "settings.json")
     monkeypatch.setattr(persistent, "_default_settings", ps)

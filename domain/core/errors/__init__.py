@@ -6,7 +6,7 @@ Public API:
 
 from __future__ import annotations
 
-from domain.errors._internal.errors import (
+from domain.core.errors._internal.errors import (
     EmptyPromptError,
     InvalidGenerationInputError,
     SloughGPTDomainError,

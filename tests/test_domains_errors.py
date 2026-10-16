@@ -1,10 +1,10 @@
-"""``domain.errors`` — domain exceptions and prompt guards (no HTTP)."""
+"""``domain.core.errors`` — domain exceptions and prompt guards (no HTTP)."""
 
 from __future__ import annotations
 
 import pytest
 
-from domain.errors._internal.errors import (
+from domain.core.errors._internal.errors import (
     EmptyPromptError,
     InvalidGenerationInputError,
     SloughGPTDomainError,

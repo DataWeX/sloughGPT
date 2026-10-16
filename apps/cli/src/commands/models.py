@@ -457,7 +457,7 @@ def _cmd_models_compare(args):
 def _cmd_models_personalities(args):
     """List available personalities."""
     try:
-        from domain.ai_personality import PERSONALITIES
+        from domain.cognition.ai_personality import PERSONALITIES
     except ImportError:
         log.error("Personalities module not found")
         return

@@ -4,7 +4,7 @@ Subpackages:
     memory     — Chat/task memory
     voice      — TTS, STT, phoneme encoding
     knowledge  — Fact storage, ingestion
-    settings   — Persistent config
+    settings   — Persistent config (domain.core.settings)
     soul       — Cognitive engine
 
 Application services (auth, billing, mobile) live outside this package in
@@ -20,7 +20,6 @@ from typing import Any, Protocol, runtime_checkable
 try:
     from domain.benchmark._internal.domain import BenchmarkDomain, get_benchmark_domain
     from domain.chat._internal.domain import ChatDomain, get_chat_domain
-    from domain.companion import CompanionSystem, get_companion
     from domain.infrastructure._internal.errors import AppError
 except (ImportError, ModuleNotFoundError):
     AppError = Exception
@@ -28,8 +27,6 @@ except (ImportError, ModuleNotFoundError):
     get_chat_domain = None
     BenchmarkDomain = None
     get_benchmark_domain = None
-    get_companion = None
-    CompanionSystem = None
 
 
 class BaseComponent:
@@ -141,6 +138,19 @@ class DomainException(AppError):
     code: str = "E_DOMAIN"
     http_status: int = 400
     user_message: str = "A domain error occurred."
+
+
+# Imported last on purpose: domain.cognition is now the parent package of
+# `companion`, and its facade pulls BaseDomain, DomainException, the Protocols
+# and Memory/Thought/ThoughtType -- every one defined above. Importing it inside
+# the try block at the top of this module ran against a still-partially-
+# initialized `domain`, raised ImportError (circular), and was silently absorbed
+# by that except, which left domain.cognition half-loaded.
+try:
+    from domain.cognition.companion import CompanionSystem, get_companion
+except (ImportError, ModuleNotFoundError):
+    CompanionSystem = None
+    get_companion = None
 
 
 __all__ = [

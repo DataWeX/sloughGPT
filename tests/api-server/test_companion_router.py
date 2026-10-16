@@ -35,7 +35,7 @@ def _fresh_companion():
     """Reset the companion singleton before each test.
 
     Resets BOTH the router's cached reference and the real singleton in
-    ``_internal.companion``. The re-export shim (``domain.companion``)
+    ``_internal.companion``. The re-export shim (``domain.cognition.companion``)
     has no state of its own — the old symbol pokes missed it silently,
     so ``get_companion()`` kept re-serving the dirty instance. (The
     DELETE endpoint is not a default reset: it recreates the "warm"
@@ -43,7 +43,7 @@ def _fresh_companion():
     """
     import routers.companion as comp_mod
 
-    import domain.companion._internal.companion as comp_state
+    import domain.cognition.companion._internal.companion as comp_state
 
     def _reset():
         comp_mod._companion_router._companion = None

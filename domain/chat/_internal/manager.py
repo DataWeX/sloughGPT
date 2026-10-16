@@ -299,7 +299,7 @@ class ChatManager:
         """Cold path: merge persisted generation defaults with overrides."""
         defaults: dict[str, Any] = {}
         try:
-            from domain.settings._internal.persistent import get_settings
+            from domain.core.settings._internal.persistent import get_settings
 
             settings = get_settings(user_id)
             gen = getattr(settings, "generation", None)

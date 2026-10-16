@@ -7,7 +7,7 @@ Public API:
 
 from __future__ import annotations
 
-from domain.companion._internal.companion import (
+from domain.cognition.companion._internal.companion import (
     CompanionSystem,
     CompanionTraits,
     ConversationContext,

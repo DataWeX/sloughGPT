@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domain.settings._internal.persistent import (
+from domain.core.settings._internal.persistent import (
     AppSettings,
     PersistentSettings,
 )

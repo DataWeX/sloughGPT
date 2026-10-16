@@ -33,7 +33,7 @@ class PluginsRouter:
     async def list_plugins(self) -> dict:
         """List all loaded plugins."""
         try:
-            from domain.plugins import get_plugin_manager
+            from domain.core.plugins import get_plugin_manager
 
             pm = get_plugin_manager()
             plugins = pm.list_plugins()
@@ -49,7 +49,7 @@ class PluginsRouter:
     ) -> dict:
         """Enable a plugin."""
         try:
-            from domain.plugins import get_plugin_manager
+            from domain.core.plugins import get_plugin_manager
 
             pm = get_plugin_manager()
             meta = pm._metadata.get(plugin_name)
@@ -68,7 +68,7 @@ class PluginsRouter:
     ) -> dict:
         """Disable a plugin."""
         try:
-            from domain.plugins import get_plugin_manager
+            from domain.core.plugins import get_plugin_manager
 
             pm = get_plugin_manager()
             meta = pm._metadata.get(plugin_name)
@@ -86,7 +86,7 @@ class PluginsRouter:
     ) -> dict:
         """Reload plugins from plugin directories."""
         try:
-            from domain.plugins import get_plugin_manager
+            from domain.core.plugins import get_plugin_manager
 
             pm = get_plugin_manager()
             repo_root = find_repo_root(Path(__file__).resolve())

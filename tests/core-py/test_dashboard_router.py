@@ -169,7 +169,7 @@ class TestDashboardSummary:
             },
         )
         _mock(
-            "domain.settings._internal.persistent",
+            "domain.core.settings._internal.persistent",
             {"get_settings": MagicMock(return_value={"settings": True})},
         )
 
@@ -210,7 +210,7 @@ class TestDashboardSummary:
             },
         )
         _mock(
-            "domain.settings._internal.persistent",
+            "domain.core.settings._internal.persistent",
             {"get_settings": MagicMock(return_value={"settings": True})},
         )
 
@@ -250,7 +250,7 @@ class TestDashboardSummary:
             },
         )
         _mock(
-            "domain.settings._internal.persistent",
+            "domain.core.settings._internal.persistent",
             {"get_settings": MagicMock(return_value={"settings": True})},
         )
 

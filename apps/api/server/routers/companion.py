@@ -152,7 +152,7 @@ class CompanionRouter:
     def _get_companion(self):
         """Get or create companion."""
         if self._companion is None:
-            from domain.companion import get_companion
+            from domain.cognition.companion import get_companion
 
             self._companion = get_companion()
         return self._companion
@@ -167,7 +167,7 @@ class CompanionRouter:
     async def reset_companion(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Reset companion to default state."""
         self._companion = None
-        from domain.companion import create_companion
+        from domain.cognition.companion import create_companion
 
         self._companion = create_companion()
         safe_audit_log("companion.reset")

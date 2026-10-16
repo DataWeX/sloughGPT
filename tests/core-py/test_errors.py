@@ -1,8 +1,8 @@
-"""Tests for domain.errors — exception hierarchy and require_non_empty_prompt."""
+"""Tests for domain.core.errors — exception hierarchy and require_non_empty_prompt."""
 
 import pytest
 
-from domain.errors._internal.errors import (
+from domain.core.errors._internal.errors import (
     EmptyPromptError,
     InvalidGenerationInputError,
     SloughGPTDomainError,

@@ -7,7 +7,7 @@ Public API:
 
 from __future__ import annotations
 
-from domain.settings._internal.persistent import (
+from domain.core.settings._internal.persistent import (
     AdaptiveSettings,
     AppSettings,
     GenerationSettings,

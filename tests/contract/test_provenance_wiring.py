@@ -28,7 +28,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOMAIN_DIR = REPO_ROOT / "domain"
-SLO_FORMAT = DOMAIN_DIR / "inference" / "_internal" / "slo_format.py"
+SLO_FORMAT = DOMAIN_DIR / "generate" / "_internal" / "slo_format.py"
 
 
 def _save_soul_calls() -> list[tuple[Path, ast.Call]]:

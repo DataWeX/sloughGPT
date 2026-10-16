@@ -2,7 +2,7 @@
 
 import pytest
 
-from domain.companion import (
+from domain.cognition.companion import (
     CompanionSystem,
     CompanionTraits,
     ConversationContext,
@@ -238,7 +238,7 @@ class TestCompanionSystem:
 
 class TestGetCompanion:
     def test_returns_singleton(self):
-        import domain.companion as mod
+        import domain.cognition.companion as mod
 
         mod._companion = None
         c1 = get_companion()
@@ -246,7 +246,7 @@ class TestGetCompanion:
         assert c1 is c2
 
     def test_singleton_resets(self):
-        import domain.companion as mod
+        import domain.cognition.companion as mod
 
         mod._companion = None
         c = get_companion()

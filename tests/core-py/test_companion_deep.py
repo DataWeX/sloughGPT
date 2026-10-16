@@ -1,6 +1,6 @@
 """Meaningful tests for CompanionSystem — clean_response, respond, adjust_for_mood, create_companion presets."""
 
-from domain.companion import (
+from domain.cognition.companion import (
     CompanionSystem,
     CompanionTraits,
     ConversationContext,

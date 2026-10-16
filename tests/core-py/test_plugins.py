@@ -1,6 +1,6 @@
 """Tests for the plugin framework."""
 
-from domain.plugins import (
+from domain.core.plugins import (
     Plugin,
     PluginHook,
     PluginManager,

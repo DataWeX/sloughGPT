@@ -7,7 +7,7 @@ Public API:
 
 from __future__ import annotations
 
-from domain.ai_personality._internal.personality import (
+from domain.cognition.ai_personality._internal.personality import (
     PERSONALITIES,
     Personality,
     PersonalityManager,

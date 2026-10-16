@@ -853,7 +853,7 @@ class HealthRouter:
             services["training"] = {"status": "error", "error": str(e)}
         # Settings
         try:
-            from domain.settings import get_settings
+            from domain.core.settings import get_settings
 
             ps = get_settings()
             services["settings"] = {"status": "ok", "sections": list(vars(ps.settings).keys())}
@@ -861,7 +861,7 @@ class HealthRouter:
             services["settings"] = {"status": "error", "error": str(e)}
         # Plugins
         try:
-            from domain.plugins import PluginManager
+            from domain.core.plugins import PluginManager
 
             pm = PluginManager()
             services["plugins"] = {"status": "ok", "loaded": len(pm.list_plugins())}
