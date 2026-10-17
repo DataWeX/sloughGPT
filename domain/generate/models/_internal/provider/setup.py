@@ -236,7 +236,11 @@ def setup_providers(
             )
 
             cfg = get_config()
-            default_model = cfg.autoload_model
+            # Domain AppConfig carries the model under cfg.model (ModelConfig);
+            # there is no flat autoload_model here — that field lives only on
+            # the server's AppConfig. Ported from 15bc0a3da (stranded on
+            # chore/ast-reachability et al).
+            default_model = cfg.model.name if cfg.model.autoload else None
             if default_model:
                 _cache_dir = _get_model_dir(default_model)
                 _slnc = _cache_dir / "model.slnc"
