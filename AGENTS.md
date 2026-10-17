@@ -117,7 +117,7 @@ This ensures consistent error handling, retries, caching, circuit breaking, and 
 
 **A page is a projection of a user journey — not a trophy case of engines.**
 
-The endpoint rule governs the API half of surface area; this governs the UI half, for the same reason — surface area is recurring cost, and "the engine exists" is not a journey. The endpoint rule has a descriptor and a parity gate; this rule historically had neither, which is how 79 `page.tsx` accumulated against a documented target of ~20 (only ~18 reachable from nav, ~2 of 79 role-checked).
+The endpoint rule governs the API half of surface area; this governs the UI half, for the same reason — surface area is recurring cost, and "the engine exists" is not a journey. The endpoint rule has a descriptor and a parity gate; this rule historically had neither, which is how **110 `page.tsx`** accumulated against a documented target of ~20 (measured on main 2026-10-17: 19 of 20 nav routes map to a page, **91 pages are nav-orphans**, **2 of 110 carry any role check** — `PRODUCT_ENGINEERING.md` itself records "current 109 pages" against "~20 pages / ~15 routers" target).
 
 1. **The 5-point test** — a new `page.tsx` earns existence only if ALL hold:
    1. **Named journey** — it serves a flow cited in `docs/UX_FLOWS.md` (a persona task, end-to-end). Engine existence, a new contract, or "we have an endpoint for it" are not journeys.
@@ -127,4 +127,4 @@ The endpoint rule governs the API half of surface area; this governs the UI half
    5. **Route budget** — `docs/PRODUCT_ENGINEERING.md` targets ~20 pages. Adding one consumes budget; exceeding it requires merging one first. Ratchet, not aspiration.
 2. **Intake owns the call** — the ruling happens at card time (SOP steps 1, 4-5) by the product side, not at build time by whoever writes the file. A brief that says "build a page for X" without a journey citation goes back for the citation before code; Gene bounces it at decomposition.
 3. **Enforcement is mechanical, not vibes** — `journeyId` on every `NavRoute` (`apps/web/lib/navigation.ts`) and the page baseline ratchet (`apps/web/lib/page-baseline.json`: every `page.tsx` on disk must be catalogued; new entries must cite a `ux/` journey; grandfathered and unmapped counts may only shrink) are enforced by `apps/web/lib/page-journey-gate.test.ts`. Policy lives here; the gate keeps sessions honest at 2am. (Persona matrix precedent: documentation alone did not hold the line.)
-4. **Grandfathered, same clause as routers** — the existing 79 are cleanup cards' business (freeze, consolidation, role gating), never a retroactive purge by this rule.
+4. **Grandfathered, same clause as routers** — the existing 110 are cleanup cards' business (freeze, consolidation, role gating), never a retroactive purge by this rule.
