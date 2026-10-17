@@ -17,7 +17,7 @@ logger = logging.getLogger("slo.infrastructure.context_core")
 
 # Lazy import to avoid heavy deps at module load
 def simple_embed(text: str) -> list[float]:
-    """Embed text using sentence-transformers (cached model singleton)."""
+    """Embed text via the canonical vector_store embedder (SloNet checkpoint -> word n-gram TF-IDF, local-only)."""
     from domain.inference._internal.vector_store import simple_embed as vs_embed
 
     return vs_embed(text)
