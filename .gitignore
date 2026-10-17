@@ -234,6 +234,10 @@ t.png
 *.so
 *.so.buildflags
 
+# Native engine source-hash cache (domain/slolib/_internal/native.py)
+# holds compiled .so + hashed .c copies — regenerated per source hash.
+.native_cache/
+
 # Build output
 **/target/
 

@@ -877,6 +877,14 @@ class CyclesRenderer:
         self.device = device or os.environ.get("SLO_CYCLES_DEVICE") or "auto"
         self._xp = resolve_array_module(self.device)
         self._rng = np.random.default_rng(42)
+        # Seed for the native core's counter RNG (keyed per path/depth/slot),
+        # pinned to the same 42 the numpy path uses so both are deterministic
+        # per seed. The bridge packs the scene + dispatches to the compiled
+        # engine; None-fallback to the numpy oracle lives in render().
+        self._seed = 42
+        from domain.shell._internal._native import NativeTrace
+
+        self._native = NativeTrace()
 
     def render(self) -> np.ndarray:
         """Render the scene. Returns (H, W, 3) float32 image tensor.
@@ -928,6 +936,21 @@ class CyclesRenderer:
         # One batch, one upload, one trace, one download for the frame:
         # _trace_batch only reads shape[:2], so samples stack as extra
         # rows — (s*H, W, 3) pretends s frames stacked vertically.
+        # Native single-source core first (card 4de18e24): one C algorithm
+        # compiled to gcc+OpenMP (cpu) or NVRTC (cuda). It traces the whole
+        # fused batch as one flat ray set in a single call — no per-bounce
+        # dispatch, no alive-ray compaction. Host in -> radiance host out,
+        # so it skips the upload below. None => no engine for this device
+        # -> fall through to the numpy oracle (identical math, slower).
+        flat_o = np.broadcast_to(origins, (s, self.height, self.width, 3)).reshape(-1, 3)
+        flat_d = dirs_all.reshape(-1, 3)
+        rad = self._native.trace(
+            xp, self.scene, flat_o, flat_d, self._seed, MAX_DEPTH, RR_START
+        )
+        if rad is not None:
+            image = rad.reshape(s, self.height, self.width, 3).mean(axis=0)
+            return np.clip(image, 0, 1)
+
         o = xp.asarray(
             np.broadcast_to(origins, (s, self.height, self.width, 3)).reshape(
                 s * self.height, self.width, 3
