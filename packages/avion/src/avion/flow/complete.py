@@ -26,6 +26,7 @@ makes the next launch pick up exactly where this one left off.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence
 
@@ -69,6 +70,32 @@ class FlowOutcome:
         }
 
 
+async def _settled_url(backend, *, reads: int = 8, pause: float = 0.25) -> str:
+    """The page's URL once it stops changing.
+
+    The last recorded click may have started a navigation the immediate
+    read would race (seen in the wild: the trailing get_url returning
+    '' mid-load, one run in three under load). Poll until two consecutive
+    reads agree; a transient read error counts as '' and keeps polling —
+    a hard failure still resolves to '' like before.
+    """
+
+    async def _read() -> str:
+        try:
+            return str(await backend.get_url() or "")
+        except Exception:
+            return ""
+
+    url = await _read()
+    for _ in range(reads):
+        await asyncio.sleep(pause)
+        nxt = await _read()
+        if nxt == url:
+            return url
+        url = nxt
+    return url
+
+
 async def complete_flow(
     events: Sequence[Event],
     launched: Launched | Any,
@@ -100,7 +127,7 @@ async def complete_flow(
     try:
         result = await EventReplay(session, config).replay(list(events))
         try:
-            final_url = str(await backend.get_url() or "")
+            final_url = await _settled_url(backend)
         except Exception:  # noqa: BLE001 — report the flow, never mask it with a read error
             final_url = ""
         return FlowOutcome(

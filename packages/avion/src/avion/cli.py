@@ -16,6 +16,7 @@ Usage::
     avion network --json
     avion launch --profile x           # own a browser; --no-wait detaches it
     avion run flow.json --profile x    # complete a recorded flow (or --cdp attach)
+    avion repl --record flow.json      # author a flow by driving; avion run completes it
     avion repl
 
 One invocation = one CDP session, but ``console``/``network`` keep history:
@@ -39,12 +40,13 @@ import asyncio
 import hashlib
 import json
 import os
+import shlex
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
-from avion.events.models import Event
+from avion.events.models import Event, EventType
 
 _DEFAULT_CDP = os.environ.get("AVION_CDP_URL", "ws://localhost:9222")
 _HINT = (
@@ -263,7 +265,7 @@ async def _cmd_network(b, as_json: bool, history: list[dict[str, Any]] | None = 
     return 0
 
 
-async def _cmd_repl(cdp_url: str) -> int:
+async def _cmd_repl(cdp_url: str, record_path: str | None = None) -> int:
     """Persistent session: read verb-args lines until quit."""
     from avion.backends.cdp import CdpBackend
 
@@ -274,7 +276,14 @@ async def _cmd_repl(cdp_url: str) -> int:
         print(f"avion: cannot reach Chromium at {cdp_url}: {e}", file=sys.stderr)
         print(_HINT, file=sys.stderr)
         return 2
-    print(f"avion repl — connected to {cdp_url} (quit to exit)")
+    recorder = None
+    if record_path:
+        from avion.events.recorder import EventRecorder
+
+        recorder = EventRecorder(session_name="repl")
+        print(f"avion repl — connected to {cdp_url} (quit to exit) — RECORDING -> {record_path}")
+    else:
+        print(f"avion repl — connected to {cdp_url} (quit to exit)")
     try:
         while True:
             try:
@@ -291,7 +300,9 @@ async def _cmd_repl(cdp_url: str) -> int:
             if line in ("quit", "exit", "q"):
                 break
             try:
-                code = await _dispatch(backend, line.split(), in_session=True)
+                code = await _dispatch(
+                    backend, shlex.split(line), in_session=True, recorder=recorder
+                )
             except SystemExit as e:
                 code = int(e.code or 1)
             if code:
@@ -299,29 +310,59 @@ async def _cmd_repl(cdp_url: str) -> int:
     finally:
         await backend.stop()
         _persist_events(cdp_url, backend)
+        if recorder is not None:
+            recorder.save(record_path)
+            print(f"recorded {len(recorder)} events -> {record_path}")
     return 0
 
 
-async def _dispatch(backend, argv: list[str], in_session: bool = False) -> int:
+async def _dispatch(backend, argv: list[str], in_session: bool = False, recorder=None) -> int:
     """Run one command against an existing backend (repl path)."""
     verb, rest = argv[0], argv[1:]
     if verb == "open" and len(rest) >= 1:
-        return await _cmd_open(backend, rest[0])
+        code = await _cmd_open(backend, rest[0])
+        rec = _replayable(recorder, code)
+        if rec is not None:
+            rec.record(EventType.NAVIGATE, name=rest[0])
+        return code
     if verb == "snapshot":
         return await _cmd_snapshot(backend)
     if verb == "click" and len(rest) >= 1:
         by, rest = _pop_by(rest)
-        return await _cmd_click(backend, rest[0], by)
+        code = await _cmd_click(backend, rest[0], by)
+        rec = _replayable(recorder, code)
+        if rec is not None:
+            loc = _locator(rest[0], by)
+            # The click resolved the element (a find) — record that as the
+            # evidence barrier first, exactly like session-driven
+            # recordings, so replay settles after submits instead of
+            # racing them. Unparseable (xpath) names are skipped as
+            # noise by replay itself.
+            rec.record(EventType.ELEMENT_FOUND, name=loc.describe())
+            rec.record(EventType.CLICK, name=loc.describe())
+        return code
     if verb == "fill" and len(rest) >= 2:
         by, rest = _pop_by(rest)
-        return await _cmd_fill(backend, rest[0], rest[1], by)
+        code = await _cmd_fill(backend, rest[0], rest[1], by)
+        rec = _replayable(recorder, code)
+        if rec is not None:
+            loc = _locator(rest[0], by)
+            rec.record(EventType.ELEMENT_FOUND, name=loc.describe())
+            rec.record(EventType.FILL, name=loc.describe(), data={"value": rest[1]})
+        return code
     if verb == "wait" and len(rest) >= 1:
         timeout = 10.0
         if "--timeout" in rest:
             i = rest.index("--timeout")
             timeout = float(rest[i + 1])
             rest = rest[:i] + rest[i + 2 :]
-        return await _cmd_wait(backend, rest[0], timeout)
+        code = await _cmd_wait(backend, rest[0], timeout)
+        rec = _replayable(recorder, code)
+        if rec is not None:
+            from avion.core.element import ElementLocator
+
+            rec.record(EventType.ELEMENT_FOUND, name=ElementLocator.text(rest[0]).describe())
+        return code
     if verb == "shot" and len(rest) >= 1:
         return await _cmd_shot(backend, rest[0])
     if verb == "console":
@@ -330,8 +371,18 @@ async def _dispatch(backend, argv: list[str], in_session: bool = False) -> int:
         return await _cmd_network(backend, "--json" in rest)
     if verb == "help":
         print("verbs: open snapshot click fill wait shot console network quit")
+        print("quote arguments with spaces: fill 'input[name=q]' \"hello world\"")
         return 0
     return _fail(f"unknown or incomplete command: {' '.join(argv)}")
+
+
+def _replayable(recorder, code: int):
+    """Record only what replay can re-drive: successes, when recording.
+
+    A failed verb is a typo the human retries — putting it in the flow
+    would break every future run of it.
+    """
+    return recorder if recorder is not None and code == 0 else None
 
 
 def _pop_by(rest: list[str]) -> tuple[str, list[str]]:
@@ -472,7 +523,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("network", help="show captured network requests")
     sp.add_argument("--json", action="store_true")
 
-    sub.add_parser("repl", help="interactive session (same verbs)")
+    sp = sub.add_parser("repl", help="interactive session (same verbs)")
+    sp.add_argument(
+        "--record",
+        metavar="FLOW_JSON",
+        default=None,
+        help="record successful verbs into a flow file avion run can complete",
+    )
 
     sp = sub.add_parser("launch", help="start a persistent-profile browser")
     sp.add_argument("--profile", default="default", help="named profile (logins persist in it)")
@@ -524,7 +581,7 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().print_help()
         return 0
     if args.cmd == "repl":
-        return asyncio.run(_cmd_repl(args.cdp))
+        return asyncio.run(_cmd_repl(args.cdp, record_path=args.record))
     if args.cmd == "launch":
         return _cmd_launch(args)
     if args.cmd == "run":
