@@ -10,7 +10,7 @@ psutil>=5.9.0
 Pillow>=9.0.0
 
 # Kaggle Dataset Import
-kaggle>=0.14.0
+kaggle>=2.2.4
 
 # Model Export
 onnx>=1.15.0
