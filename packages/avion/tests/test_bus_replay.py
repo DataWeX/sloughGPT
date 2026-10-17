@@ -124,6 +124,39 @@ class TestReplay:
         assert result.success is True
         assert a._backend.clicked == []
 
+    def test_element_found_replays_as_barrier(self):
+        """Recorded evidence becomes a wait step — replay honors the
+        settle point the recorder observed (the post-submit wait that
+        keeps a form submit from racing the next goto)."""
+        a = self._session()
+        rec = EventRecorder()
+        rec.record(EventType.ELEMENT_FOUND, name=ElementLocator.text("Start").describe())
+        rec.record(EventType.CLICK, name=ElementLocator.text("Start").describe())
+        result = run(EventReplay(a).replay(rec.events))
+        assert result.success is True
+        assert result.passed == 2
+        assert result.steps[0].action.startswith("wait ")
+        assert a._backend.clicked == [ElementLocator.text("Start").describe()]
+
+    def test_missing_barrier_evidence_fails_the_step(self):
+        """Evidence the page no longer shows is honest divergence, not noise."""
+        a = self._session()
+        rec = EventRecorder()
+        rec.record(EventType.ELEMENT_FOUND, name=ElementLocator.text("Never").describe())
+        result = run(EventReplay(a).replay(rec.events))
+        assert result.success is False
+        assert result.steps[0].success is False
+        assert "Element not found" in result.steps[0].error
+
+    def test_unreversible_evidence_is_skipped(self):
+        a = self._session()
+        rec = EventRecorder()
+        rec.record(EventType.ELEMENT_FOUND, name="xpath=//mystery")
+        rec.record(EventType.NAVIGATE, name="/late")
+        result = run(EventReplay(a).replay(rec.events))
+        assert result.success is True
+        assert len(result.steps) == 1  # only the goto — evidence skipped as noise
+
     def test_error_stops_by_default(self):
         a = self._session()
         rec = EventRecorder()

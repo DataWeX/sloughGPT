@@ -112,8 +112,19 @@ class EventReplay:
     async def _replay_one(self, event: Event) -> ReplayStep | None:
         try:
             if event.type == EventType.NAVIGATE:
+                return await self._do_goto(event)
+            if event.type == EventType.ELEMENT_FOUND:
+                # Recorded evidence replays as a BARRIER: the recorder saw
+                # this element before it proceeded — the post-submit wait
+                # that closes the form-submit race at record time. Skipping
+                # it would drop the proof; replaying it re-creates the
+                # settle point, so a login lands before the next goto races
+                # it (seen: fresh-profile replay parked on /login).
+                locator = parse_locator(event.name)
+                if locator is None:
+                    return None  # unreversible evidence — treat as noise
                 return await self._do(
-                    event, f"goto {event.name}", lambda: self._session.goto(event.name)
+                    event, f"wait {event.name}", lambda: self._session.find(locator)
                 )
             if event.type in (EventType.CLICK, EventType.FILL):
                 locator = parse_locator(event.name)
@@ -138,6 +149,21 @@ class EventReplay:
         try:
             if not self._config.dry_run:
                 await run()
+            return ReplayStep(event.seq, action)
+        except Exception as e:
+            return ReplayStep(event.seq, action, False, str(e))
+
+    async def _do_goto(self, event: Event) -> ReplayStep:
+        """``session.goto`` reports failure by RETURN, not by raising — a
+        passed step for a page that never moved is a lie the flow report
+        must not tell (seen: an attach replay counted ``goto /`` as done
+        while the browser sat on the results page)."""
+        action = f"goto {event.name}"
+        try:
+            if not self._config.dry_run:
+                ok = await self._session.goto(event.name)
+                if ok is False:
+                    return ReplayStep(event.seq, action, False, "navigation did not land")
             return ReplayStep(event.seq, action)
         except Exception as e:
             return ReplayStep(event.seq, action, False, str(e))

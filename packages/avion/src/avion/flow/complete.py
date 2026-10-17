@@ -71,17 +71,22 @@ class FlowOutcome:
 
 async def complete_flow(
     events: Sequence[Event],
-    launched: Launched,
+    launched: Launched | Any,
     *,
     base_url: str = "",
     config: ReplayConfig | None = None,
 ) -> FlowOutcome:
-    """Complete a recorded flow on a browser avion owns.
+    """Complete a recorded flow on a browser avion owns (or is attached to).
 
-    Every recorded NAVIGATE/CLICK/FILL is re-driven through a fresh Arken
-    session on ``launched.backend``; session markers and other noise are
+    ``launched`` is a :class:`avion.launch.Launched` (avion owns the
+    process) or a bare backend already connected to some browser (the
+    CLI's attach model, ``avion run --cdp``) — whichever carries the
+    connection is used. Every recorded NAVIGATE/CLICK/FILL is re-driven
+    through a fresh Arken session; session markers and other noise are
     skipped by replay itself (they count toward ``steps_total`` as
-    replayed steps only). ``config`` carries the policy: ``stop_on_error``
+    replayed steps only); recorded ``ELEMENT_FOUND`` evidence replays as
+    barriers — the settle points that keep a form submit from racing the
+    next navigation. ``config`` carries the policy: ``stop_on_error``
     (replay's default: stop at the first failed step) and ``dry_run``
     (resolve every locator, touch nothing — a dress rehearsal).
 
@@ -89,12 +94,13 @@ async def complete_flow(
     click-driven navigations a form submission caused — not merely the
     last explicit goto.
     """
+    backend = getattr(launched, "backend", launched)  # Launched or bare backend
     session = Arken(base_url=base_url)
-    await session.start(backend=launched.backend)
+    await session.start(backend=backend)
     try:
         result = await EventReplay(session, config).replay(list(events))
         try:
-            final_url = str(await launched.backend.get_url() or "")
+            final_url = str(await backend.get_url() or "")
         except Exception:  # noqa: BLE001 — report the flow, never mask it with a read error
             final_url = ""
         return FlowOutcome(

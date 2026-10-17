@@ -223,7 +223,12 @@ class CdpBackend:
         self._inflight.clear()
 
     async def navigate(self, url: str) -> None:
-        await self._send("Page.navigate", {"url": url})
+        res = await self._send("Page.navigate", {"url": url})
+        # Chrome reports a bad target in the result's errorText, NOT as an
+        # RPC error — swallowing it would let a navigation that never
+        # happened pass as done all the way to a flow's exit code.
+        if isinstance(res, dict) and res.get("errorText"):
+            raise RuntimeError(f"CDP navigate error: {res['errorText']}")
 
     async def evaluate(self, expression: str) -> Any:
         res = await self._send(

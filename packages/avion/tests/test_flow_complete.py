@@ -116,8 +116,12 @@ def _chromium_or_skip() -> str:
 _LAUNCH_ARGS = ("--no-sandbox", "--disable-gpu")
 
 
-async def _record(base: str, launched, *, login: bool) -> list:
-    """Perform the flow once; the session's recorder captures the events."""
+async def _record(base: str, launched, *, login: bool, save_to=None) -> list:
+    """Perform the flow once; the session's recorder captures the events.
+
+    ``save_to`` additionally exports the recording via
+    ``EventRecorder.save()`` — what ``avion run`` consumes.
+    """
     session = Arken(base_url=base)
     await session.start(backend=launched.backend)
     try:
@@ -138,6 +142,8 @@ async def _record(base: str, launched, *, login: bool) -> list:
         return list(session.recorder.events)
     finally:
         await session.stop()
+        if save_to is not None:
+            session.recorder.save(str(save_to))
 
 
 async def _assert_results_show(base: str, launched):
