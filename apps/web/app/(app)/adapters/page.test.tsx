@@ -244,10 +244,18 @@ describe('AdaptersPage', () => {
     render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getByText('Prune Old')).toBeTruthy() })
     expect(mockList).toHaveBeenCalledTimes(1)
-    await act(async () => { screen.getByText('Prune Old').click() })
-    await waitFor(() => { expect(mockPrune).toHaveBeenCalled() })
-    expect(screen.getByText('Pruned 2 adapters')).toBeTruthy()
-    await waitFor(() => { expect(mockList).toHaveBeenCalledTimes(2) })
+    await act(async () => {
+      screen.getByText('Prune Old').click()
+    })
+    await waitFor(() => {
+      expect(mockPrune).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Pruned 2 adapters')).toBeTruthy()
+    })
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('shows prune failure message', async () => {

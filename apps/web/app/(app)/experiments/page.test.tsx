@@ -215,7 +215,9 @@ describe('ExperimentsPage', () => {
     await act(async () => { fireEvent.change(screen.getAllByPlaceholderText('Value')[0], { target: { value: '0.25' } }) })
     await act(async () => { screen.getByText('Log Metric').click() })
     await waitFor(() => { expect(mockLogMetric).toHaveBeenCalledWith('distill-run-3', 'loss', 0.25) })
-    expect(screen.getByText('Logged loss=0.25')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Logged loss=0.25')).toBeTruthy()
+    })
   })
 
   it('logs a param to the selected experiment', async () => {
@@ -228,7 +230,9 @@ describe('ExperimentsPage', () => {
     await act(async () => { fireEvent.change(screen.getAllByPlaceholderText('Value')[1], { target: { value: '1e-4' } }) })
     await act(async () => { screen.getByText('Log Param').click() })
     await waitFor(() => { expect(mockLogParam).toHaveBeenCalledWith('distill-run-3', 'lr', '1e-4') })
-    expect(screen.getByText('Logged lr=1e-4')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Logged lr=1e-4')).toBeTruthy()
+    })
   })
 
   it('marks an experiment complete and shows status message', async () => {
@@ -238,7 +242,9 @@ describe('ExperimentsPage', () => {
     await waitFor(() => { expect(screen.getByText('distill-run-3')).toBeTruthy() })
     await act(async () => { screen.getByText('Done').click() })
     await waitFor(() => { expect(mockComplete).toHaveBeenCalledWith('distill-run-3') })
-    expect(screen.getByText('Experiment distill-run-3 marked complete')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Experiment distill-run-3 marked complete')).toBeTruthy()
+    })
   })
 
   it('dismisses the log status message', async () => {

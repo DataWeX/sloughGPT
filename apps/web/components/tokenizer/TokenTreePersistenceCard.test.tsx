@@ -111,7 +111,9 @@ describe('TokenTreePersistenceCard', () => {
     await waitFor(() => expect(mocks.mockGetStats).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(mocks.mockListSaved).toHaveBeenCalledTimes(1))
     expect(await screen.findByText('the-default')).toBeDefined()
-    expect(screen.getByText('Vocab 53')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('Vocab 53')).toBeDefined()
+    })
   })
 
   it('disables the save button when the tree is not trained', async () => {
