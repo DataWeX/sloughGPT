@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from safetensors import safe_open
+from _safetensors import read_safetensors
 
 from domain.infrastructure._internal.arch_config import build_arch
 from domain.infrastructure._internal.numpy_ops import gelu, layer_norm, softmax
@@ -12,9 +12,7 @@ from domain.infrastructure._internal.numpy_ops import gelu, layer_norm, softmax
 snap = sorted((Path.home() / ".cache/huggingface/hub/models--gpt2/snapshots").glob("*"))[0]
 weights = {}
 for f in sorted(snap.glob("*.safetensors")):
-    with safe_open(str(f), framework="numpy") as sf:
-        for k in sf.keys():
-            weights[k] = sf.get_tensor(k)
+    weights.update(read_safetensors(f))
 
 arch = build_arch("gpt2", {}, set(weights.keys()))
 W = arch.weight_map
