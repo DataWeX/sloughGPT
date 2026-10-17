@@ -1,5 +1,5 @@
 {
-  "_comment": "Page Rule (AGENTS.md) baseline. grandfathered = the pre-rule pages, no journey citation required — ratchet: this list may only SHRINK (deleting a page = delete its entry). New pages go into journeys with a ux/<flow> citation from docs/UX_FLOWS.md, never into grandfathered.",
+  "_comment": "Page Rule (AGENTS.md) baseline — mirrors main's tree EXACTLY (generated from git ls-tree, not a possibly-dirty worktree; the api-std checkout carries the crashed lane's staged mole->doctor page rename, which flips this gate red until that rename lands and its session updates the rows). grandfathered = pre-rule pages, no journey citation required — ratchet: list may only SHRINK (deleting a page = delete its entry + decrement GRANDFATHERED_CEILING). New pages go into journeys with a ux/<flow> citation from docs/UX_FLOWS.md, never into grandfathered.",
   "grandfathered": [
     "app/(app)/adapters/page.tsx",
     "app/(app)/admin/page.tsx",
@@ -45,7 +45,6 @@
     "app/(app)/datasets/page.tsx",
     "app/(app)/developer/page.tsx",
     "app/(app)/docstore/page.tsx",
-    "app/(app)/doctor/page.tsx",
     "app/(app)/errors/page.tsx",
     "app/(app)/evaluate/page.tsx",
     "app/(app)/experiments/page.tsx",
@@ -65,6 +64,7 @@
     "app/(app)/meta-weights/page.tsx",
     "app/(app)/model/[id]/page.tsx",
     "app/(app)/models/page.tsx",
+    "app/(app)/mole/page.tsx",
     "app/(app)/monitoring/page.tsx",
     "app/(app)/multimodal/page.tsx",
     "app/(app)/notifications/page.tsx",
