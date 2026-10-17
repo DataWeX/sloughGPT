@@ -14,6 +14,8 @@ from typing import Any
 
 import numpy as np
 
+from domain.core.shared import align_dim_ff
+
 logger = logging.getLogger("slo.gguf_export")
 
 # Model-like objects expose ``state_dict()`` returning a dict of arrays.
@@ -920,8 +922,15 @@ def export_to_gguf(
     writer.add_head_count(n_head)
     writer.add_head_count_kv(n_kv_head)
 
-    hidden_dim = int(n_embed * 8 // 3)
-    hidden_dim = ((hidden_dim + 63) // 64) * 64
+    # Explicit FF dims win over the derived default, then align via THE
+    # shared contract (align_dim_ff, port bd60a74b2 <- 01f84eb97) so GGUF
+    # metadata matches post-construction shapes for non-aligned configs.
+    hidden_dim = int(
+        config_dict.get("n_inner")
+        or config_dict.get("intermediate_size")
+        or (n_embed * 8 // 3)
+    )
+    hidden_dim = align_dim_ff(hidden_dim)
     writer.add_feed_forward_length(hidden_dim)
     writer.add_rope_freq_base(config.rope_freq_base)
 
