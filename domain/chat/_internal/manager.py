@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from domain.chat._internal.domain import ChatDomain, ChatRequest, ChatResponse
@@ -185,6 +185,7 @@ class ChatManager:
     ) -> ChatResponse:
         """Non-streaming reply. Single path via ``ChatDomain.respond``."""
         op_id, _stop = self._track(session_id, f"chat:{session_id}")
+        error: str | None = None
         try:
             resp = await self._domain.respond(
                 messages=messages,
@@ -199,10 +200,49 @@ class ChatManager:
             return resp
         except Exception as exc:
             logger.error("ChatManager.respond failed: %s", exc, exc_info=True)
-            self._untrack(session_id, op_id, error=str(exc))
+            error = str(exc)
             raise
-        else:
-            self._untrack(session_id, op_id)
+        finally:
+            # finally, not else: a `return` inside `try` skips the `else` clause,
+            # so the old else-branch never ran and every successful reply left
+            # its op_id in _session_ops forever (cancel_session walks that set).
+            self._untrack(session_id, op_id, error=error)
+
+    async def generate_tracked(
+        self,
+        session_id: str,
+        messages: list[dict[str, str]],
+        generate: Callable[[], Awaitable[Any]],
+        text_of: Callable[[Any], str],
+    ) -> Any:
+        """Own chat's per-session state around an EXTERNAL generation callable.
+
+        Lets the chat router keep history persistence and the cancellation
+        registry while generation runs wherever the caller chooses — here, the
+        inference kernel's public facade. The router never reaches into
+        _track/_store/_untrack; this is the seam that lets chat own its state
+        without owning generation.
+
+        ``generate`` returns whatever the caller's backend returns, and
+        ``text_of`` projects that down to the assistant text worth persisting,
+        so the original object (e.g. a full ChatResponse) is passed through
+        untouched.
+
+        Mirrors ``respond``'s tracking contract, including the finally-guarded
+        untrack (see the note there for why not ``else``).
+        """
+        op_id, _stop = self._track(session_id, f"chat:{session_id}")
+        error: str | None = None
+        try:
+            result = await generate()
+            self._store(session_id, messages, text_of(result))
+            return result
+        except Exception as exc:
+            logger.error("ChatManager.generate_tracked failed: %s", exc, exc_info=True)
+            error = str(exc)
+            raise
+        finally:
+            self._untrack(session_id, op_id, error=error)
 
     async def stream(
         self,

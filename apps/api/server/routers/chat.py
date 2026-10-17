@@ -68,10 +68,39 @@ class ChatRouter:
 
         Keeping this seam single is what makes the generation backend swappable
         without touching either endpoint's contract.
+
+        Generation and state are split deliberately: the inference kernel owns
+        generation (readiness/circuit-breaker gates, KV cache), while chat owns
+        its own state — the cancellation registry and conversation history —
+        through the manager's public entry rather than its internals. The two
+        domains hold orthogonal state, so they compose.
         """
         if stream:
+            # Streaming still delegates wholesale to the inference kernel's SSE
+            # facade. That returns a fully-formed StreamingResponse, so chat
+            # never sees the raw tokens and cannot persist history without
+            # parsing SSE frames — brittle. Doing it properly needs an inference
+            # facade yielding raw tokens, the shape ChatManager.stream() already
+            # uses. Carded separately.
             return await handle_chat_stream(request, http_request, auth_user)
-        return await handle_chat(request)
+
+        from domain.chat import get_chat_manager
+
+        manager = get_chat_manager()
+        messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+        async def _gen() -> ChatResponse:
+            return await handle_chat(request)
+
+        return await manager.generate_tracked(
+            request.session_id or "default",
+            messages,
+            _gen,
+            # inference's ChatResponse carries `message`; domain/chat's
+            # identically-named type carries `text`. Project down explicitly
+            # rather than relying on the shared name.
+            text_of=lambda resp: resp.message,
+        )
 
     @endpoint("chat.respond")
     async def respond(
