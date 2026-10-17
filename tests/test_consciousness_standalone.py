@@ -24,6 +24,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Anything that means "the model stack came with us". Extend deliberately —
@@ -165,3 +167,71 @@ print(json.dumps({{"missing": missing, "dir_ok": all(n in dir(cog) for n in cog.
         verdict = _run_probe(source)
         assert verdict["missing"] == [], f"facade names failed to resolve: {verdict['missing']}"
         assert verdict["dir_ok"] is True, "__dir__ must advertise the lazy names"
+
+
+class TestMindEmbeddability:
+    """The gateway test: a mind another app can actually adopt.
+
+    A payment gateway is worthless unless a *different* app can drop it in and
+    speak to it through a clean seam — and worthless again if it keeps its
+    ledger in the merchant's basement. These tests hold both halves: two minds
+    never cross-talk, and a mind refuses to guess where its storage lives.
+    """
+
+    def test_two_apps_two_minds_never_cross_talk(self, tmp_path: Path) -> None:
+        from domain.cognition._internal.consciousness import create_mind
+
+        store_a, store_b = tmp_path / "app_a", tmp_path / "app_b"
+        a = create_mind(str(store_a))
+        b = create_mind(str(store_b))
+
+        # App A lives a full life; App B is never told anything.
+        for i in range(5):
+            a.process(f"message {i}", f"reply {i}")
+        a.dream()
+        a.reflect()
+
+        assert len(a.mind_log.query(limit=0)) > 0
+        assert b.mind_log.query(limit=0) == []  # B has no records at all
+        assert len(b.self_model.episodes) == 0
+        assert (store_a / "mind_log.jsonl").is_file()
+        assert not (store_b / "mind_log.jsonl").exists()  # B never wrote
+
+    def test_b_beliefs_unchanged_while_a_lives(self, tmp_path: Path) -> None:
+        from domain.cognition._internal.consciousness import create_mind
+
+        a = create_mind(str(tmp_path / "a"))
+        b = create_mind(str(tmp_path / "b"))
+        beliefs_before = dict(b.self_model.self_beliefs)
+
+        for i in range(5):
+            a.process(f"more {i}", f"reply {i}")
+        a.dream()
+        a.reflect()
+
+        # Default beliefs are SEEDED with distinct values, so "flat" is the
+        # wrong isolation test. The right one is: does A's life move B?
+        assert dict(b.self_model.self_beliefs) == beliefs_before
+        assert len(b.self_model.episodes) == 0
+
+    def test_relative_store_path_is_refused(self, tmp_path: Path, monkeypatch) -> None:
+        """A mind must not write into whatever directory the host runs in."""
+        from domain.cognition._internal.consciousness import create_mind
+
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(ValueError, match="absolute"):
+            create_mind("data/consciousness")
+
+    def test_absolute_store_path_is_accepted(self, tmp_path: Path) -> None:
+        from domain.cognition._internal.consciousness import ConsciousnessEngine, create_mind
+
+        mind = create_mind(str(tmp_path / "embedded"))
+        assert isinstance(mind, ConsciousnessEngine)
+
+    def test_host_contract_is_discoverable(self) -> None:
+        """The seam must be written down where an app author looks."""
+        import domain.cognition._internal.consciousness as cog
+
+        doc = cog.__doc__ or ""
+        for call in ("process", "self_report", "locus", "maybe_dream"):
+            assert call in doc, f"host contract must document {call!r}"
