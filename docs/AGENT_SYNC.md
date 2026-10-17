@@ -4,6 +4,43 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**LANDED 2026-10-17** — card `4de18e24` (single-source trace core):
+the two-implementations liability is retired — there is no numpy walk *and* a
+CUDA walk to keep in sync any more. `domain/shell/_internal/trace_core.c`
+owns the ENTIRE path (BVH walk + GGX BSDF + emission + lobe sample + Russian
+roulette) and is compiled twice by `domain/slolib/_internal/native.py`:
+CPU `gcc -O3 -fopenmp` → ctypes (`entry_trace_cpu` = OpenMP parallel-for,
+GIL released), GPU NVRTC via `cupy.RawModule` (`trace_paths_gpu` = one
+thread per path). **`SLO_Q` is the only target-specific token** (empty on
+cpu, `__device__` under `__CUDACC__`), so parity is structural, not tested
+hope. Counter-based RNG keyed `(seed, path, depth, slot)` gives determinism
++ CPU/GPU parity without `libcurand` (still absent in this env). One thread
+per path on BOTH engines = zero host dispatches per bounce and zero
+alive-ray compaction, which is what finally kills the ~60us/python-call
+dispatch floor that made the operator-by-operator CuPy walk slower than CPU.
+Entries take a FLAT arg list (a struct-of-pointers does not marshal
+reliably across ctypes and NVRTC); `domain/shell/_internal/_native.py` is
+the marshalling seam — packs per-mesh BVH tables into global arrays
+(`moff_node`/`moff_face` offset node indices, prim face-ids re-based
+local→global, uniform K padded with -1, f32 plane), dispatches by engine,
+returns `None` when nothing compiled so `render()` falls through to the
+numpy oracle (`_trace_batch` kept intact as oracle + fallback + neural
+path). `SLO_CYCLES_NATIVE=0` (escape hatch) is read **dynamically per
+call**, never at import — an import-time constant bakes the flag in and
+leaks onto the oracle path for every later suite in the process.
+Measured (`benchmark_world_render.py --frames 2`, PASS all tiers,
+160x120@16spp): native GPU **0.39s device / 0.81s world**, native CPU
+0.42s / 1.37s (the two engines within **8%** — the near-identical target),
+oracle 6.01s / 10.75s ⇒ **15x device, 13x world** vs the previous best,
+~7400x vs the scalar baseline. Agreement: cpu-vs-gpu 5e-09 (float32 last
+ulp; gcc fuses FMA, NVRTC does not); vs the f64 oracle it is statistical
+not bit-exact — a f32-vs-f64 nudge flips which high-variance RR paths
+survive, so divergence is confined to bright/metallic pixels (corr 0.25,
+~0 on dark pixels). New `test_cycles_native.py` (11 tests); the 476-test
+cycles+render surface is green. Next measured victim: the world frame is
+now **rebuild-bound** (trace ~0.4s of a 0.8–1.4s frame) → the voxel
+mesher + BVH builder goes through the same loader.
+
 **LANDED 2026-10-16** — card `e4f15b5a` (cycles renders on the GPU):
 `cycles.py` is input-driven across the device boundary — hot helpers
 sniff their module (`_xp(a)`), host arrays in → host path out, device
