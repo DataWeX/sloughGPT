@@ -1,7 +1,9 @@
 //! slough-gateway — transport-only edge for the Python core.
 //!
 //! CCGT Gateway domain: expose + optimize, never understand. This process
-//! terminates TLS (rustls), caps request bodies, enforces edge timeouts,
+//! speaks plain HTTP on loopback — TLS belongs to the deployment layer
+//! (the rustls dependency here is the outbound reqwest feature only) —
+//! caps request bodies, enforces edge timeouts,
 //! relays response bytes untouched (streaming-safe: no buffering, no JSON
 //! parsing, no SSE re-chunking), and serves static files. Auth, rate limits,
 //! CORS semantics, and error envelopes are owned by Python — see
