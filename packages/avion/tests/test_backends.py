@@ -110,16 +110,6 @@ class TestDriverBackends:
             with pytest.raises(ImportError, match="pip install selenium"):
                 run(SeleniumBackend().start())
 
-    def test_cdp_missing_dep(self):
-        try:
-            __import__("websockets")
-            pytest.skip("websockets installed")
-        except ImportError:
-            from avion.backends.cdp import CdpBackend
-
-            with pytest.raises(ImportError, match="pip install websockets"):
-                run(CdpBackend().start())
-
     def test_appium_missing_dep(self):
         try:
             __import__("appium")

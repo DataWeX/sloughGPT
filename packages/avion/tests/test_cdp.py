@@ -1,12 +1,12 @@
 """CDP backend + CLI tests — real Chromium over the DevTools protocol.
 
-Degrades explicitly: skips with a stated reason when Chromium or
-websockets is unavailable (never a silent pass, never a crash).
+The transport is avion's own stdlib WebSocket client (avion.net.ws), so
+CDP is always available; the suite degrades explicitly only when no
+Chromium is found (never a silent pass, never a crash).
 """
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import socket
 import subprocess
@@ -50,14 +50,9 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
-HAS_WEBSOCKETS = importlib.util.find_spec("websockets") is not None
-
-
 @pytest.fixture(scope="module")
 def chromium_ws(request):
     """Launch a debuggable headless Chromium; yield its CDP endpoint."""
-    if not HAS_WEBSOCKETS:
-        pytest.skip("websockets not installed — CDP unavailable (pip install websockets)")
     binary = _find_chromium()
     if binary is None:
         pytest.skip("no Chromium binary found (AVION_CHROMIUM or ms-playwright cache)")
@@ -274,15 +269,6 @@ async def test_check_uncheck_select_over_cdp(chromium_ws, http_url):
         assert await b.evaluate("document.querySelector('#pick').value") == "b"
     finally:
         await b.stop()
-
-
-def test_missing_websockets_gives_actionable_error(monkeypatch):
-    monkeypatch.setitem(sys.modules, "websockets", None)
-    from avion.backends.cdp import _websockets
-
-    with pytest.raises(ImportError) as exc:
-        _websockets()
-    assert "pip install websockets" in str(exc.value)
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
 """CDP backend — Chrome DevTools Protocol over websocket, no driver.
 
-Requires: pip install websockets. Connects to a Chrome/Chromium instance
-started with --remote-debugging-port. All third-party imports are lazy.
+No dependencies: the websocket transport is avion's own RFC 6455 client
+(``avion.net.ws``). Connects to a Chrome/Chromium instance started with
+--remote-debugging-port (see ``avion.launch``).
 """
 
 from __future__ import annotations
@@ -11,17 +12,7 @@ import json
 from typing import Any
 
 from avion.core.element import Element, ElementLocator, SelectorStrategy
-
-
-def _websockets():
-    try:
-        import websockets
-
-        return websockets
-    except ImportError as e:
-        raise ImportError(
-            "websockets is not installed. Install it with: pip install websockets"
-        ) from e
+from avion.net.ws import connect as ws_connect
 
 
 def selector_to_js(selector) -> str | None:
@@ -78,7 +69,6 @@ class CdpBackend:
         self._reader: asyncio.Task | None = None
 
     async def _connect(self):
-        websockets = _websockets()
         import urllib.request
 
         with urllib.request.urlopen(
@@ -91,10 +81,9 @@ class CdpBackend:
         if page is None:
             raise RuntimeError("no debuggable targets found")
         self._ws_url = page["webSocketDebuggerUrl"]
-        self._ws = await websockets.connect(self._ws_url)
+        self._ws = await ws_connect(self._ws_url)
 
     async def start(self) -> None:
-        _websockets()
         await self._connect()
         self._reader = asyncio.create_task(self._read_loop())
         await self._send("Page.enable")

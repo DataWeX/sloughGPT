@@ -25,7 +25,8 @@ Environment: AVION_CDP_URL overrides the debug endpoint
 (default ws://localhost:9222). Requires a Chromium started with
 ``--remote-debugging-port=9222`` — on hosts without unprivileged
 user namespaces add ``--no-sandbox --password-store=basic`` so
-navigation cannot stall — and ``pip install websockets``.
+navigation cannot stall. No dependencies: the websocket transport
+is avion's own stdlib client.
 AVION_STATE_DIR relocates the capture store (default: $TMPDIR/avion).
 """
 
