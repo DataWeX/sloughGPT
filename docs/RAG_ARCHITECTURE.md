@@ -247,7 +247,11 @@ and hybrid retrieval (BM25 + embedding). External vector DB support is planned.
 """
 # Complete production RAG pipeline:
 
-from domains.cognitive.rag import ProductionRAG
+# Real location: domain/cognition/_internal/rag.py. The public facade
+# (domain.cognition) exports RAGService, the production bridge over
+# ProductionRAG — prefer it from app code; this example uses the class
+# directly to show the config surface.
+from domain.cognition._internal.rag import ProductionRAG
 
 # 1. Initialize
 rag = ProductionRAG(config={

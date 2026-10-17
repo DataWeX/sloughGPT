@@ -1,7 +1,7 @@
 """
 RAG Service — Production RAG with real embeddings and document persistence.
 
-Bridges the production-grade ``ProductionRAG`` from ``cognitive/rag.py`` into
+Bridges the production-grade ``ProductionRAG`` from ``cognition/_internal/rag.py`` into
 the chat pipeline by:
 
 1. Replacing simulated random embeddings with the project's n-gram TF-IDF

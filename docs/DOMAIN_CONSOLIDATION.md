@@ -1,6 +1,10 @@
 # Domain Consolidation — Design Record
 
-**Status:** decision record. No code has been moved.
+**Status:** executed — all nine §8 steps landed on `feat/generate-consolidation`
+(2026-10-17); pending the landing call into `integration-sync`/main. The
+measurements below are the 2026-10-02 design-time baseline and stand as recorded;
+where the executed tree differs (counts, paths), the execution record below is
+the authority.
 **Recorded:** 2026-10-02 · **Measured on:** `HEAD 18c720be5`
 **Card:** `d0324e7f` (continues `97260724`, the doc-vs-code truth-up)
 **Method:** all counts from `git grep` / `find` over **tracked files only**, pattern
@@ -8,6 +12,38 @@
 `node_modules`; plain `grep -r` does not (it produced a 107,500 figure that was
 discarded as `.wt-*` leakage). **`[[:space:]]`, not `[\s]`** — see the method
 correction in §6, which cost an 11.5% undercount in the first draft.
+
+---
+
+## 0. Execution record (2026-10-17, `feat/generate-consolidation`)
+
+The §8 sequence is complete on `feat/generate-consolidation` (35 commits ahead of
+`integration-sync` at the time of writing; landing pending a user call — one
+documented conflict in `docs/PUGQEEP.md`):
+
+- **Plural tree gone.** `packages/core-py/domains/` deleted; `domains.*` imports
+  retargeted to `domain.*` (the §5 packaging trap was resolved by moving the
+  package to the repo root: `pyproject.toml` now maps `domain` → root `domain/`,
+  and coverage sources are `packages/core-py`, `domain`, `services`, `testing`).
+- **CCGT four complete.** `inference` renamed to `generate`; `domain/` lives at
+  the repo root with the four domains (`cognition`, `core`, `generate`,
+  `training`) plus leaf packages (`agents`, `chat`, `knowledge`, `memory`,
+  `search`, `shell`, `soul`, `tools`) — **21 → 12 top-level domain packages**,
+  ~4,900 dead lines removed under the §7 reachability gates.
+- **Facade-first imports.** `_internal` call sites were repointed to their package
+  facades (52 imports in the first sweep), and one canonical spelling per service
+  is now enforced by example — e.g. `get_rag_service` is reached only via
+  `domain.cognition`.
+- **One shared contract per invariant.** FFN 64-alignment is a single contract
+  (`align_dim_ff`, `domain/core/shared/_internal/dims.py`) covering
+  `SloTransformer`, the weight loader, and gguf export; explicit config dims win
+  over the derived default everywhere.
+- **Gates at the execution tip:** core-py gate sets of 8,805 / 8,665 / 19,056
+  tests with 0 regressions vs. the pre-branch baseline; docs-api parity exit 0;
+  layer conformance 3/3.
+
+Design-time measurements in §1–§10 remain the recorded baseline for the decision
+itself; this section is the authority for what the tree looks like now.
 
 ---
 

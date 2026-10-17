@@ -138,6 +138,21 @@ guard = ProcessGuard(
 guard.start()
 ```
 
+### Session KV across lazy materialization
+
+`_get_model()` on a lazy provider materializes the weights and **rebinds
+`self._kv_manager`** to the eager load's manager. `_resolve_session_kv`
+therefore materializes *before* touching the manager (fix `86fe6bf94`):
+the previous receiver-first evaluation (`self._kv_manager.get_or_create(
+session_id, self._get_model().new_kv_state)`) created the first turn's
+session on the orphaned pre-materialization manager, so on this autoload
+path cross-turn KV was silently lost — `session_stats()` read the new
+manager, `cached_tokens` stayed 0, and every turn rebuilt KV from
+scratch. Eager providers short-circuit the already-loaded fast path, so
+the ordering is the only observable change. Invariant: **a session
+created for a lazy provider must land on the manager that
+`session_stats()` will read — materialize first, then resolve.**
+
 ## File Changes
 
 | File                    | Action       | Purpose                                     |
