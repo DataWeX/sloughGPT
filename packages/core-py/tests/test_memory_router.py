@@ -205,7 +205,7 @@ class TestUpdateItem:
 
 
 class TestConsolidate:
-    @patch("domain.memory._internal.consolidation.plan_consolidation")
+    @patch("domain.memory.plan_consolidation")
     @patch("routers.memory.get_memory_service")
     def test_consolidate(self, mock_get, mock_plan):
         svc = _mock_svc()
@@ -218,7 +218,7 @@ class TestConsolidate:
 
 
 class TestArchive:
-    @patch("domain.memory._internal.task_memory.list_archive")
+    @patch("domain.memory.list_archive")
     def test_archive(self, mock_list):
         mock_list.return_value = [{"id": "a"}]
         client = TestClient(_app())
@@ -226,7 +226,7 @@ class TestArchive:
         assert resp.status_code == 200
         assert resp.json()["data"]["total"] == 1
 
-    @patch("domain.memory._internal.task_memory.archive_stats")
+    @patch("domain.memory.archive_stats")
     def test_archive_stats(self, mock_stats):
         mock_stats.return_value = {"total": 10}
         client = TestClient(_app())
@@ -234,7 +234,7 @@ class TestArchive:
         assert resp.status_code == 200
         assert resp.json()["data"]["total"] == 10
 
-    @patch("domain.memory._internal.task_memory.prune_archive")
+    @patch("domain.memory.prune_archive")
     def test_archive_prune(self, mock_prune):
         mock_prune.return_value = 3
         client = TestClient(_app())
