@@ -17,7 +17,6 @@ from domain.shell._internal.vm import (
     ClockDevice,
     ConsoleDevice,
     DeviceBus,
-    DeviceFault,
     InsFault,
     VMRunner,
 )
@@ -461,5 +460,9 @@ def test_dev_ops():
 
 
 def test_dev_open_unknown_device():
-    with pytest.raises(DeviceFault):
-        _run('DEV_OPEN R0, "nope"\nHALT')
+    # Soft contract: unknown devices yield an empty handle plus a visible
+    # console message instead of crashing the guest program — the same
+    # sentinel family pinned by test_vm_coverage_gaps::test_dev_open_unknown.
+    cpu = _run('DEV_OPEN R0, "nope"\nHALT')
+    assert cpu.regs[0] == ""
+    assert "[VM] DEV_OPEN: no such device: nope" in list(cpu._output)
