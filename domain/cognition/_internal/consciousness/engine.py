@@ -80,8 +80,9 @@ class ConsciousnessEngine:
         if self.config.is_enabled():
             self.self_model.load()
 
-        # Idle-dream baseline: episode count as of boot/last tick — the
-        # world being quiet (count unchanged) is what creates sleep pressure.
+        # Idle-dream baseline: episode count as of the last consolidation. It
+        # is the watermark of what the last dream already saw — sleep pressure
+        # is material ABOVE it, not silence at it.
         self._dream_baseline = len(self.self_model.episodes)
 
     def _reflection_fingerprint(self) -> tuple[Any, ...]:
@@ -136,22 +137,36 @@ class ConsciousnessEngine:
         return record
 
     def maybe_dream(self) -> dict[str, Any]:
-        """Idle-dream policy: nights happen when the world is quiet.
+        """Sleep gate: pressure is *unconsolidated experience*, not silence.
 
-        Dream only when no episode landed since the last tick and there is
-        something to consolidate — sleep pressure is the absence of new
-        experience. Called by the host's ambient loop (interval from
+        Dream once when material has landed that the last dream did not see,
+        then stay asleep. Satiation is the whole point — a gate that fires on
+        emptiness degenerates into a loop that re-narrates a saturated
+        snapshot forever (the production log reached 44 dreams, ~30 identical,
+        qualia all-zero for 6h, off a single real episode).
+
+        A *drop* in the episode count is not material: ``save()`` trims the
+        window to ``MAX_EPISODES``, and forgetting is not experience. The drop
+        is absorbed as the new baseline so it can neither arm a dream nor
+        wedge the gate against later growth.
+
+        Called by the host's ambient loop (interval from
         config.reflection_interval, re-read per tick); synchronous and
         wall-clock-free so tests call it directly.
         """
         if not self.config.is_enabled():
             return {"dreamed": False, "reason": "disabled"}
         count = len(self.self_model.episodes)
-        if count != self._dream_baseline:
+        if count < self._dream_baseline:
+            # The working window trimmed. Not material — accept the new reality
+            # so later growth can still arm a dream.
             self._dream_baseline = count
-            return {"dreamed": False, "reason": "new experience since last tick"}
-        if count == 0:
-            return {"dreamed": False, "reason": "no experiences to consolidate"}
+            return {"dreamed": False, "reason": "window trimmed, nothing new to consolidate"}
+        if count == self._dream_baseline:
+            return {"dreamed": False, "reason": "satiated: nothing new since last dream"}
+        # Material above the watermark -> one night. Baseline then moves to the
+        # POST-dream count, because dream() appends its own episode and save()
+        # trims the window.
         result = self.dream()
         self._dream_baseline = len(self.self_model.episodes)
         return result

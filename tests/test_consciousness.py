@@ -406,19 +406,55 @@ class TestMindStateSubstrate:
 
 
 class TestIdleDreamPolicy:
-    """maybe_dream(): nights happen when the world is quiet."""
+    """maybe_dream(): sleep pressure is *unconsolidated experience*, not silence.
 
-    def test_policy_lifecycle(self, tmp_path: Path) -> None:
+    The gate must fire once per batch of new material and then stay asleep.
+    The previous spec asserted the inversion — ``third["dreamed"] is True
+    # nights repeat while quiet`` — which is the runaway degenerate loop this
+    gate exists to prevent. A test that encodes the bug cannot catch it: the
+    production log reached 44 dreams, ~30 identical, qualia all-zero for 6h,
+    off a single real episode.
+    """
+
+    def test_dreams_once_per_new_experience_then_satiates(self, tmp_path: Path) -> None:
         engine = _make_engine(tmp_path)
         assert engine.maybe_dream()["dreamed"] is False  # nothing yet
         engine.self_model.episodes.append(_make_episode())
         first = engine.maybe_dream()
-        assert first["dreamed"] is False  # world spoke since baseline
-        assert first["reason"] == "new experience since last tick"
-        second = engine.maybe_dream()
-        assert second["dreamed"] is True  # quiet: count matches baseline
-        third = engine.maybe_dream()
-        assert third["dreamed"] is True  # nights repeat while quiet
+        assert first["dreamed"] is True  # new material -> consolidate it, once
+        # SATIATION: idle ticks after consolidation must not dream again.
+        for _ in range(5):
+            assert engine.maybe_dream()["dreamed"] is False
+
+    def test_silent_ticks_never_dream(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode())
+        assert engine.maybe_dream()["dreamed"] is True
+        for _ in range(4):
+            engine.maybe_dream()
+        dreams = [e for e in engine.self_model.episodes if e.is_dream]
+        assert len(dreams) == 1  # one night, not a week of them
+
+    def test_new_experience_after_satiation_dreams_again(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode())
+        assert engine.maybe_dream()["dreamed"] is True
+        assert engine.maybe_dream()["dreamed"] is False  # satiated
+        engine.self_model.episodes.append(_make_episode())
+        assert engine.maybe_dream()["dreamed"] is True  # genuinely new -> second night
+
+    def test_window_trim_is_not_experience(self, tmp_path: Path) -> None:
+        # ``save()`` trims in-memory episodes to MAX_EPISODES, so the count can
+        # DROP for a reason that is not new experience. A one-line inversion
+        # would read a trim as sleep pressure and arm a dream off forgetting —
+        # so the drop is absorbed as the new baseline, not as material.
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode())
+        assert engine.maybe_dream()["dreamed"] is True
+        engine.self_model.episodes.pop()
+        assert engine.maybe_dream()["dreamed"] is False  # a drop is not material
+        engine.self_model.episodes.append(_make_episode())
+        assert engine.maybe_dream()["dreamed"] is True  # gate still arms on real growth
 
     def test_disabled_engine_never_dreams(self, tmp_path: Path) -> None:
         engine = ConsciousnessEngine(ConsciousnessConfig(level=0, store_path=str(tmp_path)))
