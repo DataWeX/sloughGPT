@@ -1,6 +1,7 @@
 """Code-hygiene ratchet — the 2026-10-04 cleanup sweep, encoded as tests.
 
-Origin: kanban card 0d4ad67b. Every pattern below was at ZERO true
+Origin: kanban card 0d4ad67b (re-created as 7d5e5a7c after the board
+clobber it was filed to investigate). Every pattern below was at ZERO true
 violations when this file was written, so the bar is zero forever: new
 violations fail, and the fix is either real code or a reviewed allowlist
 entry with a reason — never silence.
@@ -14,10 +15,13 @@ Enforced here (things ruff does NOT catch):
   4. print() in domain library code — stdout-channel work (TUI renderers,
      CLI tools, protocol handshakes, stderr bootstrap warnings, ``__main__``
      demo entry points) is exempt; new library prints are not
+  5. ``from __future__ import annotations`` in domain/ — scope (a), card
+     7d5e5a7c: PEP 563 across the tree, so the convention cannot erode
+     again (root cause was convention-by-example with zero enforcement)
 
 Deliberately NOT enforced (open / owned elsewhere):
-  - ``from __future__ import annotations`` — scope decision open on card
-    0d4ad67b (860-file debt across two trees); do not "fix" piecemeal
+  - ``from __future__ import annotations`` OUTSIDE domain/ (tests, scripts,
+    packages) — scope (b) remains open on card 7d5e5a7c if wanted
   - F401 unused imports — owned by ruff (pyproject [tool.ruff.lint])
 """
 
@@ -32,51 +36,57 @@ ROOT = Path(__file__).resolve().parents[1]
 SELF = Path(__file__).resolve()
 
 # Never descend into these (a 7.5G node_modules lives under apps/mobile).
-SKIP_DIRS = frozenset({
-    "node_modules", ".venv", "__pycache__", "dist", "build", ".git",
-    ".next", "coverage", ".mypy_cache", ".ruff_cache", "test_results",
-})
+SKIP_DIRS = frozenset(
+    {
+        "node_modules",
+        ".venv",
+        "__pycache__",
+        "dist",
+        "build",
+        ".git",
+        ".next",
+        "coverage",
+        ".mypy_cache",
+        ".ruff_cache",
+        "test_results",
+    }
+)
 
 SCAN_ROOTS = ("domain", "packages", "apps", "scripts")
 PY = (".py",)
 MARKER_EXTS = (".py", ".ts", ".tsx")
 
+# Scope (a) of card 7d5e5a7c: future-import enforced in the domain trees
+# (packages/core-py/domains no longer exists on main — kept for safety).
+FUTURE_ROOTS = ("domain", "packages/core-py/domains")
+
 LOGGER_FSTRING = re.compile(r"(?:logger|logging)\.(?:info|warning|error|debug)\(f['\"]")
 BARE_EXCEPT = re.compile(r"except\s*:")
 # Built from parts so this source file does not match its own scan.
-MARKER = re.compile(r"\b(?:" + "|".join(("TO" + "DO", "FIX" + "ME", "HA" + "CK", "X" + "XX")) + r"):")
+MARKER = re.compile(
+    r"\b(?:" + "|".join(("TO" + "DO", "FIX" + "ME", "HA" + "CK", "X" + "XX")) + r"):"
+)
 
 # Custom loggers whose contract rejects lazy %-args — there the f-string
 # IS the correct call (StructuredLogger.info(message, **fields): one
 # positional message only). Extend only via review.
 FSTRING_EXEMPT = {
-    "packages/avion/src/avion/core/session.py":
-        "avion StructuredLogger.info(message, **fields) — single positional; f-string required",
+    "packages/avion/src/avion/core/session.py": "avion StructuredLogger.info(message, **fields) — single positional; f-string required",
 }
 
 # Existing prints that ARE the product surface (2026-10-04 sweep: 92/92
 # legitimate). New files are never pre-exempted; extend only via review.
 PRINT_ALLOWLIST = {
-    "domain/shell/_internal/world_driver.py":
-        "TUI/world renderer — print is the frame writer",
-    "domain/multimodal/_internal/phoneme_encoder_cli.py":
-        "CLI tool — stdout is its output channel",
-    "domain/infrastructure/_internal/inference_engine.py":
-        "ENGINE_READY parent-process protocol handshake",
-    "domain/logging/_internal/config.py":
-        "bootstrap warning — cannot log while configuring logging",
-    "domain/shell/_internal/input_device.py":
-        "terminal echo in readline()",
-    "domain/shell/_internal/realm_live.py":
-        "argparse CLI run summary",
-    "domain/training/_internal/lm_eval_char.py":
-        "--json machine-readable stdout mode",
-    "domain/journeys/runner.py":
-        "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
-    "domain/shell/_internal/cmds/dashboard.py":
-        "dashboard watch-loop renderer — terminal frames ARE its output",
-    "domain/shell/_internal/cmds/status.py":
-        "status --json machine-readable stdout mode (CLI result channel)",
+    "domain/shell/_internal/world_driver.py": "TUI/world renderer — print is the frame writer",
+    "domain/multimodal/_internal/phoneme_encoder_cli.py": "CLI tool — stdout is its output channel",
+    "domain/infrastructure/_internal/inference_engine.py": "ENGINE_READY parent-process protocol handshake",
+    "domain/logging/_internal/config.py": "bootstrap warning — cannot log while configuring logging",
+    "domain/shell/_internal/input_device.py": "terminal echo in readline()",
+    "domain/shell/_internal/realm_live.py": "argparse CLI run summary",
+    "domain/training/_internal/lm_eval_char.py": "--json machine-readable stdout mode",
+    "domain/journeys/runner.py": "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
+    "domain/shell/_internal/cmds/dashboard.py": "dashboard watch-loop renderer — terminal frames ARE its output",
+    "domain/shell/_internal/cmds/status.py": "status --json machine-readable stdout mode (CLI result channel)",
 }
 
 
@@ -129,8 +139,25 @@ def test_no_fstring_logger_calls():
 
 
 def test_no_bare_except():
-    """Bare except: swallows SystemExit/KeyboardInterrupt — catch types."""
-    found = line_hits(BARE_EXCEPT, PY)
+    """Bare except: swallows SystemExit/KeyboardInterrupt — catch types.
+
+    AST-based on purpose: a line regex also matches prose *describing* the
+    anti-pattern (``atomic_write.py`` documents ``except: unlink``), and a
+    guard that fires on documentation gets ignored. Parsing finds only real
+    ``ExceptHandler`` nodes with no type, and it catches multi-line
+    ``except :`` forms a per-line scan misses.
+    """
+    found = []
+    for path in iter_files(PY):
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError as exc:
+            found.append(f"{rel}: syntax error: {exc}")
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler) and node.type is None:
+                found.append(f"{rel}:{node.lineno}: bare except: — catch a type")
     assert not found, "bare except clauses (catch explicit types):\n" + fmt(found)
 
 
@@ -148,11 +175,11 @@ def _main_guard_ranges(tree):
         test = node.test
         if not (isinstance(test.left, ast.Name) and test.left.id == "__name__"):
             continue
-        if not any(isinstance(c, ast.Constant) and c.value == "__main__"
-                   for c in test.comparators):
+        if not any(isinstance(c, ast.Constant) and c.value == "__main__" for c in test.comparators):
             continue
-        end = max((getattr(s, "end_lineno", node.lineno) for s in ast.walk(node)),
-                  default=node.lineno)
+        end = max(
+            (getattr(s, "end_lineno", node.lineno) for s in ast.walk(node)), default=node.lineno
+        )
         ranges.append((node.lineno, end))
     return ranges
 
@@ -177,8 +204,11 @@ def test_print_only_in_exempted_stdout_channels():
             continue
         guards = _main_guard_ranges(tree)
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id == "print"):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "print"
+            ):
                 continue
             if any(kw.arg == "file" for kw in node.keywords):
                 continue  # stderr/stderr-targeted warnings
@@ -189,3 +219,31 @@ def test_print_only_in_exempted_stdout_channels():
                 f"or get a channel exemption reviewed into PRINT_ALLOWLIST"
             )
     assert not violations, "library prints without an exemption:\n" + fmt(violations)
+
+
+def test_domain_files_carry_future_annotations():
+    """Scope (a), card 7d5e5a7c: every domain/ file carries PEP 563.
+
+    Root cause this pins: convention-by-example with zero enforcement let
+    the import decay across half the tree. Any new or edited domain file
+    without it fails here.
+    """
+    missing, broken = [], []
+    for path in iter_files(PY, roots=FUTURE_ROOTS):
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError) as exc:
+            broken.append(f"{rel}: {exc}")
+            continue
+        if not any(
+            isinstance(n, ast.ImportFrom)
+            and n.module == "__future__"
+            and any(a.name == "annotations" for a in n.names)
+            for n in tree.body
+        ):
+            missing.append(rel)
+    assert not broken, "unparseable domain files:\n" + fmt(broken)
+    assert not missing, "domain files missing `from __future__ import annotations`:\n" + fmt(
+        missing
+    )

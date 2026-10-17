@@ -10,6 +10,8 @@ Public API:
     create_vector_store, get_slo_manager, PDFVLMProcessor, _ngram_embed
 """
 
+from __future__ import annotations
+
 from domain.inference._internal.slo_format import (
     BehavioralTraits,
     CognitiveSignature,
