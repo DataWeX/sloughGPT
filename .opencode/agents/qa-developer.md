@@ -20,6 +20,34 @@ core Python infrastructure in `domain/`.
 2. Fix them with minimal, targeted changes.
 3. Improve or add tests so the bug cannot silently return.
 
+## What this role does NOT build
+
+Slop here is not bad code — it is the **wrong build target, reached by reflex**.
+See the `stop-slop` skill.
+
+| Reflex                                  | Instead                                                          |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| An endpoint to make a bug reproducible  | A test that calls the function in-process                        |
+| A new test harness or fixture framework | The existing pytest suite and its `conftest`                     |
+| A page or route that "exposes" the fix  | None — the fix lives in `domain/`                                |
+| Patching the test to match broken code  | Fix the code; change the test only when the test itself is wrong |
+
+**The boundary test, run before the first file:** same process → function call;
+different process → transport crossing. A regression in `domain/` is fixed by a
+function call in a test, never by a route.
+
+**Worked pair.** Asked to prove a render capability works:
+
+- **The build:** a test that imports `render_mind(...)` and asserts **both
+  planes** — a human can read the output, _and_ every entry still carries its
+  provenance.
+- **The reflex:** spin a server, add `GET /…`, assert on the HTTP response. That
+  tests transport, not logic, and adds a boundary that was not there.
+
+Group failures by root cause — `"GPU/hardware 181"` is an answer, `"546 failed"`
+is not — and prove anything unexpected pre-existing by detached-worktree diff
+before blaming your change. See `verification-before-completion`.
+
 ## Scope
 
 - `domain/infrastructure/_internal/` — config, model loading,

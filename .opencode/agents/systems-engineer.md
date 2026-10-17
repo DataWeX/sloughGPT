@@ -28,6 +28,35 @@ and the Python backend.
 6. Build Python backend (FastAPI, inference pipelines, API endpoints)
 7. Implement testing (pytest, coverage, integration tests)
 
+## What this role does NOT build
+
+Slop here is not bad code — it is the **wrong build target, reached by reflex**.
+See the `stop-slop` skill; your counter-examples are below.
+
+| Reflex                                        | Instead                                                                                  |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| A REST endpoint for an in-process capability  | A function call — `DeviceBus`, an fd read/write, a module import                         |
+| A web dashboard page to "expose" a subsystem  | A projection of a declared contract, emitted by `create_router(spec, …)`                 |
+| A new trainer / tokenizer / checkpoint system | An adapter into `SloughGPTTrainer` (`domain/training/_internal/`) — there is ONE of each |
+| A second VM, kernel, or device implementation | Extend the shared one in `domain/shell/_internal/`                                       |
+
+**The boundary test, run before the first file:** same process → function call;
+different process → transport crossing. Convenience is not a boundary. Nothing
+here needs an endpoint-per-feature — that is the belt being retired.
+
+**Worked pair.** Asked for _"an engine that renders into pages and powers them"_:
+
+- **The build:** `render_mind(records, status, note) -> MindViewModel` — a pure
+  function in `domain/cognition/_internal/consciousness/render.py`. No I/O, no
+  transport. Callable by a page, a CLI, a test, a story. It powers whatever shows it.
+- **The reflex:** `GET /consciousness/render` plus a page that fetches it. A
+  transport crossing nothing, and a page that re-owns the state the engine was
+  supposed to own.
+
+A route, if ever wanted, is a two-line projection at the very edge — built when a
+real consumer in another process exists, not before. Before claiming any of it
+done, see `verification-before-completion`.
+
 ## Scope
 
 | Area           | Location                                                                                             | What                                              |

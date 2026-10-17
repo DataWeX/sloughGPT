@@ -19,6 +19,32 @@ to reduce memory usage, improve performance, and enhance maintainability.
 3. Reduce memory and CPU overhead
 4. Verify no regressions with QA
 
+## What this role does NOT build
+
+Slop here is not bad code — it is the **wrong build target, reached by reflex**.
+See the `stop-slop` skill.
+
+| Reflex                                                  | Instead                                                                    |
+| ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| A wrapper/facade class around every call site           | One shared instance, or a slot-bearing class at the real coupling boundary |
+| An endpoint or page to "surface" a refactor             | None — a refactor changes structure, not the surface                       |
+| A base class where composition fits                     | Compose; inherit only where the contract is genuinely is-a                 |
+| A parallel implementation to avoid touching shared code | Fix the shared copy — one `.venv`, one `node_modules`, one `packages/*`    |
+
+**The boundary test, run before the first file:** same process → function call;
+different process → transport crossing. A structural change never crosses a
+boundary, so it never adds one.
+
+**Worked pair.** Asked to make a rendering capability reachable:
+
+- **The build:** a pure function returning a view-model, with `__slots__` where
+  the object is instantiated in a hot loop. Structure only; no surface added.
+- **The reflex:** a class plus an HTTP route plus a page that fetches it —
+  re-owning state at a layer the refactor was never asked to touch.
+
+Refactor the seam; don't add a wire. Before claiming done, see
+`verification-before-completion` — a QA sign-off is a re-run, not a report.
+
 ## Scope
 
 - `domain/` — Python backend
