@@ -32,7 +32,7 @@ from schemas.common import classify_and_raise, raise_error, safe_audit_log, succ
 from config import ServerConfig
 from config import gen_config as _gen_config
 from domain.agents import get_agent_system, get_tool_registry
-from domain.core import get_rag_service
+from domain.cognition import get_rag_service
 from domain.feedback import get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
@@ -839,7 +839,7 @@ def _run_post_gen_tasks(
     """
     import state as _pgs_state
 
-    from domain.core import get_rag_service as _pgs_rag
+    from domain.cognition import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
     tokens = len(full_response.split())
@@ -2073,7 +2073,7 @@ class InferenceRouter:
             rag_context = ""
             if req.use_rag:
                 try:
-                    from domain.core import is_rag_service_ready
+                    from domain.cognition import is_rag_service_ready
 
                     if not is_rag_service_ready():
                         logger.debug("RAG service not ready yet, skipping query")
