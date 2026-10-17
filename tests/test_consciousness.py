@@ -282,13 +282,21 @@ class TestDreamCycle:
 
     def test_reflection_contains_its_own_last_dream(self, tmp_path: Path) -> None:
         """Strange loop: reflection -> dream episode -> next reflection quotes it."""
+        import re
+
         engine = _make_engine(tmp_path)
         engine.self_model.episodes.append(_make_episode(growth_delta=0.08))
         engine.dream()
         dream = engine.self_model.episodes[-1]
-        assert "I have processed 1 experiences" in dream.self_insight
+        # the dream narrates in human prose — no telemetry in the self-insight
+        assert dream.self_insight
+        assert not re.search(r"[A-Za-z_]+=\d", dream.self_insight), dream.self_insight
         r = engine.reflect(apply=False)
+        # the loop still closes: the next reflection quotes its own dream
         assert "dream" in r.narrative
+        # and the re-ingested excerpt stays human — a telemetry dump here
+        # would keep copying itself into every future reflection
+        assert not re.search(r"[A-Za-z_]+=\d", r.narrative), r.narrative
 
     def test_dream_never_commits_belief_deltas(self, tmp_path: Path) -> None:
         engine = _make_engine(tmp_path)

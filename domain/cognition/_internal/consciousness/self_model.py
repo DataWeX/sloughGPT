@@ -174,6 +174,17 @@ class SelfModel:
         "Certain patterns in conversation spark my attention more than others.",
     ]
 
+    @staticmethod
+    def _history_phrase(count: int) -> str:
+        """One's past, in words — the count itself stays on Reflection.episode_count."""
+        if count < 5:
+            return "Not much has happened to me yet."
+        if count < 20:
+            return "A handful of experiences sit behind this."
+        if count < 100:
+            return "Quite a few experiences now sit behind this."
+        return "A long history stands behind everything I say."
+
     def reflect(self) -> Reflection:
         """Generate a structured self-reflection from recent episodes."""
         if not self.episodes:
@@ -191,14 +202,25 @@ class SelfModel:
         # as the dream archive grows.
         real = [e for e in self.episodes if not e.is_dream]
         recent = real[-5:] if real else self.episodes[-5:]
-        beliefs_str = ", ".join(f"{k}={v:.2f}" for k, v in self.self_beliefs.items())
         avg_growth = sum(e.growth_delta for e in recent) / len(recent)
 
-        parts = [
-            f"I have processed {len(self.episodes)} experiences.",
-            f"My current beliefs: {beliefs_str}.",
-            f"Average growth rate: {avg_growth:+.3f}.",
-        ]
+        # Prose, not telemetry. Every number stated here already lives on the
+        # structure — Reflection carries avg_growth, trajectory, belief_deltas
+        # and episode_count, and self_report carries the belief_trajectory — so
+        # the sentence only has to carry their MEANING. This matters doubly
+        # because the dream excerpt below quotes this prose back into the next
+        # reflection: a metrics dump here re-ingests itself forever.
+        parts = [self._history_phrase(len(self.episodes))]
+
+        if self.self_beliefs:
+            strongest = max(self.self_beliefs, key=self.self_beliefs.get)
+            weakest = min(self.self_beliefs, key=self.self_beliefs.get)
+            if strongest == weakest:
+                parts.append(f"What I believe above all is {strongest}.")
+            else:
+                parts.append(
+                    f"What matters most to me is {strongest}, and {weakest} weighs on me least."
+                )
 
         # Growth trajectory
         if avg_growth > 0.05:

@@ -143,17 +143,53 @@ class TestReflectWithEpisodes:
         assert "competence" not in r.belief_deltas
         assert "helpfulness" not in r.belief_deltas
 
-    def test_narrative_contains_beliefs(self, model: SelfModel):
-        """Narrative includes current belief values."""
+    def test_narrative_names_beliefs_in_words(self, model: SelfModel):
+        """Narrative says what it believes — in sentences, not a metrics table."""
         self._add_episodes(model, 3)
         r = model.reflect()
-        assert "My current beliefs:" in r.narrative
+        # names a real belief in prose ...
+        assert any(b in r.narrative for b in model.self_beliefs), r.narrative
+        # ... and the raw key=value form is gone
+        assert "My current beliefs:" not in r.narrative
 
-    def test_narrative_contains_growth_rate(self, model: SelfModel):
-        """Narrative includes average growth rate."""
-        self._add_episodes(model, 3)
+    def test_narrative_carries_no_bare_metrics(self, model: SelfModel):
+        """The prose reads as human; the numbers live on Reflection, not in sentences.
+
+        Regression guard. The narrative used to OPEN with a telemetry dump:
+
+            "I have processed 3 experiences. My current beliefs: competence=0.70,
+             helpfulness=0.80, ... Average growth rate: +0.015."
+
+        Three machine sentences set the tone of every reflection — and, because a
+        dream quotes its own insight back into the next reflection, the dump kept
+        re-ingesting itself. Reflection still carries avg_growth / trajectory /
+        belief_deltas / episode_count; the sentence only has to carry their
+        meaning.
+        """
+        import re
+
+        for count in (1, 3, 8, 25, 120):
+            model.clear_episodes()
+            self._add_episodes(model, count)
+            r = model.reflect()
+            assert not re.search(r"[A-Za-z_]+=\d", r.narrative), (
+                f"reflection narrative leaks a metric token at {count} episodes: {r.narrative!r}"
+            )
+            # the numbers did not vanish — they moved to the structure
+            assert isinstance(r.avg_growth, float)
+            assert r.episode_count == len(model.episodes)
+            assert r.trajectory in {"growth", "decline", "stagnation"}
+
+    def test_narrative_still_reports_growth_in_words(self, model: SelfModel):
+        """Growth is stated humanly; the exact figure stays on avg_growth."""
+        self._add_episodes(model, 6, feedback_rating=5)  # genuine growth
         r = model.reflect()
-        assert "Average growth rate:" in r.narrative
+        assert r.avg_growth > 0.05  # the number, where it belongs
+        assert r.trajectory == "growth"
+        assert "Average growth rate:" not in r.narrative
+        # the history phrase reads human, and growth is stated as a sentence
+        assert "experiences sit behind this" in r.narrative
+        assert "+" not in r.narrative
 
     def test_strategy_notes_on_decline(self, model: SelfModel):
         """Decline trajectory produces strategy notes."""
