@@ -9370,9 +9370,13 @@ class X86SyscallHandler:
             return -1
         data = bytes(self._cpu._read8(buf_addr + i) for i in range(count))
         if fd == 1 or fd == 2:
-            # stdout/stderr — write to console
+            # stdout/stderr — write to the process console. print() is what
+            # the syscall contract pins (pytest capsys + the terminal both
+            # see it); logger.debug(text, end=...) silently dropped guest
+            # output whenever the debug level was disabled (and its kwargs
+            # never validate on the logging path).
             text = data.decode("ascii", errors="replace")
-            logger.debug(text, end="", flush=True)
+            print(text, end="", flush=True)
             return count
         elif self._fs and fd in self._fd_table:
             filename = self._fd_table[fd]
