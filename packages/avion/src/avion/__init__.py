@@ -28,6 +28,7 @@ from avion.core.session import Arken, ArkenConfig
 # Canonical names (arken shim re-exports these).
 Avion = Arken
 AvionConfig = ArkenConfig
+from avion.flow.complete import FlowOutcome, complete_flow
 from avion.interact.primitives import (
     BoundingBox,
     Coordinate,

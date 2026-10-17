@@ -175,3 +175,9 @@ def load_flow(path: str) -> FlowGraph:
     with open(path) as f:
         payload = json.load(f)
     return build_flow(payload.get("events", []), session_name=payload.get("session", ""))
+
+
+# The execution half: recorded events -> the flow completed on a live
+# browser avion owns (import at the end — complete imports the session,
+# which must not be pulled in before the pure map above).
+from avion.flow.complete import FlowOutcome, complete_flow  # noqa: E402,F401

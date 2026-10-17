@@ -208,6 +208,15 @@ def launch_chromium(
     profile = profile or Profile()
     profile.ensure()
     chromium = find_chromium(binary)
+    # A previous run's handshake file would fool the poll below into
+    # reporting the OLD (dead) port — delete it so the file's reappearance
+    # is unambiguous evidence of THIS browser's bind. Seen in the wild:
+    # relaunching the same profile got the same port number back and the
+    # stale file answered first.
+    try:
+        (profile.dir / "DevToolsActivePort").unlink()
+    except FileNotFoundError:
+        pass
     argv = (
         chromium,
         f"--user-data-dir={profile.dir}",
