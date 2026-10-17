@@ -1,24 +1,22 @@
-"""
-Practical RAG Implementation Guide
+# Practical RAG Implementation Guide
 
 Real production patterns for using RAG effectively.
 
-⚠️ The pattern classes below (UserSpecificRAG, TemporalRAG, etc.) are
-design sketches / aspirational templates showing how ProductionRAG could
-be extended. Only ProductionRAG is implemented. These patterns serve as
-reference for future development.
-"""
+> ⚠️ The pattern classes below (UserSpecificRAG, TemporalRAG, etc.) are
+> design sketches / aspirational templates showing how ProductionRAG could
+> be extended. Only ProductionRAG is implemented (real class:
+> `domain/cognition/_internal/rag.py`, reachable via the `domain.cognition`
+> facade). These sketches serve as reference for future development — they
+> are not importable modules and have no `__all__`.
 
-# =============================================================================
-# REAL-WORLD RAG PATTERNS
-# =============================================================================
+## REAL-WORLD RAG PATTERNS
 
-"""
 PATTERN 1: User-Specific RAG
 ─────────────────────────────────
 
 For each user, maintain their own RAG context.
 
+```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        USER-SPECIFIC RAG                          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -43,10 +41,11 @@ For each user, maintain their own RAG context.
 │  └─────────────────────────────────────────────────────────┘     │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
+```
 
 Implementation:
-"""
 
+```python
 class UserSpecificRAG:
     """RAG scoped to individual user data."""
 
@@ -70,17 +69,16 @@ class UserSpecificRAG:
 
         return self.user_rags[user_id].query(question)
 
+```
 
-# =============================================================================
-# PATTERN 2: TEMPORAL RAG (Recent First)
-# =============================================================================
+## PATTERN 2: TEMPORAL RAG (Recent First)
 
-"""
 PATTERN 2: Temporal Relevance
 ─────────────────────────────────
 
 Filter by recency - most recent docs are most relevant.
 
+```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TEMPORAL RAG                                   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -103,10 +101,11 @@ Filter by recency - most recent docs are most relevant.
 │  Result: "Remote work is allowed 3 days per week..."       │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
+```
 
 Implementation:
-"""
 
+```python
 class TemporalRAG:
     """RAG with temporal filtering."""
 
@@ -133,17 +132,16 @@ class TemporalRAG:
 
         return recent[:5]  # Top 5 recent
 
+```
 
-# =============================================================================
-# PATTERN 3: MULTI-HOP RAG
-# =============================================================================
+## PATTERN 3: MULTI-HOP RAG
 
-"""
 PATTERN 3: Multi-Hop Reasoning
 ─────────────────────────────────
 
 RAG that chains through multiple documents.
 
+```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    MULTI-HOP RAG                                  │
 ├─────────────────────────────────────────────────────────────────┤
@@ -173,8 +171,9 @@ RAG that chains through multiple documents.
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
-"""
+```
 
+```python
 class MultiHopRAG:
     """RAG that chains through multiple document types."""
 
@@ -201,17 +200,16 @@ class MultiHopRAG:
             "answer": self.synthesize(primary, secondary),
         }
 
+```
 
-# =============================================================================
-# PATTERN 4: AGENTIC RAG
-# =============================================================================
+## PATTERN 4: AGENTIC RAG
 
-"""
 PATTERN 4: Agentic RAG (Self-Deciding Retrieval)
 ────────────────────────────────────────────────────
 
 The LLM decides WHEN and WHAT to retrieve.
 
+```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      AGENTIC RAG                                   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -240,8 +238,9 @@ The LLM decides WHEN and WHAT to retrieve.
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
-"""
+```
 
+```python
 class AgenticRAG:
     """RAG with agentic decision making."""
 
@@ -289,17 +288,16 @@ class AgenticRAG:
             "result": "No retrieval needed",
         }
 
+```
 
-# =============================================================================
-# PATTERN 5: RAG WITH MEMORY
-# =============================================================================
+## PATTERN 5: RAG WITH MEMORY
 
-"""
 PATTERN 5: Conversational RAG
 ───────────────────────────────
 
 RAG that remembers conversation context.
 
+```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CONVERSATIONAL RAG                              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -319,8 +317,9 @@ RAG that remembers conversation context.
 │  RAG: [all_context] + "expense meals" → "Meal expenses..."    │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
-"""
+```
 
+```python
 class ConversationalRAG:
     """RAG with conversation memory."""
 
@@ -347,16 +346,14 @@ class ConversationalRAG:
 
         return result
 
+```
 
-# =============================================================================
-# REAL PRODUCTION EXAMPLE
-# =============================================================================
+## REAL PRODUCTION EXAMPLE
 
-"""
 COMPLETE PRODUCTION EXAMPLE:
 Law Firm Contract Assistant
-"""
 
+```python
 class ContractAssistant:
     """
     Production RAG for contract review.
@@ -425,12 +422,11 @@ Please review the full documents for complete details.
             "verified": verification.get("is_verified", False),
         }
 
+```
 
-# =============================================================================
-# SUMMARY: WHEN TO USE RAG
-# =============================================================================
+## SUMMARY: WHEN TO USE RAG
 
-"""
+```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     RAG DECISION GUIDE                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -463,14 +459,5 @@ Please review the full documents for complete details.
 │  Typical: 1-100 docs per query, not 100,000.                  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
-"""
+```
 
-
-__all__ = [
-    "UserSpecificRAG",
-    "TemporalRAG",
-    "MultiHopRAG",
-    "AgenticRAG",
-    "ConversationalRAG",
-    "ContractAssistant",
-]
