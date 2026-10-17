@@ -1644,6 +1644,14 @@ class SloNetChatProvider:
         """Resolve KV state for a session, creating if needed, with TTL eviction."""
         if session_id is None:
             return None
+        # Materialize BEFORE touching the manager: on a lazy provider,
+        # _get_model() rebinds self._kv_manager to the eager load's manager —
+        # a session created before that rebinding lands on the orphaned old
+        # manager, so it vanishes from session_stats() and every later turn
+        # (cross-turn KV silently lost for lazily-loaded models, i.e. the
+        # guard-backed autoload path). Eager providers hit an already-loaded
+        # fast path here, so ordering is the only observable change.
+        self._get_model()
         self._evict_stale_sessions()
         return self._kv_manager.get_or_create(session_id, self._get_model().new_kv_state)
 
