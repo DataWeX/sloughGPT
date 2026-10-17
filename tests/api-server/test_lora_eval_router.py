@@ -90,6 +90,35 @@ class TestRunEval:
         assert resp.status_code == 200
         ev.run.assert_called()
 
+    def test_run_eval_adapter_path_immune_to_cwd(self, tmp_path, monkeypatch):
+        """Validation anchors to the repo root, not the process CWD.
+
+        _ADAPTER_BASE used to be Path("data/user_adapters").resolve() at
+        import time — a leaked or changed process CWD made every request
+        resolve against a different tree (422s).
+        """
+        client = get_test_client()
+        ev = _mock_evaluator()
+        monkeypatch.chdir(tmp_path)
+        with (
+            patch("domain.training.feedback.get_lora_evaluator", return_value=ev),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            resp = client.post("/lora-eval/run?adapter_path=data/user_adapters/test.npz")
+        assert resp.status_code == 200
+        assert _data(resp)["status"] == "compared"
+
+    def test_run_eval_rejects_sibling_prefix(self):
+        """data/user_adapters_evil/ must not pass the user_adapters/ boundary.
+
+        The old check was str.startswith against the base without a
+        separator, so any sibling directory sharing the prefix passed.
+        """
+        client = get_test_client()
+        resp = client.post("/lora-eval/run?adapter_path=data/user_adapters_evil/x.npz")
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "E_VAL_REQUEST"
+
 
 class TestEvalHistory:
     def test_get_history(self):

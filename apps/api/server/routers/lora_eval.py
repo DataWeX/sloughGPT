@@ -19,8 +19,17 @@ from schemas.common import (
     success_response,
 )
 
+from domain.core.shared import find_repo_root
+
 _VALID_ADAPTER_PATH = re.compile(r"^[\w\-/]+\.npz$")
-_ADAPTER_BASE = Path("data/user_adapters").resolve()
+# Anchor to the repo root, NOT the process CWD: the evaluator store is
+# _REPO_ROOT / "data/user_adapters" (domain.training.feedback.per_user_lora),
+# and an import-time Path(...).resolve() captured whatever directory the
+# server happened to start from — a leaked/changed CWD then made every
+# validation resolve against a different tree (422s). Sibling routers
+# (openwebui, model_stack, plugins) already anchor this way.
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
+_ADAPTER_BASE = _REPO_ROOT / "data" / "user_adapters"
 
 
 class LoraEvalRouter:
@@ -59,8 +68,10 @@ class LoraEvalRouter:
                 code="E_VAL_REQUEST",
                 details={"adapter_path": adapter_path},
             )
-        resolved = Path(adapter_path).resolve()
-        if not str(resolved).startswith(str(_ADAPTER_BASE)):
+        # Path / semantics: an absolute adapter_path replaces _REPO_ROOT, so
+        # absolute inputs land in the same boundary check as relative ones.
+        resolved = (_REPO_ROOT / adapter_path).resolve()
+        if not resolved.is_relative_to(_ADAPTER_BASE):
             raise_error(
                 f"Adapter path must be under data/user_adapters/: {adapter_path!r}",
                 code="E_VAL_REQUEST",
