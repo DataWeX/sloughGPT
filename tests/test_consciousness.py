@@ -521,6 +521,103 @@ class TestSelfReport:
         assert engine.reflection_state_key() == key_before
 
 
+class TestDreamDiary:
+    """Dreams as a readable journal — human narrative beside its provenance.
+
+    `last_dream` gives one dream, truncated and stripped of provenance: the
+    half-truth where the narrative survives but its bones do not. The diary
+    carries both planes in one entry and never dumps the whole log.
+    """
+
+    def test_diary_present_after_dreaming(self, tmp_path: Path) -> None:
+        from domain.cognition._internal.consciousness.engine import DIARY_LIMIT
+
+        engine = _make_engine(tmp_path)
+        for _ in range(3):
+            engine.self_model.episodes.append(_make_episode())
+            engine.dream()
+
+        diary = engine.self_report()["dream_diary"]
+        assert diary["total"] == 3
+        assert 0 < diary["shown"] <= DIARY_LIMIT
+        assert len(diary["entries"]) == diary["shown"]
+        assert diary["entries"][-1]["narrative"]  # readable, non-empty
+
+    def test_every_entry_carries_both_planes(self, tmp_path: Path) -> None:
+        """Human narrative AND provenance — neither may be stripped."""
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode())
+        engine.dream()
+
+        entry = engine.self_report()["dream_diary"]["entries"][-1]
+        # human plane
+        assert isinstance(entry["narrative"], str) and entry["narrative"]
+        # provenance in the bones
+        for key in ("t", "locus", "from_locus", "provenance", "qualia", "edges"):
+            assert key in entry, f"diary entry must carry {key!r}"
+        assert entry["provenance"] == "dream"
+        assert entry["locus"] == "dreaming"
+        # the full locus vocabulary, unborn included — a dream before the log
+        # has any episode honestly reports it came from nowhere yet
+        assert entry["from_locus"] in {"unborn", "awakening", "rationalizing", "dreaming"}
+
+    def test_diary_narrative_is_full_not_truncated(self, tmp_path: Path) -> None:
+        """The journal is the whole story; last_dream stays the 400-char gist."""
+        from domain.cognition._internal.consciousness.mind_state import MindRecord
+
+        engine = _make_engine(tmp_path)
+        long_story = "and then I dreamt " + "of branching halls " * 40
+        engine.mind_log.append(
+            MindRecord(
+                type="dream",
+                payload={
+                    "narrative": long_story,
+                    "locus": "dreaming",
+                    "from_locus": "awakening",
+                    "qualia": {},
+                },
+                provenance="dream",
+            )
+        )
+        report = engine.self_report()
+        assert report["dream_diary"]["entries"][-1]["narrative"] == long_story
+        assert len(report["last_dream"]["narrative"]) <= 400  # contract intact
+
+    def test_diary_is_bounded_with_accurate_total(self, tmp_path: Path) -> None:
+        """Summarise, never dump: a renderer says '12 of 44'."""
+        from domain.cognition._internal.consciousness.engine import DIARY_LIMIT
+        from domain.cognition._internal.consciousness.mind_state import MindRecord
+
+        engine = _make_engine(tmp_path)
+        for _ in range(DIARY_LIMIT + 3):
+            engine.mind_log.append(
+                MindRecord(
+                    type="dream", payload={"narrative": "night", "qualia": {}}, provenance="dream"
+                )
+            )
+        diary = engine.self_report()["dream_diary"]
+        assert diary["total"] == DIARY_LIMIT + 3
+        assert diary["shown"] == DIARY_LIMIT
+        assert len(diary["entries"]) == DIARY_LIMIT
+        # newest last — the diary reads in order
+        assert diary["entries"][0]["t"] <= diary["entries"][-1]["t"]
+
+    def test_diary_empty_before_any_dream(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        engine.process("hello", "world", level=2)
+        diary = engine.self_report()["dream_diary"]
+        assert diary == {"total": 0, "shown": 0, "entries": []}
+
+    def test_last_dream_contract_unchanged(self, tmp_path: Path) -> None:
+        """Existing consumers read last_dream — additive means additive."""
+        engine = _make_engine(tmp_path)
+        engine.self_model.episodes.append(_make_episode())
+        engine.dream()
+        report = engine.self_report()
+        assert report["last_dream"] is not None
+        assert set(report["last_dream"]) == {"t", "narrative"}
+
+
 # ---------------------------------------------------------------------------
 # ConsciousnessManager.apply()
 # ---------------------------------------------------------------------------

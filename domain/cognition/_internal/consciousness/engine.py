@@ -19,6 +19,10 @@ from domain.cognition._internal.consciousness.self_model import SelfEpisode, Sel
 _FEEDBACK_BELIEFS = ("accuracy", "helpfulness")
 _FEEDBACK_POINTS: dict[str, int] = {"thumbs_up": 5, "thumbs_down": 1, "neutral": 3}
 
+# The dream journal reads as a bounded entry list, never the whole log: a
+# renderer says "12 of 44" and keeps the raw stream one click away.
+DIARY_LIMIT = 12
+
 
 def _is_down_rating(rating: object) -> bool:
     """True for a logged negative evidence rating (string form or points)."""
@@ -177,8 +181,10 @@ class ConsciousnessEngine:
         The 'what do you know about me' surface as data — rendered time:
         current beliefs plus the trajectory that produced them, what pulls
         attention (curiosity), the experience timeline counted from the log
-        (so it survives the document window), and the last dream. Read-only:
-        a report observes the mind, it never steers it.
+        (so it survives the document window), the last dream, and the dream
+        diary — the night's dreams as a readable journal with their
+        provenance intact. Read-only: a report observes the mind, it never
+        steers it.
         """
         sm = self.self_model
         beliefs = {k: round(float(v), 4) for k, v in sm.self_beliefs.items()}
@@ -227,6 +233,35 @@ class ConsciousnessEngine:
                 if last_dream is not None
                 else None
             ),
+            "dream_diary": self._dream_diary(dreams),
+        }
+
+    def _dream_diary(self, dreams: list[MindRecord] | None = None) -> dict[str, Any]:
+        """The dream journal: readable narrative beside the provenance of its making.
+
+        Two planes in one entry — the human sentence to read, and the bones
+        that keep it honest (locus, from_locus, provenance, qualia, edges as
+        recorded). Read-only, bounded by ``DIARY_LIMIT`` with an accurate
+        ``total`` so a renderer can summarise instead of dumping the log.
+        """
+        if dreams is None:
+            dreams = self.mind_log.query(record_type="dream", limit=0)
+        window = dreams[-DIARY_LIMIT:]
+        return {
+            "total": len(dreams),
+            "shown": len(window),
+            "entries": [
+                {
+                    "t": d.t,
+                    "narrative": d.payload.get("narrative") or "",
+                    "locus": d.payload.get("locus"),
+                    "from_locus": d.payload.get("from_locus"),
+                    "provenance": d.provenance,
+                    "qualia": dict(d.payload.get("qualia") or {}),
+                    "edges": list(d.edges),
+                }
+                for d in window
+            ],
         }
 
     def process(self, input_text: str, response: str, level: int | None = None) -> str:
