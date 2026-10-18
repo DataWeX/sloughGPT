@@ -18,7 +18,7 @@ Single source of truth for navigation. Read this first.
 
 | Doc | Purpose |
 |-----|---------|
-| **STRUCTURE.md** | Repo layout |
+| **STRUCTURE.md** | Repo layout, domain/ map, branch lanes |
 | **RAG_ARCHITECTURE.md** | RAG system design |
 | **RAG_PATTERNS.md** | RAG implementation patterns |
 | **TRAINING_REFACTOR_PLAN.md** | Consolidating training loops |
