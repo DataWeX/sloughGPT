@@ -230,7 +230,10 @@ class TestCaptureCmd:
     def test_capture_cmd_returns_output_and_restores(self):
         repl = types.SimpleNamespace(
             io=MemoryIO(),
-            console=types.SimpleNamespace(_io=MemoryIO()),
+            console=types.SimpleNamespace(
+                _io=MemoryIO(),
+                _interactive=types.SimpleNamespace(_io=MemoryIO(), _is_tty=False),
+            ),
         )
         old_io = repl.io
         old_console_io = repl.console._io
@@ -246,7 +249,10 @@ class TestCaptureCmd:
     def test_capture_cmd_restores_on_error(self):
         repl = types.SimpleNamespace(
             io=MemoryIO(),
-            console=types.SimpleNamespace(_io=MemoryIO()),
+            console=types.SimpleNamespace(
+                _io=MemoryIO(),
+                _interactive=types.SimpleNamespace(_io=MemoryIO(), _is_tty=False),
+            ),
         )
         old_io = repl.io
 
