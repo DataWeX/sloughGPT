@@ -82,6 +82,33 @@ def _stop_infra_threads():
             stop_all()
 
 
+@pytest.fixture(autouse=True)
+def _reset_log_correlation_context():
+    """Clear correlation/request/log-context globals after every test.
+
+    set_correlation_id("in-main") (test_infrastructure_*) and
+    set_request_id(...) (test_logging_config::TestRecordFactory) leak into
+    every later test: setup_logging's _enriched_record_factory — installed
+    globally and never uninstalled — then injects the stale request_id into
+    every LogRecord BEFORE makeRecord applies the caller's extra dict. Two
+    CI symptoms of that one leak: StructuredLogger calls carrying an
+    explicit request_id kwarg raise CPython's makeRecord KeyError
+    ("Attempt to overwrite 'request_id' in LogRecord"), and JSONFormatter
+    shows the leaked id instead of the in-scope LogContext value
+    (priority_queue x2, structured_log, logging_config
+    ::test_no_request_id_when_none — all four green in isolation;
+    order-dependence only).
+    """
+    yield
+    corr_mod = sys.modules.get("domain.infrastructure.correlation")
+    if corr_mod is not None:
+        corr_mod.set_correlation_id(None)
+    log_mod = sys.modules.get("domain.logging._internal.config")
+    if log_mod is not None:
+        log_mod._request_id.set(None)
+        log_mod.clear_log_context()
+
+
 def build_test_app(*routers):
     """Build a FastAPI app with exception handlers registered.
 
