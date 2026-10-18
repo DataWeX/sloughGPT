@@ -533,7 +533,11 @@ class TestChunkedOperation:
         v = np.random.randn(1, 8, 4, 16).astype(np.float32)
         out, weights = co.attention_chunked(q, k, v)
         assert out.shape == (1, 8, 4, 16)
-        assert weights.shape[2] == 4
+        # weights is the assembled [B, H, S, S] attention matrix (query-major),
+        # so heads lives at axis 1 and the sequence at axes 2,3. The old ragged
+        # per-chunk concat left axis 2 as q_len (= chunk_size), which happened
+        # to equal the head count here and masked the wrong-axis assertion.
+        assert weights.shape == (1, 4, 8, 8)
 
     def test_chunk_size_one(self):
         co = ChunkedOperation(chunk_size=1)

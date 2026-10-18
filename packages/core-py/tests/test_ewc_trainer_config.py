@@ -293,7 +293,8 @@ class TestTrainerConfig:
 
     def test_learning_rate_default(self):
         tc = TrainerConfig()
-        assert tc.learning_rate == 1e-3
+        # 3e-4, the production-corroborated default (see test_epochs.py).
+        assert tc.learning_rate == 3e-4
 
     def test_weight_decay_default(self):
         tc = TrainerConfig()
@@ -353,7 +354,8 @@ class TestTrainerConfig:
 
     def test_early_stopping_patience_default(self):
         tc = TrainerConfig()
-        assert tc.early_stopping_patience == 0
+        # 5, the production-corroborated default (early-stopping ON).
+        assert tc.early_stopping_patience == 5
 
     def test_gradient_accumulation_steps_default(self):
         tc = TrainerConfig()
