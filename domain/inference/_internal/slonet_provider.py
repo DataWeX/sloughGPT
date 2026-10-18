@@ -49,9 +49,9 @@ _SloLayerNorm = None
 def _get_slo_layernorm():
     global _SloLayerNorm
     if _SloLayerNorm is None:
-        from domain.training._internal.slonet import LayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
-        _SloLayerNorm = LayerNorm
+        _SloLayerNorm = SloLayerNorm
     return _SloLayerNorm
 
 
