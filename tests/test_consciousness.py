@@ -626,6 +626,99 @@ class TestDreamDiary:
         assert set(report["last_dream"]) == {"t", "narrative"}
 
 
+class TestDreamConsolidation:
+    """A dream should consolidate what it revisits, not re-narrate global state.
+
+    Measured defects this replaces: dream qualia was a byte-copy of the waking
+    mood, consecutive dreams differed only by a rotated adjective, and the
+    consolidates edge stamped 'whatever episode was last' rather than anything
+    the dream actually chose.
+    """
+
+    def _episode_records(self, engine) -> list:
+        return engine.mind_log.query(record_type="episode", limit=0)
+
+    def test_dream_consolidates_the_oldest_unconsolidated(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        for i in range(3):
+            engine.process(f"q{i}", f"a{i}", level=2)
+        records = self._episode_records(engine)
+
+        engine.dream()
+        dream = engine.mind_log.query(record_type="dream", limit=0)[-1]
+        # the OLDEST unconsolidated episode — not 'whatever was last'
+        assert dream.edges == [{"rel": "consolidates", "id": records[0].id}]
+        assert dream.payload["revisited"] == [records[0].id]
+
+    def test_each_dream_moves_on_to_the_next(self, tmp_path: Path) -> None:
+        engine = _make_engine(tmp_path)
+        for i in range(3):
+            engine.process(f"q{i}", f"a{i}", level=2)
+        records = self._episode_records(engine)
+
+        engine.dream()
+        engine.dream()
+        dreams = engine.mind_log.query(record_type="dream", limit=0)
+        assert dreams[0].payload["revisited"] == [records[0].id]
+        assert dreams[1].payload["revisited"] == [records[1].id]
+        # a real consolidation walk, not the same night twice
+        assert dreams[0].payload["revisited"] != dreams[1].payload["revisited"]
+
+    def test_a_dream_with_nothing_new_says_so(self, tmp_path: Path) -> None:
+        """No re-rolling the same narrative in a fresh adjective."""
+        engine = _make_engine(tmp_path)
+        engine.process("q", "a", level=2)
+        first = engine.dream()
+        second = engine.dream()
+        assert first["dreamed"] is True
+        assert second["dreamed"] is False
+        assert "consolidat" in second["reason"]
+
+    def test_dream_qualia_comes_from_what_it_revisited(self, tmp_path: Path) -> None:
+        """Consolidation feels like the thing being consolidated — not the mood at bedtime."""
+        engine = _make_engine(tmp_path)
+        engine.process("q", "a", level=2)
+        revisited_qualia = {"valence": 0.9, "novelty": 0.8, "coherence": 0.7}
+        engine.self_model.episodes[-1].qualia = dict(revisited_qualia)
+
+        waking = dict(engine.qualia.current.to_dict())
+        engine.dream()
+        dream = engine.mind_log.query(record_type="dream", limit=0)[-1]
+        felt = dream.payload["qualia"]
+        assert {k: felt[k] for k in revisited_qualia} == revisited_qualia
+        # and it is no longer merely the waking snapshot
+        assert felt != waking or felt == revisited_qualia
+
+    def test_dream_records_revisited_for_the_diary(self, tmp_path: Path) -> None:
+        """The diary renders what a given night actually touched."""
+        engine = _make_engine(tmp_path)
+        engine.process("q", "a", level=2)
+        engine.dream()
+        entry = engine.self_report()["dream_diary"]["entries"][-1]
+        assert entry["revisited"]  # the bones carry the consolidation target
+
+    def test_dream_still_never_commits_belief_deltas(self, tmp_path: Path) -> None:
+        """Invariant: consolidation reads state, experience writes it."""
+        engine = _make_engine(tmp_path)
+        engine.process("q", "a", level=2)
+        before = dict(engine.self_model.self_beliefs)
+        engine.dream()
+        assert dict(engine.self_model.self_beliefs) == before
+
+    def test_dream_prose_stays_human(self, tmp_path: Path) -> None:
+        import re
+
+        engine = _make_engine(tmp_path)
+        for i in range(4):
+            engine.process(f"q{i}", f"a{i}", level=2)
+        for _ in range(4):
+            engine.dream()
+        for rec in engine.mind_log.query(record_type="dream", limit=0):
+            assert not re.search(r"[A-Za-z_]+=\d", rec.payload["narrative"]), rec.payload[
+                "narrative"
+            ]
+
+
 # ---------------------------------------------------------------------------
 # ConsciousnessManager.apply()
 # ---------------------------------------------------------------------------

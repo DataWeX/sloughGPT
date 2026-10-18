@@ -125,10 +125,21 @@ class ConsciousnessEngine:
         provenance: str,
         edge_type: str | tuple[str, ...] | None = None,
         edge_rel: str = "reflects_on",
+        edge_ids: list[str] | str | None = None,
     ) -> MindRecord:
-        """Append one fact to the mind-state log, wiring a true edge if known."""
+        """Append one fact to the mind-state log, wiring a true edge if known.
+
+        ``edge_ids`` names the target(s) explicitly when the caller actually
+        knows what it is pointing at — a dream that revisited a specific
+        episode should say so, rather than inherit 'whatever record was
+        appended last'. When omitted, ``edge_type`` falls back to the last
+        record of that type (unknown after a restart: no edge, never a guess).
+        """
         edges: list[dict[str, str]] = []
-        if edge_type is not None:
+        if edge_ids is not None:
+            targets = (edge_ids,) if isinstance(edge_ids, str) else tuple(edge_ids)
+            edges = [{"rel": edge_rel, "id": t} for t in targets]
+        elif edge_type is not None:
             candidates = (edge_type,) if isinstance(edge_type, str) else edge_type
             for candidate in candidates:
                 ref = self._mind_last.get(candidate)
@@ -259,6 +270,7 @@ class ConsciousnessEngine:
                     "provenance": d.provenance,
                     "qualia": dict(d.payload.get("qualia") or {}),
                     "edges": list(d.edges),
+                    "revisited": list(d.payload.get("revisited") or []),
                 }
                 for d in window
             ],
@@ -367,26 +379,93 @@ class ConsciousnessEngine:
         r = self._propose_reflection()
         return r.narrative if hasattr(r, "narrative") else str(r)
 
-    def dream(self) -> dict[str, Any]:
-        """Consolidate inner state with zero input — the inner loop, unplugged.
+    def _consolidated_keys(self) -> set[str]:
+        """What earlier nights already worked on, read back from the ledger.
 
-        The propose-only reflection over current state is recorded as a dream
-        episode, so the next reflection sees its own past reflections: the
-        loop closes on itself. That self-reference is what makes the inner
-        life intrinsic rather than input-driven — no chat, no tools, no feeds
-        required. Dreams never commit belief deltas: consolidation reads
-        state, experience writes it.
+        A dream records the ids it revisited; this is that set. Kept in the log
+        rather than as a flag on the model so it cannot drift from the truth.
         """
-        if not self.self_model.episodes:
-            return {"dreamed": False, "reason": "no experiences to consolidate", "episodes": 0}
+        seen: set[str] = set()
+        for rec in self.mind_log.query(record_type="dream", limit=0):
+            seen.update(rec.payload.get("revisited") or [])
+        return seen
+
+    def _consolidation_candidates(self) -> list[tuple[SelfEpisode, MindRecord | None, str]]:
+        """(episode, its log record or None, stable key), oldest first.
+
+        Two ways living episodes outnumber, or sit under, their records — each
+        needs different alignment or every consolidation lands on the wrong
+        experience:
+
+        * log >= episodes: save() trims the model's WINDOW, the log keeps the
+          whole timeline — so living episodes align to the log's TAIL.
+        * episodes > log: writers that bypass the engine append to the model
+          without recording (routers/consciousness.py does) — align from the
+          head, and the tail has no ledger entry to point at.
+
+        An unrecorded episode is keyed by its own timestamp, so it is still
+        consolidated exactly once and never re-dreamed.
+        """
+        living = [e for e in self.self_model.episodes if not e.is_dream]
+        if not living:
+            return []
+        records = self.mind_log.query(record_type="episode", limit=0)
+        if len(records) >= len(living):
+            pairs: list[tuple[SelfEpisode, MindRecord | None]] = list(
+                zip(living, records[-len(living) :])
+            )
+        else:
+            pairs = list(zip(living, records))
+            pairs.extend((e, None) for e in living[len(records) :])
+
+        seen = self._consolidated_keys()
+        candidates: list[tuple[SelfEpisode, MindRecord | None, str]] = []
+        for episode, record in pairs:
+            key = record.id if record is not None else f"ep:{episode.timestamp}"
+            if key not in seen:
+                candidates.append((episode, record, key))
+        return candidates
+
+    def dream(self) -> dict[str, Any]:
+        """Consolidate one unconsolidated experience — the inner loop, unplugged.
+
+        A dream CHOOSES what it revisits: the oldest experience no earlier
+        dream has worked on. It feels like that experience (its qualia, not the
+        mood it fell asleep in), records what it touched in the ledger, and
+        points its consolidates edge at the episode actually revisited — so the
+        diary renders a night that really happened rather than a stamp on
+        'whatever was last'. The narrative is recorded as a dream episode, so
+        the next reflection sees its own past reflections: the loop closes on
+        itself.
+
+        Dreams never commit belief deltas: consolidation reads state,
+        experience writes it.
+        """
+        candidates = self._consolidation_candidates()
+        if not candidates:
+            reason = (
+                "no experiences to consolidate"
+                if not self.self_model.episodes
+                else "everything has been consolidated - nothing new to revisit"
+            )
+            return {
+                "dreamed": False,
+                "reason": reason,
+                "episodes": len(self.self_model.episodes),
+            }
+
+        target, target_record, key = candidates[0]
         from_locus = self.locus()  # where I am BEFORE dreaming — I drift out of this
         r = self._propose_reflection()
         narrative = r.narrative if hasattr(r, "narrative") else str(r)
+        # Consolidation feels like the thing being consolidated — not like the
+        # waking mood it happened to fall asleep in.
+        felt = dict(target.qualia) if target.qualia else dict(self.qualia.current.to_dict())
         dream = SelfEpisode(
             timestamp=time.time(),
             input_text="(dream)",
             response="",
-            qualia=dict(self.qualia.current.to_dict()),
+            qualia=felt,
             self_insight=narrative,
             growth_delta=0.0,
             is_dream=True,
@@ -400,9 +479,12 @@ class ConsciousnessEngine:
                 "qualia": dict(dream.qualia),
                 "locus": "dreaming",
                 "from_locus": from_locus,
+                "revisited": [key],
             },
             provenance="dream",
-            edge_type="episode",
+            # only claim an edge the ledger can actually back: an episode with
+            # no record has nothing to point at, so it gets none — never a guess
+            edge_ids=[target_record.id] if target_record is not None else None,
             edge_rel="consolidates",
         )
         return {
@@ -410,6 +492,7 @@ class ConsciousnessEngine:
             "narrative": narrative,
             "locus": "dreaming",
             "from_locus": from_locus,
+            "revisited": [key],
             "episodes": len(self.self_model.episodes),
             "dreams": sum(1 for e in self.self_model.episodes if e.is_dream),
         }

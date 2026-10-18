@@ -90,8 +90,9 @@ heavy = sorted(
 tmp = pathlib.Path(tempfile.mkdtemp())
 eng = ConsciousnessEngine(ConsciousnessConfig(level=2, store_path=str(tmp)))
 eng.process("hello", "hi there")
-dream = eng.dream()
-tick = eng.maybe_dream()
+dream = eng.dream()          # consolidates the first exchange
+eng.process("a second exchange", "and its reply")   # NEW material for the gate
+tick = eng.maybe_dream()     # must fire — something real is unconsolidated
 reflection = eng.reflect()
 report = eng.self_report()
 records = eng.mind_log.query(limit=0)
@@ -119,10 +120,10 @@ class TestDreamEngineIsStandalone:
         assert verdict["episodes"] >= 1
         assert verdict["dream_locus"] == "dreaming"
         assert verdict["dream_from_locus"] == "awakening"
-        assert verdict["tick_dreamed"] is True  # satiation gate fires on new material
+        assert verdict["tick_dreamed"] is True  # gate fires on material that is genuinely new
         assert verdict["reflection_type"] == "Reflection"
         assert verdict["records"] >= 1
-        for key in ("beliefs", "doubts", "reflection", "timeline", "last_dream"):
+        for key in ("beliefs", "doubts", "reflection", "timeline", "last_dream", "dream_diary"):
             assert key in verdict["report_keys"], f"report missing {key!r}"
 
         # (b) Dependency independence — nothing from the model stack came along.
