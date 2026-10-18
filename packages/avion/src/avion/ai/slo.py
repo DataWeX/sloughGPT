@@ -334,49 +334,19 @@ class SloModel:
     ) -> SloModel:
         """Drive a hosted chat-completions endpoint (Authorization: Bearer).
 
-        The de-facto wire shape hosted providers speak: POST
-        ``{messages: [{role: user, content: prompt}], ...}`` under
-        ``<base_url>/chat/completions`` (``base_url`` carries the version
-        prefix, e.g. ``.../v1``), answered with
-        ``choices[0].message.content``. The key reaches the header it
-        belongs in and nothing else — never the model name, logs, or
-        error strings.
+        Delegates to ``domain.inference.language.hosted`` — the wire
+        shape and the Bearer header live in core, not here; this adapter
+        only projects the standard language client into the agent's
+        model interface. The key reaches the header and nothing else —
+        never the model name, logs, or error strings.
         """
-        from avion.backends.api import ApiBackend
+        try:
+            from domain.inference.language import hosted
+        except ImportError as e:
+            raise ImportError("the language API needs the sloughgpt core packages (domain).") from e
 
-        backend = ApiBackend(
-            base_url=base_url,
-            timeout=timeout,
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-        name = f"chat-api:{base_url}"
-
-        async def generate(prompt: str) -> str:
-            payload: dict[str, Any] = {
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": kwargs.get("max_tokens", 512),
-                "temperature": kwargs.get("temperature", 0.3),
-            }
-            if model:
-                payload["model"] = model
-            await backend.start()
-            try:
-                resp = await backend.post("/chat/completions", payload)
-            finally:
-                await backend.stop()
-            if not resp.ok:
-                raise RuntimeError(f"HTTP {resp.status}: {resp.error}")
-            body = resp.body
-            if isinstance(body, dict):
-                choices = body.get("choices") or []
-                if choices and isinstance(choices[0], dict):
-                    message = choices[0].get("message") or {}
-                    content = message.get("content") if isinstance(message, dict) else None
-                    if content:
-                        return str(content)
-            raise RuntimeError("chat endpoint returned no message content")
-
-        return cls(generate=generate, model_name=name, **kwargs)
+        client = hosted(base_url, api_key=api_key, model=model, timeout=timeout)
+        return cls.from_inference_client(client, **kwargs)
 
     @classmethod
     def from_http(
