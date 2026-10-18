@@ -34,8 +34,14 @@
   --sidebar-collapsed-width: 3rem;
   --conv-sidebar-width: 16rem;
   --tool-panel-width: 18rem;
-  /* Chat column max width — ~80ch at default scale; scales with font */
-  --chat-thread-max: min(100%, 52rem);
+  /* Nav bookmark tab (AppLayout) protrudes past the nav edge into the
+     conversation panel. Single source of truth for that protrusion: the tab's
+     own width (AppLayout) and the panel's reserved left gutter
+     (ConversationSidebar) both derive from it, so they can never drift. */
+  --nav-tab-protrusion: 1.15rem;
+  /* Chat thread max width — full-bleed by default, responsive padding handles
+     readability. Set to 100% so the conversation spans the available column. */
+  --chat-thread-max: 100%;
   --chat-bg: 246 242 237;
   /* Content area max width for large screens */
   --content-max-width: 80rem;

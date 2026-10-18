@@ -181,17 +181,20 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           data-collapsed={navCollapsed ? 'true' : undefined}
         >
           <Sidebar variant="desktop" collapsed={navCollapsed} onToggleCollapse={toggleNav} />
-          {/* 3D bookmark tab — protrudes from sidebar edge */}
+          {/* 3D bookmark tab — protrudes from sidebar edge, floats OVER the
+              conversation panel like a sticker/tray. z-40 keeps it above the
+              panel (which reserves a matching gutter via --nav-tab-protrusion)
+              so it stays hoverable/clickable at any scroll position. */}
           <button
             type="button"
             onClick={toggleNav}
             aria-label={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className={cn(
-              'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
+              'group/tab absolute top-1/2 z-40 flex h-[4.5rem] w-[var(--nav-tab-protrusion)] -translate-y-1/2 items-center justify-center',
               'rounded-r-md cursor-pointer',
               'transition-all duration-300 ease-[cubic-bezier(0.222,0.133,0,1)]',
-              'hover:w-[1.4rem]',
+              'hover:w-[calc(var(--nav-tab-protrusion)_+_0.25rem)]',
               'right-0 translate-x-[calc(100%-1px)]',
               'bg-gradient-to-b from-primary/80 via-primary to-primary/90',
               'shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1)]',
