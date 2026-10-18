@@ -867,7 +867,12 @@ class TestEfficientCrossEntropy:
         logits = np.array([[1.0, 2.0]], dtype=np.float32)
         targets = np.array([0])
         loss = efficient_cross_entropy(logits, targets, reduction="none")
-        assert loss == 0.0
+        # Per-sample loss (PyTorch 'none' semantics): -log(softmax[0])
+        # = log(1 + e) ~ 1.3133. The old `loss == 0.0` expectation (from
+        # the bbd7214df WIP) silently zeroed the loss.
+        assert isinstance(loss, np.ndarray)
+        assert loss.shape == (1,)
+        np.testing.assert_allclose(loss, [1.3133], rtol=1e-3)
 
     def test_batch_multiple(self):
         logits = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
