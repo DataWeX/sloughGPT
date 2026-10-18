@@ -491,6 +491,9 @@ def _build_agent_model(args: argparse.Namespace):
     if args.soul:
         return SloModel.from_soul(args.soul)
     if args.http:
+        api_key = args.api_key or os.environ.get("AVION_API_KEY")
+        if api_key:
+            return SloModel.from_chat_api(args.http, api_key=api_key, model=args.model)
         return SloModel.from_http(args.http)
     soul = os.environ.get("AVION_SOUL")
     if soul:
@@ -642,6 +645,20 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("task", help="what the agent should do, in words")
     sp.add_argument("--soul", default=None, help="local .soul checkpoint for our own engine")
     sp.add_argument("--http", default=None, help="base URL of a running inference server")
+    sp.add_argument(
+        "--api-key",
+        default=None,
+        help=(
+            "API key for --http: switches it to the hosted chat-completions "
+            "wire shape (Authorization: Bearer). Prefer the AVION_API_KEY "
+            "env so the key stays out of shell history and process lists."
+        ),
+    )
+    sp.add_argument(
+        "--model",
+        default=None,
+        help="model id for hosted chat-completions providers that require one",
+    )
     sp.add_argument("--profile", default=None, help="launch and own this profile's browser")
     sp.add_argument("--max-steps", type=int, default=50, help="step cap (AgentConfig default: 50)")
     sp.add_argument(
