@@ -1044,9 +1044,7 @@ class TestCPUBackend:
         # patching the pre-move non-internal name had no effect, so
         # get_resource_manager() resolved and returned its allocation (2)
         # instead of exercising the cpu_count-1 fallback below.
-        monkeypatch.setitem(
-            sys.modules, "domain.infrastructure._internal.resource_manager", None
-        )
+        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.resource_manager", None)
         n = cpu.openblas_threads()
         assert n == max(1, (os.cpu_count() or 1) - 1)
 
