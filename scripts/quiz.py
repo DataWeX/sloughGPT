@@ -26,7 +26,6 @@ import asyncio
 import json
 import re
 import sys
-import urllib.request
 from pathlib import Path
 
 # Run from anywhere: the repo root carries `domain/`, and scripts/ is not
@@ -61,51 +60,30 @@ def _chat(
     max_tokens: int = 1024,
     temperature: float = 0.2,
 ) -> str:
-    """One completion through our stack — local soul or hosted endpoint."""
-    if soul:
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
+    """One completion through the standard language API — no wire code here."""
+    from domain.inference.language import hosted
+    from domain.inference.language import soul as soul_client
 
-        client = SloNetChatProvider.from_soul(soul, model_id=soul)
-        return asyncio.run(
-            client.chat(
-                [{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+    if soul:
+        client = soul_client(soul)
+    elif http:
+        client = hosted(http, api_key=api_key, model=model)
+    else:
+        raise SystemExit("need a backend: --soul PATH or --http URL [--api-key KEY]")
+    return asyncio.run(
+        client.chat(
+            [{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
-    if http:
-        payload: dict = {
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-        if model:
-            payload["model"] = model
-        headers = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        req = urllib.request.Request(
-            http.rstrip("/") + "/chat/completions",
-            data=json.dumps(payload).encode(),
-            headers=headers,
-            method="POST",
-        )
-        with urllib.request.urlopen(req, None, 120) as resp:
-            data = json.loads(resp.read())
-        return str(data["choices"][0]["message"]["content"])
-    raise SystemExit("need a backend: --soul PATH or --http URL [--api-key KEY]")
+    )
 
 
 def _extract_json_array(text: str) -> list:
-    """First JSON array in the reply — tolerant of prose around it."""
-    start = text.find("[")
-    end = text.rfind("]")
-    if start == -1 or end <= start:
-        return []
-    try:
-        found = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return []
+    """First JSON array in the reply — via the standard tolerant parser."""
+    from domain.inference.language import extract_json
+
+    found = extract_json(text)
     return found if isinstance(found, list) else []
 
 
