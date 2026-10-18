@@ -102,6 +102,57 @@ def _headed_metadata(ua: str, full: str) -> dict[str, Any]:
     }
 
 
+# ── Input primitives — what the agent loop's Mouse/Keyboard controllers call
+
+# Key name -> (KeyboardEvent.code, windowsVirtualKeyCode) for named keys.
+_KEY_SPECS: dict[str, tuple[str, int]] = {
+    "Enter": ("Enter", 13),
+    "Escape": ("Escape", 27),
+    "Esc": ("Escape", 27),
+    "Tab": ("Tab", 9),
+    "Backspace": ("Backspace", 8),
+    "Delete": ("Delete", 46),
+    "Home": ("Home", 36),
+    "End": ("End", 35),
+    "PageUp": ("PageUp", 33),
+    "PageDown": ("PageDown", 34),
+    "ArrowLeft": ("ArrowLeft", 37),
+    "ArrowUp": ("ArrowUp", 38),
+    "ArrowRight": ("ArrowRight", 39),
+    "ArrowDown": ("ArrowDown", 40),
+    "Space": ("Space", 32),
+    " ": ("Space", 32),
+}
+
+# CDP Input modifier bitmask + the (code, vk) of the modifier keys themselves.
+_MODIFIER_BITS: dict[str, int] = {"Alt": 1, "Control": 2, "Meta": 4, "Shift": 8}
+_MODIFIER_KEYS: dict[str, tuple[str, int]] = {
+    "Shift": ("ShiftLeft", 16),
+    "Control": ("ControlLeft", 17),
+    "Alt": ("AltLeft", 18),
+    "Meta": ("MetaLeft", 91),
+}
+
+
+def _key_code(key: str) -> tuple[str, int]:
+    """Map a key name or single char to (code, windowsVirtualKeyCode)."""
+    spec = _KEY_SPECS.get(key) or _MODIFIER_KEYS.get(key)
+    if spec is not None:
+        return spec
+    if len(key) == 1:
+        if key.isdigit():
+            return (f"Digit{key}", ord(key))
+        if key.isalpha():
+            return (f"Key{key.upper()}", ord(key.upper()))
+        return (key, ord(key))  # punctuation: best-effort, text carries it
+    return (key, 0)  # unknown named key — the name alone still reaches the page
+
+
+def _button_value(button) -> str:
+    """MouseButton enum or plain string -> the CDP button name."""
+    return str(getattr(button, "value", button) or "left")
+
+
 class CdpBackend:
     """Direct CDP automation against a debuggable Chrome target."""
 
@@ -117,6 +168,9 @@ class CdpBackend:
         self._inflight: dict[str, dict[str, Any]] = {}
         self._pending: dict[int, asyncio.Future] = {}
         self._reader: asyncio.Task | None = None
+        self._mouse_x = 0.0
+        self._mouse_y = 0.0
+        self._modifiers = 0  # CDP bitmask: alt=1 ctrl=2 meta=4 shift=8
 
     async def _connect(self):
         import urllib.request
@@ -305,6 +359,157 @@ class CdpBackend:
         self._console.clear()
         self._network.clear()
         self._inflight.clear()
+
+    # ── Input primitives ─────────────────────────────────────────────
+    # The agent loop drives a browser exclusively through Mouse/Keyboard
+    # controllers, which call these exact methods — the Playwright backend
+    # always had them; now ours does too, over CDP's Input domain.
+
+    async def mouse_move(self, x: float, y: float) -> None:
+        self._mouse_x, self._mouse_y = float(x), float(y)
+        await self._send(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseMoved",
+                "x": self._mouse_x,
+                "y": self._mouse_y,
+                "button": "none",
+                "modifiers": self._modifiers,
+            },
+        )
+
+    async def mouse_down(self, button="left") -> None:
+        await self._send(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mousePressed",
+                "x": self._mouse_x,
+                "y": self._mouse_y,
+                "button": _button_value(button),
+                "clickCount": 1,
+                "modifiers": self._modifiers,
+            },
+        )
+
+    async def mouse_up(self, button="left") -> None:
+        await self._send(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseReleased",
+                "x": self._mouse_x,
+                "y": self._mouse_y,
+                "button": _button_value(button),
+                "clickCount": 1,
+                "modifiers": self._modifiers,
+            },
+        )
+
+    async def mouse_click(self, x: float, y: float, button="left") -> None:
+        await self.mouse_move(x, y)
+        await self.mouse_down(button)
+        await self.mouse_up(button)
+
+    async def mouse_double_click(self, x: float, y: float) -> None:
+        # Two presses at the same spot; the second carries clickCount=2 so
+        # the page sees a dblclick, not two independent clicks.
+        await self.mouse_move(x, y)
+        for count in (1, 2):
+            for kind in ("mousePressed", "mouseReleased"):
+                await self._send(
+                    "Input.dispatchMouseEvent",
+                    {
+                        "type": kind,
+                        "x": self._mouse_x,
+                        "y": self._mouse_y,
+                        "button": "left",
+                        "clickCount": count,
+                        "modifiers": self._modifiers,
+                    },
+                )
+
+    async def mouse_scroll(self, x: float, y: float, delta_x: int = 0, delta_y: int = 0) -> None:
+        await self.mouse_move(x, y)
+        await self._send(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseWheel",
+                "x": self._mouse_x,
+                "y": self._mouse_y,
+                "deltaX": int(delta_x),
+                "deltaY": int(delta_y),
+                "button": "none",
+                "modifiers": self._modifiers,
+            },
+        )
+
+    async def keyboard_down(self, key: str) -> None:
+        bit = _MODIFIER_BITS.get(key)
+        if bit:
+            self._modifiers |= bit
+        code, vk = _key_code(key)
+        await self._send(
+            "Input.dispatchKeyEvent",
+            {
+                "type": "rawKeyDown",
+                "key": key,
+                "code": code,
+                "windowsVirtualKeyCode": vk,
+                "modifiers": self._modifiers,
+            },
+        )
+
+    async def keyboard_up(self, key: str) -> None:
+        bit = _MODIFIER_BITS.get(key)
+        if bit:
+            self._modifiers &= ~bit
+        code, vk = _key_code(key)
+        await self._send(
+            "Input.dispatchKeyEvent",
+            {
+                "type": "keyUp",
+                "key": key,
+                "code": code,
+                "windowsVirtualKeyCode": vk,
+                "modifiers": self._modifiers,
+            },
+        )
+
+    async def keyboard_press(self, key: str, hold_ms: float = 0) -> None:
+        if hold_ms > 0:
+            await self.keyboard_down(key)
+            await asyncio.sleep(hold_ms / 1000)
+            await self.keyboard_up(key)
+            return
+        code, vk = _key_code(key)
+        params: dict[str, Any] = {
+            "key": key,
+            "code": code,
+            "windowsVirtualKeyCode": vk,
+            "modifiers": self._modifiers,
+        }
+        # Keys that produce text need a keyDown *with* text, or the page
+        # never sees the character (rawKeyDown alone inserts nothing).
+        text = "\r" if key == "Enter" else (" " if key in ("Space", " ") else "")
+        await self._send(
+            "Input.dispatchKeyEvent",
+            {"type": "keyDown" if text else "rawKeyDown", "text": text, **params},
+        )
+        await self._send("Input.dispatchKeyEvent", {"type": "keyUp", **params})
+
+    async def keyboard_type(self, text: str, delay_ms: float = 0) -> None:
+        delay = delay_ms / 1000 if delay_ms > 0 else 0
+        for ch in text:
+            await self._send(
+                "Input.dispatchKeyEvent",
+                {
+                    "type": "char",
+                    "key": ch,
+                    "text": ch,
+                    "modifiers": self._modifiers,
+                },
+            )
+            if delay:
+                await asyncio.sleep(delay)
 
     async def navigate(self, url: str) -> None:
         res = await self._send("Page.navigate", {"url": url})

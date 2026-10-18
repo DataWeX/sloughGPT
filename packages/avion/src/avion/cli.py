@@ -16,6 +16,7 @@ Usage::
     avion network --json
     avion launch --profile x           # own a browser; --no-wait detaches it
     avion run flow.json --profile x    # complete a recorded flow (or --cdp attach)
+    avion agent "sign in and search" --soul model.soul --profile x  # our model drives the loop
     avion repl --record flow.json      # author a flow by driving; avion run completes it
     avion repl
 
@@ -483,6 +484,61 @@ async def _cmd_run(args: argparse.Namespace) -> int:
     return 0 if outcome.completed else 1
 
 
+def _build_agent_model(args: argparse.Namespace):
+    """Resolve the agent's model: --soul, --http, or the AVION_SOUL env."""
+    from avion.ai.slo import SloModel
+
+    if args.soul:
+        return SloModel.from_soul(args.soul)
+    if args.http:
+        return SloModel.from_http(args.http)
+    soul = os.environ.get("AVION_SOUL")
+    if soul:
+        return SloModel.from_soul(soul)
+    return None
+
+
+async def _cmd_agent(args: argparse.Namespace) -> int:
+    """Drive the agent loop with our own model — own a profile or attach."""
+    from avion.ai.agent import Agent, AgentConfig
+    from avion.backends.cdp import CdpBackend
+    from avion.launch import Profile, launch_chromium
+
+    model = _build_agent_model(args)
+    if model is None:
+        return _fail("agent needs a model: --soul PATH, --http URL, or AVION_SOUL set")
+
+    launched = None
+    if args.profile:
+        launched = launch_chromium(
+            Profile(args.profile), headless=not args.headed, extra_args=args.arg
+        )
+        backend: Any = launched.backend
+        print(f"agent on profile={args.profile} model={model.model_name}", file=sys.stderr)
+    else:
+        backend = CdpBackend(cdp_url=args.cdp)
+        print(f"agent on {args.cdp} model={model.model_name}", file=sys.stderr)
+    agent = Agent(model=model, config=AgentConfig(max_steps=args.max_steps))
+    try:
+        await agent.start(backend=backend)
+        result = await agent.run(args.task)
+        await agent.stop()
+    except Exception as exc:
+        return _fail(f"agent run failed: {exc}")
+    finally:
+        if launched is not None:
+            launched.stop()
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        # Summarize, don't dump: status, steps, why it stopped, then errors.
+        mark = "done" if result.success else "FAILED"
+        print(f"{mark}: {result.steps_taken} steps — stop: {result.stop_reason}")
+        for line in (result.error or "").splitlines()[:5]:
+            print(f"  {line}")
+    return 0 if result.success else 1
+
+
 # ── parser / entry ──────────────────────────────────────────────────────
 
 
@@ -572,6 +628,33 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="CHROMIUM_ARG",
         help="extra chromium arg when launching, repeatable (use --arg=--no-sandbox)",
     )
+
+    sp = sub.add_parser(
+        "agent",
+        help="run the agent loop with our own model (computer use)",
+        description=(
+            "Model: --soul (local .soul checkpoint, our engine, no network), "
+            "--http (a running inference server), or the AVION_SOUL env var. "
+            "Browser: --profile owns a launch; otherwise the global --cdp "
+            "flag (before the subcommand) or AVION_CDP_URL attaches."
+        ),
+    )
+    sp.add_argument("task", help="what the agent should do, in words")
+    sp.add_argument("--soul", default=None, help="local .soul checkpoint for our own engine")
+    sp.add_argument("--http", default=None, help="base URL of a running inference server")
+    sp.add_argument("--profile", default=None, help="launch and own this profile's browser")
+    sp.add_argument("--max-steps", type=int, default=50, help="step cap (AgentConfig default: 50)")
+    sp.add_argument(
+        "--headed", action="store_true", help="show the window when launching (default: headless)"
+    )
+    sp.add_argument("--json", action="store_true", help="print the full trajectory as JSON")
+    sp.add_argument(
+        "--arg",
+        action="append",
+        default=[],
+        metavar="CHROMIUM_ARG",
+        help="extra chromium arg when launching, repeatable (use --arg=--no-sandbox)",
+    )
     return p
 
 
@@ -586,6 +669,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_launch(args)
     if args.cmd == "run":
         return asyncio.run(_cmd_run(args))
+    if args.cmd == "agent":
+        return asyncio.run(_cmd_agent(args))
 
     async def run(b) -> int:
         if args.cmd == "open":

@@ -76,6 +76,7 @@ class AgentResult:
 
     task: str
     trajectory: Trajectory
+    model_name: str = ""
     success: bool = False
     error: str = ""
     total_duration_ms: float = 0.0
@@ -97,6 +98,7 @@ class AgentResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "task": self.task,
+            "model_name": self.model_name,
             "success": self.success,
             "error": self.error,
             "steps_taken": self.steps_taken,
@@ -452,6 +454,7 @@ class Agent:
         return AgentResult(
             task=task,
             trajectory=trajectory,
+            model_name=self._model.model_name,
             success=trajectory.success,
             error=trajectory.metadata.get("error", ""),
             total_duration_ms=total_ms,
