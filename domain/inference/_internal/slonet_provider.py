@@ -1581,8 +1581,17 @@ class SloNetChatProvider:
         """Resolve KV state for a session, creating if needed, with TTL eviction."""
         if session_id is None:
             return None
+        # Materialize the model FIRST: lazy loading REBINDS self._kv_manager
+        # (it adopts the eager provider's manager at the from_slnc/from_soul
+        # materialization sites), and the old expression bound the manager
+        # before evaluating its own argument, self._get_model(). The very
+        # first session therefore landed in the orphaned pre-load instance:
+        # session_stats counted 0, and turn 2 created a FRESH state —
+        # silently forfeiting cross-turn KV reuse on the lazy path (the
+        # production path).
+        factory = self._get_model().new_kv_state
         self._evict_stale_sessions()
-        return self._kv_manager.get_or_create(session_id, self._get_model().new_kv_state)
+        return self._kv_manager.get_or_create(session_id, factory)
 
     def _generate_sync(
         self,
