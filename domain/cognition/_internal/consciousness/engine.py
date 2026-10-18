@@ -84,11 +84,6 @@ class ConsciousnessEngine:
         if self.config.is_enabled():
             self.self_model.load()
 
-        # Idle-dream baseline: episode count as of the last consolidation. It
-        # is the watermark of what the last dream already saw — sleep pressure
-        # is material ABOVE it, not silence at it.
-        self._dream_baseline = len(self.self_model.episodes)
-
     def _reflection_fingerprint(self) -> tuple[Any, ...]:
         """State of exactly the inputs SelfModel.reflect() reads."""
         sm = self.self_model
@@ -154,16 +149,21 @@ class ConsciousnessEngine:
     def maybe_dream(self) -> dict[str, Any]:
         """Sleep gate: pressure is *unconsolidated experience*, not silence.
 
-        Dream once when material has landed that the last dream did not see,
-        then stay asleep. Satiation is the whole point — a gate that fires on
-        emptiness degenerates into a loop that re-narrates a saturated
-        snapshot forever (the production log reached 44 dreams, ~30 identical,
-        qualia all-zero for 6h, off a single real episode).
+        The pressure is read from the LEDGER, not counted from a proxy. A dream
+        records which experience it revisited, so "is anything waiting?" is
+        answered by the substrate itself. Counting episodes failed twice: it
+        armed a dream on material a direct ``dream()`` had already consumed (the
+        count rises when a dream appends its own episode), and it WEDGED a
+        restarted mind — ``__init__`` set the watermark from ``len(episodes)``,
+        which counts dream episodes, so a fresh process opened at
+        count == baseline and reported "satiated" forever while the ledger still
+        held unconsolidated experience. Memory cannot survive the restart the
+        ledger was built to survive.
 
-        A *drop* in the episode count is not material: ``save()`` trims the
-        window to ``MAX_EPISODES``, and forgetting is not experience. The drop
-        is absorbed as the new baseline so it can neither arm a dream nor
-        wedge the gate against later growth.
+        The log never trims — ``save()`` trims the model's WINDOW — so an
+        episode is either in some dream's revisited set or it is not. One
+        unambiguous question: the grew/unchanged/shrank branches a count drop
+        required (forgetting versus material) do not exist here.
 
         Called by the host's ambient loop (interval from
         config.reflection_interval, re-read per tick); synchronous and
@@ -171,20 +171,16 @@ class ConsciousnessEngine:
         """
         if not self.config.is_enabled():
             return {"dreamed": False, "reason": "disabled"}
-        count = len(self.self_model.episodes)
-        if count < self._dream_baseline:
-            # The working window trimmed. Not material — accept the new reality
-            # so later growth can still arm a dream.
-            self._dream_baseline = count
-            return {"dreamed": False, "reason": "window trimmed, nothing new to consolidate"}
-        if count == self._dream_baseline:
-            return {"dreamed": False, "reason": "satiated: nothing new since last dream"}
-        # Material above the watermark -> one night. Baseline then moves to the
-        # POST-dream count, because dream() appends its own episode and save()
-        # trims the window.
-        result = self.dream()
-        self._dream_baseline = len(self.self_model.episodes)
-        return result
+        if not self._consolidation_candidates():
+            return {
+                "dreamed": False,
+                "reason": (
+                    "nothing to consolidate yet"
+                    if not self.self_model.episodes
+                    else "satiated: everything has been consolidated"
+                ),
+            }
+        return self.dream()
 
     def self_report(self) -> dict[str, Any]:
         """Fold the mind-state log into the structured self-report.

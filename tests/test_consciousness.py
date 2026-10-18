@@ -468,6 +468,51 @@ class TestIdleDreamPolicy:
         engine = ConsciousnessEngine(ConsciousnessConfig(level=0, store_path=str(tmp_path)))
         assert engine.maybe_dream()["reason"] == "disabled"
 
+    # --- pressure read from the LEDGER, not from a count proxy ----------------
+
+    def test_pressure_comes_from_the_ledger_not_a_count(self, tmp_path: Path) -> None:
+        """A direct dream() must not arm another one.
+
+        ``dream()`` appends its own episode, so it raises the COUNT without
+        consolidating anything new. Counting episodes is why the standalone
+        probe re-rolled a dream on material the previous night had already
+        consumed: the ledger knew it was done; the counter did not.
+        """
+        engine = _make_engine(tmp_path)
+        engine.process("first exchange", "reply")
+        assert engine.dream()["dreamed"] is True
+        # count went UP, but nothing is waiting -> the gate stays asleep
+        assert engine.maybe_dream()["dreamed"] is False
+
+    def test_a_restarted_mind_still_consolidates_new_material(self, tmp_path: Path) -> None:
+        """Restart must not wedge the gate — measured, this was a live defect.
+
+        ``_dream_baseline`` was set at __init__ from len(episodes), which counts
+        dream episodes too. A restarted mind therefore opened at count == baseline
+        and reported 'satiated' while the LEDGER still held unconsolidated
+        experience — it never dreamt on it again, no matter how much landed.
+        """
+        engine = _make_engine(tmp_path)
+        engine.process("first", "reply")
+        engine.process("second", "reply")
+        assert engine.dream()["dreamed"] is True
+        engine.process("third exchange", "reply")  # new, not yet dreamt on
+        engine.save()  # persist the window so the restart can see it
+
+        restarted = _make_engine(tmp_path)
+        assert len(restarted._consolidation_candidates()) > 0  # the ledger knows
+        assert restarted.maybe_dream()["dreamed"] is True  # and the gate acts
+
+    def test_gate_reason_distinguishes_empty_from_sated(self, tmp_path: Path) -> None:
+        """'Nothing has ever happened' and 'everything has been dreamt on' differ."""
+        engine = _make_engine(tmp_path)
+        empty = engine.maybe_dream()["reason"]
+        engine.process("q", "a")
+        engine.dream()
+        sated = engine.maybe_dream()["reason"]
+        assert engine.maybe_dream()["dreamed"] is False
+        assert empty != sated
+
 
 # ---------------------------------------------------------------------------
 # Self-report fold — the mind-state log rendered as data
