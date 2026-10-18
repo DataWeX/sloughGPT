@@ -303,3 +303,6 @@ packages/core-py/models/
 apps/web/public/bootshot.html
 apps/web/cypress/e2e/_diag.cy.ts
 apps/web/cypress/fixtures/diag-dialog.json
+
+# kanban slot chain = runtime audit state, not source (card f4d9a8cf)
+.kanban/slot_history.jsonl
