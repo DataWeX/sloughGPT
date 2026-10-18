@@ -295,6 +295,81 @@ class TestPortHelpers:
         assert _check_web_ready(49997) is False
 
 
+class TestResolveDevPorts:
+    """`slo dev` resolves both ports once, up front: free stays, busy shifts.
+
+    Shift-only — dev never reuses a healthy listener (no repo identity in
+    /health; reuse could attach to another checkout's backend).
+    """
+
+    @staticmethod
+    def _bound_socket():
+        """A listening socket on a kernel-assigned port, plus that port."""
+        import socket
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("localhost", 0))
+        sock.listen(1)
+        return sock, sock.getsockname()[1]
+
+    @staticmethod
+    def _free_port() -> int:
+        """A port that is free right now (bind-then-close, kernel-assigned)."""
+        import socket
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("localhost", 0))
+            return sock.getsockname()[1]
+
+    def test_free_ports_unchanged(self):
+        from commands.dev import _resolve_dev_ports
+
+        api, web = self._free_port(), self._free_port()
+        while web == api:  # bind(0)-after-close may hand back the same port
+            web = self._free_port()
+        assert _resolve_dev_ports(api, web) == (api, web)
+
+    def test_busy_api_shifts_web_untouched(self):
+        from commands.dev import _resolve_dev_ports
+
+        sock, busy = self._bound_socket()
+        free_web = self._free_port()
+        try:
+            api, web = _resolve_dev_ports(busy, free_web)
+        finally:
+            sock.close()
+        assert api != busy and api > busy, "busy API port must shift"
+        assert web == free_web, "free web port must not move"
+
+    def test_busy_web_shifts_api_untouched(self):
+        from commands.dev import _resolve_dev_ports
+
+        sock, busy = self._bound_socket()
+        free_api = self._free_port()
+        while free_api == busy:
+            free_api = self._free_port()
+        try:
+            api, web = _resolve_dev_ports(free_api, busy)
+        finally:
+            sock.close()
+        assert api == free_api, "free API port must not move"
+        assert web != busy and web > busy, "busy web port must shift"
+
+    def test_both_busy_shift_both(self):
+        from commands.dev import _resolve_dev_ports
+
+        s1, busy_api = self._bound_socket()
+        s2, busy_web = self._bound_socket()
+        try:
+            api, web = _resolve_dev_ports(busy_api, busy_web)
+        finally:
+            s1.close()
+            s2.close()
+        assert api != busy_api and api > busy_api
+        assert web != busy_web and web > busy_web
+
+
 class TestCleanup:
     """Tests for _cleanup function handling None processes."""
 
@@ -497,6 +572,35 @@ class TestWebDevEnv:
         assert base == {"PATH": "/base/bin"}
         assert out["PATH"].split(os.pathsep)[0].startswith(str(nvm))
 
+    def test_injects_api_url_from_resolved_port(self):
+        from commands.dev import _web_dev_env
+
+        out = _web_dev_env({"PATH": "/base"}, 3000, 8001)
+        assert out["NEXT_PUBLIC_API_URL"] == "http://localhost:8001"
+
+    def test_explicit_api_url_wins_over_injection(self):
+        from commands.dev import _web_dev_env
+
+        out = _web_dev_env(
+            {"PATH": "/base", "NEXT_PUBLIC_API_URL": "https://api.example"},
+            3000,
+            8001,
+        )
+        assert out["NEXT_PUBLIC_API_URL"] == "https://api.example"
+
+    def test_explicit_empty_api_url_preserved(self):
+        """Empty string means same-origin gateway mode — must not be clobbered."""
+        from commands.dev import _web_dev_env
+
+        out = _web_dev_env({"PATH": "/base", "NEXT_PUBLIC_API_URL": ""}, 3000, 8001)
+        assert out["NEXT_PUBLIC_API_URL"] == ""
+
+    def test_no_api_port_no_injection(self):
+        from commands.dev import _web_dev_env
+
+        out = _web_dev_env({"PATH": "/base"}, 3999)
+        assert "NEXT_PUBLIC_API_URL" not in out
+
 
 class TestCmdDevWebPort:
     """`slo dev --web-port N` must make the dev server listen on N.
@@ -547,6 +651,7 @@ class TestCmdDevWebPort:
             patch("commands.dev._preflight_model_check"),
             patch("commands.dev._check_api_ready", return_value=False),
             patch("commands.dev._check_port", return_value=False),
+            patch("commands.dev._is_port_bound", return_value=False),
             patch("commands.dev._kill_port"),
             patch("commands.dev._cleanup"),
             patch("commands.dev.find_server_python", return_value="/usr/bin/python3"),
@@ -697,6 +802,9 @@ class TestCmdDevFailureReporting:
             patch("commands.dev._preflight_model_check"),
             patch("commands.dev._check_api_ready", return_value=False),
             patch("commands.dev._check_port", return_value=False),
+            # Keep resolution deterministic: these tests assert on exact
+            # ports, so a busy host port must not trigger a shift.
+            patch("commands.dev._is_port_bound", return_value=False),
             patch("commands.dev._kill_port"),
             patch("commands.dev._cleanup"),
             patch("commands.dev.find_server_python", return_value="/usr/bin/python3"),
