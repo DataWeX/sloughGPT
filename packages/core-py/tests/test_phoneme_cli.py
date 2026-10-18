@@ -1,9 +1,18 @@
 """Tests for phoneme_encoder_cli.py — CLI tool."""
 
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
+
+# Repo root (packages/core-py/tests/<file> -> parents[3]). The CLI runs as a
+# subprocess and resolves `domain` via its own sys.path — when the suite is
+# launched from packages/core-py (CI's `cd packages/core-py && pytest tests/`)
+# the cwd no longer carries the repo root, so the subprocess dies with
+# ModuleNotFoundError before any assertion can see stdout.
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture
@@ -12,7 +21,11 @@ def run_cli():
 
     def _run(*args):
         cmd = [sys.executable, "-m", "domain.multimodal._internal.phoneme_encoder_cli"] + list(args)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        env = {
+            **os.environ,
+            "PYTHONPATH": str(REPO_ROOT) + os.pathsep + os.environ.get("PYTHONPATH", ""),
+        }
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, env=env)
         return result
 
     return _run
