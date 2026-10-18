@@ -1,4 +1,4 @@
-"""Standard language API — one contract, real wire, tolerant replies.
+"""Generation API — one contract, real wire, tolerant replies.
 
 No mocks: a stdlib ThreadingHTTPServer speaks the hosted
 chat-completions shape and records what actually arrived.
@@ -11,7 +11,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from domain.inference.language import extract_json, hosted
+from domain.inference.generation import extract_json, hosted
 
 SEEN: dict = {}
 
