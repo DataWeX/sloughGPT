@@ -328,16 +328,18 @@ class SloModel:
     ) -> SloModel:
         """Drive a hosted chat-completions endpoint (Authorization: Bearer).
 
-        Delegates to ``domain.inference.language.hosted`` — the wire
+        Delegates to ``domain.inference.generation.hosted`` — the wire
         shape and the Bearer header live in core, not here; this adapter
         only projects the standard language client into the agent's
         model interface. The key reaches the header and nothing else —
         never the model name, logs, or error strings.
         """
         try:
-            from domain.inference.language import hosted
+            from domain.inference.generation import hosted
         except ImportError as e:
-            raise ImportError("the language API needs the sloughgpt core packages (domain).") from e
+            raise ImportError(
+                "the generation API needs the sloughgpt core packages (domain)."
+            ) from e
 
         client = hosted(base_url, api_key=api_key, model=model, timeout=timeout)
         return cls.from_inference_client(client, **kwargs)

@@ -46,9 +46,13 @@ class TestApiProviderInit:
         p = ApiProvider(api_key="sk-test", api_url="https://example.com/custom/gateway")
         assert p.api_url == "https://example.com/custom/gateway/v1"
 
-    def test_empty_api_key_raises(self):
-        with pytest.raises(ValueError, match="API key required"):
-            ApiProvider(api_key="", api_url="https://api.openai.com/v1")
+    def test_empty_api_key_allowed_for_keyless_endpoints(self):
+        # Keyless local servers (Ollama/LM Studio/vLLM — listed in this
+        # module's own docstring) take no Authorization header; the
+        # generation entry (domain.inference.generation) relies on this
+        # so local endpoints work without a key.
+        p = ApiProvider(api_key="", api_url="http://localhost:11434/v1")
+        assert p.api_key == ""
 
     def test_empty_api_url_raises(self):
         with pytest.raises(ValueError, match="API URL required"):

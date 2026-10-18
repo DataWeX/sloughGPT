@@ -61,8 +61,8 @@ def _chat(
     temperature: float = 0.2,
 ) -> str:
     """One completion through the standard language API — no wire code here."""
-    from domain.inference.language import hosted
-    from domain.inference.language import soul as soul_client
+    from domain.inference.generation import hosted
+    from domain.inference.generation import soul as soul_client
 
     if soul:
         client = soul_client(soul)
@@ -81,7 +81,7 @@ def _chat(
 
 def _extract_json_array(text: str) -> list:
     """First JSON array in the reply — via the standard tolerant parser."""
-    from domain.inference.language import extract_json
+    from domain.inference.generation import extract_json
 
     found = extract_json(text)
     return found if isinstance(found, list) else []
