@@ -2414,7 +2414,7 @@ class TestSyscallHandler:
         child = ptable.create(name="child")
         pcb.children.append(child.pid)
         child.state = __import__(
-            "domain.shell.vm", fromlist=["ProcessState"]
+            "domain.shell._internal.vm", fromlist=["ProcessState"]
         ).ProcessState.TERMINATED
         result = handler._sys_wait()
         assert result == child.pid

@@ -47,6 +47,7 @@ ALLOWLIST: dict[str, str] = {
     "domain/shell/_internal/cmds/status.py": "status --json result is written to stdout for piping",
     "domain/shell/_internal/input_device.py": "terminal echo (bare newline on Enter)",
     "domain/shell/_internal/realm_live.py": "realm harness; prints the run summary",
+    "domain/shell/_internal/vm.py": "guest console: _sys_write sends VM stdout/stderr to the process console (the capsys syscall contract)",
     "domain/shell/_internal/world_driver.py": "headless world harness; aligned report tables",
     "domain/training/_internal/lm_eval_char.py": "--json output mode (logger.info covers the rest)",
 }
