@@ -1,8 +1,10 @@
 /**
- * Minimal type for the v86 x86 PC emulator. The package ships no type
- * definitions; only the surface used by lib/v86-controller.ts is declared.
+ * Global v86 x86 emulator — loaded at runtime from the vendored public asset
+ * /v86/libv86.js (UMD build sets window.V86, classes typed loosely here).
+ * It is deliberately NOT imported from the npm package: the package ESM
+ * references node builtins (fs, crypto, perf_hooks) inside node-only branches
+ * that break eager bundle resolvers (Turbopack). See lib/v86-controller.ts.
  */
-declare module "v86" {
-  export const V86: any;
-  export default V86;
+interface Window {
+  V86?: new (options: Record<string, unknown>) => unknown
 }

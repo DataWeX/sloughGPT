@@ -18,8 +18,12 @@ const LOCAL_HDA_URL = '/buildroot/buildroot.img'
 const LOCAL_KERNEL_URL = '/buildroot/bzimage68.bin'
 const REMOTE_KERNEL_URL = 'https://i.copy.sh/buildroot-bzimage68.bin'
 const LOCAL_ISO_URL = '/buildroot/buildroot.iso'
-const BIOS_URL = '/bios/seabios.bin'
-const VGA_BIOS_URL = '/bios/vgabios.bin'
+const LOCAL_BIOS_URL = '/bios/seabios.bin'
+const LOCAL_VGA_BIOS_URL = '/bios/vgabios.bin'
+// BIOS binaries ship in neither the tree nor the npm package; copy.sh hosts
+// the SeaBIOS/VGA pair for the public demo, so fall back to it like the kernel.
+const REMOTE_BIOS_URL = 'https://copy.sh/v86/bios/seabios.bin'
+const REMOTE_VGA_BIOS_URL = 'https://copy.sh/v86/bios/vgabios.bin'
 const WASM_PATH = '/v86/v86.wasm'
 const MEMORY_MB = 256
 const AUTO_SAVE_INTERVAL_MS = 30_000
@@ -36,6 +40,12 @@ export const IMAGE_URLS: Record<V86ImageKind, readonly string[]> = {
   kernel: [LOCAL_KERNEL_URL, REMOTE_KERNEL_URL],
   iso: [LOCAL_ISO_URL],
 }
+
+/** BIOS pairs probed in order; the VGA BIOS always comes from the same host as the system BIOS. */
+export const BIOS_URLS: readonly { bios: string; vga: string }[] = [
+  { bios: LOCAL_BIOS_URL, vga: LOCAL_VGA_BIOS_URL },
+  { bios: REMOTE_BIOS_URL, vga: REMOTE_VGA_BIOS_URL },
+]
 
 interface ProbeResult {
   available: boolean
@@ -123,6 +133,20 @@ async function resolveImageFor(
             'apps/web/public/buildroot/bzimage68.bin ' +
             `https://i.copy.sh/buildroot-bzimage68.bin, `) +
       'then reload.',
+  )
+}
+
+/**
+ * Resolve the BIOS pair: prefer locally vendored binaries, fall back to the
+ * copy.sh-hosted pair (same fail-fast contract as resolveImageFor).
+ */
+export async function resolveBios(): Promise<{ bios: string; vga: string }> {
+  for (const pair of BIOS_URLS) {
+    const probe = await probeImage(pair.bios)
+    if (probe.available) return pair
+  }
+  throw new Error(
+    `BIOS not available: ${BIOS_URLS.map((p) => p.bios).join(', ')} all unreachable.`,
   )
 }
 
@@ -229,11 +253,16 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
             : await resolveDefaultImage()
         if (stale()) return
 
+        const bios = options.biosUrl
+          ? { bios: options.biosUrl, vga: LOCAL_VGA_BIOS_URL }
+          : await resolveBios()
+        if (stale()) return
+
         const ctrl = new V86Controller()
         controllerRef.current = ctrl
         await ctrl.init(container, {
-          biosUrl: options.biosUrl || BIOS_URL,
-          vgaBiosUrl: options.vgaBiosUrl || VGA_BIOS_URL,
+          biosUrl: bios.bios,
+          vgaBiosUrl: options.vgaBiosUrl || bios.vga,
           imageUrl: image.url,
           imageSize: image.size,
           imageKind: image.kind,

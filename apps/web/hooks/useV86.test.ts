@@ -189,6 +189,61 @@ describe('useV86', () => {
     expect(result.current.error).toMatch(/buildroot\.iso/)
   })
 
+  it('init probes the BIOS pair and passes the local pair when available', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const { result } = renderHook(() => useV86())
+
+    await act(async () => {
+      await result.current.init(document.createElement('div'))
+    })
+
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(instance.init).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        biosUrl: '/bios/seabios.bin',
+        vgaBiosUrl: '/bios/vgabios.bin',
+      }),
+    )
+  })
+
+  it('resolveBios falls back to the copy.sh pair when local binaries are missing', async () => {
+    const { resolveBios } = await import('./useV86')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve(
+          url.startsWith('https://copy.sh/v86/bios/')
+            ? { ok: true, status: 200, headers: { get: () => null } }
+            : { ok: false, status: 404, headers: { get: () => null } },
+        ),
+      ),
+    )
+
+    await expect(resolveBios()).resolves.toEqual({
+      bios: 'https://copy.sh/v86/bios/seabios.bin',
+      vga: 'https://copy.sh/v86/bios/vgabios.bin',
+    })
+  })
+
+  it('a custom biosUrl bypasses probing and pins the local VGA default', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const { result } = renderHook(() => useV86({ biosUrl: '/custom/bios.bin' }))
+
+    await act(async () => {
+      await result.current.init(document.createElement('div'))
+    })
+
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(instance.init).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        biosUrl: '/custom/bios.bin',
+        vgaBiosUrl: '/bios/vgabios.bin',
+      }),
+    )
+  })
+
   it('explicit boot media skips persisted-state restore; auto restores', async () => {
     const { V86Controller } = await import('@/lib/v86-controller')
     const explicit = renderHook(() => useV86({ bootMedia: 'iso' }))
