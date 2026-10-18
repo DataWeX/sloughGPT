@@ -68,6 +68,7 @@ class TestCollections:
             "drafts",
             "kv",
             "errors",
+            "message-notes",
         }
         assert COLLECTIONS == expected
 
