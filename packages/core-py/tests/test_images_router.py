@@ -99,16 +99,19 @@ class TestGenerateImage:
         ir = ImagesRouter()
         client = TestClient(_app(ir))
         resp = client.post("/images/generate", json={"prompt": ""})
-        assert resp.status_code == 200
-        assert resp.json()["prompt"] == ""
+        # 2ca971c55 added prompt length validation (min_length=1): an empty
+        # prompt is now a request-validation error, same as the missing-key
+        # case below. The old echo-back contract predates the validator.
+        assert resp.status_code == 422
 
     def test_generate_long_prompt(self):
         ir = ImagesRouter()
         client = TestClient(_app(ir))
         long_prompt = "a beautiful landscape " * 100
         resp = client.post("/images/generate", json={"prompt": long_prompt})
-        assert resp.status_code == 200
-        assert resp.json()["prompt"] == long_prompt
+        # 2100 chars > max_length=2000 (2ca971c55) -> validation error; the
+        # echo-back contract predates the validator.
+        assert resp.status_code == 422
 
     def test_generate_returns_data_uri(self):
         ir = ImagesRouter()

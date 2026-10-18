@@ -176,7 +176,12 @@ class TestHealth:
         hr = _make_health_router()
         client = TestClient(_app(hr), raise_server_exceptions=False)
         with patch(
-            "domain.feedback._internal.model_health.get_health_monitor",
+            # The handler does `from domain.feedback import get_health_monitor`
+            # — an EAGER re-binding in domain/feedback/__init__.py — so
+            # patching the defining submodule never reached the call site and
+            # the endpoint answered 200. Patch the package attribute the
+            # call site actually reads.
+            "domain.feedback.get_health_monitor",
             side_effect=RuntimeError("boom"),
         ):
             resp = client.get("/health/model")

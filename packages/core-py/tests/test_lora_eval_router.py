@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -79,13 +79,40 @@ def _app():
     return app
 
 
+class _PathExists:
+    """Stand-in for the router's own ``Path`` binding.
+
+    Real ``resolve()`` (so the ``_ADAPTER_BASE`` confinement check sees a
+    path genuinely under the base) but ``exists() == True`` so the
+    with-adapter branch runs. Patching ``pathlib.Path`` never reached the
+    router: ``routers.lora_eval`` did ``from pathlib import Path`` at
+    import, so the module-local name kept the real class.
+    """
+
+    def __init__(self, p):
+        self._p = p
+
+    def resolve(self):
+        return Path(self._p).resolve()
+
+    def exists(self):
+        return True
+
+
 # ---------------------------------------------------------------------------
 # Tests — patch at domain module level (lazy imports inside handler body)
 # ---------------------------------------------------------------------------
 
 PATCH_EVALUATOR = "domain.feedback._internal.lora_eval.get_lora_evaluator"
-PATCH_STORE = "domain.feedback._internal.per_user_lora.get_per_user_lora"
-PATCH_PER_U_LORA = "domain.feedback._internal.per_user_lora.get_per_user_lora"
+# get_per_user_lora/get_health_monitor are EAGERLY re-bound in
+# domain/feedback/__init__.py, so the handlers' `from domain.feedback
+# import ...` reads the PACKAGE attribute — patching the submodule they
+# were defined in never reaches it (the store mocks were silently
+# bypassed and the real, empty store answered 'no_adapters').
+# get_lora_evaluator works from the submodule only because it is the
+# lazy __getattr__ re-export.
+PATCH_STORE = "domain.feedback.get_per_user_lora"
+PATCH_PER_U_LORA = "domain.feedback.get_per_user_lora"
 
 
 class TestRunEval:
@@ -94,23 +121,31 @@ class TestRunEval:
         evaluator = _make_evaluator()
         mock_get.return_value = evaluator
         client = TestClient(_app())
-        resp = client.get("/lora-eval/run", params={"adapter_path": "/nonexistent/foo.npz"})
+        # The route is POST (add_api_route methods=["POST"]) — the GET here
+        # predates the verb move and got 405. The path must also sit under
+        # _ADAPTER_BASE (resolved against CWD) or the confinement check
+        # rejects it before the evaluator runs; a nonexistent file inside the
+        # base is the baseline-only case.
+        resp = client.post(
+            "/lora-eval/run", params={"adapter_path": "data/user_adapters/missing.npz"}
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"
         assert "baseline" in data
 
-    @patch("pathlib.Path")
+    @patch("routers.lora_eval.Path", _PathExists)
     @patch(PATCH_EVALUATOR)
-    def test_with_adapter_comparison(self, mock_get, mock_path_cls):
+    def test_with_adapter_comparison(self, mock_get):
         evaluator = _make_evaluator()
         mock_get.return_value = evaluator
-        # Make Path.exists() return True
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path_cls.return_value = mock_path_instance
         client = TestClient(_app())
-        resp = client.get("/lora-eval/run", params={"adapter_path": "/tmp/best.npz"})
+        # POST (the verb move — GET got 405), a path under _ADAPTER_BASE
+        # (confinement resolves against CWD), and a patch of the router's
+        # OWN Path binding: @patch("pathlib.Path") never reached it, so
+        # exists() stayed False and the baseline-only branch ran instead
+        # of "compared".
+        resp = client.post("/lora-eval/run", params={"adapter_path": "data/user_adapters/best.npz"})
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "compared"
