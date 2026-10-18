@@ -39,7 +39,14 @@ class TestStatus:
         assert "uptime_seconds" in data
         assert "timestamp" in data
 
-    def test_ready(self):
+    def test_ready(self, monkeypatch):
+        # /ready now gates on subsystem checks (database, inference); the
+        # happy path needs them up. Patch the facade read points the handler
+        # imports at call time.
+        monkeypatch.setattr(
+            "domain.feedback.get_feedback_db", lambda *a, **k: object(), raising=False
+        )
+        monkeypatch.setattr("domain.inference.get_engine", lambda *a, **k: object(), raising=False)
         sr = StatusRouter()
         client = TestClient(_app(sr))
         resp = client.get("/ready")
