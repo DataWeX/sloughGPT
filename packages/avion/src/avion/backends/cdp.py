@@ -195,8 +195,34 @@ class CdpBackend:
         await self._send("Log.enable")
         await self._send("Network.enable")
         await self._normalize_headless_ua()
+        await self._strip_webdriver_tell()
         if self._target_url != "about:blank":
             await self.navigate(self._target_url)
+
+    async def _strip_webdriver_tell(self) -> None:
+        """Make ``navigator.webdriver`` unreadable to page scripts.
+
+        The automation protocol sets it to ``true`` on every browser it
+        drives — the cheapest bot tell there is, readable by any page at
+        document creation, before a single action happens (X and every
+        other anti-bot stack checks it). Shadow the prototype getter with
+        an instance one answering ``undefined``, injected before document
+        scripts run. Always-on for this backend — it *is* the automation
+        backend, so there is no session where the tell is legitimate —
+        and fail-open: a browser that refuses the script stays exactly as
+        usable as before, never worse.
+        """
+        try:
+            await self._send(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {
+                    "source": (
+                        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+                    ),
+                },
+            )
+        except Exception:
+            pass
 
     async def _normalize_headless_ua(self) -> None:
         """Present the build's headed identity when it is the headless shell.
