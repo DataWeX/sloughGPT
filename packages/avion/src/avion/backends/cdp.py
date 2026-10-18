@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any
 
 from avion.core.element import Element, ElementLocator, SelectorStrategy
@@ -61,6 +62,55 @@ def _js_iife(body: str) -> str:
     return "(() => { " + body + " })()"
 
 
+def _headed_metadata(ua: str, full: str) -> dict[str, Any]:
+    """Client-hint metadata for the headed identity of a UA string.
+
+    ``architecture``/``model``/``mobile`` (and friends) are *mandatory*
+    fields of the CDP ``UserAgentMetadata`` binding — omitting one is a
+    protocol error, not a preference. The headless shell also exposes no
+    ``navigator.userAgentData`` to ask, so the values are the host's own
+    facts: machine and kernel from stdlib ``platform``, the platform
+    family parsed from the very UA being constructed — self-consistent
+    with the header the server will read. Versions come from the live
+    build, so the identity tracks chromium upgrades.
+    """
+    import platform as host
+
+    if "Windows" in ua:
+        os_name = "Windows"
+    elif "Mac OS X" in ua:
+        os_name = "macOS"
+    else:
+        os_name = "Linux"
+    machine = host.machine().lower()
+    if machine.startswith(("arm", "aarch")):
+        arch, bitness = "arm", "64"
+    elif machine in ("i386", "i586", "i686"):
+        arch, bitness = "x86", "32"
+    else:
+        arch, bitness = "x86", "64"  # x86_64 — this fleet and friends
+    major = full.split(".", 1)[0]
+    return {
+        "brands": [
+            {"brand": "Google Chrome", "version": major},
+            {"brand": "Chromium", "version": major},
+            {"brand": "Not?A_Brand", "version": "99"},
+        ],
+        "fullVersionList": [
+            {"brand": "Google Chrome", "version": full},
+            {"brand": "Chromium", "version": full},
+            {"brand": "Not?A_Brand", "version": "99.0.0.0"},
+        ],
+        "platform": os_name,
+        "platformVersion": host.release() or "0.0.0",
+        "architecture": arch,
+        "model": "",
+        "mobile": False,
+        "bitness": bitness,
+        "wow64": False,
+    }
+
+
 class CdpBackend:
     """Direct CDP automation against a debuggable Chrome target."""
 
@@ -101,8 +151,42 @@ class CdpBackend:
         await self._send("Runtime.enable")
         await self._send("Log.enable")
         await self._send("Network.enable")
+        await self._normalize_headless_ua()
         if self._target_url != "about:blank":
             await self.navigate(self._target_url)
+
+    async def _normalize_headless_ua(self) -> None:
+        """Present the build's headed identity when it is the headless shell.
+
+        chrome-headless-shell reports ``HeadlessChrome/...`` and carries no
+        ``Google Chrome`` brand in its client hints; servers that fingerprint
+        both answer 403 to the document (x.com did, while curl and a real
+        Chrome got 200 from the same host — nothing about the network).
+        ``Network.setUserAgentOverride`` is the one knob that fixes the
+        ``User-Agent`` header *and* the ``sec-ch-ua`` hints together: a UA
+        flag alone still advertises Chromium-only hints and gets
+        cross-checked. Fail-open, and only for the shell: a real Chrome is
+        never touched, and any failure leaves the browser exactly as it was
+        — the site then behaves as before, never worse.
+        """
+        try:
+            ua = await self.evaluate("navigator.userAgent")
+            if not isinstance(ua, str):
+                return
+            match = re.search(r"HeadlessChrome/(\d+(?:\.\d+)*)", ua)
+            if match is None:
+                return  # a real Chrome — leave its own identity alone
+            full = match.group(1)
+            await self._send(
+                "Network.setUserAgentOverride",
+                {
+                    "userAgent": ua.replace("HeadlessChrome", "Chrome"),
+                    "userAgentMetadata": _headed_metadata(ua, full),
+                    "acceptLanguage": "en-US,en;q=0.9",
+                },
+            )
+        except Exception:
+            return  # best effort: never worse than the un-normalized browser
 
     async def stop(self) -> None:
         task, self._reader = self._reader, None
