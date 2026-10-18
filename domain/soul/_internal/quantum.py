@@ -287,9 +287,14 @@ class HyperdimensionalProcessor:
         return self.bind(bound, key)
 
     def cleanup(self) -> int:
-        """Remove rarely used vectors to save memory."""
+        """Remove dead (all-zero) vectors to save memory.
+
+        Only all-zero vectors are dead: encode() emits balanced +/-1 binary
+        vectors whose sum is also exactly 0 for ~14% of draws at dim=32 — a
+        sum-based predicate was discarding healthy vectors at random.
+        """
         removed = 0
-        to_remove = [k for k, v in self.vectors.items() if sum(v) == 0]
+        to_remove = [k for k, v in self.vectors.items() if not any(v)]
         for k in to_remove:
             del self.vectors[k]
             removed += 1

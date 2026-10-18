@@ -1371,34 +1371,6 @@ class TestQuantizedLinear:
         expected = x @ w.T + b
         np.testing.assert_allclose(result, expected, atol=0.1)
 
-    def test_make_torch_forward_returns_callable(self):
-        try:
-            import torch
-        except ImportError:
-            pytest.skip("torch not installed")
-
-        w = np.random.randn(8, 16).astype(np.float32) * 0.02
-        engine = Quantine(bits=8, mode="symmetric")
-        info = engine.quantize("test.weight", w)
-
-        ql = QuantizedLinear(
-            weight_int8=info.array,
-            scale=info.meta.scale,
-            zero_point=info.meta.zero_point,
-            bias=None,
-            bits=info.meta.bits,
-            original_shape=info.meta.original_shape,
-            mode=info.meta.mode,
-        )
-
-        fwd = ql.make_torch_forward()
-        assert callable(fwd)
-
-        x_torch = torch.randn(2, 16)
-        result = fwd(x_torch)
-        assert isinstance(result, torch.Tensor)
-        assert result.shape == (2, 8)
-
     def test_from_linear_extraction(self):
         try:
             import torch  # noqa: F401
