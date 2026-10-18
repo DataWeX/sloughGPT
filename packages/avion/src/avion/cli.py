@@ -14,6 +14,10 @@ Usage::
     avion shot page.png
     avion console --errors
     avion network --json
+    avion launch --profile x           # own a browser; --no-wait detaches it
+    avion run flow.json --profile x    # complete a recorded flow (or --cdp attach)
+    avion agent "sign in and search" --soul model.soul --profile x  # our model drives the loop
+    avion repl --record flow.json      # author a flow by driving; avion run completes it
     avion repl
 
 One invocation = one CDP session, but ``console``/``network`` keep history:
@@ -343,6 +347,149 @@ def _pop_by(rest: list[str]) -> tuple[str, list[str]]:
     return by, rest
 
 
+def _load_flow_events(path: str) -> list[Event]:
+    """Events from a flow file saved by ``EventRecorder.save()``.
+
+    A malformed file surfaces as ``ValueError`` — the CLI turns that into a
+    loud message and exit 1, never a traceback.
+    """
+    payload = json.loads(Path(path).read_text())
+    raw = payload.get("events") if isinstance(payload, dict) else payload
+    if not isinstance(raw, list):
+        raise ValueError(f"no events in flow file: {path}")
+    try:
+        return [Event.from_dict(d) for d in raw]
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"malformed event in {path}: {exc}") from exc
+
+
+def _cmd_launch(args: argparse.Namespace) -> int:
+    """Own a browser start: visible until Enter, or detached with --no-wait."""
+    from avion.launch import Profile, launch_chromium
+
+    launched = launch_chromium(Profile(args.profile), headless=args.headless, extra_args=args.arg)
+    print(f"launched profile={args.profile} pid={launched.process.pid}")
+    print(f"endpoint={launched.endpoint.base_ws_url}")
+    if args.no_wait:
+        # Detach: the browser outlives this invocation — that is the point
+        # (persistent profile, other verbs attach to it).
+        print(f"detach: export AVION_CDP_URL={launched.endpoint.base_ws_url}")
+        return 0
+    print("browser running — press Enter to stop it...", flush=True)
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        pass
+    launched.stop()
+    print("stopped.")
+    return 0
+
+
+async def _cmd_run(args: argparse.Namespace) -> int:
+    """Complete a recorded flow: own a profile browser or attach via --cdp."""
+    from avion.backends.cdp import CdpBackend
+    from avion.events.replay import ReplayConfig
+    from avion.flow import complete_flow
+    from avion.launch import Profile, launch_chromium
+
+    try:
+        events = _load_flow_events(args.flow)
+    except (OSError, ValueError) as exc:
+        return _fail(str(exc))
+
+    launched = None
+    if args.profile:
+        launched = launch_chromium(
+            Profile(args.profile), headless=not args.headed, extra_args=args.arg
+        )
+        target: Any = launched
+        print(f"running flow on profile={args.profile} ({len(events)} events)", file=sys.stderr)
+    else:
+        target = CdpBackend(cdp_url=args.cdp)
+        print(f"running flow on {args.cdp} ({len(events)} events)", file=sys.stderr)
+    try:
+        outcome = await complete_flow(
+            events,
+            target,
+            base_url=args.base_url,
+            config=ReplayConfig(dry_run=args.dry_run),
+        )
+    except Exception as exc:
+        return _fail(f"flow run failed: {exc}")
+    finally:
+        if launched is not None:
+            launched.stop()
+    if args.json:
+        print(json.dumps(outcome.to_dict(), indent=2))
+    else:
+        # Summarize, don't dump: one status line + the failures, nothing else.
+        mark = "completed" if outcome.completed else "FAILED"
+        print(
+            f"{mark}: {outcome.steps_done}/{outcome.steps_total} steps — final: {outcome.final_url}"
+        )
+        for step in outcome.failed_steps:
+            print(
+                f"  step {step.get('event_seq', '?')} {step.get('action', '')}:"
+                f" {step.get('error') or 'failed'}"
+            )
+    return 0 if outcome.completed else 1
+
+
+def _build_agent_model(args: argparse.Namespace):
+    """Resolve the agent's model: --soul, --http, or the AVION_SOUL env."""
+    from avion.ai.slo import SloModel
+
+    if args.soul:
+        return SloModel.from_soul(args.soul)
+    if args.http:
+        return SloModel.from_http(args.http)
+    soul = os.environ.get("AVION_SOUL")
+    if soul:
+        return SloModel.from_soul(soul)
+    return None
+
+
+async def _cmd_agent(args: argparse.Namespace) -> int:
+    """Drive the agent loop with our own model — own a profile or attach."""
+    from avion.ai.agent import Agent, AgentConfig
+    from avion.backends.cdp import CdpBackend
+    from avion.launch import Profile, launch_chromium
+
+    model = _build_agent_model(args)
+    if model is None:
+        return _fail("agent needs a model: --soul PATH, --http URL, or AVION_SOUL set")
+
+    launched = None
+    if args.profile:
+        launched = launch_chromium(
+            Profile(args.profile), headless=not args.headed, extra_args=args.arg
+        )
+        backend: Any = launched.backend
+        print(f"agent on profile={args.profile} model={model.model_name}", file=sys.stderr)
+    else:
+        backend = CdpBackend(cdp_url=args.cdp)
+        print(f"agent on {args.cdp} model={model.model_name}", file=sys.stderr)
+    agent = Agent(model=model, config=AgentConfig(max_steps=args.max_steps))
+    try:
+        await agent.start(backend=backend)
+        result = await agent.run(args.task)
+        await agent.stop()
+    except Exception as exc:
+        return _fail(f"agent run failed: {exc}")
+    finally:
+        if launched is not None:
+            launched.stop()
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        # Summarize, don't dump: status, steps, why it stopped, then errors.
+        mark = "done" if result.success else "FAILED"
+        print(f"{mark}: {result.steps_taken} steps — stop: {result.stop_reason}")
+        for line in (result.error or "").splitlines()[:5]:
+            print(f"  {line}")
+    return 0 if result.success else 1
+
+
 # ── parser / entry ──────────────────────────────────────────────────────
 
 
@@ -383,7 +530,82 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("network", help="show captured network requests")
     sp.add_argument("--json", action="store_true")
 
-    sub.add_parser("repl", help="interactive session (same verbs)")
+    sp = sub.add_parser("repl", help="interactive session (same verbs)")
+    sp.add_argument(
+        "--record",
+        metavar="FLOW_JSON",
+        default=None,
+        help="record successful verbs into a flow file avion run can complete",
+    )
+
+    sp = sub.add_parser("launch", help="start a persistent-profile browser")
+    sp.add_argument("--profile", default="default", help="named profile (logins persist in it)")
+    sp.add_argument("--headless", action="store_true", help="run without a visible window")
+    sp.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="detach: leave it running and print its endpoint",
+    )
+    sp.add_argument(
+        "--arg",
+        action="append",
+        default=[],
+        metavar="CHROMIUM_ARG",
+        help="extra chromium arg, repeatable (use --arg=--no-sandbox for dashed values)",
+    )
+
+    sp = sub.add_parser(
+        "run",
+        help="complete a recorded flow (an EventRecorder save file)",
+        description=(
+            "Owns a browser with --profile; otherwise attaches to the global "
+            "--cdp flag (before the subcommand) or AVION_CDP_URL."
+        ),
+    )
+    sp.add_argument("flow", help="flow JSON saved by EventRecorder.save()")
+    sp.add_argument("--profile", default=None, help="launch and own this profile's browser")
+    sp.add_argument("--base-url", default="", help="base URL for relative navigations")
+    sp.add_argument(
+        "--headed",
+        action="store_true",
+        help="show the window when launching (default: headless)",
+    )
+    sp.add_argument("--dry-run", action="store_true", help="resolve every locator, touch nothing")
+    sp.add_argument("--json", action="store_true", help="print the full report as JSON")
+    sp.add_argument(
+        "--arg",
+        action="append",
+        default=[],
+        metavar="CHROMIUM_ARG",
+        help="extra chromium arg when launching, repeatable (use --arg=--no-sandbox)",
+    )
+
+    sp = sub.add_parser(
+        "agent",
+        help="run the agent loop with our own model (computer use)",
+        description=(
+            "Model: --soul (local .soul checkpoint, our engine, no network), "
+            "--http (a running inference server), or the AVION_SOUL env var. "
+            "Browser: --profile owns a launch; otherwise the global --cdp "
+            "flag (before the subcommand) or AVION_CDP_URL attaches."
+        ),
+    )
+    sp.add_argument("task", help="what the agent should do, in words")
+    sp.add_argument("--soul", default=None, help="local .soul checkpoint for our own engine")
+    sp.add_argument("--http", default=None, help="base URL of a running inference server")
+    sp.add_argument("--profile", default=None, help="launch and own this profile's browser")
+    sp.add_argument("--max-steps", type=int, default=50, help="step cap (AgentConfig default: 50)")
+    sp.add_argument(
+        "--headed", action="store_true", help="show the window when launching (default: headless)"
+    )
+    sp.add_argument("--json", action="store_true", help="print the full trajectory as JSON")
+    sp.add_argument(
+        "--arg",
+        action="append",
+        default=[],
+        metavar="CHROMIUM_ARG",
+        help="extra chromium arg when launching, repeatable (use --arg=--no-sandbox)",
+    )
     return p
 
 
@@ -393,7 +615,13 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().print_help()
         return 0
     if args.cmd == "repl":
-        return asyncio.run(_cmd_repl(args.cdp))
+        return asyncio.run(_cmd_repl(args.cdp, record_path=args.record))
+    if args.cmd == "launch":
+        return _cmd_launch(args)
+    if args.cmd == "run":
+        return asyncio.run(_cmd_run(args))
+    if args.cmd == "agent":
+        return asyncio.run(_cmd_agent(args))
 
     async def run(b) -> int:
         if args.cmd == "open":
