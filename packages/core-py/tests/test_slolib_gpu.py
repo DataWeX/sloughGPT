@@ -24,6 +24,27 @@ from domain.slolib._internal import gpu as slib
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
+def _fixed_meminfo_open(total_kb: int = 16777216):
+    """A builtins.open stand-in that serves a fixed /proc/meminfo.
+
+    vram_gb()'s psutil-absent fallback halves the HOST's MemTotal, so
+    pinning ``== 8.0`` only ever held on a 16GB machine (the author's box);
+    on the 15.6GiB CI host the fallback returns 7.807. 16777216 kB = 16 GiB
+    -> exactly 8.0 everywhere. Non-meminfo opens pass through untouched.
+    """
+    import builtins
+    import io
+
+    real_open = builtins.open
+
+    def _open(path, *args, **kwargs):
+        if str(path) == "/proc/meminfo":
+            return io.StringIO(f"MemTotal:       {total_kb} kB\n")
+        return real_open(path, *args, **kwargs)
+
+    return _open
+
+
 # =============================================================================
 # Independent numpy references
 # =============================================================================
@@ -452,6 +473,9 @@ class TestDeviceBasics:
                 raise RuntimeError("no memory info")
 
         monkeypatch.setitem(sys.modules, "psutil", _Boom())
+        # Same host-RAM pitfall as test_vram_gb_psutil_fallback: the
+        # meminfo fallback is exercised here, so pin it with a fixed value.
+        monkeypatch.setattr("builtins.open", _fixed_meminfo_open())
         assert cpu.vram_gb() == 8.0
 
 
@@ -1016,12 +1040,21 @@ class TestCPUBackend:
         cpu._openblas_threads_cache = None
         monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
         monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
-        monkeypatch.setitem(sys.modules, "domain.infrastructure.resource_manager", None)
+        # The impl imports domain.infrastructure._internal.resource_manager —
+        # patching the pre-move non-internal name had no effect, so
+        # get_resource_manager() resolved and returned its allocation (2)
+        # instead of exercising the cpu_count-1 fallback below.
+        monkeypatch.setitem(
+            sys.modules, "domain.infrastructure._internal.resource_manager", None
+        )
         n = cpu.openblas_threads()
         assert n == max(1, (os.cpu_count() or 1) - 1)
 
     def test_vram_gb_psutil_fallback(self, cpu, monkeypatch):
         monkeypatch.setitem(sys.modules, "psutil", None)
+        # The /proc/meminfo fallback halves the HOST's RAM — inject a fixed
+        # 16GiB MemTotal so ==8.0 holds on every machine.
+        monkeypatch.setattr("builtins.open", _fixed_meminfo_open())
         assert cpu.vram_gb() == 8.0
 
     def test_compute_tier_full(self, cpu, monkeypatch):
