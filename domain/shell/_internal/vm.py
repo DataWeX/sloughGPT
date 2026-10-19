@@ -2581,10 +2581,24 @@ class DeviceRegisterMap:
 # ── CPU ──────────────────────────────────────────────────────────────────────
 
 
-class CPU:
-    """Central processing unit with integer ALU, tensor ALU, and control flow."""
+def _default_tensor():
+    """Build the CPU's tensor backend (lazy import; injectable for tests/alt backends).
 
-    def __init__(self, memory=None, devices=None):
+    The CPU owns control flow + data movement; tensor MATH lives on the device.
+    """
+    from .tensor_device import TensorDevice as _ComputeTensorDevice
+
+    return _ComputeTensorDevice()
+
+
+class CPU:
+    """Central processing unit — control flow, integer ALU, and device/tensor delegation.
+
+    Tensor opcodes (MATMUL, RELU, …) marshal operands here and delegate the math
+    to ``self._tensor`` (a TensorDevice); the CPU no longer inlines tensor math.
+    """
+
+    def __init__(self, memory=None, devices=None, tensor=None):
         self.regs = [0] * NUM_REGS
         self.pc = 0
         self.sp = STACK_BASE
@@ -2594,6 +2608,7 @@ class CPU:
         self._stack = {}
         self._memory = memory or Memory()
         self._devices = devices or DeviceBus()
+        self._tensor = tensor if tensor is not None else _default_tensor()
         self._instructions = []
         self._running = False
         self._step_count = 0
@@ -3092,7 +3107,7 @@ def _op_add(cpu, ops):
     rd = cpu._reg(ops[0])
     a, b = cpu._val(ops[1]), cpu._val(ops[2])
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-        cpu.regs[rd] = cpu._parse_tensor(a) + cpu._parse_tensor(b)
+        cpu.regs[rd] = cpu._tensor.add(cpu._parse_tensor(a), cpu._parse_tensor(b))
     else:
         cpu.regs[rd] = (a or 0) + (b or 0)
 
@@ -3102,7 +3117,7 @@ def _op_sub(cpu, ops):
     rd = cpu._reg(ops[0])
     a, b = cpu._val(ops[1]), cpu._val(ops[2])
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-        cpu.regs[rd] = cpu._parse_tensor(a) - cpu._parse_tensor(b)
+        cpu.regs[rd] = cpu._tensor._sub(cpu._parse_tensor(a), cpu._parse_tensor(b))
     else:
         cpu.regs[rd] = (a or 0) - (b or 0)
 
@@ -3112,7 +3127,7 @@ def _op_mul(cpu, ops):
     rd = cpu._reg(ops[0])
     a, b = cpu._val(ops[1]), cpu._val(ops[2])
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-        cpu.regs[rd] = cpu._parse_tensor(a) * cpu._parse_tensor(b)
+        cpu.regs[rd] = cpu._tensor.mul(cpu._parse_tensor(a), cpu._parse_tensor(b))
     else:
         cpu.regs[rd] = (a or 0) * (b or 0)
 
@@ -3123,7 +3138,7 @@ def _op_div(cpu, ops):
     a = cpu._parse_tensor(cpu._val(ops[1]))
     b = cpu._parse_tensor(cpu._val(ops[2]))
     with np.errstate(divide="ignore", invalid="ignore"):
-        result = a / b
+        result = cpu._tensor._div(a, b)
         result = np.where(np.isinf(result), 0.0, result)
         result = np.where(np.isnan(result), 0.0, result)
     cpu.regs[rd] = result
@@ -3133,14 +3148,16 @@ def _op_neg(cpu, ops):
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     a = cpu._val(ops[1])
-    cpu.regs[rd] = -cpu._parse_tensor(a) if isinstance(a, np.ndarray) else -(a or 0)
+    cpu.regs[rd] = (
+        cpu._tensor._neg(cpu._parse_tensor(a)) if isinstance(a, np.ndarray) else -(a or 0)
+    )
 
 
 def _op_abs(cpu, ops):
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     a = cpu._val(ops[1])
-    cpu.regs[rd] = np.abs(a) if isinstance(a, np.ndarray) else abs(a or 0)
+    cpu.regs[rd] = cpu._tensor._abs(a) if isinstance(a, np.ndarray) else abs(a or 0)
 
 
 def _op_matmul(cpu, ops):
@@ -3156,19 +3173,19 @@ def _op_matmul(cpu, ops):
         a = a.reshape(1, -1)
     if b.ndim == 1:
         b = b.reshape(-1, 1)
-    cpu.regs[rd] = a @ b
+    cpu.regs[rd] = cpu._tensor.matmul(a, b)
 
 
 def _op_transpose(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = cpu._parse_tensor(cpu._val(ops[1])).T
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._transpose(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_dot(cpu, ops):
     cpu._check_arity(ops, 3)
     a = cpu._parse_tensor(cpu._val(ops[1])).ravel()
     b = cpu._parse_tensor(cpu._val(ops[2])).ravel()
-    cpu.regs[cpu._reg(ops[0])] = float(np.dot(a, b))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._dot(a, b))
 
 
 def _op_norm(cpu, ops):
@@ -3178,22 +3195,22 @@ def _op_norm(cpu, ops):
 
 def _op_sum(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = float(np.sum(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._sum(cpu._parse_tensor(cpu._val(ops[1]))))
 
 
 def _op_mean(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = float(np.mean(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._mean(cpu._parse_tensor(cpu._val(ops[1]))))
 
 
 def _op_max(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = float(np.max(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._max(cpu._parse_tensor(cpu._val(ops[1]))))
 
 
 def _op_argmax(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = int(np.argmax(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = int(cpu._tensor._argmax(cpu._parse_tensor(cpu._val(ops[1])), None))
 
 
 def _op_reshape(cpu, ops):
@@ -3201,7 +3218,7 @@ def _op_reshape(cpu, ops):
     a = cpu._parse_tensor(cpu._val(ops[1]))
     rows = int(ops[2]) if isinstance(ops[2], (int, float)) else -1
     cols = int(ops[3]) if isinstance(ops[3], (int, float)) else -1
-    cpu.regs[cpu._reg(ops[0])] = a.reshape(rows, cols)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._reshape(a, (rows, cols))
 
 
 def _op_shape(cpu, ops):
@@ -3216,34 +3233,30 @@ def _op_size(cpu, ops):
 
 def _op_relu(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = np.maximum(0, cpu._parse_tensor(cpu._val(ops[1])))
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor.relu(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_gelu(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = (
-        0.5 * a * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (a + 0.044715 * a**3)))
-    )
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._gelu(a)
 
 
 def _op_sigmoid(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = 1.0 / (1.0 + np.exp(-np.clip(a, -500, 500)))
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._sigmoid(a)
 
 
 def _op_tanh(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = np.tanh(cpu._parse_tensor(cpu._val(ops[1])))
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._tanh(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_softmax(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    shifted = a - np.max(a)
-    exp_a = np.exp(shifted)
-    cpu.regs[cpu._reg(ops[0])] = exp_a / np.sum(exp_a)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor.softmax(a, axis=None)
 
 
 def _op_layernorm(cpu, ops):
