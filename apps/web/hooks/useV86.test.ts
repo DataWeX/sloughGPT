@@ -244,6 +244,35 @@ describe('useV86', () => {
     )
   })
 
+  it('kernel-mode boot passes the demo kernel cmdline; hda boots do not', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const kernel = renderHook(() => useV86({ bootMedia: 'kernel' }))
+
+    await act(async () => {
+      await kernel.result.current.init(document.createElement('div'))
+    })
+
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(instance.init).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        imageKind: 'kernel',
+        cmdline:
+          'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on',
+      }),
+    )
+
+    const hda = renderHook(() => useV86())
+    await act(async () => {
+      await hda.result.current.init(document.createElement('div'))
+    })
+    const hdaInstance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(hdaInstance.init).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ imageKind: 'hda', cmdline: undefined }),
+    )
+  })
+
   it('explicit boot media skips persisted-state restore; auto restores', async () => {
     const { V86Controller } = await import('@/lib/v86-controller')
     const explicit = renderHook(() => useV86({ bootMedia: 'iso' }))

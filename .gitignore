@@ -230,6 +230,10 @@ data/
 *.soul
 *.gguf
 *.bin
+# v86 BIOS pair vendored from https://copy.sh/v86/bios/ (SeaBIOS + Bochs VGA,
+# GPL-2 upstream) — committed because the legacy copy.sh server sends no CORS
+# headers, so the browser cannot fetch them at runtime.
+!apps/web/public/bios/*.bin
 *.img
 *.db
 *.sqlite

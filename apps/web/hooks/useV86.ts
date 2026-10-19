@@ -26,6 +26,18 @@ const REMOTE_BIOS_URL = 'https://copy.sh/v86/bios/seabios.bin'
 const REMOTE_VGA_BIOS_URL = 'https://copy.sh/v86/bios/vgabios.bin'
 const WASM_PATH = '/v86/v86.wasm'
 const MEMORY_MB = 256
+/**
+ * Kernel command line for kernel-mode boots — the copy.sh demo preset for
+ * this exact kernel (buildroot6), plus `earlyprintk=serial,ttyS0,115200`
+ * which mirrors early boot to COM1 (v86 always emulates the UART; the
+ * kernel disables the bootconsole once the VGA console takes over, so this
+ * costs nothing after early boot and keeps boot evidence readable over
+ * serial for debugging). The full chain — these flags with the vendored
+ * lib/wasm pair — boots this image to the busybox shell prompt; verified
+ * over serial 2026-10-18. `tsc=reliable` covers v86's TSC, which Linux
+ * otherwise distrusts as a clocksource.
+ */
+const KERNEL_CMDLINE = 'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on'
 const AUTO_SAVE_INTERVAL_MS = 30_000
 const IMAGE_PROBE_TIMEOUT_MS = 10_000
 
@@ -268,6 +280,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
           imageKind: image.kind,
           memoryMb: options.memoryMb || MEMORY_MB,
           wasmPath: options.wasmPath || WASM_PATH,
+          cmdline: image.kind === 'kernel' ? KERNEL_CMDLINE : undefined,
         })
         if (stale()) {
           ctrl.destroy()
