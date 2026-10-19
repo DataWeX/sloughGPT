@@ -283,6 +283,26 @@ def _find_free_port(start: int) -> int:
     return start  # fallback
 
 
+def _resolve_dev_ports(api_port: int, web_port: int) -> tuple[int, int]:
+    """Resolve both dev ports once, before anything is spawned.
+
+    ``dev`` only shifts a busy port — it never reuses a healthy listener:
+    ``/health`` exposes no repo identity, so reusing could silently attach
+    this session to another checkout's backend instead of this tree's
+    ``--reload`` server. One resolution point keeps the TUI status block,
+    readiness poll, cleanup, and the web's baked API URL all in agreement.
+    """
+    resolved_api = api_port
+    resolved_web = web_port
+    if _is_port_bound(api_port):
+        resolved_api = _find_free_port(api_port + 1)
+        log.warning(f"API port {api_port} busy, using {resolved_api}")
+    if _is_port_bound(web_port):
+        resolved_web = _find_free_port(web_port + 1)
+        log.warning(f"Web port {web_port} busy, using {resolved_web}")
+    return resolved_api, resolved_web
+
+
 def _get_startup_progress(port: int) -> dict | None:
     """Fetch startup progress from /health/startup-progress."""
     try:
@@ -394,9 +414,20 @@ def _node_env(env: dict) -> dict:
     return env
 
 
-def _web_dev_env(env: dict, web_port: int) -> dict:
-    """Env for the web dev server — Next.js reads PORT for its listen port."""
-    return {**_node_env(env), "PORT": str(web_port)}
+def _web_dev_env(env: dict, web_port: int, api_port: int | None = None) -> dict:
+    """Env for the web dev server — Next.js reads PORT for its listen port.
+
+    When ``api_port`` (the resolved dev API port) is given and the caller
+    hasn't set ``NEXT_PUBLIC_API_URL``, it is injected here: vite.config.ts
+    evaluates ``?? 'http://localhost:8000'`` once at config load, so a
+    shifted API port must reach the web process as env *before spawn* or
+    the UI silently talks to a different backend. An explicit value —
+    including empty string (same-origin gateway mode) — always wins.
+    """
+    out = {**_node_env(env), "PORT": str(web_port)}
+    if api_port is not None and "NEXT_PUBLIC_API_URL" not in out:
+        out["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}"
+    return out
 
 
 def _package_dev_script(web_root: Path) -> str:
@@ -432,6 +463,9 @@ def cmd_dev(args):
     api_port = getattr(args, "port", 8000)
     web_port = getattr(args, "web_port", 3000)
     watch_web = getattr(args, "watch_web", False)
+    # One resolution before the status block, both spawns, and the readiness
+    # poll read these variables — every consumer must see the same ports.
+    api_port, web_port = _resolve_dev_ports(api_port, web_port)
 
     # ── Signal handlers — installed before any spawn ──────
     # Flag-only: the dashboard loop notices `shutdown` and the `finally`
@@ -474,7 +508,7 @@ def cmd_dev(args):
     env["FORCE_COLOR"] = "1"
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
-    web_env = _web_dev_env(env, web_port)
+    web_env = _web_dev_env(env, web_port, api_port)
     npm_cmd = _web_dev_cmd(web_port)
 
     python = Path(find_server_python(root))

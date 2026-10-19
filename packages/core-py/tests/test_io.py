@@ -246,7 +246,10 @@ class TestCapture:
         class _Repl:
             def __init__(self):
                 self.io = MemoryIO()
-                self.console = SimpleNamespace(_io=MemoryIO())
+                self.console = SimpleNamespace(
+                    _io=MemoryIO(),
+                    _interactive=SimpleNamespace(_io=MemoryIO(), _is_tty=False),
+                )
 
         repl = _Repl()
         old_io = repl.io

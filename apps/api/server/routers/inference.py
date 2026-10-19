@@ -3311,16 +3311,49 @@ class InferenceRouter:
                 if provider is not None:
                     try:
                         caps = provider.capabilities
-                        result[name] = {
-                            "model_id": provider.model_id,
-                            "capabilities": {
-                                "chat": caps.chat,
-                                "streaming": caps.streaming,
-                                "embedding": caps.embedding,
-                                "vision": caps.vision,
-                            },
-                            "metadata": provider.metadata,
-                        }
+                        # A provider is a plugin, and this handler already
+                        # isolates one that misbehaves: the guard below
+                        # degrades it to {"error": ...} rather than failing
+                        # the whole listing. That isolation never reached this
+                        # value. A metadata field holding a datetime, an engine
+                        # handle, or any other non-JSON type is perfectly
+                        # well-formed here, and only fails later, in the
+                        # response encoder, outside the guard — which is why
+                        # `GET /providers` answered 500 E_SERIALIZATION while
+                        # this method raised nothing, and why the default log
+                        # level recorded no cause at all. Coercing with
+                        # `default=str` is what the SSE routers already do.
+                        #
+                        # `metadata` is declared a @property on the Provider
+                        # protocol, but ct_provider / slonet_provider /
+                        # slonet_server implement it as a plain METHOD while
+                        # api_provider / router / slo_transformer use @property.
+                        # Reading it property-style on a plain-method provider
+                        # puts a bound method in the payload; `default=str` then
+                        # coerces it to the useless
+                        # "<bound method ... at 0x...>" repr. Normalise the read
+                        # first so the real dict is what gets serialised, then
+                        # let `default=str` catch genuinely non-JSON values
+                        # inside it. Callers are split the same way, so accept
+                        # both forms here rather than churning every call site.
+                        meta = provider.metadata
+                        if callable(meta):
+                            meta = meta()
+                        result[name] = json.loads(
+                            json.dumps(
+                                {
+                                    "model_id": provider.model_id,
+                                    "capabilities": {
+                                        "chat": caps.chat,
+                                        "streaming": caps.streaming,
+                                        "embedding": caps.embedding,
+                                        "vision": caps.vision,
+                                    },
+                                    "metadata": meta,
+                                },
+                                default=str,
+                            )
+                        )
                     except Exception as exc:
                         logger.warning(
                             "Provider '%s' capability query failed: %s",

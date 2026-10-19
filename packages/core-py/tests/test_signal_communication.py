@@ -924,8 +924,11 @@ class TestEpisodicMemory:
     def test_recall_negative_k(self):
         em = EpisodicMemory(capacity=10)
         em.record(np.zeros(3), (0.5,), 1.0)
+        # k <= 0 is the documented "return all episodes" contract, pinned by
+        # test_shell_memory.py (both the k == 0 and the k < 0 cases); negative
+        # k takes the same branch rather than returning [].
         result = em.recall(-1)
-        assert result == []
+        assert len(result) == 1
 
     def test_recall_negative_k_by_reward(self):
         em = EpisodicMemory(capacity=10)

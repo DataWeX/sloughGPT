@@ -759,14 +759,16 @@ def test_export_to_sou_rename_failure_cleans_temp(tmp_path, monkeypatch):
     def _boom(src, dst):
         raise OSError("rename failed")
 
-    def _fake_unlink(path):
-        raise OSError("unlink failed")
-
-    monkeypatch.setattr(os, "rename", _boom)
-    monkeypatch.setattr(os, "unlink", _fake_unlink)
+    # The atomic writer's final move is os.replace (atomic_write.py), not
+    # os.rename — patching the wrong primitive let the export succeed and
+    # the test saw no error at all.
+    monkeypatch.setattr(os, "replace", _boom)
     target = str(tmp_path / "x.soul")
     with pytest.raises(OSError):
         export_to_sou(net, target, include_weights=False)
+    # WAL order: weights first, sidecar never reached; the failed write's
+    # except path unlinks its *.tmp — nothing may remain in the directory.
+    assert list(tmp_path.iterdir()) == []
 
 
 # ---------------------------------------------------------------------------
@@ -790,10 +792,15 @@ def test_kernel_import_fallback():
     import textwrap
 
     core_py = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # domain/ lives at the repo root; the subprocess gets no conftest
+    # sys.path fixup, so core_py alone leaves it unimportable (same family
+    # as the phoneme subprocess PYTHONPATH fix, PR #147).
+    repo_root = os.path.dirname(os.path.dirname(core_py))
     code = textwrap.dedent(
         f"""
         import sys
         sys.path.insert(0, {core_py!r})
+        sys.path.insert(0, {repo_root!r})
         sys.modules["domain.training._internal.slonet_kernels"] = None
         from domain.training._internal import slonet
         assert slonet._KERNELS_AVAILABLE is False

@@ -14,6 +14,8 @@ Public API:
     get_consciousness, reset_consciousness
 """
 
+from __future__ import annotations
+
 
 def __getattr__(name):
     _lazy = {

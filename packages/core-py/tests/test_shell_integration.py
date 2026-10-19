@@ -171,10 +171,18 @@ class TestLocalCommands:
 
 
 def test_subprocess_shell_launches():
-    pkgs = str(Path(__file__).resolve().parents[1])
     import os
 
-    env = {**os.environ, "PYTHONPATH": pkgs}
+    # domain/ lives at the repo root. packages/core-py/tests/<file> ->
+    # parents[3] (the batch-C phoneme-cli pattern); the rehome left
+    # parents[1] alone, which cannot satisfy "import domain" in the
+    # subprocess.
+    root = str(Path(__file__).resolve().parents[3])
+    pkgs = str(Path(__file__).resolve().parents[1])
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(filter(None, [os.environ.get("PYTHONPATH"), root, pkgs])),
+    }
     result = subprocess.run(
         [sys.executable, "-c", "from domain.shell._internal.repl import ShellREPL; print('ok')"],
         capture_output=True,

@@ -10,6 +10,8 @@ Public API:
     merge_dicts, clamp, validate_config, retry, Timer, Cache, RateLimiter
 """
 
+from __future__ import annotations
+
 from domain.shared._internal.concurrency import Cache, RateLimiter, Timer, retry
 from domain.shared._internal.dims import FF_ALIGN, align_dim_ff
 from domain.shared._internal.formatting import format_size, format_time

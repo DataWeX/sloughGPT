@@ -80,6 +80,12 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [copied, setCopied] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  // Auto-close timer from handleCopy — tracked so the [open] effect's
+  // cleanup can cancel it. Otherwise it survives unmount and fires
+  // setState after the component is gone (production: setState-after-
+  // unmount leak; vitest: post-teardown "window is not defined" once
+  // jsdom is destroyed).
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -98,11 +104,18 @@ export const MessageContextMenu = memo(function MessageContextMenu({
     document.addEventListener('keydown', handleKey)
     document.addEventListener('click', close)
     // Auto-focus first menu item
-    setTimeout(() => {
+    const focusTimer = setTimeout(() => {
       const firstItem = menuRef.current?.querySelector('[role="menuitem"]:not([disabled])') as HTMLElement
       firstItem?.focus()
     }, 0)
     return () => {
+      // Runs on every open-change AND on unmount: cancels the pending
+      // auto-close (stale cycle) and the focus timer (leak past cleanup).
+      if (closeTimerRef.current !== null) {
+        clearTimeout(closeTimerRef.current)
+        closeTimerRef.current = null
+      }
+      clearTimeout(focusTimer)
       document.removeEventListener('keydown', handleKey)
       document.removeEventListener('click', close)
     }
@@ -113,7 +126,8 @@ export const MessageContextMenu = memo(function MessageContextMenu({
       await navigator.clipboard.writeText(content)
       setCopied(true)
       onCopy?.(content)
-      setTimeout(() => setOpen(false), 400)
+      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = setTimeout(() => setOpen(false), 400)
     } catch { /* clipboard unavailable */ }
   }, [content, onCopy])
 

@@ -183,3 +183,62 @@ describe('chatStore sendMessage — stream-complete persist', () => {
     expect(secondPersist).toEqual(live.map((m) => ({ role: m.role, content: m.content })))
   })
 })
+
+/**
+ * Split-brain regression (blank chat pane).
+ *
+ * Bug: chat-store `init()` scheduled its OWN loadSession via setTimeout, on top
+ * of the controller's session load mirrored in by useChatStoreBridge. The
+ * controller is the source of truth; the store renders. The rogue store-side load
+ * resolved later with a stale/persisted read and clobbered live store.messages —
+ * blanking the pane while the toolbar (controller) still showed the real count.
+ *
+ * Fix: init() no longer loads the session. These tests prove a stale persisted
+ * read arriving after init does NOT overwrite live messages the bridge pushed.
+ */
+describe('init() does not race the controller bridge (split-brain)', () => {
+  it('does not schedule an independent session load on init', async () => {
+    const loadSessions = vi.mocked(chatDB.loadSessions)
+    loadSessions.mockClear()
+
+    // Bridge has just mirrored live controller messages into the store.
+    useChatStore.setState({
+      messages: [
+        { id: 'm1', role: 'user', content: 'live user msg', timestamp: new Date() },
+        { id: 'm2', role: 'assistant', content: 'live assistant reply', timestamp: new Date() },
+      ],
+    })
+
+    // A persisted session exists (stale, empty messages) — the old racer would
+    // find it and overwrite the live pane with [].
+    vi.mocked(chatDB.getKV).mockResolvedValue('sess-1' as never)
+    loadSessions.mockResolvedValue([
+      { id: 'sess-1', name: 'stale', messages: [], updatedAt: '2026-01-01' },
+    ] as never)
+
+    useChatStore.getState().init(makeConfig())
+
+    // Flush the macrotask the racer used (setTimeout 0) plus microtasks.
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await Promise.resolve()
+
+    // The store never issued its own load, and live messages survive intact.
+    expect(loadSessions).not.toHaveBeenCalled()
+    const msgs = useChatStore.getState().messages
+    expect(msgs).toHaveLength(2)
+    expect(msgs[0].content).toBe('live user msg')
+    expect(msgs[1].content).toBe('live assistant reply')
+  })
+
+  it('init() still hydrates sessionId without touching messages', async () => {
+    useChatStore.setState({ messages: [], sessionId: '' })
+    vi.mocked(chatDB.getKV).mockResolvedValue('sess-9' as never)
+
+    useChatStore.getState().init(makeConfig())
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(useChatStore.getState().sessionId).toBe('sess-9')
+    expect(useChatStore.getState().messages).toEqual([])
+  })
+})

@@ -27,14 +27,23 @@ def _mock(mod_name, attrs):
     m = MagicMock()
     for k, v in attrs.items():
         setattr(m, k, v)
+    # Save the REAL module (if any) before swapping: _cleanup must restore
+    # it, not pop the entry — popping evicts the real module from the import
+    # cache, so every later `import` of it creates a fresh copy and objects
+    # bound earlier (collection-time imports, eagerly-bound facades) end up
+    # split-brained against the new one.
+    if mod_name not in original_imports:
+        original_imports[mod_name] = sys.modules.get(mod_name)
     sys.modules[mod_name] = m
-    original_imports[mod_name] = m
     return m
 
 
 def _cleanup():
-    for mod in list(original_imports):
-        sys.modules.pop(mod, None)
+    for mod, orig in original_imports.items():
+        if orig is None:
+            sys.modules.pop(mod, None)
+        else:
+            sys.modules[mod] = orig
     original_imports.clear()
 
 

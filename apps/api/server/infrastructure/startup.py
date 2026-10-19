@@ -920,6 +920,59 @@ class StartupOrchestrator:
                 warmup_proc = PgqProcess(fn=_warm_checkpoints, name="ckpt-warmup")
                 self._bg_tree.branch([warmup_proc])
 
+                # Background health-snapshot warmup. The FIRST
+                # get_detailed_health() call costs ~1.3s: it imports the
+                # controllers.health graph (284 modules) and, via
+                # domain.slolib.get_accelerator() -> _detect_best_backend() ->
+                # is_available(), reaches the GPU stack (cupy: 279ms self,
+                # 758ms cumulative). Nothing warmed it before, so that whole
+                # cost landed in-request on the first /health/stream
+                # subscriber — measured 1281ms vs 1.5ms warm.
+                #
+                # Run it here, where there is no traffic yet. Note this only
+                # works because PgqProcess executes IN-PROCESS: the warmed
+                # sys.modules are this process's. (Verified: a marker file and
+                # a deliberately-unrelated stdlib module both landed in the
+                # parent.) A forked child would warm nothing but the page
+                # cache.
+                def _warm_health():
+                    try:
+                        from controllers.health import get_health_controller
+
+                        get_health_controller().get_detailed_health()
+                    except Exception as e:
+                        logger.debug(
+                            "Health warmup failed (non-fatal): %s", e, extra={"tag": "START"}
+                        )
+
+                self._bg_tree.branch([PgqProcess(fn=_warm_health, name="health-warmup")])
+
+                # Background dashboard-snapshot warmup — the same defect, and
+                # NOT covered by the health warmup above. Measured in a fresh
+                # process: the first `_build_snapshot()` costs **1419ms** and
+                # pulls 654 modules, against 6.6ms warm, and neither
+                # `controllers.health` nor `cupy` is in sys.modules afterwards
+                # — dashboard reaches its own closure (`domain.infrastructure`,
+                # `training.jobs`, the event buffer), so warming health leaves
+                # this cold. First `/dashboard/stream` subscriber pays it.
+                #
+                # Two separate procs rather than one that does both: they run
+                # concurrently on the background tree, and a failure in either
+                # warmup stays isolated to itself.
+                def _warm_dashboard():
+                    try:
+                        from routers.dashboard import _build_snapshot
+
+                        _build_snapshot()
+                    except Exception as e:
+                        logger.debug(
+                            "Dashboard warmup failed (non-fatal): %s",
+                            e,
+                            extra={"tag": "START"},
+                        )
+
+                self._bg_tree.branch([PgqProcess(fn=_warm_dashboard, name="dashboard-warmup")])
+
                 return
             except Exception as e:
                 last_exc = e

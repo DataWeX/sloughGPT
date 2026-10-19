@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import {Markdown} from './Markdown';
 import {useColors} from '../theme/colors';
+import {S, R, T} from '../theme/scales';
 import {copyToClipboard} from '../services/clipboard';
 import {triggerHaptic} from '../services/haptics';
 import {sounds} from '../services/sounds';
@@ -36,11 +37,6 @@ function formatTime(ts: number): string {
 
 const SWIPE_THRESHOLD = -80;
 const DELETE_WIDTH = 72;
-
-// Spacing/radii/typography constants
-const S = {xs: 4, sm: 8, md: 12, lg: 16, xl: 20};
-const R = {sm: 6, md: 10, lg: 16, xl: 20, full: 9999};
-const T = {body: {fontSize: 15, lineHeight: 22, letterSpacing: 0.1}, small: {fontSize: 11, lineHeight: 15, letterSpacing: 0.2}};
 
 
 interface ContextAction {
@@ -127,7 +123,7 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
     bubble: {
       paddingHorizontal: S.md + 2,
       paddingVertical: 10,
-      borderRadius: R.lg,
+      borderRadius: R.xl,
     },
     highlight: {
       borderWidth: 2,
@@ -166,7 +162,7 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
       borderRadius: R.md,
     },
     timestamp: {
-      ...T.small,
+      ...T.badge,
       color: textMuted,
       marginTop: 3,
     },
@@ -249,7 +245,7 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
     },
     contextMenu: {
       backgroundColor: bg,
-      borderRadius: R.lg,
+      borderRadius: R.xl,
       width: '100%',
       maxWidth: 280,
       overflow: 'hidden',
@@ -270,7 +266,7 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
       borderBottomColor: border,
     },
     contextPreviewText: {
-      ...T.small,
+      ...T.badge,
       color: textMuted,
       lineHeight: 18,
     },
@@ -288,7 +284,6 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
     contextLabel: {
       ...T.body,
       color: textColor,
-      fontSize: 15,
     },
     contextLabelDestructive: {
       color: colors.error,

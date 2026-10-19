@@ -1,5 +1,7 @@
 """Tests for domain.soul._internal.quantum — HyperdimensionalProcessor, TemporalReasoningEngine."""
 
+import random
+
 import pytest
 
 from domain.soul._internal.quantum import HyperdimensionalProcessor, TemporalReasoningEngine
@@ -264,7 +266,18 @@ class TestUnbind:
 class TestCleanup:
     def test_cleanup_removes_zero_vectors(self):
         hp = HyperdimensionalProcessor(dim=32)
-        hp.encode("keep")
+        # encode() emits balanced +/-1 binary vectors and cleanup() removes
+        # any vector whose sum is exactly 0 (contract pinned by
+        # test_quantum::test_cleanup_removes_zero_sum_vectors, which
+        # manufactures a [1, -1, ...] vector) — ~14% of random draws are
+        # balanced. Pin the RNG so "keep" is unbalanced on every run, and
+        # restore the global state afterwards.
+        state = random.getstate()
+        try:
+            random.seed(0)
+            hp.encode("keep")
+        finally:
+            random.setstate(state)
         hp.vectors["zero"] = [0] * 32
         removed = hp.cleanup()
         assert removed == 1
@@ -273,8 +286,16 @@ class TestCleanup:
 
     def test_cleanup_nothing_to_remove(self):
         hp = HyperdimensionalProcessor(dim=32)
-        hp.encode("a")
-        hp.encode("b")
+        # Same RNG pin as above: seed 0 yields sum(a)=6, sum(b)=-2 — both
+        # unbalanced, so the sum-based cleanup removes nothing on every run
+        # instead of ~14%-per-vector of the suite's ambient random state.
+        state = random.getstate()
+        try:
+            random.seed(0)
+            hp.encode("a")
+            hp.encode("b")
+        finally:
+            random.setstate(state)
         removed = hp.cleanup()
         assert removed == 0
 
