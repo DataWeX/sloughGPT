@@ -20,6 +20,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from .asgi_host import run_http
 from .framing import Request, WireError, build_response, read_request
 
 
@@ -42,22 +43,33 @@ class WireServer:
 
     def __init__(
         self,
-        handler: Handler,
+        handler: Handler | None = None,
         host: str = "127.0.0.1",
         port: int = 0,
         backlog: int = 64,
+        *,
+        asgi_app: Callable | None = None,
     ) -> None:
+        if (handler is None) == (asgi_app is None):
+            raise ValueError("exactly one of 'handler' or 'asgi_app' is required")
         self._handler = handler
+        self._asgi_app = asgi_app
         self._host = host
         self._port = port
         self._backlog = backlog
         self._listener: socket.socket | None = None
+        self._bound: tuple[str, int] = (host, port)
         self._accept_thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._clients: set[socket.socket] = set()
         self._lock = threading.Lock()
 
     # ── lifecycle ──────────────────────────────────────────────────────
+
+    @property
+    def asgi_app(self) -> Callable | None:
+        """The ASGI app this server drives, if constructed in ASGI mode."""
+        return self._asgi_app
 
     @property
     def port(self) -> int:
@@ -76,6 +88,7 @@ class WireServer:
         listener.listen(self._backlog)
         listener.settimeout(0.2)  # stop() responsiveness
         self._listener = listener
+        self._bound = listener.getsockname()[:2]
         self._stop.clear()
         self._accept_thread = threading.Thread(
             target=self._accept_loop, name="wire-accept", daemon=True
@@ -156,6 +169,19 @@ class WireServer:
                     return
                 if request is None:  # clean EOF between requests
                     return
+                if self._asgi_app is not None:
+                    # ASGI mode: the adapter owns response bytes and the
+                    # keep-alive decision (app Connection header wins)
+                    keep = run_http(
+                        self._asgi_app,
+                        request,
+                        conn.sendall,
+                        client=conn.getpeername()[:2],
+                        server=self._bound,
+                    )
+                    if not keep:
+                        return
+                    continue
                 try:
                     response = self._handler(request)
                 except Exception:  # noqa: BLE001 - boundary: handler crash -> 500

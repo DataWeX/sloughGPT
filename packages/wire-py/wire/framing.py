@@ -109,8 +109,10 @@ def _parse_request_line(line: bytes) -> tuple[str, str, str]:
         raise MalformedRequest("invalid method token")
     if not target_raw:
         raise MalformedRequest("empty request target")
-    if any(byte < 0x21 or byte == 0x7F for byte in target_raw):
-        raise MalformedRequest("control character in request target")
+    if not all(0x21 <= byte <= 0x7E for byte in target_raw):
+        # origin-form is printable ASCII (pct-encoded); a raw high byte here
+        # would otherwise reach decode() and crash the connection thread
+        raise MalformedRequest("non-printable byte in request target")
     if version_raw == b"HTTP/1.1":
         version = "1.1"
     elif version_raw == b"HTTP/1.0":
@@ -242,6 +244,32 @@ def _reason_phrase(status: int) -> str:
         return ""
 
 
+def serialize_head(
+    status: int,
+    headers: Mapping[str, str] | Sequence[tuple[str, str]],
+    *,
+    keep_alive: bool,
+) -> bytes:
+    """Serialize status line + headers, wire-owned metadata included.
+
+    The wire is the one authority for ``Connection``/``Date``/``Server``:
+    caller-supplied values of those three are discarded, everything else
+    passes through in order. Ends with the header/body separator.
+    """
+    if not 100 <= status <= 599:
+        raise ValueError(f"status {status} out of range")
+    items = list(headers.items()) if isinstance(headers, Mapping) else list(headers)
+    items = [(k, v) for k, v in items if k.lower() not in ("connection", "date", "server")]
+    items.append(("Connection", "keep-alive" if keep_alive else "close"))
+    items.append(("Date", formatdate(usegmt=True)))
+    items.append(_HEADER)
+
+    head = f"HTTP/1.1 {status} {_reason_phrase(status)}".encode("ascii")
+    for key, value in items:
+        head += b"\r\n" + key.encode("ascii") + b": " + str(value).encode("latin-1")
+    return head + b"\r\n\r\n"
+
+
 def build_response(
     status: int,
     headers: Mapping[str, str] | Sequence[tuple[str, str]],
@@ -257,8 +285,6 @@ def build_response(
     caller-supplied duplicates of them are ignored — one authority for how
     the message ends.
     """
-    if not 100 <= status <= 599:
-        raise ValueError(f"status {status} out of range")
     items = list(headers.items()) if isinstance(headers, Mapping) else list(headers)
     lower = {k.lower() for k, _ in items}
 
@@ -276,14 +302,4 @@ def build_response(
         if "content-length" not in lower:
             items.append(("Content-Length", str(len(body))))
 
-    items = [(k, v) for k, v in items if k.lower() != "connection"]
-    items.append(("Connection", "keep-alive" if keep_alive else "close"))
-    if "date" not in lower:
-        items.append(("Date", formatdate(usegmt=True)))
-    if _HEADER[0].lower() not in lower:
-        items.append(_HEADER)
-
-    head = f"HTTP/1.1 {status} {_reason_phrase(status)}".encode("ascii")
-    for key, value in items:
-        head += b"\r\n" + key.encode("ascii") + b": " + str(value).encode("latin-1")
-    return head + b"\r\n\r\n" + framed
+    return serialize_head(status, items, keep_alive=keep_alive) + framed

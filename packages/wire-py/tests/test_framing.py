@@ -123,6 +123,7 @@ def test_malformed_request_line_is_400():
         b"GET / HTTP/9.9\r\n\r\n",  # unknown version
         b"GET\t/ HTTP/1.1\r\n\r\n",  # tab separator
         b"\x00\x01 / HTTP/1.1\r\n\r\n",  # binary junk
+        b"GET /\xff HTTP/1.1\r\n\r\n",  # raw non-ASCII target byte
     ):
         with pytest.raises(MalformedRequest) as exc:
             read_request(_reader(bad))
