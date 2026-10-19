@@ -54,9 +54,7 @@ _MARKERS: tuple[tuple[str, str], ...] = (
 )
 
 
-def detect_challenge(
-    *, title: str = "", url: str = "", text: str = ""
-) -> Challenge | None:
+def detect_challenge(*, title: str = "", url: str = "", text: str = "") -> Challenge | None:
     """First challenge signal in the page's words, or None on a healthy page.
 
     ``text`` is whatever the caller already holds — body innerText, an
@@ -92,8 +90,7 @@ async def page_challenge(backend, *, a11y_text: str = "") -> Challenge | None:
         url = str(await backend.get_url() or "")
         title = str(await backend.evaluate("document.title") or "")
         text = a11y_text or str(
-            await backend.evaluate("(document.body && document.body.innerText) || ''")
-            or ""
+            await backend.evaluate("(document.body && document.body.innerText) || ''") or ""
         )
     except Exception:
         return None

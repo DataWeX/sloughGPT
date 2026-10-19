@@ -48,13 +48,16 @@ def propose_candidates(
         async def run(session) -> str:
             await session.click_text(name)
             return f"clicked {name!r}"
+
         return run
 
     def _fill(name: str, text: str):
         async def run(session) -> str:
             from avion.core.element import ElementLocator
+
             await session.fill(ElementLocator.label(name), text)
             return f"typed into {name!r}"
+
         return run
 
     async def _noop(session) -> str:
@@ -74,8 +77,7 @@ def propose_candidates(
         if name and role in ("button", "link", "tab", "menuitem", "option"):
             choices.append(Choice(f"click {name!r}", _click(name), kind="click"))
         elif name and role in ("textbox", "searchbox", "input", "combobox") and task:
-            choices.append(Choice(
-                f"type {task!r} into {name!r}", _fill(name, task), kind="fill"))
+            choices.append(Choice(f"type {task!r} into {name!r}", _fill(name, task), kind="fill"))
         for child in node.get("children", []) or []:
             walk(child)
 
@@ -181,8 +183,7 @@ class ChoiceAgent:
                 break
             except Exception as e:
                 observation = f"error: {e}"
-            transcript.append({"pick": pick, "label": choice.label,
-                               "observation": observation})
+            transcript.append({"pick": pick, "label": choice.label, "observation": observation})
             if choice.kind == "done":
                 if not goal:
                     success = True
@@ -193,8 +194,9 @@ class ChoiceAgent:
                 except Exception:
                     url = ""
                 try:
-                    text_now = str(await self._session._backend.evaluate(
-                        "document.body.innerText") or "")
+                    text_now = str(
+                        await self._session._backend.evaluate("document.body.innerText") or ""
+                    )
                 except Exception:
                     text_now = ""
                 verify = await Verifier().verify(goal, url=url, text=text_now)

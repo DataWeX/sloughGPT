@@ -55,11 +55,13 @@ class Curriculum:
         if feedback is not None:
             for pattern, count in feedback.failure_patterns():
                 action = pattern.split(":", 1)[0]
-                proposals.append(TaskProposal(
-                    task=f"practice {action} until it succeeds",
-                    reason=f"failed {count}x ({pattern[:80]})",
-                    source="retry-failure",
-                ))
+                proposals.append(
+                    TaskProposal(
+                        task=f"practice {action} until it succeeds",
+                        reason=f"failed {count}x ({pattern[:80]})",
+                        source="retry-failure",
+                    )
+                )
                 if len(proposals) >= max_suggestions:
                     return proposals
 
@@ -74,12 +76,14 @@ class Curriculum:
                         covered.add(name)
             for task in known_tasks:
                 if task not in covered:
-                    proposals.append(TaskProposal(
-                        task=task,
-                        reason="not yet learned",
-                        goal=[{"kind": "text_absent", "value": ""}],
-                        source="untried",
-                    ))
+                    proposals.append(
+                        TaskProposal(
+                            task=task,
+                            reason="not yet learned",
+                            goal=[{"kind": "text_absent", "value": ""}],
+                            source="untried",
+                        )
+                    )
                     if len(proposals) >= max_suggestions:
                         return proposals
 
@@ -91,17 +95,21 @@ class Curriculum:
                 if skill is not None and (best is None or skill.uses > best.uses):
                     best = skill
             if best is not None:
-                proposals.append(TaskProposal(
-                    task=f"{best.source_task or best.name} with an extra step",
-                    reason=f"mastered '{best.name}' ({best.uses} uses)",
-                    source="extend",
-                ))
+                proposals.append(
+                    TaskProposal(
+                        task=f"{best.source_task or best.name} with an extra step",
+                        reason=f"mastered '{best.name}' ({best.uses} uses)",
+                        source="extend",
+                    )
+                )
 
         # 4. Fallback: explore.
         if not proposals:
-            proposals.append(TaskProposal(
-                task="explore the current page and describe it",
-                reason="nothing to retry, try, or extend",
-                source="explore",
-            ))
+            proposals.append(
+                TaskProposal(
+                    task="explore the current page and describe it",
+                    reason="nothing to retry, try, or extend",
+                    source="explore",
+                )
+            )
         return proposals[:max_suggestions] if max_suggestions else proposals

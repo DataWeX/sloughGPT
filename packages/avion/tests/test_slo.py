@@ -19,8 +19,12 @@ class TestPrompt:
         from avion.ai.models import Action, Step
 
         history = [
-            Step(step_number=0, action=Action(ActionType.MOUSE_CLICK, {"x": 1, "y": 2}),
-                 observation="clicked", reward=0.1)
+            Step(
+                step_number=0,
+                action=Action(ActionType.MOUSE_CLICK, {"x": 1, "y": 2}),
+                observation="clicked",
+                reward=0.1,
+            )
         ]
         prompt = build_prompt("do it", {"role": "button"}, history)
         assert "do it" in prompt

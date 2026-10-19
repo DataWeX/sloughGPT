@@ -331,12 +331,11 @@ class CdpBackend:
         params = raw.get("params") or {}
         if method == "Runtime.consoleAPICalled":
             text = " ".join(
-                str(a.get("value", a.get("description", "")))
-                for a in params.get("args", [])
+                str(a.get("value", a.get("description", ""))) for a in params.get("args", [])
             )
             self._push_console({"level": str(params.get("type", "log")), "text": text})
         elif method == "Runtime.exceptionThrown":
-            detail = (params.get("exceptionDetails") or {})
+            detail = params.get("exceptionDetails") or {}
             desc = (detail.get("exception") or {}).get("description") or detail.get("text", "")
             self._push_console({"level": "error", "text": str(desc)})
         elif method == "Log.entryAdded":
@@ -620,18 +619,12 @@ class CdpBackend:
 
     async def check(self, element: Element) -> None:
         await self.evaluate(
-            _js_iife(
-                "const el = (" + element.raw["js"] + "); "
-                "if (el && !el.checked) el.click();"
-            )
+            _js_iife("const el = (" + element.raw["js"] + "); if (el && !el.checked) el.click();")
         )
 
     async def uncheck(self, element: Element) -> None:
         await self.evaluate(
-            _js_iife(
-                "const el = (" + element.raw["js"] + "); "
-                "if (el && el.checked) el.click();"
-            )
+            _js_iife("const el = (" + element.raw["js"] + "); if (el && el.checked) el.click();")
         )
 
     async def hover(self, element: Element) -> None:
@@ -673,9 +666,7 @@ class CdpBackend:
 
         deadline = asyncio.get_event_loop().time() + timeout
         while True:
-            body = await self.evaluate(
-                "(document.body && document.body.innerText) || ''"
-            )
+            body = await self.evaluate("(document.body && document.body.innerText) || ''")
             if text in str(body or ""):
                 return True
             if asyncio.get_event_loop().time() >= deadline:

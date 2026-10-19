@@ -222,9 +222,7 @@ async def test_act_click_screenshot_reaches_the_recorder():
     backend = FakeBackend()
     recorder = EventRecorder(session_name="test")
     picker = ElementPicker(backend, recorder=recorder)
-    picked = PickedElement(
-        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="button"
-    )
+    picked = PickedElement(locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="button")
 
     await picker.act(picked)
 
@@ -242,9 +240,7 @@ async def test_failed_act_still_captures_the_broken_state():
 
     recorder = EventRecorder(session_name="test")
     picker = ElementPicker(GoneBackend(), recorder=recorder)
-    picked = PickedElement(
-        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="button"
-    )
+    picked = PickedElement(locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="button")
 
     await picker.act(picked)
 
@@ -278,9 +274,7 @@ async def test_fill_records_a_fill_event_without_the_raw_value():
     backend = FakeBackend()
     recorder = EventRecorder(session_name="test")
     picker = ElementPicker(backend, recorder=recorder)
-    picked = PickedElement(
-        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input"
-    )
+    picked = PickedElement(locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input")
 
     await picker.fill(picked, "hunter2-secret")
 
@@ -301,9 +295,7 @@ async def test_fill_on_unresolvable_element_records_failure():
 
     recorder = EventRecorder(session_name="test")
     picker = ElementPicker(GoneBackend(), recorder=recorder)
-    picked = PickedElement(
-        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input"
-    )
+    picked = PickedElement(locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input")
 
     await picker.fill(picked, "anything")
 
@@ -316,9 +308,7 @@ async def test_fill_on_unresolvable_element_records_failure():
 async def test_fill_without_recorder_still_fills():
     backend = FakeBackend()
     picker = ElementPicker(backend)  # no recorder wired
-    picked = PickedElement(
-        locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input"
-    )
+    picked = PickedElement(locator=_locator_from_payload(_SAMPLE_PAYLOAD), tag="input")
 
     await picker.fill(picked, "plain value")
 

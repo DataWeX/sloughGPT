@@ -71,14 +71,12 @@ def chromium_ws(request):
         f"--user-data-dir={user_dir}",
         "--no-first-run",
         "--no-default-browser-check",
-        "--no-sandbox",          # unprivileged userns is AppArmor-blocked here
+        "--no-sandbox",  # unprivileged userns is AppArmor-blocked here
         "--password-store=basic",  # keyring DBus lookups stall Page.navigate
         "--disable-gpu",
         "about:blank",
     ]
-    proc = subprocess.Popen(
-        args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
+    proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     base = f"http://127.0.0.1:{port}"
     deadline = time.time() + 15
     ready = False
@@ -204,19 +202,13 @@ async def test_exception_captured_as_console_error(chromium_ws, http_url):
             await b.evaluate("(function(){ throw new Error('kaboom'); })()")
         entries = await _poll(
             lambda: [
-                e
-                for e in b.console_entries()
-                if "kaboom" in e["text"] and e["level"] == "error"
+                e for e in b.console_entries() if "kaboom" in e["text"] and e["level"] == "error"
             ]
         )
         assert entries, b.console_entries()
         # async throw: arrives via Runtime.exceptionThrown (no evaluate involved)
         await b.evaluate("setTimeout(() => { throw new Error('later-boom'); }, 0)")
-        entries = await _poll(
-            lambda: [
-                e for e in b.console_entries() if "later-boom" in e["text"]
-            ]
-        )
+        entries = await _poll(lambda: [e for e in b.console_entries() if "later-boom" in e["text"]])
         assert entries, b.console_entries()
         assert all(e["level"] in ("error", "assert") for e in entries)
     finally:
@@ -240,9 +232,7 @@ async def test_network_capture(chromium_ws, http_url):
     try:
         await b.navigate(http_url)
         entries = await _poll(
-            lambda: [
-                e for e in b.network_entries() if "index.html" in e.get("url", "")
-            ]
+            lambda: [e for e in b.network_entries() if "index.html" in e.get("url", "")]
         )
         assert entries, b.network_entries()
         assert entries[0]["status"] == 200
@@ -371,9 +361,7 @@ def test_cli_module_invocation():
     assert "snapshot" in proc.stdout
 
 
-def test_cli_console_and_network_survive_separate_invocations(
-    chromium_ws, http_url, capsys
-):
+def test_cli_console_and_network_survive_separate_invocations(chromium_ws, http_url, capsys):
     """Each CLI run is a new process — history must outlive the session."""
     from avion.cli import main
 

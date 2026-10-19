@@ -66,16 +66,13 @@ def _data_rows(step: FlowStep) -> str:
     for key in ("best", "tag", "text"):
         if key in data:
             rows.append(
-                f'<tr><th>{html.escape(str(key))}</th>'
-                f"<td>{html.escape(str(data[key]))}</td></tr>"
+                f"<tr><th>{html.escape(str(key))}</th><td>{html.escape(str(data[key]))}</td></tr>"
             )
     if "rect" in data and isinstance(data["rect"], dict):
         r = data["rect"]
         rows.append(
             "<tr><th>rect</th><td>"
-            + html.escape(
-                ", ".join(f"{k}={r.get(k, '?')}" for k in ("x", "y", "width", "height"))
-            )
+            + html.escape(", ".join(f"{k}={r.get(k, '?')}" for k in ("x", "y", "width", "height")))
             + "</td></tr>"
         )
     if "candidates" in data:
@@ -93,27 +90,17 @@ def _data_rows(step: FlowStep) -> str:
     if rest:
         payload = json.dumps(rest, default=str, ensure_ascii=False)
         payload = payload.replace("</", "<\\/")  # never let data close a script/tag
-        rows.append(
-            f"<tr><th>data</th><td><code>{html.escape(payload)}</code></td></tr>"
-        )
+        rows.append(f"<tr><th>data</th><td><code>{html.escape(payload)}</code></td></tr>")
     return "".join(rows)
 
 
 def _detail_panel(index: int, step: FlowStep) -> str:
     """One pre-rendered detail card (hidden unless selected)."""
     status = (
-        '<span class="ok">passed</span>'
-        if step.success
-        else '<span class="fail">failed</span>'
+        '<span class="ok">passed</span>' if step.success else '<span class="fail">failed</span>'
     )
-    err = (
-        f'<p class="error">{html.escape(step.error)}</p>' if step.error else ""
-    )
-    dur = (
-        f'<span class="dur">{step.duration_ms:.0f} ms</span>'
-        if step.duration_ms
-        else ""
-    )
+    err = f'<p class="error">{html.escape(step.error)}</p>' if step.error else ""
+    dur = f'<span class="dur">{step.duration_ms:.0f} ms</span>' if step.duration_ms else ""
     kind = " \u2014 picked element" if step.is_pick else ""
     rows = _data_rows(step)
     # Per-step screenshot (the trace-viewer hallmark). Bytes from a live
@@ -127,22 +114,24 @@ def _detail_panel(index: int, step: FlowStep) -> str:
     else:
         src = ""
     img = (
-        f'<img class="shot" alt="page state at step {step.seq}" '
-        f'src="data:image/png;base64,{src}">'
+        f'<img class="shot" alt="page state at step {step.seq}" src="data:image/png;base64,{src}">'
         if src
         else ""
     )
     return f"""
-    <section class="detail" id="d{index}"{' hidden' if index else ''}>
+    <section class="detail" id="d{index}"{" hidden" if index else ""}>
       <h2>Step {step.seq}: {html.escape(step.type)}{kind}</h2>
       <p class="instr">{
-        html.escape(f"\u2192 {step.label}" if not step.is_pick
-                    else f"\u2192 pick: {step.data.get('best') or step.label}")
-      }</p>
+        html.escape(
+            f"\u2192 {step.label}"
+            if not step.is_pick
+            else f"\u2192 pick: {step.data.get('best') or step.label}"
+        )
+    }</p>
       <p class="meta">{status}{dur}</p>
       {err}
       {img}
-      {f'<table class="data">{rows}</table>' if rows else ''}
+      {f'<table class="data">{rows}</table>' if rows else ""}
     </section>"""
 
 
@@ -217,7 +206,7 @@ def _map_svg(graph: FlowGraph) -> str:
             )
         parts.append(
             f'<g class="node {cls}" id="n{i}" onclick="selectStep({i})" '
-            f'onkeydown="if(event.key===\'Enter\'||event.key===\' \')'
+            f"onkeydown=\"if(event.key==='Enter'||event.key===' ')"
             f'{{event.preventDefault();selectStep({i})}}" '
             f'role="button" tabindex="0" aria-label="Step {step.seq}: '
             f'{_label(step)}" style="cursor:pointer">'
@@ -240,7 +229,7 @@ def render_html(graph: FlowGraph) -> str:
 
     list_items = "".join(
         f'<li id="li{i}" onclick="selectStep({i})" '
-        f'onkeydown="if(event.key===\'Enter\'||event.key===\' \')'
+        f"onkeydown=\"if(event.key==='Enter'||event.key===' ')"
         f'{{event.preventDefault();selectStep({i})}}" tabindex="0"'
         f' class="{"" if s.success else "bad"}">'
         f'<span class="seq">{s.seq}</span> '
@@ -249,14 +238,11 @@ def render_html(graph: FlowGraph) -> str:
         for i, s in enumerate(steps)
     )
     details = "".join(_detail_panel(i, s) for i, s in enumerate(steps))
-    counts = (
-        f"{_count(len(graph.steps), 'step')} \u00b7 "
-        f"{_count(len(graph.picks), 'pick')}"
-        + (f" \u00b7 {len(graph.failed)} failed" if graph.failed else "")
+    counts = f"{_count(len(graph.steps), 'step')} \u00b7 {_count(len(graph.picks), 'pick')}" + (
+        f" \u00b7 {len(graph.failed)} failed" if graph.failed else ""
     )
     trunc = (
-        f'<p class="empty">showing first {_MAX_STEPS} of '
-        f"{len(graph.steps)} steps</p>"
+        f'<p class="empty">showing first {_MAX_STEPS} of {len(graph.steps)} steps</p>'
         if len(graph.steps) > _MAX_STEPS
         else ""
     )
@@ -321,9 +307,9 @@ def render_html(graph: FlowGraph) -> str:
 <header><h1>{title}</h1><span class="counts">{counts}</span></header>
 <main>
   <aside class="timeline"><ul>{list_items}</ul>{empty}{trunc}</aside>
-  <div class="map">{_map_svg(view) if steps else ''}</div>
+  <div class="map">{_map_svg(view) if steps else ""}</div>
   <section class="details">{details}
-    <p class="empty"{' hidden' if steps else ''}>Nothing selected.</p>
+    <p class="empty"{" hidden" if steps else ""}>Nothing selected.</p>
   </section>
 </main>
 <script>

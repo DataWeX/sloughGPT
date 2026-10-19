@@ -67,9 +67,7 @@ class FlowStep:
             # must stay real JSON — bytes become base64 strings here rather
             # than falling through json's default=str mangling ("b'\\x89PN..").
             d["data"] = {
-                k: base64.b64encode(v).decode("ascii")
-                if isinstance(v, (bytes, bytearray))
-                else v
+                k: base64.b64encode(v).decode("ascii") if isinstance(v, (bytes, bytearray)) else v
                 for k, v in self.data.items()
             }
         return d

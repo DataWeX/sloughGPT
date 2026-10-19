@@ -51,10 +51,12 @@ class TestParse:
 
 class TestCandidates:
     def test_grounding(self):
-        choices = propose_candidates({
-            "role": "root",
-            "children": [{"role": "button", "name": "Start"}],
-        })
+        choices = propose_candidates(
+            {
+                "role": "root",
+                "children": [{"role": "button", "name": "Start"}],
+            }
+        )
         labels = [c.label for c in choices]
         assert labels[0] == "click 'Start'"
         assert labels[-3:] == [

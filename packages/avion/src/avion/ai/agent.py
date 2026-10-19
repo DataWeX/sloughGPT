@@ -573,9 +573,7 @@ class Agent:
         attempt fails does the loop see a FAIL action. An exhausted
         deadline always wins — retries never outlive the run's budget.
         """
-        attempts = 1 + (
-            max(0, self._config.max_retries) if self._config.retry_on_failure else 0
-        )
+        attempts = 1 + (max(0, self._config.max_retries) if self._config.retry_on_failure else 0)
         last_error = "no attempt made"
         for _ in range(attempts):
             try:
@@ -690,9 +688,7 @@ class Agent:
                     result["reward"] = 0.0
                 else:
                     try:
-                        raw = await self._executor.run(
-                            name, params.get("args") or {}
-                        )
+                        raw = await self._executor.run(name, params.get("args") or {})
                     except Exception as e:
                         result["observation"] = f"error: {e}"
                         result["reward"] = -0.5

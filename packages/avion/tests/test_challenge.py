@@ -158,9 +158,7 @@ class TestDetectChallenge:
 
 class TestPageChallenge:
     def test_reads_live_page(self):
-        ch = asyncio.run(
-            page_challenge(FakeBackend(body="Just a moment...", title="Wait"))
-        )
+        ch = asyncio.run(page_challenge(FakeBackend(body="Just a moment...", title="Wait")))
         assert ch is not None and ch.kind == "cloudflare"
 
     def test_a11y_text_substitutes_for_body_read(self):
@@ -312,9 +310,7 @@ class TestAgentYield:
 
 
 class TestCliExitCodes:
-    FLOW = {
-        "events": [{"type": "navigate", "name": "http://example.com", "seq": 1}]
-    }
+    FLOW = {"events": [{"type": "navigate", "name": "http://example.com", "seq": 1}]}
 
     def _args(self, tmp_path: Path):
         import argparse

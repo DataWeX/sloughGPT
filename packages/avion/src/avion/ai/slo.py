@@ -59,10 +59,7 @@ def build_prompt(
             tools.describe(),
             "",
         ]
-    lines.append(
-        'Reply format: {"action_type": "<name>", "params": {...}, '
-        '"reasoning": "<why>"}'
-    )
+    lines.append('Reply format: {"action_type": "<name>", "params": {...}, "reasoning": "<why>"}')
     return "\n".join(lines)
 
 
@@ -92,10 +89,7 @@ def _history_text(history: list[Step] | None, budget: int | None = None) -> str:
     for s in steps[-_HISTORY_STEPS:]:
         if s.action is None:
             continue
-        lines.append(
-            f"- {s.action.action_type.value} {s.action.params} "
-            f"=> {s.observation[:120]}"
-        )
+        lines.append(f"- {s.action.action_type.value} {s.action.params} => {s.observation[:120]}")
     text = "\n".join(lines) or "(no actions yet)"
     if budget is not None and len(text) > budget:
         text = "...[trimmed]\n" + text[-budget:]
