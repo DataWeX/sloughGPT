@@ -2,11 +2,13 @@
 Chat Router - the prompting surface: respond, stream, regenerate, cancel.
 
 Owns POST /chat and POST /chat/stream (single registration owner — the parity
-gate fails on any duplicate path+method). Those two delegate to the inference
-kernel through its public facades (`handle_chat` / `handle_chat_stream`) so
-model-readiness gates, enrichment phases, reconnect replay and the SSE
-framing stay identical for every caller (card 13c37a23, porting the settled
-fix 86c6cff8c from feat/chat-owns-prompting).
+gate fails on any duplicate path+method). Those two read the generation engine
+through its port (`infrastructure.generation.get_chat_engine`) — never by
+importing the inference router — so model-readiness gates, enrichment phases,
+reconnect replay and the SSE framing stay kernel-owned and identical for every
+caller (card 13c37a23, porting the settled fix 86c6cff8c from
+feat/chat-owns-prompting). Chat reads the engine's output (tokens + details) as
+data and shapes the response for the frontend.
 Session state lives in session.py.
 """
 
@@ -17,12 +19,13 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.generation import get_chat_engine
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
+from schemas.chat import ChatRequest, ChatResponse
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
-from routers.inference import ChatRequest, ChatResponse, handle_chat, handle_chat_stream
 
 logger = logging.getLogger(__name__)
 
@@ -75,31 +78,43 @@ class ChatRouter:
         through the manager's public entry rather than its internals. The two
         domains hold orthogonal state, so they compose.
         """
+        engine = get_chat_engine()
+
         if stream:
-            # Streaming still delegates wholesale to the inference kernel's SSE
-            # facade. That returns a fully-formed StreamingResponse, so chat
+            # Streaming still rides the engine's SSE projection through the
+            # port. That returns a fully-formed StreamingResponse, so chat
             # never sees the raw tokens and cannot persist history without
-            # parsing SSE frames — brittle. Doing it properly needs an inference
-            # facade yielding raw tokens, the shape ChatManager.stream() already
-            # uses. Carded separately.
-            return await handle_chat_stream(request, http_request, auth_user)
+            # parsing SSE frames — brittle. Doing it properly needs the engine
+            # to yield raw tokens (a follow-on on this port), the shape
+            # ChatManager.stream() already uses. Carded separately.
+            return await engine.stream_sse(request, http_request, auth_user)
 
         from domain.chat import get_chat_manager
 
         manager = get_chat_manager()
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
-        async def _gen() -> ChatResponse:
-            return await handle_chat(request)
+        async def _gen():
+            return await engine.respond(request)
 
-        return await manager.generate_tracked(
+        turn = await manager.generate_tracked(
             request.session_id or "default",
             messages,
             _gen,
-            # inference's ChatResponse carries `message`; domain/chat's
-            # identically-named type carries `text`. Project down explicitly
-            # rather than relying on the shared name.
-            text_of=lambda resp: resp.message,
+            # The engine's TurnResult carries the assistant text under `text`;
+            # project that down for history persistence.
+            text_of=lambda resp: resp.text,
+        )
+        # Chat handles the response: read the engine's details off the turn and
+        # shape the wire payload for the frontend.
+        return ChatResponse(
+            message=turn.text,
+            session_id=turn.session_id,
+            done=turn.done,
+            model=turn.model,
+            usage=turn.usage,
+            elapsed_ms=turn.elapsed_ms,
+            finish_reason=turn.finish_reason,
         )
 
     @endpoint("chat.respond")

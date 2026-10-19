@@ -245,56 +245,16 @@ class UpsertSessionRequest(BaseModel):
     pinned: bool | None = None
 
 
-class Message(BaseModel):
-    role: str = Field(..., pattern=r"^(user|assistant|system)$")
-    content: str = Field(..., min_length=1, max_length=100000)
-
-
-class ChatRequest(BaseModel):
-    messages: list[Message]
-    model: str = "qwen2.5-0.5b-instruct"
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=128, ge=1, le=2048)
-    max_new_tokens: int | None = Field(
-        default=None, ge=1, le=2048, description="Alias for max_tokens (frontend compat)"
-    )
-    top_p: float = Field(default=0.85, ge=0.0, le=1.0)
-    top_k: int = Field(default=40, ge=0, le=500)
-    repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
-    session_id: str | None = None
-    user_id: str | None = None
-    system_prompt: str | None = None
-    knowledge: list[str] | None = None
-    images: list[str] | None = Field(default=None, description="Base64 encoded images")
-    use_context_core: bool = Field(
-        default=True, description="Use ContextCore for multi-layer context"
-    )
-    use_rag: bool = Field(
-        default=True, description="Use production RAG for document-grounded responses"
-    )
-    agent_id: str | None = Field(
-        default=None, description="Agent ID for role-based system instructions"
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        """Resolve max_new_tokens alias into max_tokens."""
-        if self.max_new_tokens is not None and self.max_tokens == 128:
-            object.__setattr__(self, "max_tokens", self.max_new_tokens)
-
-
-class ChatResponse(BaseModel):
-    message: str
-    session_id: str
-    done: bool = True
-
-
-class ChatControlRequest(BaseModel):
-    session_id: str
-    action: str = Field(..., pattern=r"^(cancel|approve|context)$")
-    tool_name: str | None = None
-    approved: bool | None = None
-    context: str | None = None
-
+# Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
+# chat router no longer imports this router. Re-exported here for backwards
+# compatibility with existing importers (mobile BFF, tests).
+from infrastructure.generation import TurnResult, register_chat_engine  # noqa: E402
+from schemas.chat import (  # noqa: E402
+    ChatControlRequest,
+    ChatRequest,
+    ChatResponse,
+    Message,
+)
 
 # In-memory store for pending control requests per session
 _chat_control_store: dict[str, dict] = {}
@@ -2901,10 +2861,15 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.reset_context")
 
-    async def chat(
-        self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
-    ) -> ChatResponse:
-        """chat."""
+    async def respond_turn(self, req: ChatRequest) -> TurnResult:
+        """Engine core: run one generation turn, return the full result.
+
+        This is the inference engine's read interface — it returns everything
+        the model pushed out (text plus the model/usage/finish/timing details
+        the old handler computed and discarded), so the chat surface reads the
+        details as data instead of reaching into this router. The HTTP route
+        ``chat`` is a thin projection over this method.
+        """
         _chat_t0 = time.monotonic()
         import state as _chat_state
 
@@ -3023,12 +2988,14 @@ class InferenceRouter:
                 timeout=60.0,
             )
         except TimeoutError:
-            return ChatResponse(
-                message="Generation timed out. Try a shorter prompt or fewer tokens.",
+            return TurnResult(
+                text="Generation timed out. Try a shorter prompt or fewer tokens.",
                 session_id=req.session_id or "default",
                 done=True,
             )
 
+        tokens = 0
+        _chat_elapsed_ms: float | None = None
         try:
             tokens = _count_tokens(result.text, _chat_state)
             _chat_elapsed_ms = round((time.monotonic() - _chat_t0) * 1000, 1)
@@ -3052,10 +3019,40 @@ class InferenceRouter:
         except Exception as e:
             logger.warning("Failed to capture conversation: %s", e)
 
-        return ChatResponse(
-            message=result.text,
+        # Optional detail fields are metadata read off the engine's result.
+        # Coerce them to JSON-safe primitives so a backend that omits or
+        # mistypes one can never break the wire response.
+        _completion = tokens if isinstance(tokens, int) else 0
+        _raw_usage = getattr(result, "usage_tokens", None)
+        _usage = dict(_raw_usage) if isinstance(_raw_usage, dict) else {}
+        _usage.update({"completion_tokens": _completion, "total_tokens": _completion})
+        _fr = getattr(result, "finish_reason", "stop")
+        _model = _chat_state.model_type or req.model
+
+        return TurnResult(
+            text=result.text,
             session_id=result.session_id,
             done=result.done,
+            model=_model if isinstance(_model, str) else req.model,
+            usage=_usage,
+            elapsed_ms=_chat_elapsed_ms if isinstance(_chat_elapsed_ms, (int, float)) else None,
+            finish_reason=_fr if isinstance(_fr, str) else "stop",
+            tokens=[result.text],
+        )
+
+    async def chat(
+        self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> ChatResponse:
+        """POST /chat — thin projection over the engine's ``respond_turn``."""
+        turn = await self.respond_turn(req)
+        return ChatResponse(
+            message=turn.text,
+            session_id=turn.session_id,
+            done=turn.done,
+            model=turn.model,
+            usage=turn.usage,
+            elapsed_ms=turn.elapsed_ms,
+            finish_reason=turn.finish_reason,
         )
 
     async def send_voice_message(
@@ -3539,6 +3536,25 @@ class InferenceRouter:
 
 _instance = InferenceRouter()
 router = _instance.router
+
+
+class _GenerationEngine:
+    """Inference-backed implementation of the generation engine port.
+
+    Registered into ``infrastructure.generation`` so the chat surface reads the
+    engine's output through the port instead of importing this router. The
+    streaming side still returns the engine's SSE projection (transitional) —
+    a follow-on turns it into a raw-token generator the chat handler frames.
+    """
+
+    async def respond(self, req: ChatRequest) -> TurnResult:
+        return await _instance.respond_turn(req)
+
+    async def stream_sse(self, req: ChatRequest, request: Request, auth_user: dict | None = None):
+        return await _instance.chat_stream(req, request, auth_user)
+
+
+register_chat_engine(_GenerationEngine())
 
 
 def set_vector_store_ref(ref) -> dict:

@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from apps.api.server.infrastructure.generation import TurnResult
 from apps.api.server.routers.chat import ChatRouter
-from apps.api.server.routers.inference import ChatResponse as InferenceChatResponse
 from domain.chat._internal.manager import ChatManager
 
 
@@ -97,12 +97,13 @@ def test_respond_untracks_on_failure(manager):
 
 def test_post_chat_persists_history(client, manager):
     """POST /chat must store the exchange, exactly as domain/chat's own path did."""
-    fake = InferenceChatResponse(message="hi back", session_id="s1")
+    fake = TurnResult(text="hi back", session_id="s1")
     stored: list[tuple[str, str]] = []
+    fake_engine = SimpleNamespace(respond=AsyncMock(return_value=fake))
 
     with (
         patch("domain.chat.get_chat_manager", return_value=manager),
-        patch("apps.api.server.routers.chat.handle_chat", AsyncMock(return_value=fake)),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
         patch.object(
             ChatManager,
             "_store",
@@ -126,7 +127,8 @@ def test_post_chat_persists_history(client, manager):
 
 def test_post_chat_passes_session_id_to_manager(client, manager):
     """The wire contract's session_id must reach chat's state layer."""
-    fake = InferenceChatResponse(message="ok", session_id="sess-42")
+    fake = TurnResult(text="ok", session_id="sess-42")
+    fake_engine = SimpleNamespace(respond=AsyncMock(return_value=fake))
     tracked: list[str] = []
 
     def _track(session_id, label):
@@ -135,7 +137,7 @@ def test_post_chat_passes_session_id_to_manager(client, manager):
 
     with (
         patch("domain.chat.get_chat_manager", return_value=manager),
-        patch("apps.api.server.routers.chat.handle_chat", AsyncMock(return_value=fake)),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
         patch.object(ChatManager, "_store"),
         patch.object(ChatManager, "_track", side_effect=_track),
         patch.object(ChatManager, "_untrack"),
@@ -154,7 +156,7 @@ def test_post_chat_passes_session_id_to_manager(client, manager):
 
 def test_generate_tracked_returns_backend_object_untouched(manager):
     """The seam must pass the backend's response through, storing only its text."""
-    sentinel = InferenceChatResponse(message="full reply", session_id="s")
+    sentinel = TurnResult(text="full reply", session_id="s")
     stored: list[str] = []
 
     async def _gen():
@@ -174,7 +176,7 @@ def test_generate_tracked_returns_backend_object_untouched(manager):
                 "s",
                 [{"role": "user", "content": "hi"}],
                 _gen,
-                text_of=lambda r: r.message,
+                text_of=lambda r: r.text,
             )
         )
 
@@ -187,3 +189,55 @@ def test_router_exposes_single_generation_seam():
     assert hasattr(ChatRouter, "_generate")
     assert hasattr(ChatRouter, "respond")
     assert hasattr(ChatRouter, "stream")
+
+
+def test_post_chat_surfaces_engine_details(client, manager):
+    """Chat must read the engine's details off the port and shape the response.
+
+    The engine (inference) computes model/usage/finish/timing; chat is the
+    response handler, so it reads those off the returned TurnResult and puts
+    them on the wire for the frontend — the details the old handler discarded.
+    """
+    turn = TurnResult(
+        text="answer",
+        session_id="s1",
+        model="qwen2.5-0.5b-instruct",
+        usage={"completion_tokens": 7, "total_tokens": 7},
+        elapsed_ms=12.5,
+        finish_reason="stop",
+    )
+    fake_engine = SimpleNamespace(respond=AsyncMock(return_value=turn))
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+        patch.object(ChatManager, "_store"),
+        patch.object(ChatManager, "_track", return_value=("op-5", None)),
+        patch.object(ChatManager, "_untrack"),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": "s1", "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["message"] == "answer"
+    assert body["model"] == "qwen2.5-0.5b-instruct"
+    assert body["usage"]["completion_tokens"] == 7
+    assert body["elapsed_ms"] == 12.5
+    assert body["finish_reason"] == "stop"
+
+
+def test_chat_router_does_not_import_inference_router():
+    """Layering pin: the chat surface must read the engine via its port, never
+    by importing the sibling inference router (routers must not import routers)."""
+    import inspect
+
+    import apps.api.server.routers.chat as chat_mod
+
+    src = inspect.getsource(chat_mod)
+    assert "from routers.inference" not in src, (
+        "chat.py must not import routers.inference — use infrastructure.generation's port"
+    )
+    assert "from apps.api.server.routers.inference" not in src
