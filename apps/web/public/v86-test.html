@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>v86 bare boot test</title></head>
+  <body>
+    <!-- Canonical v86 container: text div (pre) + hidden textarea; v86 adds canvas itself -->
+    <div id="screen_container" style="background:#000;color:#0f0;font:14px monospace">
+      <div style="white-space:pre; font:14px monospace; line-height:14px"></div>
+      <textarea style="display:none"></textarea>
+    </div>
+    <script src="/v86-test/libv86.js"></script>
+    <script>
+      // Mirror of apps/web/lib/v86-controller.ts ensureV86RenderScheduling:
+      // browsers suspend requestAnimationFrame in hidden documents, and v86's
+      // screen adapter repaints only from rAF — without this fallback the
+      // adapter's buffer never reaches the DOM while the tab is backgrounded.
+      (() => {
+        if (window.__v86RafShim) return
+        window.__v86RafShim = true
+        const nativeRaf = window.requestAnimationFrame.bind(window)
+        const nativeCancel = window.cancelAnimationFrame.bind(window)
+        const timeoutByHandle = new Map()
+        const nativeByHandle = new Map()
+        let nextHandle = 1
+        const viaNative = (handle, cb) =>
+          nativeRaf((t) => { nativeByHandle.delete(handle); cb(t) })
+        window.requestAnimationFrame = (cb) => {
+          const handle = nextHandle++
+          if (document.hidden) {
+            timeoutByHandle.set(handle, setTimeout(() => {
+              timeoutByHandle.delete(handle)
+              if (document.hidden) cb(performance.now())
+              else nativeByHandle.set(handle, viaNative(handle, cb))
+            }, 16))
+          } else {
+            nativeByHandle.set(handle, viaNative(handle, cb))
+          }
+          return handle
+        }
+        window.cancelAnimationFrame = (handle) => {
+          const t = timeoutByHandle.get(handle)
+          if (t !== undefined) { clearTimeout(t); timeoutByHandle.delete(handle); return }
+          const n = nativeByHandle.get(handle)
+          if (n !== undefined) { nativeCancel(n); nativeByHandle.delete(handle) }
+        }
+      })()
+      const log = (m) => { document.title = 'v86-test: ' + m; console.log('[test]', m) }
+      const events = { putChar: 0, textChange: 0, setSize: 0, serialBytes: 0 }
+      window.__events = events
+      window.__serial = ''
+      log('starting')
+      try {
+        const emulator = new V86({
+          wasm_path: '/v86-test/v86.wasm',
+          memory_size: 256 * 1024 * 1024,
+          vga_memory_size: 8 * 1024 * 1024,
+          screen_container: document.getElementById('screen_container'),
+          bios: { url: '/bios/seabios.bin' },
+          vga_bios: { url: '/bios/vgabios.bin' },
+          bzimage: { url: '/buildroot/bzimage68.bin' },
+          cmdline: 'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on',
+          autostart: true,
+          fastboot: true,
+          disable_jit: true,
+          disable_speaker: true,
+        })
+        emulator.add_listener('emulator-started', () => log('started'))
+        emulator.add_listener('download-error', (e) => log('download-error ' + e.file_name))
+        const wire = (bus) => {
+          if (!bus || typeof bus.register !== 'function') return false
+          try {
+            bus.register('screen-put-char', () => { events.putChar++ })
+            bus.register('screen-text-change', () => { events.textChange++ })
+            bus.register('screen-set-size', () => { events.setSize++ })
+            bus.register('serial0-output-byte', (b) => {
+              events.serialBytes++
+              if (window.__serial.length < 4000) window.__serial += String.fromCharCode(b & 0xff)
+            })
+            return true
+          } catch (err) { return false }
+        }
+        window.__busWired = !!(wire(emulator.bus) || wire(emulator.emulator_bus))
+        window.__emu = emulator
+      } catch (e) {
+        log('THREW: ' + e)
+      }
+    </script>
+  </body>
+</html>

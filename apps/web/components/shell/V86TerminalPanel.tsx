@@ -134,10 +134,16 @@ export function V86TerminalPanel({
         )}
       </div>
 
-      {/* VM screen */}
+      {/* VM screen. v86 appends a canvas (graphics mode) and a div of row
+          divs (text mode); rows are block divs of self-colored spans, so the
+          container only needs the mono font, preserved spaces, and
+          `relative` so v86's absolutely-positioned cursor anchors here. The
+          hidden-tab rAF→timer fallback lives in the controller: without it
+          the adapter's repaint loop is suspended while the document is
+          hidden and the screen never paints. */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-hidden bg-black"
+        className="relative flex-1 overflow-hidden bg-black font-mono text-sm [&_div]:whitespace-pre"
         data-testid="v86-screen"
       />
 

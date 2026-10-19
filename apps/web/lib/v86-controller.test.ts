@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { V86Controller } from './v86-controller'
+import { V86Controller, ensureV86RenderScheduling } from './v86-controller'
 
 describe('V86Controller', () => {
   let controller: V86Controller
@@ -52,6 +52,7 @@ describe('V86Controller', () => {
       imageUrl: 'https://i.copy.sh/buildroot-bzimage68.bin',
       imageSize: 10068480,
       imageKind: 'kernel',
+      cmdline: 'tsc=reliable mitigations=off random.trust_cpu=on',
     })
 
     expect(configs[0].bzimage).toEqual({
@@ -59,6 +60,7 @@ describe('V86Controller', () => {
       async: true,
       size: 10068480,
     })
+    expect(configs[0].cmdline).toBe('tsc=reliable mitigations=off random.trust_cpu=on')
     expect(configs[0].hda).toBeUndefined()
     vi.unstubAllGlobals()
   })
@@ -250,6 +252,99 @@ describe('V86Controller', () => {
       if (had) g.setImmediate = orig
       else delete g.setImmediate
       vi.unstubAllGlobals()
+    }
+  })
+
+  it('rAF shim keeps one outstanding callback ticking while the document is hidden', () => {
+    vi.useFakeTimers()
+    const nativeRafCalls: Array<(t: number) => void> = []
+    const win = {
+      requestAnimationFrame: (cb: (t: number) => void) => {
+        nativeRafCalls.push(cb)
+        return nativeRafCalls.length
+      },
+      cancelAnimationFrame: vi.fn(),
+    }
+    const doc = { hidden: true }
+    vi.stubGlobal('window', win)
+    vi.stubGlobal('document', doc)
+    try {
+      ensureV86RenderScheduling()
+      const shimmed = win.requestAnimationFrame as (cb: (t: number) => void) => number
+
+      const fired: number[] = []
+      const h1 = shimmed(() => fired.push(1))
+      expect(h1).toBeGreaterThan(0)
+      expect(fired).toHaveLength(0)
+      vi.advanceTimersByTime(16)
+      expect(fired).toHaveLength(1)
+
+      // v86 re-registers each frame (adapter timer loop) — the chain keeps
+      // ticking on schedule, and no native rAF is involved while hidden.
+      shimmed(() => fired.push(2))
+      vi.advanceTimersByTime(16)
+      expect(fired).toEqual([1, 2])
+      expect(nativeRafCalls).toHaveLength(0)
+
+      // cancelAnimationFrame removes a pending hidden-tab callback.
+      const h3 = shimmed(() => fired.push(3))
+      win.cancelAnimationFrame(h3)
+      vi.advanceTimersByTime(16)
+      expect(fired).toEqual([1, 2])
+    } finally {
+      vi.unstubAllGlobals()
+      vi.useRealTimers()
+    }
+  })
+
+  it('rAF shim defers to native rAF while visible and switches paths on visibility flips', () => {
+    vi.useFakeTimers()
+    const nativeRafCalls: Array<(t: number) => void> = []
+    const win = {
+      requestAnimationFrame: (cb: (t: number) => void) => {
+        nativeRafCalls.push(cb)
+        return nativeRafCalls.length
+      },
+      cancelAnimationFrame: vi.fn(),
+    }
+    const doc = { hidden: false }
+    vi.stubGlobal('window', win)
+    vi.stubGlobal('document', doc)
+    try {
+      ensureV86RenderScheduling()
+      const shimmed = win.requestAnimationFrame as (cb: (t: number) => void) => number
+
+      const fired: number[] = []
+      shimmed(() => fired.push(1))
+      expect(nativeRafCalls).toHaveLength(1)
+      vi.advanceTimersByTime(32)
+      expect(fired).toHaveLength(0) // visible: the timeout chain must not fire it
+      nativeRafCalls[0](16.7) // browser delivers the frame
+      expect(fired).toEqual([1])
+
+      // Visible → hidden flip: the next registration goes through the timer
+      // chain; the earlier callback was delivered exactly once.
+      doc.hidden = true
+      shimmed(() => fired.push(2))
+      expect(nativeRafCalls).toHaveLength(1)
+      vi.advanceTimersByTime(16)
+      expect(fired).toEqual([1, 2])
+
+      // Hidden → visible flip mid-flight: a registration queued on the
+      // timeout chain while hidden is re-dispatched through native rAF when
+      // the timeout fires after visibility returns, instead of firing from
+      // the timer.
+      doc.hidden = true
+      shimmed(() => fired.push(3))
+      doc.hidden = false
+      vi.advanceTimersByTime(16)
+      expect(fired).toEqual([1, 2])
+      expect(nativeRafCalls).toHaveLength(2)
+      nativeRafCalls[1](33.3)
+      expect(fired).toEqual([1, 2, 3])
+    } finally {
+      vi.unstubAllGlobals()
+      vi.useRealTimers()
     }
   })
 })

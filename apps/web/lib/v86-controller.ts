@@ -19,6 +19,74 @@ const V86_SCRIPT_URL = '/v86/libv86.js'
 let v86LoadPromise: Promise<unknown> | null = null
 
 /**
+ * v86's screen adapter repaints exclusively from `requestAnimationFrame`, and
+ * browsers suspend rAF while the document is hidden (background tab, occluded
+ * window). The CPU keeps running — its loop is setImmediate-driven — and
+ * put-char events keep filling the adapter's cell buffer, but the buffer
+ * never reaches the DOM: the VM screen looks dead even though the guest is
+ * alive. Replace rAF with a scheduler that keeps the adapter's single
+ * outstanding callback ticking on a 16ms timer chain while hidden and defers
+ * to native rAF while visible. Handles stay stable across the transition so
+ * the adapter's cancelAnimationFrame (destroy path) still works, and
+ * exactly-once delivery is preserved: a callback sits in exactly one pending
+ * store at a time; visibility flips re-dispatch, never duplicate.
+ */
+export function ensureV86RenderScheduling(): void {
+  const win =
+    typeof window === 'undefined'
+      ? undefined
+      : (window as unknown as Record<string, unknown>)
+  if (!win || typeof win.requestAnimationFrame !== 'function' || win.__v86RafShim) return
+  win.__v86RafShim = true
+
+  const doc = typeof document === 'undefined' ? undefined : document
+  const nativeRaf = (win.requestAnimationFrame as (cb: (t: number) => void) => number).bind(win)
+  const nativeCancel = (win.cancelAnimationFrame as (h: number) => void).bind(win)
+
+  type FrameCallback = (time: number) => void
+  type TimerHandle = ReturnType<typeof setTimeout>
+  const timeoutByHandle = new Map<number, TimerHandle>()
+  const nativeByHandle = new Map<number, number>()
+  let nextHandle = 1
+
+  const viaNative = (handle: number, cb: FrameCallback): number =>
+    nativeRaf((t) => {
+      nativeByHandle.delete(handle)
+      cb(t)
+    })
+
+  win.requestAnimationFrame = (cb: FrameCallback): number => {
+    const handle = nextHandle++
+    if (doc?.hidden) {
+      timeoutByHandle.set(
+        handle,
+        setTimeout(() => {
+          timeoutByHandle.delete(handle)
+          if (doc.hidden) cb(performance.now())
+          else nativeByHandle.set(handle, viaNative(handle, cb))
+        }, 16),
+      )
+    } else {
+      nativeByHandle.set(handle, viaNative(handle, cb))
+    }
+    return handle
+  }
+  win.cancelAnimationFrame = (handle: number): void => {
+    const t = timeoutByHandle.get(handle)
+    if (t !== undefined) {
+      clearTimeout(t)
+      timeoutByHandle.delete(handle)
+      return
+    }
+    const n = nativeByHandle.get(handle)
+    if (n !== undefined) {
+      nativeCancel(n)
+      nativeByHandle.delete(handle)
+    }
+  }
+}
+
+/**
  * The vendored libv86 runtime branches on `typeof process !== 'undefined'`
  * to pick Node-style scheduling (`global.setImmediate`) over timers. Bundlers
  * commonly define a `window.process = { env }` shim without defining `global`
@@ -30,6 +98,7 @@ let v86LoadPromise: Promise<unknown> | null = null
  * `setTimeout(cb, ms)` would swallow them and freeze the CPU loop idle.
  */
 function ensureV86SchedulingGlobals(): void {
+  ensureV86RenderScheduling()
   const g = window as unknown as Record<string, unknown>
   const realGlobal = globalThis as unknown as Record<string, unknown>
   if (g.global === undefined && g.process !== undefined) {
@@ -89,6 +158,14 @@ export class V86Controller {
       imageKind?: 'hda' | 'kernel' | 'iso'
       memoryMb?: number
       wasmPath?: string
+      /**
+       * Kernel command line (kernel boot only). Passed through from useV86's
+       * KERNEL_CMDLINE — the copy.sh demo preset (buildroot6) flags for this
+       * exact kernel, plus an early serial-console mirror for boot debugging.
+       * The full chain (vendored lib/wasm pair + these flags) boots this
+       * image to the busybox shell prompt; verified over serial 2026-10-18.
+       */
+      cmdline?: string
     },
   ): Promise<void> {
     ensureV86SchedulingGlobals()
@@ -123,6 +200,7 @@ export class V86Controller {
       // worth that lifecycle hazard.
       disable_speaker: true,
       wasm_path: opts.wasmPath,
+      cmdline: opts.cmdline,
     })
 
     await new Promise<void>((resolve) => {
