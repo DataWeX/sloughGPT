@@ -217,6 +217,7 @@ class ChatManager:
             yield "[Error: No provider available]"
             return
         op_id, stop = self._track(session_id, f"chat-stream:{session_id}")
+        parts: list[str] = []
         try:
             async for token in provider.chat_stream(
                 messages,
@@ -225,9 +226,16 @@ class ChatManager:
                 cancel_event=stop,
                 session_id=session_id,
             ):
+                parts.append(token)
                 yield token
         finally:
             self._untrack(session_id, op_id)
+        # Persist the completed turn like respond does — but only a COMPLETE
+        # one: cancellation breaks the provider loop early and consumer
+        # disconnect (GeneratorExit) never reaches this line, so a truncated
+        # assistant turn is never stored (cards 3af4d2b0/19591fa7).
+        if parts and not stop.is_set():
+            self._store(session_id, messages, "".join(parts))
 
     async def regenerate(
         self,

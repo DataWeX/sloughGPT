@@ -120,6 +120,37 @@ async def test_stream_cancel_stops_early(manager):
     assert len(rest) < 2  # stopped early, never buffered the tail
 
 
+async def test_stream_stores_history_on_completion(manager):
+    """Streaming persists the turn like respond does (cards 3af4d2b0/19591fa7)."""
+    sid = _sid()
+    tokens = [t async for t in manager.stream([{"role": "user", "content": "hi"}], session_id=sid)]
+    assert tokens == ["he", "llo", " world"]
+    history = manager.history(sid)
+    assert history[0] == {"role": "user", "content": "hi"}
+    assert history[-1] == {"role": "assistant", "content": "hello world"}
+
+
+async def test_stream_cancel_does_not_store_partial_history(manager):
+    """A cancelled stream must not record a truncated assistant turn."""
+    sid = _sid()
+    gen = manager.stream([{"role": "user", "content": "hi"}], session_id=sid)
+    first = await gen.__anext__()
+    assert first == "he"
+    assert manager.cancel_session(sid) >= 1
+    rest = [t async for t in gen]
+    assert len(rest) < 2
+    assert not any(m["role"] == "assistant" for m in manager.history(sid))
+
+
+async def test_stream_consumer_disconnect_does_not_store(manager):
+    """Router early-return (client disconnect) closes the generator: no partial store."""
+    sid = _sid()
+    gen = manager.stream([{"role": "user", "content": "hi"}], session_id=sid)
+    await gen.__anext__()
+    await gen.aclose()
+    assert not any(m["role"] == "assistant" for m in manager.history(sid))
+
+
 async def test_regenerate_uses_stored_history(manager):
     sid = _sid()
     await manager.respond([{"role": "user", "content": "hi"}], session_id=sid)
