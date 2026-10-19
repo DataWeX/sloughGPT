@@ -93,20 +93,20 @@ To change the API URL, copy **`.env.example`** to **`.env.local`** (or edit **`.
 
 ## Available Scripts
 
-| Script                     | Description                                                                                                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`              | Start development server (Next.js)                                                                                                             |
-| `npm run build`            | Production build (may reuse **`.next`**)                                                                                                       |
-| `npm run build:clean`      | **`rm -rf .next`** then **`next build`** — final step of **`npm run ci`** / CI **`test-web`**                                                  |
-| `npm run start`            | Run production server after `build`                                                                                                            |
-| `npm run lint`             | Run ESLint (`next lint`)                                                                                                                       |
-| `npm run typecheck`        | TypeScript `tsc --noEmit`                                                                                                                      |
-| `npm run test`             | Vitest unit tests (`lib/**/*.test.ts`, `hooks/**/*.test.ts`) — fast API/UX helpers                                                             |
-| `npm run ci`               | Lint + typecheck + Vitest + **`build:clean`** (parity with CI **`test-web`**)                                                                  |
-| `npm run e2e` / `e2e:open` | Cypress E2E (browser) against a running app; default baseUrl `http://localhost:5173`                                                           |
-| `npm run e2e:ci`           | `next dev -p 3010` + headless Cypress with mocked FastAPI — complements Vitest, not a substitute                                               |
-| `npm run ci:e2e`           | **`build:clean`** then `e2e:ci` (full UI smoke with mocked backend)                                                                            |
-| `npm run clean`            | Deletes **`.next`** (use if dev server shows missing chunk errors like `Cannot find module './NNN.js'` or `/_next/static/chunks/*.js` **404**) |
+| Script                     | Description                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run dev`              | Start the **Vite** dev server on **:5173** — matches **`slough-web.service`** (the live stack)                                                         |
+| `npm run build`            | **Vite** production build → **`dist-vite/`** (same-origin assets; `MAN_STATIC_DIR` defaults there)                                                     |
+| `npm run build:clean`      | **`rm -rf .next .next-dev`** then `next build` — **Next path**, final step of **`npm run ci:e2e`**                                                     |
+| `npm run start`            | **`vite preview`** — serve the production build                                                                                                        |
+| `npm run lint`             | ESLint over the app (**`eslint .`**; build dirs excluded via **`.eslintignore`**)                                                                      |
+| `npm run typecheck`        | TypeScript `tsc --noEmit`                                                                                                                              |
+| `npm run test`             | Vitest unit tests (**`vitest run`**)                                                                                                                   |
+| `npm run ci`               | Lint + typecheck + Vitest + **Vite `build`** — local gate (CI's web job runs eslint/tsc/vitest then **`next build --webpack`**)                        |
+| `npm run e2e` / `e2e:open` | Cypress E2E (browser) against a running app; default baseUrl `http://localhost:5173`                                                                   |
+| `npm run e2e:ci`           | `next dev -p 3010` + headless Cypress with mocked FastAPI — complements Vitest, not a substitute                                                       |
+| `npm run ci:e2e`           | **`build:clean`** then `e2e:ci` (full UI smoke with mocked backend)                                                                                    |
+| `npm run clean`            | Deletes **`.next`** / **`.next-dev`** (Next-path caches; use if the **Next** dev/e2e server shows missing-chunk 404s like `/_next/static/chunks/*.js`) |
 
 ## Project Structure
 
