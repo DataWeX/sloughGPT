@@ -234,6 +234,9 @@ data/
 # GPL-2 upstream) — committed because the legacy copy.sh server sends no CORS
 # headers, so the browser cannot fetch them at runtime.
 !apps/web/public/bios/*.bin
+# v86 GUI desktop saved-states — fetched by scripts/fetch_gui_images.sh;
+# c.copy.sh 403s browser-origin requests, so they are vendored same-origin.
+apps/web/public/gui/*.zst
 *.img
 *.db
 *.sqlite

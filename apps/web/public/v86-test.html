@@ -43,34 +43,53 @@
           if (n !== undefined) { nativeCancel(n); nativeByHandle.delete(handle) }
         }
       })()
+      // ?state=<url>&mem=<MB> boots by restoring a v86 saved state instead of
+      // the kernel path (GUI-image experiments: states may embed the disk).
+      const q = new URLSearchParams(location.search)
+      const stateUrl = q.get('state')
+      const memMb = parseInt(q.get('mem') || '128', 10)
       const log = (m) => { document.title = 'v86-test: ' + m; console.log('[test]', m) }
       const events = { putChar: 0, textChange: 0, setSize: 0, serialBytes: 0 }
       window.__events = events
       window.__serial = ''
       log('starting')
       try {
-        const emulator = new V86({
+        const base = {
           wasm_path: '/v86-test/v86.wasm',
-          memory_size: 256 * 1024 * 1024,
           vga_memory_size: 8 * 1024 * 1024,
           screen_container: document.getElementById('screen_container'),
           bios: { url: '/bios/seabios.bin' },
           vga_bios: { url: '/bios/vgabios.bin' },
-          bzimage: { url: '/buildroot/bzimage68.bin' },
-          cmdline: 'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on',
           autostart: true,
           fastboot: true,
           disable_jit: true,
           disable_speaker: true,
-        })
+        }
+        const cfg = stateUrl
+          ? { ...base, memory_size: memMb * 1024 * 1024, initial_state: { url: stateUrl } }
+          : {
+              ...base,
+              memory_size: 256 * 1024 * 1024,
+              bzimage: { url: '/buildroot/bzimage68.bin' },
+              cmdline: 'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on',
+            }
+        const emulator = new V86(cfg)
         emulator.add_listener('emulator-started', () => log('started'))
         emulator.add_listener('download-error', (e) => log('download-error ' + e.file_name))
+        window.__snap = () => {
+          const c = document.getElementById('screen_container').querySelector('canvas')
+          return c ? c.toDataURL('image/png') : 'no-canvas'
+        }
         const wire = (bus) => {
           if (!bus || typeof bus.register !== 'function') return false
           try {
             bus.register('screen-put-char', () => { events.putChar++ })
             bus.register('screen-text-change', () => { events.textChange++ })
             bus.register('screen-set-size', () => { events.setSize++ })
+            bus.register('screen-set-size-graphical', (w, h) => {
+              events.setSize++
+              events.graphical = w + 'x' + h
+            })
             bus.register('serial0-output-byte', (b) => {
               events.serialBytes++
               if (window.__serial.length < 4000) window.__serial += String.fromCharCode(b & 0xff)
