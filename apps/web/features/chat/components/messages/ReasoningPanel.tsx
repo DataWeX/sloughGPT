@@ -36,7 +36,7 @@ export const ReasoningPanel = memo(function ReasoningPanel({ isThinking, context
   }, [expanded, contextLayers, isThinking])
 
   return (
-    <div className={cn("mx-auto w-full max-w-4xl px-4 sm:px-6", className)}>
+    <div className={cn("w-full px-4 sm:px-6", className)}>
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
