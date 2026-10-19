@@ -12,6 +12,7 @@ Public API:
     PersonalityManager, PersonalityProfile, QualiaEngine, QualiaState
     Reflection, SelfEpisode, SelfIdentity, SelfModel
     get_consciousness, reset_consciousness
+    record_experience — the single substrate-recording seam for non-chat runs
 """
 
 from __future__ import annotations
@@ -101,11 +102,13 @@ __all__ = [
     "SelfModel",
     "get_consciousness",
     "reset_consciousness",
+    "record_experience",
 ]
 
 _LAZY_IMPORTS = {
     "ConsciousnessTrainer": ("._internal.consciousness.training", "ConsciousnessTrainer"),
     "TrainingConfig": ("._internal.consciousness.training", "TrainingConfig"),
+    "record_experience": ("._internal.experience_recorder", "record_experience"),
 }
 
 
