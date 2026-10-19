@@ -954,6 +954,22 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-19 · `feat/wire-py` — we own the HTTP wire, phase 1 (card
+  `ecea49c8`, stacked on `feat/scene-build`).** `packages/wire-py` is the
+  stdlib-only sync framing layer: `wire/framing.py` (request parser —
+  version-aware keep-alive, chunked request bodies, TE+CL smuggling guard,
+  conflicting-CL rejection, header caps -> 431, malformed -> 400; response
+  serializer with wire-owned Content-Length/Connection/Date/Server) and
+  `wire/server.py` (`WireServer`: threaded sync accept loop, handler crash ->
+  500 + close, desynced connections never reused, prompt `stop()`). TDD: 30
+  tests RED -> GREEN, ruff clean; `pytest.ini` adds the package to default
+  testpaths/pythonpath (+30 collected; the 24 collection errors are
+  diff-identical to HEAD = pre-existing). NEXT: phase 2 ASGI host adapter
+  (`wire/asgi_host.py`, asyncio confined to that seam) + SSE; minimal RFC6455
+  WS deferred (flip stays gated on WS). uvicorn remains the default host until
+  phase 3 gates (`SLO_TRANSPORT` A/B harness + `benchmark_transport.py`) are
+  green. From `.wt-worldbrain`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
