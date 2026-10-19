@@ -59,12 +59,23 @@ class FlowOutcome:
     def failed_steps(self) -> list[dict[str, Any]]:
         return [s.to_dict() for s in self.result.steps if not s.success]
 
+    @property
+    def needs_human(self) -> bool:
+        """The replay yielded on a challenge page — a human must take over."""
+        return self.result.needs_human
+
+    @property
+    def challenge(self) -> dict[str, str] | None:
+        """The challenge that stopped the flow (kind/evidence/url), or None."""
+        return self.result.challenge
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "completed": self.completed,
             "final_url": self.final_url,
             "steps_done": self.steps_done,
             "steps_total": self.steps_total,
+            "challenge": self.challenge,
             "failed_steps": self.failed_steps,
             "steps": [s.to_dict() for s in self.result.steps],
         }

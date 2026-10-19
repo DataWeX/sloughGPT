@@ -28,6 +28,7 @@ from avion.core.session import Arken, ArkenConfig
 # Canonical names (arken shim re-exports these).
 Avion = Arken
 AvionConfig = ArkenConfig
+from avion.challenge import Challenge, detect_challenge
 from avion.interact.primitives import (
     BoundingBox,
     Coordinate,
@@ -51,6 +52,7 @@ __all__ = [
     "AvionConfig",
     "Backend",
     "BoundingBox",
+    "Challenge",
     "Coordinate",
     "Element",
     "ElementFinder",

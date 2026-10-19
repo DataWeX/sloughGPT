@@ -459,6 +459,7 @@ async def _cmd_run(args: argparse.Namespace) -> int:
     else:
         target = CdpBackend(cdp_url=args.cdp)
         print(f"running flow on {args.cdp} ({len(events)} events)", file=sys.stderr)
+    outcome = None
     try:
         outcome = await complete_flow(
             events,
@@ -469,7 +470,9 @@ async def _cmd_run(args: argparse.Namespace) -> int:
     except Exception as exc:
         return _fail(f"flow run failed: {exc}")
     finally:
-        if launched is not None:
+        # On a challenge yield the browser STAYS OPEN — a parked browser
+        # on the challenge page is the handoff, not debris to reap.
+        if launched is not None and not (outcome is not None and outcome.needs_human):
             launched.stop()
     if args.json:
         print(json.dumps(outcome.to_dict(), indent=2))
@@ -484,6 +487,14 @@ async def _cmd_run(args: argparse.Namespace) -> int:
                 f"  step {step.get('event_seq', '?')} {step.get('action', '')}:"
                 f" {step.get('error') or 'failed'}"
             )
+        if outcome.needs_human:
+            ch = outcome.challenge or {}
+            print(
+                f"needs a human: {ch.get('evidence', 'challenge page')} —"
+                " close the browser when you're done with it"
+            )
+    if outcome.needs_human:
+        return 3  # distinct from 1 (failed steps): a human must take over
     return 0 if outcome.completed else 1
 
 
@@ -525,6 +536,7 @@ async def _cmd_agent(args: argparse.Namespace) -> int:
         backend = CdpBackend(cdp_url=args.cdp)
         print(f"agent on {args.cdp} model={model.model_name}", file=sys.stderr)
     agent = Agent(model=model, config=AgentConfig(max_steps=args.max_steps))
+    result = None
     try:
         await agent.start(backend=backend)
         result = await agent.run(args.task)
@@ -532,7 +544,9 @@ async def _cmd_agent(args: argparse.Namespace) -> int:
     except Exception as exc:
         return _fail(f"agent run failed: {exc}")
     finally:
-        if launched is not None:
+        # A challenge yield keeps the browser open — the parked page is
+        # the human's handoff (same policy as `avion run`).
+        if launched is not None and not (result is not None and result.stop_reason == "needs_human"):
             launched.stop()
     if args.json:
         print(json.dumps(result.to_dict(), indent=2))
@@ -542,6 +556,14 @@ async def _cmd_agent(args: argparse.Namespace) -> int:
         print(f"{mark}: {result.steps_taken} steps — stop: {result.stop_reason}")
         for line in (result.error or "").splitlines()[:5]:
             print(f"  {line}")
+        if result.stop_reason == "needs_human":
+            ch = result.challenge or {}
+            print(
+                f"needs a human: {ch.get('evidence', 'challenge page')} —"
+                " close the browser when you're done with it"
+            )
+    if result.stop_reason == "needs_human":
+        return 3  # distinct from 1 (failed): a human must take over
     return 0 if result.success else 1
 
 

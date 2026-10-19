@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from avion.challenge import page_challenge
 from avion.core.element import ElementLocator
 from avion.events.models import Event, EventType
 
@@ -39,6 +40,10 @@ class ReplayConfig:
 
     stop_on_error: bool = True
     dry_run: bool = False  # resolve locators, skip actions
+    # Challenge yield: a bot-challenge page stops the replay (the human
+    # takes over); disable only against internal pages whose wording
+    # collides with a marker.
+    yield_on_challenge: bool = True
 
 
 @dataclass
@@ -65,6 +70,14 @@ class ReplayResult:
 
     steps: list[ReplayStep] = field(default_factory=list)
     success: bool = True
+    # Set when the replay yielded to a human (challenge page): the dict
+    # form of avion.challenge.Challenge, None on a clean run.
+    challenge: dict[str, str] | None = None
+
+    @property
+    def needs_human(self) -> bool:
+        """The replay stopped on a challenge page, not on a step outcome."""
+        return self.challenge is not None
 
     @property
     def passed(self) -> int:
@@ -79,6 +92,7 @@ class ReplayResult:
             "success": self.success,
             "passed": self.passed,
             "failed": self.failed,
+            "challenge": self.challenge,
             "steps": [s.to_dict() for s in self.steps],
         }
 
@@ -99,6 +113,14 @@ class EventReplay:
     async def replay(self, events: list[Event]) -> ReplayResult:
         result = ReplayResult()
         for event in events:
+            # Challenge yield, checked before the next step acts on a
+            # page automation must not touch: halt with the evidence.
+            if self._config.yield_on_challenge and not self._config.dry_run:
+                challenge = await page_challenge(getattr(self._session, "backend", None))
+                if challenge is not None:
+                    result.challenge = challenge.to_dict()
+                    result.success = False
+                    break
             step = await self._replay_one(event)
             if step is None:
                 continue  # event carries no action (e.g. session markers)
