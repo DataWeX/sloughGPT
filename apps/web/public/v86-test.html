@@ -48,6 +48,9 @@
       const q = new URLSearchParams(location.search)
       const stateUrl = q.get('state')
       const memMb = parseInt(q.get('mem') || '128', 10)
+      const hdaMb = parseInt(q.get('hda') || '0', 10)
+      const chunkBytes = parseInt(q.get('chunk') || '262144', 10)
+      const netType = q.get('net') || 'ne2k'
       const log = (m) => { document.title = 'v86-test: ' + m; console.log('[test]', m) }
       const events = { putChar: 0, textChange: 0, setSize: 0, serialBytes: 0 }
       window.__events = events
@@ -66,7 +69,38 @@
           disable_speaker: true,
         }
         const cfg = stateUrl
-          ? { ...base, memory_size: memMb * 1024 * 1024, initial_state: { url: stateUrl } }
+          ? {
+              ...base,
+              memory_size: memMb * 1024 * 1024,
+              // States were saved from machines with an IDE primary disk:
+              // (1) the PIIX3 ide pci_bars[0..1] only exist when hda is
+              //     configured, else Ic.set_state throws "original_bar";
+              // (2) the saved drive buffer is a ya (async on-demand file
+              //     device, block_cache state shape) — {buffer} builds a z
+              //     instead and z.set_state throws on the ya-shaped entry.
+              // {url,size,async:true} -> Ca() -> ya with NO upfront download.
+              // ya.get_state keeps only WRITTEN sectors, so reads miss the
+              // cache and Range-fetch this url — /gui/disks/ is 404 until the
+              // image is vendored (download-error events measure the miss rate).
+              ...(hdaMb > 0
+                ? {
+                    hda: {
+                      url: '/gui/disks/' + (stateUrl.match(/([^/]+)_state/) || [, 'disk'])[1] + '.img',
+                      size: hdaMb * 1024 * 1024,
+                      async: true,
+                      fixed_chunk_size: chunkBytes,
+                    },
+                  }
+                : {}),
+              // NIC class must match the save-time machine: default ne2k
+              // serializes at S.set_state a[59] — states saved with
+              // net_device.type "virtio" (copy.sh profile bc:"virtio") have
+              // a[59]=null there and a virtio_net entry elsewhere; a class
+              // mismatch throws ("null[0]") or cross-writes PCI config space.
+              net_device: { type: netType },
+              initial_state: { url: stateUrl },
+              autostart: false,
+            }
           : {
               ...base,
               memory_size: 256 * 1024 * 1024,
@@ -74,8 +108,32 @@
               cmdline: 'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on',
             }
         const emulator = new V86(cfg)
-        emulator.add_listener('emulator-started', () => log('started'))
+        emulator.add_listener('emulator-started', () => { if (!stateUrl) log('started') })
         emulator.add_listener('download-error', (e) => log('download-error ' + e.file_name))
+        if (stateUrl) {
+          // State mode: continue_init kicks off restore_state() WITHOUT
+          // awaiting it (the public wrapper drops the inner promise too) and
+          // the restore's internal stop leaves the CPU dead afterwards — the
+          // desktop paints as a frozen still (running:false, tick:0). On
+          // 'emulator-loaded' the file is fetched; poll-run until the machine
+          // takes off and stays off (an early run() may be clobbered by a
+          // still-in-flight restore — the next attempt sticks).
+          emulator.add_listener('emulator-loaded', () => {
+            let tries = 0
+            const attempt = () => {
+              tries++
+              const tick = () => (emulator.v86 && emulator.v86.tick_counter) || 0
+              const before = tick()
+              emulator.run().catch(() => {})
+              setTimeout(() => {
+                if (emulator.is_running() && tick() > before) log('started (state restored)')
+                else if (tries < 20) attempt()
+                else log('restore-error: machine would not start')
+              }, 700)
+            }
+            attempt()
+          })
+        }
         window.__snap = () => {
           const c = document.getElementById('screen_container').querySelector('canvas')
           return c ? c.toDataURL('image/png') : 'no-canvas'
