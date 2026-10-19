@@ -968,7 +968,17 @@ git push -u origin feat/<name>   # push your own branch when done
   (`wire/asgi_host.py`, asyncio confined to that seam) + SSE; minimal RFC6455
   WS deferred (flip stays gated on WS). uvicorn remains the default host until
   phase 3 gates (`SLO_TRANSPORT` A/B harness + `benchmark_transport.py`) are
-  green. From `.wt-worldbrain`.
+  green. **Phase 2 also done (`3eed464dc`)**: `wire/asgi_host.py` (scope +
+  per-request loop + streaming frames; crash-before-bytes = 500 + close;
+  receive parks post-body - proven against real FastAPI
+  `StreamingResponse`, no hang), `serialize_head` extracted, target
+  high-byte now a clean 400 (was `UnicodeDecodeError` killing the conn
+  thread), `WireServer(asgi_app=...)` mode. 37 tests green; smoke: JSON
+  (Content-Length) then SSE (chunked) on the SAME keep-alive connection.
+  REMAINING phase 3: `SLO_TRANSPORT` wiring, A/B curl harness vs uvicorn,
+  `benchmark_transport.py`, journey gates + ASGI lifespan before any
+  default flip; RFC6455 WS deferred (flip gated on it). From
+  `.wt-worldbrain`.
 
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
