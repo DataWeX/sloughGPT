@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wire-py"
+version = "0.1.0"
+description = "Our own minimal HTTP/1.1 wire layer — sync framing + accept loop (cards ecea49c8)"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+
+[tool.setuptools]
+packages = ["wire"]
