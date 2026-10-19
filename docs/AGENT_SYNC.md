@@ -964,6 +964,22 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-19 · Browser VM (v86) boots real Linux — `feat/v86-tiny-linux`
+  (cards `8d1136ed` done, `89790ca6` done-on-side-trunks).** Linux 6.8.12
+  (copy.sh `buildroot6` bzImage, vendored in `public/buildroot/`) boots in
+  the Browser VM panel to a busybox shell; interactive end-to-end (real
+  window-level keystrokes → guest console: `id` → `uid=0(root)`); the screen
+  paints live tty text **even in hidden tabs**. All media local, zero runtime
+  CDN: BIOS pair vendored (`public/bios/` — the copy.sh legacy host sends no
+  CORS headers), emulator pair = copy.sh's current demo build in
+  `public/v86/` (replaces the npm 0.5.456 pair; both stall identically
+  without the render fix — see Gotchas). HEAD `19c55567c` (3 commits atop
+  `c250ea4dc`): proven kernel cmdline (+ `earlyprintk=serial` mirror),
+  `ensureV86RenderScheduling()` rAF hidden-tab shim (+2 tests), panel screen
+  container styles, bare boot harness `public/v86-test.html` (bus-event
+  counters + serial capture). Gates: tsc clean, vitest 8068/8068 @ 838
+  files, eslint 0 errors. From `.wt-logentry`/`feat/v86-tiny-linux`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
@@ -1003,6 +1019,18 @@ git push -u origin feat/<name>   # push your own branch when done
   Check it before treating a failure as yours.
 
 ## Gotchas that cost hours (add yours here)
+
+- **v86 "frozen screen" / "kernel hang" illusions (cost a day)**: the v86 DOM
+  text adapter repaints **only** from `requestAnimationFrame`, and browsers
+  suspend rAF in hidden documents — the CPU keeps running and put-char events
+  keep buffering, but nothing reaches the DOM (fix: keep the adapter's single
+  outstanding callback on a 16ms timer chain while hidden, native rAF while
+  visible — `ensureV86RenderScheduling()` in `apps/web/lib/v86-controller.ts`).
+  And raw `cpu.read8(0xB8000 …)` dumps go **stale** under CRTC scroll while
+  `get_real_eip()` can lag — together they made a kernel that was booting
+  fine look hung at `last_pfn = 0xf000` on two different emulator builds.
+  Trust the serial channel (`serial0_send()` + `serial0-output-byte` bus
+  events) and the adapter's DOM row buffer instead.
 
 - **`PYTHONNOUSERSITE=1` (AGENTS.md) breaks browser suites**: playwright is
   installed in `~/.local/lib/python3.12/site-packages/` (user site), not in
