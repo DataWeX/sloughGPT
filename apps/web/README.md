@@ -93,20 +93,20 @@ To change the API URL, copy **`.env.example`** to **`.env.local`** (or edit **`.
 
 ## Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server (Next.js) |
-| `npm run build` | Production build (may reuse **`.next`**) |
-| `npm run build:clean` | **`rm -rf .next`** then **`next build`** — final step of **`npm run ci`** / CI **`test-web`** |
-| `npm run start` | Run production server after `build` |
-| `npm run lint` | Run ESLint (`next lint`) |
-| `npm run typecheck` | TypeScript `tsc --noEmit` |
-| `npm run test` | Vitest unit tests (`lib/**/*.test.ts`, `hooks/**/*.test.ts`) — fast API/UX helpers |
-| `npm run ci` | Lint + typecheck + Vitest + **`build:clean`** (parity with CI **`test-web`**) |
-| `npm run e2e` / `e2e:open` | Cypress E2E (browser) against a running app; default baseUrl `http://localhost:5173` |
-| `npm run e2e:ci` | `next dev -p 3010` + headless Cypress with mocked FastAPI — complements Vitest, not a substitute |
-| `npm run ci:e2e` | **`build:clean`** then `e2e:ci` (full UI smoke with mocked backend) |
-| `npm run clean` | Deletes **`.next`** (use if dev server shows missing chunk errors like `Cannot find module './NNN.js'` or `/_next/static/chunks/*.js` **404**) |
+| Script                     | Description                                                                                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`              | Start development server (Next.js)                                                                                                             |
+| `npm run build`            | Production build (may reuse **`.next`**)                                                                                                       |
+| `npm run build:clean`      | **`rm -rf .next`** then **`next build`** — final step of **`npm run ci`** / CI **`test-web`**                                                  |
+| `npm run start`            | Run production server after `build`                                                                                                            |
+| `npm run lint`             | Run ESLint (`next lint`)                                                                                                                       |
+| `npm run typecheck`        | TypeScript `tsc --noEmit`                                                                                                                      |
+| `npm run test`             | Vitest unit tests (`lib/**/*.test.ts`, `hooks/**/*.test.ts`) — fast API/UX helpers                                                             |
+| `npm run ci`               | Lint + typecheck + Vitest + **`build:clean`** (parity with CI **`test-web`**)                                                                  |
+| `npm run e2e` / `e2e:open` | Cypress E2E (browser) against a running app; default baseUrl `http://localhost:5173`                                                           |
+| `npm run e2e:ci`           | `next dev -p 3010` + headless Cypress with mocked FastAPI — complements Vitest, not a substitute                                               |
+| `npm run ci:e2e`           | **`build:clean`** then `e2e:ci` (full UI smoke with mocked backend)                                                                            |
+| `npm run clean`            | Deletes **`.next`** (use if dev server shows missing chunk errors like `Cannot find module './NNN.js'` or `/_next/static/chunks/*.js` **404**) |
 
 ## Project Structure
 
@@ -138,13 +138,13 @@ python3 apps/api/server/main.py
 
 1. **Node 20+** — match **`.nvmrc`**; run `node -v`.
 2. **Install & build** — from `apps/web`: `npm ci` (or `npm install`), then `npm run dev` or `npm run ci` to match CI.
-3. **Environment** — copy **`.env.example`** → **`.env.local`**. Set **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`) so NextAuth can issue sessions. **`NEXTAUTH_URL`** should match where you open the app (e.g. `http://localhost:5173`).
+3. **Environment** — copy **`.env.example`** → **`.env.local`**. The live stack (vite on `:5173`, same-origin in production) authenticates via FastAPI **`/auth/login`** — it does not serve `/api/auth/*` and ignores the `NEXTAUTH_*` vars. Those matter **only** for the Next alternate path (`npm run dev:e2e` on `:3010`, `npm run build:export`): if you run that path, set **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`) and point **`NEXTAUTH_URL`** at `http://localhost:3010`; otherwise the template values can stay untouched.
 4. **API must be up** — the UI calls **`NEXT_PUBLIC_API_URL`** (default `http://localhost:8000`). Login and most actions use the FastAPI backend; if the API is down, the home page shows **offline** and login will fail.
-5. **GitHub OAuth** — optional. If **`GITHUB_ID`** / **`GITHUB_SECRET`** are unset, NextAuth still runs with a placeholder provider; use the **`/login`** form (FastAPI `/auth/login`) for username/password.
+5. **GitHub OAuth** — optional, **Next-path only**. Under vite, `next-auth/react` is a compatibility stub (`vite/next-compat/next-auth.tsx`, always unauthenticated) and vite serves only `planner`/`calendar` API routes — use the **`/login`** form (FastAPI `/auth/login`) for username/password. On the Next alternate (`dev:e2e`), if **`GITHUB_ID`** / **`GITHUB_SECRET`** are unset, NextAuth falls back to a placeholder provider.
 
 ## Training console
 
-The **Training** page calls `POST /training/start`. Native trainer `.soul` files on the API host embed `stoi` / `itos` / `chars` for fair `cli.py eval`; formats and caveats are in [docs/policies/CONTRIBUTING.md](../../docs/policies/CONTRIBUTING.md) (*Checkpoint vocabulary*).
+The **Training** page calls `POST /training/start`. Native trainer `.soul` files on the API host embed `stoi` / `itos` / `chars` for fair `cli.py eval`; formats and caveats are in [docs/policies/CONTRIBUTING.md](../../docs/policies/CONTRIBUTING.md) (_Checkpoint vocabulary_).
 
 ## License
 

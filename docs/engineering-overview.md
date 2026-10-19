@@ -140,7 +140,7 @@ React Native 0.86. 32 screens, 32 services.
 
 Rust/Axum reverse proxy (`slough-gateway`, binds `:8080`).
 
-**Role:** Fast entry point. Generic byte-relay to Python core. Stateless zstd/gzip compression (identity fallback for SSE/Range/small/HEAD). Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves the **static site document root** when a build exists (`MAN_STATIC_DIR`, default `apps/web/dist-vite`, then `apps/web/.next/static`): file hit → asset, browser navigation (`Accept: text/html`) → `index.html` for SPA routes, data requests → relay. Routing is by **request kind, not path prefix** — the SPA and the API own the same top-level names (`/training`, `/models`, `/chat`), and the only browser *navigation* onto API surface is `/docs`, `/redoc`, `/openapi.json` (path contract). Result: shell + API + SSE on one origin, and the shell still loads when the sidecar is down.
+**Role:** Fast entry point. Generic byte-relay to Python core. Stateless zstd/gzip compression (identity fallback for SSE/Range/small/HEAD). Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves the **static site document root** when a build exists (`MAN_STATIC_DIR`, default `apps/web/dist-vite`, then `apps/web/.next/static`): file hit → asset, browser navigation (`Accept: text/html`) → `index.html` for SPA routes, data requests → relay. Routing is by **request kind, not path prefix** — the SPA and the API own the same top-level names (`/training`, `/models`, `/chat`), and the only browser _navigation_ onto API surface is `/docs`, `/redoc`, `/openapi.json` (path contract). Result: shell + API + SSE on one origin, and the shell still loads when the sidecar is down.
 
 **Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + filters + compression + health + static files.
 
@@ -256,19 +256,21 @@ The web container listens on **:3000 inside the container** on both image
 paths — Next image (`apps/web/Dockerfile`: `ENV PORT=3000`, `EXPOSE 3000`)
 and Vite image (`apps/web/Dockerfile.vite`: nginx `listen 3000` +
 `/health`, `EXPOSE 3000`). Everything that targets `web:3000` or
-`localhost:3000` *inside* the compose network is therefore valid.
+`localhost:3000` _inside_ the compose network is therefore valid.
 
-| Context | Host ports | Notes |
-| ------- | ---------- | ----- |
-| Live systemd dev stack | web **:5173** (vite), api :8000, gateway :8080 | Independent of docker; never :3000 (`e47e19ee` retired those claims) |
-| `docker-compose.yml` (dev) | web `3000:3000`, api `8000:8000`, gateway `8080:8080` | Host `curl localhost:3000` valid **here only** |
-| `docker-compose.prod.yml` | nginx only: `${NGINX_HTTP_PORT:-80}:80`, `:443` | nginx routes `/ → web:3000`, `/v1\|chat\|training\|health → api:8000`, static → gateway. Nothing on host :8000/:3000 |
-| grafana / prometheus / postgres / redis (prod) | none | Internal only — grafana's `:3000/api/health` healthcheck is Grafana's own in-network default port, not a host publish |
+| Context                                        | Host ports                                            | Notes                                                                                                                 |
+| ---------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Live systemd dev stack                         | web **:5173** (vite), api :8000, gateway :8080        | Independent of docker; never :3000 (`e47e19ee` retired those claims)                                                  |
+| `docker-compose.yml` (dev)                     | web `3000:3000`, api `8000:8000`, gateway `8080:8080` | Host `curl localhost:3000` valid **here only**                                                                        |
+| `docker-compose.prod.yml`                      | nginx only: `${NGINX_HTTP_PORT:-80}:80`, `:443`       | nginx routes `/ → web:3000`, `/v1\|chat\|training\|health → api:8000`, static → gateway. Nothing on host :8000/:3000  |
+| grafana / prometheus / postgres / redis (prod) | none                                                  | Internal only — grafana's `:3000/api/health` healthcheck is Grafana's own in-network default port, not a host publish |
 
 Consequences: `infra/scripts/deploy.sh` health checks read **container
 health** (`docker inspect`) instead of host curls that can never pass;
-`.env.example`'s `NEXTAUTH_URL=http://localhost:3000` applies to the
-dev-compose Next path (prod compose defaults to `http://localhost`);
+`.env.example`'s `NEXTAUTH_URL` (Next-path only — host `dev:e2e` runs
+Next on `:3010`, dev-compose maps it to `:3000`; the live vite stack
+ignores it) applies to the Next path (prod compose defaults to
+`http://localhost`);
 `apps/web/Dockerfile.vite` is built standalone and not wired into compose
 yet. Grafana has no nginx route — no host URL exists for it.
 

@@ -1,1 +1,6 @@
 cypress/
+dist-vite/
+.next/
+.next-dev/
+storybook-static/
+coverage/
