@@ -482,7 +482,10 @@ class BVH:
         extent = aabb_max - aabb_min
         axis = int(np.argmax(extent))
         centroids = (v0 + v1 + v2) / 3.0
-        order = centroids[:, axis].argsort()
+        # stable: ties keep arrival order — the deterministic total order
+        # scene_build.c's merge sort reproduces, so native and python
+        # trees are byte-identical, not merely equivalent (card bdfcb8cb).
+        order = centroids[:, axis].argsort(kind="stable")
         indices = indices[order]
 
         mid = len(indices) // 2
@@ -495,8 +498,31 @@ class BVH:
     def _build(self, max_prims: int):
         self._prim_indices: list[int] = []
         n_faces = len(self.mesh.faces)
-        indices = np.arange(n_faces)
-        self._root = self._build_recursive(indices, max_prims)
+        from domain.shell._internal._native_build import build_bvh_native
+
+        built = build_bvh_native(self.mesh.vertices, self.mesh.faces, max_prims)
+        if built is not None:
+            # Native tree (scene_build.c): nodes arrive in the same
+            # pre-order the recursion produced, prim order included, so
+            # the batch tables below and the scalar walk consume
+            # identical structures either way (card bdfcb8cb).
+            nmin, nmax, left, right, pstart, pcnt, prims, root = built
+            self._root = root
+            self._prim_indices = prims.tolist()
+            self.nodes = [
+                BVHNode(
+                    aabb_min=nmin[i],
+                    aabb_max=nmax[i],
+                    left=int(left[i]),
+                    right=int(right[i]),
+                    primitive_start=int(pstart[i]),
+                    primitive_count=int(pcnt[i]),
+                )
+                for i in range(len(nmin))
+            ]
+        else:
+            indices = np.arange(n_faces)
+            self._root = self._build_recursive(indices, max_prims)
         self._prepare_batch_tables(max_prims)
 
     def _prepare_batch_tables(self, max_prims: int):

@@ -4,6 +4,31 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**LANDED 2026-10-17** — card `bdfcb8cb` (single-source scene build,
+branch `feat/scene-build` stacked on `feat/opcode-split`): the world
+frame is no longer rebuild-bound. `domain/shell/_internal/scene_build.c`
+— voxel mesh extraction + BVH construction — goes through the same
+compile-once loader as trace_core.c (gcc `-O3 -fopenmp` → ctypes, NVRTC
+→ RawKernel; `SLO_Q` the only target token). The mesher is one thread
+per voxel; the BVH is an explicit-stack iterative build (NVRTC forbids
+recursion) that appends nodes in exactly the python recursion's
+pre-order. **Parity is exact by construction, not statistical**: the C
+reproduces each double→float32 rounding once, and its merge sort's
+(centroid, arrival position) total order equals `argsort(kind="stable")`
+— `cycles.py` switched to stable in the same commit. Seam is minimal:
+`BVH._build` replaces only `_build_recursive`; `_build_voxel_mesh` tries
+native first; both fall back to the untouched python oracle on
+`SLO_CYCLES_NATIVE=0` (dynamic) or a missing compiler. The frame path
+uses the CPU engine (the scene is host-resident — a GPU build would
+spend its win on PCIe); the GPU entries exist, compile, and are run
+bit-exact vs python by tests. Measured (24x12x24 world, pop 8, pools 3,
+160x120@16spp): build_scene **0.614s/57.2% → 0.064s/16.9%** (9.6x, no
+longer the frame's majority), world frame **1.073s → 0.377s** — the
+world frame now converges with the device frame (~0.39s);
+`benchmark_world_render.py --frames 2` PASS (device 0.12s / world
+0.25s). New `test_scene_build_native.py` (15 tests: mesh/BVH/hit parity,
+fallbacks, NVRTC bit-exact); 238-test cycles+render surface green.
+
 **LANDED 2026-10-17** — card `4de18e24` (single-source trace core):
 the two-implementations liability is retired — there is no numpy walk *and* a
 CUDA walk to keep in sync any more. `domain/shell/_internal/trace_core.c`
