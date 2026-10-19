@@ -45,6 +45,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
+from avion.events.models import Event
+
 _DEFAULT_CDP = os.environ.get("AVION_CDP_URL", "ws://localhost:9222")
 _HINT = (
     "Start one with:\n"

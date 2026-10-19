@@ -57,3 +57,21 @@ class Event:
         if self.duration_ms:
             d["duration_ms"] = round(self.duration_ms, 2)
         return d
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Event:
+        """Rebuild an event from its dict form (the to_dict inverse).
+
+        Screenshots are presence-flagged in the dict form (``has_screenshot``)
+        and cannot round-trip — the flag is dropped, never faked into data.
+        """
+        return cls(
+            type=EventType(d["type"]),
+            name=d.get("name", ""),
+            data=dict(d.get("data") or {}),
+            success=bool(d.get("success", True)),
+            error=d.get("error", ""),
+            duration_ms=float(d.get("duration_ms", 0.0)),
+            timestamp=float(d.get("timestamp", 0.0)),
+            seq=int(d.get("seq", 0)),
+        )
