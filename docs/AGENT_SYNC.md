@@ -986,8 +986,9 @@ git push -u origin feat/<name>   # push your own branch when done
   Disk reads Range-fetch `/gui/disks/*.img` — images NOT vendored yet
   (user: "forget for now"; states keep only written sectors, so file
   access beyond the snapshot stalls; source = byte-range part files on
-  c.copy.sh, `<dir>/<start>-<end>.img` — the dotfile URL 404s). Landed
-  atop `379d1c371`: panel gallery ("Desktop states" selector over
+  c.copy.sh, `<dir>/<start>-<end>.img` — the dotfile URL 404s). HEAD
+  `877e97682` (+ harness fix `aa08f2bf3`, atop `379d1c371`, pushed):
+  panel gallery ("Desktop states" selector over
   `lib/v86-gui-states.ts`) + suspend/resume standby — closing the panel
   detaches the controller-owned screen host and freezes the machine
   (shared session outlives the view; remount adopts it, no reboot);
