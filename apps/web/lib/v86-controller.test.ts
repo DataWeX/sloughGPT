@@ -347,4 +347,135 @@ describe('V86Controller', () => {
       vi.useRealTimers()
     }
   })
+
+  it('init in state mode builds initial_state + async hda + net_device config', async () => {
+    const configs: any[] = []
+    class MockV86 {
+      constructor(cfg: any) {
+        configs.push(cfg)
+      }
+      add_listener(ev: string, cb: () => void) {
+        if (ev === 'emulator-started') cb()
+      }
+      is_running() {
+        return true
+      }
+      stop() {}
+      run() {}
+      destroy() {}
+    }
+    vi.stubGlobal('window', { V86: MockV86 })
+
+    const c = new V86Controller()
+    await c.init({} as unknown as HTMLElement, {
+      biosUrl: '/bios/seabios.bin',
+      vgaBiosUrl: '/bios/vgabios.bin',
+      state: {
+        url: '/gui/reactos_state-v3.bin.zst',
+        memoryMb: 512,
+        hda: { url: '/gui/disks/reactos.img', sizeBytes: 734003200, chunkBytes: 1048576 },
+        netDeviceType: 'virtio',
+      },
+    })
+
+    // The exact harness-proven shape: states restore only when the NIC class
+    // matches the save-time machine and hda exists as an async file device.
+    expect(configs[0].initial_state).toEqual({ url: '/gui/reactos_state-v3.bin.zst' })
+    expect(configs[0].memory_size).toBe(512 * 1024 * 1024)
+    expect(configs[0].hda).toEqual({
+      url: '/gui/disks/reactos.img',
+      async: true,
+      size: 734003200,
+      fixed_chunk_size: 1048576,
+    })
+    expect(configs[0].net_device).toEqual({ type: 'virtio' })
+    expect(configs[0].bzimage).toBeUndefined()
+    expect(configs[0].cdrom).toBeUndefined()
+    expect(configs[0].cmdline).toBeUndefined()
+    vi.unstubAllGlobals()
+  })
+
+  it('state mode defaults to a ne2k NIC and omits hda when no image accompanies the state', async () => {
+    const configs: any[] = []
+    class MockV86 {
+      constructor(cfg: any) {
+        configs.push(cfg)
+      }
+      add_listener(ev: string, cb: () => void) {
+        if (ev === 'emulator-started') cb()
+      }
+      is_running() {
+        return false
+      }
+      destroy() {}
+    }
+    vi.stubGlobal('window', { V86: MockV86 })
+
+    const c = new V86Controller()
+    await c.init({} as unknown as HTMLElement, {
+      biosUrl: '/bios/seabios.bin',
+      vgaBiosUrl: '/bios/vgabios.bin',
+      state: { url: '/gui/windows98_state-v2.bin.zst', memoryMb: 128 },
+    })
+
+    expect(configs[0].initial_state).toEqual({ url: '/gui/windows98_state-v2.bin.zst' })
+    expect(configs[0].memory_size).toBe(128 * 1024 * 1024)
+    expect(configs[0].net_device).toEqual({ type: 'ne2k' })
+    expect(configs[0].hda).toBeUndefined()
+    vi.unstubAllGlobals()
+  })
+
+  it('suspend stops a running machine and resume restarts it; both safe when uninitialized', async () => {
+    let running = true
+    const stops = vi.fn()
+    const runs = vi.fn()
+    class MockV86 {
+      constructor(_cfg: any) {}
+      add_listener(ev: string, cb: () => void) {
+        if (ev === 'emulator-started') cb()
+      }
+      is_running() {
+        return running
+      }
+      stop() {
+        stops()
+        running = false
+      }
+      run() {
+        runs()
+        running = true
+      }
+      destroy() {}
+    }
+    vi.stubGlobal('window', { V86: MockV86 })
+
+    const c = new V86Controller()
+    await c.init({} as unknown as HTMLElement, {
+      biosUrl: '/bios/seabios.bin',
+      vgaBiosUrl: '/bios/vgabios.bin',
+      imageUrl: '/buildroot/buildroot.img',
+    })
+
+    expect(c.hasMachine()).toBe(true)
+    expect(c.isRunning()).toBe(true)
+
+    c.suspend()
+    expect(stops).toHaveBeenCalledTimes(1)
+    expect(c.isRunning()).toBe(false)
+    expect(c.isSuspended()).toBe(true)
+
+    c.resume()
+    expect(runs).toHaveBeenCalledTimes(1)
+    expect(c.isRunning()).toBe(true)
+    expect(c.isSuspended()).toBe(false)
+    vi.unstubAllGlobals()
+
+    const fresh = new V86Controller()
+    expect(fresh.hasMachine()).toBe(false)
+    expect(fresh.isSuspended()).toBe(false)
+    expect(() => {
+      fresh.suspend()
+      fresh.resume()
+    }).not.toThrow()
+  })
 })

@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { V86Controller } from '@/lib/v86-controller'
+import { getGuiStatePreset } from '@/lib/v86-gui-states'
 import { logger, trackEvent } from '@/lib/dev-log'
 
 // Boot image resolution order:
@@ -186,6 +187,12 @@ export interface UseV86Options {
    * probes only that kind's candidates (see IMAGE_URLS).
    */
   bootMedia?: V86BootMedia
+  /**
+   * GUI desktop snapshot boot: a preset id from GUI_STATE_PRESETS. Boots via
+   * v86 initial_state with the save-time machine profile (exact memory, async
+   * hda, NIC class) and skips image probing plus IndexedDB restore/auto-save.
+   */
+  statePresetId?: string
   /** Custom BIOS URL */
   biosUrl?: string
   /** Custom VGA BIOS URL */
@@ -198,6 +205,8 @@ export interface UseV86Options {
 
 export interface UseV86Result {
   isBooted: boolean
+  /** True when the machine is frozen in standby (panel closed / power off). */
+  isSuspended: boolean
   stateSaved: boolean
   error: string | null
   save: () => Promise<void>
@@ -206,10 +215,29 @@ export interface UseV86Result {
   init: (container: HTMLElement) => Promise<void>
   /** Tear down the running emulator and boot again with the latest options. */
   reboot: () => Promise<void>
+  /** Freeze the machine into standby (screen detached, CPU stopped). */
+  suspend: () => void
+  /** Power on from standby. */
+  resume: () => void
+}
+
+/**
+ * The VM session is shared across hook instances: closing the panel suspends
+ * and detaches the screen, but the machine keeps living at module scope —
+ * reopening the panel adopts it without a reboot (process lifetime decoupled
+ * from view lifetime). reboot() is the only real destroy path; a page reload
+ * is the only true session end.
+ */
+let sharedController: V86Controller | null = null
+
+/** Test-only: forget the shared session so each test starts with a fresh machine. */
+export function resetV86SessionForTests(): void {
+  sharedController = null
 }
 
 export function useV86(options: UseV86Options = {}): UseV86Result {
   const [isBooted, setIsBooted] = useState(false)
+  const [isSuspended, setIsSuspended] = useState(false)
   const [stateSaved, setStateSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const controllerRef = useRef<V86Controller | null>(null)
@@ -239,8 +267,10 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
       autoSaveRef.current = null
     }
     controllerRef.current?.destroy()
+    if (sharedController === controllerRef.current) sharedController = null
     controllerRef.current = null
     setIsBooted(false)
+    setIsSuspended(false)
   }, [])
 
   const init = useCallback(
@@ -249,20 +279,40 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
       containerRef.current = container
       const gen = ++initGenRef.current
       const stale = () => gen !== initGenRef.current
-      // Explicit media picks (selector) boot fresh — skip state restore so a
-      // saved hda session is never replayed onto a different image kind.
-      const explicitMedia = options.bootMedia != null && options.bootMedia !== 'auto'
+
+      const preset = options.statePresetId ? getGuiStatePreset(options.statePresetId) : undefined
+      if (options.statePresetId && !preset) {
+        setError(`Unknown GUI state preset: ${options.statePresetId}`)
+        return
+      }
+      // Explicit picks (media selector or desktop gallery) boot fresh — skip
+      // state restore so a saved session is never replayed onto a different
+      // machine.
+      const explicitMedia =
+        preset != null || (options.bootMedia != null && options.bootMedia !== 'auto')
 
       try {
-        const image = options.imageUrl
-          ? {
-              url: options.imageUrl,
-              size: options.imageSize,
-              kind: options.imageKind || ('hda' as const),
-            }
-          : options.bootMedia && options.bootMedia !== 'auto'
-            ? await resolveImageFor(options.bootMedia)
-            : await resolveDefaultImage()
+        // Reopen path: the shared controller already owns a live machine —
+        // adopt it (reattach the screen host) instead of rebooting.
+        if (sharedController?.hasMachine()) {
+          sharedController.attachScreen(container)
+          controllerRef.current = sharedController
+          setIsBooted(true)
+          setIsSuspended(sharedController.isSuspended())
+          return
+        }
+
+        const image = preset
+          ? null
+          : options.imageUrl
+            ? {
+                url: options.imageUrl,
+                size: options.imageSize,
+                kind: options.imageKind || ('hda' as const),
+              }
+            : options.bootMedia && options.bootMedia !== 'auto'
+              ? await resolveImageFor(options.bootMedia)
+              : await resolveDefaultImage()
         if (stale()) return
 
         const bios = options.biosUrl
@@ -270,24 +320,46 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
           : await resolveBios()
         if (stale()) return
 
-        const ctrl = new V86Controller()
+        const ctrl = sharedController ?? new V86Controller()
+        sharedController = ctrl
         controllerRef.current = ctrl
-        await ctrl.init(container, {
-          biosUrl: bios.bios,
-          vgaBiosUrl: options.vgaBiosUrl || bios.vga,
-          imageUrl: image.url,
-          imageSize: image.size,
-          imageKind: image.kind,
-          memoryMb: options.memoryMb || MEMORY_MB,
-          wasmPath: options.wasmPath || WASM_PATH,
-          cmdline: image.kind === 'kernel' ? KERNEL_CMDLINE : undefined,
-        })
+        // Invariant: exactly one of (state preset, resolved image) is set.
+        if (preset) {
+          await ctrl.init(container, {
+            biosUrl: bios.bios,
+            vgaBiosUrl: options.vgaBiosUrl || bios.vga,
+            wasmPath: options.wasmPath || WASM_PATH,
+            state: {
+              url: preset.stateUrl,
+              memoryMb: preset.memoryMb,
+              hda: {
+                url: preset.hdaUrl,
+                sizeBytes: preset.hdaSizeBytes,
+                chunkBytes: preset.hdaChunkBytes,
+              },
+              netDeviceType: preset.netDeviceType,
+            },
+          })
+        } else if (image) {
+          await ctrl.init(container, {
+            biosUrl: bios.bios,
+            vgaBiosUrl: options.vgaBiosUrl || bios.vga,
+            imageUrl: image.url,
+            imageSize: image.size,
+            imageKind: image.kind,
+            memoryMb: options.memoryMb || MEMORY_MB,
+            wasmPath: options.wasmPath || WASM_PATH,
+            cmdline: image.kind === 'kernel' ? KERNEL_CMDLINE : undefined,
+          })
+        }
         if (stale()) {
           ctrl.destroy()
+          if (sharedController === ctrl) sharedController = null
           if (controllerRef.current === ctrl) controllerRef.current = null
           return
         }
         setIsBooted(true)
+        setIsSuspended(false)
         setError(null)
         trackEvent('vm_booted')
 
@@ -298,14 +370,18 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
         }
 
         // Start auto-save — skip ticks when the emulator is not running
-        // (failed boot / stopped): save_state on a non-running machine throws
-        // and only spams logs every 30s.
-        autoSaveRef.current = setInterval(() => {
-          if (!ctrl.isRunning()) return
-          ctrl.persistState().catch((e) => {
-            logger.warning('VM auto-save failed', { exception: String(e) })
-          })
-        }, AUTO_SAVE_INTERVAL_MS)
+        // (failed boot / stopped / suspended): save_state on a non-running
+        // machine throws and only spams logs every 30s. GUI snapshot boots
+        // skip it entirely: the snapshot IS the session state, and sharing
+        // the IndexedDB key would evict the Linux session's state.
+        if (!preset) {
+          autoSaveRef.current = setInterval(() => {
+            if (!ctrl.isRunning()) return
+            ctrl.persistState().catch((e) => {
+              logger.warning('VM auto-save failed', { exception: String(e) })
+            })
+          }, AUTO_SAVE_INTERVAL_MS)
+        }
       } catch (err: unknown) {
         if (stale()) return
         trackEvent('vm_boot_error', {
@@ -321,6 +397,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
       options.imageSize,
       options.imageKind,
       options.bootMedia,
+      options.statePresetId,
       options.memoryMb,
       options.wasmPath,
     ],
@@ -354,12 +431,52 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
     trackEvent('vm_reset')
   }, [])
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      teardown()
-    }
-  }, [teardown])
+  /** Freeze the machine into standby — panel close does this automatically. */
+  const suspend = useCallback(() => {
+    controllerRef.current?.suspend()
+    setIsSuspended(true)
+    trackEvent('vm_suspended')
+  }, [])
 
-  return { isBooted, stateSaved, error, save, restore, reset, init, reboot }
+  /** Power on from standby. */
+  const resume = useCallback(() => {
+    controllerRef.current?.resume()
+    setIsSuspended(false)
+    trackEvent('vm_resumed')
+  }, [])
+
+  // View attachment lifecycle. On mount (including React StrictMode's
+  // grouped double-invoke: setup-all → cleanup-all → setup-again, where
+  // the panel's init attaches the host mid-cycle and cleanup-all would
+  // otherwise leave it detached) attach the persistent screen host. On
+  // unmount suspend + detach — the machine is a shared session that
+  // outlives the panel (standby with a power-on button on reopen);
+  // teardown()/reboot() is the only real destroy path.
+  useEffect(() => {
+    const ctrl = controllerRef.current ?? sharedController
+    if (ctrl?.hasMachine() && containerRef.current) {
+      ctrl.attachScreen(containerRef.current)
+    }
+    return () => {
+      const live = controllerRef.current
+      if (live) {
+        live.suspend()
+        live.detachScreen()
+      }
+    }
+  }, [])
+
+  return {
+    isBooted,
+    isSuspended,
+    stateSaved,
+    error,
+    save,
+    restore,
+    reset,
+    init,
+    reboot,
+    suspend,
+    resume,
+  }
 }

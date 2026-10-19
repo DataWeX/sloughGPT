@@ -144,16 +144,47 @@ async function openDB(): Promise<IDBDatabase> {
   })
 }
 
+/** Save-time machine profile for a GUI desktop snapshot boot (see lib/v86-gui-states.ts). */
+export interface V86StateBootConfig {
+  /** Same-origin snapshot file (initial_state url). */
+  url: string
+  /** Exact RAM the snapshot was saved with — restore aborts on any other. */
+  memoryMb: number
+  /**
+   * The snapshot's machine had an IDE primary disk. The saved drive buffer is
+   * a block-cache async file device, so hda must come back as one
+   * ({url,size,async,fixed_chunk_size}) — a sync buffer object throws in
+   * set_state — and its presence materializes the PIIX3 ide pci_bars that
+   * the state's PCI restore writes into.
+   */
+  hda?: { url: string; sizeBytes: number; chunkBytes: number }
+  /**
+   * Save-time NIC class. 'virtio' profiles (copy.sh bc:"virtio") saved a
+   * virtio-net device and a null ne2k slot — the default ne2k crashes
+   * restoring that slot ("null[0]").
+   */
+  netDeviceType?: 'ne2k' | 'virtio' | 'none'
+}
+
 export class V86Controller {
   private emulator: any = null
   private V86Class: any = null
+  /**
+   * Controller-owned screen host: v86's adapter binds its elements at
+   * construction, so the element React renders must not be the element v86
+   * paints into — a React unmount would orphan the adapter on a detached
+   * node. The panel only borrows the host (attachScreen/detachScreen moves
+   * the SAME node), keeping the adapter's references valid across remounts.
+   */
+  private screenHost: HTMLElement | null = null
 
   async init(
     screenContainer: HTMLElement,
     opts: {
       biosUrl: string
       vgaBiosUrl: string
-      imageUrl: string
+      /** Boot image URL (image boots only; state boots use `state.url`). */
+      imageUrl?: string
       imageSize?: number
       imageKind?: 'hda' | 'kernel' | 'iso'
       memoryMb?: number
@@ -166,30 +197,69 @@ export class V86Controller {
        * image to the busybox shell prompt; verified over serial 2026-10-18.
        */
       cmdline?: string
+      /**
+       * GUI desktop snapshot boot (initial_state). Pins the save-time machine
+       * profile: exact memory, async hda file device, NIC class. When set,
+       * imageUrl/imageKind/cmdline are ignored.
+       */
+      state?: V86StateBootConfig
     },
   ): Promise<void> {
     ensureV86SchedulingGlobals()
     this.V86Class = await loadV86Runtime()
 
-    const image = opts.imageSize
-      ? { url: opts.imageUrl, async: true, size: opts.imageSize }
-      : { url: opts.imageUrl }
+    // Fresh host per boot; destroy() removes it. In non-DOM runtimes (lib
+    // tests) fall back to the caller's container.
+    this.screenHost?.remove()
+    this.screenHost =
+      typeof document !== 'undefined' && typeof document.createElement === 'function'
+        ? document.createElement('div')
+        : null
+    if (this.screenHost) this.screenHostInitAttach(screenContainer)
 
-    // boot_order = 0x(THIRD)(SECOND)(FIRST), device codes 1=floppy 2=hd 3=cd.
-    // CD-first with hard-disk fallback: 0x123 (cd, hd, floppy).
-    const media =
-      opts.imageKind === 'kernel'
-        ? { bzimage: image }
-        : opts.imageKind === 'iso'
-          ? { cdrom: image, boot_order: 0x123 }
-          : { hda: image }
+    let media: Record<string, unknown> = {}
+    if (!opts.state) {
+      const image = opts.imageSize
+        ? { url: opts.imageUrl, async: true, size: opts.imageSize }
+        : { url: opts.imageUrl }
+
+      // boot_order = 0x(THIRD)(SECOND)(FIRST), device codes 1=floppy 2=hd 3=cd.
+      // CD-first with hard-disk fallback: 0x123 (cd, hd, floppy).
+      media =
+        opts.imageKind === 'kernel'
+          ? { bzimage: image }
+          : opts.imageKind === 'iso'
+            ? { cdrom: image, boot_order: 0x123 }
+            : { hda: image }
+    }
+
+    // Snapshot restore: initial_state plus the save-time profile. net_device
+    // is always explicit — its class must match the machine that saved the
+    // state (default 'ne2k' equals the library default).
+    const stateConfig: Record<string, unknown> = opts.state
+      ? {
+          initial_state: { url: opts.state.url },
+          net_device: { type: opts.state.netDeviceType ?? 'ne2k' },
+          ...(opts.state.hda
+            ? {
+                hda: {
+                  url: opts.state.hda.url,
+                  async: true,
+                  size: opts.state.hda.sizeBytes,
+                  fixed_chunk_size: opts.state.hda.chunkBytes,
+                },
+              }
+            : {}),
+        }
+      : {}
 
     this.emulator = new this.V86Class({
-      screen_container: screenContainer,
+      screen_container: this.screenHost ?? screenContainer,
       bios: { url: opts.biosUrl },
       vga_bios: { url: opts.vgaBiosUrl },
       ...media,
-      memory_size: (opts.memoryMb ?? 256) * 1024 * 1024,
+      ...stateConfig,
+      memory_size: ((opts.state ? opts.state.memoryMb : opts.memoryMb) ?? 256) * 1024 * 1024,
       vga_memory_size: 8 * 1024 * 1024,
       autostart: true,
       fastboot: true,
@@ -252,10 +322,51 @@ export class V86Controller {
     return this.emulator?.is_running() ?? false
   }
 
+  /**
+   * Move the persistent screen host into a (re)mounted panel container.
+   * appendChild MOVES the node, so the adapter's element references stay
+   * valid — the canvas never gets recreated across panel remounts.
+   */
+  attachScreen(container: HTMLElement): void {
+    if (this.screenHost) container.appendChild(this.screenHost)
+  }
+
+  /** Init-time attach: tolerates stub containers ({}) in non-DOM tests. */
+  private screenHostInitAttach(container: HTMLElement): void {
+    if (typeof container?.appendChild === 'function') container.appendChild(this.screenHost!)
+  }
+
+  /** Panel close: detach the screen but keep the host (and machine) alive. */
+  detachScreen(): void {
+    this.screenHost?.remove()
+  }
+
+  /** Standby: freeze the CPU (near-zero cost). The machine keeps its state. */
+  suspend(): void {
+    if (this.emulator?.is_running()) this.emulator.stop()
+  }
+
+  /** Power on from standby: resume the frozen machine. */
+  resume(): void {
+    if (this.emulator && !this.emulator.is_running()) this.emulator.run()
+  }
+
+  /** True when a machine exists but its CPU is frozen (standby). */
+  isSuspended(): boolean {
+    return this.emulator != null && !this.emulator.is_running()
+  }
+
+  /** True when a live machine exists (initialized and not destroyed). */
+  hasMachine(): boolean {
+    return this.emulator != null
+  }
+
   destroy(): void {
     if (this.emulator) {
       this.emulator.destroy?.()
       this.emulator = null
     }
+    this.detachScreen()
+    this.screenHost = null
   }
 }

@@ -973,12 +973,30 @@ git push -u origin feat/<name>   # push your own branch when done
   CDN: BIOS pair vendored (`public/bios/` — the copy.sh legacy host sends no
   CORS headers), emulator pair = copy.sh's current demo build in
   `public/v86/` (replaces the npm 0.5.456 pair; both stall identically
-  without the render fix — see Gotchas). HEAD `19c55567c` (3 commits atop
-  `c250ea4dc`): proven kernel cmdline (+ `earlyprintk=serial` mirror),
-  `ensureV86RenderScheduling()` rAF hidden-tab shim (+2 tests), panel screen
-  container styles, bare boot harness `public/v86-test.html` (bus-event
-  counters + serial capture). Gates: tsc clean, vitest 8068/8068 @ 838
-  files, eslint 0 errors. From `.wt-logentry`/`feat/v86-tiny-linux`.
+  without the render fix — see Gotchas). Then the GUI desktop gallery: 8
+  copy.sh snapshots vendored via `scripts/fetch_gui_images.sh`
+  (`public/gui/*.zst`, gitignored) and booted LIVE — the original "they
+  don't work" traced to three config-layer mismatches (lib is
+  byte-identical to copy.sh's current build; states were fine): exact
+  save-time memory, hda as an async file device (saved drive buffer is a
+  block-cache image; presence also materializes PIIX3 ide pci_bars), and
+  matching NIC class (copy.sh `bc:"virtio"` = virtio-NET, not storage —
+  a default ne2k crashes restoring virtio profiles' null ne2k slot).
+  Win98 + ReactOS verified restoring to a running CPU with working input.
+  Disk reads Range-fetch `/gui/disks/*.img` — images NOT vendored yet
+  (user: "forget for now"; states keep only written sectors, so file
+  access beyond the snapshot stalls; source = byte-range part files on
+  c.copy.sh, `<dir>/<start>-<end>.img` — the dotfile URL 404s). Landed
+  atop `379d1c371`: panel gallery ("Desktop states" selector over
+  `lib/v86-gui-states.ts`) + suspend/resume standby — closing the panel
+  detaches the controller-owned screen host and freezes the machine
+  (shared session outlives the view; remount adopts it, no reboot);
+  reopen shows a power-on button; reboot remains the only destroy path.
+  New: `initial_state` controller boot kind, `attachScreen/detachScreen`,
+  `suspend/resume/isSuspended/hasMachine`, +57 tests across
+  presets/controller/hook/panel (screen-host identity across remounts
+  included). Gates: tsc clean, full vitest suite green, eslint 0 errors.
+  From `.wt-logentry`/`feat/v86-tiny-linux`.
 
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useV86 } from './useV86'
+import { useV86, resetV86SessionForTests } from './useV86'
 
 vi.mock('@/lib/dev-log', () => ({
   logger: { child: () => ({ warning: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }) },
@@ -14,6 +14,12 @@ vi.mock('@/lib/v86-controller', () => {
   const mockRestoreState = vi.fn().mockResolvedValue(undefined)
   const mockRestart = vi.fn()
   const mockDestroy = vi.fn()
+  const mockHasMachine = vi.fn().mockReturnValue(false)
+  const mockAttachScreen = vi.fn()
+  const mockDetachScreen = vi.fn()
+  const mockSuspend = vi.fn()
+  const mockResume = vi.fn()
+  const mockIsSuspended = vi.fn().mockReturnValue(false)
 
   return {
     V86Controller: vi.fn().mockImplementation(() => ({
@@ -23,6 +29,12 @@ vi.mock('@/lib/v86-controller', () => {
       restoreState: mockRestoreState,
       restart: mockRestart,
       destroy: mockDestroy,
+      hasMachine: mockHasMachine,
+      attachScreen: mockAttachScreen,
+      detachScreen: mockDetachScreen,
+      suspend: mockSuspend,
+      resume: mockResume,
+      isSuspended: mockIsSuspended,
       save_state: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
       is_running: vi.fn().mockReturnValue(true),
       isRunning: vi.fn().mockReturnValue(true),
@@ -33,6 +45,9 @@ vi.mock('@/lib/v86-controller', () => {
 describe('useV86', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // The hook keeps a module-level shared session (the VM outlives panel
+    // unmounts); reset it so each test starts with a fresh machine.
+    resetV86SessionForTests()
     vi.useFakeTimers()
     // init() probes the default boot image before constructing the controller;
     // answer "local image exists, 8MB" without real network I/O.
@@ -360,5 +375,97 @@ describe('useV86', () => {
     const { probeImage } = await import('./useV86')
     expect((await probeImage('/buildroot/missing.iso')).available).toBe(false)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('boots a GUI state preset via initial_state config, skipping restore and auto-save', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const { result } = renderHook(() => useV86({ statePresetId: 'reactos' }))
+
+    await act(async () => {
+      await result.current.init(document.createElement('div'))
+    })
+
+    expect(result.current.isBooted).toBe(true)
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(instance.init).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        state: expect.objectContaining({
+          url: '/gui/reactos_state-v3.bin.zst',
+          memoryMb: 512,
+          netDeviceType: 'virtio',
+          hda: expect.objectContaining({
+            url: '/gui/disks/reactos.img',
+            sizeBytes: 734003200,
+            chunkBytes: 1048576,
+          }),
+        }),
+      }),
+    )
+    // A desktop snapshot is self-contained: never replay the IndexedDB Linux
+    // session onto it, and never overwrite that session with auto-saves.
+    expect(instance.restoreState).not.toHaveBeenCalled()
+    expect(instance.persistState).not.toHaveBeenCalled()
+  })
+
+  it('unknown state preset fails with an actionable error', async () => {
+    const { result } = renderHook(() => useV86({ statePresetId: 'does-not-exist' }))
+
+    await act(async () => {
+      await result.current.init(document.createElement('div'))
+    })
+
+    expect(result.current.isBooted).toBe(false)
+    expect(result.current.error).toMatch(/Unknown GUI state preset/)
+  })
+
+  it('suspend and resume flip isSuspended around the controller', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const { result } = renderHook(() => useV86())
+
+    await act(async () => {
+      await result.current.init(document.createElement('div'))
+    })
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+
+    act(() => {
+      result.current.suspend()
+    })
+    expect(instance.suspend).toHaveBeenCalledTimes(1)
+    expect(result.current.isSuspended).toBe(true)
+
+    act(() => {
+      result.current.resume()
+    })
+    expect(instance.resume).toHaveBeenCalledTimes(1)
+    expect(result.current.isSuspended).toBe(false)
+  })
+
+  it('unmount suspends and detaches without destroying; remount adopts the live machine', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const first = renderHook(() => useV86())
+    const container = document.createElement('div')
+
+    await act(async () => {
+      await first.result.current.init(container)
+    })
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    // After init the shared controller owns a machine; hasMachine reflects it.
+    instance.hasMachine.mockReturnValue(true)
+
+    first.unmount()
+    expect(instance.suspend).toHaveBeenCalledTimes(1)
+    expect(instance.detachScreen).toHaveBeenCalledTimes(1)
+    expect(instance.destroy).not.toHaveBeenCalled()
+
+    // Reopen the panel: the machine is adopted, not rebooted.
+    const second = renderHook(() => useV86())
+    await act(async () => {
+      await second.result.current.init(document.createElement('div'))
+    })
+    expect(instance.init).toHaveBeenCalledTimes(1)
+    expect(instance.attachScreen).toHaveBeenCalled()
+    expect(second.result.current.isBooted).toBe(true)
+    expect(second.result.current.error).toBeNull()
   })
 })
