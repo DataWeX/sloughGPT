@@ -119,7 +119,9 @@ class ChatRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> StreamingResponse:
         """Streaming chat response (SSE) — the same generation path, streamed."""
-        return await self._generate(request, stream=True, http_request=http_request, auth_user=auth_user)
+        return await self._generate(
+            request, stream=True, http_request=http_request, auth_user=auth_user
+        )
 
     @endpoint("chat.regenerate")
     async def regenerate(
