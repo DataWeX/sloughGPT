@@ -21,7 +21,7 @@ import logging
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
-from avion.events.models import Event
+from avion.events.models import Event, strip_screenshot
 
 
 @runtime_checkable
@@ -74,14 +74,14 @@ class StdlibSink:
             level = logging.ERROR if event.error else logging.WARNING
         else:
             level = self._level
-        # to_dict() already drops screenshot bytes (flag only) — never
-        # re-attach raw data here or a LogRecord carries megabytes.
+        # to_dict keeps screenshot pixels (base64) for durable stores — strip
+        # them here so a LogRecord never carries megabytes; the flag stays.
         self._logger.log(
             level,
             "%s %s",
             event.type.value,
             event.name,
-            extra={"avion_event": event.to_dict()},
+            extra={"avion_event": strip_screenshot(event.to_dict())},
         )
 
 

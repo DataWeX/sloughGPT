@@ -26,6 +26,7 @@ Degrades with a stated skip when no Chromium is available.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -131,8 +132,9 @@ class TestEventRoundTrip:
         assert back.timestamp == 1000.5
         assert back.seq == 7
 
-    def test_screenshot_flag_is_dropped_never_faked(self):
-        """to_dict stores a presence flag; from_dict must not turn it into data."""
+    def test_screenshot_persists_as_base64_flag_stays_additive(self):
+        """save()/journal keep the pixels (base64) — the presence-flag-only
+        hole is closed; the flag stays additive and never fakes into data."""
         e = Event(
             type=EventType.SCREENSHOT,
             name="p.png",
@@ -140,10 +142,16 @@ class TestEventRoundTrip:
         )
         d = e.to_dict()
         assert d["has_screenshot"] is True
-        assert "screenshot" not in d["data"]
+        assert d["data"]["screenshot"] == base64.b64encode(b"\x89PNG").decode("ascii")
+        assert '"\\x89' not in json.dumps(d)  # never raw bytes in JSON
         back = Event.from_dict(d)
-        assert "screenshot" not in back.data
-        assert "has_screenshot" not in back.data
+        assert back.data["screenshot"] == b"\x89PNG"  # pixels round-trip
+        assert back.data["path"] == "p.png"
+        assert "has_screenshot" not in back.data  # flag never becomes data
+        # legacy file (flag only, written before pixels persisted): loads as-is
+        legacy = Event.from_dict({"type": "screenshot", "name": "p.png", "has_screenshot": True})
+        assert "screenshot" not in legacy.data
+        assert legacy.data == {}
 
     def test_optional_fields_default_when_absent(self):
         back = Event.from_dict({"type": "navigate", "name": "/"})
