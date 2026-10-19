@@ -532,6 +532,54 @@ class TensorDevice:
         rms = np.sqrt(np.mean(x**2, axis=-1, keepdims=True) + eps)
         return x / rms * w
 
+    # ── VM-instruction tensor ops (the board CPU delegates these here) ──────
+    # Explicit signatures because the CPU calls them directly with fixed arity.
+    # Operands arrive already parsed by the CPU, so they are consumed as-is —
+    # this mirrors the expressions that used to live inline in the CPU shims.
+
+    def _norm(self, x):
+        """L2 norm (VM NORM)."""
+        return np.linalg.norm(x)
+
+    def _shape(self, x):
+        """Tensor shape as a list (VM SHAPE)."""
+        return list(x.shape)
+
+    def _size(self, x):
+        """Element count (VM SIZE)."""
+        return int(x.size)
+
+    def _layernorm_global(self, x):
+        """Plain weightless layernorm, global reduction (VM LAYERNORM).
+
+        Distinct from ``_layer_norm`` (affine: weight/bias, axis=-1) — this is
+        the statistical, axis-free normalization the VM opcode specifies.
+        """
+        return (x - np.mean(x)) / np.sqrt(np.var(x) + 1e-5)
+
+    def _rmsnorm_global(self, x):
+        """Plain weightless rmsnorm, global reduction (VM RMSNORM).
+
+        Distinct from ``_rms_norm`` (affine: weight, axis=-1).
+        """
+        return x / np.sqrt(np.mean(x**2) + 1e-5)
+
+    def _randn(self, rows, cols):
+        """Standard-normal tensor (VM RANDN)."""
+        return np.random.randn(rows, cols)
+
+    def _randunif(self, rows, cols, lo, hi):
+        """Uniform tensor (VM RANDUNIF)."""
+        return np.random.uniform(lo, hi, (rows, cols))
+
+    def _safe_div(self, a, b):
+        """Division with inf/nan -> 0 (VM DIV: the guard is part of the contract)."""
+        with np.errstate(divide="ignore", invalid="ignore"):
+            result = self._div(a, b)
+            result = np.where(np.isinf(result), 0.0, result)
+            result = np.where(np.isnan(result), 0.0, result)
+        return result
+
     def _attention(self, *args):
         query, key, value = args[0], args[1], args[2]
         mask = args[3] if len(args) > 3 else None

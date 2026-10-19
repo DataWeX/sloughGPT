@@ -3137,11 +3137,7 @@ def _op_div(cpu, ops):
     rd = cpu._reg(ops[0])
     a = cpu._parse_tensor(cpu._val(ops[1]))
     b = cpu._parse_tensor(cpu._val(ops[2]))
-    with np.errstate(divide="ignore", invalid="ignore"):
-        result = cpu._tensor._div(a, b)
-        result = np.where(np.isinf(result), 0.0, result)
-        result = np.where(np.isnan(result), 0.0, result)
-    cpu.regs[rd] = result
+    cpu.regs[rd] = cpu._tensor._safe_div(a, b)
 
 
 def _op_neg(cpu, ops):
@@ -3190,7 +3186,7 @@ def _op_dot(cpu, ops):
 
 def _op_norm(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = float(np.linalg.norm(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._norm(cpu._parse_tensor(cpu._val(ops[1]))))
 
 
 def _op_sum(cpu, ops):
@@ -3223,12 +3219,12 @@ def _op_reshape(cpu, ops):
 
 def _op_shape(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = list(cpu._parse_tensor(cpu._val(ops[1])).shape)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._shape(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_size(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = int(cpu._parse_tensor(cpu._val(ops[1])).size)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._size(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_relu(cpu, ops):
@@ -3262,20 +3258,20 @@ def _op_softmax(cpu, ops):
 def _op_layernorm(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = (a - np.mean(a)) / np.sqrt(np.var(a) + 1e-5)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._layernorm_global(a)
 
 
 def _op_rmsnorm(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = a / np.sqrt(np.mean(a**2) + 1e-5)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._rmsnorm_global(a)
 
 
 def _op_randn(cpu, ops):
     cpu._check_arity(ops, 3)
     r = int(ops[1]) if isinstance(ops[1], (int, float)) else 1
     c = int(ops[2]) if isinstance(ops[2], (int, float)) else 1
-    cpu.regs[cpu._reg(ops[0])] = np.random.randn(r, c)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._randn(r, c)
 
 
 def _op_randunif(cpu, ops):
@@ -3284,7 +3280,7 @@ def _op_randunif(cpu, ops):
     c = int(ops[2]) if isinstance(ops[2], (int, float)) else 1
     lo = float(ops[3]) if isinstance(ops[3], (int, float)) else 0.0
     hi = float(ops[4]) if isinstance(ops[4], (int, float)) else 1.0
-    cpu.regs[cpu._reg(ops[0])] = np.random.uniform(lo, hi, (r, c))
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._randunif(r, c, lo, hi)
 
 
 # ── Comparison ───────────────────────────────────────────────────────────────
