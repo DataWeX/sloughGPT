@@ -72,7 +72,7 @@ export default function ConsciousnessPersonalityPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await consciousnessController.updatePersonality(editTraits)
+      await consciousnessController.updatePersonality({ traits: editTraits })
       addToast('Personality traits updated', 'success')
       setIsEditing(false)
       await fetchAll()

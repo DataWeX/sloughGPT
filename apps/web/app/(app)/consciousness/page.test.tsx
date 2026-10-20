@@ -20,12 +20,13 @@ const mockStatus = {
   },
   beliefs: { helpful: 0.9, accurate: 0.7 },
   episodes: 10,
-  narrative: 'Test narrative',
   training: {
+    pairs_collected: 15,
+    min_pairs: 10,
+    should_train: false,
     is_training: false,
-    total_pairs: 15,
-    current_epoch: 0,
-    loss: 0.0,
+    training_runs: 0,
+    last_result: null,
   },
 }
 

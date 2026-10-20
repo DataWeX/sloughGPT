@@ -37,7 +37,7 @@ describe('ConsciousnessVersionsPage', () => {
     vi.clearAllMocks()
     localStorage.clear()
     mockController.getStatus.mockResolvedValue({ level: 2, enabled: true } as any)
-    mockController.getPersonality.mockResolvedValue({ voice: 'Analytical', traits: ['curious', 'precise'], style: 'Formal' } as any)
+    mockController.getPersonality.mockResolvedValue({ voice: { formality: 0.8, warmth: 0.3 }, traits: { curious: 0.9, precise: 0.8 }, style: { use_examples: true } } as any)
     mockController.updateConfig.mockResolvedValue({ updated: true } as any)
     mockController.updatePersonality.mockResolvedValue({ updated: true } as any)
   })
@@ -89,7 +89,7 @@ describe('ConsciousnessVersionsPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Full').length).toBeGreaterThan(0)
       expect(screen.getAllByText('Active').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('Analytical').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('formality: 0.80, warmth: 0.30').length).toBeGreaterThan(0)
     })
   })
 })

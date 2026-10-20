@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type ConsciousnessStatus } from '@/lib/consciousness-controller'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,17 +72,6 @@ interface PersonalityPrefs {
 interface ConfigStatus {
   level: number
   enabled: boolean
-}
-
-interface FullStatus {
-  enabled: boolean
-  level: number
-  episodes: number
-  beliefs: Record<string, number>
-  training: {
-    is_training: boolean
-    total_pairs: number
-  }
 }
 
 const DEFAULT_PREFS: AllPrefs = {
@@ -156,7 +145,7 @@ export default function AllSettingsPage() {
   const addToast = useToastStore(s => s.addToast)
   const { t } = useLocale()
   const [config, setConfig] = useState<ConfigStatus | null>(null)
-  const [status, setStatus] = useState<FullStatus | null>(null)
+  const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
   const [prefs, setPrefs] = useState<AllPrefs>(DEFAULT_PREFS)
   const [personality, setPersonality] = useState<PersonalityPrefs>(DEFAULT_PERSONALITY)
   const [loading, setLoading] = useState(true)
@@ -168,8 +157,8 @@ export default function AllSettingsPage() {
   const fetchStatus = useCallback(async () => {
     try {
       const data = await consciousnessController.getStatus()
-      setStatus(data as FullStatus)
-      setConfig({ level: (data as FullStatus).level ?? 0, enabled: (data as FullStatus).enabled ?? false })
+      setStatus(data)
+      setConfig({ level: data.level ?? 0, enabled: data.enabled ?? false })
     } catch (e) {
       console.error('Failed to fetch consciousness status', e)
     }

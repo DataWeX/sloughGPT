@@ -38,9 +38,19 @@ interface ConfigSnapshot {
 }
 
 interface PersonalitySnapshot {
-  voice?: string
-  traits?: string[]
-  style?: string
+  voice?: Record<string, number>
+  traits?: Record<string, number>
+  style?: Record<string, boolean>
+}
+
+/** One-line summary of a personality metric record (voice/traits/style). */
+function summarizeMetrics(record: Record<string, unknown> | undefined | null): string {
+  if (!record) return '—'
+  const entries = Object.entries(record)
+  if (entries.length === 0) return '—'
+  return entries
+    .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'number' ? v.toFixed(2) : String(v)}`)
+    .join(', ')
 }
 
 interface SavedVersion {
@@ -123,7 +133,7 @@ export default function ConsciousnessVersionsPage() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const data = await consciousnessController.getStatus() as any
+      const data = await consciousnessController.getStatus()
       setConfig({ level: data?.level ?? 0, enabled: data?.enabled ?? false })
     } catch (e) {
       console.error('Failed to fetch consciousness config', e)
@@ -132,12 +142,8 @@ export default function ConsciousnessVersionsPage() {
 
   const fetchPersonality = useCallback(async () => {
     try {
-      const data = await consciousnessController.getPersonality() as any
-      setPersonality({
-        voice: data?.voice || data?.tone || '',
-        traits: data?.traits || data?.personality_traits || [],
-        style: data?.style || data?.response_style || '',
-      })
+      const data = await consciousnessController.getPersonality()
+      setPersonality({ voice: data.voice, traits: data.traits, style: data.style })
     } catch (e) {
       console.error('Failed to fetch consciousness personality', e)
     }
@@ -200,7 +206,10 @@ export default function ConsciousnessVersionsPage() {
       await consciousnessController.updateConfig(restoreTarget.config as unknown as Record<string, unknown>)
 
       if (restoreTarget.personality) {
-        await consciousnessController.updatePersonality(restoreTarget.personality as Record<string, number>)
+        // Absent keys are dropped by JSON serialization, so the backend leaves
+        // the corresponding personality fields untouched (no empty-dict wipe).
+        const snap = restoreTarget.personality
+        await consciousnessController.updatePersonality({ traits: snap.traits, voice: snap.voice, style: snap.style })
       }
 
       setConfig(restoreTarget.config)
@@ -308,20 +317,20 @@ export default function ConsciousnessVersionsPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{t('consciousness_versions.voice')}</p>
-                  <p className="text-sm font-medium mt-0.5">{personality?.voice || '—'}</p>
+                  <p className="text-sm font-medium mt-0.5">{summarizeMetrics(personality?.voice)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{t('consciousness_versions.style')}</p>
-                  <p className="text-sm font-medium mt-0.5">{personality?.style || '—'}</p>
+                  <p className="text-sm font-medium mt-0.5">{summarizeMetrics(personality?.style)}</p>
                 </div>
               </div>
             )}
-            {personality?.traits && personality.traits.length > 0 && (
+            {personality?.traits && Object.keys(personality.traits).length > 0 && (
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{t('consciousness_versions.traits')}</p>
                 <div className="flex flex-wrap gap-1 mt-1">
-                  {personality.traits.map((trait, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">{trait}</Badge>
+                  {Object.keys(personality.traits).map((trait) => (
+                    <Badge key={trait} variant="outline" className="text-xs">{trait}</Badge>
                   ))}
                 </div>
               </div>
@@ -380,13 +389,13 @@ export default function ConsciousnessVersionsPage() {
                         <Badge variant="outline" className="text-xs shrink-0">{LEVEL_LABELS[version.config.level] || `L${version.config.level}`}</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">{formatDate(version.timestamp)}</p>
-                      {version.personality?.traits && version.personality.traits.length > 0 && (
+                      {version.personality?.traits && Object.keys(version.personality.traits).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {version.personality.traits.slice(0, 3).map((trait, i) => (
-                            <Badge key={i} variant="secondary" className="text-[10px]">{trait}</Badge>
+                          {Object.keys(version.personality.traits).slice(0, 3).map((trait) => (
+                            <Badge key={trait} variant="secondary" className="text-[10px]">{trait}</Badge>
                           ))}
-                          {version.personality.traits.length > 3 && (
-                            <Badge variant="secondary" className="text-[10px]">+{version.personality.traits.length - 3}</Badge>
+                          {Object.keys(version.personality.traits).length > 3 && (
+                            <Badge variant="secondary" className="text-[10px]">+{Object.keys(version.personality.traits).length - 3}</Badge>
                           )}
                         </div>
                       )}
@@ -523,20 +532,20 @@ export default function ConsciousnessVersionsPage() {
                   {renderDiffRow(t('consciousness_versions.enabled'), left.config.enabled ? 'Yes' : 'No', right.config.enabled ? 'Yes' : 'No')}
                   <div className="border-t border-border/30 pt-3 mt-3">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2">{t('consciousness_versions.personality_diff')}</p>
-                    {renderDiffRow(t('consciousness_versions.voice'), left.personality?.voice || '—', right.personality?.voice || '—')}
-                    {renderDiffRow(t('consciousness_versions.style'), left.personality?.style || '—', right.personality?.style || '—')}
+                    {renderDiffRow(t('consciousness_versions.voice'), summarizeMetrics(left.personality?.voice), summarizeMetrics(right.personality?.voice))}
+                    {renderDiffRow(t('consciousness_versions.style'), summarizeMetrics(left.personality?.style), summarizeMetrics(right.personality?.style))}
                     <div className="mt-2">
                       <div className="flex items-center gap-3 text-sm">
                         <span className="w-24 text-muted-foreground shrink-0">{t('consciousness_versions.traits')}</span>
                         <span className="flex-1 flex flex-wrap gap-1">
-                          {(left.personality?.traits || []).map((trait, i) => (
-                            <Badge key={i} variant="outline" className="text-xs bg-destructive/10 text-destructive dark:text-destructive border-destructive/30">{trait}</Badge>
+                          {Object.keys(left.personality?.traits ?? {}).map((trait) => (
+                            <Badge key={trait} variant="outline" className="text-xs bg-destructive/10 text-destructive dark:text-destructive border-destructive/30">{trait}</Badge>
                           ))}
                         </span>
                         <span className="text-muted-foreground text-xs">→</span>
                         <span className="flex-1 flex flex-wrap gap-1">
-                          {(right.personality?.traits || []).map((trait, i) => (
-                            <Badge key={i} variant="outline" className="text-xs bg-success/10 text-success dark:text-success border-success/30">{trait}</Badge>
+                          {Object.keys(right.personality?.traits ?? {}).map((trait) => (
+                            <Badge key={trait} variant="outline" className="text-xs bg-success/10 text-success dark:text-success border-success/30">{trait}</Badge>
                           ))}
                         </span>
                       </div>

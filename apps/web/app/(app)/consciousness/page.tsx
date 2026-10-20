@@ -2,33 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type ConsciousnessStatus } from '@/lib/consciousness-controller'
 import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Skeleton, Slider, Switch } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
-
-interface ConsciousnessStatus {
-  enabled: boolean
-  level: number
-  current_qualia: {
-    valence: number
-    arousal: number
-    novelty: number
-    coherence: number
-    salience: number
-    certainty: number
-    complexity: number
-  }
-  beliefs: Record<string, number>
-  episodes: number
-  narrative: string
-  training: {
-    is_training: boolean
-    total_pairs: number
-    current_epoch: number
-    loss: number
-  }
-}
 
 interface EvalReport {
   overall_score: number
@@ -72,7 +49,7 @@ export default function ConsciousnessPage() {
   const fetchStatus = useCallback(async () => {
     try {
       const data = await consciousnessController.getStatus()
-      setStatus(data as unknown as ConsciousnessStatus)
+      setStatus(data)
       setLevel(data.level ?? 0)
     } catch (e) {
       console.error('Failed to fetch consciousness status', e)
@@ -499,33 +476,19 @@ export default function ConsciousnessPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Training Pairs: </span>
-                  <span className="font-mono">{status.training.total_pairs}</span>
+                  <span className="font-mono">{status.training.pairs_collected}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Episodes: </span>
                   <span className="font-mono">{status.episodes}</span>
                 </div>
-                {status.training.loss > 0 && (
+                {status.training.last_result?.loss != null && status.training.last_result.loss > 0 && (
                   <div>
                     <span className="text-muted-foreground">Loss: </span>
-                    <span className="font-mono">{status.training.loss.toFixed(4)}</span>
+                    <span className="font-mono">{status.training.last_result.loss.toFixed(4)}</span>
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {status?.narrative && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Narrative</CardTitle>
-              <CardDescription>Auto-generated consciousness narrative</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {status.narrative}
-              </p>
             </CardContent>
           </Card>
         )}

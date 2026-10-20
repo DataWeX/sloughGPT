@@ -4,22 +4,29 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/http-client'
 import { createSSEStream } from '@/lib/sse-client'
 
+/** True payload of GET /consciousness/status — engine.get_status() + router-injected training (trainer.get_status()). */
 export interface ConsciousnessStatus {
-  status: string
-  uptime: number
-  episodes: number
-  beliefs_count: number
-  qualia_count: number
   enabled: boolean
   level: number
-  current_qualia: Record<string, number>
+  episodes: number
   beliefs: Record<string, number>
-  narrative: string
+  current_qualia: Record<string, number>
+  curiosity_topics: Record<string, unknown>
   training: {
+    pairs_collected: number
+    min_pairs: number
+    should_train: boolean
     is_training: boolean
-    total_pairs: number
-    current_epoch: number
-    loss: number
+    training_runs: number
+    /** Last entry of the trainer's run history, null before the first run. */
+    last_result: {
+      timestamp: number
+      status: string
+      pairs: number
+      loss: number | null
+      adapter: string | null
+      elapsed: number
+    } | null
   }
 }
 
@@ -88,7 +95,7 @@ export interface Personality {
   values: string[]
   goals: string[]
   voice: Record<string, number>
-  style: Record<string, unknown>
+  style: Record<string, boolean>
   traits: Record<string, number>
   interests: string[]
   avoid: string[]
@@ -211,8 +218,21 @@ export const consciousnessController = {
     return apiGet<Personality>('/consciousness/personality')
   },
 
-  async updatePersonality(traits: Record<string, number>): Promise<{ updated: boolean }> {
-    return apiPatch('/consciousness/personality', { traits })
+  /**
+   * PATCH /consciousness/personality — body mirrors the backend's
+   * PersonalityUpdateRequest (all fields optional; absent keys are dropped
+   * by JSON serialization so the backend leaves them untouched).
+   */
+  async updatePersonality(update: {
+    values?: string[]
+    goals?: string[]
+    voice?: Record<string, number>
+    style?: Record<string, boolean>
+    traits?: Record<string, number>
+    interests?: string[]
+    avoid?: string[]
+  }): Promise<{ updated: boolean }> {
+    return apiPatch('/consciousness/personality', update)
   },
 
   async resetPersonality(): Promise<{ reset: boolean }> {

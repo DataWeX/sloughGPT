@@ -123,13 +123,13 @@ export default function ConsciousnessMonitorPage() {
 
       if (episodesResult.status === 'fulfilled') {
         const eps = episodesResult.value.episodes ?? []
-        const lastRating = (eps[eps.length - 1] as any)?.rating
+        const lastRating = eps.at(-1)?.rating
         if (lastRating !== undefined) {
           setRatingStream(prev => [...prev, lastRating].slice(-10))
         }
       }
 
-      const memPerf = (performance as any).memory
+      const memPerf = (performance as Performance & { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory
       if (memPerf) {
         setMemoryUsage(Math.min(100, (memPerf.usedJSHeapSize / memPerf.jsHeapSizeLimit) * 100))
       } else {

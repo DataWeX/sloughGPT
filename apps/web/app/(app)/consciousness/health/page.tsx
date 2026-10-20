@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type ConsciousnessStatus } from '@/lib/consciousness-controller'
 import {
   Card, CardContent, CardHeader, CardTitle, Skeleton, Switch,
 } from '@sloughgpt/strui'
@@ -20,13 +20,6 @@ interface HealthData {
   positive_ratio: number
   qualia: Record<string, number>
   last_reflection: string
-}
-
-interface StatusData {
-  response_quality: number
-  last_reflection: string
-  training_pairs?: number
-  [key: string]: unknown
 }
 
 interface EvalData {
@@ -88,7 +81,7 @@ export default function ConsciousnessHealthPage() {
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [health, setHealth] = useState<HealthData | null>(null)
-  const [status, setStatus] = useState<StatusData | null>(null)
+  const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
   const [evalData, setEvalData] = useState<EvalData | null>(null)
   const [episodesData, setEpisodesData] = useState<EpisodesData | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(false)
@@ -118,7 +111,7 @@ export default function ConsciousnessHealthPage() {
         }
       }
       if (sResult.status === 'fulfilled') {
-        setStatus(sResult.value as unknown as StatusData)
+        setStatus(sResult.value)
       }
       if (eResult.status === 'fulfilled') {
         setEvalData(eResult.value as unknown as EvalData)
@@ -177,7 +170,7 @@ export default function ConsciousnessHealthPage() {
 
   const avgGrowthPct = health ? (health.avg_growth * 100).toFixed(1) : '—'
   const positiveRatioPct = health ? `${(health.positive_ratio * 100).toFixed(0)}%` : '—'
-  const trainingPairs = (status as any)?.training?.total_pairs ?? (status as any)?.training_pairs ?? 0
+  const trainingPairs = status?.training?.pairs_collected ?? 0
 
   const diagnosticSeverity = (msg: string): 'info' | 'warning' | 'error' => {
     const lower = msg.toLowerCase()
@@ -314,7 +307,7 @@ export default function ConsciousnessHealthPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xs text-muted-foreground truncate">
-                {health?.last_reflection || status?.last_reflection || '—'}
+                {health?.last_reflection || '—'}
               </div>
             </CardContent>
           </Card>

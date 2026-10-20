@@ -130,7 +130,17 @@ export default function ConsciousnessQuickstartPage() {
     router.push('/chat')
   }
 
-  const steps = [
+  interface QuickstartStep {
+    num: number
+    titleKey: string
+    descKey: string
+    actionKey: string
+    done: boolean
+    onClick: () => void
+    loading?: boolean
+  }
+
+  const steps: QuickstartStep[] = [
     {
       num: 1,
       titleKey: 'consciousness_quickstart.step1_title',
@@ -227,9 +237,9 @@ export default function ConsciousnessQuickstartPage() {
                   size="sm"
                   variant={step.done ? 'secondary' : 'default'}
                   onClick={step.onClick}
-                  disabled={(step as any).loading}
+                  disabled={step.loading}
                 >
-                  {(step as any).loading ? '...' : step.done ? t('consciousness_quickstart.done') : t(step.actionKey)}
+                  {step.loading ? '...' : step.done ? t('consciousness_quickstart.done') : t(step.actionKey)}
                 </Button>
               </div>
             ))}

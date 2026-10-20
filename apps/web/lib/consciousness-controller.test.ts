@@ -19,11 +19,20 @@ describe('consciousnessController.getStatus', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs /consciousness/status', async () => {
-    apiClient.apiGet.mockResolvedValue({ status: 'active', uptime: 3600, episodes: 42, beliefs_count: 10, qualia_count: 5 })
+    apiClient.apiGet.mockResolvedValue({
+      enabled: true,
+      level: 1,
+      episodes: 42,
+      beliefs: { honesty: 1 },
+      current_qualia: { valence: 0.5 },
+      curiosity_topics: {},
+      training: { pairs_collected: 7, min_pairs: 10, should_train: false, is_training: false, training_runs: 0, last_result: null },
+    })
     const result = await consciousnessController.getStatus()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/consciousness/status')
-    expect(result.status).toBe('active')
+    expect(result.enabled).toBe(true)
     expect(result.episodes).toBe(42)
+    expect(result.training.pairs_collected).toBe(7)
   })
 })
 
@@ -117,7 +126,7 @@ describe('consciousnessController.updatePersonality', () => {
 
   it('PATCHes /consciousness/personality with traits', async () => {
     apiClient.apiPatch.mockResolvedValue({ updated: true })
-    const result = await consciousnessController.updatePersonality({ openness: 0.95 })
+    const result = await consciousnessController.updatePersonality({ traits: { openness: 0.95 } })
     expect(apiClient.apiPatch).toHaveBeenCalledWith('/consciousness/personality', { traits: { openness: 0.95 } })
     expect(result.updated).toBe(true)
   })

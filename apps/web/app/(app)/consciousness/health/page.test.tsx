@@ -45,9 +45,13 @@ const mockHealth = {
 }
 
 const mockStatus = {
-  response_quality: 75,
-  last_reflection: 'Good response quality',
-  training: { total_pairs: 20 },
+  enabled: true,
+  level: 2,
+  episodes: 50,
+  beliefs: {},
+  current_qualia: {},
+  curiosity_topics: {},
+  training: { pairs_collected: 20, min_pairs: 10, should_train: false, is_training: false, training_runs: 0, last_result: null },
 }
 
 const mockEval = {
