@@ -987,23 +987,28 @@ git push -u origin feat/<name>   # push your own branch when done
   flip; RFC6455 WS deferred (flip gated on it). Next lane: NPU CAPS.
   From `.wt-worldbrain`.
 
-- **2026-10-19 · `feat/npu-caps` — OS design L2, CAPS contract phase 1
-  (card `d74e2cef`, stacked on `feat/wire-py`).** `IoctlCommand.CAPS` +
-  `TensorDevice.caps()` = the tensor unit's machine-readable contract
-  `{name, type, ops, dtypes, backend, parity}` — declared once on the ONE
-  TensorDevice whose three faces (CPU tensor backend
-  `vm._default_tensor`, kernel `NPUDevice._compute`, runtime
+- **2026-10-19 · `feat/npu-caps` — OS design L2, CAPS + native tensor
+  kernels, card DONE (phase 2; `d74e2cef`, stacked on `feat/wire-py`).**
+  `IoctlCommand.CAPS` + `TensorDevice.caps()` = the tensor unit's
+  machine-readable contract `{name, type, ops, dtypes, backend, parity}`
+  — declared once on the ONE TensorDevice whose three faces (CPU tensor
+  backend `vm._default_tensor`, kernel `NPUDevice._compute`, runtime
   DeviceManager `"tensor"`) all reach it through the same
-  `ioctl()/call()` path. `ops` is single-sourced from
-  `list_commands()`; a drift test asserts every advertised op resolves
-  in the dispatch table; backend/parity report phase-1 truth (numpy, no
-  native routing). TDD: new `packages/core-py/tests/test_tensor_caps.py`
-  14 RED -> GREEN (+1 phase-2 xfail); tensor suite 76 green; face
-  suites fail identically with/without the change (stash-diff proven
-  pre-existing); ruff clean. sha `05fd1d1f8`. NEXT phase 2:
-  benchmark-first (`scripts/benchmark_tensor_kernels.py` to pick winners
-  honestly), then `NativeEngines` routing + native-vs-numpy parity + fill
-  CAPS. From `.wt-worldbrain`.
+  `ioctl()/call()` path; `ops` single-sourced from `list_commands()`
+  with a drift test. Phase 2 routes hot ops through the ONE loader:
+  `domain/shell/_internal/tensor_kernels.c` (SLO_Q source, gcc+OpenMP /
+  NVRTC entries) behind `SLO_TENSOR_NATIVE` (=0 forces the numpy oracle)
+  — **benchmark-gated** (`scripts/benchmark_tensor_kernels.py`,
+  thread-pinned): softmax 2.5-2.7x, layernorm 3.6-3.8x, rmsnorm 1.4-1.5x,
+  gelu 1.5-1.6x shipped; relu 0.97x NOT routed (kernel ships, stays
+  engine-tested); matmul stays BLAS. CAPS reports reality: engine
+  `native-cpu`, `native_ops = parity = [GELU, LAYER_NORM, RMS_NORM,
+  SOFTMAX]` (exact-set ratchet). TDD 19 RED -> GREEN; new
+  `test_tensor_native.py` (CPU parity, kill-switch spy, byte-identity
+  fallbacks, GPU-vs-oracle on real CUDA); face stash-diff = 12
+  pre-existing identical; ruff clean. shas `8050828ae` (routing),
+  `e23fdb2d7` (bench), `05df4b22d` (evidence). LANDING: tail of the
+  7-branch stack (after `feat/wire-py`). From `.wt-worldbrain`.
 
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
