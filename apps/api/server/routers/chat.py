@@ -2,8 +2,8 @@
 Chat Router - the prompting surface: respond, stream, regenerate, cancel.
 
 Owns POST /chat and POST /chat/stream (single registration owner — the parity
-gate fails on any duplicate path+method). Those two read the generation engine
-through its port (`domain.generation.engine.get_chat_engine`) — never by
+gate fails on any duplicate path+method). Those two read the engine
+through its port (`domain.inference.engine.get_chat_engine`) — never by
 importing the inference router — so model-readiness gates, enrichment phases
 and the token stream stay kernel-owned and identical for every caller (card
 13c37a23). Chat reads the engine's output (tokens + details) as data and shapes
@@ -28,7 +28,7 @@ from schemas.chat import ChatRequest, ChatResponse
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
-from domain.generation.engine import fold, get_chat_engine
+from domain.inference.engine import fold, get_chat_engine
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class ChatRouter:
         self,
         request: ChatRequest,
     ) -> AsyncIterator:
-        """The single generation path: the engine's raw-token stream.
+        """The single inference path: the engine's raw-token stream.
 
         Streaming is baked in — this is how chat generates, not a mode and not a
         parameter. The engine yields raw ``str`` tokens followed by a final

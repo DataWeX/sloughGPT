@@ -1,21 +1,21 @@
-"""Generation engine port — the chat surface's read interface to the engine.
+"""Inference engine port — the chat surface's read interface to the engine.
 
 Dependency direction (the whole point of this module):
 
-    routers/chat.py      ──imports──▶  domain.generation (this port)
-    routers/inference.py ──registers─▶ domain.generation (this port)
+    routers/chat.py      ──imports──▶  domain.inference (this port)
+    routers/inference.py ──registers─▶ domain.inference (this port)
 
-Neither router imports the other. This is the generation *capability*, so it
-lives in the generation domain alongside its adapter (inference is the
-generation domain's model-facing implementation). It stays app-import-free:
-no pydantic, no FastAPI — the wire contracts live in ``schemas`` and the
+Neither router imports the other. This is the inference *capability*, so it
+lives in the inference domain alongside its adapter (routers/inference.py is
+the domain's model-facing implementation). It stays app-import-free: no
+pydantic, no FastAPI — the wire contracts live in ``schemas`` and the
 transport (SSE framing) lives at the edge; both translate at the boundary,
 never into the core.
 
-The contract is stream-only. ``stream`` is *the* generation method — it yields
+The contract is stream-only. ``stream`` is *the* inference method — it yields
 raw tokens, then a final ``TurnResult`` carrying the details. There is no
 separate non-streaming backend and no ``stream: bool`` mode: streaming is not a
-choice, it is how the engine generates. A non-streaming surface is simply a
+choice, it is how the model emits tokens. A non-streaming surface is simply a
 fold of this stream performed at the edge (collect the tokens, return the last
 ``TurnResult``).
 """
@@ -29,7 +29,7 @@ from typing import Awaitable, Protocol, runtime_checkable
 
 @dataclass(slots=True)
 class TurnRequest:
-    """Generation inputs, domain-native (no wire coupling).
+    """Inference inputs, domain-native (no wire coupling).
 
     The edge (routers) translates its pydantic ``ChatRequest`` into this.
     """
@@ -54,9 +54,9 @@ class TurnRequest:
 
 @dataclass(slots=True)
 class TurnResult:
-    """Everything the engine pushes out for one generation turn — the "details"
-    the chat surface reads off the output (values the non-streaming path
-    historically computed and discarded)."""
+    """Everything the engine pushes out for one turn — the "details" the chat
+    surface reads off the output (values the old handler computed and
+    discarded)."""
 
     text: str
     session_id: str
@@ -70,9 +70,9 @@ class TurnResult:
 
 @runtime_checkable
 class ChatEngine(Protocol):
-    """The generation engine's public seam.
+    """The inference engine's public seam.
 
-    ``stream`` is the single generation method: it yields raw tokens, then a
+    ``stream`` is the single inference method: it yields raw tokens, then a
     final ``TurnResult``. Non-streaming surfaces fold this stream at the edge.
     """
 
@@ -84,7 +84,7 @@ def fold(stream: AsyncIterator[TurnResult | str]) -> Awaitable[TurnResult]:
 
     This is *the* non-streaming path — not a second backend, just a fold of
     ``stream``. Edges that need a complete response (e.g. the mobile BFF's
-    offline sync) call this; nothing here generates independently.
+    offline sync) call this; nothing here runs the model independently.
     """
 
     async def _collect() -> TurnResult:
@@ -93,7 +93,7 @@ def fold(stream: AsyncIterator[TurnResult | str]) -> Awaitable[TurnResult]:
             if isinstance(item, TurnResult):
                 result = item
         if result is None:
-            raise RuntimeError("generation stream ended without a final TurnResult")
+            raise RuntimeError("engine stream ended without a final TurnResult")
         return result
 
     return _collect()
@@ -103,15 +103,15 @@ _engine: ChatEngine | None = None
 
 
 def register_chat_engine(engine: ChatEngine) -> None:
-    """Register the inference-backed generation engine (once, at boot)."""
+    """Register the inference-backed engine (once, at boot)."""
     global _engine
     _engine = engine
 
 
 def get_chat_engine() -> ChatEngine:
-    """Return the registered generation engine (raises if unwired)."""
+    """Return the registered engine (raises if unwired)."""
     if _engine is None:
         raise RuntimeError(
-            "No chat generation engine registered. routers.inference must register one at boot."
+            "No chat engine registered. routers.inference must register one at boot."
         )
     return _engine

@@ -255,7 +255,7 @@ from schemas.chat import (  # noqa: E402
     Message,
 )
 
-from domain.generation.engine import (  # noqa: E402
+from domain.inference.engine import (  # noqa: E402
     TurnRequest,
     TurnResult,
     fold,
@@ -2868,7 +2868,7 @@ class InferenceRouter:
             classify_and_raise(e, source="inference.reset_context")
 
     async def stream_turn(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]:
-        """The single generation method: yield raw tokens, then the final ``TurnResult``.
+        """The single inference method: yield raw tokens, then the final ``TurnResult``.
 
         Streaming is baked in — there is no non-streaming backend and no
         ``stream: bool`` toggle. Edges fold this stream when they need a
@@ -3026,7 +3026,7 @@ class InferenceRouter:
                     collected.append(token)
                     yield token
         except Exception as e:
-            logger.error("chat stream generation failed: %s", e, exc_info=True)
+            logger.error("chat stream failed: %s", e, exc_info=True)
             raise
 
         text = "".join(collected)
@@ -3559,9 +3559,9 @@ router = _instance.router
 
 
 class _GenerationEngine:
-    """Inference-backed implementation of the generation engine port.
+    """Inference-backed implementation of the engine port.
 
-    Registered into ``domain.generation.engine`` so the chat surface reads the
+    Registered into ``domain.inference.engine`` so the chat surface reads the
     engine's output through the port instead of importing this router. The one
     method is ``stream``: a raw-token generator that yields tokens then the final
     ``TurnResult``. There is no separate non-streaming backend — surfaces that

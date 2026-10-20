@@ -3,7 +3,7 @@
 These are the request/response shapes for the conversation surface (text +
 audio). They live in a neutral home so **neither router imports the other**:
 `routers/chat.py` (the response/frontend handler) and `routers/inference.py`
-(the generation engine) both project these same contracts.
+(the inference engine) both project these same contracts.
 
 Historically these lived in ``routers/inference.py``, which forced the chat
 router to import a sibling router (``from routers.inference import ...``) — a
@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from domain.generation.engine import TurnRequest
+from domain.inference.engine import TurnRequest
 
 
 class Message(BaseModel):
@@ -53,7 +53,7 @@ class ChatRequest(BaseModel):
             object.__setattr__(self, "max_tokens", self.max_new_tokens)
 
     def to_turn(self) -> TurnRequest:
-        """Translate the wire contract into the generation engine's domain input.
+        """Translate the wire contract into the engine's domain input.
 
         This is the edge translation the port depends on: the wire type stays a
         pydantic ``ChatRequest`` (HTTP/JSON coupling), the engine consumes a

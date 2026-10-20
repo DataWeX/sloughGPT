@@ -5,7 +5,7 @@ stateless: inference's ``chat()`` takes ``req.messages`` from the client and
 never persists, so no history was written and no op was ever registered for
 cancellation — while ``regenerate``/``cancel``/``active_sessions`` kept running
 on ``domain/chat``'s stateful kernel. These tests pin the composed behaviour at
-the seam: generation in inference, state in chat.
+the seam: inference in engine, state in chat.
 
 ``ChatManager`` declares ``__slots__``, so its collaborators are patched on the
 CLASS, never on an instance.
@@ -19,7 +19,7 @@ import pytest
 
 from apps.api.server.routers.chat import ChatRouter
 from domain.chat._internal.manager import ChatManager
-from domain.generation.engine import TurnResult
+from domain.inference.engine import TurnResult
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def _respond(manager, **kw):
 
 
 def _engine_yielding(*items):
-    """A fake generation engine whose ``stream`` yields the given items.
+    """A fake engine whose ``stream`` yields the given items.
 
     Streaming is the engine's one method, so the fake mirrors that shape: an
     async generator producing raw tokens followed by the final ``TurnResult``.
@@ -198,7 +198,7 @@ def test_generate_tracked_returns_backend_object_untouched(manager):
     assert stored == ["full reply"]
 
 
-def test_router_exposes_single_generation_seam():
+def test_router_exposes_single_inference_seam():
     """Both endpoints must funnel through one streaming seam, per the merge contract."""
     assert hasattr(ChatRouter, "_stream_tokens")
     assert hasattr(ChatRouter, "respond")
@@ -252,6 +252,6 @@ def test_chat_router_does_not_import_inference_router():
 
     src = inspect.getsource(chat_mod)
     assert "from routers.inference" not in src, (
-        "chat.py must not import routers.inference — use domain.generation.engine's port"
+        "chat.py must not import routers.inference — use domain.inference.engine's port"
     )
     assert "from apps.api.server.routers.inference" not in src
