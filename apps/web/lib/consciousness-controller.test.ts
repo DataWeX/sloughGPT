@@ -82,10 +82,33 @@ describe('consciousnessController.getPersonality', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs /consciousness/personality', async () => {
-    apiClient.apiGet.mockResolvedValue({ traits: { openness: 0.9 }, description: 'Curious', name: 'Explorer' })
+    apiClient.apiGet.mockResolvedValue({
+      values: ['honesty'],
+      goals: ['accuracy'],
+      voice: { formality: 0.5 },
+      style: { use_examples: true },
+      traits: { openness: 0.9 },
+      interests: ['science'],
+      avoid: ['speculation'],
+    })
     const result = await consciousnessController.getPersonality()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/consciousness/personality')
-    expect(result.name).toBe('Explorer')
+    expect(result.traits.openness).toBe(0.9)
+  })
+})
+
+describe('consciousnessController.getPersonalityPresets', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('projects the name-keyed dict into an array with `name` injected', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      presets: { default: { traits: { openness: 0.5 } }, formal: { traits: { openness: 0.3 } } },
+      names: ['default', 'formal'],
+    })
+    const result = await consciousnessController.getPersonalityPresets()
+    expect(result.presets.map(p => p.name)).toEqual(['default', 'formal'])
+    expect(result.presets[0].traits.openness).toBe(0.5)
+    expect(result.names).toEqual(['default', 'formal'])
   })
 })
 
@@ -116,7 +139,7 @@ describe('consciousnessController.savePersona', () => {
 
   it('POSTs /consciousness/personas/save', async () => {
     apiClient.apiPost.mockResolvedValue({ id: 'p2' })
-    const result = await consciousnessController.savePersona({ name: 'Thinker', personality: { traits: {}, description: '', name: '' }, active: false })
+    const result = await consciousnessController.savePersona({ name: 'Thinker', personality: { values: [], goals: [], voice: {}, style: {}, traits: {}, interests: [], avoid: [] }, active: false })
     expect(apiClient.apiPost).toHaveBeenCalledWith('/consciousness/personas/save', expect.objectContaining({ name: 'Thinker' }))
     expect(result.id).toBe('p2')
   })

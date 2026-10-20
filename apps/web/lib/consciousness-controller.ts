@@ -83,10 +83,28 @@ export interface Belief {
   timestamp: string
 }
 
+/** True payload of GET /consciousness/personality (PersonalityProfile.to_dict()). */
 export interface Personality {
+  values: string[]
+  goals: string[]
+  voice: Record<string, number>
+  style: Record<string, unknown>
   traits: Record<string, number>
-  description: string
+  interests: string[]
+  avoid: string[]
+}
+
+/** A preset profile with its name-key injected as `name` (payload serves a name-keyed dict). */
+export interface PersonalityPreset extends Personality {
   name: string
+}
+
+/** Entry of GET /consciousness/personality/history — a voice/traits trajectory over episodes. */
+export interface PersonalityHistoryEntry {
+  timestamp: number
+  step: number
+  voice: Record<string, number>
+  traits: Record<string, number>
 }
 
 export interface Persona {
@@ -201,12 +219,18 @@ export const consciousnessController = {
     return apiPost('/consciousness/clear/beliefs')
   },
 
-  async getPersonalityHistory(): Promise<{ history: Personality[] }> {
+  async getPersonalityHistory(): Promise<{ history: PersonalityHistoryEntry[] }> {
     return apiGet('/consciousness/personality/history')
   },
 
-  async getPersonalityPresets(): Promise<{ presets: Record<string, unknown>[] }> {
-    return apiGet('/consciousness/personality/presets')
+  async getPersonalityPresets(): Promise<{ presets: PersonalityPreset[]; names: string[] }> {
+    const resp = await apiGet<{ presets: Record<string, Omit<PersonalityPreset, 'name'>>; names: string[] }>('/consciousness/personality/presets')
+    // The endpoint serves presets as a name-keyed dict of profiles (no `name`
+    // inside each profile); project to an array with the key injected as `name`.
+    return {
+      presets: Object.entries(resp.presets ?? {}).map(([name, profile]) => ({ name, ...profile })),
+      names: resp.names ?? [],
+    }
   },
 
   async applyPersonalityPreset(presetName: string): Promise<{ applied: boolean }> {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type Personality, type PersonalityPreset, type PersonalityHistoryEntry } from '@/lib/consciousness-controller'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -28,15 +28,15 @@ export default function ConsciousnessPersonalityPage() {
   const addToast = useToastStore(s => s.addToast)
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
-  const [personality, setPersonality] = useState<{ name: string; description: string; traits: Record<string, number> } | null>(null)
+  const [personality, setPersonality] = useState<Personality | null>(null)
   const [editTraits, setEditTraits] = useState<Record<string, number>>({})
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
-  const [presets, setPresets] = useState<Record<string, unknown>[]>([])
+  const [presets, setPresets] = useState<PersonalityPreset[]>([])
   const [applyingPreset, setApplyingPreset] = useState<string | null>(null)
   const [conflicts, setConflicts] = useState<string[]>([])
-  const [history, setHistory] = useState<{ name: string; description: string; traits: Record<string, number> }[]>([])
+  const [history, setHistory] = useState<PersonalityHistoryEntry[]>([])
 
   const fetchAll = useCallback(async () => {
     try {
@@ -47,18 +47,18 @@ export default function ConsciousnessPersonalityPage() {
         consciousnessController.getPersonalityHistory(),
       ])
       if (pResult.status === 'fulfilled') {
-        const p = pResult.value as any
+        const p = pResult.value
         setPersonality(p)
         setEditTraits(p.traits ?? {})
       }
       if (prResult.status === 'fulfilled') {
-        setPresets((prResult.value as any).presets ?? [])
+        setPresets(prResult.value.presets)
       }
       if (cResult.status === 'fulfilled') {
-        setConflicts((cResult.value as any).conflicts ?? [])
+        setConflicts(cResult.value.conflicts)
       }
       if (hResult.status === 'fulfilled') {
-        setHistory((hResult.value as any).history ?? [])
+        setHistory(hResult.value.history)
       }
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
@@ -148,15 +148,9 @@ export default function ConsciousnessPersonalityPage() {
                 <CardTitle className="text-base">{t('consciousness_personality.overview_title')}</CardTitle>
                 <CardDescription>{t('consciousness_personality.overview_desc')}</CardDescription>
               </div>
-              {personality?.name && (
-                <Badge variant="outline">{personality.name}</Badge>
-              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {personality?.description && (
-              <p className="text-sm text-muted-foreground">{personality.description}</p>
-            )}
             <div className="space-y-3">
               {traitKeys.map(trait => (
                 <div key={trait} className="space-y-1">
@@ -210,18 +204,15 @@ export default function ConsciousnessPersonalityPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {presets.map((preset: any) => (
+                {presets.map((preset) => (
                   <Button
                     key={preset.name}
-                    variant={personality?.name === preset.name ? 'default' : 'outline'}
+                    variant="outline"
                     className="h-auto flex-col items-start p-3 text-left"
                     onClick={() => handleApplyPreset(preset.name)}
                     disabled={applyingPreset === preset.name}
                   >
                     <span className="text-sm font-medium">{preset.name}</span>
-                    {preset.description && (
-                      <span className="text-xs text-muted-foreground mt-1 line-clamp-2">{preset.description}</span>
-                    )}
                   </Button>
                 ))}
               </div>
@@ -259,16 +250,12 @@ export default function ConsciousnessPersonalityPage() {
                 {history.map((entry, i) => (
                   <div key={i} className="rounded-lg border p-3 text-sm">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">{entry.name}</span>
                       <span className="text-xs text-muted-foreground">#{history.length - i}</span>
                     </div>
-                    {entry.description && (
-                      <p className="text-xs text-muted-foreground mb-2">{entry.description}</p>
-                    )}
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(entry.traits).map(([k, v]) => (
                         <span key={k} className="text-[10px] text-muted-foreground">
-                          {TRAIT_LABELS[k] ?? k}: {(v as number * 100).toFixed(0)}%
+                          {TRAIT_LABELS[k] ?? k}: {(v * 100).toFixed(0)}%
                         </span>
                       ))}
                     </div>

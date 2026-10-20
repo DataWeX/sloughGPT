@@ -29,8 +29,12 @@ vi.mock('@/lib/toast-store', () => ({
 }))
 
 const mockPersonality = {
-  name: 'Friendly',
-  description: 'A friendly personality',
+  values: ['honesty'],
+  goals: ['accuracy'],
+  voice: { formality: 0.5 },
+  style: { use_examples: true },
+  interests: ['science'],
+  avoid: ['speculation'],
   traits: {
     openness: 0.7,
     conscientiousness: 0.6,
@@ -45,10 +49,11 @@ const mockPersonality = {
 
 const mockPresets = {
   presets: [
-    { name: 'Default', description: 'Default personality', traits: {} },
-    { name: 'Formal', description: 'Professional tone', traits: {} },
-    { name: 'Creative', description: 'Imaginative and expressive', traits: {} },
+    { name: 'Default', traits: {} },
+    { name: 'Formal', traits: {} },
+    { name: 'Creative', traits: {} },
   ],
+  names: ['Default', 'Formal', 'Creative'],
 }
 
 const mockConflicts = {
@@ -58,8 +63,9 @@ const mockConflicts = {
 const mockHistory = {
   history: [
     {
-      name: 'Friendly',
-      description: 'A friendly personality',
+      timestamp: 1736935200,
+      step: 0,
+      voice: { formality: 0.5, warmth: 0.7 },
       traits: { openness: 0.7, agreeableness: 0.8 },
     },
   ],
@@ -85,7 +91,6 @@ describe('ConsciousnessPersonalityPage', () => {
     render(<ConsciousnessPersonalityPage />)
     await waitFor(() => {
       expect(screen.getAllByText('consciousness_personality.overview_title').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('Friendly').length).toBeGreaterThan(0)
     })
   })
 

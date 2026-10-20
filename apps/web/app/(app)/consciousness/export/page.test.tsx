@@ -39,7 +39,7 @@ describe('ConsciousnessExportPage', () => {
     mockController.getEpisodeHistory.mockResolvedValue({ episodes: [], total: 0 })
     mockController.getQualiaHistory.mockResolvedValue({ history: [] })
     mockController.getBeliefsHistory.mockResolvedValue({ beliefs: [] })
-    mockController.getPersonality.mockResolvedValue({ traits: {}, description: '', name: '' })
+    mockController.getPersonality.mockResolvedValue({ values: [], goals: [], voice: {}, style: {}, traits: {}, interests: [], avoid: [] })
     mockController.getStatus.mockResolvedValue({ enabled: true, level: 1, episodes: 0, beliefs: {} } as any)
     localStorage.clear()
   })

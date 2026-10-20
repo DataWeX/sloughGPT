@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type PersonalityPreset } from '@/lib/consciousness-controller'
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -28,15 +28,6 @@ interface EvalData {
 interface EpisodesData {
   episodes: Array<{ timestamp: number; growth_delta: number; rating: number; [key: string]: unknown }>
   total: number
-}
-
-interface PresetData {
-  id: string
-  name: string
-  description: string
-  level?: number
-  qualia?: Record<string, number>
-  beliefs?: Record<string, number>
 }
 
 type ConfigKey = 'current' | 'default' | 'formal' | 'creative' | 'analyst' | 'empathetic' | 'minimal'
@@ -99,7 +90,7 @@ export default function ConsciousnessComparePage() {
   const [loading, setLoading] = useState(true)
   const [configA, setConfigA] = useState<ConfigKey>('current')
   const [configB, setConfigB] = useState<ConfigKey>('default')
-  const [presets, setPresets] = useState<PresetData[]>([])
+  const [presets, setPresets] = useState<PersonalityPreset[]>([])
   const [currentHealth, setCurrentHealth] = useState<HealthData | null>(null)
   const [currentEval, setCurrentEval] = useState<EvalData | null>(null)
   const [currentEpisodes, setCurrentEpisodes] = useState<EpisodesData | null>(null)
@@ -129,7 +120,7 @@ export default function ConsciousnessComparePage() {
   const fetchPresets = useCallback(async () => {
     try {
       const data = await consciousnessController.getPersonalityPresets()
-      setPresets((data as any).presets ?? data)
+      setPresets(data.presets)
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     }
@@ -142,7 +133,7 @@ export default function ConsciousnessComparePage() {
   const fakeDataMap = useMemo(() => {
     const map: Record<string, HealthData> = {}
     presets.forEach(p => {
-      map[p.id] = buildFakeData(p.name)
+      map[p.name] = buildFakeData(p.name)
     })
     map['default'] = buildFakeData('default')
     map['formal'] = buildFakeData('formal')
