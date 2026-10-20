@@ -1509,6 +1509,22 @@ def _run_program(vs, source, capsys, max_cycles=200000):
     return cycles
 
 
+# The syscall torture program never terminates. Syscall 6 forks a child and
+# syscall 8 (wait) then blocks on that child, but the child is never
+# scheduled: the PIT divider defaults to 11931 and this harness ticks the PIT
+# once per 100 cycles, so IRQ0 — the only path into Scheduler.tick() and thus
+# the only way to preempt — cannot fire before ~11931 * 100 == 1.19M cycles,
+# far past any sane run budget. With no preemption the child never runs its
+# exit, wait() never returns, and the loop burns the entire budget producing
+# no further output. Guest output therefore stabilizes well under 20k cycles
+# (verified byte-identical at 20k and 200k), so a smaller budget is a pure
+# efficiency win: it cuts the dead spin ~10x (5.1s -> 0.5s locally), which is
+# what pushed these two over pytest's 120s global timeout on slower CI
+# runners. Tests that DO terminate (files/exec) finish in <2k cycles and are
+# unaffected — they keep the default.
+_SYSCALLS_RUN_BUDGET = 20000
+
+
 class TestSyscallIntegration:
     """End-to-end tests that assemble and run x86 programs via X86VirtualSystem."""
 
@@ -1539,7 +1555,7 @@ class TestSyscallIntegration:
     def test_syscalls_runs_to_completion(self, capsys):
         """Spawn and run the full syscall test program."""
         vs = X86VirtualSystem(memory_size=0x800000)
-        cycles = _run_program(vs, TEST_SYSCALLS_ASM, capsys)
+        cycles = _run_program(vs, TEST_SYSCALLS_ASM, capsys, max_cycles=_SYSCALLS_RUN_BUDGET)
         assert cycles > 0
         # Program should have exited (scheduler should be idle or only kernel left)
         captured = capsys.readouterr()
@@ -1559,7 +1575,7 @@ class TestSyscallIntegration:
     def test_syscalls_write_stdout(self, capsys):
         """The syscall test writes PASS/FAIL to stdout via SYS_WRITE."""
         vs = X86VirtualSystem(memory_size=0x800000)
-        _run_program(vs, TEST_SYSCALLS_ASM, capsys)
+        _run_program(vs, TEST_SYSCALLS_ASM, capsys, max_cycles=_SYSCALLS_RUN_BUDGET)
         captured = capsys.readouterr()
         assert "PASS" in captured.out
 
