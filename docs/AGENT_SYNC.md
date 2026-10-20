@@ -952,6 +952,24 @@ git push -u origin feat/<name>   # push your own branch when done
 - `zzz_test.py` at repo root is a stray from origin's `89e01b58c`
   (shell lazy-loading refactor) — not ours; owner please remove.
 
+- **2026-10-20 · gateway binary provenance closed (card `12aad775`, done).**
+  Was partially remediated (Oct 19 rebuild, stamps already clean) but still
+  stale vs its own source: `cargo build --release --locked -p slough-gateway`
+  in the **shared checkout** recompiled the crate (1m10s → binary 10:50),
+  `systemctl --user restart slough-gateway` (PID 171770), and `:8080/health`
+  = `{status, gateway:"rust", sidecar{healthy,last_check,model_loaded,
+  model_name}, uptime_seconds}` matches this checkout's `HealthResponse`
+  (`src/main.rs:146`, handler `:380`; uptime=3s proves the fresh process
+  serves it). `strings binary | grep edge-cascade` = 0; foreign `.d` stamps
+  = 0. Unit `WorkingDirectory`/`ExecStart` already pointed at the shared
+  checkout — no unit edits; edge-cascade worktree stays provenance reference
+  only. Journal note (`~/.config/dev-notes/2026-10-01-*.md`) set `status:
+  done` by hand — **note the tooling gap: `PlannerStore` reads only
+  `.dev-notes/notes.journal.jsonl`, it cannot see the legacy `.md` journal
+  AGENTS.md calls source of truth, so CLI `note update` misses those** (the
+  `08baf13f` board-sync owner may want this on their radar). From
+  `.wt-worldbrain`.
+
 ## In flight
 
 - **2026-10-19 · `feat/wire-py` — we own the HTTP wire, phase 1 (card
