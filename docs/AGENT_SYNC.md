@@ -975,10 +975,17 @@ git push -u origin feat/<name>   # push your own branch when done
   high-byte now a clean 400 (was `UnicodeDecodeError` killing the conn
   thread), `WireServer(asgi_app=...)` mode. 37 tests green; smoke: JSON
   (Content-Length) then SSE (chunked) on the SAME keep-alive connection.
-  REMAINING phase 3: `SLO_TRANSPORT` wiring, A/B curl harness vs uvicorn,
-  `benchmark_transport.py`, journey gates + ASGI lifespan before any
-  default flip; RFC6455 WS deferred (flip gated on it). From
-  `.wt-worldbrain`.
+  **Phase 3 part 1 done (`bddedfe6e`)**: `scripts/benchmark_transport.py`
+  (raw-socket client for precise TTFB, `--json` for tracking) —
+  keep-alive p50 0.115 ms / ~8.3k req/s, fresh-conn p50 0.285 ms,
+  8-thread concurrent 5.8k req/s, ASGI adapter p50 0.398 ms
+  (+0.28 ms/req = per-request `asyncio.run`), SSE TTFB p50 0.529 ms
+  (total 41 ms / 5 frames x 5 ms); TTFB bug fixed pre-commit (absolute
+  `perf_counter` had leaked into the latency metric). REMAINING phase 3:
+  `SLO_TRANSPORT` wiring + A/B harness vs uvicorn (our numbers are now
+  the fixed baseline), journey gates + ASGI lifespan before any default
+  flip; RFC6455 WS deferred (flip gated on it). Next lane: NPU CAPS.
+  From `.wt-worldbrain`.
 
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
