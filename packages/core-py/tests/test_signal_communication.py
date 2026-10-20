@@ -924,11 +924,15 @@ class TestEpisodicMemory:
     def test_recall_negative_k(self):
         em = EpisodicMemory(capacity=10)
         em.record(np.zeros(3), (0.5,), 1.0)
-        # k <= 0 is the documented "return all episodes" contract, pinned by
-        # test_shell_memory.py (both the k == 0 and the k < 0 cases); negative
-        # k takes the same branch rather than returning [].
+        # Contract: k < 0 fails closed (returns []); k == 0 is the sole "return
+        # all" sentinel. test_shell_memory.py::test_recall_k_negative_returns_empty
+        # pins exactly this for both classes and both by_reward branches — its
+        # comment records that negative k returning the whole buffer was a
+        # silent-unbounded footgun. This test still asserted that pre-migration
+        # behaviour and its comment mis-cited test_shell_memory.py, which pins
+        # empty rather than all; its own by_reward sibling below already agrees.
         result = em.recall(-1)
-        assert len(result) == 1
+        assert result == []
 
     def test_recall_negative_k_by_reward(self):
         em = EpisodicMemory(capacity=10)

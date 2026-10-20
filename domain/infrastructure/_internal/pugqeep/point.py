@@ -27,6 +27,33 @@ import numpy as np
 from .point_interface import PointProtocol
 
 
+def accuracy_from_error(mse: float, var: float) -> float:
+    """Index of efficiency ``1 - mse/var``, clamped to Point's ``[0, 1]`` contract.
+
+    The raw index is bounded *above* but not below: ``mse >= 0`` guarantees the
+    result is ``<= 1``, yet when reconstruction error exceeds the signal's
+    variance — near-constant data, or simply a bad fit — the ratio passes 1 and
+    the result runs arbitrarily negative (``1 - 7.59 == -6.59``). Point is a
+    ratio and ``PointLibrary._validate_point`` enforces ``0 <= accuracy <= 1``,
+    so an unclamped value raised ``Accuracy must be 0-1, got -6.59`` only at
+    store time, long after the number was computed.
+
+    Flooring at ``0.0`` is the honest value: accuracy ``<= 0`` means "no better
+    than predicting the mean", and that is the natural floor for this metric.
+    It does not disturb the residual decision either — ``residual_threshold`` is
+    documented as (0-1), so both a negative and a floored ``0.0`` compare below
+    it identically.
+
+    Args:
+        mse: Mean squared reconstruction error (>= 0).
+        var: Variance of the signal being approximated (>= 0).
+
+    Returns:
+        Efficiency in ``[0.0, 1.0]``.
+    """
+    return max(0.0, 1.0 - mse / (var + 1e-8))
+
+
 @dataclass(eq=False)
 class Point(PointProtocol):
     """Compressed data with meaning — stores a generator function.
