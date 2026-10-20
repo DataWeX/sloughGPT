@@ -28,6 +28,25 @@ export type ChatMode =
   | 'read'
   | 'talk'
 
+const CHAT_MODE_SET: Record<ChatMode, true> = {
+  chat: true,
+  write: true,
+  rewrite: true,
+  decide: true,
+  explain: true,
+  translate: true,
+  brainstorm: true,
+  wellness: true,
+  create: true,
+  read: true,
+  talk: true,
+}
+
+/** Narrow a stringly-typed mode value to the real ChatMode union. */
+export function isChatMode(value: string): value is ChatMode {
+  return value in CHAT_MODE_SET
+}
+
 // Mode colors use theme tokens only (shared with EmptyState cards — same
 // mode, same token). Only one tab is active at a time, so token reuse
 // across modes is intentional and keeps a single accent language.

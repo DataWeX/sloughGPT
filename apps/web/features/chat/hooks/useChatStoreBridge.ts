@@ -12,6 +12,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useChatStore, type ChatConfig } from '@/lib/chat-store'
+import type { ChatSession } from '@/lib/chat-utils'
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
 
 export function useChatStoreBridge(controller: ChatPageController) {
@@ -30,8 +31,8 @@ export function useChatStoreBridge(controller: ChatPageController) {
       currentSoul: model.currentSoul,
       currentAgent: controller.agents?.currentAgent ?? null,
       useLocalEngine: false,
-      engineRef: { current: null } as any,
-      engineLoadingRef: { current: false } as any,
+      engineRef: { current: null },
+      engineLoadingRef: { current: false },
       initLocalEngine: async () => false,
       customSystemPrompt: controller.customSystemPrompt || '',
       showToast,
@@ -62,7 +63,24 @@ export function useChatStoreBridge(controller: ChatPageController) {
       contextLayers: chat.contextLayers,
       pendingToolApproval: chat.pendingToolApproval,
       currentError: chat.currentError,
-      sidebarConversations: chat.sidebarConversations as any,
+      // The store slot is ChatSession[]; the controller exposes the
+      // session-controller Conversation shape — map (not cast) across the seam.
+      sidebarConversations: chat.sidebarConversations.map((c): ChatSession => ({
+        id: c.id,
+        name: c.name,
+        messages: (c.messages ?? []).map((m) => ({
+          id: m.id,
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content,
+          timestamp: new Date(m.timestamp ?? Date.now()),
+        })),
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+        synced: Boolean(c.synced),
+        starred: c.starred,
+        pinned: c.pinned,
+        archived: c.archived,
+      })),
       selectedMessageIds: chat.selectedMessageIds,
       selectionMode: chat.selectionMode,
     })

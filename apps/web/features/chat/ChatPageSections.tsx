@@ -9,7 +9,7 @@ import { ChatArea, ErrorBanner } from '@/features/chat/components'
 import { ToolApprovalDialog } from '@/features/chat/components/ToolApprovalDialog'
 import { ContextInjectionBar } from '@/features/chat/components/ContextInjectionBar'
 import { ImageDropZone } from '@/features/chat/components/layout/ImageDropZone'
-import { ModeBar } from '@/features/chat/components/toolbar/ModeBar'
+import { ModeBar, isChatMode } from '@/features/chat/components/toolbar/ModeBar'
 import { ChatToolbar } from '@/features/chat/components/toolbar/ChatToolbar'
 import { logger } from '@/lib/dev-log'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
@@ -390,7 +390,8 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
 
   const handleModeSelect = useCallback(
     (mode: string) => {
-      setChatMode(mode as any)
+      // EmptyState/ChatArea props are stringly typed; accept only real modes.
+      if (isChatMode(mode)) setChatMode(mode)
     },
     [setChatMode],
   )

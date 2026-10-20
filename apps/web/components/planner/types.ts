@@ -119,7 +119,7 @@ export interface HashTree {
     commit_hash: string
     parent_hash: string
     root_ref: string
-    changes: any[]
+    changes: unknown[]
     color: string
     pixel: string
     timestamp: string
