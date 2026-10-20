@@ -46,7 +46,7 @@ hardware**.
 
 - 50% infra/repo (`registry`, `model-stack`, `executor`, `cache_tags`), 30% train/bench, 20% API
 - Lives in `domain/core/infrastructure` + `apps/api/server/routers/system.py` + `training/executor`
-- Expects `docs/PRODUCT_ENGINEERING.md:42` CCGT — infra is a domain, not plumbing
+- Expects `docs/PRODUCT_ENGINEERING.md` CCGT — infra is first-class machinery inside Core, not throwaway plumbing
 - Reads benchmark and profiling output directly; tunes thresholds against
   measured crossover points rather than documented defaults
 
@@ -79,7 +79,7 @@ hardware**.
 **How they interact:**
 
 - 40% API/SDK, 30% eval/bench, 20% train, 10% chat sanity-check
-- Reads `docs/PRODUCT_ENGINEERING.md` CCGT (Cognitive/Core/Gateway/Training) — expects each feature to ship all four
+- Reads `docs/PRODUCT_ENGINEERING.md` CCGT (Cognitive/Core/Generate/Training) — expects each feature to ship all four
 - Wants `benchmark/score` and `model-stack` programmable, not just `benchmark/run`
 
 **Success criteria:**

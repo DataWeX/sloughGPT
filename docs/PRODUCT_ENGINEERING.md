@@ -27,7 +27,7 @@ New work must move at least one of owned architecture, owned objective
 
 ---
 
-## CCGT fairness rule (Cognitive, Core, Gateway, Training)
+## CCGT fairness rule (Cognitive, Core, Generate, Training)
 
 The only four domains. Every piece ships all four or it doesn't ship:
 
@@ -35,13 +35,14 @@ The only four domains. Every piece ships all four or it doesn't ship:
 | ------------- | --------------------------------------------------------------------------------------------------- |
 | **Cognitive** | How does this integrate with reasoning, memory, souls, attention?                                   |
 | **Core**      | Where does it live in the serving core (engine, providers, KV, queues)?                             |
-| **Gateway**   | How is this exposed and optimized at the edge (filtering, streaming relay, timeouts, load shaping)? |
+| **Generate**  | How is this produced — forward pass, engine, tokenizer, providers, caches, embeddings?              |
 | **Training**  | How is this learned or improved (objective, data, loop)?                                            |
 
-No Core-only work that leaves the other three behind. The gateway is a
-domain, not plumbing — it is how we optimize the core infra stack's exposure,
-so it must be built well: generic byte-relay, zero-buffer streaming, strict
-filters, never duplicated model logic.
+No Core-only work that leaves the other three behind. Gateway is not a
+domain — `apps/gateway` is a Rust edge service (axum + tokio), an
+*application* boundary. The edge discipline still applies to it and to every
+client: generic byte-relay, zero-buffer streaming, strict filters, never
+duplicated model logic.
 
 ---
 
@@ -61,8 +62,8 @@ Harden it before adding features. Perf budgets are acceptance gates:
 ## Client / core separation
 
 Clients (web, CLI, mobile, SDK) stay out of core infra so both sides stay
-writable — and the Gateway domain, which owns edge optimization, talks to core
-only through the same stable interfaces:
+writable — and the gateway (`apps/gateway`), which owns edge optimization,
+talks to core only through the same stable interfaces:
 
 - Web → FastAPI over HTTP, exclusively via `http-client.ts`
   (`apiGet/apiPost/...`) — never raw `fetch`, never `domain/*` imports.

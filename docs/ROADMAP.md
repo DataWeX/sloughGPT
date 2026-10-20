@@ -2,9 +2,10 @@
 
 > Direction: a general-AI **model**, not a net. Owned architecture (SloNet),
 > owned objective (beyond next-token prediction), owned data. Every item serves
-> all four domains — **Cognitive, Core, Gateway, Training** — with the
+> all four domains — **Cognitive, Core, Generate, Training** — with the
 > serving engine (`InferenceEngine` + `SloNetServer`) hardened first and the
-> gateway built well as the edge optimizer of the core infra stack.
+> gateway (`apps/gateway`, a Rust app — not a domain) built well as the edge
+> optimizer of the core infra stack.
 > Borrowed weights (HF conversion, distillation) are bootstrap, not destination.
 
 ## Current state (September 2026)
@@ -22,12 +23,13 @@
 
 - **Cognitive** — consciousness engine post-processes generation (`ConsciousnessConfig.level`); Personality/Memory/Style/Task context managers; auto-memory service learning from conversations; souls/traits with feedback-driven weight updates.
 - **Core** — provider registry + router with processor pipeline (Vision/Knowledge/ToolUse/ Personality/Style), session core + KV-cache reuse, priority queue with streaming slot reservation, cancel manager, persistent settings. Serves chat/stream/regenerate (standardized SSE envelope) plus the raw `/inference/generate` path and the `[[TOOL: name]]` tool loop.
-- **Gateway** — thin generic edge is live: byte-relay + stateless zstd/gzip (`x-uncompressed-content-length`, SSE/Range/HEAD identity), strict path filters (traversal/`..`/NUL → 403 before Python), opt-in deny prefixes (`MAN_GATEWAY_DENY`), opt-in chat-only mode (`MAN_GATEWAY_CHAT_ONLY=1` allowlists conversation surface), and `/health` parses the API `data` envelope (`model_type`). Frontend cut over via Vite `loadEnv` + `inlinePublicEnv` → `PUBLIC_API_URL=:8080`. Auth/rate-limits stay in Python.
+- **Generate** — `domain/generate` (renamed from `domain/inference`; the external contract already said generate: `POST /generate`, `SloEngine.generate()`). Forward pass + providers: `forward_pass.py` over SloNet autograd/`NativeEngine` (RoPE/RMSNorm/GQA/KV-cache/top-p/top-k), API/CT/SloNet providers, `SloEmbedder`/`TextEmbedder`, tokenizer + `SloFormat`/`slo_manager`, response/semantic cache + `session_kv_manager`, vector stores (ChromaDB/Pinecone), PDF VLM.
 - **Training** — single composable `TrainingLoop` (`training_handler.py`: samplers, gradient handlers, loss trackers, checkpoint savers) replacing the three loop copies; distillation, LoRA (including background feedback loop), activity classifier.
 
 ### Clients (separate from core infra — see PRODUCT_ENGINEERING.md)
 
 - Web: 32 pages on `@sloughgpt/strui`, per-domain controllers over one HTTP client, markdown chat with streaming/regeneration/feedback. CLI: Python REPL (40+ commands) + opt-in curses TUI. Voyager journey library (201 tests, 7 backends). Mobile: not started. Clients reach core only through the API/protocol — never internals.
+- Gateway (`apps/gateway`, Rust/axum — an app, not a domain): thin generic edge is live — byte-relay + stateless zstd/gzip (`x-uncompressed-content-length`, SSE/Range/HEAD identity), strict path filters (traversal/`..`/NUL → 403 before Python), opt-in deny prefixes (`MAN_GATEWAY_DENY`), opt-in chat-only mode (`MAN_GATEWAY_CHAT_ONLY=1` allowlists conversation surface), and `/health` parses the API `data` envelope (`model_type`). Frontend cut over via Vite `loadEnv` + `inlinePublicEnv` → `PUBLIC_API_URL=:8080`. Auth/rate-limits stay in Python.
 
 ### Compression (pugqeep)
 
