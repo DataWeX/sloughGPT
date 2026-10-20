@@ -14,7 +14,7 @@ export function ConsciousnessQuickActions() {
   const addToast = useToastStore(s => s.addToast)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
-  const [result, setResult] = useState<{ action: string; data: any } | null>(null)
+  const [result, setResult] = useState<{ action: string; data: unknown } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
@@ -50,7 +50,7 @@ export function ConsciousnessQuickActions() {
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  const runAction = useCallback(async (action: string, fn: () => Promise<any>) => {
+  const runAction = useCallback(async (action: string, fn: () => Promise<unknown>) => {
     setLoading(action)
     try {
       const data = await fn()

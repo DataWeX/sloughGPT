@@ -154,8 +154,9 @@ export function ConsciousnessProvider({ children, enabled = true }: Consciousnes
   const reflect = useCallback(async () => {
     setReflecting(true)
     try {
-      const data = (await consciousnessController.reflect()) as any
-      if (data?.event) setEvent(data.event)
+      // Reflect applies belief deltas server-side; its payload (Reflection.to_dict)
+      // has no event field — bus emissions remain the only event source.
+      await consciousnessController.reflect()
     } catch (e) {
       _log.debug('Reflect failed', { error: e instanceof Error ? e.message : String(e) })
     }

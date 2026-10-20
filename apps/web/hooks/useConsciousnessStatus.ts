@@ -24,7 +24,7 @@ export function getConsciousnessLevelLabel(level: number): string {
   return LEVEL_LABELS[level] ?? 'Off'
 }
 
-export function getQualiaMood(qualia: ConsciousnessStatus['current_qualia'] | undefined): string {
+export function getQualiaMood(qualia: Record<string, number> | undefined): string {
   if (!qualia) return ''
   const { valence, arousal, novelty } = qualia
   if (valence > 0.3 && arousal > 0.5) return 'engaged'

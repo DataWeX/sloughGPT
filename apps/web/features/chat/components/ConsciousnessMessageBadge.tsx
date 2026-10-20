@@ -20,8 +20,8 @@ export function ConsciousnessMessageBadge({ messageId }: Props) {
 
   if (!event) return null
 
-  const mood = getQualiaMood(event.qualia as any || {})
-  const growth = (event as any).growth ?? event.growth_delta ?? 0
+  const mood = getQualiaMood(event.qualia)
+  const growth = event.growth_delta
 
   return (
     <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
