@@ -1000,10 +1000,24 @@ git push -u origin feat/<name>   # push your own branch when done
   (+0.28 ms/req = per-request `asyncio.run`), SSE TTFB p50 0.529 ms
   (total 41 ms / 5 frames x 5 ms); TTFB bug fixed pre-commit (absolute
   `perf_counter` had leaked into the latency metric). REMAINING phase 3:
-  `SLO_TRANSPORT` wiring + A/B harness vs uvicorn (our numbers are now
-  the fixed baseline), journey gates + ASGI lifespan before any default
-  flip; RFC6455 WS deferred (flip gated on it). Next lane: NPU CAPS.
-  From `.wt-worldbrain`.
+  `SLO_TRANSPORT` wiring + journey gates before any default flip;
+  RFC6455 WS deferred (flip gated on it). **Phase 3 lifespan + A/B done
+  (2026-10-20, committed on stack tail `feat/npu-caps`)**:
+  `wire/asgi_host.py` gains `Lifespan` — one dedicated loop thread drives
+  the spec handshake (startup completes before the accept thread spawns,
+  shutdown after connections close; failed/crashed/timed-out handshakes
+  unwind with no thread leak); `WireServer(lifespan="auto"|"on"|"off")`
+  with uvicorn-compatible auto fallback (lifespan-unaware apps keep
+  serving). Real FastAPI `lifespan=` interop proven in tests; 48 wire
+  tests green (11 new `tests/test_lifespan.py`), ruff clean. A/B: in-process uvicorn 0.53 in `benchmark_transport.py` (same app, same
+  raw-socket client, interleaved rows, `--no-uvicorn`) — ours 0.354 ms
+  p50 vs uvicorn 41.0 ms tight-loop, localized to uvicorn's split
+  head/body writes with no TCP_NODELAY + delayed-ACK (TTFB 0.77 ms,
+  body held 40 ms; 100ms-idle capacity row = 0.94 ms) vs our
+  single-write framing; adapter overhead +0.23 ms/req; 2 runs recorded
+  (note `2026-10-20-wire-layer-phase3-lifespan-ab.md`). REMAINING:
+  `SLO_TRANSPORT` wiring + journey gates (shared tree ~113 dirty — the
+  window). Next lane: NPU CAPS. From `.wt-worldbrain`.
 
 - **2026-10-19 · `feat/npu-caps` — OS design L2, CAPS + native tensor
   kernels, card DONE (phase 2; `d74e2cef`, stacked on `feat/wire-py`).**
