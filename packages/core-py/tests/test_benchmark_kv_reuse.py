@@ -142,7 +142,7 @@ def test_stack_benchmark_consistency(stack_metrics):
 
 @pytest.fixture(scope="module")
 def stack_stream_metrics():
-    """Tiny 2-turn streaming serving-stack benchmark (the /chat/stream path)."""
+    """Tiny 2-turn streaming serving-stack benchmark (the POST /chat SSE path)."""
     model = bk.create_model(vocab=256)
     return bk.benchmark_stack(model, [7], step=2, turns=2, max_tokens=2, steps=1, stream=True)
 

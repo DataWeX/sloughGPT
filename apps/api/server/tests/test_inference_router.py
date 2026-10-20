@@ -197,14 +197,20 @@ class TestGenerateRequiresModel:
 
 
 class TestChatRequiresModel:
-    def test_chat_returns_503_without_model(self):
-        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
-        assert resp.status_code == 503
+    def test_chat_reports_missing_model_as_stream_error(self):
+        """POST /chat is streaming-only, so a turn that cannot start is reported inside the stream.
 
-    def test_chat_stream_returns_error_without_model(self):
-        resp = client.post("/chat/stream", json={"messages": [{"role": "user", "content": "hi"}]})
+        ``test_support`` no-ops ReadinessGateMiddleware for this suite (so
+        schema-validation tests stay observable), which is why the answer here
+        is an SSE error frame rather than a status. In the deployed app the
+        gate answers 503 *before* the handler for /chat when no model is
+        materialized — that contract is pinned in
+        tests/server/test_readiness_gate.py.
+        """
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
+        assert "No model loaded" in resp.text
 
 
 class TestVoiceEndpoints:
@@ -230,8 +236,19 @@ class TestSchemaValidation:
         assert resp.status_code == 422
 
     def test_chat_empty_messages_list(self):
+        """An empty list is semantic validation, and semantics live in the turn.
+
+        Pydantic can only enforce that ``messages`` is present at the wire
+        level; "contains a user message" is the turn's own gate, so the failure
+        arrives as an SSE error frame like every other in-turn failure rather
+        than as 400/422. Which gate fires first depends on load state (this
+        suite has no model, so readiness wins) — the frame is the contract.
+        """
         resp = client.post("/chat", json={"messages": []})
-        assert resp.status_code in (400, 422, 503)
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        assert '"status": "error"' in resp.text
+        assert "No model loaded" in resp.text or "No user message" in resp.text
 
     def test_generate_temperature_out_of_range(self):
         resp = client.post("/inference/generate", json={"prompt": "hi", "temperature": 5.0})

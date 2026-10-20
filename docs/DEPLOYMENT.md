@@ -118,7 +118,7 @@ helm upgrade --install sloughgpt ./infra/k8s/helm/sloughgpt/ -n sloughgpt --crea
 ### Generation
 - `POST /generate` - Text generation
 - `POST /generate/stream` - Streaming generation
-- `POST /chat/stream` - Chat completion
+- `POST /chat` - Chat completion (SSE streaming — the endpoint's only state)
 
 ### Model
 - `GET /models` - List models

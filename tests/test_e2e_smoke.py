@@ -11,6 +11,7 @@ Generation-dependent endpoints are skipped when no model is loaded.
 Run: ``pytest tests/test_e2e_smoke.py -v``
 """
 
+import json
 import os
 
 # Disable background services so lifespan completes quickly.
@@ -124,7 +125,13 @@ class TestChatSessions:
 class TestChatGenerate:
     """Generation endpoints — only tested when a model is loaded."""
 
-    def test_chat_non_streaming(self, client, model_loaded):
+    def test_chat_folding_client_recovers_reply(self, client, model_loaded):
+        """A caller wanting a complete reply folds the stream at its own edge.
+
+        POST /chat streams — there is no non-streaming sibling, because a second
+        URL would re-advertise streaming as a choice. The fold belongs to the
+        client: read the token frames, stop at the closing frame.
+        """
         if not model_loaded:
             pytest.skip("No model loaded")
         resp = client.post(
@@ -135,21 +142,15 @@ class TestChatGenerate:
             },
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert "message" in data
-
-    def test_chat_stream(self, client, model_loaded):
-        if not model_loaded:
-            pytest.skip("No model loaded")
-        resp = client.post(
-            "/chat/stream",
-            json={
-                "messages": [{"role": "user", "content": "Hi"}],
-                "max_tokens": 20,
-            },
-        )
-        assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
+
+        frames = [
+            json.loads(line[6:]) for line in resp.text.splitlines() if line.startswith("data: ")
+        ]
+        assert frames, "POST /chat must emit SSE frames"
+        folded = "".join(f.get("data", {}).get("token", "") for f in frames)
+        assert folded.strip(), "a folding client must recover a non-empty reply"
+        assert frames[-1]["status"] == "complete", "the closing frame ends the stream"
 
     def test_generate(self, client, model_loaded):
         if not model_loaded:

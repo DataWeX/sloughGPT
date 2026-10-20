@@ -27,7 +27,7 @@ native scaffolding generation before any build/test/E2E is possible.
 ### 0.1 API contract — mobile rides the shared core image
 
 The mobile client talks to the **same** HTTP+SSE surface as web
-(`api-client.ts` ↔ `http-client.ts`, `/chat`, `/chat/stream`, `/training/*`,
+(`api-client.ts` ↔ `http-client.ts`, `/chat`, `/training/*`,
 `/health`, `/multimodal/*`). One exception is tracked as debt (card
 `eng-core-image-01`): the `/mobile` BFF (`apps/api/server/routers/mobile.py`)
 currently imports `domain/` singletons and `routers.inference._instance` directly

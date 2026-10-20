@@ -2872,8 +2872,8 @@ class InferenceRouter:
 
         Streaming is baked in — there is no non-streaming backend and no
         ``stream: bool`` toggle. Edges fold this stream when they need a
-        complete response (POST /chat, the mobile BFF), or frame the tokens
-        as they arrive (POST /chat/stream).
+        complete response (the mobile BFF), or frame the tokens as they arrive
+        (POST /chat, the web client).
 
         Yields:
             ``str`` raw tokens as they are generated, then a final
@@ -3615,9 +3615,9 @@ async def handle_chat_stream(
 ) -> StreamingResponse:
     """Public facade over the shared chat-stream handler (SSE).
 
-    ChatRouter (routers/chat.py) delegates POST /chat/stream through here,
-    so readiness gates, enrichment phases, reconnect replay and session
-    ownership stamping stay kernel-owned (shared-core contract: translate
-    at the edge, never into the core).
+    The public chat surface is POST /chat (routers/chat.py); this facade keeps
+    the kernel-owned path — readiness gates, enrichment phases, reconnect
+    replay and session ownership stamping (shared-core contract: translate at
+    the edge, never into the core).
     """
     return await _instance.chat_stream(req, request, auth_user)

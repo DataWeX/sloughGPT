@@ -21,7 +21,7 @@
 ### Four domains
 
 - **Cognitive** — consciousness engine post-processes generation (`ConsciousnessConfig.level`); Personality/Memory/Style/Task context managers; auto-memory service learning from conversations; souls/traits with feedback-driven weight updates.
-- **Core** — provider registry + router with processor pipeline (Vision/Knowledge/ToolUse/ Personality/Style), session core + KV-cache reuse, priority queue with streaming slot reservation, cancel manager, persistent settings. Serves chat/stream/regenerate (standardized SSE envelope) plus the raw `/inference/generate` path and the `[[TOOL: name]]` tool loop.
+- **Core** — provider registry + router with processor pipeline (Vision/Knowledge/ToolUse/ Personality/Style), session core + KV-cache reuse, priority queue with streaming slot reservation, cancel manager, persistent settings. Serves chat/regenerate (standardized SSE envelope) plus the raw `/inference/generate` path and the `[[TOOL: name]]` tool loop.
 - **Gateway** — thin generic edge is live: byte-relay + stateless zstd/gzip (`x-uncompressed-content-length`, SSE/Range/HEAD identity), strict path filters (traversal/`..`/NUL → 403 before Python), opt-in deny prefixes (`MAN_GATEWAY_DENY`), opt-in chat-only mode (`MAN_GATEWAY_CHAT_ONLY=1` allowlists conversation surface), and `/health` parses the API `data` envelope (`model_type`). Frontend cut over via Vite `loadEnv` + `inlinePublicEnv` → `PUBLIC_API_URL=:8080`. Auth/rate-limits stay in Python.
 - **Training** — single composable `TrainingLoop` (`training_handler.py`: samplers, gradient handlers, loss trackers, checkpoint savers) replacing the three loop copies; distillation, LoRA (including background feedback loop), activity classifier.
 

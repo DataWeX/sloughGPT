@@ -113,7 +113,8 @@ def test_post_chat_persists_history(client, manager):
     """POST /chat must store the exchange, exactly as domain/chat's own path did."""
     fake = TurnResult(text="hi back", session_id="s1")
     stored: list[tuple[str, str]] = []
-    fake_engine = _engine_yielding(fake)
+    # Token first, then the final result — the shape the engine actually emits.
+    fake_engine = _engine_yielding("hi back", fake)
 
     with (
         patch("domain.chat.get_chat_manager", return_value=manager),
@@ -135,7 +136,10 @@ def test_post_chat_persists_history(client, manager):
         )
 
     assert resp.status_code == 200
-    assert resp.json()["message"] == "hi back"
+    assert resp.headers["content-type"].startswith("text/event-stream"), (
+        "POST /chat streams — it is the endpoint's only state"
+    )
+    assert "hi back" in resp.text, "the engine's token must reach the wire"
     assert stored == [("s1", "hi back")], "history must be persisted for POST /chat"
 
 
@@ -250,18 +254,34 @@ def test_generate_tracked_delivers_the_registered_stop_event(manager):
 
 
 def test_router_exposes_single_engine_seam():
-    """Both endpoints must funnel through one streaming seam, per the merge contract."""
+    """One chat entry point: POST /chat, and it streams.
+
+    Pinned so a well-meaning "add a non-streaming variant" fails loudly. A
+    second route would re-advertise streaming as a choice, which is the exact
+    coupling the engine port removed; a caller wanting a complete reply folds
+    the stream at its own edge.
+    """
     assert hasattr(ChatRouter, "_stream_tokens")
-    assert hasattr(ChatRouter, "respond")
     assert hasattr(ChatRouter, "stream")
+    assert not hasattr(ChatRouter, "respond"), (
+        "POST /chat is the single entry point — the fold is not a separate route"
+    )
+
+    paths = {
+        (route.path, method) for route in ChatRouter().router.routes for method in route.methods
+    }
+    assert ("/chat", "POST") in paths, "POST /chat must be registered"
+    assert ("/stream", "POST") not in paths, (
+        "/chat/stream must not return — streaming is POST /chat's only state"
+    )
 
 
 def test_post_chat_surfaces_engine_details(client, manager):
-    """Chat must read the engine's details off the port and shape the response.
+    """Chat must read the engine's details off the port and put them on the wire.
 
-    The engine computes model/usage/finish/timing; chat is the
-    response handler, so it reads those off the returned TurnResult and puts
-    them on the wire for the frontend — the details the old handler discarded.
+    The engine computes usage/timing/finish on the final ``TurnResult``; chat is
+    the response handler, so it surfaces those on the closing SSE frame instead
+    of discarding them the way the old handler did.
     """
     turn = TurnResult(
         text="answer",
@@ -271,7 +291,8 @@ def test_post_chat_surfaces_engine_details(client, manager):
         elapsed_ms=12.5,
         finish_reason="stop",
     )
-    fake_engine = _engine_yielding(turn)
+    # Token first, then the final result carrying the details.
+    fake_engine = _engine_yielding("answer", turn)
 
     with (
         patch("domain.chat.get_chat_manager", return_value=manager),
@@ -286,12 +307,11 @@ def test_post_chat_surfaces_engine_details(client, manager):
         )
 
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["message"] == "answer"
-    assert body["model"] == "qwen2.5-0.5b-instruct"
-    assert body["usage"]["completion_tokens"] == 7
-    assert body["elapsed_ms"] == 12.5
-    assert body["finish_reason"] == "stop"
+    body = resp.text
+    assert "answer" in body
+    # Details ride the closing frame, so a folding client loses nothing.
+    for key in ("completion_tokens", "total_tokens", "model", "finish_reason", "elapsed_ms"):
+        assert key in body, f"closing frame must carry {key} off the TurnResult"
 
 
 def test_chat_router_does_not_import_inference_router():

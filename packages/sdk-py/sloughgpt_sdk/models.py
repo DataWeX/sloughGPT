@@ -79,7 +79,7 @@ class ChatMessage:
 
 @dataclass
 class ChatRequest:
-    """Request model for chat completions (``POST /chat`` and ``POST /chat/stream``)."""
+    """Request model for chat completions (``POST /chat`` (SSE streaming))."""
 
     messages: list[ChatMessage]
     model: str | None = "gpt2"

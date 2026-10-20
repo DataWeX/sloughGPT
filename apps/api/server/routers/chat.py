@@ -1,17 +1,22 @@
 """
-Chat Router - the prompting surface: respond, stream, regenerate, cancel.
+Chat Router - the prompting surface: stream, regenerate, cancel.
 
-Owns POST /chat and POST /chat/stream (single registration owner — the parity
-gate fails on any duplicate path+method). Those two read the engine
-through its port (`domain.inference.engine.get_chat_engine`) — never by
-importing the inference router — so model-readiness gates, enrichment phases
-and the token stream stay kernel-owned and identical for every caller (card
-13c37a23). Chat reads the engine's output (tokens + details) as data and shapes
-the response for the frontend.
+Owns POST /chat (single registration owner — the parity gate fails on any
+duplicate path+method). It reads the engine through its port
+(`domain.inference.engine.get_chat_engine`) — never by importing the inference
+router — so model-readiness gates, enrichment phases and the token stream stay
+kernel-owned and identical for every caller (card 13c37a23). Chat reads the
+engine's output (tokens + details) as data and shapes the response for the
+frontend.
 
-Streaming is baked in: the engine's one method yields raw tokens, so this
-router never toggles a "stream" mode. POST /chat/stream frames those tokens as
-they arrive; POST /chat folds the same stream and returns a complete payload.
+POST /chat STREAMS. That is not a mode and not an option: the engine's one
+method yields raw tokens, so streaming is the endpoint's only state. There is
+deliberately no POST /chat/stream sibling and no `stream` flag — a second URL
+would re-advertise streaming as a choice, which is the exact coupling the port
+removed. A caller that wants a complete reply folds the stream at *its* edge:
+the web client reads until the `done: true` frame, and the mobile BFF folds
+in-process through `handle_chat`.
+
 Session state lives in session.py.
 """
 
@@ -25,11 +30,11 @@ from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
-from schemas.chat import ChatRequest, ChatResponse
+from schemas.chat import ChatRequest
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
-from domain.inference.engine import fold, get_chat_engine
+from domain.inference.engine import get_chat_engine
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +53,7 @@ class ChatRouter:
         self._sse_error = sse_error
 
     def _register_routes(self):
-        self.router.add_api_route("", self.respond, methods=["POST"])
-        self.router.add_api_route("/stream", self.stream, methods=["POST"])
+        self.router.add_api_route("", self.stream, methods=["POST"])
         self.router.add_api_route("/{session_id}/regenerate", self.regenerate, methods=["POST"])
         self.router.add_api_route("/{session_id}/cancel", self.cancel, methods=["POST"])
         self.router.add_api_route("/active", self.active_sessions, methods=["GET"])
@@ -65,9 +69,9 @@ class ChatRouter:
 
         Streaming is baked in — this is how chat responds, not a mode and not a
         parameter. The engine yields raw ``str`` tokens followed by a final
-        ``TurnResult``; both routes derive from this: POST /chat/stream frames
-        the tokens as they arrive, POST /chat folds them into a complete
-        payload. Gates and cache (readiness/circuit-breaker, KV) live in the
+        ``TurnResult``. POST /chat frames them as they arrive; a caller wanting
+        a complete payload folds them at its own edge. Gates and cache
+        (readiness/circuit-breaker, KV) live in the
         engine's own domain — ``domain/generate``; chat owns its own state — the
         cancellation registry and conversation history — through the manager's
         public entry.
@@ -82,40 +86,6 @@ class ChatRouter:
         async for item in engine.stream(turn_req):
             yield item
 
-    @endpoint("chat.respond")
-    async def respond(
-        self,
-        request: ChatRequest,
-        auth_user: dict = Depends(require_auth_if_enabled),
-    ) -> ChatResponse:
-        """Chat response — a fold of the engine's token stream."""
-        from domain.chat import get_chat_manager
-
-        manager = get_chat_manager()
-        messages = [{"role": m.role, "content": m.content} for m in request.messages]
-
-        async def _gen(stop: threading.Event):
-            return await fold(self._stream_tokens(request, stop))
-
-        turn = await manager.generate_tracked(
-            request.session_id or "default",
-            messages,
-            _gen,
-            # The engine's TurnResult carries the assistant text under `text`.
-            text_of=lambda resp: resp.text,
-        )
-        # Chat handles the response: read the engine's details off the turn and
-        # shape the wire payload for the frontend.
-        return ChatResponse(
-            message=turn.text,
-            session_id=turn.session_id,
-            done=turn.done,
-            model=turn.model,
-            usage=turn.usage,
-            elapsed_ms=turn.elapsed_ms,
-            finish_reason=turn.finish_reason,
-        )
-
     @endpoint("chat.stream")
     async def stream(
         self,
@@ -123,7 +93,14 @@ class ChatRouter:
         http_request: Request,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> StreamingResponse:
-        """Streaming chat response (SSE) — the same token stream, framed as it arrives."""
+        """POST /chat — chat's one entry point. Streams, because it is the only state.
+
+        There is no `stream` flag and no /chat/stream sibling: the engine yields
+        raw tokens, so this route frames them as they arrive and always has.
+        A caller wanting a complete reply folds the stream at its own edge (read
+        until the `done: true` frame), which is why the mobile BFF folds
+        in-process through ``handle_chat`` instead of asking for a second shape.
+        """
         from domain.chat import get_chat_manager
 
         manager = get_chat_manager()
@@ -147,9 +124,20 @@ class ChatRouter:
                             _token_count += 1
                             yield self._sse_token("chat", item)
                     else:
-                        # Final TurnResult: close the stream with usage metadata.
+                        # Final TurnResult: close the stream. The engine computes
+                        # usage/timing/finish on it, so surface them here — that
+                        # detail is the point of the port, and folding callers
+                        # read it off this frame.
                         yield self._sse_token(
-                            "chat", "", done=True, meta={"usage_tokens": item.usage}
+                            "chat",
+                            "",
+                            done=True,
+                            meta={
+                                "usage_tokens": item.usage,
+                                "model": item.model,
+                                "finish_reason": item.finish_reason,
+                                "elapsed_ms": item.elapsed_ms,
+                            },
                         )
                 _elapsed_ms = round((time.time() - _start) * 1000)
                 safe_audit_log(

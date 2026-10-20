@@ -32,7 +32,7 @@ describe('chatController.stream', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
-  it('POSTs /chat/stream with message and generation fields', async () => {
+  it('POSTs /chat with message and generation fields', async () => {
     apiClient.apiGet.mockResolvedValue({ model_loaded: true, model_type: 'gpt2' })
 
     vi.mocked(fetch).mockResolvedValue({
@@ -46,7 +46,7 @@ describe('chatController.stream', () => {
     }
 
     expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/chat/stream'),
+      expect.stringMatching(/\/chat$/),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({

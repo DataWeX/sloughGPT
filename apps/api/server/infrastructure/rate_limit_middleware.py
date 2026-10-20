@@ -16,10 +16,10 @@ from domain.infrastructure.rate_limiter import (
     RateLimiter,
 )
 
-# Per-route rate limits: path prefix -> (max_requests, window_seconds)
+# Per-route rate limits: path -> (max_requests, window_seconds)
 # Expensive GPU/CPU endpoints get much lower limits.
 _ROUTE_LIMITS: dict[str, tuple[int, int]] = {
-    "/chat/stream": (10, 60),
+    "/chat": (10, 60),  # POST /chat — the generation entry point (and its only state)
     "/chat/voice": (5, 60),
     "/inference/generate/stream": (10, 60),
     "/inference/generate": (20, 60),
@@ -40,6 +40,12 @@ _ROUTE_LIMITS: dict[str, tuple[int, int]] = {
     "/mobile/train": (2, 120),
     "/models/": (30, 60),  # model file serving (GET)
 }
+
+# Keys matched as a complete path rather than a prefix. ``/chat`` must not fan
+# its strict limit out onto the cheap siblings under it (``/chat/sessions``,
+# ``/chat/health``, keystroke-driven search), and the generation endpoint
+# itself has no subpaths to lose.
+_EXACT_ROUTE_KEYS = frozenset({"/chat"})
 
 # Per-workspace rate limit multiplier (workspace_id -> multiplier)
 # Default is 1x. Workspace admins can be granted higher limits.
@@ -79,7 +85,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     Applies to all routes except health probes (always allowed).
     Localhost requests (127.0.0.1 / ::1) get 10x the limit.
-    Expensive endpoints (chat/stream, inference, model load) get
+    Expensive endpoints (chat, inference, model load) get
     separate, stricter limits to prevent GPU OOM.
     When auth is enabled, rate limits are also tracked per workspace.
     Exceeding ``max_requests`` in ``window_seconds`` returns 429 with
@@ -99,9 +105,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._workspace_limiters: dict[str, RateLimiter] = {}
 
     def _match_route(self, path: str) -> tuple[str | None, RateLimiter | None]:
-        """Find matching route-specific limiter."""
+        """Find matching route-specific limiter.
+
+        Keys in ``_EXACT_ROUTE_KEYS`` match the whole path; everything else
+        matches as a prefix (``/chat/voice/...``, ``/training/...``).
+        """
         for prefix, limiter in self._route_limiters.items():
-            if path.startswith(prefix):
+            if prefix in _EXACT_ROUTE_KEYS:
+                matched = path == prefix
+            else:
+                matched = path.startswith(prefix)
+            if matched:
                 return prefix, limiter
         return None, None
 

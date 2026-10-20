@@ -110,7 +110,7 @@ export const chatController = {
     }
 
     try {
-      for await (const event of streamSSE('/chat/stream', { body })) {
+      for await (const event of streamSSE('/chat', { body })) {
         if (event.status === 'error') {
           yield `[${event.message || (event.data?.error as string) || 'Stream error'}]`
           return

@@ -107,11 +107,11 @@ rows from that output instead of hand-editing.
 
 ### G2 — backend test coverage for 3 routers (card `f71f9f9e`)
 
-| Router           | Surface                                                                    | Lines | Coverage today                                                              |
-| ---------------- | -------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------- |
-| `chat.py`        | `POST /chat`, `/chat/stream`, regenerate, cancel, GET active/health/addons | 246   | none for the HTTP router (existing `test_chat_*` cover manager/trainer/CLI) |
-| `model_stack.py` | model-stack routes                                                         | 116   | zero tests anywhere                                                         |
-| `phoneme.py`     | phoneme router                                                             | 158   | frontend only (`phoneme-controller.test.ts`)                                |
+| Router           | Surface                                                                           | Lines | Coverage today                                                              |
+| ---------------- | --------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------- |
+| `chat.py`        | `POST /chat` (SSE — its only state), regenerate, cancel, GET active/health/addons | 283   | none for the HTTP router (existing `test_chat_*` cover manager/trainer/CLI) |
+| `model_stack.py` | model-stack routes                                                                | 116   | zero tests anywhere                                                         |
+| `phoneme.py`     | phoneme router                                                                    | 158   | frontend only (`phoneme-controller.test.ts`)                                |
 
 ## Out of scope (deliberately)
 

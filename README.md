@@ -122,8 +122,7 @@ Core endpoints:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/chat` | Chat with a loaded model |
-| `POST` | `/chat/stream` | Streaming chat (SSE) |
+| `POST` | `/chat` | Chat with a loaded model (SSE streaming — the endpoint's only state) |
 | `POST` | `/inference/generate` | Text generation |
 | `POST` | `/inference/generate/stream` | Streaming generation (SSE) |
 | `POST` | `/training/start` | Start training (SSE progress) |

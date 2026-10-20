@@ -61,7 +61,7 @@ both shells at the same endpoints, never by giving one shell a private path.
 | ------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | Health       | `/health`, `/health/live`, `/health/ready`, `/health/detailed`, `/health/startup-progress`, `/health/services` | liveness/readiness, phase progress    |
 | System state | `/system/metrics`, `/system/info`, `/system/disk`, `/system/lifecycle`, `/system/inference-pool`               | server state read-model               |
-| Streaming    | `/system/stream` (SSE output), `/chat/stream` (SSE chat), `/errors/stream`, `/training/stream`                 | live state + generation               |
+| Streaming    | `/system/stream` (SSE output), `/chat` (SSE chat), `/errors/stream`, `/training/stream`                         | live state + generation               |
 | Executor     | `/system/executor`, `/system/executor/{job_id}`, `/result`, `/purge`, `/cancel`                                | training job pool                     |
 | Core flows   | `/chat`, `/inference/*`, `/models/*`, `/session/*`, `/knowledge`, `/memory`, `/settings/*`                     | feature surface shared by both shells |
 
@@ -75,7 +75,7 @@ endpoint without a matching read-model consumer.
 
 ### SSE frame schema
 
-Every SSE endpoint (`/chat/stream`, `/system/stream`, */stream) yields frames as
+Every SSE endpoint (`/chat`, `/system/stream`, */stream) yields frames as
 lines `data: {json}` with no `event:` name, framed per `domain/api` SSE envelope:
 
 ```json
@@ -167,7 +167,7 @@ list is documented in [`docs/routers.md`](routers.md).
 | Router                                                                                                                                                                      | Covered by SDK                                                |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | Health (`/health`, `/health/detailed`)                                                                                                                                      | ✅                                                            |
-| Inference (`/inference/generate`, `/inference/generate/stream`, `/chat`, `/chat/stream`)                                                                                    | ✅                                                            |
+| Inference (`/inference/generate`, `/inference/generate/stream`, `/chat`)                                                                                                    | ✅                                                            |
 | Models (`/models`)                                                                                                                                                          | ✅                                                            |
 | Souls (`/souls`)                                                                                                                                                            | ✅                                                            |
 | Knowledge (`/knowledge`)                                                                                                                                                    | ✅                                                            |

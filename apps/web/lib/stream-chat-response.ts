@@ -112,7 +112,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
     let shouldRetry = false
 
     try {
-      for await (const event of streamSSE('/chat/stream', { body, signal, lastEventId })) {
+      for await (const event of streamSSE('/chat', { body, signal, lastEventId })) {
         const d = event.data ?? {}
 
         // Track last event ID for reconnection
@@ -228,7 +228,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           }
 
           useErrorStore.getState().addError(new Error(message), {
-            source: 'chat/stream',
+            source: 'chat',
             title: `Chat stream error (${httpStatus})`,
           })
           onError(httpStatus, message, {
@@ -283,7 +283,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
 
       _log.error('Stream network error after retries', { retries, message })
       useErrorStore.getState().addError(err instanceof Error ? err : new Error(message), {
-        source: 'chat/stream',
+        source: 'chat',
         title: 'Connection Error',
       })
       onError(0, message, undefined)

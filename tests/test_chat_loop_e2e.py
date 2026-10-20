@@ -74,7 +74,7 @@ def mock_chat_deps():
 
     # ChatManager is a process-global singleton that CACHES its resolved
     # provider (manager._active_provider); app startup resolves it before
-    # this fixture's patches install, so the /chat/stream route read the
+    # this fixture's patches install, so the POST /chat route read the
     # stale cached provider and emitted zero tokens (2 reds, card
     # c59d5be7). Reset on entry so resolution happens under the patch,
     # and again on exit so the mock-cached manager cannot leak into other
@@ -85,15 +85,15 @@ def mock_chat_deps():
     try:
         with (
             patch("domain.models._internal.provider.get_provider", return_value=provider),
-        # The SERVING /chat/stream handler is inference.chat_stream — the
-        # inference router mounts before the chat router in the manifest
-        # (Starlette first-match), and inference.py binds get_provider via
-        # a TOP-LEVEL import (inference.py:45), so the _internal-level
-        # patch above never reaches it (real registry resolves to None in
-        # the test env -> zero tokens, card c59d5be7). Patch the consumer
-        # module attr per 2368d4aa3; the chat-manager path still resolves
-        # through the _internal patch (function-local import there).
-        patch("routers.inference.get_provider", return_value=provider),
+            # The chat router owns POST /chat and reaches the engine through its
+            # port; the engine's implementation (stream_turn) lives in
+            # routers/inference.py and calls get_provider via a TOP-LEVEL import
+            # (inference.py:45), so the _internal-level patch above never reaches
+            # it (real registry resolves to None in the test env -> zero tokens,
+            # card c59d5be7). Patch the consumer module attr per 2368d4aa3; the
+            # chat-manager path still resolves through the _internal patch
+            # (function-local import there).
+            patch("routers.inference.get_provider", return_value=provider),
             patch(
                 "routers.inference._enrich_knowledge",
                 return_value={"source": "none", "facts": [], "topics": []},
@@ -141,9 +141,9 @@ class TestChatLoopE2E:
         assert body.get("status") == "success" or "session_id" in body.get("data", {})
 
     def test_chat_stream_returns_sse(self, client, mock_chat_deps):
-        """Send a message via /chat/stream and collect SSE events."""
+        """Send a message via POST /chat and collect its SSE events."""
         resp = client.post(
-            "/chat/stream",
+            "/chat",
             json={
                 "messages": [{"role": "user", "content": "Hi there"}],
                 "max_tokens": 50,
@@ -222,7 +222,7 @@ class TestChatLoopE2E:
         session_id = "full-cycle-test"
 
         resp = client.post(
-            "/chat/stream",
+            "/chat",
             json={
                 "session_id": session_id,
                 "messages": [{"role": "user", "content": "Hello world"}],

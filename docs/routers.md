@@ -53,27 +53,26 @@ Registered pre-lifespan in `main.py`.
 
 ## Inference Router (`/inference`, `/chat`, `/context`, `/session`)
 
-| Method   | Path                                | Description                      |
-| -------- | ----------------------------------- | -------------------------------- |
-| `POST`   | `/inference/generate`               | Non-streaming text generation.   |
-| `POST`   | `/inference/generate/stream`        | Streaming text generation (SSE). |
-| `POST`   | `/chat`                             | Chat (non-streaming).            |
-| `POST`   | `/chat/stream`                      | Chat (SSE streaming).            |
-| `GET`    | `/context/inspect`                  | Inspect context layers.          |
-| `POST`   | `/context/store-fact`               | Store a fact in context.         |
-| `GET`    | `/context/facts`                    | List context facts.              |
-| `POST`   | `/context/reset`                    | Reset context state.             |
-| `GET`    | `/session/list`                     | List all sessions.               |
-| `POST`   | `/session/create`                   | Create a new session.            |
-| `GET`    | `/session/{session_id}`             | Get session details.             |
-| `DELETE` | `/session/{session_id}`             | Delete a session.                |
-| `POST`   | `/session/{session_id}/regenerate`  | Regenerate the last response.    |
-| `GET`    | `/session/{session_id}/suggestions` | Chat suggestions for a session.  |
-| `GET`    | `/providers`                        | List model providers.            |
-| `GET`    | `/operations`                       | List active operations.          |
-| `POST`   | `/operations/{op_id}/cancel`        | Cancel an operation.             |
-| `POST`   | `/operations/cancel-all`            | Cancel all operations.           |
-| `POST`   | `/operations/purge`                 | Purge completed operations.      |
+| Method   | Path                                | Description                            |
+| -------- | ----------------------------------- | -------------------------------------- |
+| `POST`   | `/inference/generate`               | Non-streaming text generation.         |
+| `POST`   | `/inference/generate/stream`        | Streaming text generation (SSE).       |
+| `POST`   | `/chat`                             | Chat — SSE streaming (its only state). |
+| `GET`    | `/context/inspect`                  | Inspect context layers.                |
+| `POST`   | `/context/store-fact`               | Store a fact in context.               |
+| `GET`    | `/context/facts`                    | List context facts.                    |
+| `POST`   | `/context/reset`                    | Reset context state.                   |
+| `GET`    | `/session/list`                     | List all sessions.                     |
+| `POST`   | `/session/create`                   | Create a new session.                  |
+| `GET`    | `/session/{session_id}`             | Get session details.                   |
+| `DELETE` | `/session/{session_id}`             | Delete a session.                      |
+| `POST`   | `/session/{session_id}/regenerate`  | Regenerate the last response.          |
+| `GET`    | `/session/{session_id}/suggestions` | Chat suggestions for a session.        |
+| `GET`    | `/providers`                        | List model providers.                  |
+| `GET`    | `/operations`                       | List active operations.                |
+| `POST`   | `/operations/{op_id}/cancel`        | Cancel an operation.                   |
+| `POST`   | `/operations/cancel-all`            | Cancel all operations.                 |
+| `POST`   | `/operations/purge`                 | Purge completed operations.            |
 
 ## Infer Router (`/infer`)
 

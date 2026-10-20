@@ -116,7 +116,7 @@ class TestChatNonStreaming:
 class TestChatStreaming:
     def test_chat_stream_returns_sse(self, client, model_loaded):
         resp = client.post(
-            "/chat/stream",
+            "/chat",
             json={
                 "messages": [{"role": "user", "content": "Hi"}],
                 "max_tokens": 20,
@@ -133,7 +133,7 @@ class TestChatStreaming:
 
     def test_chat_stream_has_complete_event(self, client, model_loaded):
         resp = client.post(
-            "/chat/stream",
+            "/chat",
             json={
                 "messages": [{"role": "user", "content": "Hi"}],
                 "max_tokens": 20,
@@ -145,7 +145,7 @@ class TestChatStreaming:
 
     def test_chat_stream_has_token_in_standard_envelope(self, client, model_loaded):
         resp = client.post(
-            "/chat/stream",
+            "/chat",
             json={
                 "messages": [{"role": "user", "content": "Hello"}],
                 "max_tokens": 15,
@@ -409,7 +409,7 @@ class TestFullCycle:
     def test_cycle_stream(self, client, model_loaded):
         """Step 1: Stream a chat message."""
         resp = client.post(
-            "/chat/stream",
+            "/chat",
             json={
                 "session_id": self.CYCLE_SESSION,
                 "messages": [{"role": "user", "content": "Hello from full cycle"}],

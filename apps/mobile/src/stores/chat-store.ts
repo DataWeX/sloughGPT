@@ -380,7 +380,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ),
         }));
         for await (const event of streamSSE(
-          '/chat/stream',
+          '/chat',
           body,
           controller.signal,
         )) {
