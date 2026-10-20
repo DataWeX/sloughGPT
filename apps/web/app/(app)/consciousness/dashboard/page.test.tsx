@@ -88,7 +88,7 @@ describe('ConsciousnessDashboardPage', () => {
     mockController.seedData.mockResolvedValue({ seeded: 10 })
     mockController.reflect.mockResolvedValue({ reflection: 'Test reflection' })
     mockController.submitFeedback.mockResolvedValue({ accepted: true, belief_updates: [] })
-    mockController.updateConfig.mockResolvedValue({ updated: true })
+    mockController.updateConfig.mockResolvedValue({ level: 2, enabled: true })
   })
 
   it('renders the page title', async () => {

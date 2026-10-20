@@ -40,7 +40,7 @@ const TestWrapper = ({ children }: { children: React.ReactNode }) => (
 describe('ConsciousnessQuickstartPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockController.updateConfig.mockResolvedValue({ updated: true })
+    mockController.updateConfig.mockResolvedValue({ level: 2, enabled: true })
     mockController.applyPersonalityPreset.mockResolvedValue({ applied: true })
     mockController.seedData.mockResolvedValue({ seeded: 10 })
     localStorage.clear()

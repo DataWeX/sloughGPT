@@ -2,17 +2,18 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { apiGet } from '@/lib/http-client'
+import type { ConsciousnessStats } from '@/lib/consciousness-controller'
 
 const POLL_INTERVAL = 30_000
 
 export function useConsciousnessStats() {
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<ConsciousnessStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchStats = useCallback(async () => {
     try {
-      const data = await apiGet('/consciousness/stats')
+      const data = await apiGet<ConsciousnessStats>('/consciousness/stats')
       setStats(data)
       setError(null)
     } catch (err) {
@@ -28,7 +29,7 @@ export function useConsciousnessStats() {
       setLoading(true)
       setError(null)
       try {
-        const data = await apiGet('/consciousness/stats')
+        const data = await apiGet<ConsciousnessStats>('/consciousness/stats')
         if (!active) return
         setStats(data)
         setError(null)

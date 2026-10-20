@@ -48,12 +48,12 @@ export function useConsciousnessShortcuts(enabled: boolean = true) {
         addToast('Toggling consciousness...', 'info')
         consciousnessController.getStatus()
           .then(status => {
-            const currentLevel = (status as any)?.level ?? 0
+            const currentLevel = status.level ?? 0
             const newLevel = currentLevel === 0 ? 1 : 0
             return consciousnessController.updateConfig({ level: newLevel })
           })
           .then(result => {
-            const level = (result as any)?.level
+            const level = result.level
             addToast(level ? `Consciousness enabled (level ${level})` : 'Consciousness disabled', 'success')
           })
           .catch(() => {
@@ -78,5 +78,5 @@ export function useConsciousnessShortcuts(enabled: boolean = true) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [registered, router, addToast])
 
-  return { registerShortcuts, lastAction } as any
+  return { registerShortcuts, lastAction }
 }

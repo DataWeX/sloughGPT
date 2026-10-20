@@ -49,7 +49,7 @@ describe('ConsciousnessSettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockController.getStatus.mockResolvedValue(mockStatus as any)
-    mockController.updateConfig.mockResolvedValue({ updated: true })
+    mockController.updateConfig.mockResolvedValue({ level: 2, enabled: true })
     mockController.seedData.mockResolvedValue({ seeded: 10 })
     mockController.clearEpisodes.mockResolvedValue({ cleared: true, episodes_cleared: 50 })
     mockController.resetBeliefs.mockResolvedValue({ reset: true, beliefs: {} })

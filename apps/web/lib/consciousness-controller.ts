@@ -30,6 +30,24 @@ export interface ConsciousnessStatus {
   }
 }
 
+/** True payload of GET /consciousness/stats — router get_stats(). */
+export type ConsciousnessStats = {
+  total_episodes: number
+  total_feedback: number
+  avg_rating: number
+  avg_growth: number
+  qualia_averages: Record<string, number>
+  belief_averages: Record<string, number>
+  personality_summary: {
+    voice_averages: Record<string, number>
+    trait_averages: Record<string, number>
+  }
+  /** trainer.get_status() — same dict as ConsciousnessStatus['training']. */
+  training_status: ConsciousnessStatus['training']
+  health_score: number
+  active_personas: number
+}
+
 export interface SelfModel {
   traits: Record<string, number>
   beliefs: string[]
@@ -174,7 +192,8 @@ export const consciousnessController = {
     return apiPost('/consciousness/reflect')
   },
 
-  async updateConfig(config: Record<string, unknown>): Promise<{ updated: boolean }> {
+  /** PATCH /consciousness/config — returns the post-update level/enabled. */
+  async updateConfig(config: Record<string, unknown>): Promise<{ level: number; enabled: boolean }> {
     return apiPatch('/consciousness/config', config)
   },
 
@@ -312,8 +331,8 @@ export const consciousnessController = {
     return apiPost('/consciousness/backup/import', formData)
   },
 
-  async getStats(): Promise<Record<string, unknown>> {
-    return apiGet('/consciousness/stats')
+  async getStats(): Promise<ConsciousnessStats> {
+    return apiGet<ConsciousnessStats>('/consciousness/stats')
   },
 
   async batch(

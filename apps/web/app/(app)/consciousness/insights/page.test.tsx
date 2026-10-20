@@ -80,7 +80,25 @@ describe('ConsciousnessInsightsPage', () => {
     vi.mocked(consciousnessController.healthCheck).mockResolvedValue(mockHealth as any)
     vi.mocked(consciousnessController.evaluate).mockResolvedValue(mockEval as any)
     vi.mocked(consciousnessController.getPersonality).mockResolvedValue(mockPersonality as any)
-    vi.mocked(consciousnessController.getStats).mockResolvedValue({})
+    vi.mocked(consciousnessController.getStats).mockResolvedValue({
+      total_episodes: 0,
+      total_feedback: 0,
+      avg_rating: 0,
+      avg_growth: 0,
+      qualia_averages: {},
+      belief_averages: {},
+      personality_summary: { voice_averages: {}, trait_averages: {} },
+      training_status: {
+        pairs_collected: 0,
+        min_pairs: 10,
+        should_train: false,
+        is_training: false,
+        training_runs: 0,
+        last_result: null,
+      },
+      health_score: 0,
+      active_personas: 0,
+    })
   })
 
   it('renders without crashing', async () => {

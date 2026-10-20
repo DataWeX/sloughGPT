@@ -23,7 +23,7 @@ describe('useConsciousnessStats', () => {
   })
 
   it('fetches stats on mount', async () => {
-    const mockStats = { total_episodes: 42, avg_qualia: { valence: 0.6 } }
+    const mockStats = { total_episodes: 42, qualia_averages: { valence: 0.6 } }
     mockApiGet.mockResolvedValue(mockStats)
 
     const { result } = renderHook(() => useConsciousnessStats())

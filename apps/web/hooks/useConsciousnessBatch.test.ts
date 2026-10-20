@@ -42,13 +42,13 @@ describe('useConsciousnessBatch', () => {
     })
 
     expect(result.current.results).toHaveLength(2)
-    expect(result.current.results[0].status).toBe('fulfilled')
-    expect(result.current.results[1].status).toBe('fulfilled')
+    expect(result.current.results![0].status).toBe('fulfilled')
+    expect(result.current.results![1].status).toBe('fulfilled')
     expect(result.current.error).toBeNull()
   })
 
   it('sets loading during execution', async () => {
-    let resolve: (v: any) => void
+    let resolve: (v: { level: number; enabled: boolean }) => void
     mockCtrl.updateConfig.mockImplementation(
       () => new Promise((r) => { resolve = r })
     )
@@ -62,7 +62,7 @@ describe('useConsciousnessBatch', () => {
     expect(result.current.loading).toBe(true)
 
     await act(async () => {
-      resolve!({ data: {} })
+      resolve!({ level: 1, enabled: true })
     })
 
     expect(result.current.loading).toBe(false)

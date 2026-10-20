@@ -8,8 +8,16 @@ export interface ConsciousnessBatchOperation {
   payload: Record<string, unknown>
 }
 
+/** Union of the per-operation payload types batch can settle with. */
+type BatchOperationResult =
+  | Awaited<ReturnType<typeof consciousnessController.seedData>>
+  | Awaited<ReturnType<typeof consciousnessController.submitFeedback>>
+  | Awaited<ReturnType<typeof consciousnessController.reflect>>
+  | Awaited<ReturnType<typeof consciousnessController.updateConfig>>
+  | null
+
 export function useConsciousnessBatch() {
-  const [results, setResults] = useState<any>(null)
+  const [results, setResults] = useState<PromiseSettledResult<BatchOperationResult>[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
