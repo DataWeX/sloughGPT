@@ -41,12 +41,26 @@ class TestStatus:
 
     def test_ready(self, monkeypatch):
         # /ready now gates on subsystem checks (database, inference); the
-        # happy path needs them up. Patch the facade read points the handler
+        # happy path needs them up. Patch the read points the handler
         # imports at call time.
+        #
+        # get_feedback_db patches at the facade level like its consumer
+        # copies do. get_engine must patch the INTERNAL module — the same
+        # target tests/server and apps/api/server use. A facade-level
+        # setattr here would materialize the attr in domain.inference's
+        # namespace; monkeypatch teardown restores via setattr (never
+        # delattr), so the facade would permanently shadow its __getattr__
+        # forwarding and every later internal-level patch in the process
+        # goes invisible — readiness then flips false for those copies
+        # (order-dependent multi-file failures).
         monkeypatch.setattr(
             "domain.feedback.get_feedback_db", lambda *a, **k: object(), raising=False
         )
-        monkeypatch.setattr("domain.inference.get_engine", lambda *a, **k: object(), raising=False)
+        monkeypatch.setattr(
+            "domain.inference._internal.native.engine.get_engine",
+            lambda *a, **k: object(),
+            raising=False,
+        )
         sr = StatusRouter()
         client = TestClient(_app(sr))
         resp = client.get("/ready")
