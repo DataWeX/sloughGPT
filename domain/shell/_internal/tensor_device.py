@@ -25,6 +25,8 @@ class TensorDevice:
     def __init__(self, name: str = "tensor"):
         self._name = name
         self._ops = {
+            # Contract
+            IoctlCommand.CAPS: self._caps,
             # Linear algebra
             IoctlCommand.MATMUL: self._matmul,
             IoctlCommand.DOT: self._dot,
@@ -141,6 +143,36 @@ class TensorDevice:
     def list_commands(self) -> list[str]:
         """List all available commands."""
         return sorted([cmd.value for cmd in self._ops.keys()])
+
+    def caps(self) -> dict:
+        """Capability matrix — the device's machine-readable contract.
+
+        ONE device, three faces (the CPU's tensor backend via
+        ``vm._default_tensor``, the kernel NPUDevice's ``_compute``, the
+        runtime DeviceManager's registered ``"tensor"``) — each reaches
+        this through the same ``ioctl()``/``call()`` path, so the matrix
+        is declared once here and never per-face.
+
+        Phase 1 reports phase-1 truth: the engine is numpy and nothing is
+        routed through the native loader yet. Phase 2 fills
+        ``backend.native_*`` and ``parity`` with what actually landed —
+        these fields report reality, never intent.
+        """
+        return {
+            "name": self._name,
+            "type": "tensor",
+            "ops": self.list_commands(),
+            # _to_arr coerces scalar/list inputs to float64; ndarray inputs
+            # pass through opaquely, so float64 is the one guaranteed
+            # computation dtype.
+            "dtypes": ["float64"],
+            "backend": {"engine": "numpy", "native_available": False, "native_ops": []},
+            "parity": [],
+        }
+
+    def _caps(self, *args) -> dict:
+        """Ioctl handler — extra args ignored (DEV_CALL may pass junk)."""
+        return self.caps()
 
     # ── Function calls (direct use) ───────────────────────────────────────
 
