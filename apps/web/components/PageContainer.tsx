@@ -163,8 +163,8 @@ export function PageContainer({
             <EmptyCard
               message={emptyMessage}
               description={emptyDescription}
-              icon={emptyIcon as any}
-              action={(emptyAction ?? null) as any}
+              icon={emptyIcon}
+              action={emptyAction ?? null}
             />
           </div>
         </div>

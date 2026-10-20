@@ -48,7 +48,7 @@ export function CloudTrainingJobList({
                     {job.provider}
                   </span>
                 </div>
-                <Badge variant={statusVariant(job.status) as any}>
+                <Badge variant={statusVariant(job.status)}>
                   {job.status}
                 </Badge>
               </div>

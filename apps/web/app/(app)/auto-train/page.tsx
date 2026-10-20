@@ -51,7 +51,8 @@ export default function AutoTrainPage() {
       ])
       if (statusData) {
         setStatus(statusData as unknown as AutoTrainStatus)
-        setThreshold((statusData as any).threshold || 10)
+        const thr = statusData.threshold
+        setThreshold(typeof thr === 'number' && thr !== 0 ? thr : 10)
       }
       if (statsData) {
         setStats(statsData as unknown as TrainingStats)
