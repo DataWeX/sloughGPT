@@ -16,6 +16,7 @@ import select
 import signal
 import struct
 import sys
+import tempfile
 import termios
 import time
 
@@ -312,7 +313,19 @@ class _TuiSession:
         self.cols = cols
         self.buf = b""
         self.screen = _Screen(rows, cols)
-        self.err_path = os.environ.get("TUI_LIVE_CHILD_ERR", "/tmp/opencode/tui_live_child.err")
+        # Scratch paths live in the system temp dir, one directory per process.
+        # The previous defaults hardcoded a machine-specific directory that does
+        # not exist on CI runners, so the forked child died with FileNotFoundError
+        # while opening its stderr file — before drawing a single frame — and
+        # _ready() could never become true: these tests failed on CI while
+        # passing locally. pty.fork() inherits this path, so parent and child
+        # always agree. Both env vars still override.
+        self.scratch_dir = os.path.join(tempfile.gettempdir(), f"tui_live_{os.getpid()}")
+        os.makedirs(self.scratch_dir, exist_ok=True)
+        self.err_path = os.environ.get("TUI_LIVE_CHILD_ERR") or os.path.join(
+            self.scratch_dir, "child.err"
+        )
+        os.makedirs(os.path.dirname(self.err_path), exist_ok=True)
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
             self._child()
@@ -323,7 +336,7 @@ class _TuiSession:
         if os.environ.get("TUI_LIVE_COV"):
             import coverage
 
-            cov_dir = os.environ.get("TUI_LIVE_COV_DIR", "/tmp/opencode/tui_cov")
+            cov_dir = os.environ.get("TUI_LIVE_COV_DIR") or os.path.join(self.scratch_dir, "cov")
             os.makedirs(cov_dir, exist_ok=True)
             cov = coverage.Coverage(
                 source=["domain/shell"],
