@@ -32,7 +32,7 @@ from schemas.common import classify_and_raise, raise_error, safe_audit_log, succ
 from config import ServerConfig
 from config import gen_config as _gen_config
 from domain.agents import get_agent_system, get_tool_registry
-from domain.core import get_rag_service
+from domain.cognition import get_rag_service
 from domain.feedback import get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
@@ -839,7 +839,7 @@ def _run_post_gen_tasks(
     """
     import state as _pgs_state
 
-    from domain.core import get_rag_service as _pgs_rag
+    from domain.cognition import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
     tokens = len(full_response.split())
@@ -2073,7 +2073,7 @@ class InferenceRouter:
             rag_context = ""
             if req.use_rag:
                 try:
-                    from domain.core import is_rag_service_ready
+                    from domain.cognition import is_rag_service_ready
 
                     if not is_rag_service_ready():
                         logger.debug("RAG service not ready yet, skipping query")
@@ -2905,7 +2905,7 @@ class InferenceRouter:
         self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> ChatResponse:
         """chat."""
-        _chat_t0 = time.monotonic()
+        _chat_start_dt = datetime.datetime.now()
         import state as _chat_state
 
         from domain import get_chat_domain
@@ -3029,28 +3029,37 @@ class InferenceRouter:
                 done=True,
             )
 
+        # Audit gap G2: this path used to stop after an inline metrics record
+        # and an inline capture, while every other post-generation task — most
+        # importantly consciousness, which is what actually writes the
+        # substrate episode — was launched only from chat_stream. A non-stream
+        # turn therefore left NO record of having happened.
+        #
+        # The inline record_inference/capture that used to live here are gone
+        # rather than kept alongside: _run_post_gen_tasks performs both, and
+        # retaining them would double-count every non-streaming turn. One task
+        # set, one call site, both paths.
         try:
-            tokens = _count_tokens(result.text, _chat_state)
-            _chat_elapsed_ms = round((time.monotonic() - _chat_t0) * 1000, 1)
-            get_server_state().record_inference(
-                tokens=tokens,
-                elapsed_ms=_chat_elapsed_ms,
-                model=_chat_state.model_type or req.model,
-            )
-        except Exception as e:
-            logger.warning("Failed to record inference metrics: %s", e)
-
-        try:
-            capture(
-                user_msg or "",
+            _post_gen = _run_post_gen_tasks(
                 result.text,
-                model=_chat_state.model_type or req.model,
-                tokens_generated=_count_tokens(result.text, _chat_state),
-                temperature=gen_params["temperature"],
-                meta={"session_id": req.session_id or "default"},
+                user_msg or "",
+                result.session_id or req.session_id or "default",
+                _chat_start_dt,
+                req,
+                self._get_context_core(),
+                self._bg_tasks_lock,
+                self._BG_TASKS,
+                self._bg_tasks_lock_discard,
+                corr_id="nonstream",
             )
+            if _post_gen.get("narrative"):
+                logger.info(
+                    "Non-stream chat reflection recorded (level=%s)",
+                    _post_gen["level"],
+                    extra={"tag": "INF"},
+                )
         except Exception as e:
-            logger.warning("Failed to capture conversation: %s", e)
+            logger.warning("Post-gen tasks failed: %s", e)
 
         return ChatResponse(
             message=result.text,
