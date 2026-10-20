@@ -433,7 +433,7 @@ export default function ConsciousnessHistoryPage() {
                                   <div className="text-xs font-medium text-muted-foreground mb-2">{t('consciousness_history.qualia_breakdown')}</div>
                                   <div className="grid grid-cols-2 gap-2">
                                     {QUALIA_DIMS.map(({ key, color }) => {
-                                      const val = (ep.qualia as any)[key]
+                                      const val: number | undefined = ep.qualia[key]
                                       if (val === undefined) return null
                                       return (
                                         <div key={key} className="flex items-center gap-2">

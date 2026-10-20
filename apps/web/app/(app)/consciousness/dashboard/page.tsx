@@ -178,11 +178,11 @@ export default function ConsciousnessDashboardPage() {
         const point: BeliefsPoint = {
           timestamp: Date.now() / 1000,
           step: (prev[prev.length - 1]?.step ?? 0) + 1,
-          competence: (latestEvent.beliefs as any).competence ?? 0,
-          helpfulness: (latestEvent.beliefs as any).helpfulness ?? 0,
-          creativity: (latestEvent.beliefs as any).creativity ?? 0,
-          accuracy: (latestEvent.beliefs as any).accuracy ?? 0,
-          empathy: (latestEvent.beliefs as any).empathy ?? 0,
+          competence: latestEvent.beliefs.competence ?? 0,
+          helpfulness: latestEvent.beliefs.helpfulness ?? 0,
+          creativity: latestEvent.beliefs.creativity ?? 0,
+          accuracy: latestEvent.beliefs.accuracy ?? 0,
+          empathy: latestEvent.beliefs.empathy ?? 0,
         }
         return [...prev, point]
       })
@@ -458,9 +458,9 @@ export default function ConsciousnessDashboardPage() {
           </CardHeader>
           <CardContent>
             {(() => {
-              const status = evalReport as any
-              const lastReflection =
-                status?.last_reflection || episodes[episodes.length - 1]?.self_insight
+              // EvalReport carries no last_reflection (it never did — the cast
+              // masked it); the episode self_insight has always been the source.
+              const lastReflection = episodes[episodes.length - 1]?.self_insight
               return lastReflection ? (
                 <div className="text-sm italic text-muted-foreground">
                   &quot;{lastReflection}&quot;

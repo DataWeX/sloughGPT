@@ -3,6 +3,8 @@
  * Handles init, save/restore state, and IndexedDB persistence.
  */
 
+import type { V86Constructor, V86Emulator } from 'v86'
+
 const DB_NAME = 'v86-vm'
 const DB_VERSION = 1
 const STORE_NAME = 'state'
@@ -18,8 +20,7 @@ async function openDB(): Promise<IDBDatabase> {
 }
 
 export class V86Controller {
-  private emulator: any = null
-  private V86Class: any = null
+  private emulator: V86Emulator | null = null
 
   async init(
     screenContainer: HTMLElement,
@@ -33,9 +34,11 @@ export class V86Controller {
     },
   ): Promise<void> {
     const mod = await import('v86')
-    this.V86Class = mod.V86 || (mod as any).default?.V86 || mod
+    // v86's export shape varies by bundler: named export, CJS default
+    // namespace ({ V86 }), or the module itself acting as the constructor.
+    const V86Class: V86Constructor = mod.V86 || mod.default?.V86 || (mod as unknown as V86Constructor)
 
-    this.emulator = new this.V86Class({
+    const emulator = new V86Class({
       screen_container: screenContainer,
       bios: { url: opts.biosUrl },
       vga_bios: { url: opts.vgaBiosUrl },
@@ -48,9 +51,10 @@ export class V86Controller {
       fastboot: true,
       wasm_path: opts.wasmPath,
     })
+    this.emulator = emulator
 
     await new Promise<void>((resolve) => {
-      this.emulator.add_listener('emulator-started', () => resolve())
+      emulator.add_listener('emulator-started', () => resolve())
       // Fallback: resolve after 5s even if event doesn't fire
       setTimeout(resolve, 5000)
     })
