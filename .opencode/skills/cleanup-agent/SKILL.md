@@ -21,11 +21,37 @@ find <dirs> -name '*.py' | wc -l
 
 A count of 0 means nothing until the scope control shows files were scanned.
 
+## Scope control — WHICH tree are you in?
+
+A clean-looking pass is worthless if it came from the wrong checkout. The repo
+carries ~100 linked worktrees, and the **root worktree is routinely on a
+feature lane, not `main`** — so a ratchet run there measures that lane, not
+the repository.
+
+```bash
+git rev-parse --abbrev-ref HEAD      # print this BEFORE reporting any result
+git worktree list | grep "$(pwd)"    # which checkout am I actually in?
+```
+
+- To judge **`origin/main`**, scan a detached worktree of it —
+  `git worktree add --detach <path> origin/main` — never the root.
+- To judge **your branch**, say which branch/SHA in the result.
+
+**Never** report "the ratchet is green/red on the repo" without naming the
+SHA or branch that produced it. Proven 2026-10-20: a `test_no_bare_except`
+failure was measured on `feat/chat-engine-port`, whose line-regex `line_hits`
+predates the AST rewrite already on `origin/main` (`b94452570`). The real
+tree was green, and a fix was about to be built that already existed.
+
 ## Ratchet first
 
-`tests/test_code_hygiene.py` encodes patterns 1–4 as zero-tolerance tests
-(with reviewed exemptions). Run it before any manual sweep — it is the
-fastest signal, and new violations that reach the tree fail it.
+`tests/test_code_hygiene.py` encodes **5 zero-tolerance tests** — patterns 1–5
+below (with reviewed exemptions). Run it before any manual sweep: it is the
+fastest signal, and new violations that reach the tree fail it. Run it **in
+the tree you mean to judge** (scope control above), and report the SHA with
+the result.
+
+Current status on `origin/main` (2026-10-21): **5 passed**.
 
 ## How to Use
 
@@ -46,13 +72,30 @@ Ratcheted: `tests/test_code_hygiene.py::test_no_fstring_logger_calls` (zero as o
 ```bash
 grep -rL 'from __future__ import annotations' --include='*.py' --exclude-dir=__pycache__ domain packages/core-py
 ```
-STATUS (2026-10-04): open scope decision on card `0d4ad67b` — 860 of 1665 files missing; no explicit mandate exists (PYTHON_FIRST.md only exemplifies it), ruff cannot enforce it. NOT ratcheted; do not mass-edit without the user's scope pick.
+**STATUS (2026-10-21): NOW RATCHETED — this supersedes the old "open scope
+decision / do not mass-edit" note (2026-10-04, card `0d4ad67b`).**
+`tests/test_code_hygiene.py::test_domain_files_carry_future_annotations` (docstring:
+"Scope (a), card `7d5e5a7c`") enforces it against
+`FUTURE_ROOTS = ("domain", "packages/core-py/domains")` — the scope pick was made
+and the test landed, so do not treat this as unmandated, and do not edit files
+outside `FUTURE_ROOTS` to chase it. The `grep -rL` above is only a reconnaissance
+count, not a pass/fail signal.
 
 ### 3. Bare except clauses
 ```bash
 grep -rnE 'except[[:space:]]*:' --include='*.py' --exclude-dir=__pycache__ domain packages apps scripts
 ```
-Note: ruff's E722 is disabled in `pyproject.toml` — the ratchet test and this scan are the only guards. Zero as of 2026-10-04.
+Note: ruff's E722 is disabled in `pyproject.toml`, so the ratchet test is the
+only real guard. **On `origin/main` the ratchet is AST-based** — it walks
+`ast.Try` handlers where `handler.type is None` — so docstring or comment prose
+that merely *mentions* `except:` does not trip it.
+
+**That `grep` line is the naive per-line version and produces false positives on
+prose.** Confirmed 2026-10-20: it flagged `domain/infrastructure/_internal/atomic_write.py:7`,
+which only *explains* the `except: unlink` bug in its module docstring. Treat a
+grep hit as a lead to confirm with `ast`, never as a violation on its own.
+Verified 2026-10-21: **0 real bare excepts across 2062 `.py` files** (scope:
+`domain`, `packages`, `apps`, `scripts`).
 
 ### 4. print() in production code — CHECK CONTEXT FIRST
 `print()` in TUI renderers, CLI tools, protocol handshakes (`ENGINE_READY`),
