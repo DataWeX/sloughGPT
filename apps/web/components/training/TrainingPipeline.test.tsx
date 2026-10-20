@@ -116,9 +116,10 @@ describe('TrainingPipeline', () => {
     expect(screen.getByText('Results')).toBeDefined()
   })
 
-  it('starts on data step', () => {
+  it('starts on data step', async () => {
     render(<TrainingPipeline form={form} datasets={datasets} session={session} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
-    expect(screen.getByText(/Pick your data/)).toBeDefined()
+    // DataStep loads through next/dynamic (phase-1 WEIGHT) — wait for it.
+    expect(await screen.findByText(/Pick your data/)).toBeDefined()
   })
 
   it('shows training in progress when session is running', () => {

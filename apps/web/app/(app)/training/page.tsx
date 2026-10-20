@@ -9,7 +9,14 @@ import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { trainingJobsController } from '@/lib/training-controller'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
-import { TestModelDialog } from '@/components/training/TestModelDialog'
+import nextDynamic from 'next/dynamic'
+
+// training-ui-slim phase 1 (WEIGHT, card 6b14be03): dialog loads on demand.
+// (named nextDynamic: `dynamic` is this route's force-dynamic export)
+const TestModelDialog = nextDynamic(
+  () => import('@/components/training/TestModelDialog').then((m) => m.TestModelDialog),
+  { ssr: false },
+)
 import { useApiReady } from '@/hooks/useLiveStatus'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'

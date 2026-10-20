@@ -10,11 +10,26 @@ import type { TrainingFormState } from '@/hooks/useTrainingForm'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
-import { DataStep } from '@/components/training/DataStep'
-import { ConfigureStep } from '@/components/training/ConfigureStep'
-import { TrainStep } from '@/components/training/TrainStep'
-import { ResultsStep } from '@/components/training/ResultsStep'
 import { formatDuration } from '@/lib/formatDuration'
+
+// training-ui-slim phase 1 (WEIGHT, card 6b14be03): only the ACTIVE step
+// mounts, so each is loaded on demand instead of eagerly with the page.
+const DataStep = dynamic(
+  () => import('@/components/training/DataStep').then((m) => m.DataStep),
+  { ssr: false },
+)
+const ConfigureStep = dynamic(
+  () => import('@/components/training/ConfigureStep').then((m) => m.ConfigureStep),
+  { ssr: false },
+)
+const TrainStep = dynamic(
+  () => import('@/components/training/TrainStep').then((m) => m.TrainStep),
+  { ssr: false },
+)
+const ResultsStep = dynamic(
+  () => import('@/components/training/ResultsStep').then((m) => m.ResultsStep),
+  { ssr: false },
+)
 
 const LossChart = dynamic(
   () => import('@/components/training/LossChart').then((m) => m.LossChart),
