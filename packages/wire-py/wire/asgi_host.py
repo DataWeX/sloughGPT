@@ -47,7 +47,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from urllib.parse import unquote
 
-from .framing import Request, build_response, serialize_head
+from .framing import BodyReader, BodyTooLarge, Request, build_response, serialize_head
 from .websocket import (
     CLOSE_TOO_BIG,
     OP_BINARY,
@@ -73,7 +73,11 @@ from .websocket import (
 )
 
 # statuses whose responses carry no body — no Content-Length may be sent
-_BODILESS = frozenset({204, 304})
+_BODYLESS = frozenset({204, 304})
+# one executor round-trip per MiB, not per 64 KiB: each thread<->loop hop
+# costs a wakeup — the benchmark showed 160 hops per 10 MiB leaving ~3.4x
+# on the table vs uvicorn (which parses on the loop, no hop at all)
+_BODY_READ_CHUNK = 1 << 20
 
 SendBytes = Callable[[bytes], None]
 
@@ -154,6 +158,8 @@ def run_http(
     server: tuple[str, int],
     forwarded_allow_ips: frozenset[str] = DEFAULT_TRUSTED_PROXIES,
     access_log: bool = False,
+    body: BodyReader | None = None,
+    body_exec: ThreadPoolExecutor | None = None,
 ) -> bool:
     """Run one ASGI http cycle; return whether the connection stays alive.
 
@@ -164,7 +170,16 @@ def run_http(
     same way. With ``access_log``, one uvicorn-style line per completed
     response goes to the ``wire.access`` logger (raw TCP peer, not the
     forwarded identity).
+
+    ``body`` is the streaming-mode :class:`BodyReader` (set when the body
+    exceeded the buffer threshold): ``receive()`` fetches chunks off-loop
+    on ``body_exec`` (one worker — a cancelled receive shares the
+    in-flight read), delivering ``http.request`` + ``more_body`` frames.
+    An upload the app never finishes reading closes the connection —
+    unread bytes in flight would desync the next request.
     """
+    if body is not None and body_exec is None:
+        raise ValueError("streaming body requires a reader executor")
     scope = _build_scope(request, client, server, forwarded_allow_ips)
     state: dict = {"head_written": False, "keep": False, "framing": None}
 
@@ -195,14 +210,38 @@ def run_http(
         state["head_written"] = True  # nothing further may be written
 
     async def cycle() -> bool:
+        loop = asyncio.get_running_loop()
         disconnect = asyncio.Event()  # never set in v1 (no read-polling yet)
         body_sent = False
+        read_future: asyncio.Future | None = None
 
         async def receive() -> dict:
-            nonlocal body_sent
-            if not body_sent:
-                body_sent = True
-                return {"type": "http.request", "body": request.body, "more_body": False}
+            nonlocal body_sent, read_future
+            if body is None:
+                if not body_sent:
+                    body_sent = True
+                    return {"type": "http.request", "body": request.body, "more_body": False}
+            elif not body_sent:
+                # streaming body: the blocking read runs on the connection's
+                # reader executor, never the loop (the ws frame-reader seam).
+                # shield() is load-bearing: a cancelled receive (starlette's
+                # wait_for) must NOT cancel the wrapped future — the executor
+                # work keeps running and body bytes may never be dropped —
+                # so the retry awaits the SAME future and collects its result
+                if read_future is None:
+                    read_future = loop.run_in_executor(
+                        body_exec, partial(body.read_some, _BODY_READ_CHUNK)
+                    )
+                try:
+                    chunk = await asyncio.shield(read_future)
+                except BodyTooLarge:
+                    read_future = None
+                    body_sent = True
+                    raise
+                read_future = None
+                if body.done:
+                    body_sent = True
+                return {"type": "http.request", "body": chunk, "more_body": not body.done}
             # after the body the only message left is disconnect; without a
             # read-poller nothing ever sets it, so this parks the caller
             # (same shape as a client that simply hasn't hung up yet)
@@ -243,7 +282,7 @@ def run_http(
 
             if not state["head_written"]:
                 app_lower = state["app_lower"]
-                if status in _BODILESS or status < 200:
+                if status in _BODYLESS or status < 200:
                     if body or more:
                         raise RuntimeError("body frame on a bodiless status")
                     on_bytes(serialize_head(status, state["headers"], keep_alive=state["keep"]))
@@ -304,6 +343,17 @@ def run_http(
 
         try:
             await app(scope, receive, send)
+        except BodyTooLarge as exc:
+            # streaming body over the running cap (chunked has no declared
+            # size to pre-check): refuse if the response hasn't started,
+            # otherwise close — a partial upload can't be repaired
+            if not state["head_written"]:
+                on_bytes(
+                    build_response(exc.status, {}, f"{exc.message}\n".encode(), keep_alive=False)
+                )
+                state["head_written"] = True
+            _log_access(exc.status)
+            return False
         except Exception:  # noqa: BLE001 - ASGI app is an untrusted boundary
             if not state["head_written"]:
                 _send_500()
@@ -320,6 +370,12 @@ def run_http(
             # app streamed without a final frame — close the framing cleanly
             on_bytes(b"0\r\n\r\n")
         _log_access(int(state["status"]))
+        if body is not None and not body.done:
+            # unread upload bytes would desync the next request (they are
+            # still in flight) — close; if the head already advertised
+            # keep-alive, a bare FIN is still perfectly legal (uvicorn
+            # closes in exactly this situation)
+            return False
         return bool(state["keep"])
 
     try:

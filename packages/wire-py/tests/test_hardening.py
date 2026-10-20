@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import socket
+import time
 
 from wire.framing import Request
 from wire.server import Response, WireServer
@@ -81,6 +82,20 @@ def _read_response(sock: socket.socket, buf: bytearray) -> tuple[int, bytes]:
 
 def _ok_handler(request: Request) -> Response:
     return Response(status=200, headers={"Content-Type": "text/plain"}, body=b"ok")
+
+
+def _access_lines(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == "wire.access"]
+
+
+def _wait_for_access_line(caplog, needle: str, timeout: float = 2.0) -> list[str]:
+    """The server logs AFTER the client already has the response — poll."""
+    deadline = time.time() + timeout
+    lines = _access_lines(caplog)
+    while not any(needle in line for line in lines) and time.time() < deadline:
+        time.sleep(0.01)
+        lines = _access_lines(caplog)
+    return lines
 
 
 class ScopeApp:
@@ -323,7 +338,7 @@ def test_access_log_line_handler_mode(caplog):
                 assert status == 200
     finally:
         server.stop()
-    lines = [r.getMessage() for r in caplog.records if r.name == "wire.access"]
+    lines = _wait_for_access_line(caplog, '"GET /hello HTTP/1.1" 200')
     assert any('"GET /hello HTTP/1.1" 200' in line for line in lines), lines
 
 
@@ -339,5 +354,5 @@ def test_access_log_line_asgi_mode(caplog):
                 assert status == 200
     finally:
         server.stop()
-    lines = [r.getMessage() for r in caplog.records if r.name == "wire.access"]
+    lines = _wait_for_access_line(caplog, '"GET /hello HTTP/1.1" 200')
     assert any('"GET /hello HTTP/1.1" 200' in line for line in lines), lines

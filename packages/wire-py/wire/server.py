@@ -30,11 +30,19 @@ import logging
 import socket
 import threading
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from .asgi_host import Lifespan, LifespanError, run_http, run_websocket
-from .framing import DEFAULT_MAX_BODY, Request, WireError, build_response, read_request
+from .framing import (
+    DEFAULT_BODY_BUFFER_THRESHOLD,
+    DEFAULT_MAX_BODY,
+    Request,
+    WireError,
+    build_response,
+    read_request,
+)
 from .websocket import DEFAULT_MAX_PAYLOAD, is_ws_upgrade
 
 logger = logging.getLogger(__name__)
@@ -74,6 +82,7 @@ class WireServer:
         lifespan_timeout: float = 30.0,
         keep_alive_timeout: float | None = 5.0,
         max_body: int = DEFAULT_MAX_BODY,
+        body_buffer_threshold: int = DEFAULT_BODY_BUFFER_THRESHOLD,
         ws_max_size: int = DEFAULT_MAX_PAYLOAD,
         forwarded_allow_ips: str | Sequence[str] | None = "127.0.0.1",
         access_log: bool = True,
@@ -91,6 +100,7 @@ class WireServer:
         self._lifespan_timeout = lifespan_timeout
         self._keep_alive_timeout = keep_alive_timeout
         self._max_body = max_body
+        self._body_buffer_threshold = body_buffer_threshold
         self._ws_max_size = ws_max_size
         if forwarded_allow_ips is None:
             forwarded_allow_ips = "127.0.0.1"  # uvicorn parity: loopback default
@@ -258,7 +268,10 @@ class WireServer:
                     conn.settimeout(self._keep_alive_timeout)
                 try:
                     request = read_request(
-                        reader, max_body=self._max_body, on_expect=_expect_continue
+                        reader,
+                        max_body=self._max_body,
+                        on_expect=_expect_continue,
+                        body_buffer_threshold=self._body_buffer_threshold,
                     )
                 except WireError as exc:
                     # desync: answer the status, then close — never reuse
@@ -296,19 +309,40 @@ class WireServer:
                         )
                         return
                     # ASGI mode: the adapter owns response bytes and the
-                    # keep-alive decision (app Connection header wins)
-                    keep = run_http(
-                        self._asgi_app,
-                        request,
-                        conn.sendall,
-                        client=peer,
-                        server=self._bound,
-                        forwarded_allow_ips=self._forwarded_allow,
-                        access_log=self._access_log,
+                    # keep-alive decision (app Connection header wins).
+                    # A streaming body gets a dedicated single-worker
+                    # reader executor (the ws seam) — torn down with the
+                    # cycle, never waited on: an in-flight read wakes with
+                    # EOF when the connection closes
+                    body_exec = (
+                        ThreadPoolExecutor(max_workers=1, thread_name_prefix="wire-body")
+                        if request.body_reader is not None
+                        else None
                     )
+                    try:
+                        keep = run_http(
+                            self._asgi_app,
+                            request,
+                            conn.sendall,
+                            client=peer,
+                            server=self._bound,
+                            forwarded_allow_ips=self._forwarded_allow,
+                            access_log=self._access_log,
+                            body=request.body_reader,
+                            body_exec=body_exec,
+                        )
+                    finally:
+                        if body_exec is not None:
+                            body_exec.shutdown(wait=False, cancel_futures=True)
                     if not keep:
                         return
                     continue
+                if request.body_reader is not None:
+                    # handler contract is Request -> Response: drain the
+                    # streamed remainder instead of handing the reader over
+                    request = replace(
+                        request, body=request.body_reader.read_all(), body_reader=None
+                    )
                 try:
                     response = self._handler(request)
                 except Exception:  # noqa: BLE001 - boundary: handler crash -> 500

@@ -314,6 +314,55 @@ async def _asgi_app(scope, receive, send):
     await send({"type": "http.response.body", "body": b"bench-ok"})
 
 
+class _UploadApp:
+    """ASGI: drains the streamed request body, replies with the byte count."""
+
+    async def __call__(self, scope, receive, send) -> None:
+        total = 0
+        while True:
+            message = await receive()
+            total += len(message["body"])
+            if not message.get("more_body", False):
+                break
+        payload = str(total).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"content-length", str(len(payload)).encode())],
+            }
+        )
+        await send({"type": "http.response.body", "body": payload})
+
+
+def bench_upload(port: int, size_mib: float = 10.0, rounds: int = 5) -> dict:
+    """End-to-end upload of a big Content-Length body (streamed receive).
+
+    What this measures: total time from the client's first write to the
+    byte-count response — framing + off-loop body streaming + response.
+    Byte-exactness is asserted every round, so a lost or duplicated
+    chunk fails the row instead of skewing it.
+    """
+    payload = b"u" * int(size_mib * 1024 * 1024)
+    head = f"POST /upload HTTP/1.1\r\nHost: bench\r\nContent-Length: {len(payload)}\r\n\r\n".encode()
+    lat: list[float] = []
+    for _ in range(rounds):
+        conn = socket.create_connection(("127.0.0.1", port), timeout=30)
+        try:
+            t0 = time.perf_counter()
+            conn.sendall(head + payload)
+            _ttfb, status, body = _read_response(conn, t0)
+            lat.append(time.perf_counter() - t0)
+            assert status == 200, status
+            assert int(body) == len(payload), body  # byte-exact through the stream
+        finally:
+            conn.close()
+    out = _percentiles(lat)
+    out["mib_s"] = round(size_mib / min(lat), 1)
+    out["rounds"] = rounds
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--requests", type=int, default=1000)
@@ -349,6 +398,22 @@ def main() -> int:
             # capacity row: 100ms idle sidesteps the tight-loop Nagle stall
             results["uvicorn_asgi_gapped"] = bench_keepalive(uvicorn_srv.port, 50, gap=0.1)
         results["sse_ttfb"] = bench_sse_ttfb(asgi_srv, args.sse_samples)
+        # streaming-body row: 10 MiB upload through the receive() seam
+        upload_srv = WireServer(
+            asgi_app=_UploadApp(), host="127.0.0.1", port=0, lifespan="off", access_log=False
+        )
+        upload_srv.start()
+        try:
+            results["upload_wire"] = bench_upload(upload_srv.port)
+        finally:
+            upload_srv.stop()
+        if uvicorn_srv is not None:
+            upload_uvicorn = _UvicornTarget(_UploadApp())
+            upload_uvicorn.start()
+            try:
+                results["upload_uvicorn"] = bench_upload(upload_uvicorn.port)
+            finally:
+                upload_uvicorn.stop()
     finally:
         handler_srv.stop()
         asgi_srv.stop()

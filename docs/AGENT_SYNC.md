@@ -1070,6 +1070,34 @@ git push -u origin feat/<name>   # push your own branch when done
   +0.284 ms). Deferred with reasons: body streaming (needs a card),
   permessage-deflate, hot-reload. Only the shared-tree `SLO_TRANSPORT`
   wiring + journey gates remain. From `.wt-worldbrain`.
+  **Streaming request bodies (card `c24543a4`, DONE, 2026-10-20)** —
+  the last deferred Tier-1 item, landed on `feat/npu-caps`. Bodies over
+  `body_buffer_threshold` (default 64 KiB) stream through ASGI
+  `receive()` (`http.request` + `more_body`); `max_body` became a
+  running total (413 `BodyTooLarge`, matters for chunked); small bodies
+  keep the exact single-frame path (hot path pinned by test). New
+  `wire/framing.py` `BodyReader` (reads through the connection's
+  buffered reader — pipelined bytes never stolen; threshold read-ahead
+  re-queued so nothing is lost or reordered at the buffer→stream
+  switch), per-request single-worker reader executor in `server.py`
+  (the WS seam, `shutdown(wait=False,cancel_futures=True)` in a
+  finally), handler mode drains via `read_all()` (buffered contract
+  preserved). Two bugs caught by RED tests: (1) **cancellation dropped
+  body bytes** — `wait_for(receive())` cancelled the wrapped future
+  while the executor read completed, discarding bytes; the WS
+  cancel-and-reset pattern would corrupt an HTTP body, so the HTTP side
+  uses `asyncio.shield()` (cancellation abandons the await, never the
+  future's result); (2) access-log assert race in my own hardening test
+  (client has the response before the server thread logs) → bounded
+  poll. `_BODILESS` → `_BODYLESS` typo fix. Benchmark gained
+  `upload_wire`/`upload_uvicorn` (10 MiB CL, byte-exact per round):
+  64 KiB chunks = 3.4× behind uvicorn → `_BODY_READ_CHUNK` 1 MiB =
+  **488 MiB/s (1.55×)**; 2 MiB no better → floor is the thread↔loop
+  seam itself, core stays sync (execution philosophy). Final record at
+  load 15: upload_wire 35.1 ms p50 vs uvicorn 15.6 ms, all other rows
+  unchanged (A/B −98.7%). 6 new `tests/test_streaming.py` → suite
+  **83 green**, ruff clean. Follow-up on card (low prio): bounded
+  read-ahead queue if a bulk-ingest journey demands it.
 
 - **2026-10-19 · `feat/npu-caps` — OS design L2, CAPS + native tensor
   kernels, card DONE (phase 2; `d74e2cef`, stacked on `feat/wire-py`).**

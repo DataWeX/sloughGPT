@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email.utils import formatdate
 from http import HTTPStatus
 from typing import BinaryIO
@@ -32,6 +32,10 @@ MAX_HEADER_LINE = 8192
 MAX_HEADERS = 100
 # the wire buffers whole bodies (uvicorn streams) — bound them per request
 DEFAULT_MAX_BODY = 64 * 1024 * 1024
+# bodies up to this are collected inline at parse time (the hot path —
+# small JSON bodies stay one buffered read); anything larger streams
+# through Request.body_reader for the host to deliver incrementally
+DEFAULT_BODY_BUFFER_THRESHOLD = 64 * 1024
 
 _METHOD_RE = re.compile(rb"^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$")
 _TOKEN_RE = re.compile(rb"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
@@ -84,6 +88,9 @@ class Request:
     headers: tuple[tuple[str, str], ...]
     body: bytes
     keep_alive: bool
+    # transport-internal: set when the body exceeded the buffer threshold
+    # — the host streams it (ASGI receive loop) or drains it (handler mode)
+    body_reader: BodyReader | None = field(default=None, compare=False, repr=False)
 
     def header(self, name: str) -> str | None:
         """First header value matching ``name`` case-insensitively."""
@@ -169,63 +176,138 @@ def _parse_headers(reader: BinaryIO) -> list[tuple[str, str]]:
             raise HeaderTooLarge("header count over cap")
 
 
-def _read_chunked(reader: BinaryIO, *, max_body: int = DEFAULT_MAX_BODY) -> bytes:
+class BodyReader:
+    """Incremental request-body reader — the streaming seam (sync by design).
+
+    Reads through the connection's buffered reader, so pipelined bytes are
+    never stolen, and enforces ``max_body`` as a RUNNING total (→ 413 via
+    :class:`BodyTooLarge` — chunked bodies have no declared size to
+    pre-check). ``read_some`` loops one underlying read at a time, so
+    bytes reach the app as they arrive; any read-ahead taken by the
+    buffer-threshold decision is queued and handed out first.
+    """
+
+    def __init__(
+        self,
+        reader: BinaryIO,
+        *,
+        length: int | None,
+        chunked: bool,
+        max_body: int = DEFAULT_MAX_BODY,
+    ) -> None:
+        self._reader = reader
+        self._chunked = chunked
+        self._remaining = length or 0
+        self._max = max_body
+        self._consumed = 0
+        self._pending = b""
+        self._chunk_left = 0
+        self._done = not chunked and length is None
+
+    @property
+    def done(self) -> bool:
+        return self._done
+
+    def queue(self, data: bytes) -> None:
+        """Re-queue read-ahead bytes so a streaming host emits them first."""
+        self._pending = data + self._pending
+
+    def read_some(self, size: int = 65536) -> bytes:
+        """Next chunk; ``b""`` only once the body is complete."""
+        if self._pending:
+            out, self._pending = self._pending, b""
+            return out
+        if self._done:
+            return b""
+        if self._chunked:
+            out = self._read_chunked_some(size)
+        else:
+            take = min(size, self._remaining)
+            data = _read_at_least(self._reader, take)
+            self._remaining -= len(data)
+            if self._remaining == 0:
+                self._done = True
+            out = data
+        self._consumed += len(out)
+        if self._consumed > self._max:
+            raise BodyTooLarge(f"body over cap {self._max}")
+        return out
+
+    def read_all(self) -> bytes:
+        """Drain the body (handler mode); honours the same running cap."""
+        out = bytearray(self._pending)
+        self._pending = b""
+        while not self._done:
+            out += self.read_some()
+        return bytes(out)
+
+    def _read_chunked_some(self, size: int) -> bytes:
+        if self._chunk_left == 0:
+            size_line = _read_line(self._reader, MAX_HEADER_LINE)
+            size_raw = size_line.split(b";", 1)[0].strip()
+            if not _HEX_RE.match(size_raw):
+                raise MalformedRequest("invalid chunk size")
+            self._chunk_left = int(size_raw, 16)
+            if self._chunk_left == 0:
+                self._read_trailers()
+                self._done = True
+                return b""
+        data = _read_at_least(self._reader, min(size, self._chunk_left), "chunk data")
+        self._chunk_left -= len(data)
+        if self._chunk_left == 0:
+            if self._reader.read(2) != b"\r\n":
+                raise MalformedRequest("chunk data not CRLF-terminated")
+        return data
+
+    def _read_trailers(self) -> None:
+        # trailer lines up to the cap, then an empty line
+        trailers = 0
+        while True:
+            trailer = self._reader.readline()
+            if not trailer or not trailer.endswith(b"\r\n"):
+                raise MalformedRequest("truncated chunked trailers")
+            if len(trailer) > MAX_HEADER_LINE:
+                raise HeaderTooLarge("trailer line over cap")
+            if trailer == b"\r\n":
+                return
+            if b":" not in trailer:
+                raise MalformedRequest("malformed trailer line")
+            trailers += 1
+            if trailers > MAX_HEADERS:
+                raise HeaderTooLarge("trailer count over cap")
+
+
+def _read_at_least(reader: BinaryIO, n: int, what: str = "request body") -> bytes:
+    """Exactly ``n`` bytes, one underlying read at a time (EOF truncates)."""
     out = bytearray()
-    while True:
-        size_line = _read_line(reader, MAX_HEADER_LINE)
-        size_raw = size_line.split(b";", 1)[0].strip()
-        if not _HEX_RE.match(size_raw):
-            raise MalformedRequest("invalid chunk size")
-        size = int(size_raw, 16)
-        if size == 0:
-            # trailers: header lines up to the cap, then an empty line
-            trailers = 0
-            while True:
-                trailer = reader.readline()
-                if not trailer or not trailer.endswith(b"\r\n"):
-                    raise MalformedRequest("truncated chunked trailers")
-                if len(trailer) > MAX_HEADER_LINE:
-                    raise HeaderTooLarge("trailer line over cap")
-                if trailer == b"\r\n":
-                    return bytes(out)
-                if b":" not in trailer:
-                    raise MalformedRequest("malformed trailer line")
-                trailers += 1
-                if trailers > MAX_HEADERS:
-                    raise HeaderTooLarge("trailer count over cap")
-        if len(out) + size > max_body:
-            raise BodyTooLarge(f"chunked body over cap {max_body}")
-        data = reader.read(size)
-        if len(data) != size:
-            raise MalformedRequest("truncated chunk data")
-        out += data
-        if reader.read(2) != b"\r\n":
-            raise MalformedRequest("chunk data not CRLF-terminated")
+    while len(out) < n:
+        piece = (
+            reader.read1(n - len(out)) if hasattr(reader, "read1") else reader.read(n - len(out))
+        )
+        if not piece:
+            break
+        out += piece
+    if len(out) != n:
+        raise MalformedRequest(f"truncated {what}")
+    return bytes(out)
 
 
-def _read_body(
-    reader: BinaryIO,
-    headers: list[tuple[str, str]],
-    *,
-    max_body: int = DEFAULT_MAX_BODY,
-    wants_100: bool = False,
-    on_expect: Callable[[], None] | None = None,
-) -> bytes:
+def _body_plan(headers: list[tuple[str, str]], max_body: int) -> tuple[int | None, bool]:
+    """Validate body framing; return ``(declared length | None, chunked)``.
+
+    Rejects smuggling shapes (TE+CL together, unsupported encodings,
+    conflicting or non-numeric Content-Length) and over-declared bodies
+    (413 before a single body byte is read).
+    """
     te = [v for k, v in headers if k.lower() == "transfer-encoding"]
     cl = [v for k, v in headers if k.lower() == "content-length"]
 
     if te and cl:
         raise MalformedRequest("Transfer-Encoding together with Content-Length")
-
     if te:
         if te[0].strip().lower() != "chunked":
             raise MalformedRequest(f"unsupported transfer encoding {te[0]!r}")
-        # only after the framing validated: no interim response for a
-        # request the wire is about to refuse
-        if wants_100 and on_expect is not None:
-            on_expect()
-        return _read_chunked(reader, max_body=max_body)
-
+        return None, True
     if cl:
         if len({v.strip() for v in cl}) > 1:
             raise MalformedRequest("conflicting Content-Length values")
@@ -235,14 +317,8 @@ def _read_body(
         size = int(raw)
         if size > max_body:
             raise BodyTooLarge(f"body of {size} bytes over cap {max_body}")
-        if wants_100 and on_expect is not None:
-            on_expect()
-        data = reader.read(size)
-        if len(data) != size:
-            raise MalformedRequest("truncated request body")
-        return data
-
-    return b""
+        return size, False
+    return None, False  # no body
 
 
 def read_request(
@@ -250,6 +326,7 @@ def read_request(
     *,
     max_body: int = DEFAULT_MAX_BODY,
     on_expect: Callable[[], None] | None = None,
+    body_buffer_threshold: int = DEFAULT_BODY_BUFFER_THRESHOLD,
 ) -> Request | None:
     """Read one request from ``reader``.
 
@@ -258,6 +335,14 @@ def read_request(
     / :class:`BodyTooLarge` / :class:`ExpectationFailed` with the status
     the server should answer. Reads exactly one message — pipelined bytes
     stay buffered in ``reader`` for the next call.
+
+    Bodies are read through a :class:`BodyReader`: up to
+    ``body_buffer_threshold`` bytes are collected inline (the hot path —
+    small bodies stay one buffered read, ``Request.body`` is complete);
+    anything larger leaves ``Request.body_reader`` set with the read-ahead
+    queued, so the host streams it (ASGI receive loop) or drains it
+    (handler mode). ``max_body`` bounds the declared AND running totals
+    alike.
 
     ``Expect: 100-continue`` is evaluated here: an unrecognized
     expectation raises 417 before the body is touched; a recognized one
@@ -278,21 +363,34 @@ def read_request(
     expect = next((v for k, v in headers if k.lower() == "expect"), None)
     if expect is not None and expect.strip().lower() != "100-continue":
         raise ExpectationFailed(f"unsupported expectation {expect.strip()!r}")
-    body = _read_body(
-        reader,
-        headers,
-        max_body=max_body,
-        wants_100=expect is not None,
-        on_expect=on_expect,
-    )
+    length, chunked = _body_plan(headers, max_body)
+    # only after the framing validated: no interim response for a
+    # request the wire is about to refuse
+    if expect is not None and on_expect is not None and (length is not None or chunked):
+        on_expect()
+    body_reader = BodyReader(reader, length=length, chunked=chunked, max_body=max_body)
+    collected = bytearray()
+    while not body_reader.done and len(collected) <= body_buffer_threshold:
+        collected += body_reader.read_some(body_buffer_threshold + 1)
     keep = should_keep_alive(version, headers)
+    if body_reader.done:
+        return Request(
+            method=method,
+            target=target,
+            version=version,
+            headers=tuple(headers),
+            body=bytes(collected),
+            keep_alive=keep,
+        )
+    body_reader.queue(bytes(collected))
     return Request(
         method=method,
         target=target,
         version=version,
         headers=tuple(headers),
-        body=body,
+        body=b"",
         keep_alive=keep,
+        body_reader=body_reader,
     )
 
 

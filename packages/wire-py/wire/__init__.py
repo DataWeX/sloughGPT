@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from .asgi_host import Lifespan, LifespanError
 from .framing import (
+    DEFAULT_BODY_BUFFER_THRESHOLD,
     DEFAULT_MAX_BODY,
     MAX_HEADER_LINE,
     MAX_HEADERS,
@@ -30,6 +31,7 @@ from .server import Handler, Response, WireServer
 __version__ = "0.1.0"
 
 __all__ = [
+    "DEFAULT_BODY_BUFFER_THRESHOLD",
     "DEFAULT_MAX_BODY",
     "MAX_HEADERS",
     "MAX_HEADER_LINE",
