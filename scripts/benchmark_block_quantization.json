@@ -1,0 +1,291 @@
+[
+ {
+  "ts": "2026-10-20T22:18:32+00:00",
+  "rounds": 3,
+  "python": "3.12.14",
+  "numpy": "2.5.3",
+  "rows": [
+   {
+    "method": "cluster",
+    "layer": "attn_qkv (128x512)",
+    "shape": [
+     128,
+     512
+    ],
+    "raw_bytes": 262144,
+    "comp_bytes": 63404,
+    "ratio": 4.134502555043846,
+    "cosine": 0.9998324513435364,
+    "mse": 1.3331225545698544e-07,
+    "compress_ms": 376.25675300000694,
+    "decompress_ms": 250.9538489998704,
+    "serialize_ms": 0.1213240000197402,
+    "accuracy": 0.999665379524231
+   },
+   {
+    "method": "block_q4",
+    "layer": "attn_qkv (128x512)",
+    "shape": [
+     128,
+     512
+    ],
+    "raw_bytes": 262144,
+    "comp_bytes": 49152,
+    "ratio": 5.333333333333333,
+    "cosine": 0.9969503879547119,
+    "mse": 2.442958475512569e-06,
+    "compress_ms": 1.664868000034403,
+    "decompress_ms": 0.30918199990992434,
+    "serialize_ms": 0.11095699983343366,
+    "accuracy": 0.9938685894012451
+   },
+   {
+    "method": "block_q8",
+    "layer": "attn_qkv (128x512)",
+    "shape": [
+     128,
+     512
+    ],
+    "raw_bytes": 262144,
+    "comp_bytes": 81920,
+    "ratio": 3.2,
+    "cosine": 0.9999893307685852,
+    "mse": 8.423055142259273e-09,
+    "compress_ms": 1.7201260000092589,
+    "decompress_ms": 0.2618880000682111,
+    "serialize_ms": 0.1362139998946077,
+    "accuracy": 0.9999788403511047
+   },
+   {
+    "method": "cluster",
+    "layer": "attn_out (128x128)",
+    "shape": [
+     128,
+     128
+    ],
+    "raw_bytes": 65536,
+    "comp_bytes": 17596,
+    "ratio": 3.724482837008411,
+    "cosine": 0.999810516834259,
+    "mse": 1.5126482821870013e-07,
+    "compress_ms": 195.98007200011125,
+    "decompress_ms": 78.08936500009622,
+    "serialize_ms": 0.06031999987499148,
+    "accuracy": 0.9996191263198853
+   },
+   {
+    "method": "block_q4",
+    "layer": "attn_out (128x128)",
+    "shape": [
+     128,
+     128
+    ],
+    "raw_bytes": 65536,
+    "comp_bytes": 12288,
+    "ratio": 5.333333333333333,
+    "cosine": 0.9969075918197632,
+    "mse": 2.472819687682204e-06,
+    "compress_ms": 0.6586849999621336,
+    "decompress_ms": 0.16626100000394217,
+    "serialize_ms": 0.06892100009281421,
+    "accuracy": 0.993773341178894
+   },
+   {
+    "method": "block_q8",
+    "layer": "attn_out (128x128)",
+    "shape": [
+     128,
+     128
+    ],
+    "raw_bytes": 65536,
+    "comp_bytes": 20480,
+    "ratio": 3.2,
+    "cosine": 0.99998939037323,
+    "mse": 8.478798108058072e-09,
+    "compress_ms": 0.6843569999546162,
+    "decompress_ms": 0.08685099987815192,
+    "serialize_ms": 0.10884399989663507,
+    "accuracy": 0.9999786615371704
+   },
+   {
+    "method": "cluster",
+    "layer": "ffn_up (128x256)",
+    "shape": [
+     128,
+     256
+    ],
+    "raw_bytes": 131072,
+    "comp_bytes": 32918,
+    "ratio": 3.981772890212042,
+    "cosine": 0.999829113483429,
+    "mse": 1.3835654044669354e-07,
+    "compress_ms": 248.9455080001335,
+    "decompress_ms": 211.99745900003109,
+    "serialize_ms": 0.0900659999842901,
+    "accuracy": 0.9996567368507385
+   },
+   {
+    "method": "block_q4",
+    "layer": "ffn_up (128x256)",
+    "shape": [
+     128,
+     256
+    ],
+    "raw_bytes": 131072,
+    "comp_bytes": 24576,
+    "ratio": 5.333333333333333,
+    "cosine": 0.9969815015792847,
+    "mse": 2.444065103190951e-06,
+    "compress_ms": 0.8849150001424277,
+    "decompress_ms": 0.17262999995182327,
+    "serialize_ms": 0.08245799995165726,
+    "accuracy": 0.9939365983009338
+   },
+   {
+    "method": "block_q8",
+    "layer": "ffn_up (128x256)",
+    "shape": [
+     128,
+     256
+    ],
+    "raw_bytes": 131072,
+    "comp_bytes": 40960,
+    "ratio": 3.2,
+    "cosine": 0.9999896287918091,
+    "mse": 8.431396025798676e-09,
+    "compress_ms": 0.9236409998720774,
+    "decompress_ms": 0.13885799990021042,
+    "serialize_ms": 0.09011099996314442,
+    "accuracy": 0.9999790787696838
+   },
+   {
+    "method": "cluster",
+    "layer": "ffn_down (256x128)",
+    "shape": [
+     256,
+     128
+    ],
+    "raw_bytes": 131072,
+    "comp_bytes": 32987,
+    "ratio": 3.973444084033104,
+    "cosine": 0.9998450875282288,
+    "mse": 1.2532123605524248e-07,
+    "compress_ms": 219.7654839999359,
+    "decompress_ms": 134.23071099987283,
+    "serialize_ms": 0.07725299997218826,
+    "accuracy": 0.999688982963562
+   },
+   {
+    "method": "block_q4",
+    "layer": "ffn_down (256x128)",
+    "shape": [
+     256,
+     128
+    ],
+    "raw_bytes": 131072,
+    "comp_bytes": 24576,
+    "ratio": 5.333333333333333,
+    "cosine": 0.9969977140426636,
+    "mse": 2.4387845769524574e-06,
+    "compress_ms": 0.9312239999417216,
+    "decompress_ms": 0.2183599999625585,
+    "serialize_ms": 0.0828249999358377,
+    "accuracy": 0.9939475059509277
+   },
+   {
+    "method": "block_q8",
+    "layer": "ffn_down (256x128)",
+    "shape": [
+     256,
+     128
+    ],
+    "raw_bytes": 131072,
+    "comp_bytes": 40960,
+    "ratio": 3.2,
+    "cosine": 0.9999893307685852,
+    "mse": 8.512172300356724e-09,
+    "compress_ms": 0.8387899999888759,
+    "decompress_ms": 0.12234999985594186,
+    "serialize_ms": 0.0880100001268147,
+    "accuracy": 0.9999788999557495
+   },
+   {
+    "method": "cluster",
+    "layer": "tiny (32x32)",
+    "shape": [
+     32,
+     32
+    ],
+    "raw_bytes": 4096,
+    "comp_bytes": 3084,
+    "ratio": 1.3281452658884565,
+    "cosine": 0.9998523592948914,
+    "mse": 1.1770769248187207e-07,
+    "compress_ms": 199.00110499997936,
+    "decompress_ms": 7.792314999960581,
+    "serialize_ms": 0.04813600003217289,
+    "accuracy": 0.999702513217926
+   },
+   {
+    "method": "block_q4",
+    "layer": "tiny (32x32)",
+    "shape": [
+     32,
+     32
+    ],
+    "raw_bytes": 4096,
+    "comp_bytes": 768,
+    "ratio": 5.333333333333333,
+    "cosine": 0.9969037771224976,
+    "mse": 2.4617249891889514e-06,
+    "compress_ms": 0.3727630000867066,
+    "decompress_ms": 0.04507400012698781,
+    "serialize_ms": 0.05095899996376829,
+    "accuracy": 0.993777871131897
+   },
+   {
+    "method": "block_q8",
+    "layer": "tiny (32x32)",
+    "shape": [
+     32,
+     32
+    ],
+    "raw_bytes": 4096,
+    "comp_bytes": 1280,
+    "ratio": 3.2,
+    "cosine": 0.9999898076057434,
+    "mse": 8.090707659391683e-09,
+    "compress_ms": 0.2797019999434269,
+    "decompress_ms": 0.022573000023839995,
+    "serialize_ms": 0.054043000091041904,
+    "accuracy": 0.999979555606842
+   }
+  ],
+  "summary": {
+   "cluster": {
+    "ratio": 3.428469526437172,
+    "cosine": 0.9998339056968689,
+    "mse": 1.3319251053189872e-07,
+    "compress_ms": 247.9897844000334,
+    "decompress_ms": 136.61273979996622,
+    "serialize_ms": 0.07941979997667659
+   },
+   "block_q4": {
+    "ratio": 5.333333333333333,
+    "cosine": 0.9969481945037841,
+    "mse": 2.4520705665054266e-06,
+    "compress_ms": 0.9024910000334785,
+    "decompress_ms": 0.18230139999104722,
+    "serialize_ms": 0.07922399995550222
+   },
+   "block_q8": {
+    "ratio": 3.2,
+    "cosine": 0.9999894976615906,
+    "mse": 8.387225847172886e-09,
+    "compress_ms": 0.8893231999536511,
+    "decompress_ms": 0.12650399994527106,
+    "serialize_ms": 0.09544439999444876
+   }
+  }
+ }
+]
