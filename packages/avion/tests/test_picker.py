@@ -313,3 +313,29 @@ async def test_fill_without_recorder_still_fills():
     await picker.fill(picked, "plain value")
 
     assert backend.filled == "plain value"  # recording is a side effect, not a gate
+
+
+# ── recorder guard locks (adapted from stranded 24b8ca4b7) ──────────────────
+
+
+class TestRecorderGuardLocks:
+    """Every recorder gate in the picker must be `is not None`, not truthiness.
+
+    EventRecorder defines __len__ — a recorder with zero events is falsey —
+    so `if self._recorder:` silently drops the first events of a recording.
+    The `is not None` form is the only correct gate; these pins lock it.
+    """
+
+    @staticmethod
+    def _source() -> str:
+        from pathlib import Path
+
+        import avion.interact.picker as picker_module
+
+        return Path(picker_module.__file__).read_text(encoding="utf-8")
+
+    def test_guards_use_is_not_none(self):
+        assert self._source().count("if self._recorder is not None:") >= 3
+
+    def test_truthiness_gate_is_forbidden(self):
+        assert "if self._recorder:" not in self._source()
