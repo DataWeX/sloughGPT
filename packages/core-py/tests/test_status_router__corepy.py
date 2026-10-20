@@ -40,13 +40,13 @@ class TestStatus:
         assert "timestamp" in data
 
     def test_ready(self, monkeypatch):
-        # /ready now gates on subsystem checks (database, inference); the
-        # happy path needs them up. Patch the facade read points the handler
-        # imports at call time.
+        # /ready gates on subsystem checks (database, generation); the happy
+        # path needs them up. The generation probe reads the transport callables
+        # on domain.inference.generation, so it needs no patch — it is
+        # environment-independent by design (no native lib involved).
         monkeypatch.setattr(
             "domain.feedback.get_feedback_db", lambda *a, **k: object(), raising=False
         )
-        monkeypatch.setattr("domain.inference.get_engine", lambda *a, **k: object(), raising=False)
         sr = StatusRouter()
         client = TestClient(_app(sr))
         resp = client.get("/ready")
