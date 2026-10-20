@@ -38,7 +38,9 @@ const mockEpisodes = [
     qualia: { valence: 0.5, arousal: 0.3 },
     growth_delta: 0.05,
     rating: 4,
-    timestamp: '2025-09-11T10:00:00Z',
+    input_text: 'What is consciousness?',
+    self_insight: 'Exploring awareness.',
+    timestamp: 1757575200,
   },
   {
     input: 'Tell me about AI',
@@ -47,7 +49,9 @@ const mockEpisodes = [
     qualia: { valence: 0.6, arousal: 0.4 },
     growth_delta: -0.02,
     rating: 3,
-    timestamp: '2025-09-11T11:00:00Z',
+    input_text: 'Tell me about AI',
+    self_insight: 'Technical territory.',
+    timestamp: 1757578800,
   },
 ]
 

@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import {
+  consciousnessController,
+  type ConsciousnessStatus,
+  type Episode,
+  type QualiaEntry,
+  type HealthCheckResult,
+  type EvalReport,
+  type BeliefHistoryEntry,
+} from '@/lib/consciousness-controller'
 import {
   Badge,
   Button,
@@ -75,12 +83,12 @@ export default function ConsciousnessMasterDashboardPage() {
   const { stats, loading: statsLoading } = useConsciousnessStats()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
   const [loading, setLoading] = useState(true)
-  const [health, setHealth] = useState<any>(null)
-  const [status, setStatus] = useState<any>(null)
-  const [evalReport, setEvalReport] = useState<any>(null)
-  const [episodes, setEpisodes] = useState<any[]>([])
-  const [qualiaHistory, setQualiaHistory] = useState<any[]>([])
-  const [beliefsHistory, setBeliefsHistory] = useState<any[]>([])
+  const [health, setHealth] = useState<HealthCheckResult | null>(null)
+  const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
+  const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
+  const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [qualiaHistory, setQualiaHistory] = useState<QualiaEntry[]>([])
+  const [beliefsHistory, setBeliefsHistory] = useState<BeliefHistoryEntry[]>([])
   const [currentBeliefs, setCurrentBeliefs] = useState<Record<string, number>>({})
   const [currentQualia, setCurrentQualia] = useState<Record<string, number>>({})
   const [seeding, setSeeding] = useState(false)
@@ -139,7 +147,7 @@ export default function ConsciousnessMasterDashboardPage() {
   useEffect(() => {
     if (!isLive || !latestEvent) return
     if (latestEvent.qualia) setCurrentQualia(latestEvent.qualia)
-    if (latestEvent.beliefs) setCurrentBeliefs(latestEvent.beliefs as any)
+    if (latestEvent.beliefs) setCurrentBeliefs(latestEvent.beliefs)
   }, [latestEvent, isLive])
 
   const handleSeed = async () => {
@@ -198,13 +206,13 @@ export default function ConsciousnessMasterDashboardPage() {
   const totalEpisodes = stats?.total_episodes ?? episodes.length
   const avgGrowth =
     episodes.length > 0
-      ? episodes.reduce((s: number, e: any) => s + (e.growth_delta ?? 0), 0) / episodes.length
+      ? episodes.reduce((s, e) => s + (e.growth_delta ?? 0), 0) / episodes.length
       : 0
   const avgRating =
     episodes.length > 0
-      ? episodes.reduce((s: number, e: any) => s + (e.rating ?? 0), 0) / episodes.length
+      ? episodes.reduce((s, e) => s + (e.rating ?? 0), 0) / episodes.length
       : 0
-  const healthScore = health?.score ?? health?.health_score ?? 0
+  const healthScore = health?.health_score ?? 0
   const diagnostics = evalReport?.diagnostics ?? health?.diagnostics ?? []
   const lastReflection = episodes[episodes.length - 1]?.self_insight ?? null
 
@@ -222,16 +230,16 @@ export default function ConsciousnessMasterDashboardPage() {
 
   const ratingDist = [1, 2, 3, 4, 5].map((r) => ({
     rating: `${r}★`,
-    count: episodes.filter((e: any) => Math.round(e.rating ?? 0) === r).length,
+    count: episodes.filter((e) => Math.round(e.rating ?? 0) === r).length,
   }))
 
-  const growthData = episodes.map((ep: any, i: number) => ({
+  const growthData = episodes.map((ep, i) => ({
     time: formatTime(ep.timestamp),
     growth: ep.growth_delta ?? 0,
     ma:
       episodes
         .slice(Math.max(0, i - 2), i + 1)
-        .reduce((s: number, e: any) => s + (e.growth_delta ?? 0), 0) / Math.min(i + 1, 3),
+        .reduce((s, e) => s + (e.growth_delta ?? 0), 0) / Math.min(i + 1, 3),
   }))
 
   if (loading || statsLoading) {
@@ -581,7 +589,7 @@ export default function ConsciousnessMasterDashboardPage() {
                   {[
                     {
                       label: t('consciousness_health.episodes'),
-                      value: status?.episode_count ?? totalEpisodes,
+                      value: status?.episodes ?? totalEpisodes,
                     },
                     {
                       label: t('consciousness_health.avg_growth'),
@@ -589,7 +597,7 @@ export default function ConsciousnessMasterDashboardPage() {
                     },
                     {
                       label: t('consciousness_health.positive_ratio'),
-                      value: `${((episodes.filter((e: any) => (e.growth_delta ?? 0) > 0).length / Math.max(1, episodes.length)) * 100).toFixed(0)}%`,
+                      value: `${((episodes.filter((e) => (e.growth_delta ?? 0) > 0).length / Math.max(1, episodes.length)) * 100).toFixed(0)}%`,
                     },
                     {
                       label: t('consciousness_health.enabled'),
@@ -687,7 +695,7 @@ export default function ConsciousnessMasterDashboardPage() {
                 {[...episodes]
                   .reverse()
                   .slice(0, 5)
-                  .map((ep: any, i: number) => (
+                  .map((ep, i) => (
                     <div
                       key={i}
                       className="flex gap-3 rounded-lg border p-2 sm:p-3 text-xs sm:text-sm"

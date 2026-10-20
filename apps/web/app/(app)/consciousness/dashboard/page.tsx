@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import {
+  consciousnessController,
+  type Episode,
+  type EvalReport,
+} from '@/lib/consciousness-controller'
 import {
   Badge,
   Button,
@@ -43,14 +47,6 @@ import {
   Area,
 } from 'recharts'
 
-interface Episode {
-  timestamp: number
-  input_text: string
-  self_insight: string
-  growth_delta: number
-  qualia: Record<string, number>
-}
-
 interface QualiaPoint {
   timestamp: number
   valence: number
@@ -67,12 +63,6 @@ interface BeliefsPoint {
   creativity: number
   accuracy: number
   empathy: number
-}
-
-interface EvalReport {
-  overall_score: number
-  diagnostics: string[]
-  [key: string]: unknown
 }
 
 // Chart series routed through the theme tokens — chart-N follows the active

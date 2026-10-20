@@ -43,10 +43,36 @@ export interface Episode {
   input: string
   response: string
   narrative: string
+  input_text: string
+  self_insight: string
   qualia: Record<string, number>
   growth_delta: number
   rating: number
-  timestamp: string
+  timestamp: number
+}
+
+export interface HealthCheckResult {
+  health_score: number
+  enabled: boolean
+  level: number
+  episodes: number
+  avg_growth: number
+  positive_ratio: number
+  qualia: Record<string, number>
+  last_reflection: string
+  diagnostics: string[]
+}
+
+export interface EvalReport {
+  overall_score: number
+  metrics: Record<string, { score: number; weight: number; details: string }>
+  diagnostics: string[]
+}
+
+export interface BeliefHistoryEntry {
+  timestamp: number
+  step: number
+  [key: string]: number
 }
 
 export interface Belief {
@@ -127,11 +153,7 @@ export const consciousnessController = {
     return apiPost('/consciousness/train/start', config ?? {})
   },
 
-  async evaluate(): Promise<{
-    overall_score: number
-    metrics: Record<string, { score: number; weight: number; details: string }>
-    diagnostics: string[]
-  }> {
+  async evaluate(): Promise<EvalReport> {
     return apiGet('/consciousness/evaluate')
   },
 
@@ -145,9 +167,7 @@ export const consciousnessController = {
     return apiGet(`/consciousness/history/qualia${qs}`)
   },
 
-  async getBeliefsHistory(
-    limit?: number,
-  ): Promise<{ beliefs: Array<{ timestamp: number; step: number; [key: string]: number }> }> {
+  async getBeliefsHistory(limit?: number): Promise<{ beliefs: BeliefHistoryEntry[] }> {
     const qs = limit ? `?limit=${limit}` : ''
     return apiGet(`/consciousness/history/beliefs${qs}`)
   },
@@ -217,17 +237,7 @@ export const consciousnessController = {
     return apiDelete(`/consciousness/personas/${personaId}`)
   },
 
-  async healthCheck(): Promise<{
-    health_score: number
-    enabled: boolean
-    level: number
-    episodes: number
-    avg_growth: number
-    positive_ratio: number
-    qualia: Record<string, number>
-    last_reflection: string
-    diagnostics: string[]
-  }> {
+  async healthCheck(): Promise<HealthCheckResult> {
     return apiGet('/consciousness/health')
   },
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type Episode } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
   Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
@@ -11,16 +11,6 @@ import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { useSelection } from '@/hooks/useSelection'
-
-interface Episode {
-  input: string
-  response: string
-  narrative: string
-  qualia: Record<string, number>
-  growth_delta: number
-  rating: number
-  timestamp: string
-}
 
 const QUALIA_DIMS = [
   { key: 'valence', color: 'rgb(var(--chart-1))' },
@@ -36,13 +26,13 @@ const RATING_CHART_VARS = ['var(--destructive)', 'rgb(var(--chart-2))', 'var(--w
 
 const PAGE_SIZE = 20
 
-function formatTimestamp(ts: string): string {
+function formatTimestamp(epochSeconds: number): string {
   try {
-    const d = new Date(ts)
-    if (isNaN(d.getTime())) return ts
+    const d = new Date(epochSeconds * 1000)
+    if (isNaN(d.getTime())) return String(epochSeconds)
     return d.toLocaleString()
   } catch {
-    return ts
+    return String(epochSeconds)
   }
 }
 
