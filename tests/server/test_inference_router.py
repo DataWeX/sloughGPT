@@ -227,13 +227,9 @@ class TestChatErrorFrames:
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
     @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
-    @patch("apps.api.server.routers.inference.get_memory_service")
     @patch("apps.api.server.routers.inference.get_rag_service")
     @patch("apps.api.server.routers.inference.get_provider", return_value=None)
-    def test_chat_no_provider_frame(
-        self, mock_get_provider, mock_rag, mock_mem_svc, mock_enrich, client
-    ):
-        mock_mem_svc.return_value.stats.return_value = {"total_facts": 0}
+    def test_chat_no_provider_frame(self, mock_get_provider, mock_rag, mock_enrich, client):
         mock_rag.return_value.stats.return_value = {"total_chunks": 0}
         resp = client.post(
             "/chat",
@@ -266,12 +262,9 @@ class TestChatStreamCancel:
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
     @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
-    @patch("apps.api.server.routers.inference.get_memory_service")
     @patch("apps.api.server.routers.inference.get_rag_service")
     @patch("apps.api.server.routers.inference.get_provider")
-    def test_cancel_event_reaches_provider(
-        self, mock_get_provider, mock_rag, mock_mem_svc, mock_enrich, client
-    ):
+    def test_cancel_event_reaches_provider(self, mock_get_provider, mock_rag, mock_enrich, client):
         import threading
 
         seen: dict = {}
@@ -283,7 +276,6 @@ class TestChatStreamCancel:
         mock_prov = MagicMock()
         mock_prov.chat_stream = _stream
         mock_get_provider.return_value = mock_prov
-        mock_mem_svc.return_value.stats.return_value = {"total_facts": 0}
         mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
         resp = client.post(

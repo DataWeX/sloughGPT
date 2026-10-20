@@ -32,8 +32,11 @@ Deliberately out of scope (each is a different rule): ``/inference/generate``'s
 non-streaming variant is grandfathered by the Endpoint Rule (no retroactive
 purge); ``companion`` owns a *separate* ``POST /chat`` under its own prefix
 with its own ``ChatResponse``; the port's ``fold()`` is the edge fold the
-design mandates and must stay; the dead ``chat_stream``/``handle_chat_stream``
-path is retirement-card business, not this gate's.
+design mandates and must stay. The router-level ``chat_stream``/
+``handle_chat_stream`` pair has been retired; its provider-protocol namesake
+(``provider.chat_stream()`` — the token producer every engine streams
+through) is a different layer and must stay, so this gate never greps for the
+bare name.
 
 AST rather than text: ``routers/chat.py`` uses the words "folds" and "/chat/stream
 sibling" in five docstring lines, so a grep gate would fail on our own comments
