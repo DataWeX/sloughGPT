@@ -59,15 +59,16 @@ class ChatRouter:
         self,
         request: ChatRequest,
     ) -> AsyncIterator:
-        """The single inference path: the engine's raw-token stream.
+        """The single path: the engine's raw-token stream.
 
-        Streaming is baked in — this is how chat generates, not a mode and not a
+        Streaming is baked in — this is how chat responds, not a mode and not a
         parameter. The engine yields raw ``str`` tokens followed by a final
-        ``TurnResult``; both routes derive from this: POST /chat frames the
-        tokens as they arrive, POST /chat folds them into a complete payload.
-        Generation (readiness/circuit-breaker gates, KV cache) lives in the
-        inference kernel; chat owns its own state — the cancellation registry and
-        conversation history — through the manager's public entry.
+        ``TurnResult``; both routes derive from this: POST /chat/stream frames
+        the tokens as they arrive, POST /chat folds them into a complete
+        payload. Gates and cache (readiness/circuit-breaker, KV) live in the
+        engine's own domain — ``domain/generate``; chat owns its own state — the
+        cancellation registry and conversation history — through the manager's
+        public entry.
         """
         engine = get_chat_engine()
         turn_req = request.to_turn()

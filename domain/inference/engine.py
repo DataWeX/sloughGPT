@@ -1,18 +1,25 @@
-"""Inference engine port — the chat surface's read interface to the engine.
+"""Generate engine port — the chat surface's read interface to the engine.
+
+Home: ``domain/generate`` — the CCGT domain owning everything the model does
+to turn a prompt into a response (engine, model ops, stack, plus inference as
+one module among them). On this branch the directory is still spelled
+``domain/inference``: the wholesale rename ``domain/inference ->
+domain/generate`` is ``f9013376d`` on ``feat/generate-consolidation``, which
+picks this file up as ``domain/generate/engine.py`` with no conflict. Nothing
+else in the domain tree was touched to make room for it.
 
 Dependency direction (the whole point of this module):
 
-    routers/chat.py      ──imports──▶  domain.inference (this port)
-    routers/inference.py ──registers─▶ domain.inference (this port)
+    routers/chat.py      ──imports──▶  this port
+    routers/inference.py ──registers─▶ this port
 
-Neither router imports the other. This is the inference *capability*, so it
-lives in the inference domain alongside its adapter (routers/inference.py is
-the domain's model-facing implementation). It stays app-import-free: no
-pydantic, no FastAPI — the wire contracts live in ``schemas`` and the
-transport (SSE framing) lives at the edge; both translate at the boundary,
-never into the core.
+Neither router imports the other. This is the generate *capability*, so it
+lives alongside its adapter (routers/inference.py is the domain's
+model-facing implementation). It stays app-import-free: no pydantic, no
+FastAPI — the wire contracts live in ``schemas`` and the transport (SSE
+framing) lives at the edge; both translate at the boundary, never into the core.
 
-The contract is stream-only. ``stream`` is *the* inference method — it yields
+The contract is stream-only. ``stream`` is *the* engine method — it yields
 raw tokens, then a final ``TurnResult`` carrying the details. There is no
 separate non-streaming backend and no ``stream: bool`` mode: streaming is not a
 choice, it is how the model emits tokens. A non-streaming surface is simply a
@@ -29,7 +36,7 @@ from typing import Awaitable, Protocol, runtime_checkable
 
 @dataclass(slots=True)
 class TurnRequest:
-    """Inference inputs, domain-native (no wire coupling).
+    """Model inputs, domain-native (no wire coupling).
 
     The edge (routers) translates its pydantic ``ChatRequest`` into this.
     """
@@ -70,9 +77,9 @@ class TurnResult:
 
 @runtime_checkable
 class ChatEngine(Protocol):
-    """The inference engine's public seam.
+    """The generate engine's public seam.
 
-    ``stream`` is the single inference method: it yields raw tokens, then a
+    ``stream`` is the single engine method: it yields raw tokens, then a
     final ``TurnResult``. Non-streaming surfaces fold this stream at the edge.
     """
 

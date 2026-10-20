@@ -1,11 +1,11 @@
 """POST /chat must own chat's state rather than delegate it away.
 
-The delegation to inference's ``handle_chat`` quietly made chat's main endpoint
-stateless: inference's ``chat()`` takes ``req.messages`` from the client and
-never persists, so no history was written and no op was ever registered for
+The delegation away from chat's own handler quietly made the main endpoint
+stateless: the old adapter took ``req.messages`` from the client and
+never persisted, so no history was written and no op was ever registered for
 cancellation — while ``regenerate``/``cancel``/``active_sessions`` kept running
 on ``domain/chat``'s stateful kernel. These tests pin the composed behaviour at
-the seam: inference in engine, state in chat.
+the seam: the model in the engine, state in chat.
 
 ``ChatManager`` declares ``__slots__``, so its collaborators are patched on the
 CLASS, never on an instance.
@@ -198,7 +198,7 @@ def test_generate_tracked_returns_backend_object_untouched(manager):
     assert stored == ["full reply"]
 
 
-def test_router_exposes_single_inference_seam():
+def test_router_exposes_single_engine_seam():
     """Both endpoints must funnel through one streaming seam, per the merge contract."""
     assert hasattr(ChatRouter, "_stream_tokens")
     assert hasattr(ChatRouter, "respond")
@@ -208,7 +208,7 @@ def test_router_exposes_single_inference_seam():
 def test_post_chat_surfaces_engine_details(client, manager):
     """Chat must read the engine's details off the port and shape the response.
 
-    The engine (inference) computes model/usage/finish/timing; chat is the
+    The engine computes model/usage/finish/timing; chat is the
     response handler, so it reads those off the returned TurnResult and puts
     them on the wire for the frontend — the details the old handler discarded.
     """

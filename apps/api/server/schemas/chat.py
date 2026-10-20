@@ -3,7 +3,7 @@
 These are the request/response shapes for the conversation surface (text +
 audio). They live in a neutral home so **neither router imports the other**:
 `routers/chat.py` (the response/frontend handler) and `routers/inference.py`
-(the inference engine) both project these same contracts.
+(the generate engine) both project these same contracts.
 
 Historically these lived in ``routers/inference.py``, which forced the chat
 router to import a sibling router (``from routers.inference import ...``) — a
@@ -84,7 +84,7 @@ class ChatResponse(BaseModel):
     """Chat completion result.
 
     The detail fields (``model``, ``usage``, ``elapsed_ms``, ``finish_reason``)
-    surface what the inference engine already computes but historically
+    surface what the engine already computes but historically
     discarded — the chat handler reads them off the engine's output rather than
     reaching into the engine. They are optional and additive for wire
     compatibility.
