@@ -17,8 +17,6 @@ export default defineConfig({
       ['lib/sync-html-theme.test.ts', 'jsdom'],
       ['lib/download-utils.test.ts', 'jsdom'],
       ['lib/reaction-store.test.ts', 'jsdom'],
-      ['lib/query/hooks.test.ts', 'jsdom'],
-      ['lib/query/api-hooks.test.ts', 'jsdom'],
       ['lib/cache/hooks.test.ts', 'jsdom'],
       ['lib/cache/api-hooks.test.ts', 'jsdom'],
       ['lib/soulnet-webgpu/**/*.test.ts', 'jsdom'],

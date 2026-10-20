@@ -189,7 +189,6 @@ vi.mock('@/hooks/useLiveStatus', () => ({
   },
 }))
 vi.mock('@/components/training/TrainingSummaryCard', () => ({ TrainingSummaryCard: () => null }))
-vi.mock('@/components/training/TrainingHealthCard', () => ({ TrainingHealthCard: () => null }))
 vi.mock('@/components/OutputCard', () => ({ OutputCard: () => null }))
 vi.mock('@/components/training/TestModelDialog', () => ({ TestModelDialog: () => null }))
 vi.mock('@/components/training/TrainingPipeline', () => ({

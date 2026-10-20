@@ -26,16 +26,6 @@ vi.mock('@/lib/feedback-controller', () => ({
 vi.mock('@/lib/dataset-controller', () => ({
   datasetController: { list: vi.fn().mockResolvedValue([]) },
 }))
-vi.mock('@/lib/query', () => ({
-  useQuery: () => ({ data: undefined }),
-  useMutation: () => ({ mutate: vi.fn() }),
-  useInvalidate: () => vi.fn(),
-}))
-vi.mock('@/lib/query/hooks', () => ({
-  useQuery: () => ({ data: undefined }),
-  useMutation: () => ({ mutate: vi.fn() }),
-  useInvalidate: () => vi.fn(),
-}))
 vi.mock('@/lib/cache/api-hooks', () => ({
   useModels: () => ({ data: undefined }),
   useSouls: () => ({ data: undefined }),

@@ -56,9 +56,6 @@ vi.mock('@sloughgpt/strui', async () => {
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
-vi.mock('@/lib/query/api-hooks', () => ({
-  useLoadModel: () => ({ mutateAsync: vi.fn().mockResolvedValue({ model_id: 'test-model' }) }),
-}))
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: () => vi.fn(),
 }))
