@@ -987,6 +987,24 @@ git push -u origin feat/<name>   # push your own branch when done
   flip; RFC6455 WS deferred (flip gated on it). Next lane: NPU CAPS.
   From `.wt-worldbrain`.
 
+- **2026-10-19 · `feat/npu-caps` — OS design L2, CAPS contract phase 1
+  (card `d74e2cef`, stacked on `feat/wire-py`).** `IoctlCommand.CAPS` +
+  `TensorDevice.caps()` = the tensor unit's machine-readable contract
+  `{name, type, ops, dtypes, backend, parity}` — declared once on the ONE
+  TensorDevice whose three faces (CPU tensor backend
+  `vm._default_tensor`, kernel `NPUDevice._compute`, runtime
+  DeviceManager `"tensor"`) all reach it through the same
+  `ioctl()/call()` path. `ops` is single-sourced from
+  `list_commands()`; a drift test asserts every advertised op resolves
+  in the dispatch table; backend/parity report phase-1 truth (numpy, no
+  native routing). TDD: new `packages/core-py/tests/test_tensor_caps.py`
+  14 RED -> GREEN (+1 phase-2 xfail); tensor suite 76 green; face
+  suites fail identically with/without the change (stash-diff proven
+  pre-existing); ruff clean. sha `05fd1d1f8`. NEXT phase 2:
+  benchmark-first (`scripts/benchmark_tensor_kernels.py` to pick winners
+  honestly), then `NativeEngines` routing + native-vs-numpy parity + fill
+  CAPS. From `.wt-worldbrain`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
