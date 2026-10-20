@@ -34,7 +34,7 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis type="number" tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" />
                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" />
-                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val: any) => [Number(val).toFixed(1) + ' tok/s', 'Throughput']} />
+                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val) => [Number(val).toFixed(1) + ' tok/s', 'Throughput']} />
                 <Bar dataKey="throughput" fill="var(--primary)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -48,7 +48,7 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis type="number" tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" />
                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" hide />
-                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val: any) => [Number(val).toFixed(0) + ' ms', 'Latency']} />
+                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val) => [Number(val).toFixed(0) + ' ms', 'Latency']} />
                 <Bar dataKey="latency" fill="var(--warning)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -62,7 +62,7 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis type="number" tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" />
                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke="var(--muted-foreground)" hide />
-                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val: any) => [Number(val).toFixed(0) + ' MB', 'Memory']} />
+                <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6, border: '1px solid var(--border)' }} formatter={(val) => [Number(val).toFixed(0) + ' MB', 'Memory']} />
                 <Bar dataKey="memory" fill="var(--accent)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>

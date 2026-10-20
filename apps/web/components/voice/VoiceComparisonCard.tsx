@@ -32,7 +32,7 @@ function formatDuration(ms: number) {
 function getPeakData(url: string, bins = 64): Promise<Float32Array> {
   return new Promise((resolve) => {
     const audio = new Audio(url)
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext!)()
     const analyser = ctx.createAnalyser()
     analyser.fftSize = bins * 2
 

@@ -30,7 +30,7 @@ async function getWaveformData(url: string, bins = 128): Promise<{ timeDomain: F
 
     audio.addEventListener('canplaythrough', async () => {
       try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext!)()
         const source = ctx.createMediaElementSource(audio)
         const analyser = ctx.createAnalyser()
         analyser.fftSize = bins * 2
