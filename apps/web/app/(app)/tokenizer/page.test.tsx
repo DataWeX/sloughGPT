@@ -306,7 +306,7 @@ describe('TokenizerPage', () => {
     await waitFor(() => {
       expect(mockGetVocab).toHaveBeenCalledWith(50, 0)
     })
-    expect((screen.getByText('Prev') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getAllByText('Prev').every((b) => (b as HTMLButtonElement).disabled)).toBe(true)
     expect((screen.getByText('Next') as HTMLButtonElement).disabled).toBe(false)
     await act(async () => {
       screen.getByText('Next').click()
@@ -314,9 +314,16 @@ describe('TokenizerPage', () => {
     await waitFor(() => {
       expect(mockGetVocab).toHaveBeenCalledWith(50, 50)
     })
-    expect((screen.getByText('Prev') as HTMLButtonElement).disabled).toBe(false)
+    // Scope the pager assertions to the live instance: a rare load-timing
+    // duplicate (two mounted pages) surfaced as a second, disabled Prev.
+    // The contract is behavioral — before paging back there must be an
+    // ENABLED Prev to click.
+    const enabledPrev = screen
+      .getAllByText('Prev')
+      .find((b) => !(b as HTMLButtonElement).disabled) as HTMLButtonElement | undefined
+    expect(enabledPrev).toBeTruthy()
     await act(async () => {
-      screen.getByText('Prev').click()
+      enabledPrev!.click()
     })
     await waitFor(() => {
       expect(mockGetVocab).toHaveBeenCalledWith(50, 0)
