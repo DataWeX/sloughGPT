@@ -109,7 +109,7 @@ describe('pluginsCloudController.openwebuiDatasets', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs /openwebui/datasets', async () => {
-    apiClient.apiGet.mockResolvedValue({ datasets: [{ id: 'd1', name: 'My Dataset' }] })
+    apiClient.apiGet.mockResolvedValue({ datasets: [{ id: 'd1', name: 'My Dataset', path: '/data/d1', workspace_id: null }] })
     const result = await pluginsCloudController.openwebuiDatasets()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/openwebui/datasets')
     expect(result).toHaveLength(1)
@@ -120,7 +120,7 @@ describe('pluginsCloudController.openwebuiCheckpoints', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs /openwebui/checkpoints', async () => {
-    apiClient.apiGet.mockResolvedValue({ checkpoints: [{ name: 'cp-1' }] })
+    apiClient.apiGet.mockResolvedValue({ checkpoints: [{ id: 'cp-1', name: 'cp-1', path: '/checkpoints/cp-1' }] })
     const result = await pluginsCloudController.openwebuiCheckpoints()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/openwebui/checkpoints')
     expect(result).toHaveLength(1)
@@ -131,10 +131,11 @@ describe('pluginsCloudController.openwebuiStartTraining', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('POSTs start training', async () => {
-    apiClient.apiPost.mockResolvedValue({ job_id: 'ow-1', status: 'started' })
+    apiClient.apiPost.mockResolvedValue({ status: 'started', dataset_id: 'ds-1', method: 'lora' })
     const result = await pluginsCloudController.openwebuiStartTraining('ds-1', 'lora')
     expect(apiClient.apiPost).toHaveBeenCalledWith('/openwebui/training/start', { dataset_id: 'ds-1', method: 'lora' })
-    expect(result.job_id).toBe('ow-1')
+    expect(result.status).toBe('started')
+    expect(result.dataset_id).toBe('ds-1')
   })
 })
 
@@ -142,10 +143,10 @@ describe('pluginsCloudController.openwebuiStopTraining', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('POSTs stop training', async () => {
-    apiClient.apiPost.mockResolvedValue({ stopped: true })
+    apiClient.apiPost.mockResolvedValue({ status: 'stopped' })
     const result = await pluginsCloudController.openwebuiStopTraining()
     expect(apiClient.apiPost).toHaveBeenCalledWith('/openwebui/training/stop')
-    expect(result.stopped).toBe(true)
+    expect(result.status).toBe('stopped')
   })
 })
 
@@ -153,7 +154,7 @@ describe('pluginsCloudController.openwebuiTrainingStatus', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs training status', async () => {
-    apiClient.apiGet.mockResolvedValue({ status: 'idle', progress: 0 })
+    apiClient.apiGet.mockResolvedValue({ status: 'idle', progress: 0, current_epoch: 0, total_epochs: 0 })
     const result = await pluginsCloudController.openwebuiTrainingStatus()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/openwebui/training/status')
     expect(result.status).toBe('idle')

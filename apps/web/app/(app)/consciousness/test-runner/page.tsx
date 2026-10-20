@@ -36,7 +36,7 @@ const SUITES: TestSuite[] = [
   { id: 'integration', label: 'Integration Tests', enabled: true },
 ]
 
-async function apiCall(method: string, path: string, body?: string): Promise<{ status: number; data: any; duration: number }> {
+async function apiCall(method: string, path: string, body?: string): Promise<{ status: number; data: unknown; duration: number }> {
   const start = Date.now()
   try {
     const init: RequestInit = {
@@ -47,12 +47,27 @@ async function apiCall(method: string, path: string, body?: string): Promise<{ s
     const res = await fetch(`${PUBLIC_API_URL}${path}`, init)
     const duration = Date.now() - start
     const text = await res.text()
-    let data: any
-    try { data = JSON.parse(text) } catch { data = text }
-    return { status: res.status, data: data?.data ?? data, duration }
+    let data: unknown
+    try { data = JSON.parse(text) as unknown } catch { data = text }
+    // Unwrap a `{ data: ... }` envelope when present (endpoints vary); mirrors the
+    // former `data?.data ?? data` exactly, including the null-falls-back case.
+    if (typeof data === 'object' && data !== null) {
+      const inner = (data as Record<string, unknown>).data
+      if (inner != null) data = inner
+    }
+    return { status: res.status, data, duration }
   } catch (e) {
     return { status: 0, data: extractErrorMessage(e), duration: Date.now() - start }
   }
+}
+
+/** Pull `key` off an unwrapped payload when present and non-null, else the payload itself. */
+function pick(data: unknown, key: string): unknown {
+  if (typeof data === 'object' && data !== null) {
+    const v = (data as Record<string, unknown>)[key]
+    if (v != null) return v
+  }
+  return data
 }
 
 function assert(condition: boolean, msg: string): void {
@@ -168,7 +183,7 @@ export default function ConsciousnessTestRunnerPage() {
           case 'core.process': {
             const r = await apiCall('POST', '/consciousness/reflect', '{"text": "test"}')
             assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            assert(r.data && typeof r.data === 'object', 'Response is not an object')
+            assert(!!r.data && typeof r.data === 'object', 'Response is not an object')
             break
           }
           case 'core.reflect': {
@@ -196,15 +211,15 @@ export default function ConsciousnessTestRunnerPage() {
           }
           case 'qualia.dimensions': {
             const r = await apiCall('GET', '/consciousness/qualia')
-            const q = (r.data as any)?.qualia ?? r.data
+            const q = pick(r.data, 'qualia')
             assert(typeof q === 'object' && q !== null, 'Qualia not an object')
-            const keys = Object.keys(q)
+            const keys = Object.keys(q as Record<string, unknown>)
             assert(keys.length >= 5, `Expected >= 5 dimensions, got ${keys.length}`)
             break
           }
           case 'qualia.values': {
             const r = await apiCall('GET', '/consciousness/qualia')
-            const q = (r.data as any)?.qualia ?? r.data
+            const q = pick(r.data, 'qualia')
             for (const [k, v] of Object.entries(q as Record<string, unknown>)) {
               assert(typeof v === 'number', `${k} is not a number`)
               assert((v as number) >= 0 && (v as number) <= 1, `${k} out of range: ${v}`)
@@ -225,7 +240,7 @@ export default function ConsciousnessTestRunnerPage() {
           }
           case 'self_model.beliefs': {
             const r = await apiCall('GET', '/consciousness/self-model')
-            const sm = (r.data as any)?.beliefs ?? r.data
+            const sm = pick(r.data, 'beliefs')
             if (sm && typeof sm === 'object') {
               const vals = Object.values(sm as Record<string, unknown>)
               assert(vals.length > 0, 'No beliefs found')
@@ -262,7 +277,7 @@ export default function ConsciousnessTestRunnerPage() {
           }
           case 'personality.traits': {
             const r = await apiCall('GET', '/consciousness/personality')
-            const p = (r.data as any)?.traits ?? r.data
+            const p = pick(r.data, 'traits')
             if (p && typeof p === 'object') {
               for (const [, v] of Object.entries(p as Record<string, unknown>)) {
                 assert(typeof v === 'number', `Trait value not a number`)

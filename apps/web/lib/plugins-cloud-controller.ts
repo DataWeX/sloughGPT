@@ -17,6 +17,29 @@ export interface PluginInfo {
   hooks: string[]
 }
 
+/** Entry of GET /openwebui/datasets (router list_datasets). */
+export interface OpenWebuiDataset {
+  id: string
+  name: string
+  path: string
+  workspace_id: string | null
+}
+
+/** Entry of GET /openwebui/checkpoints (router list_checkpoints). */
+export interface OpenWebuiCheckpoint {
+  id: string
+  name: string
+  path: string
+}
+
+/** Payload of GET /openwebui/training/status (router training_status). */
+export interface OpenWebuiTrainingStatus {
+  status: string
+  progress: number
+  current_epoch: number
+  total_epochs: number
+}
+
 export const pluginsCloudController = {
   async listCloudJobs(limit: number = 10): Promise<CloudJob[]> {
     const resp = await apiGet<{ jobs: CloudJob[] }>(`/cloud-training/jobs?limit=${limit}`)
@@ -52,25 +75,25 @@ export const pluginsCloudController = {
     return apiPost('/plugins/reload')
   },
 
-  async openwebuiDatasets(): Promise<any[]> {
-    const resp = await apiGet<{ datasets: any[] }>('/openwebui/datasets')
+  async openwebuiDatasets(): Promise<OpenWebuiDataset[]> {
+    const resp = await apiGet<{ datasets: OpenWebuiDataset[] }>('/openwebui/datasets')
     return resp.datasets
   },
 
-  async openwebuiCheckpoints(): Promise<any[]> {
-    const resp = await apiGet<{ checkpoints: any[] }>('/openwebui/checkpoints')
+  async openwebuiCheckpoints(): Promise<OpenWebuiCheckpoint[]> {
+    const resp = await apiGet<{ checkpoints: OpenWebuiCheckpoint[] }>('/openwebui/checkpoints')
     return resp.checkpoints
   },
 
-  async openwebuiStartTraining(datasetId: string, method: string = 'finetune'): Promise<any> {
+  async openwebuiStartTraining(datasetId: string, method: string = 'finetune'): Promise<{ status: string; dataset_id: string; method: string }> {
     return apiPost('/openwebui/training/start', { dataset_id: datasetId, method })
   },
 
-  async openwebuiStopTraining(): Promise<any> {
+  async openwebuiStopTraining(): Promise<{ status: string }> {
     return apiPost('/openwebui/training/stop')
   },
 
-  async openwebuiTrainingStatus(): Promise<any> {
+  async openwebuiTrainingStatus(): Promise<OpenWebuiTrainingStatus> {
     return apiGet('/openwebui/training/status')
   },
 }
