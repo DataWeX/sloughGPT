@@ -34,11 +34,22 @@ interface QueryStoreState {
   cache: Record<string, QueryCacheEntry>
   /** Set of all currently fetching keys (for useIsFetching). */
   fetchingKeys: Set<string>
+  /**
+   * Monotonic counter bumped by `revalidateAll()`.
+   *
+   * `invalidateQuery` alone cannot make an already-mounted `useQuery` refetch:
+   * it only clears `updatedAt`, and the hook's fetch effect keys off
+   * `[sk, enabled]` — neither of which changes. Mounted views therefore stay on
+   * stale data forever. The version is the missing signal: `useQuery` remembers
+   * the version it last fetched under and refetches when it advances.
+   */
+  refreshVersion: number
 }
 
 export const useQueryStore = create<QueryStoreState>(() => ({
   cache: {},
   fetchingKeys: new Set(),
+  refreshVersion: 0,
 }))
 
 function getEntry(key: string): QueryCacheEntry | undefined {
@@ -189,6 +200,26 @@ export function invalidateQuery(key: QueryKey) {
   if (entry) {
     setEntry(sk, { updatedAt: 0, _promise: undefined })
   }
+}
+
+/**
+ * Mark every cached entry stale and bump `refreshVersion`.
+ *
+ * This is the document-reload replacement: cached data, error and status are
+ * preserved (so views keep rendering and no spinner flashes), while the version
+ * bump tells every mounted `useQuery` to refetch. An in-flight `_promise` is
+ * kept — a request already running is the freshest data we have, and dropping
+ * it would break the dedup guarantee.
+ */
+export function revalidateAll(): void {
+  useQueryStore.setState((state) => {
+    const cache = { ...state.cache }
+    for (const sk of Object.keys(cache)) {
+      // Keep data/error/status/_promise; only the freshness marker moves.
+      cache[sk] = { ...cache[sk], updatedAt: 0 }
+    }
+    return { cache, refreshVersion: state.refreshVersion + 1 }
+  })
 }
 
 /** Subscribe a component to a query key. Returns unsubscribe function. */

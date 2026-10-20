@@ -58,9 +58,12 @@ const QUICK_ACTIONS = [
 
 export default function DeveloperPage() {
   const [tab, setTab] = useState<string>('shell')
-  useRefreshShortcut(() => {
-    window.location.reload()
-  })
+  // 'r' remounts the tab panels so each re-runs its own mount loader. A
+  // document reload also killed any live terminal session, so this is
+  // equivalent-or-better while keeping the rest of the app intact (drafts,
+  // open panels, other state).
+  const [refreshKey, setRefreshKey] = useState(0)
+  useRefreshShortcut(() => setRefreshKey((k) => k + 1))
   const { startupStage, startupElapsed } = useLiveStatus()
 
   return (
@@ -88,7 +91,7 @@ export default function DeveloperPage() {
         </div>
       }
     >
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs key={refreshKey} value={tab} onValueChange={setTab}>
         <TabsList aria-label="Developer tools">
           <TabsTrigger value="shell">Terminal</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>

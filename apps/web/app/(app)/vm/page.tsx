@@ -576,9 +576,6 @@ export default function VMPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trainingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  useRefreshShortcut(() => {
-    window.location.reload()
-  })
 
   useEffect(() => {
     return () => {
@@ -674,7 +671,28 @@ export default function VMPage() {
     }
   }, [trainingJobId, pollTrainingJob])
 
-  // Load from URL hash (#code=base64) or persisted state after hydration
+  // The three GET-backed fields, loaded from their own controllers. Guarded by
+  // the *Touched refs, so a refresh can never overwrite a field the user has
+  // edited — untouched fields simply pick up the fresh server value. Shared by
+  // the mount effect and the 'r' shortcut: refresh re-runs these GETs instead
+  // of reloading the document, which used to destroy the training timer and
+  // every form field. Training timers, *Touched refs and form state are never
+  // touched here.
+  const loadVmData = useCallback(async () => {
+    const [role, maxSteps, trainConfigData] = await Promise.all([
+      loadRole(),
+      loadMaxSteps(),
+      loadTrainConfig(),
+    ])
+    if (!roleTouched.current) setRoleRaw(role)
+    if (!stepsTouched.current) setMaxStepsRaw(maxSteps)
+    if (!trainTouched.current) setTrainConfigRaw(trainConfigData)
+    setHydrated(true)
+  }, [])
+
+  // Load from URL hash (#code=base64) or persisted state after hydration.
+  // Mount-only: the hash is a one-shot deep-link, not something to re-read on
+  // every refresh.
   useEffect(() => {
     let sourceLoaded = false
     try {
@@ -688,26 +706,25 @@ export default function VMPage() {
       /* malformed hash — fall through to chatDB */
     }
 
-    const loadState = async () => {
+    const loadSource = async () => {
       if (!sourceLoaded && !sourceTouched.current) {
         const saved = await chatDB.getKV<string>('vm-source')
         if (saved) setSourceRaw(saved)
       }
-      const [role, maxSteps, trainConfigData] = await Promise.all([
-        loadRole(),
-        loadMaxSteps(),
-        loadTrainConfig(),
-      ])
-      if (!roleTouched.current) setRoleRaw(role)
-      if (!stepsTouched.current) setMaxStepsRaw(maxSteps)
-      if (!trainTouched.current) setTrainConfigRaw(trainConfigData)
-      setHydrated(true)
     }
 
     // A rejected KV read must not leave the page stuck on the loading
     // skeleton (hydrated gates both rendering and the save effects).
-    loadState().catch(() => setHydrated(true))
-  }, [])
+    Promise.allSettled([loadVmData(), loadSource()]).then((results) => {
+      if (results.some((r) => r.status === 'rejected')) setHydrated(true)
+    })
+  }, [loadVmData])
+
+  // 'r' re-runs this page's own idempotent GET loads — never the document
+  // (which destroyed the training timer and every form field).
+  useRefreshShortcut(() => {
+    loadVmData().catch(() => setHydrated(true))
+  })
 
   // Save source to chatDB on change.
   // Touched fields save immediately even before hydration (the hydration load
