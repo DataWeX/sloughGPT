@@ -473,7 +473,7 @@ def dev(ctx, model, web_port, watch_web, auto_download):
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
 @click.option(
-    "--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and opens browser"
+    "--web", is_flag=True, help="Start full FastAPI server + Vite web UI and opens browser"
 )
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
 @click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")
