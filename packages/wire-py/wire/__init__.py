@@ -1,11 +1,13 @@
 """wire — our own minimal HTTP/1.1 wire layer (card ecea49c8).
 
 Sync, stdlib-only. Phase 1 delivers framing + a keep-alive TCP accept
-loop; the ASGI host adapter (phase 2) builds on top of this seam.
+loop; the ASGI host adapter (phase 2) builds on top of this seam; phase 3
+adds the lifespan handshake (:class:`Lifespan`) around the accept loop.
 """
 
 from __future__ import annotations
 
+from .asgi_host import Lifespan, LifespanError
 from .framing import (
     MAX_HEADER_LINE,
     MAX_HEADERS,
@@ -28,6 +30,8 @@ __all__ = [
     "MAX_REQUEST_LINE",
     "HeaderTooLarge",
     "Handler",
+    "Lifespan",
+    "LifespanError",
     "MalformedRequest",
     "Request",
     "Response",

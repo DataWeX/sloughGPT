@@ -17,11 +17,24 @@ Framing decision on the FIRST response body frame:
 
 Websocket scopes are out of scope here (deferred on card ecea49c8; the
 default transport flip stays gated on WS support).
+
+Lifespan (phase 3): :class:`Lifespan` drives the ASGI lifespan protocol on a
+dedicated long-lived loop thread — the spec requires ONE startup handshake
+before the first request may be served and ONE shutdown handshake after the
+last, while each http cycle keeps its own short-lived loop. Loop-affinity
+constraint (documented, not silent): lifespan handlers must create
+loop-AGNOSTIC resources — sync clients, engine handles, threads — because
+request cycles run on other loops; an async client bound to the driver loop
+cannot be used from a request. This repo's execution philosophy (sync core,
+engines behind ThreadPoolExecutors, PGQ event-loop-free) makes its FastAPI
+lifespan loop-agnostic in practice.
 """
 
 from __future__ import annotations
 
 import asyncio
+import threading
+from collections import deque
 from collections.abc import Callable
 from urllib.parse import unquote
 
@@ -221,3 +234,185 @@ def run_http(
     except OSError:
         # transport died (peer reset during send)
         return False
+
+
+class LifespanError(RuntimeError):
+    """Lifespan handshake failed (app reported failure, crashed, or timed out)."""
+
+
+class Lifespan:
+    """Drives one ASGI app's lifespan protocol on a dedicated loop thread.
+
+    Exactly one driver per server lifetime, matching the spec: the app gets a
+    ``lifespan`` scope, must complete ``startup`` before any http request may
+    be served, and must complete ``shutdown`` after the last one. The app's
+    single ``__call__`` task stays alive across both handshakes (it parks in
+    ``receive()`` between them), so startup handlers see the same objects
+    shutdown handlers do.
+
+    Failure paths all leave no leaked thread: ``startup()`` raises
+    :class:`LifespanError` (text includes the app's ``message`` or the task's
+    exception) after unwinding the loop; ``shutdown()`` raises after unwinding
+    so the caller's teardown always completes.
+    """
+
+    def __init__(self, app: Callable) -> None:
+        self._app = app
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._task: asyncio.Task | None = None
+        self._wakeup: asyncio.Event | None = None
+        self._inbox: deque[dict] = deque()
+        self._lock = threading.Lock()
+        self._ready = threading.Event()  # driver-side handshake wait
+        self._error: str | None = None  # ``.failed`` message, set before ready
+        self._got: dict[str, bool] = {"startup": False, "shutdown": False}
+        self._scope: dict = {}
+
+    @property
+    def thread(self) -> threading.Thread | None:
+        """The driver loop thread, while a handshake is live (None otherwise)."""
+        return self._thread
+
+    # ── driver side (any thread) ───────────────────────────────────────
+
+    def startup(self, timeout: float = 30.0) -> None:
+        """Run the startup handshake; raise LifespanError on any failure."""
+        if self._thread is not None:
+            raise LifespanError("lifespan already started")
+        self._loop = asyncio.new_event_loop()
+        self._ready = threading.Event()
+        self._error = None
+        self._got = {"startup": False, "shutdown": False}
+        self._scope = {
+            "type": "lifespan",
+            "asgi": {"version": "3.0", "spec_version": "2.3"},
+            "state": {},
+        }
+        self._thread = threading.Thread(target=self._run, name="wire-lifespan", daemon=True)
+        self._thread.start()
+        self._post({"type": "lifespan.startup"})
+        if not self._ready.wait(timeout):
+            self._stop_loop()
+            raise LifespanError(f"timeout ({timeout}s) waiting for lifespan.startup")
+        if (error := self._handshake_error("startup")) is not None:
+            self._stop_loop()
+            raise LifespanError(error)
+
+    def shutdown(self, timeout: float = 30.0) -> None:
+        """Run the shutdown handshake; a no-op if never started or already done."""
+        if self._thread is None:
+            return  # never started / already shut down — idempotent
+        self._ready.clear()
+        self._error = None
+        error: str | None
+        if self._task is not None and self._task.done():
+            # nothing left to consume the message — classify the dead task
+            error = self._task_exit_error("shutdown")
+        else:
+            self._post({"type": "lifespan.shutdown"})
+            if not self._ready.wait(timeout):
+                error = f"timeout ({timeout}s) waiting for lifespan.shutdown"
+            else:
+                error = self._handshake_error("shutdown")
+        self._stop_loop()
+        if error is not None:
+            raise LifespanError(error)
+
+    def _handshake_error(self, phase: str) -> str | None:
+        """Classify the just-woken handshake: None = that phase completed."""
+        if self._error is not None:
+            return self._error
+        if self._got[phase]:
+            return None
+        return self._task_exit_error(phase)
+
+    def _task_exit_error(self, phase: str) -> str:
+        """Why the app task can no longer complete this phase."""
+        if self._task is None:
+            return f"app exited without completing lifespan.{phase}"
+        if not self._task.done():
+            return f"app did not complete lifespan.{phase}"
+        if not self._task.cancelled():
+            exc = self._task.exception()
+            if exc is not None:
+                return f"{type(exc).__name__}: {exc}"
+        return f"app exited without completing lifespan.{phase}"
+
+    def _post(self, message: dict) -> None:
+        """Queue an inbox message and wake the app's ``receive()``."""
+        with self._lock:
+            self._inbox.append(message)
+        assert self._loop is not None
+        # callback looks up self._wakeup at run time — _run creates it before
+        # run_forever starts processing callbacks
+        self._loop.call_soon_threadsafe(self._wakeup_set)
+
+    def _wakeup_set(self) -> None:
+        if self._wakeup is not None:
+            self._wakeup.set()
+
+    def _stop_loop(self) -> None:
+        """Stop the driver loop and join its thread (unwinds the app task)."""
+        thread, self._thread = self._thread, None
+        if thread is None or self._loop is None:
+            return
+        try:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        except RuntimeError:
+            pass  # loop already closed
+        thread.join(timeout=5.0)
+
+    # ── app side (driver loop thread) ──────────────────────────────────
+
+    def _run(self) -> None:
+        loop = self._loop
+        assert loop is not None
+        asyncio.set_event_loop(loop)
+        try:
+            self._wakeup = asyncio.Event()
+            self._task = loop.create_task(self._app(self._scope, self._receive, self._send))
+            self._task.add_done_callback(self._task_done)
+            loop.run_forever()
+        finally:
+            try:
+                pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+
+    def _task_done(self, task: asyncio.Task) -> None:
+        # The handshake can no longer proceed — wake the driver either way;
+        # it classifies the dead task (crash vs. clean early exit).
+        del task
+        self._ready.set()
+
+    async def _receive(self) -> dict:
+        while True:
+            with self._lock:
+                if self._inbox:
+                    return self._inbox.popleft()
+            assert self._wakeup is not None
+            self._wakeup.clear()
+            with self._lock:
+                # posted between the first check and clear — still valid
+                if self._inbox:
+                    return self._inbox.popleft()
+            await self._wakeup.wait()
+
+    async def _send(self, message: dict) -> None:
+        kind = str(message.get("type", ""))
+        if kind == "lifespan.startup.complete":
+            self._got["startup"] = True
+            self._ready.set()
+        elif kind == "lifespan.shutdown.complete":
+            self._got["shutdown"] = True
+            self._ready.set()
+        elif kind in ("lifespan.startup.failed", "lifespan.shutdown.failed"):
+            self._error = str(message.get("message") or kind)
+            self._ready.set()
+        # other message types are not part of the spec — ignored

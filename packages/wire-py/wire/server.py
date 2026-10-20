@@ -5,6 +5,12 @@ execution philosophy — the async seam lives above it, in the phase-2 ASGI
 host adapter, never in this layer). One thread per connection, an accept
 thread with a polling timeout so ``stop()`` is prompt and deterministic.
 
+Lifespan (phase 3): ASGI mode runs the lifespan handshake around the accept
+loop — ``lifespan="on"`` (strict: startup failure fails start),
+``"auto"`` (uvicorn-compatible: log and serve anyway — the default, so
+lifespan-unaware apps keep working), ``"off"`` (skip). Handler mode never
+constructs a driver.
+
 Connection lifecycle:
 - clean EOF between requests ends the connection (no error);
 - framing errors are answered with their status (400/431) + ``Connection:
@@ -15,13 +21,19 @@ Connection lifecycle:
 
 from __future__ import annotations
 
+import logging
 import socket
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Literal
 
-from .asgi_host import run_http
+from .asgi_host import Lifespan, LifespanError, run_http
 from .framing import Request, WireError, build_response, read_request
+
+logger = logging.getLogger(__name__)
+
+LifespanMode = Literal["auto", "on", "off"]
 
 
 @dataclass
@@ -49,14 +61,21 @@ class WireServer:
         backlog: int = 64,
         *,
         asgi_app: Callable | None = None,
+        lifespan: LifespanMode = "auto",
+        lifespan_timeout: float = 30.0,
     ) -> None:
         if (handler is None) == (asgi_app is None):
             raise ValueError("exactly one of 'handler' or 'asgi_app' is required")
+        if lifespan not in ("auto", "on", "off"):
+            raise ValueError(f"lifespan must be 'auto', 'on', or 'off', got {lifespan!r}")
         self._handler = handler
         self._asgi_app = asgi_app
         self._host = host
         self._port = port
         self._backlog = backlog
+        self._lifespan_mode: LifespanMode = lifespan
+        self._lifespan_timeout = lifespan_timeout
+        self._lifespan_driver: Lifespan | None = None
         self._listener: socket.socket | None = None
         self._bound: tuple[str, int] = (host, port)
         self._accept_thread: threading.Thread | None = None
@@ -72,6 +91,12 @@ class WireServer:
         return self._asgi_app
 
     @property
+    def lifespan(self) -> Lifespan | None:
+        """The live lifespan driver (None in handler mode, lifespan off, or
+        after a startup failure in auto mode)."""
+        return self._lifespan_driver
+
+    @property
     def port(self) -> int:
         """Bound port (resolved after ``start()`` — supports port 0)."""
         if self._listener is None:
@@ -79,7 +104,7 @@ class WireServer:
         return int(self._listener.getsockname()[1])
 
     def start(self) -> None:
-        """Bind, listen, and spawn the accept thread."""
+        """Bind, run the lifespan startup handshake, spawn the accept thread."""
         if self._listener is not None:
             raise RuntimeError("server already started")
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -90,6 +115,23 @@ class WireServer:
         self._listener = listener
         self._bound = listener.getsockname()[:2]
         self._stop.clear()
+        if self._asgi_app is not None and self._lifespan_mode != "off":
+            # uvicorn's order: bind first (port reserved), handshake second,
+            # accept thread last — no request can beat the startup handshake
+            driver = Lifespan(self._asgi_app)
+            try:
+                driver.startup(timeout=self._lifespan_timeout)
+            except LifespanError as exc:
+                if self._lifespan_mode == "on":
+                    self._listener = None
+                    try:
+                        listener.close()
+                    except OSError:
+                        pass
+                    raise
+                logger.warning("lifespan startup failed — serving without it: %s", exc)
+            else:
+                self._lifespan_driver = driver
         self._accept_thread = threading.Thread(
             target=self._accept_loop, name="wire-accept", daemon=True
         )
@@ -126,6 +168,14 @@ class WireServer:
         if self._accept_thread is not None:
             self._accept_thread.join(timeout=2.0)
             self._accept_thread = None
+        driver, self._lifespan_driver = self._lifespan_driver, None
+        if driver is not None:
+            try:
+                driver.shutdown(timeout=self._lifespan_timeout)
+            except LifespanError as exc:
+                # teardown must always complete — a failed shutdown handshake
+                # is logged, never raised out of stop()
+                logger.warning("lifespan shutdown failed: %s", exc)
 
     # ── accept / serve ─────────────────────────────────────────────────
 

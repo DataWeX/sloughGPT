@@ -183,8 +183,10 @@ def test_scope_is_built_from_the_request(echo_server: WireServer):
         assert status == 200
         assert body == b"GET /v1/chat "
 
-        scope = app.scopes[0]
-        assert scope["type"] == "http"
+        # phase 3: the app sees a lifespan scope first (auto-mode attempt —
+        # EchoApp is lifespan-unaware); the http scope under test is the
+        # one built from the request
+        scope = next(s for s in app.scopes if s["type"] == "http")
         assert scope["asgi"]["version"] == "3.0"
         assert scope["method"] == "GET"
         assert scope["path"] == "/v1/chat"
