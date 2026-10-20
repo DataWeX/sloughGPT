@@ -46,6 +46,10 @@ sibling" in five docstring lines, so a grep gate would fail on our own comments
 from __future__ import annotations
 
 import ast
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -64,6 +68,63 @@ TOGGLE_NAMES: frozenset[str] = frozenset({"stream", "streaming"})
 
 def _parse(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
+# The live registry is read in a *cold interpreter*, never in-process.
+# ``get_all_routers()`` imports all 53 router modules, and their first import
+# binds ``state``/startup in whatever interpreter does it. Running that inside
+# pytest would freeze real-state bindings before the behaviour suites patch
+# ``sys.modules`` (they rely on ``state`` binding their mock on first import)
+# — turning this gate into an order-dependent hazard that fails sibling suites
+# it has no business touching. One subprocess, zero pollution.
+_PROBE = """
+import json
+from routers import get_all_routers
+
+rows = []
+for router in get_all_routers():
+    for route in getattr(router, "routes", []):
+        endpoint = getattr(route, "endpoint", None)
+        annotations = getattr(endpoint, "__annotations__", None) or {}
+        rows.append({
+            "path": getattr(route, "path", "") or "",
+            "methods": sorted(getattr(route, "methods", None) or []),
+            "endpoint": getattr(endpoint, "__qualname__", ""),
+            "has_response_model": getattr(route, "response_model", None) is not None,
+            "returns": getattr(annotations.get("return"), "__name__", None),
+        })
+print("ROWS=" + json.dumps(rows))
+"""
+
+
+def _registered_routes() -> list[dict]:
+    """Snapshot the production route registry (``get_all_routers()``) once."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        str(p)
+        for p in (
+            ROOT,
+            ROOT / "apps" / "api" / "server",
+            ROOT / "packages" / "core-py",
+            ROOT / "packages" / "sdk-py",
+            ROOT / "packages" / "downcraft",
+            ROOT / "apps" / "cli" / "src",
+        )
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", _PROBE],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=ROOT,
+        timeout=300,
+    )
+    assert proc.returncode == 0, (
+        f"route-registry probe exited {proc.returncode}:\n{proc.stderr[-3000:]}"
+    )
+    line = next((ln for ln in reversed(proc.stdout.splitlines()) if ln.startswith("ROWS=")), None)
+    assert line is not None, f"probe produced no ROWS marker:\n{proc.stdout[-2000:]}"
+    return json.loads(line[len("ROWS=") :])
 
 
 def _rel(path: Path) -> str:
@@ -93,46 +154,35 @@ def test_no_chat_stream_route_literal_in_any_router():
 def test_served_chat_endpoint_is_single_and_sse_typed():
     """The registered surface: one POST /chat, streaming, no folded body, no sibling.
 
-    Scanned across **every** router in ``get_all_routers()`` — the collection
-    production mounts (``infrastructure/startup.py``) and the router manifest
-    read — rather than the chat router alone, so a second router claiming POST
-    /chat (or a concatenated sibling path) fails here even though it never
-    appears as a literal. No request is made: with no model materialized
-    ReadinessGateMiddleware answers 503 before the handler, so a live POST
-    would inspect the gate, not the endpoint.
+    Scanned across **every** router in the production mount set (the registry
+    ``get_all_routers()`` returns — what ``infrastructure/startup.py`` and the
+    router manifest read), taken from a cold subprocess so this gate cannot
+    reorder sibling suites' module imports (see ``_registered_routes``). No
+    request is made: with no model materialized ReadinessGateMiddleware
+    answers 503 before the handler, so a live POST would inspect the gate,
+    not the endpoint.
     """
-    from routers import get_all_routers
+    rows = _registered_routes()
 
-    sibling, chat_posts = [], []
-    for router in get_all_routers():
-        for route in getattr(router, "routes", []):
-            path = getattr(route, "path", "") or ""
-            methods = getattr(route, "methods", None) or set()
-            if path.startswith(FORBIDDEN_PATH):
-                sibling.append(f"{sorted(methods)} {path}")
-            if path == "/chat" and "POST" in methods:
-                chat_posts.append(route)
+    sibling = [f"{r['methods']} {r['path']}" for r in rows if r["path"].startswith(FORBIDDEN_PATH)]
+    chat_posts = [r for r in rows if r["path"] == "/chat" and "POST" in r["methods"]]
 
-    assert sibling == [], f"a non-streaming sibling is being served: {sibling}"
+    assert sibling == [], f"a non-streaming sibling is registered: {sibling}"
     assert len(chat_posts) == 1, (
         f"POST /chat must have exactly one registration owner, found {len(chat_posts)}"
     )
 
     route = chat_posts[0]
-    assert route.response_model is None, (
+    assert not route["has_response_model"], (
         "POST /chat must not declare a folded response_model — a complete reply "
         "is the consumer's fold of the stream, not a response body"
     )
-
-    endpoint = route.endpoint
-    assert getattr(endpoint, "__qualname__", "").startswith("ChatRouter."), (
-        f"POST /chat is served by {getattr(endpoint, '__qualname__', endpoint)}, "
-        "not the chat router — ownership moved without this gate noticing"
+    assert route["endpoint"].startswith("ChatRouter."), (
+        f"POST /chat is served by {route['endpoint']}, not the chat router — "
+        "ownership moved without this gate noticing"
     )
-    annotations = getattr(endpoint, "__annotations__", None) or {}
-    returns = annotations.get("return")
-    assert getattr(returns, "__name__", None) == "StreamingResponse", (
-        f"POST /chat must be typed StreamingResponse, got {returns!r}"
+    assert route["returns"] == "StreamingResponse", (
+        f"POST /chat must be typed StreamingResponse, got {route['returns']!r}"
     )
 
 
