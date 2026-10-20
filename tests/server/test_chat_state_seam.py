@@ -17,9 +17,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from apps.api.server.infrastructure.generation import TurnResult
 from apps.api.server.routers.chat import ChatRouter
 from domain.chat._internal.manager import ChatManager
+from domain.generation.engine import TurnResult
 
 
 @pytest.fixture
@@ -42,6 +42,20 @@ def client():
 
 def _respond(manager, **kw):
     return asyncio.run(manager.respond(messages=[{"role": "user", "content": "hi"}], **kw))
+
+
+def _engine_yielding(*items):
+    """A fake generation engine whose ``stream`` yields the given items.
+
+    Streaming is the engine's one method, so the fake mirrors that shape: an
+    async generator producing raw tokens followed by the final ``TurnResult``.
+    """
+
+    async def stream(req):
+        for item in items:
+            yield item
+
+    return SimpleNamespace(stream=stream)
 
 
 def test_respond_untracks_on_success(manager):
@@ -99,7 +113,7 @@ def test_post_chat_persists_history(client, manager):
     """POST /chat must store the exchange, exactly as domain/chat's own path did."""
     fake = TurnResult(text="hi back", session_id="s1")
     stored: list[tuple[str, str]] = []
-    fake_engine = SimpleNamespace(respond=AsyncMock(return_value=fake))
+    fake_engine = _engine_yielding(fake)
 
     with (
         patch("domain.chat.get_chat_manager", return_value=manager),
@@ -128,7 +142,7 @@ def test_post_chat_persists_history(client, manager):
 def test_post_chat_passes_session_id_to_manager(client, manager):
     """The wire contract's session_id must reach chat's state layer."""
     fake = TurnResult(text="ok", session_id="sess-42")
-    fake_engine = SimpleNamespace(respond=AsyncMock(return_value=fake))
+    fake_engine = _engine_yielding(fake)
     tracked: list[str] = []
 
     def _track(session_id, label):
@@ -185,8 +199,8 @@ def test_generate_tracked_returns_backend_object_untouched(manager):
 
 
 def test_router_exposes_single_generation_seam():
-    """Both endpoints must funnel through one seam, per the merge contract."""
-    assert hasattr(ChatRouter, "_generate")
+    """Both endpoints must funnel through one streaming seam, per the merge contract."""
+    assert hasattr(ChatRouter, "_stream_tokens")
     assert hasattr(ChatRouter, "respond")
     assert hasattr(ChatRouter, "stream")
 
@@ -206,7 +220,7 @@ def test_post_chat_surfaces_engine_details(client, manager):
         elapsed_ms=12.5,
         finish_reason="stop",
     )
-    fake_engine = SimpleNamespace(respond=AsyncMock(return_value=turn))
+    fake_engine = _engine_yielding(turn)
 
     with (
         patch("domain.chat.get_chat_manager", return_value=manager),
@@ -238,6 +252,6 @@ def test_chat_router_does_not_import_inference_router():
 
     src = inspect.getsource(chat_mod)
     assert "from routers.inference" not in src, (
-        "chat.py must not import routers.inference — use infrastructure.generation's port"
+        "chat.py must not import routers.inference — use domain.generation.engine's port"
     )
     assert "from apps.api.server.routers.inference" not in src

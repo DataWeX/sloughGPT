@@ -15,6 +15,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from domain.generation.engine import TurnRequest
+
 
 class Message(BaseModel):
     role: str = Field(..., pattern=r"^(user|assistant|system)$")
@@ -49,6 +51,33 @@ class ChatRequest(BaseModel):
         """Resolve max_new_tokens alias into max_tokens."""
         if self.max_new_tokens is not None and self.max_tokens == 128:
             object.__setattr__(self, "max_tokens", self.max_new_tokens)
+
+    def to_turn(self) -> TurnRequest:
+        """Translate the wire contract into the generation engine's domain input.
+
+        This is the edge translation the port depends on: the wire type stays a
+        pydantic ``ChatRequest`` (HTTP/JSON coupling), the engine consumes a
+        domain-native ``TurnRequest``. The dependency points *down* (app → domain),
+        so neither side imports the other's layer.
+        """
+        return TurnRequest(
+            messages=[{"role": m.role, "content": m.content} for m in self.messages],
+            model=self.model,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            top_p=self.top_p,
+            top_k=self.top_k,
+            repetition_penalty=self.repetition_penalty,
+            session_id=self.session_id or "default",
+            user_id=self.user_id or "default",
+            system_prompt=self.system_prompt,
+            knowledge=self.knowledge,
+            images=self.images,
+            agent_id=self.agent_id,
+            use_context_core=self.use_context_core,
+            use_rag=self.use_rag,
+            model_fields_set=set(self.model_fields_set),
+        )
 
 
 class ChatResponse(BaseModel):

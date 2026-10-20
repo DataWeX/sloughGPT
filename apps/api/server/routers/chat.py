@@ -3,12 +3,15 @@ Chat Router - the prompting surface: respond, stream, regenerate, cancel.
 
 Owns POST /chat and POST /chat/stream (single registration owner — the parity
 gate fails on any duplicate path+method). Those two read the generation engine
-through its port (`infrastructure.generation.get_chat_engine`) — never by
-importing the inference router — so model-readiness gates, enrichment phases,
-reconnect replay and the SSE framing stay kernel-owned and identical for every
-caller (card 13c37a23, porting the settled fix 86c6cff8c from
-feat/chat-owns-prompting). Chat reads the engine's output (tokens + details) as
-data and shapes the response for the frontend.
+through its port (`domain.generation.engine.get_chat_engine`) — never by
+importing the inference router — so model-readiness gates, enrichment phases
+and the token stream stay kernel-owned and identical for every caller (card
+13c37a23). Chat reads the engine's output (tokens + details) as data and shapes
+the response for the frontend.
+
+Streaming is baked in: the engine's one method yields raw tokens, so this
+router never toggles a "stream" mode. POST /chat/stream frames those tokens as
+they arrive; POST /chat folds the same stream and returns a complete payload.
 Session state lives in session.py.
 """
 
@@ -19,13 +22,13 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.generation import get_chat_engine
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
 from schemas.chat import ChatRequest, ChatResponse
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
+from domain.generation.engine import fold, get_chat_engine
 
 logger = logging.getLogger(__name__)
 
@@ -52,57 +55,45 @@ class ChatRouter:
         self.router.add_api_route("/health", self.health, methods=["GET"])
         self.router.add_api_route("/addons", self.addons, methods=["GET"])
 
-    async def _generate(
+    async def _stream_tokens(
         self,
         request: ChatRequest,
-        *,
-        stream: bool,
-        http_request: Request | None = None,
-        auth_user: dict | None = None,
-    ) -> ChatResponse | StreamingResponse:
-        """Single chat-generation seam.
+    ) -> AsyncIterator:
+        """The single generation path: the engine's raw-token stream.
 
-        POST /chat and POST /chat/stream are two projections of one generation
-        path: both funnels through here, and `stream` is a mode rather than a
-        second, parallel handler. Prompting surface lives in this router;
-        readiness/circuit-breaker gates and the response shape are whatever the
-        chosen backend owns, and they are identical for every caller precisely
-        because there is only one place that decides.
-
-        Keeping this seam single is what makes the generation backend swappable
-        without touching either endpoint's contract.
-
-        Generation and state are split deliberately: the inference kernel owns
-        generation (readiness/circuit-breaker gates, KV cache), while chat owns
-        its own state — the cancellation registry and conversation history —
-        through the manager's public entry rather than its internals. The two
-        domains hold orthogonal state, so they compose.
+        Streaming is baked in — this is how chat generates, not a mode and not a
+        parameter. The engine yields raw ``str`` tokens followed by a final
+        ``TurnResult``; both routes derive from this: POST /chat frames the
+        tokens as they arrive, POST /chat folds them into a complete payload.
+        Generation (readiness/circuit-breaker gates, KV cache) lives in the
+        inference kernel; chat owns its own state — the cancellation registry and
+        conversation history — through the manager's public entry.
         """
         engine = get_chat_engine()
+        turn_req = request.to_turn()
+        async for item in engine.stream(turn_req):
+            yield item
 
-        if stream:
-            # Streaming still rides the engine's SSE projection through the
-            # port. That returns a fully-formed StreamingResponse, so chat
-            # never sees the raw tokens and cannot persist history without
-            # parsing SSE frames — brittle. Doing it properly needs the engine
-            # to yield raw tokens (a follow-on on this port), the shape
-            # ChatManager.stream() already uses. Carded separately.
-            return await engine.stream_sse(request, http_request, auth_user)
-
+    @endpoint("chat.respond")
+    async def respond(
+        self,
+        request: ChatRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> ChatResponse:
+        """Chat response — a fold of the engine's token stream."""
         from domain.chat import get_chat_manager
 
         manager = get_chat_manager()
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
         async def _gen():
-            return await engine.respond(request)
+            return await fold(self._stream_tokens(request))
 
         turn = await manager.generate_tracked(
             request.session_id or "default",
             messages,
             _gen,
-            # The engine's TurnResult carries the assistant text under `text`;
-            # project that down for history persistence.
+            # The engine's TurnResult carries the assistant text under `text`.
             text_of=lambda resp: resp.text,
         )
         # Chat handles the response: read the engine's details off the turn and
@@ -117,15 +108,6 @@ class ChatRouter:
             finish_reason=turn.finish_reason,
         )
 
-    @endpoint("chat.respond")
-    async def respond(
-        self,
-        request: ChatRequest,
-        auth_user: dict = Depends(require_auth_if_enabled),
-    ) -> ChatResponse:
-        """Non-streaming chat response."""
-        return await self._generate(request, stream=False, auth_user=auth_user)
-
     @endpoint("chat.stream")
     async def stream(
         self,
@@ -133,10 +115,45 @@ class ChatRouter:
         http_request: Request,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> StreamingResponse:
-        """Streaming chat response (SSE) — the same generation path, streamed."""
-        return await self._generate(
-            request, stream=True, http_request=http_request, auth_user=auth_user
-        )
+        """Streaming chat response (SSE) — the same token stream, framed as it arrives."""
+        from domain.chat import get_chat_manager
+
+        manager = get_chat_manager()
+        session_id = request.session_id or "default"
+        messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+        async def generate():
+            _start = time.time()
+            _token_count = 0
+            try:
+                async for item in manager.generate_stream_tracked(
+                    session_id,
+                    messages,
+                    lambda: self._stream_tokens(request),
+                    text_of=lambda resp: resp.text,
+                ):
+                    if await http_request.is_disconnected():
+                        return
+                    if isinstance(item, str):
+                        if item:
+                            _token_count += 1
+                            yield self._sse_token("chat", item)
+                    else:
+                        # Final TurnResult: close the stream with usage metadata.
+                        yield self._sse_token(
+                            "chat", "", done=True, meta={"usage_tokens": item.usage}
+                        )
+                _elapsed_ms = round((time.time() - _start) * 1000)
+                safe_audit_log(
+                    "chat.stream",
+                    resource=session_id,
+                    detail=f"tokens={_token_count} elapsed={_elapsed_ms}ms",
+                )
+            except Exception as e:
+                logger.error("Chat stream error: %s", e, exc_info=True)
+                yield self._sse_error("chat", "STREAM", str(e))
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
 
     @endpoint("chat.regenerate")
     async def regenerate(

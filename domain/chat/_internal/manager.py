@@ -244,6 +244,41 @@ class ChatManager:
         finally:
             self._untrack(session_id, op_id, error=error)
 
+    async def generate_stream_tracked(
+        self,
+        session_id: str,
+        messages: list[dict[str, str]],
+        stream: Callable[[], AsyncIterator[Any]],
+        text_of: Callable[[Any], str],
+    ) -> AsyncIterator[Any]:
+        """Own chat's per-session state around an EXTERNAL token stream.
+
+        The streaming twin of ``generate_tracked``: chat owns the cancellation
+        registry and conversation history while the engine streams tokens. It
+        yields the caller's items untouched (raw tokens, then the final result)
+        and stores history once the stream completes.
+
+        ``stream`` yields the caller's own items — typically raw ``str`` tokens
+        followed by a final result object; ``text_of`` projects the assistant
+        text off that final object for persistence.
+        """
+        op_id, _stop = self._track(session_id, f"chat-stream:{session_id}")
+        error: str | None = None
+        result: Any = None
+        try:
+            async for item in stream():
+                if not isinstance(item, str):
+                    result = item
+                yield item
+            if result is not None:
+                self._store(session_id, messages, text_of(result))
+        except Exception as exc:
+            logger.error("ChatManager.generate_stream_tracked failed: %s", exc, exc_info=True)
+            error = str(exc)
+            raise
+        finally:
+            self._untrack(session_id, op_id, error=error)
+
     async def stream(
         self,
         messages: list[dict[str, str]],

@@ -248,12 +248,18 @@ class UpsertSessionRequest(BaseModel):
 # Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
 # chat router no longer imports this router. Re-exported here for backwards
 # compatibility with existing importers (mobile BFF, tests).
-from infrastructure.generation import TurnResult, register_chat_engine  # noqa: E402
 from schemas.chat import (  # noqa: E402
     ChatControlRequest,
     ChatRequest,
     ChatResponse,
     Message,
+)
+
+from domain.generation.engine import (  # noqa: E402
+    TurnRequest,
+    TurnResult,
+    fold,
+    register_chat_engine,
 )
 
 # In-memory store for pending control requests per session
@@ -2861,27 +2867,26 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.reset_context")
 
-    async def respond_turn(self, req: ChatRequest) -> TurnResult:
-        """Engine core: run one generation turn, return the full result.
+    async def stream_turn(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]:
+        """The single generation method: yield raw tokens, then the final ``TurnResult``.
 
-        This is the inference engine's read interface — it returns everything
-        the model pushed out (text plus the model/usage/finish/timing details
-        the old handler computed and discarded), so the chat surface reads the
-        details as data instead of reaching into this router. The HTTP route
-        ``chat`` is a thin projection over this method.
+        Streaming is baked in — there is no non-streaming backend and no
+        ``stream: bool`` toggle. Edges fold this stream when they need a
+        complete response (POST /chat, the mobile BFF), or frame the tokens
+        as they arrive (POST /chat/stream).
+
+        Yields:
+            ``str`` raw tokens as they are generated, then a final
+            ``TurnResult`` carrying the details (model, usage, timing,
+            finish_reason, and the full token list).
         """
         _chat_t0 = time.monotonic()
         import state as _chat_state
 
-        from domain import get_chat_domain
-
+        # GATES — reject fast before any provider call.
         ms = _get_model_status()
         if not ms["ready"]:
-            raise_error(
-                ms["reason"],
-                ms["code"],
-                status_code=ms["status"],
-            )
+            raise_error(ms["reason"], ms["code"], status_code=ms["status"])
 
         mem_err = _check_memory_pressure()
         if mem_err:
@@ -2903,24 +2908,26 @@ class InferenceRouter:
         except Exception as e:
             logger.debug("Circuit breaker check failed: %s", e)
 
-        user_msg = _extract_user_message(req.messages)
+        user_msg = ""
+        messages = [dict(m) for m in req.messages]
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                content = m.get("content")
+                user_msg = content if isinstance(content, str) else str(content)
+                break
         if not user_msg:
             raise_error("No user message", "E_BAD_REQUEST", status_code=400)
 
         system_prompt = req.system_prompt or ""
-
-        messages = [{"role": m.role, "content": m.content} for m in req.messages]
 
         if req.images:
             content_parts = [{"type": "text", "text": user_msg}]
             for img_data in req.images:
                 content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
             for i in range(len(messages) - 1, -1, -1):
-                if messages[i]["role"] == "user":
+                if messages[i].get("role") == "user":
                     messages[i]["content"] = content_parts
                     break
-
-        chat_domain = get_chat_domain()
 
         if req.agent_id:
             try:
@@ -2936,7 +2943,6 @@ class InferenceRouter:
                 logger.warning(
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
-                # Non-streaming path: log but continue (no SSE channel to send error)
 
         if req.knowledge:
             knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
@@ -2946,10 +2952,10 @@ class InferenceRouter:
                 else f"Use the following context to answer:\n{knowledge_str}"
             )
 
+        # Knowledge enrichment — retrieve user facts and inject context.
         try:
             enrichment = await asyncio.wait_for(
-                asyncio.to_thread(_enrich_knowledge, user_msg, False, 5),
-                timeout=10.0,
+                asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
             )
             if enrichment.get("facts"):
                 k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
@@ -2961,90 +2967,104 @@ class InferenceRouter:
         except Exception as e:
             logger.debug("Knowledge enrichment failed: %s", e)
 
-        try:
-            gen_params = _apply_meta_weights(
-                temperature=req.temperature,
-                top_p=req.top_p,
-                top_k=req.top_k,
-                repetition_penalty=req.repetition_penalty,
-                user_message=user_msg,
-                user_id=req.user_id or "default",
-                explicit=req.model_fields_set,
-            )
-            # Enforce context window budget before delegating to domain
-            messages = _trim_messages_to_budget(
-                messages, _gen_config.max_context_length, req.max_tokens
-            )
-            result = await asyncio.wait_for(
-                chat_domain.respond(
-                    messages=messages,
-                    model=_chat_state.model_type or req.model,
-                    system_prompt=system_prompt,
-                    temperature=gen_params["temperature"],
-                    max_tokens=req.max_tokens,
-                    session_id=req.session_id or "default",
-                    user_id=req.user_id or "default",
-                ),
-                timeout=60.0,
-            )
-        except TimeoutError:
-            return TurnResult(
-                text="Generation timed out. Try a shorter prompt or fewer tokens.",
-                session_id=req.session_id or "default",
-                done=True,
-            )
+        # Production RAG — retrieve relevant context from ingested documents
+        # and inject it as a leading system block (gated on req.use_rag).
+        if req.use_rag:
+            try:
+                from domain.core import is_rag_service_ready
 
-        tokens = 0
-        _chat_elapsed_ms: float | None = None
+                if is_rag_service_ready():
+                    rag_svc = await asyncio.wait_for(
+                        asyncio.to_thread(get_rag_service), timeout=10.0
+                    )
+                    if rag_svc.stats().get("total_chunks", 0) > 0:
+                        rag_result = await asyncio.wait_for(
+                            asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0
+                        )
+                        if rag_result.get("num_results", 0) > 0:
+                            rag_block = (
+                                f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} "
+                                f"relevant passages]\n\n{rag_result['context']}"
+                            )
+                            messages.insert(0, {"role": "system", "content": rag_block})
+            except Exception as e:
+                logger.debug("RAG query skipped: %s", e)
+
+        gen_params = _apply_meta_weights(
+            temperature=req.temperature,
+            top_p=req.top_p,
+            top_k=req.top_k,
+            repetition_penalty=req.repetition_penalty,
+            user_message=user_msg,
+            user_id=req.user_id or "default",
+            explicit=req.model_fields_set,
+        )
+        messages = _trim_messages_to_budget(
+            messages, _gen_config.max_context_length, req.max_tokens
+        )
+
+        if system_prompt:
+            messages = [{"role": "system", "content": system_prompt}] + messages
+
+        provider = get_provider("default")
+        if provider is None:
+            raise_error("Model not loaded", "E_INFRA_REGISTRY", status_code=503)
+
+        model = _chat_state.model_type or req.model
+        session_id = req.session_id or "default"
+
+        collected: list[str] = []
         try:
-            tokens = _count_tokens(result.text, _chat_state)
-            _chat_elapsed_ms = round((time.monotonic() - _chat_t0) * 1000, 1)
-            get_server_state().record_inference(
-                tokens=tokens,
-                elapsed_ms=_chat_elapsed_ms,
-                model=_chat_state.model_type or req.model,
-            )
+            async for token in provider.chat_stream(
+                messages,
+                max_tokens=req.max_tokens,
+                cancel_event=None,
+                session_id=session_id,
+                **gen_params,
+            ):
+                if token:
+                    collected.append(token)
+                    yield token
+        except Exception as e:
+            logger.error("chat stream generation failed: %s", e, exc_info=True)
+            raise
+
+        text = "".join(collected)
+        elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
+        tokens = 0
+        try:
+            tokens = _count_tokens(text, _chat_state)
+            get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed, model=model)
         except Exception as e:
             logger.warning("Failed to record inference metrics: %s", e)
-
         try:
             capture(
                 user_msg or "",
-                result.text,
-                model=_chat_state.model_type or req.model,
-                tokens_generated=_count_tokens(result.text, _chat_state),
+                text,
+                model=model,
+                tokens_generated=_count_tokens(text, _chat_state),
                 temperature=gen_params["temperature"],
-                meta={"session_id": req.session_id or "default"},
+                meta={"session_id": session_id},
             )
         except Exception as e:
             logger.warning("Failed to capture conversation: %s", e)
 
-        # Optional detail fields are metadata read off the engine's result.
-        # Coerce them to JSON-safe primitives so a backend that omits or
-        # mistypes one can never break the wire response.
-        _completion = tokens if isinstance(tokens, int) else 0
-        _raw_usage = getattr(result, "usage_tokens", None)
-        _usage = dict(_raw_usage) if isinstance(_raw_usage, dict) else {}
-        _usage.update({"completion_tokens": _completion, "total_tokens": _completion})
-        _fr = getattr(result, "finish_reason", "stop")
-        _model = _chat_state.model_type or req.model
-
-        return TurnResult(
-            text=result.text,
-            session_id=result.session_id,
-            done=result.done,
-            model=_model if isinstance(_model, str) else req.model,
-            usage=_usage,
-            elapsed_ms=_chat_elapsed_ms if isinstance(_chat_elapsed_ms, (int, float)) else None,
-            finish_reason=_fr if isinstance(_fr, str) else "stop",
-            tokens=[result.text],
+        yield TurnResult(
+            text=text,
+            session_id=session_id,
+            done=True,
+            model=model,
+            usage={"completion_tokens": tokens, "total_tokens": tokens},
+            elapsed_ms=elapsed,
+            finish_reason="stop",
+            tokens=collected,
         )
 
     async def chat(
         self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> ChatResponse:
-        """POST /chat — thin projection over the engine's ``respond_turn``."""
-        turn = await self.respond_turn(req)
+        """POST /chat — a fold of the engine's raw-token stream."""
+        turn = await fold(self.stream_turn(req.to_turn()))
         return ChatResponse(
             message=turn.text,
             session_id=turn.session_id,
@@ -3541,17 +3561,16 @@ router = _instance.router
 class _GenerationEngine:
     """Inference-backed implementation of the generation engine port.
 
-    Registered into ``infrastructure.generation`` so the chat surface reads the
-    engine's output through the port instead of importing this router. The
-    streaming side still returns the engine's SSE projection (transitional) —
-    a follow-on turns it into a raw-token generator the chat handler frames.
+    Registered into ``domain.generation.engine`` so the chat surface reads the
+    engine's output through the port instead of importing this router. The one
+    method is ``stream``: a raw-token generator that yields tokens then the final
+    ``TurnResult``. There is no separate non-streaming backend — surfaces that
+    need a complete response fold this stream at the edge.
     """
 
-    async def respond(self, req: ChatRequest) -> TurnResult:
-        return await _instance.respond_turn(req)
-
-    async def stream_sse(self, req: ChatRequest, request: Request, auth_user: dict | None = None):
-        return await _instance.chat_stream(req, request, auth_user)
+    async def stream(self, req: TurnRequest):
+        async for item in _instance.stream_turn(req):
+            yield item
 
 
 register_chat_engine(_GenerationEngine())

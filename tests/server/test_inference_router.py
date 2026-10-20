@@ -243,21 +243,23 @@ class TestChat:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domain.get_chat_domain")
-    def test_chat_success(self, mock_get_domain, client):
-        mock_domain = MagicMock()
-        mock_domain.respond = AsyncMock(
-            return_value=MagicMock(
-                text="Hello back",
-                session_id="sess-1",
-                done=True,
-            )
-        )
-        mock_get_domain.return_value = mock_domain
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_chat_success(self, mock_get_provider, client):
+        # POST /chat folds the engine's raw-token stream (streaming is the only
+        # generation path), so the seam to fake is the provider's chat_stream.
+        mock_provider = MagicMock()
+
+        async def _chat_stream(messages, **kwargs):
+            for tok in ["Hello", " back"]:
+                yield tok
+
+        mock_provider.chat_stream = _chat_stream
+        mock_get_provider.return_value = mock_provider
 
         resp = client.post(
             "/chat",
             json={
+                "session_id": "sess-1",
                 "messages": [{"role": "user", "content": "Hello"}],
             },
         )
