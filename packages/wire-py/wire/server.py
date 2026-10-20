@@ -11,6 +11,11 @@ loop — ``lifespan="on"`` (strict: startup failure fails start),
 lifespan-unaware apps keep working), ``"off"`` (skip). Handler mode never
 constructs a driver.
 
+WebSocket (phase 3): an ``Upgrade: websocket`` request in ASGI mode is
+handed to ``run_websocket`` (see :mod:`wire.asgi_host`) instead of the
+HTTP loop — the session consumes the connection (handshake, frames, close),
+so no keep-alive follows it.
+
 Connection lifecycle:
 - clean EOF between requests ends the connection (no error);
 - framing errors are answered with their status (400/431) + ``Connection:
@@ -28,8 +33,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
-from .asgi_host import Lifespan, LifespanError, run_http
+from .asgi_host import Lifespan, LifespanError, run_http, run_websocket
 from .framing import Request, WireError, build_response, read_request
+from .websocket import is_ws_upgrade
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +226,19 @@ class WireServer:
                 if request is None:  # clean EOF between requests
                     return
                 if self._asgi_app is not None:
+                    if is_ws_upgrade(request):
+                        # HTTP→WS upgrade: the session consumes the
+                        # connection (handshake, frames, close) — no
+                        # keep-alive loop after it
+                        run_websocket(
+                            self._asgi_app,
+                            request,
+                            reader,
+                            conn.sendall,
+                            client=conn.getpeername()[:2],
+                            server=self._bound,
+                        )
+                        return
                     # ASGI mode: the adapter owns response bytes and the
                     # keep-alive decision (app Connection header wins)
                     keep = run_http(
@@ -261,6 +280,15 @@ class WireServer:
         finally:
             with self._lock:
                 self._clients.discard(conn)
+            # wake any read still blocked on this socket first: the ws
+            # session's reader thread holds the makefile lock inside a
+            # blocking read, and reader.close() waits on that same lock —
+            # close() alone does not interrupt a blocked recv (only
+            # shutdown does), so closing the reader first deadlocks.
+            try:
+                conn.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
             try:
                 reader.close()
             except OSError:

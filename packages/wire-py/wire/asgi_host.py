@@ -15,8 +15,14 @@ Framing decision on the FIRST response body frame:
   compute one would defeat the point);
 - otherwise -> ``Content-Length`` from the frame.
 
-Websocket scopes are out of scope here (deferred on card ecea49c8; the
-default transport flip stays gated on WS support).
+WebSocket (phase 3): :func:`run_websocket` serves the upgrade — handshake
+validation/101 live in :mod:`wire.websocket` (sync), then one session loop
+owns the connection for its lifetime. Frame reads run in a dedicated
+single-worker reader executor (shielded so a cancelled ``receive`` never
+spawns a second reader on the buffered stream, and torn down without
+waiting so a stranded read cannot deadlock session end) — which is what
+lets an app send while a receive is pending. Writes go straight to the
+sync socket from the loop thread, same as :func:`run_http`.
 
 Lifespan (phase 3): :class:`Lifespan` drives the ASGI lifespan protocol on a
 dedicated long-lived loop thread — the spec requires ONE startup handshake
@@ -36,9 +42,32 @@ import asyncio
 import threading
 from collections import deque
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import unquote
 
 from .framing import Request, build_response, serialize_head
+from .websocket import (
+    OP_BINARY,
+    OP_CLOSE,
+    OP_PING,
+    OP_PONG,
+    OP_TEXT,
+    WsProtocolError,
+    encode_frame,
+    handshake_problem,
+)
+from .websocket import (
+    close_payload as _ws_close_payload,
+)
+from .websocket import (
+    read_frame as _ws_read_frame,
+)
+from .websocket import (
+    reject_response as _ws_reject_response,
+)
+from .websocket import (
+    switch_response as _ws_switch_response,
+)
 
 # statuses whose responses carry no body — no Content-Length may be sent
 _BODILESS = frozenset({204, 304})
@@ -234,6 +263,238 @@ def run_http(
     except OSError:
         # transport died (peer reset during send)
         return False
+
+
+def _build_ws_scope(request: Request, client: tuple[str, int], server: tuple[str, int]) -> dict:
+    target = request.target
+    path, _, query = target.partition("?")
+    subprotocols: list[str] = []
+    if proto := request.header("sec-websocket-protocol"):
+        subprotocols = [p.strip() for p in proto.split(",") if p.strip()]
+    return {
+        "type": "websocket",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": request.version,
+        "scheme": "ws",
+        "path": unquote(path),
+        "raw_path": path.encode("ascii"),
+        "query_string": query.encode("ascii"),
+        "root_path": "",
+        "headers": [
+            (key.lower().encode("ascii"), value.encode("latin-1")) for key, value in request.headers
+        ],
+        "client": client,
+        "server": server,
+        "subprotocols": subprotocols,
+    }
+
+
+def run_websocket(
+    app: Callable,
+    request: Request,
+    reader,  # buffered binary reader for the connection (makefile)
+    on_bytes: SendBytes,
+    *,
+    client: tuple[str, int],
+    server: tuple[str, int],
+) -> None:
+    """Serve one WebSocket upgrade; blocks until the session ends.
+
+    Handshake problems answer as HTTP (400 / 426 + version header) before
+    the app is called; the app rejecting pre-accept answers 403. The session
+    then runs on ONE event loop for the connection's lifetime — frame reads
+    off-loop in a dedicated single-worker reader executor (a cancelled
+    ``receive`` shares the in-flight read, never strands a second reader),
+    writes direct to the sync socket from the loop thread, exactly like
+    ``run_http``.
+    """
+    problem = handshake_problem(request)
+    if problem is not None:
+        on_bytes(_ws_reject_response(problem))
+        return
+    # single-worker reader executor owned by this session: the default
+    # executor is joined by asyncio.run at teardown, so a cancelled receive
+    # leaving its read in flight would deadlock session end (the connection
+    # close that would wake the reader only happens after we return).
+    read_exec = ThreadPoolExecutor(max_workers=1, thread_name_prefix="wire-ws-read")
+    try:
+        asyncio.run(
+            _ws_session(
+                app, request, reader, on_bytes, client=client, server=server, read_exec=read_exec
+            )
+        )
+    except OSError:
+        return  # peer vanished mid-frame/write; teardown is the caller's
+    finally:
+        # never wait: an in-flight read wakes with EOF when _serve_conn
+        # closes the connection right after this returns
+        read_exec.shutdown(wait=False, cancel_futures=True)
+
+
+async def _ws_session(
+    app: Callable,
+    request: Request,
+    reader,
+    on_bytes: SendBytes,
+    *,
+    client: tuple[str, int],
+    server: tuple[str, int],
+    read_exec: ThreadPoolExecutor,
+) -> None:
+    loop = asyncio.get_running_loop()
+    scope = _build_ws_scope(request, client, server)
+
+    accepted = False
+    closed = False  # close frame (server- or client-initiated) is settled
+    settled: dict | None = None  # disconnect message once the session ends
+    receiving = False
+    read_future: asyncio.Future | None = None
+    asm = bytearray()
+    asm_opcode = 0
+
+    def _settle(code: int) -> dict:
+        nonlocal closed, settled
+        closed = True
+        settled = {"type": "websocket.disconnect", "code": code}
+        return settled
+
+    async def _fail(code: int) -> dict:
+        """Protocol-level close: answer with a close frame, then settle."""
+        if accepted and not closed:
+            try:
+                on_bytes(encode_frame(OP_CLOSE, _ws_close_payload(code)))
+            except OSError:
+                pass
+        return _settle(code)
+
+    async def _next_frame():
+        nonlocal read_future
+        if read_future is None:
+            read_future = loop.run_in_executor(read_exec, _ws_read_frame, reader)
+        fut = read_future
+        try:
+            # shield: a cancelled receive() must not cancel the in-flight
+            # read (that would let a later receive spawn a SECOND reader
+            # on the same buffered stream)
+            return await asyncio.shield(fut)
+        finally:
+            if fut.done() and read_future is fut:
+                read_future = None
+
+    async def receive() -> dict:
+        nonlocal receiving, asm, asm_opcode
+        if not accepted:
+            return {"type": "websocket.connect"}
+        if settled is not None:
+            return settled
+        if receiving:
+            raise RuntimeError("concurrent websocket.receive is not allowed")
+        receiving = True
+        try:
+            while True:
+                try:
+                    frame = await _next_frame()
+                except WsProtocolError:
+                    return await _fail(1002)
+                except (ConnectionError, OSError):
+                    return _settle(1006)  # abnormal close: no close frame
+                if frame is None:
+                    return _settle(1006)  # clean EOF without a close frame
+                if frame.opcode == OP_PING:
+                    on_bytes(encode_frame(OP_PONG, frame.payload))  # server duty
+                    continue
+                if frame.opcode == OP_PONG:
+                    continue
+                if frame.opcode == OP_CLOSE:
+                    code = (
+                        int.from_bytes(frame.payload[:2], "big")
+                        if len(frame.payload) >= 2
+                        else 1005
+                    )
+                    if accepted and not closed:
+                        try:
+                            on_bytes(encode_frame(OP_CLOSE, frame.payload))  # echo §5.5.1
+                        except OSError:
+                            pass
+                    return _settle(code)
+                if frame.opcode in (OP_TEXT, OP_BINARY):
+                    if asm_opcode:
+                        return await _fail(1002)  # data frame mid-fragmentation
+                    if frame.fin:
+                        return await _deliver(frame.opcode, bytes(frame.payload))
+                    asm = bytearray(frame.payload)
+                    asm_opcode = frame.opcode
+                    continue
+                # OP_CONT
+                if asm_opcode == 0:
+                    return await _fail(1002)  # continuation without a start
+                asm.extend(frame.payload)
+                if frame.fin:
+                    message = await _deliver(asm_opcode, bytes(asm))
+                    asm = bytearray()
+                    asm_opcode = 0
+                    return message
+        finally:
+            receiving = False
+
+    async def _deliver(opcode: int, payload: bytes) -> dict:
+        if opcode == OP_TEXT:
+            try:
+                return {"type": "websocket.receive", "text": payload.decode("utf-8")}
+            except UnicodeDecodeError:
+                return await _fail(1007)  # invalid UTF-8 text (RFC6455 §8.1)
+        return {"type": "websocket.receive", "bytes": payload}
+
+    async def send(message: dict) -> None:
+        nonlocal accepted, closed, settled
+        kind = message.get("type")
+        if kind == "websocket.accept":
+            if accepted or settled is not None:
+                raise RuntimeError("websocket.accept after accept/close")
+            on_bytes(_ws_switch_response(request, message.get("subprotocol")))
+            accepted = True
+        elif kind == "websocket.send":
+            if not accepted:
+                raise RuntimeError("websocket.accept must precede sends")
+            if closed:
+                raise RuntimeError("websocket.send after close")
+            if "text" in message:
+                on_bytes(encode_frame(OP_TEXT, message["text"].encode()))
+            elif "bytes" in message:
+                on_bytes(encode_frame(OP_BINARY, bytes(message["bytes"])))
+            else:
+                raise RuntimeError("websocket.send requires 'text' or 'bytes'")
+        elif kind == "websocket.close":
+            if not accepted:
+                # app rejected the connection → HTTP 403, never a frame
+                if settled is None:
+                    on_bytes(_ws_reject_response((403, "WebSocket upgrade denied", {})))
+                    settled = {"type": "websocket.disconnect", "code": 1008}
+                    closed = True
+                return
+            if not closed:
+                code = int(message.get("code", 1000))
+                on_bytes(encode_frame(OP_CLOSE, _ws_close_payload(code)))
+                _settle(code)
+        else:
+            raise RuntimeError(f"unexpected websocket send type: {kind!r}")
+
+    try:
+        await app(scope, receive, send)
+    except Exception:  # noqa: BLE001 - ASGI app is an untrusted boundary
+        pass  # no HTTP response exists post-upgrade; teardown closes TCP
+    finally:
+        if accepted and not closed:
+            # app returned without close — complete the handshake anyway
+            try:
+                on_bytes(encode_frame(OP_CLOSE, _ws_close_payload(1000)))
+            except OSError:
+                pass
+        elif not accepted and settled is None:
+            try:
+                on_bytes(_ws_reject_response((403, "WebSocket upgrade denied", {})))
+            except OSError:
+                pass
 
 
 class LifespanError(RuntimeError):

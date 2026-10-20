@@ -1016,8 +1016,44 @@ git push -u origin feat/<name>   # push your own branch when done
   body held 40 ms; 100ms-idle capacity row = 0.94 ms) vs our
   single-write framing; adapter overhead +0.23 ms/req; 2 runs recorded
   (note `2026-10-20-wire-layer-phase3-lifespan-ab.md`). REMAINING:
-  `SLO_TRANSPORT` wiring + journey gates (shared tree ~113 dirty — the
+  `SLO_TRANSPORT` wiring + journey gates (shared tree ~110 dirty — the
   window). Next lane: NPU CAPS. From `.wt-worldbrain`.
+  **RFC6455 WS done (2026-10-20, committed on stack tail `feat/npu-caps`)
+  — the flip gate is CLEARED.** `wire/websocket.py` (sync stdlib:
+  handshake validation, 101 + `Sec-WebSocket-Accept`, unmasked server /
+  masked client frames, 7/16/64-bit lengths, fragmentation,
+  ping→auto-pong) + `wire/asgi_host.py` `run_websocket` (one session loop
+  per connection over the ASGI websocket connect/accept/receive/send/
+  close/disconnect contract, dedicated single-worker reader executor with
+  a shielded in-flight read) + `wire/server.py` routes
+  `is_ws_upgrade(request)` → `run_websocket` (session consumes the
+  connection, no keep-alive after). Scope grounded on the API's real
+  surface — `inference.py` `add_api_websocket_route("/ws/generate",
+  ws_generate)` with Starlette accept/receive_text/send_json/close, whose
+  interop test pins that exact route shape end-to-end over a real socket.
+  Two real bugs caught by RED tests then fixed: (1) cancelled-receive
+  teardown deadlock — Starlette's `wait_for(receive,30s)` cancels a
+  pending receive and the in-flight read stayed on the default executor
+  that `asyncio.run` joins at session end while the connection is still
+  open → hang; fixed with a session-owned reader executor torn down
+  `shutdown(wait=False,cancel_futures=True)`. (2) reader-close deadlock
+  (second order) — `reader.close()` waits on the makefile lock held by
+  that blocked read, and `socket.close()` does not interrupt a blocked
+  recv (only `shutdown()` does); `_serve_conn` teardown now does
+  `conn.shutdown(SHUT_RDWR)` before `reader.close()`. 14 new
+  `tests/test_websocket.py` (handshake 101/400/426, text+binary 16/64-bit
+  echo, fragmentation, ping→pong, unmasked-client-frame 1002,
+  server-push-while-receive-pending, close/EOF, reject→403, plain-HTTP
+  untouched, cancelled-receive teardown, FastAPI interop); full wire
+  suite **62 green**, ruff clean. pytest gotcha recorded in-file: with
+  `from __future__ import annotations` FastAPI resolves the endpoint's
+  `websocket: WebSocket` annotation against MODULE globals — importing
+  `WebSocket` inside the test silently degrades it to a required query
+  param and the route 403-rejects. Benchmark re-run after the teardown
+  change (shutdown on every HTTP conn path): no regression (keepalive
+  p50 0.087 ms, keepalive_asgi 0.352 ms, uvicorn A/B delta unchanged
+  −99.1%). Only the shared-tree `SLO_TRANSPORT` wiring + journey gates
+  remain. From `.wt-worldbrain`.
 
 - **2026-10-19 · `feat/npu-caps` — OS design L2, CAPS + native tensor
   kernels, card DONE (phase 2; `d74e2cef`, stacked on `feat/wire-py`).**

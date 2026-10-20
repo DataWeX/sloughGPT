@@ -2,7 +2,9 @@
 
 Sync, stdlib-only. Phase 1 delivers framing + a keep-alive TCP accept
 loop; the ASGI host adapter (phase 2) builds on top of this seam; phase 3
-adds the lifespan handshake (:class:`Lifespan`) around the accept loop.
+adds the lifespan handshake (:class:`Lifespan`) around the accept loop and
+RFC6455 WebSocket upgrades (``wire.websocket`` codec + ``wire.asgi_host``
+session) — the flip gate for the transport default.
 """
 
 from __future__ import annotations
