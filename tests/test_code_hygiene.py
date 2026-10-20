@@ -32,10 +32,21 @@ ROOT = Path(__file__).resolve().parents[1]
 SELF = Path(__file__).resolve()
 
 # Never descend into these (a 7.5G node_modules lives under apps/mobile).
-SKIP_DIRS = frozenset({
-    "node_modules", ".venv", "__pycache__", "dist", "build", ".git",
-    ".next", "coverage", ".mypy_cache", ".ruff_cache", "test_results",
-})
+SKIP_DIRS = frozenset(
+    {
+        "node_modules",
+        ".venv",
+        "__pycache__",
+        "dist",
+        "build",
+        ".git",
+        ".next",
+        "coverage",
+        ".mypy_cache",
+        ".ruff_cache",
+        "test_results",
+    }
+)
 
 SCAN_ROOTS = ("domain", "packages", "apps", "scripts")
 PY = (".py",)
@@ -44,39 +55,30 @@ MARKER_EXTS = (".py", ".ts", ".tsx")
 LOGGER_FSTRING = re.compile(r"(?:logger|logging)\.(?:info|warning|error|debug)\(f['\"]")
 BARE_EXCEPT = re.compile(r"except\s*:")
 # Built from parts so this source file does not match its own scan.
-MARKER = re.compile(r"\b(?:" + "|".join(("TO" + "DO", "FIX" + "ME", "HA" + "CK", "X" + "XX")) + r"):")
+MARKER = re.compile(
+    r"\b(?:" + "|".join(("TO" + "DO", "FIX" + "ME", "HA" + "CK", "X" + "XX")) + r"):"
+)
 
 # Custom loggers whose contract rejects lazy %-args — there the f-string
 # IS the correct call (StructuredLogger.info(message, **fields): one
 # positional message only). Extend only via review.
 FSTRING_EXEMPT = {
-    "packages/avion/src/avion/core/session.py":
-        "avion StructuredLogger.info(message, **fields) — single positional; f-string required",
+    "packages/avion/src/avion/core/session.py": "avion StructuredLogger.info(message, **fields) — single positional; f-string required",
 }
 
 # Existing prints that ARE the product surface (2026-10-04 sweep: 92/92
 # legitimate). New files are never pre-exempted; extend only via review.
 PRINT_ALLOWLIST = {
-    "domain/shell/_internal/world_driver.py":
-        "TUI/world renderer — print is the frame writer",
-    "domain/multimodal/_internal/phoneme_encoder_cli.py":
-        "CLI tool — stdout is its output channel",
-    "domain/infrastructure/_internal/inference_engine.py":
-        "ENGINE_READY parent-process protocol handshake",
-    "domain/logging/_internal/config.py":
-        "bootstrap warning — cannot log while configuring logging",
-    "domain/shell/_internal/input_device.py":
-        "terminal echo in readline()",
-    "domain/shell/_internal/realm_live.py":
-        "argparse CLI run summary",
-    "domain/training/_internal/lm_eval_char.py":
-        "--json machine-readable stdout mode",
-    "domain/journeys/runner.py":
-        "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
-    "domain/shell/_internal/cmds/dashboard.py":
-        "dashboard watch-loop renderer — terminal frames ARE its output",
-    "domain/shell/_internal/cmds/status.py":
-        "status --json machine-readable stdout mode (CLI result channel)",
+    "domain/shell/_internal/world_driver.py": "TUI/world renderer — print is the frame writer",
+    "domain/multimodal/_internal/phoneme_encoder_cli.py": "CLI tool — stdout is its output channel",
+    "domain/infrastructure/_internal/inference_engine.py": "ENGINE_READY parent-process protocol handshake",
+    "domain/logging/_internal/config.py": "bootstrap warning — cannot log while configuring logging",
+    "domain/shell/_internal/input_device.py": "terminal echo in readline()",
+    "domain/shell/_internal/realm_live.py": "argparse CLI run summary",
+    "domain/training/_internal/lm_eval_char.py": "--json machine-readable stdout mode",
+    "domain/journeys/runner.py": "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
+    "domain/shell/_internal/cmds/dashboard.py": "dashboard watch-loop renderer — terminal frames ARE its output",
+    "domain/shell/_internal/cmds/status.py": "status --json machine-readable stdout mode (CLI result channel)",
 }
 
 
@@ -110,6 +112,41 @@ def line_hits(pattern, exts):
     return found
 
 
+def bare_except_hits():
+    """Real ``except:`` handlers via AST, same file scope as ``line_hits``.
+
+    AST rather than the ``BARE_EXCEPT`` line-regex because prose counts as a
+    hit under text matching: ``atomic_write.py`` quotes the banned pattern
+    (``except: unlink``) while explaining why it exists, and the scanner
+    flagged its own rule's documentation. Only a parseable
+    ``ExceptHandler`` with no type is a violation; a file that fails to parse
+    falls back to the regex so unparsable code stays conservatively covered.
+    """
+    found = []
+    for path in iter_files(PY):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(text, filename=str(path))
+        except SyntaxError:
+            for lineno, line in enumerate(text.splitlines(), 1):
+                if BARE_EXCEPT.search(line):
+                    found.append(f"{rel}:{lineno}: {line.strip()[:120]}")
+            continue
+        lines = text.splitlines()
+        hits = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler) and node.type is None:
+                lineno = node.lineno
+                line = lines[lineno - 1] if 0 < lineno <= len(lines) else ""
+                hits.append(f"{rel}:{lineno}: {line.strip()[:120]}")
+        found.extend(sorted(hits))
+    return found
+
+
 def fmt(found, limit=40):
     body = "\n".join(found[:limit])
     extra = len(found) - limit
@@ -129,8 +166,13 @@ def test_no_fstring_logger_calls():
 
 
 def test_no_bare_except():
-    """Bare except: swallows SystemExit/KeyboardInterrupt — catch types."""
-    found = line_hits(BARE_EXCEPT, PY)
+    """Bare except: swallows SystemExit/KeyboardInterrupt — catch types.
+
+    Matches the pattern, not the prose (``bare_except_hits``): a line-regex
+    flags docstrings that quote ``except:`` while documenting why it is
+    banned, which is how this gate went red with zero real violations.
+    """
+    found = bare_except_hits()
     assert not found, "bare except clauses (catch explicit types):\n" + fmt(found)
 
 
@@ -148,11 +190,11 @@ def _main_guard_ranges(tree):
         test = node.test
         if not (isinstance(test.left, ast.Name) and test.left.id == "__name__"):
             continue
-        if not any(isinstance(c, ast.Constant) and c.value == "__main__"
-                   for c in test.comparators):
+        if not any(isinstance(c, ast.Constant) and c.value == "__main__" for c in test.comparators):
             continue
-        end = max((getattr(s, "end_lineno", node.lineno) for s in ast.walk(node)),
-                  default=node.lineno)
+        end = max(
+            (getattr(s, "end_lineno", node.lineno) for s in ast.walk(node)), default=node.lineno
+        )
         ranges.append((node.lineno, end))
     return ranges
 
@@ -177,8 +219,11 @@ def test_print_only_in_exempted_stdout_channels():
             continue
         guards = _main_guard_ranges(tree)
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id == "print"):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "print"
+            ):
                 continue
             if any(kw.arg == "file" for kw in node.keywords):
                 continue  # stderr/stderr-targeted warnings
