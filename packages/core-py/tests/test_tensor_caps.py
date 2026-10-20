@@ -103,13 +103,19 @@ class TestCapsMatrix:
         out = TensorDevice().matmul([[1.0, 2.0]], [[3.0], [4.0]])
         assert out.dtype == np.float64
 
-    def test_backend_reports_phase1_truth(self):
-        # No native routing yet: engine is numpy, nothing routed, no parity.
-        backend = TensorDevice().caps()["backend"]
-        assert backend["engine"] == "numpy"
-        assert backend["native_available"] is False
-        assert backend["native_ops"] == []
-        assert TensorDevice().caps()["parity"] == []
+    def test_backend_reports_reality(self):
+        # Phase-1 (numpy, nothing routed) and phase-2 (native-cpu, routed)
+        # are both legal snapshots of ONE invariant: engine name,
+        # availability, routed ops, and parity must never disagree.
+        caps = TensorDevice().caps()
+        backend = caps["backend"]
+        assert backend["engine"] in ("numpy", "native-cpu")
+        routed = backend["native_ops"]
+        assert (backend["engine"] == "native-cpu") == (len(routed) > 0)
+        assert backend["native_available"] == (len(routed) > 0)
+        assert routed == sorted(routed)
+        # today every routed op ships with a parity test — drift guard
+        assert caps["parity"] == routed
 
     def test_info_contract_unchanged(self):
         # CAPS is a pure addition — info() keeps its existing shape.
@@ -130,7 +136,17 @@ def _probe_args(cmd: str) -> tuple:
     return (scalar,)
 
 
-@pytest.mark.xfail(reason="phase 2: native routing not landed yet", strict=False)
+def _has_compiler() -> bool:
+    import shutil
+
+    return shutil.which("gcc") is not None or shutil.which("clang") is not None
+
+
+@pytest.mark.skipif(not _has_compiler(), reason="no C compiler — numpy stays the engine")
 def test_phase2_native_backend_present():
+    # RED until card d74e2cef phase 2 lands (compiler exists, engine
+    # still numpy) — flips green with the routing, no skip on this box.
     backend = TensorDevice().caps()["backend"]
     assert backend["native_available"] is True
+    assert backend["engine"] == "native-cpu"
+    assert backend["native_ops"]
