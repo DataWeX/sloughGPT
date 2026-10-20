@@ -727,7 +727,7 @@ def _print_summary(api_lines, web_lines, status, api_port=8000, web_port=3000):
 def cmd_serve(args):
     """Start HTTP inference server.
 
-    With --web: starts full FastAPI server + Next.js web UI and opens browser.
+    With --web: starts full FastAPI server + web UI (vite dev) and opens browser.
     With --mobile: starts FastAPI server + React Native metro bundler.
     Without flags: starts the full FastAPI server only (API-only mode).
 
@@ -1194,7 +1194,7 @@ def _cmd_api_and_mobile(args):
 
 
 def _cmd_api_and_web(args):
-    """Start full FastAPI server + Next.js web frontend with browser auto-open."""
+    """Start full FastAPI server + vite web frontend with browser auto-open."""
     root = _repo_root()
     api_port = getattr(args, "port", 8000)
     web_port = getattr(args, "web_port", 3000)
@@ -1281,10 +1281,6 @@ def _cmd_api_and_web(args):
         if k in os.environ:
             env[k] = os.environ[k]
 
-    # Set NEXTAUTH_URL to suppress NextAuth warning
-    if "NEXTAUTH_URL" not in env:
-        env["NEXTAUTH_URL"] = f"http://localhost:{web_port}"
-
     # ── Start FastAPI server ─────────────────────────────────────
     if shutdown[0]:
         return
@@ -1317,103 +1313,20 @@ def _cmd_api_and_web(args):
         )
         api_thread.start()
 
-    # ── Build standalone if needed ──────────────────────────────
+    # ── Start Web frontend (vite channel — card 2deae375) ────────
     web_root = root / "apps" / "web"
-    standalone_dir = web_root / ".next" / "standalone"
-    server_js_candidates = [
-        standalone_dir / "server.js",
-        standalone_dir / "apps" / "web" / "server.js",
-    ]
-    server_js = next((p for p in server_js_candidates if p.is_file()), server_js_candidates[0])
 
-    if not server_js.is_file():
-        build_log.step("Building Next.js standalone (first time)...")
-        # Force-clean .next to avoid stale/locked artifacts on macOS
-        next_cache = web_root / ".next"
-        if next_cache.is_dir():
-            subprocess.run(["rm", "-rf", str(next_cache)], check=False)
-        build_env = {**env, "NEXT_TELEMETRY_DISABLED": "1"}
-        build_proc = subprocess.Popen(
-            ["npx", "next", "build"],
-            cwd=str(web_root),
-            env=build_env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        build_lines = deque(maxlen=200)
-        build_thread = threading.Thread(
-            target=_read_stream, args=(build_proc.stdout, build_lines, stop_event), daemon=True
-        )
-        build_thread.start()
-        build_proc.wait()
-        if build_proc.returncode != 0:
-            build_log.error("Next.js build failed")
-            build_log.info("Relevant build output:")
-            for line in _extract_error_lines(build_lines):
-                build_log.info(f"  | {line}")
-            stop_event.set()
-            # Own the API process here — returning without cleanup leaks it.
-            _cleanup(api_proc, None, api_port, web_port)
-            return
-        build_log.success("Build complete")
-        if shutdown[0]:
-            return
-
-    # ── Copy static assets for standalone ───────────────────────
-    standalone_root = server_js.parent
-    static_src = web_root / ".next" / "static"
-    static_dst = standalone_root / ".next" / "static"
-    if static_src.is_dir() and not static_dst.is_dir():
-        import shutil
-
-        static_dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(static_src, static_dst)
-
-    public_src = web_root / "public"
-    public_dst = standalone_root / "public"
-    if public_src.is_dir() and not public_dst.is_dir():
-        import shutil
-
-        for dirpath, dirnames, filenames in os.walk(public_src, followlinks=False):
-            rel = os.path.relpath(dirpath, public_src)
-            dst_dir = public_dst / rel
-            dst_dir.mkdir(parents=True, exist_ok=True)
-            for f in filenames:
-                src_file = os.path.join(dirpath, f)
-                if os.path.islink(src_file) and not os.path.exists(src_file):
-                    continue
-                shutil.copy2(src_file, dst_dir / f)
-
-    # ── Start Web frontend ───────────────────────────────────────
-    web_env = {
-        **env,
-        "PORT": str(web_port),
-        "HOSTNAME": "0.0.0.0",
-        "NEXT_PUBLIC_API_URL": os.environ.get(
-            "NEXT_PUBLIC_API_URL", f"http://{args.host}:{api_port}"
-        ),
-    }
+    web_env = _web_dev_env(env, web_port, api_port)
 
     if not web_reused:
-        if server_js.is_file():
-            web_proc = subprocess.Popen(
-                ["node", "server.js"],
-                cwd=str(server_js.parent.resolve()),
-                env=web_env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-        else:
-            web_proc = subprocess.Popen(
-                _web_dev_cmd(web_port),
-                cwd=str(web_root.resolve()),
-                env=web_env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+        web_proc = subprocess.Popen(
+            _web_dev_cmd(web_port),
+            cwd=str(web_root.resolve()),
+            env=web_env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
         web_thread = threading.Thread(
             target=_read_stream,
@@ -1521,14 +1434,9 @@ def _cmd_api_and_web(args):
                     _handle_eaddrinuse(web_port, "web")
                     break
                 log.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
-                web_cwd = (
-                    str(server_js.parent.resolve())
-                    if server_js.is_file()
-                    else str(web_root.resolve())
-                )
                 web_proc = subprocess.Popen(
-                    ["node", "server.js"] if server_js.is_file() else _web_dev_cmd(web_port),
-                    cwd=web_cwd,
+                    _web_dev_cmd(web_port),
+                    cwd=str(web_root.resolve()),
                     env=web_env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,

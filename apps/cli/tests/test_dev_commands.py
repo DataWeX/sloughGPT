@@ -477,6 +477,74 @@ class TestCmdApiAndWebMonitorLoop:
             # The function should complete without crashing
 
 
+class TestCmdApiAndWebViteChannel:
+    """`slo serve --web` must spawn the vite channel — never npx next / node server.js.
+
+    Card 2deae375: the CLI's --web flag kept the retired Next path alive
+    (`npx next build` + `.next/standalone/server.js`) while the API side
+    moved to serving dist-vite. Both spawn sites (initial + crash-restart)
+    now go through `_web_dev_cmd`, and a source scan keeps the Next path
+    from creeping back into apps/cli/src.
+    """
+
+    def test_serve_spawns_npm_dev_never_next(self, mock_log, tmp_path):
+        from commands.dev import _cmd_api_and_web
+
+        args = MagicMock()
+        args.host = "localhost"
+        args.port = 8000
+        args.web_port = 3000
+
+        popen_calls = []
+
+        def fake_popen(cmd, **kwargs):
+            popen_calls.append(list(cmd))
+            proc = MagicMock()
+            proc.poll.return_value = None
+            return proc
+
+        with (
+            patch("commands.dev.subprocess.Popen", side_effect=fake_popen),
+            patch("commands.dev._is_port_bound", return_value=False),
+            patch("commands.dev._kill_port"),
+            # reuse check must miss (so both children spawn), readiness
+            # poll must hit (so the startup waits exit immediately)
+            patch("commands.dev._check_api_ready", side_effect=[False, True]),
+            patch("commands.dev._check_web_ready", return_value=False),
+            patch("commands.dev._check_port", return_value=True),
+            patch("commands.dev._repo_root", return_value=tmp_path),
+            patch("commands.dev._package_dev_script", return_value="vite"),
+            patch("commands.dev._read_stream"),
+            patch("commands.dev._cleanup"),
+            patch("commands.dev.find_server_python", return_value="/usr/bin/python3"),
+            patch("commands.dev.signal"),
+            patch("commands.dev.webbrowser"),
+            patch("commands.dev.time") as mock_time,
+        ):
+            mock_time.sleep.side_effect = [None, None, KeyboardInterrupt]
+            _cmd_api_and_web(args)
+
+        web_calls = [c for c in popen_calls if c[:3] == ["npm", "run", "dev"]]
+        assert web_calls, f"vite child never spawned: {popen_calls}"
+        flat = [" ".join(c) for c in popen_calls]
+        assert not any("next" in c for c in flat), flat
+        assert not any("server.js" in c for c in flat), flat
+
+    def test_no_next_path_in_cli_sources(self):
+        from pathlib import Path
+
+        import commands.dev as mod
+
+        src_dir = Path(mod.__file__).parent
+        offenders = []
+        for f in sorted(src_dir.glob("*.py")):
+            src = f.read_text(encoding="utf-8")
+            for needle in ("next build", ".next", '"server.js"'):
+                if needle in src:
+                    offenders.append(f"{f.name}: {needle}")
+        assert not offenders, f"Next serve path reintroduced: {offenders}"
+
+
 class TestStartupBudget:
     """The CLI's API-wait budget must cover the server's real startup cost."""
 
