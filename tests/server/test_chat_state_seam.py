@@ -173,7 +173,7 @@ def test_generate_tracked_returns_backend_object_untouched(manager):
     sentinel = TurnResult(text="full reply", session_id="s")
     stored: list[str] = []
 
-    async def _gen():
+    async def _gen(_stop):
         return sentinel
 
     with (
@@ -196,6 +196,57 @@ def test_generate_tracked_returns_backend_object_untouched(manager):
 
     assert result is sentinel
     assert stored == ["full reply"]
+
+
+def test_generate_tracked_delivers_the_registered_stop_event(manager):
+    """The stop event handed to the callable must be the one the registry sets.
+
+    This is the whole cancel channel: ``_track`` mints the ``threading.Event``
+    and registers ``stop.set`` as the cancel callback, so the ONLY way a cancel
+    reaches the token loop is if that same object is passed into the callable.
+    A discarded ``_stop`` leaves ``CancelManager.cancel()`` firing into a flag
+    nobody reads — the API reports ``cancelled: true`` while generation runs to
+    completion. Both tracked entry points must deliver it.
+    """
+    import threading
+
+    stop = threading.Event()
+    seen: dict[str, object] = {}
+
+    async def _gen(received):
+        seen["stop"] = received
+        return TurnResult(text="ok", session_id="s")
+
+    async def _stream(received):
+        seen["stream_stop"] = received
+        if False:  # pragma: no cover - makes this an async generator
+            yield None
+
+    async def _drain():
+        async for _ in manager.generate_stream_tracked(
+            "s",
+            [{"role": "user", "content": "hi"}],
+            _stream,
+            text_of=lambda r: r.text,
+        ):
+            pass
+
+    with (
+        patch.object(ChatManager, "_track", return_value=("op-9", stop)),
+        patch.object(ChatManager, "_untrack"),
+        patch.object(ChatManager, "_store"),
+    ):
+        asyncio.run(
+            manager.generate_tracked(
+                "s", [{"role": "user", "content": "hi"}], _gen, text_of=lambda r: r.text
+            )
+        )
+        asyncio.run(_drain())
+
+    assert seen["stop"] is stop, "generate_tracked must deliver the registered stop event"
+    assert seen["stream_stop"] is stop, (
+        "generate_stream_tracked must deliver the registered stop event"
+    )
 
 
 def test_router_exposes_single_engine_seam():

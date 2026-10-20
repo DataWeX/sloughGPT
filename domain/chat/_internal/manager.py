@@ -212,7 +212,7 @@ class ChatManager:
         self,
         session_id: str,
         messages: list[dict[str, str]],
-        generate: Callable[[], Awaitable[Any]],
+        generate: Callable[[threading.Event], Awaitable[Any]],
         text_of: Callable[[Any], str],
     ) -> Any:
         """Own chat's per-session state around an EXTERNAL generation callable.
@@ -223,6 +223,13 @@ class ChatManager:
         _track/_store/_untrack; this is the seam that lets chat own its state
         without owning generation.
 
+        ``generate`` is called WITH the session's stop event. That is the whole
+        point of taking the callable here rather than running it directly: this
+        method both registers the cancel op and hands the other end of the same
+        ``threading.Event`` to the caller, so ``cancel_session`` → ``stop.set()``
+        is actually observed by the token loop instead of landing on a flag
+        nobody reads.
+
         ``generate`` returns whatever the caller's backend returns, and
         ``text_of`` projects that down to the assistant text worth persisting,
         so the original object (e.g. a full ChatResponse) is passed through
@@ -231,10 +238,10 @@ class ChatManager:
         Mirrors ``respond``'s tracking contract, including the finally-guarded
         untrack (see the note there for why not ``else``).
         """
-        op_id, _stop = self._track(session_id, f"chat:{session_id}")
+        op_id, stop = self._track(session_id, f"chat:{session_id}")
         error: str | None = None
         try:
-            result = await generate()
+            result = await generate(stop)
             self._store(session_id, messages, text_of(result))
             return result
         except Exception as exc:
@@ -248,7 +255,7 @@ class ChatManager:
         self,
         session_id: str,
         messages: list[dict[str, str]],
-        stream: Callable[[], AsyncIterator[Any]],
+        stream: Callable[[threading.Event], AsyncIterator[Any]],
         text_of: Callable[[Any], str],
     ) -> AsyncIterator[Any]:
         """Own chat's per-session state around an EXTERNAL token stream.
@@ -258,15 +265,19 @@ class ChatManager:
         yields the caller's items untouched (raw tokens, then the final result)
         and stores history once the stream completes.
 
+        ``stream`` is called WITH the session's stop event (see the note on
+        ``generate_tracked``): registering the op and delivering its flag are
+        one transaction, so a cancel fired mid-stream reaches the token loop.
+
         ``stream`` yields the caller's own items — typically raw ``str`` tokens
         followed by a final result object; ``text_of`` projects the assistant
         text off that final object for persistence.
         """
-        op_id, _stop = self._track(session_id, f"chat-stream:{session_id}")
+        op_id, stop = self._track(session_id, f"chat-stream:{session_id}")
         error: str | None = None
         result: Any = None
         try:
-            async for item in stream():
+            async for item in stream(stop):
                 if not isinstance(item, str):
                     result = item
                 yield item

@@ -3018,7 +3018,11 @@ class InferenceRouter:
             async for token in provider.chat_stream(
                 messages,
                 max_tokens=req.max_tokens,
-                cancel_event=None,
+                # The turn's stop flag: minted by whoever owns the registry
+                # (chat's manager) and delivered with the request. The provider
+                # polls is_set() each token, so a cancel fired mid-stream stops
+                # generation here. None only when the caller has no registry.
+                cancel_event=req.cancel_event,
                 session_id=session_id,
                 **gen_params,
             ):

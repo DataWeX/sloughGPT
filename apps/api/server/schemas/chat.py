@@ -11,6 +11,7 @@ layering violation. They now live here; ``routers/inference.py`` re-exports
 them for backwards compatibility with existing importers (mobile BFF, tests).
 """
 
+import threading
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -52,13 +53,18 @@ class ChatRequest(BaseModel):
         if self.max_new_tokens is not None and self.max_tokens == 128:
             object.__setattr__(self, "max_tokens", self.max_new_tokens)
 
-    def to_turn(self) -> TurnRequest:
+    def to_turn(self, cancel_event: threading.Event | None = None) -> TurnRequest:
         """Translate the wire contract into the engine's domain input.
 
         This is the edge translation the port depends on: the wire type stays a
         pydantic ``ChatRequest`` (HTTP/JSON coupling), the engine consumes a
         domain-native ``TurnRequest``. The dependency points *down* (app → domain),
         so neither side imports the other's layer.
+
+        ``cancel_event`` is deliberately NOT part of the wire contract — it is
+        never client-supplied. The chat manager mints it alongside the cancel op
+        and passes it down through the router; this translation is the one place
+        it crosses into the turn so the provider's token loop can observe it.
         """
         return TurnRequest(
             messages=[{"role": m.role, "content": m.content} for m in self.messages],
@@ -76,6 +82,7 @@ class ChatRequest(BaseModel):
             agent_id=self.agent_id,
             use_context_core=self.use_context_core,
             use_rag=self.use_rag,
+            cancel_event=cancel_event,
             model_fields_set=set(self.model_fields_set),
         )
 

@@ -29,6 +29,7 @@ fold of this stream performed at the edge (collect the tokens, return the last
 
 from __future__ import annotations
 
+import threading
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Awaitable, Protocol, runtime_checkable
@@ -56,6 +57,16 @@ class TurnRequest:
     agent_id: str | None = None
     use_context_core: bool = True
     use_rag: bool = True
+    cancel_event: threading.Event | None = None
+    """Cooperative cancellation for this turn.
+
+    Created by whoever owns the cancellation registry (chat's manager) and
+    delivered with the request; the engine hands it straight to the provider's
+    token loop, which polls ``is_set()``. Cancel is part of the generation
+    contract — a stream that cannot be stopped is not a complete one — so it
+    travels with the turn rather than being resolved inside the engine. The
+    engine never imports the registry; it only reads the flag.
+    """
     model_fields_set: set[str] = field(default_factory=set)
 
 

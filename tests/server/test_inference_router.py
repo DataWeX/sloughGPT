@@ -236,6 +236,65 @@ class TestChatStream:
         assert resp.status_code == 200
 
 
+class TestChatStreamCancel:
+    """The cancel channel must reach the provider's token loop, end to end.
+
+    ``CancelManager`` sets a ``threading.Event``; the provider's token loop
+    polls ``is_set()``. The only way a cancel is real is if those are the SAME
+    object, so this walks the whole chain in one request:
+
+      chat manager `_track` mints stop  →  hands it to the stream factory
+        →  `_stream_tokens(request, stop)`  →  `to_turn(cancel_event=stop)`
+        →  `TurnRequest.cancel_event`  →  `stream_turn`  →  provider kwarg
+
+    Before the fix the factory took zero arguments, so ``_stop`` was discarded
+    and the provider always received ``None`` — the API still answered
+    ``cancelled: true`` while generation ran to completion.
+    """
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_memory_service")
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_cancel_event_reaches_provider(
+        self, mock_get_provider, mock_rag, mock_mem_svc, mock_enrich, client
+    ):
+        import threading
+
+        seen: dict = {}
+
+        async def _stream(messages, **kw):
+            seen["cancel_event"] = kw.get("cancel_event", "NOT_PASSED")
+            yield "hi"
+
+        mock_prov = MagicMock()
+        mock_prov.chat_stream = _stream
+        mock_get_provider.return_value = mock_prov
+        mock_mem_svc.return_value.stats.return_value = {"total_facts": 0}
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        resp = client.post(
+            "/chat/stream",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "session_id": "cancel-pin",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert "cancel_event" in seen, "provider.chat_stream was never called"
+        assert seen["cancel_event"] is not None, (
+            "provider received cancel_event=None — the registry's stop event was "
+            "dropped before reaching the token loop, so POST /chat/control "
+            "cancel would report success while generation continues"
+        )
+        assert isinstance(seen["cancel_event"], threading.Event)
+
+
 class TestChat:
     """POST /chat"""
 

@@ -16,6 +16,7 @@ Session state lives in session.py.
 """
 
 import logging
+import threading
 import time
 from collections.abc import AsyncIterator
 
@@ -58,6 +59,7 @@ class ChatRouter:
     async def _stream_tokens(
         self,
         request: ChatRequest,
+        cancel_event: threading.Event | None = None,
     ) -> AsyncIterator:
         """The single path: the engine's raw-token stream.
 
@@ -69,9 +71,14 @@ class ChatRouter:
         engine's own domain — ``domain/generate``; chat owns its own state — the
         cancellation registry and conversation history — through the manager's
         public entry.
+
+        ``cancel_event`` is the manager's stop flag for this session, delivered
+        by the tracked wrapper that owns the registry; it rides the turn down to
+        the provider's token loop. Chat never polls it itself — it only forwards
+        the channel it was handed.
         """
         engine = get_chat_engine()
-        turn_req = request.to_turn()
+        turn_req = request.to_turn(cancel_event=cancel_event)
         async for item in engine.stream(turn_req):
             yield item
 
@@ -87,8 +94,8 @@ class ChatRouter:
         manager = get_chat_manager()
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
-        async def _gen():
-            return await fold(self._stream_tokens(request))
+        async def _gen(stop: threading.Event):
+            return await fold(self._stream_tokens(request, stop))
 
         turn = await manager.generate_tracked(
             request.session_id or "default",
@@ -130,7 +137,7 @@ class ChatRouter:
                 async for item in manager.generate_stream_tracked(
                     session_id,
                     messages,
-                    lambda: self._stream_tokens(request),
+                    lambda stop: self._stream_tokens(request, stop),
                     text_of=lambda resp: resp.text,
                 ):
                     if await http_request.is_disconnected():
