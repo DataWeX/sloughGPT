@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type Episode } from '@/lib/consciousness-controller'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
   KpiGrid, StatCard, SectionHeader, FoldSection, Button,
@@ -10,16 +10,6 @@ import {
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-
-interface Episode {
-  input: string
-  response: string
-  narrative: string
-  qualia: Record<string, number>
-  growth_delta: number
-  rating: number
-  timestamp: string
-}
 
 interface QualiaPoint {
   valence: number
@@ -178,7 +168,7 @@ export default function ConsciousnessAnalyticsPage() {
       ])
 
       if (episodesResult.status === 'fulfilled') {
-        setEpisodes((episodesResult.value as unknown as { episodes: Episode[] })?.episodes ?? [])
+        setEpisodes(episodesResult.value?.episodes ?? [])
       }
       if (qualiaResult.status === 'fulfilled') {
         setQualiaHistory((qualiaResult.value as unknown as { qualia: QualiaPoint[] })?.qualia ?? [])

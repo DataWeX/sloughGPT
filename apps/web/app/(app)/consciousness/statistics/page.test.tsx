@@ -40,7 +40,7 @@ const mockEpisodes = [
     qualia: { valence: 0.5, arousal: 0.3, novelty: 0.6, coherence: 0.7, salience: 0.4, certainty: 0.8, complexity: 0.3 },
     growth_delta: 0.05,
     rating: 4,
-    timestamp: '2025-01-15T10:00:00Z',
+    timestamp: 1736935200,
   },
   {
     input: 'Test input 2',
@@ -49,7 +49,7 @@ const mockEpisodes = [
     qualia: { valence: 0.4, arousal: 0.2, novelty: 0.5, coherence: 0.6, salience: 0.3, certainty: 0.7, complexity: 0.4 },
     growth_delta: -0.02,
     rating: 2,
-    timestamp: '2025-01-15T11:00:00Z',
+    timestamp: 1736938800,
   },
 ]
 

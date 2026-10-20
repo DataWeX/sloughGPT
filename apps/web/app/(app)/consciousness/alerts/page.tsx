@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type Episode } from '@/lib/consciousness-controller'
 import {
   Badge,
   Button,
@@ -29,14 +29,6 @@ interface HealthData {
   positive_ratio: number
   qualia: Record<string, number>
   last_reflection: string
-}
-
-interface Episode {
-  timestamp: number
-  growth_delta: number
-  rating: number
-  qualia: Record<string, number>
-  [key: string]: unknown
 }
 
 interface EpisodesData {
@@ -187,7 +179,7 @@ export default function ConsciousnessAlertsPage() {
         setHealth(healthResult.value as unknown as HealthData)
       }
       if (episodesResult.status === 'fulfilled') {
-        setEpisodesData(episodesResult.value as unknown as EpisodesData)
+        setEpisodesData(episodesResult.value)
       }
       setLastCheck(Date.now() / 1000)
     } catch (e) {

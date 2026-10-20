@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type Episode } from '@/lib/consciousness-controller'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
   KpiGrid, StatCard, SectionHeader, FoldSection, Button,
@@ -10,16 +10,6 @@ import {
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-
-interface Episode {
-  input: string
-  response: string
-  narrative: string
-  qualia: Record<string, number>
-  growth_delta: number
-  rating: number
-  timestamp: string
-}
 
 interface StatusData {
   response_quality: number
@@ -187,7 +177,7 @@ export default function ConsciousnessStatisticsPage() {
       ])
 
       if (epRes.status === 'fulfilled') {
-        setEpisodes((epRes.value.episodes ?? []) as unknown as Episode[])
+        setEpisodes(epRes.value.episodes ?? [])
       }
       if (statusRes.status === 'fulfilled') {
         setStatusData(statusRes.value as unknown as StatusData)
@@ -235,7 +225,7 @@ export default function ConsciousnessStatisticsPage() {
       }
     })
 
-    const timestamps = episodes.map(e => new Date(e.timestamp).getTime()).sort((a, b) => a - b)
+    const timestamps = episodes.map(e => new Date(e.timestamp * 1000).getTime()).sort((a, b) => a - b)
     let episodesPerDay = 0
     if (timestamps.length > 1) {
       const spanMs = timestamps[timestamps.length - 1] - timestamps[0]
@@ -263,7 +253,7 @@ export default function ConsciousnessStatisticsPage() {
   const episodesByDay = useMemo(() => {
     const map = new Map<string, number>()
     episodes.forEach(e => {
-      const day = e.timestamp.slice(0, 10)
+      const day = new Date(e.timestamp * 1000).toISOString().slice(0, 10)
       map.set(day, (map.get(day) ?? 0) + 1)
     })
     const sorted = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
@@ -277,7 +267,7 @@ export default function ConsciousnessStatisticsPage() {
     const map = new Map<string, { sum: number; count: number }>()
     episodes.forEach(e => {
       if (e.rating <= 0) return
-      const day = e.timestamp.slice(0, 10)
+      const day = new Date(e.timestamp * 1000).toISOString().slice(0, 10)
       const existing = map.get(day) ?? { sum: 0, count: 0 }
       existing.sum += e.rating
       existing.count++

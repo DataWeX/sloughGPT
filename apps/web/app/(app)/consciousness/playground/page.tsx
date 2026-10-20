@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type Episode } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
 } from '@sloughgpt/strui'
@@ -34,17 +34,10 @@ interface ConsciousnessStatus {
   last_reflection: string
 }
 
-interface Episode {
-  timestamp: number
-  input_text: string
-  response: string
-  narrative: string
-  self_insight: string
-  growth_delta: number
-  qualia: QualiaState
-  rating: number
-  index: number
-}
+// `index` is read by the feedback flow but is never present in the API
+// payload (kanban card 0a0e81f1) — optional so honest types preserve the
+// current fallback behavior.
+type IndexedEpisode = Episode & { index?: number }
 
 const QUALIA_DIMENSIONS = [
   { key: 'valence', color: 'rgb(var(--chart-1))', label: 'Valence' },
@@ -87,7 +80,7 @@ export default function ConsciousnessPlaygroundPage() {
   const [processing, setProcessing] = useState(false)
   const [reflectionResult, setReflectionResult] = useState<string | null>(null)
   const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
-  const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [episodes, setEpisodes] = useState<IndexedEpisode[]>([])
   const [ratingEpisode, setRatingEpisode] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -103,7 +96,7 @@ export default function ConsciousnessPlaygroundPage() {
   const fetchEpisodes = useCallback(async () => {
     try {
       const data = await consciousnessController.getEpisodeHistory(20)
-      setEpisodes((data as any).episodes || [])
+      setEpisodes(data.episodes || [])
     } catch (e) {
       console.error('Failed to fetch episodes', e)
     }
@@ -122,7 +115,7 @@ export default function ConsciousnessPlaygroundPage() {
     setReflectionResult(null)
     try {
       const data = await consciousnessController.reflect()
-      setReflectionResult((data as any)?.reflection ?? 'No reflection generated')
+      setReflectionResult(data.reflection ?? 'No reflection generated')
       addToast('Reflection generated', 'success')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
@@ -139,7 +132,7 @@ export default function ConsciousnessPlaygroundPage() {
     setProcessing(true)
     try {
       const data = await consciousnessController.reflect()
-      setReflectionResult((data as any)?.reflection ?? 'No reflection generated')
+      setReflectionResult(data.reflection ?? 'No reflection generated')
       await Promise.all([fetchStatus(), fetchEpisodes()])
       addToast('Input processed through consciousness', 'success')
       setInput('')
@@ -163,9 +156,9 @@ export default function ConsciousnessPlaygroundPage() {
     }
   }
 
-  const qualia = (status as any)?.current_qualia ?? {}
-  const beliefs = (status as any)?.beliefs ?? {}
-  const rq = (status as any)?.response_quality ?? {}
+  const qualia: QualiaState = status?.current_qualia ?? {}
+  const beliefs: BeliefsState = status?.beliefs ?? {}
+  const rq: Partial<ConsciousnessStatus['response_quality']> = status?.response_quality ?? {}
 
   if (loading) {
     return (
@@ -248,7 +241,7 @@ export default function ConsciousnessPlaygroundPage() {
                         />
                       </div>
                       <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">
-                        {((qualia[key] ?? 0) as number).toFixed(2)}
+                        {(qualia[key] ?? 0).toFixed(2)}
                       </span>
                     </div>
                   ))}
@@ -274,13 +267,13 @@ export default function ConsciousnessPlaygroundPage() {
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
-                            width: `${Math.max(0, Math.min(100, ((beliefs[key] ?? 0) as number) * 100))}%`,
+                            width: `${Math.max(0, Math.min(100, (beliefs[key] ?? 0) * 100))}%`,
                             backgroundColor: color,
                           }}
                         />
                       </div>
                       <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">
-                        {(((beliefs[key] ?? 0) as number) * 100).toFixed(0)}%
+                        {((beliefs[key] ?? 0) * 100).toFixed(0)}%
                       </span>
                     </div>
                   ))}
@@ -316,7 +309,7 @@ export default function ConsciousnessPlaygroundPage() {
                             <Button
                               key={r}
                               size="sm"
-                              variant={r === (ep as any).rating ? 'default' : 'outline'}
+                              variant={r === ep.rating ? 'default' : 'outline'}
                               className="h-6 px-2 text-[10px]"
                               onClick={() => handleFeedback(realIndex, r)}
                               disabled={ratingEpisode === realIndex}
@@ -341,7 +334,7 @@ export default function ConsciousnessPlaygroundPage() {
                         </Badge>
                         {ep.qualia && Object.entries(ep.qualia).slice(0, 3).map(([k, v]) => (
                           <span key={k} className="text-[10px] text-muted-foreground">
-                            {k}: {(v as number).toFixed(2)}
+                            {k}: {v.toFixed(2)}
                           </span>
                         ))}
                       </div>
