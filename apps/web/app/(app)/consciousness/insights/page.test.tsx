@@ -9,6 +9,7 @@ vi.mock('@/lib/consciousness-controller', () => ({
     healthCheck: vi.fn(),
     evaluate: vi.fn(),
     getPersonality: vi.fn(),
+    getStats: vi.fn(),
   },
 }))
 
@@ -79,6 +80,7 @@ describe('ConsciousnessInsightsPage', () => {
     vi.mocked(consciousnessController.healthCheck).mockResolvedValue(mockHealth as any)
     vi.mocked(consciousnessController.evaluate).mockResolvedValue(mockEval as any)
     vi.mocked(consciousnessController.getPersonality).mockResolvedValue(mockPersonality as any)
+    vi.mocked(consciousnessController.getStats).mockResolvedValue({})
   })
 
   it('renders without crashing', async () => {

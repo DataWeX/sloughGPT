@@ -47,7 +47,7 @@ describe('AllSettingsPage', () => {
     vi.clearAllMocks()
     mockController.getStatus.mockResolvedValue(mockStatus as any)
     mockController.updateConfig.mockResolvedValue({ updated: true })
-    mockController.seedData.mockResolvedValue({ seeded: true })
+    mockController.seedData.mockResolvedValue({ seeded: 10 })
     mockController.clearEpisodes.mockResolvedValue({ cleared: true, episodes_cleared: 50 })
     mockController.resetBeliefs.mockResolvedValue({ reset: true, beliefs: {} })
     mockController.resetPersonality.mockResolvedValue({ reset: true })

@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type Episode } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
 } from '@sloughgpt/strui'
@@ -61,7 +61,7 @@ export default function ConsciousnessTestingPage() {
 
   const [stateData, setStateData] = useState<Record<string, unknown> | null>(null)
   const [beliefsData, setBeliefsData] = useState<Record<string, unknown> | null>(null)
-  const [episodesData, setEpisodesData] = useState<Array<Record<string, unknown>>>([])
+  const [episodesData, setEpisodesData] = useState<Episode[]>([])
   const [personalityData, setPersonalityData] = useState<Record<string, unknown> | null>(null)
   const [stateLoading, setStateLoading] = useState(false)
 
@@ -129,10 +129,13 @@ export default function ConsciousnessTestingPage() {
         const data = await consciousnessController.reflect()
         results.push({
           input,
-          growth_delta: (data as any).growth_delta ?? 0,
-          rating: (data as any).rating ?? 0,
-          qualia: (data as any).qualia ?? {},
-          narrative: (data as any).narrative ?? '',
+          // reflect() carries avg_growth — not per-row growth_delta/rating/qualia.
+          // Rows showed 0/{} before the truth-up too; rating has no source at all
+          // (ruling card 0a0e81f1).
+          growth_delta: data.avg_growth ?? 0,
+          rating: 0,
+          qualia: {},
+          narrative: data.narrative ?? '',
         })
         setBatchResults([...results])
       } catch {
@@ -162,7 +165,7 @@ export default function ConsciousnessTestingPage() {
       ])
       setStateData(statusData as unknown as Record<string, unknown>)
       setBeliefsData(selfModelData as unknown as Record<string, unknown>)
-      setEpisodesData(((episodesDataResult as any)?.episodes || []).slice(-5))
+      setEpisodesData(episodesDataResult.episodes.slice(-5))
       setPersonalityData(personalityDataResult as unknown as Record<string, unknown>)
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
@@ -187,7 +190,7 @@ export default function ConsciousnessTestingPage() {
     setSeedLoading(true)
     try {
       const data = await consciousnessController.seedData({ count: 50 })
-      addToast(`Seeded ${(data as any).seeded ?? 50} episodes`, 'success')
+      addToast(`Seeded ${data.seeded ?? 50} episodes`, 'success')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -303,27 +306,27 @@ export default function ConsciousnessTestingPage() {
             </Button>
             {manualResult && (
               <div className="space-y-2">
-                {(manualResult as any).qualia && (
+                {Boolean(manualResult.qualia) && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_testing.qualia')}</div>
                     <pre className="rounded-md border border-border/50 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-40 whitespace-pre-wrap">
-                      {JSON.stringify((manualResult as any).qualia, null, 2)}
+                      {JSON.stringify(manualResult.qualia, null, 2)}
                     </pre>
                   </div>
                 )}
-                {(manualResult as any).beliefs && (
+                {Boolean(manualResult.beliefs) && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_testing.beliefs')}</div>
                     <pre className="rounded-md border border-border/50 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-40 whitespace-pre-wrap">
-                      {JSON.stringify((manualResult as any).beliefs, null, 2)}
+                      {JSON.stringify(manualResult.beliefs, null, 2)}
                     </pre>
                   </div>
                 )}
-                {(manualResult as any).narrative && (
+                {Boolean(manualResult.narrative) && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_testing.narrative')}</div>
                     <div className="rounded-md border border-border/50 bg-muted/20 p-3 text-sm italic">
-                      {String((manualResult as any).narrative)}
+                      {String(manualResult.narrative)}
                     </div>
                   </div>
                 )}

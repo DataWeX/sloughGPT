@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController } from '@/lib/consciousness-controller'
+import { consciousnessController, type Episode, type HealthCheckResult, type EvalReport, type Personality } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
 } from '@sloughgpt/strui'
@@ -33,11 +33,11 @@ export default function ConsciousnessInsightsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [expandedCard, setExpandedCard] = useState<string | null>(null)
 
-  const [episodes, setEpisodes] = useState<any[]>([])
-  const [healthData, setHealthData] = useState<any>(null)
-  const [evalData, setEvalData] = useState<any>(null)
-  const [personalityData, setPersonalityData] = useState<any>(null)
-  const [statsData, setStatsData] = useState<any>(null)
+  const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [healthData, setHealthData] = useState<HealthCheckResult | null>(null)
+  const [evalData, setEvalData] = useState<EvalReport | null>(null)
+  const [personalityData, setPersonalityData] = useState<Personality | null>(null)
+  const [statsData, setStatsData] = useState<Record<string, unknown> | null>(null)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -46,11 +46,11 @@ export default function ConsciousnessInsightsPage() {
         consciousnessController.healthCheck(),
         consciousnessController.evaluate(),
         consciousnessController.getPersonality(),
-        (await import('@/lib/http-client')).apiGet('/consciousness/stats') as any,
+        consciousnessController.getStats(),
       ])
 
       if (epResult.status === 'fulfilled') {
-        setEpisodes((epResult.value as any)?.episodes ?? [])
+        setEpisodes(epResult.value.episodes ?? [])
       }
       if (healthResult.status === 'fulfilled') {
         setHealthData(healthResult.value)
@@ -83,7 +83,7 @@ export default function ConsciousnessInsightsPage() {
     const insights: Insight[] = []
 
     if (episodes.length >= 2) {
-      const growths = episodes.map((e: any) => e.growth_delta)
+      const growths = episodes.map((e) => e.growth_delta)
       const half = Math.floor(growths.length / 2)
       const firstHalf = growths.slice(0, half).reduce((a: number, b: number) => a + b, 0) / (half || 1)
       const secondHalf = growths.slice(half).reduce((a: number, b: number) => a + b, 0) / ((growths.length - half) || 1)
@@ -171,10 +171,10 @@ export default function ConsciousnessInsightsPage() {
     }
 
     if (episodes.length > 0) {
-      const rated = episodes.filter((e: any) => e.rating > 0)
+      const rated = episodes.filter((e) => e.rating > 0)
       if (rated.length > 0) {
-        const avgRating = rated.reduce((s: number, e: any) => s + e.rating, 0) / rated.length
-        const growths = rated.map((e: any) => e.growth_delta)
+        const avgRating = rated.reduce((s, e) => s + e.rating, 0) / rated.length
+        const growths = rated.map((e) => e.growth_delta)
         const avgGrowth = growths.reduce((a: number, b: number) => a + b, 0) / growths.length
         const consistent = (avgRating > 3 && avgGrowth > 0) || (avgRating < 3 && avgGrowth < 0)
 
@@ -195,7 +195,7 @@ export default function ConsciousnessInsightsPage() {
     }
 
     if (episodes.length > 0) {
-      const inputs = episodes.map((e: any) => (e.input_text ?? '').toLowerCase().slice(0, 50))
+      const inputs = episodes.map((e) => (e.input_text ?? '').toLowerCase().slice(0, 50))
       const unique = new Set(inputs).size
       const diversity = unique / inputs.length
 
@@ -263,7 +263,7 @@ export default function ConsciousnessInsightsPage() {
 
   const scoreTrend = useMemo(() => {
     if (episodes.length < 4) return 'stable'
-    const growths = episodes.map((e: any) => e.growth_delta)
+    const growths = episodes.map((e) => e.growth_delta)
     const half = Math.floor(growths.length / 2)
     const firstHalf = growths.slice(0, half).reduce((a: number, b: number) => a + b, 0) / (half || 1)
     const secondHalf = growths.slice(half).reduce((a: number, b: number) => a + b, 0) / ((growths.length - half) || 1)

@@ -100,7 +100,7 @@ describe('ConsciousnessMasterDashboardPage', () => {
     mockController.getEpisodeHistory.mockResolvedValue({ episodes: mockEpisodes } as any)
     mockController.getQualiaHistory.mockResolvedValue({ history: [] } as any)
     mockController.getBeliefsHistory.mockResolvedValue({ beliefs: [] } as any)
-    mockController.seedData.mockResolvedValue({ seeded: true })
+    mockController.seedData.mockResolvedValue({ seeded: 10 })
     mockController.reflect.mockResolvedValue({ reflection: 'Test reflection' })
   })
 

@@ -176,7 +176,7 @@ export const consciousnessController = {
     return apiPost('/consciousness/feedback', feedback)
   },
 
-  async seedData(data: Record<string, unknown>): Promise<{ seeded: boolean }> {
+  async seedData(data: Record<string, unknown>): Promise<{ seeded: number }> {
     const count = (data.count as number) || 30
     return apiPost(`/consciousness/seed?count=${count}`, {})
   },

@@ -42,7 +42,7 @@ describe('ConsciousnessQuickstartPage', () => {
     vi.clearAllMocks()
     mockController.updateConfig.mockResolvedValue({ updated: true })
     mockController.applyPersonalityPreset.mockResolvedValue({ applied: true })
-    mockController.seedData.mockResolvedValue({ seeded: true })
+    mockController.seedData.mockResolvedValue({ seeded: 10 })
     localStorage.clear()
   })
 
