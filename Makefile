@@ -42,7 +42,7 @@ test-py-slow:
 	cd packages/core-py && $(PY) -m pytest -m slow $(ARGS)
 
 test-py-training:
-	cd packages/core-py && $(PY) -m pytest tests/test_training_sequence.py tests/test_training_status.py tests/test_trainer_protocol.py tests/test_auto_trainer.py tests/test_distillation.py tests/test_distill_gpt2.py tests/test_video_trainer.py tests/test_mobile_training_store.py tests/test_pugqeep_checkpoint.py tests/test_pugqeep.py tests/test_pugqeep_generic.py -x -q $(ARGS)
+	cd packages/core-py && $(PY) -m pytest tests/test_training_sequence.py tests/test_training_status__corepy.py tests/test_trainer_protocol.py tests/test_auto_trainer.py tests/test_distillation.py tests/test_distill_gpt2.py tests/test_video_trainer.py tests/test_mobile_training_store.py tests/test_pugqeep_checkpoint.py tests/test_pugqeep.py tests/test_pugqeep_generic.py -x -q $(ARGS)
 
 test-py-all:
 	cd packages/core-py && $(PY) -m pytest -m "" $(ARGS)
