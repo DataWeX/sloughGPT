@@ -22,8 +22,8 @@ describe('SoulEngineWorker', () => {
     fw.emit({ type: 'ready' })
     await initP
 
-    const loadP = w.load('https://models.example/friendly.sou', CFG)
-    expect(fw.messages[1]).toMatchObject({ type: 'loaded', url: 'https://models.example/friendly.sou' })
+    const loadP = w.load('https://models.example/friendly.soul', CFG)
+    expect(fw.messages[1]).toMatchObject({ type: 'loaded', url: 'https://models.example/friendly.soul' })
     fw.emit({ type: 'loaded', metadata: { version: 3 } })
     await expect(loadP).resolves.toEqual({ metadata: { version: 3 } })
 
@@ -67,7 +67,7 @@ describe('createSoulEngine', () => {
     makeWebGPU(new Float32Array([0, 0]))
     const sou = makeLstmSou({ e: 2, h: 2, v: 3, nl: 1 }, { p7: new Float32Array([1, 5, 2]) })
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou })))
-    const engine = await createSoulEngine('https://models.example/friendly.sou', CFG)
+    const engine = await createSoulEngine('https://models.example/friendly.soul', CFG)
     expect(engine.ready).toBe(true)
     const tokens: string[] = []
     for await (const t of engine.generate('', 2, 0)) tokens.push(t)
@@ -91,7 +91,7 @@ describe('worker.ts protocol', () => {
     await onmessage(msg({ type: 'init' }))
     expect(post).toHaveBeenCalledWith({ type: 'ready' })
 
-    await onmessage(msg({ type: 'load', url: 'https://models.example/friendly.sou', config: CFG }))
+    await onmessage(msg({ type: 'load', url: 'https://models.example/friendly.soul', config: CFG }))
     expect(post).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'loaded', metadata: expect.any(Object) }),
     )
@@ -152,7 +152,7 @@ describe('worker.ts protocol', () => {
     expect(post).toHaveBeenCalledWith({ type: 'ready' })
 
     post.mockClear()
-    await onmessage(msg({ type: 'load', url: 'https://models.example/baby.sou' }))
+    await onmessage(msg({ type: 'load', url: 'https://models.example/baby.soul' }))
     expect(post).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'loaded', metadata: expect.any(Object) }),
     )
@@ -175,7 +175,7 @@ describe('worker.ts protocol', () => {
     expect(post).toHaveBeenCalledWith({ type: 'ready' })
 
     post.mockClear()
-    await onmessage(msg({ type: 'load', url: 'https://models.example/lstm.sou' }))
+    await onmessage(msg({ type: 'load', url: 'https://models.example/lstm.soul' }))
     expect(post).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'loaded', metadata: expect.any(Object) }),
     )
@@ -195,7 +195,7 @@ describe('worker.ts protocol', () => {
     const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
 
     await onmessage(msg({ type: 'init' }))
-    await onmessage(msg({ type: 'load', url: 'https://models.example/lstm.sou' }))
+    await onmessage(msg({ type: 'load', url: 'https://models.example/lstm.soul' }))
 
     // Token 1 is 'b' (argmax). eosToken=1 should stop immediately.
     post.mockClear()

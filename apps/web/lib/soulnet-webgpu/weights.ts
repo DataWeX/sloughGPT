@@ -1,10 +1,10 @@
 /**
- * SoulNet .sou weight file parser.
+ * SoulNet .soul weight file parser.
  *
  * ## Canonical v3 Binary Format (source of truth)
  *
  * ```
- * [4 bytes] SOU_MAGIC = b"SOUL"
+ * [4 bytes] SOUL_MAGIC = b"SOUL"
  * [4 bytes] version (uint32 LE, =3)
  * [4 bytes] json_len (uint32 LE)
  * [json_len bytes] JSON metadata (UTF-8)
@@ -28,7 +28,7 @@
  *
  * ## v2 Format (legacy, JSON weights — no longer produced)
  * ```
- * [4 bytes] SOU_MAGIC
+ * [4 bytes] SOUL_MAGIC
  * [4 bytes] version (uint32 LE, =2)
  * [4 bytes] json_len
  * [json_len bytes] JSON metadata
@@ -37,7 +37,7 @@
  * ```
  */
 
-const SOU_MAGIC = new Uint8Array([0x53, 0x4f, 0x55, 0x4c])
+const SOUL_MAGIC = new Uint8Array([0x53, 0x4f, 0x55, 0x4c])
 
 export interface SoulMetadata {
   version: number
@@ -76,21 +76,21 @@ export interface SoulTransformerArch extends SoulNetArch {
   eps: number
 }
 
-/** Infer SoulNet architecture from .sou weight shapes — no config needed.
+/** Infer SoulNet architecture from .soul weight shapes — no config needed.
 
     Heuristic: vocab size from last param length, hidden dim from second-last,
     embed dim from first param. LSTM vs transformer detected by param count.
     Transformer: reads n_head/n_kv_head from JSON metadata, infers dimFF from
     w1 weight shape.
 
-    @param buffer - raw .sou file bytes
+    @param buffer - raw .soul file bytes
     @returns architecture details (embedDim, hiddenDim, vocabSize, numLayers, archType)
 */
 export function inferArch(buffer: ArrayBuffer): SoulNetArch | SoulTransformerArch {
   const view = new DataView(buffer)
   const magic = new Uint8Array(buffer, 0, 4)
   for (let i = 0; i < 4; i++) {
-    if (magic[i] !== SOU_MAGIC[i]) throw new Error('Invalid .sou magic')
+    if (magic[i] !== SOUL_MAGIC[i]) throw new Error('Invalid .soul magic')
   }
   const version = view.getUint32(4, true)
   const jsonLen = view.getUint32(8, true)
@@ -169,20 +169,20 @@ export function inferArch(buffer: ArrayBuffer): SoulNetArch | SoulTransformerArc
   return { embedDim, hiddenDim, vocabSize, numLayers, archType: 'lstm' }
 }
 
-/** Parse a .sou file into metadata + flat weight arrays.
+/** Parse a .soul file into metadata + flat weight arrays.
 
     Supports v2 (JSON weights) and v3 (binary float32) formats.
     Handles 4-byte alignment for Float32Array offsets (WebGPU requirement).
 
-    @param buffer - raw .sou file bytes
+    @param buffer - raw .soul file bytes
     @returns parsed checkpoint with metadata and weights dict
 */
 export function parseSou(buffer: ArrayBuffer): SoulCheckpoint {
   const view = new DataView(buffer)
   const magic = new Uint8Array(buffer, 0, 4)
   for (let i = 0; i < 4; i++) {
-    if (magic[i] !== SOU_MAGIC[i]) {
-      throw new Error(`Invalid .sou magic: expected SOUL, got ${String.fromCharCode(...magic)}`)
+    if (magic[i] !== SOUL_MAGIC[i]) {
+      throw new Error(`Invalid .soul magic: expected SOUL, got ${String.fromCharCode(...magic)}`)
     }
   }
 

@@ -57,7 +57,7 @@ describe('parseSou', () => {
 
   it('throws on invalid magic', () => {
     const bad = new Uint8Array([1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0]).buffer
-    expect(() => parseSou(bad)).toThrow(/Invalid \.sou magic/)
+    expect(() => parseSou(bad)).toThrow(/Invalid \.soul magic/)
   })
 
   it('throws on non-JSON metadata', () => {
@@ -102,7 +102,7 @@ describe('inferArch', () => {
 
   it('throws on invalid magic', () => {
     const bad = new Uint8Array([9, 9, 9, 9, 0, 0, 0, 0]).buffer
-    expect(() => inferArch(bad)).toThrow(/Invalid \.sou magic/)
+    expect(() => inferArch(bad)).toThrow(/Invalid \.soul magic/)
   })
 })
 

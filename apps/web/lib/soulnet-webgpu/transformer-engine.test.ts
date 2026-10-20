@@ -46,8 +46,8 @@ describe('SoulTransformerWebGPU', () => {
     vi.stubGlobal('fetch', fetchMock)
     const engine = new SoulTransformerWebGPU()
     await engine.init()
-    await engine.load('https://models.example/baby.sou', ARCH)
-    expect(fetchMock).toHaveBeenCalledWith('https://models.example/baby.sou')
+    await engine.load('https://models.example/baby.soul', ARCH)
+    expect(fetchMock).toHaveBeenCalledWith('https://models.example/baby.soul')
     expect(engine.ready).toBe(true)
   })
 

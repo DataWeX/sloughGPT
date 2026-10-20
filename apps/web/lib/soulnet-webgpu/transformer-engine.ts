@@ -328,7 +328,7 @@ export class SoulTransformerWebGPU {
     })
   }
 
-  /** Load a .sou Transformer checkpoint.
+  /** Load a .soul Transformer checkpoint.
    *
    * Expects flat p{i} parameters. The architecture must be provided
    * from inferArch() output.

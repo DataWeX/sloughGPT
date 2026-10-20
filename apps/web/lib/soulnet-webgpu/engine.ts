@@ -4,7 +4,7 @@
  * CPU: embedding, fc_out, softmax
  * GPU: LSTM cell forward (the heavy matmul)
  *
- * Weight file format: v3 binary .sou (see weights.ts for the canonical spec).
+ * Weight file format: v3 binary .soul (see weights.ts for the canonical spec).
  *
  * Usage:
  *   const engine = new SoulNetWebGPU()
@@ -180,12 +180,12 @@ export class SoulNetWebGPU {
     })
   }
 
-  /** Load a .sou checkpoint and configure for inference.
+  /** Load a .soul checkpoint and configure for inference.
 
       Accepts either a URL (fetched automatically) or pre-loaded ArrayBuffer.
       Auto-detects old (7-param) vs new (8/12-param) format and w model type.
 
-      @param urlOrBuffer - model URL or raw .sou bytes
+      @param urlOrBuffer - model URL or raw .soul bytes
       @param cfg - model architecture (embedDim, hiddenDim, vocabSize, numLayers)
       @returns parsed checkpoint metadata
       @throws if weights are incompatible with the engine

@@ -2,7 +2,7 @@
  * Shared test helper for lib/soulnet-webgpu tests.
  *
  * Provides:
- * - makeSou / makeSouV2 — binary .sou builders (v3 + v2)
+ * - makeSou / makeSouV2 — binary .soul builders (v3 + v2)
  * - makeLstmSou / makeTransformerSou — standard-format checkpoints
  * - makeWebGPU — stubs navigator.gpu + WebGPU constants with a fake device
  * - FakeWorker + stubWorker — for SoulEngineWorker protocol tests
@@ -17,13 +17,13 @@ export interface SouParam {
   data: Float32Array
 }
 
-const SOU_MAGIC_BYTES = new Uint8Array([0x53, 0x4f, 0x55, 0x4c])
+const SOUL_MAGIC_BYTES = new Uint8Array([0x53, 0x4f, 0x55, 0x4c])
 
 export function makeSou(metadata: Record<string, unknown>, params: SouParam[]): ArrayBuffer {
   const enc = new TextEncoder()
   const metaBytes = enc.encode(JSON.stringify(metadata))
   const chunks: Uint8Array[] = []
-  chunks.push(SOU_MAGIC_BYTES)
+  chunks.push(SOUL_MAGIC_BYTES)
   const header = new Uint8Array(8)
   const dv = new DataView(header.buffer)
   dv.setUint32(0, 3, true)
@@ -66,7 +66,7 @@ export function makeSouV2(metadata: Record<string, unknown>, weightsJson: string
   const wjson = enc.encode(weightsJson)
   const out = new Uint8Array(4 + 8 + meta.length + 4 + wjson.length)
   const dv = new DataView(out.buffer)
-  out.set(SOU_MAGIC_BYTES, 0)
+  out.set(SOUL_MAGIC_BYTES, 0)
   dv.setUint32(4, 2, true)
   dv.setUint32(8, meta.length, true)
   out.set(meta, 12)

@@ -1,7 +1,7 @@
 /**
  * SoulNet WebGPU — Browser-side neural inference.
  *
- * Loads a .sou checkpoint and runs SoulNet LSTM forward passes
+ * Loads a .soul checkpoint and runs SoulNet LSTM forward passes
  * on the GPU, entirely in the browser tab. No server needed.
  *
  * Example:

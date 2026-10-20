@@ -1,5 +1,5 @@
 /**
- * IndexedDB-backed weight cache for .sou checkpoints.
+ * IndexedDB-backed weight cache for .soul checkpoints.
  *
  * Avoids re-fetching and re-parsing large weight files across page reloads.
  * Keys by URL; gracefully degrades when IndexedDB is unavailable.

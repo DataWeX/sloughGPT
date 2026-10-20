@@ -45,8 +45,8 @@ describe('SoulNetWebGPU', () => {
     vi.stubGlobal('fetch', fetchMock)
     const engine = new SoulNetWebGPU()
     await engine.init()
-    await engine.load('https://models.example/friendly.sou', CFG)
-    expect(fetchMock).toHaveBeenCalledWith('https://models.example/friendly.sou')
+    await engine.load('https://models.example/friendly.soul', CFG)
+    expect(fetchMock).toHaveBeenCalledWith('https://models.example/friendly.soul')
     expect(engine.ready).toBe(true)
   })
 
