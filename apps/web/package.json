@@ -26,7 +26,7 @@
     "build:clean": "npm run clean && node ./scripts/next-build-retry.mjs",
     "start": "vite preview",
     "dev:e2e": "next dev -p 3010",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=13750",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
