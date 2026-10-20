@@ -11,9 +11,12 @@ from __future__ import annotations
 
 from .asgi_host import Lifespan, LifespanError
 from .framing import (
+    DEFAULT_MAX_BODY,
     MAX_HEADER_LINE,
     MAX_HEADERS,
     MAX_REQUEST_LINE,
+    BodyTooLarge,
+    ExpectationFailed,
     HeaderTooLarge,
     MalformedRequest,
     Request,
@@ -27,9 +30,12 @@ from .server import Handler, Response, WireServer
 __version__ = "0.1.0"
 
 __all__ = [
+    "DEFAULT_MAX_BODY",
     "MAX_HEADERS",
     "MAX_HEADER_LINE",
     "MAX_REQUEST_LINE",
+    "BodyTooLarge",
+    "ExpectationFailed",
     "HeaderTooLarge",
     "Handler",
     "Lifespan",

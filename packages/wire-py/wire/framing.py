@@ -11,13 +11,17 @@ Security-relevant behaviour, all pinned by tests:
 - conflicting duplicate ``Content-Length`` values are rejected, identical
   duplicates accepted (RFC 9112 §6.3);
 - header line and header count caps raise 431, malformed anything else 400;
-- obsolete line folding (obs-fold) is rejected rather than reinterpreted.
+- obsolete line folding (obs-fold) is rejected rather than reinterpreted;
+- bodies are capped (``max_body``, default 64 MiB → 413) because the wire
+  buffers them whole — chunked streams count toward the same cap;
+- ``Expect`` is honoured: ``100-continue`` fires ``on_expect`` (the
+  interim response) only after the framing validated, anything else → 417.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from email.utils import formatdate
 from http import HTTPStatus
@@ -26,6 +30,8 @@ from typing import BinaryIO
 MAX_REQUEST_LINE = 8192
 MAX_HEADER_LINE = 8192
 MAX_HEADERS = 100
+# the wire buffers whole bodies (uvicorn streams) — bound them per request
+DEFAULT_MAX_BODY = 64 * 1024 * 1024
 
 _METHOD_RE = re.compile(rb"^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$")
 _TOKEN_RE = re.compile(rb"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
@@ -54,6 +60,18 @@ class HeaderTooLarge(WireError):
     """Header line or header count over the configured cap — answered with 431."""
 
     status = 431
+
+
+class BodyTooLarge(WireError):
+    """Declared or streamed body over ``max_body`` — answered with 413."""
+
+    status = 413
+
+
+class ExpectationFailed(WireError):
+    """Unrecognized ``Expect`` header value — answered with 417."""
+
+    status = 417
 
 
 @dataclass(frozen=True)
@@ -151,7 +169,7 @@ def _parse_headers(reader: BinaryIO) -> list[tuple[str, str]]:
             raise HeaderTooLarge("header count over cap")
 
 
-def _read_chunked(reader: BinaryIO) -> bytes:
+def _read_chunked(reader: BinaryIO, *, max_body: int = DEFAULT_MAX_BODY) -> bytes:
     out = bytearray()
     while True:
         size_line = _read_line(reader, MAX_HEADER_LINE)
@@ -160,7 +178,8 @@ def _read_chunked(reader: BinaryIO) -> bytes:
             raise MalformedRequest("invalid chunk size")
         size = int(size_raw, 16)
         if size == 0:
-            # trailers: any number of header lines, terminated by an empty line
+            # trailers: header lines up to the cap, then an empty line
+            trailers = 0
             while True:
                 trailer = reader.readline()
                 if not trailer or not trailer.endswith(b"\r\n"):
@@ -171,7 +190,11 @@ def _read_chunked(reader: BinaryIO) -> bytes:
                     return bytes(out)
                 if b":" not in trailer:
                     raise MalformedRequest("malformed trailer line")
-            # unreachable
+                trailers += 1
+                if trailers > MAX_HEADERS:
+                    raise HeaderTooLarge("trailer count over cap")
+        if len(out) + size > max_body:
+            raise BodyTooLarge(f"chunked body over cap {max_body}")
         data = reader.read(size)
         if len(data) != size:
             raise MalformedRequest("truncated chunk data")
@@ -180,7 +203,14 @@ def _read_chunked(reader: BinaryIO) -> bytes:
             raise MalformedRequest("chunk data not CRLF-terminated")
 
 
-def _read_body(reader: BinaryIO, headers: list[tuple[str, str]]) -> bytes:
+def _read_body(
+    reader: BinaryIO,
+    headers: list[tuple[str, str]],
+    *,
+    max_body: int = DEFAULT_MAX_BODY,
+    wants_100: bool = False,
+    on_expect: Callable[[], None] | None = None,
+) -> bytes:
     te = [v for k, v in headers if k.lower() == "transfer-encoding"]
     cl = [v for k, v in headers if k.lower() == "content-length"]
 
@@ -190,7 +220,11 @@ def _read_body(reader: BinaryIO, headers: list[tuple[str, str]]) -> bytes:
     if te:
         if te[0].strip().lower() != "chunked":
             raise MalformedRequest(f"unsupported transfer encoding {te[0]!r}")
-        return _read_chunked(reader)
+        # only after the framing validated: no interim response for a
+        # request the wire is about to refuse
+        if wants_100 and on_expect is not None:
+            on_expect()
+        return _read_chunked(reader, max_body=max_body)
 
     if cl:
         if len({v.strip() for v in cl}) > 1:
@@ -199,6 +233,10 @@ def _read_body(reader: BinaryIO, headers: list[tuple[str, str]]) -> bytes:
         if not raw.isdigit():
             raise MalformedRequest("invalid Content-Length")
         size = int(raw)
+        if size > max_body:
+            raise BodyTooLarge(f"body of {size} bytes over cap {max_body}")
+        if wants_100 and on_expect is not None:
+            on_expect()
         data = reader.read(size)
         if len(data) != size:
             raise MalformedRequest("truncated request body")
@@ -207,13 +245,25 @@ def _read_body(reader: BinaryIO, headers: list[tuple[str, str]]) -> bytes:
     return b""
 
 
-def read_request(reader: BinaryIO) -> Request | None:
+def read_request(
+    reader: BinaryIO,
+    *,
+    max_body: int = DEFAULT_MAX_BODY,
+    on_expect: Callable[[], None] | None = None,
+) -> Request | None:
     """Read one request from ``reader``.
 
     Returns ``None`` on a clean EOF (keep-alive peer closed between
     requests); raises :class:`MalformedRequest` / :class:`HeaderTooLarge`
-    with the status the server should answer. Reads exactly one message —
-    pipelined bytes stay buffered in ``reader`` for the next call.
+    / :class:`BodyTooLarge` / :class:`ExpectationFailed` with the status
+    the server should answer. Reads exactly one message — pipelined bytes
+    stay buffered in ``reader`` for the next call.
+
+    ``Expect: 100-continue`` is evaluated here: an unrecognized
+    expectation raises 417 before the body is touched; a recognized one
+    invokes ``on_expect`` (the server sends the interim response) only
+    after the framing and the body cap have validated — never for a
+    request the wire is about to refuse.
     """
     line = reader.readline()
     if not line:
@@ -225,7 +275,16 @@ def read_request(reader: BinaryIO) -> Request | None:
     method, target, version = _parse_request_line(line[:-2])
 
     headers = _parse_headers(reader)
-    body = _read_body(reader, headers)
+    expect = next((v for k, v in headers if k.lower() == "expect"), None)
+    if expect is not None and expect.strip().lower() != "100-continue":
+        raise ExpectationFailed(f"unsupported expectation {expect.strip()!r}")
+    body = _read_body(
+        reader,
+        headers,
+        max_body=max_body,
+        wants_100=expect is not None,
+        on_expect=on_expect,
+    )
     keep = should_keep_alive(version, headers)
     return Request(
         method=method,

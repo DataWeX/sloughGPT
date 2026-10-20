@@ -155,10 +155,10 @@ class WsApp:
             await send({"type": "websocket.send", kind: message[kind]})
 
 
-def _serve(app) -> WireServer:
+def _serve(app, **server_kwargs) -> WireServer:
     # lifespan off: these tests are about the upgrade branch, and the
     # lifespan-attempt scope would pollute app.scopes
-    server = WireServer(asgi_app=app, host="127.0.0.1", port=0, lifespan="off")
+    server = WireServer(asgi_app=app, host="127.0.0.1", port=0, lifespan="off", **server_kwargs)
     server.start()
     return server
 
@@ -396,6 +396,40 @@ def test_cancelled_receive_does_not_strand_session_teardown():
             assert sock.recv(1) == b""  # session ended, TCP closed
     finally:
         server.stop()  # must return promptly — no stranded join
+
+
+def test_ws_message_over_cap_closes_with_1009():
+    # uvicorn parity: ws_max_size 16 MB default; over-cap → close 1009
+    # (Message Too Big), not an unbounded bytearray
+    server = _serve(WsApp(), ws_max_size=1024)
+    try:
+        with _connect(server) as sock:
+            status, _, rest = _handshake(sock)
+            assert status == 101
+            frames = _Frames(sock, rest)
+            sock.sendall(_client_frame(OP_TEXT, b"x" * 2048))  # > cap
+            opcode, payload = frames.read()
+            assert opcode == OP_CLOSE
+            assert _close_code(payload) == 1009
+    finally:
+        server.stop()
+
+
+def test_ws_fragment_assembly_over_cap_closes_with_1009():
+    # individual fragments pass the frame cap, the assembled message must not
+    server = _serve(WsApp(), ws_max_size=1024)
+    try:
+        with _connect(server) as sock:
+            status, _, rest = _handshake(sock)
+            assert status == 101
+            frames = _Frames(sock, rest)
+            sock.sendall(_client_frame(OP_TEXT, b"a" * 600, fin=False))  # under cap
+            sock.sendall(_client_frame(OP_CONT, b"b" * 600, fin=False))  # 1200 > 1024
+            opcode, payload = frames.read()
+            assert opcode == OP_CLOSE
+            assert _close_code(payload) == 1009
+    finally:
+        server.stop()
 
 
 # ── real-app interop (the flip-gate acceptance) ───────────────────────

@@ -1052,8 +1052,24 @@ git push -u origin feat/<name>   # push your own branch when done
   param and the route 403-rejects. Benchmark re-run after the teardown
   change (shutdown on every HTTP conn path): no regression (keepalive
   p50 0.087 ms, keepalive_asgi 0.352 ms, uvicorn A/B delta unchanged
-  −99.1%). Only the shared-tree `SLO_TRANSPORT` wiring + journey gates
-  remain. From `.wt-worldbrain`.
+  −99.1%). **Tier-1 hardening (uvicorn parity, wire-local)** then closed
+  the A/B gap list: proxy-header translation (XFF/XFP → scope
+  client/scheme, trusted peers only, `forwarded_allow_ips` default
+  `127.0.0.1`), keep-alive idle timeout (`keep_alive_timeout=5.0`,
+  read-phase only — SSE writes unbounded, pipelined bytes never
+  false-trip), body cap (`max_body` 64 MiB → 413; chunked counts;
+  trailers capped), WS message cap (`ws_max_size` 16 MiB on declared
+  frame length + fragment assembly → close 1009), `Expect:
+  100-continue` (interim only after validation; unknown → 417),
+  uvicorn-format access log (`wire.access`, handler + ASGI + WS 101).
+  Smuggling guards already existed from phase 1 — the only body gap
+  was the cap. 15 new tests (`test_hardening.py` 13 + 2 WS-cap) →
+  suite **77 green**, ruff clean; a test-helper flake (discarded
+  coalesced pipelined bytes) fixed via shared read buffer (43/60 →
+  0/15). Benchmark no regression (keepalive p50 0.099 ms, adapter
+  +0.284 ms). Deferred with reasons: body streaming (needs a card),
+  permessage-deflate, hot-reload. Only the shared-tree `SLO_TRANSPORT`
+  wiring + journey gates remain. From `.wt-worldbrain`.
 
 - **2026-10-19 · `feat/npu-caps` — OS design L2, CAPS + native tensor
   kernels, card DONE (phase 2; `d74e2cef`, stacked on `feat/wire-py`).**

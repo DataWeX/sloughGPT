@@ -29,15 +29,18 @@ from __future__ import annotations
 import logging
 import socket
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
 from .asgi_host import Lifespan, LifespanError, run_http, run_websocket
-from .framing import Request, WireError, build_response, read_request
-from .websocket import is_ws_upgrade
+from .framing import DEFAULT_MAX_BODY, Request, WireError, build_response, read_request
+from .websocket import DEFAULT_MAX_PAYLOAD, is_ws_upgrade
 
 logger = logging.getLogger(__name__)
+# uvicorn-parity access line (same logger name as asgi_host's ASGI mode;
+# logging by name keeps the two modules import-independent)
+access_logger = logging.getLogger("wire.access")
 
 LifespanMode = Literal["auto", "on", "off"]
 
@@ -69,6 +72,11 @@ class WireServer:
         asgi_app: Callable | None = None,
         lifespan: LifespanMode = "auto",
         lifespan_timeout: float = 30.0,
+        keep_alive_timeout: float | None = 5.0,
+        max_body: int = DEFAULT_MAX_BODY,
+        ws_max_size: int = DEFAULT_MAX_PAYLOAD,
+        forwarded_allow_ips: str | Sequence[str] | None = "127.0.0.1",
+        access_log: bool = True,
     ) -> None:
         if (handler is None) == (asgi_app is None):
             raise ValueError("exactly one of 'handler' or 'asgi_app' is required")
@@ -81,6 +89,17 @@ class WireServer:
         self._backlog = backlog
         self._lifespan_mode: LifespanMode = lifespan
         self._lifespan_timeout = lifespan_timeout
+        self._keep_alive_timeout = keep_alive_timeout
+        self._max_body = max_body
+        self._ws_max_size = ws_max_size
+        if forwarded_allow_ips is None:
+            forwarded_allow_ips = "127.0.0.1"  # uvicorn parity: loopback default
+        if isinstance(forwarded_allow_ips, str):
+            ips = [part.strip() for part in forwarded_allow_ips.split(",")]
+        else:
+            ips = [str(ip).strip() for ip in forwarded_allow_ips]
+        self._forwarded_allow: frozenset[str] = frozenset(ip for ip in ips if ip)
+        self._access_log = access_log
         self._lifespan_driver: Lifespan | None = None
         self._listener: socket.socket | None = None
         self._bound: tuple[str, int] = (host, port)
@@ -203,15 +222,44 @@ class WireServer:
                 self._clients.add(conn)
             threading.Thread(target=self._serve_conn, args=(conn,), daemon=True).start()
 
+    def _log_access(self, peer, request: Request, status: int) -> None:
+        # uvicorn-parity access line: raw TCP peer (not the forwarded
+        # identity — that's for the app, not the log)
+        if self._access_log:
+            access_logger.info(
+                '%s:%d - "%s %s HTTP/%s" %d',
+                peer[0],
+                peer[1],
+                request.method,
+                request.target,
+                request.version,
+                status,
+            )
+
     def _serve_conn(self, conn: socket.socket) -> None:
         try:
             reader = conn.makefile("rb")
+            peer = conn.getpeername()[:2]
         except OSError:
             return  # connection already torn down by stop()
+
+        def _expect_continue() -> None:
+            # bare interim response (RFC 9110 §10.1.1) — fired only after
+            # the framing and the body cap validated (read_request's word)
+            conn.sendall(b"HTTP/1.1 100 Continue\r\n\r\n")
+
         try:
             while True:
+                if self._keep_alive_timeout is not None:
+                    # uvicorn timeout_keep_alive parity: the READ phase owns
+                    # the idle timer (first byte included — a slowloris peer
+                    # holds a thread for at most this long); buffered bytes
+                    # cost no syscall, so pipelined requests never false-trip
+                    conn.settimeout(self._keep_alive_timeout)
                 try:
-                    request = read_request(reader)
+                    request = read_request(
+                        reader, max_body=self._max_body, on_expect=_expect_continue
+                    )
                 except WireError as exc:
                     # desync: answer the status, then close — never reuse
                     conn.sendall(
@@ -223,6 +271,11 @@ class WireServer:
                         )
                     )
                     return
+                finally:
+                    # clear the timer before any response write — SSE
+                    # streams and slow readers run unbounded, like uvicorn
+                    if self._keep_alive_timeout is not None:
+                        conn.settimeout(None)
                 if request is None:  # clean EOF between requests
                     return
                 if self._asgi_app is not None:
@@ -235,8 +288,11 @@ class WireServer:
                             request,
                             reader,
                             conn.sendall,
-                            client=conn.getpeername()[:2],
+                            client=peer,
                             server=self._bound,
+                            forwarded_allow_ips=self._forwarded_allow,
+                            access_log=self._access_log,
+                            ws_max_size=self._ws_max_size,
                         )
                         return
                     # ASGI mode: the adapter owns response bytes and the
@@ -245,8 +301,10 @@ class WireServer:
                         self._asgi_app,
                         request,
                         conn.sendall,
-                        client=conn.getpeername()[:2],
+                        client=peer,
                         server=self._bound,
+                        forwarded_allow_ips=self._forwarded_allow,
+                        access_log=self._access_log,
                     )
                     if not keep:
                         return
@@ -262,6 +320,7 @@ class WireServer:
                             keep_alive=False,
                         )
                     )
+                    self._log_access(peer, request, 500)
                     return
                 keep = request.keep_alive if response.keep_alive is None else response.keep_alive
                 conn.sendall(
@@ -273,10 +332,13 @@ class WireServer:
                         chunked=response.chunked,
                     )
                 )
+                self._log_access(peer, request, response.status)
                 if not keep:
                     return
         except OSError:
-            return  # peer vanished mid-write; connection teardown
+            # peer vanished mid-write — and the idle timer firing mid-read
+            # (a silent keep-alive client) lands here too: clean close
+            return
         finally:
             with self._lock:
                 self._clients.discard(conn)

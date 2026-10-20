@@ -39,14 +39,17 @@ lifespan loop-agnostic in practice.
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from urllib.parse import unquote
 
 from .framing import Request, build_response, serialize_head
 from .websocket import (
+    CLOSE_TOO_BIG,
     OP_BINARY,
     OP_CLOSE,
     OP_PING,
@@ -74,16 +77,56 @@ _BODILESS = frozenset({204, 304})
 
 SendBytes = Callable[[bytes], None]
 
+# uvicorn-parity access line (same logger name in server.py handler mode;
+# logging by name keeps the two modules import-independent)
+access_logger = logging.getLogger("wire.access")
 
-def _build_scope(request: Request, client: tuple[str, int], server: tuple[str, int]) -> dict:
+# proxy headers (X-Forwarded-For / -Proto) are honoured only from trusted
+# direct peers — uvicorn's forwarded_allow_ips default
+DEFAULT_TRUSTED_PROXIES = frozenset({"127.0.0.1"})
+
+
+def _apply_forwarded(
+    request: Request,
+    client: tuple[str, int],
+    trusted: frozenset[str],
+    base_scheme: str,
+) -> tuple[tuple[str, int], str]:
+    """uvicorn-parity proxy-header translation for trusted direct peers.
+
+    ``X-Forwarded-For`` (leftmost = original client) replaces the peer
+    address, ``X-Forwarded-Proto: https`` upgrades the scheme
+    (``http``→``https``, ``ws``→``wss``). From an untrusted peer — or
+    when no header is present — the scope keeps the real TCP identity:
+    spoofed headers must not reshape it.
+    """
+    if not trusted or client[0] not in trusted:
+        return client, base_scheme
+    xff = request.header("x-forwarded-for")
+    if xff:
+        host = xff.split(",")[0].strip()
+        if host:
+            client = (host, client[1])
+    if (request.header("x-forwarded-proto") or "").strip().lower() == "https":
+        base_scheme = {"http": "https", "ws": "wss"}.get(base_scheme, base_scheme)
+    return client, base_scheme
+
+
+def _build_scope(
+    request: Request,
+    client: tuple[str, int],
+    server: tuple[str, int],
+    trusted: frozenset[str] = DEFAULT_TRUSTED_PROXIES,
+) -> dict:
     target = request.target
     path, _, query = target.partition("?")
+    client, scheme = _apply_forwarded(request, client, trusted, "http")
     return {
         "type": "http",
         "asgi": {"version": "3.0", "spec_version": "2.3"},
         "http_version": request.version,
         "method": request.method,
-        "scheme": "http",
+        "scheme": scheme,
         "path": unquote(path),
         "raw_path": path.encode("ascii"),
         "query_string": query.encode("ascii"),
@@ -109,6 +152,8 @@ def run_http(
     *,
     client: tuple[str, int],
     server: tuple[str, int],
+    forwarded_allow_ips: frozenset[str] = DEFAULT_TRUSTED_PROXIES,
+    access_log: bool = False,
 ) -> bool:
     """Run one ASGI http cycle; return whether the connection stays alive.
 
@@ -116,10 +161,24 @@ def run_http(
     wire becomes a 500 + close, a crash after (the response is already
     partially written) just closes — a desynced stream can't be repaired
     with a late status line. Transport failures close the connection the
-    same way.
+    same way. With ``access_log``, one uvicorn-style line per completed
+    response goes to the ``wire.access`` logger (raw TCP peer, not the
+    forwarded identity).
     """
-    scope = _build_scope(request, client, server)
+    scope = _build_scope(request, client, server, forwarded_allow_ips)
     state: dict = {"head_written": False, "keep": False, "framing": None}
+
+    def _log_access(status: int) -> None:
+        if access_log:
+            access_logger.info(
+                '%s:%d - "%s %s HTTP/%s" %d',
+                client[0],
+                client[1],
+                request.method,
+                request.target,
+                request.version,
+                status,
+            )
 
     def _send_500() -> None:
         try:
@@ -248,14 +307,19 @@ def run_http(
         except Exception:  # noqa: BLE001 - ASGI app is an untrusted boundary
             if not state["head_written"]:
                 _send_500()
+                _log_access(500)
+            else:
+                _log_access(int(state.get("status", 500)))
             return False
         if not state["head_written"]:
             # app returned without ever starting a response
             _send_500()
+            _log_access(500)
             return False
         if state["framing"] == "chunked":
             # app streamed without a final frame — close the framing cleanly
             on_bytes(b"0\r\n\r\n")
+        _log_access(int(state["status"]))
         return bool(state["keep"])
 
     try:
@@ -265,9 +329,15 @@ def run_http(
         return False
 
 
-def _build_ws_scope(request: Request, client: tuple[str, int], server: tuple[str, int]) -> dict:
+def _build_ws_scope(
+    request: Request,
+    client: tuple[str, int],
+    server: tuple[str, int],
+    trusted: frozenset[str] = DEFAULT_TRUSTED_PROXIES,
+) -> dict:
     target = request.target
     path, _, query = target.partition("?")
+    client, scheme = _apply_forwarded(request, client, trusted, "ws")
     subprotocols: list[str] = []
     if proto := request.header("sec-websocket-protocol"):
         subprotocols = [p.strip() for p in proto.split(",") if p.strip()]
@@ -275,7 +345,7 @@ def _build_ws_scope(request: Request, client: tuple[str, int], server: tuple[str
         "type": "websocket",
         "asgi": {"version": "3.0", "spec_version": "2.3"},
         "http_version": request.version,
-        "scheme": "ws",
+        "scheme": scheme,
         "path": unquote(path),
         "raw_path": path.encode("ascii"),
         "query_string": query.encode("ascii"),
@@ -297,6 +367,9 @@ def run_websocket(
     *,
     client: tuple[str, int],
     server: tuple[str, int],
+    forwarded_allow_ips: frozenset[str] = DEFAULT_TRUSTED_PROXIES,
+    access_log: bool = False,
+    ws_max_size: int = 16 * 1024 * 1024,
 ) -> None:
     """Serve one WebSocket upgrade; blocks until the session ends.
 
@@ -306,7 +379,8 @@ def run_websocket(
     off-loop in a dedicated single-worker reader executor (a cancelled
     ``receive`` shares the in-flight read, never strands a second reader),
     writes direct to the sync socket from the loop thread, exactly like
-    ``run_http``.
+    ``run_http``. ``ws_max_size`` bounds every message (frames and
+    assembled fragments) — over-cap closes with 1009.
     """
     problem = handshake_problem(request)
     if problem is not None:
@@ -320,7 +394,16 @@ def run_websocket(
     try:
         asyncio.run(
             _ws_session(
-                app, request, reader, on_bytes, client=client, server=server, read_exec=read_exec
+                app,
+                request,
+                reader,
+                on_bytes,
+                client=client,
+                server=server,
+                read_exec=read_exec,
+                forwarded_allow_ips=forwarded_allow_ips,
+                access_log=access_log,
+                max_payload=ws_max_size,
             )
         )
     except OSError:
@@ -340,9 +423,12 @@ async def _ws_session(
     client: tuple[str, int],
     server: tuple[str, int],
     read_exec: ThreadPoolExecutor,
+    forwarded_allow_ips: frozenset[str],
+    access_log: bool,
+    max_payload: int,
 ) -> None:
     loop = asyncio.get_running_loop()
-    scope = _build_ws_scope(request, client, server)
+    scope = _build_ws_scope(request, client, server, forwarded_allow_ips)
 
     accepted = False
     closed = False  # close frame (server- or client-initiated) is settled
@@ -370,7 +456,9 @@ async def _ws_session(
     async def _next_frame():
         nonlocal read_future
         if read_future is None:
-            read_future = loop.run_in_executor(read_exec, _ws_read_frame, reader)
+            read_future = loop.run_in_executor(
+                read_exec, partial(_ws_read_frame, reader, max_payload=max_payload)
+            )
         fut = read_future
         try:
             # shield: a cancelled receive() must not cancel the in-flight
@@ -394,8 +482,8 @@ async def _ws_session(
             while True:
                 try:
                     frame = await _next_frame()
-                except WsProtocolError:
-                    return await _fail(1002)
+                except WsProtocolError as exc:
+                    return await _fail(exc.code)  # 1002 protocol, 1009 cap
                 except (ConnectionError, OSError):
                     return _settle(1006)  # abnormal close: no close frame
                 if frame is None:
@@ -428,6 +516,8 @@ async def _ws_session(
                 # OP_CONT
                 if asm_opcode == 0:
                     return await _fail(1002)  # continuation without a start
+                if len(asm) + len(frame.payload) > max_payload:
+                    return await _fail(CLOSE_TOO_BIG)  # assembled > cap
                 asm.extend(frame.payload)
                 if frame.fin:
                     message = await _deliver(asm_opcode, bytes(asm))
@@ -453,6 +543,15 @@ async def _ws_session(
                 raise RuntimeError("websocket.accept after accept/close")
             on_bytes(_ws_switch_response(request, message.get("subprotocol")))
             accepted = True
+            if access_log:
+                access_logger.info(
+                    '%s:%d - "%s %s HTTP/%s" 101',
+                    client[0],
+                    client[1],
+                    request.method,
+                    request.target,
+                    request.version,
+                )
         elif kind == "websocket.send":
             if not accepted:
                 raise RuntimeError("websocket.accept must precede sends")

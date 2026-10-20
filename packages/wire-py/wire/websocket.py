@@ -37,10 +37,22 @@ OP_PONG = 0xA
 
 _CLOSE_NORMAL = 1000
 _CLOSE_PROTOCOL = 1002
+CLOSE_TOO_BIG = 1009  # RFC6455 §7.4.1 — message too big
+
+# uvicorn parity: ws_max_size bounds what we buffer per message
+DEFAULT_MAX_PAYLOAD = 16 * 1024 * 1024
 
 
 class WsProtocolError(Exception):
-    """A frame violated RFC6455 (unmasked client frame, bad opcode, …)."""
+    """A frame violated RFC6455 (unmasked client frame, bad opcode, …).
+
+    ``code`` is the close status the session must answer with (1002 by
+    default, 1009 for an over-cap message).
+    """
+
+    def __init__(self, message: str, code: int = _CLOSE_PROTOCOL) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def is_ws_upgrade(request: Request) -> bool:
@@ -139,13 +151,14 @@ class Frame:
     payload: bytes
 
 
-def read_frame(reader) -> Frame | None:
+def read_frame(reader, *, max_payload: int | None = None) -> Frame | None:
     """Read one client frame from a buffered binary reader.
 
     Returns ``None`` only on a clean EOF at a frame boundary (the client
     went away between messages); a frame cut short mid-payload raises
     :class:`ConnectionError`. Protocol violations raise
-    :class:`WsProtocolError`.
+    :class:`WsProtocolError` (code 1002; 1009 when ``max_payload`` is
+    exceeded — checked on the DECLARED length, before any allocation).
     """
 
     def _take(n: int) -> bytes:
@@ -170,6 +183,10 @@ def read_frame(reader) -> Frame | None:
         n = int.from_bytes(_take(2), "big")
     elif n == 127:
         n = int.from_bytes(_take(8), "big")
+    if max_payload is not None and n > max_payload:
+        raise WsProtocolError(
+            f"frame payload of {n} bytes over cap {max_payload}", code=CLOSE_TOO_BIG
+        )
     if opcode not in (OP_CONT, OP_TEXT, OP_BINARY, OP_CLOSE, OP_PING, OP_PONG):
         raise WsProtocolError(f"unknown opcode {opcode:#x}")
     mask = _take(4)

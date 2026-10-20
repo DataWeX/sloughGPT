@@ -327,10 +327,12 @@ def main() -> int:
     args = parser.parse_args()
 
     results: dict = {}
-    handler_srv = WireServer(_handler, host="127.0.0.1", port=0)
+    handler_srv = WireServer(_handler, host="127.0.0.1", port=0, access_log=False)
     # lifespan="off": _asgi_app is not lifespan-aware (it would park in
     # receive() until the auto-mode timeout) — transport is what we measure
-    asgi_srv = WireServer(asgi_app=_asgi_app, host="127.0.0.1", port=0, lifespan="off")
+    asgi_srv = WireServer(
+        asgi_app=_asgi_app, host="127.0.0.1", port=0, lifespan="off", access_log=False
+    )
     uvicorn_srv = None if args.no_uvicorn else _UvicornTarget(_asgi_app)
     handler_srv.start()
     asgi_srv.start()
