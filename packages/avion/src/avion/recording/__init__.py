@@ -1,6 +1,10 @@
 """avion.recording — record a browser session into a viewer-ready artifact.
 
-FEATURE: recording-viewer — one recording run produces::
+(No FEATURE: tag on purpose — this package is part of the avion CLI, whose
+files carry no feature-flag markers, and registering flags lives outside
+this package's ownership.)
+
+One recording run produces::
 
     <out>/
       manifest.json   target, clock, capabilities, sweep, frame index

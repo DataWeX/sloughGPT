@@ -1,7 +1,7 @@
 """
 Export a recorded session to an animated format.
 
-FEATURE: recording-export — turn frames/*.jpg + events.json + boxes.jsonl
+Turn frames/*.jpg + events.json + boxes.jsonl
 into an mp4 (capability-gated: imageio-ffmpeg). No audio (explicit product
 decision), boxes re-derived at render time so the export matches what the
 viewer shows — never burned into the frames.

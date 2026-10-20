@@ -1,6 +1,6 @@
 """Recording session — the lifecycle that binds clock, artifact and sampler.
 
-FEATURE: recording-viewer — `avion record` drives a live CDP backend while a
+`avion record` drives a live CDP backend while a
 session captures frames (own sync thread), stamps events on ONE clock and
 closes into a viewer-ready artifact. `avion stop`/`view` re-derive boxes from
 what this session persisted.
