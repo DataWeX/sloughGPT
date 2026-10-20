@@ -57,7 +57,9 @@ const mockPresets = {
 }
 
 const mockConflicts = {
-  conflicts: ['High empathy may reduce decisiveness'],
+  conflicts: [
+    { type: 'voice', severity: 'medium', message: 'High empathy may reduce decisiveness', fields: ['traits.empathy'] },
+  ],
 }
 
 const mockHistory = {

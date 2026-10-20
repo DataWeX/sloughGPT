@@ -139,7 +139,7 @@ describe('consciousnessController.savePersona', () => {
 
   it('POSTs /consciousness/personas/save', async () => {
     apiClient.apiPost.mockResolvedValue({ id: 'p2' })
-    const result = await consciousnessController.savePersona({ name: 'Thinker', personality: { values: [], goals: [], voice: {}, style: {}, traits: {}, interests: [], avoid: [] }, active: false })
+    const result = await consciousnessController.savePersona({ persona_id: 'thinker', name: 'Thinker', profile: { values: [], goals: [], voice: {}, style: {}, traits: {}, interests: [], avoid: [] } })
     expect(apiClient.apiPost).toHaveBeenCalledWith('/consciousness/personas/save', expect.objectContaining({ name: 'Thinker' }))
     expect(result.id).toBe('p2')
   })

@@ -92,13 +92,13 @@ export const ChatInput = memo(function ChatInput({
   const [draft, setDraft] = useState('')
   const { status: consciousnessStatus } = useConsciousnessStatus()
   const { t } = useLocale()
-  const [personas, setPersonas] = useState<{ id: string; name: string; values: any }[]>([])
+  const [personas, setPersonas] = useState<{ id: string; name: string; values: string[] }[]>([])
   const [activePersona, setActivePersona] = useState<string | null>(null)
 
   const fetchPersonas = useCallback(async () => {
     try {
       const result = await consciousnessController.listPersonas()
-      setPersonas((result.personas ?? []).map(p => ({ id: p.id, name: p.name, values: p.personality })))
+      setPersonas((result.personas ?? []).map(p => ({ id: p.id, name: p.name, values: p.values })))
     } catch {
       // Personas endpoint may not exist
     }

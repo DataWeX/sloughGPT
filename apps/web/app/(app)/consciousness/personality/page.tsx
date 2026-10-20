@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { consciousnessController, type Personality, type PersonalityPreset, type PersonalityHistoryEntry } from '@/lib/consciousness-controller'
+import { consciousnessController, type Personality, type PersonalityPreset, type PersonalityHistoryEntry, type PersonalityConflict } from '@/lib/consciousness-controller'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -35,7 +35,7 @@ export default function ConsciousnessPersonalityPage() {
   const [resetting, setResetting] = useState(false)
   const [presets, setPresets] = useState<PersonalityPreset[]>([])
   const [applyingPreset, setApplyingPreset] = useState<string | null>(null)
-  const [conflicts, setConflicts] = useState<string[]>([])
+  const [conflicts, setConflicts] = useState<PersonalityConflict[]>([])
   const [history, setHistory] = useState<PersonalityHistoryEntry[]>([])
 
   const fetchAll = useCallback(async () => {
@@ -231,7 +231,7 @@ export default function ConsciousnessPersonalityPage() {
                 {conflicts.map((conflict, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm">
                     <Badge variant="destructive" className="shrink-0">!</Badge>
-                    <span>{conflict}</span>
+                    <span>{conflict.message}</span>
                   </div>
                 ))}
               </div>

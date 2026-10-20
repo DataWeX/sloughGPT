@@ -107,12 +107,20 @@ export interface PersonalityHistoryEntry {
   traits: Record<string, number>
 }
 
+/** One conflict entry of GET /consciousness/personality/conflicts (PersonalityManager.get_conflicts). */
+export interface PersonalityConflict {
+  type: string
+  severity: string
+  message: string
+  fields: string[]
+}
+
+/** A saved persona list entry (PersonalityManager.list_personas). */
 export interface Persona {
   id: string
   name: string
-  personality: Personality
-  active: boolean
-  created_at: string
+  values: string[]
+  updated_at: number | null
 }
 
 export interface TrainingStatus {
@@ -237,7 +245,7 @@ export const consciousnessController = {
     return apiPost('/consciousness/personality/presets/apply', { preset: presetName })
   },
 
-  async getPersonalityConflicts(): Promise<{ conflicts: string[] }> {
+  async getPersonalityConflicts(): Promise<{ conflicts: PersonalityConflict[] }> {
     return apiGet('/consciousness/personality/conflicts')
   },
 
@@ -245,12 +253,13 @@ export const consciousnessController = {
     return apiGet('/consciousness/personas')
   },
 
-  async savePersona(persona: Omit<Persona, 'id' | 'created_at'>): Promise<{ id: string }> {
+  /** Body of POST /consciousness/personas/save (SavePersonaRequest); profile = full PersonalityProfile dict. */
+  async savePersona(persona: { persona_id: string; name?: string; profile?: Personality }): Promise<{ id: string; name: string; updated_at: number }> {
     return apiPost('/consciousness/personas/save', persona)
   },
 
-  async getPersona(personaId: string): Promise<Persona> {
-    return apiGet<Persona>(`/consciousness/personas/${personaId}`)
+  async getPersona(personaId: string): Promise<{ id: string } & Personality> {
+    return apiGet(`/consciousness/personas/${personaId}`)
   },
 
   async activatePersona(personaId: string): Promise<{ activated: boolean }> {

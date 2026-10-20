@@ -100,7 +100,7 @@ export default function PersonalityPage() {
 
   const fetchPersonas = useCallback(async () => {
     try {
-      const data = (await consciousnessController.listPersonas()) as any
+      const data = await consciousnessController.listPersonas()
       setSavedPersonas(data.personas ?? [])
     } catch {
       // Saved personas are optional — the page works without them.
@@ -124,13 +124,13 @@ export default function PersonalityPage() {
         setAvoidInput(d.avoid.join(', '))
       }
       if (presetsResult.status === 'fulfilled') {
-        setPresetNames((presetsResult.value as any)?.names ?? [])
+        setPresetNames(presetsResult.value.names ?? [])
       }
       if (histResult.status === 'fulfilled') {
-        setPersonalityHistory((histResult.value as any)?.history ?? [])
+        setPersonalityHistory(histResult.value.history ?? [])
       }
       if (conflictsResult.status === 'fulfilled') {
-        setConflicts((conflictsResult.value as any)?.conflicts ?? [])
+        setConflicts(conflictsResult.value.conflicts ?? [])
       }
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
@@ -172,7 +172,7 @@ export default function PersonalityPage() {
       setProfile(data as PersonalityProfile)
       addToast('Personality saved', 'success')
       const conflictsData = await consciousnessController.getPersonalityConflicts()
-      setConflicts((conflictsData as any)?.conflicts ?? [])
+      setConflicts(conflictsData.conflicts ?? [])
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -275,7 +275,7 @@ export default function PersonalityPage() {
         persona_id: slug,
         name: personaNameInput.trim(),
         profile,
-      } as any)
+      })
       addToast('Persona saved', 'success')
       setShowSavePersonaDialog(false)
       setPersonaNameInput('')
