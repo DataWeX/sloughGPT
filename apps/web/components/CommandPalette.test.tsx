@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-const { mockPush, mockSessionList, mockModelList } = vi.hoisted(() => ({
+const { mockPush, bootstrapState } = vi.hoisted(() => ({
   mockPush: vi.fn(),
-  mockSessionList: vi.fn(),
-  mockModelList: vi.fn(),
+  bootstrapState: { payload: null as any },
 }))
 
 vi.mock('next/navigation', () => ({
@@ -13,11 +12,20 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/lib/model-controller', () => ({
-  modelController: { list: mockModelList },
+  modelController: { list: vi.fn(), load: vi.fn() },
 }))
 
-vi.mock('@/lib/session-controller', () => ({
-  sessionController: { list: mockSessionList },
+vi.mock('@/lib/souls-controller', () => ({
+  soulsController: { list: vi.fn(), switch: vi.fn() },
+}))
+
+vi.mock('@/contexts/BootstrapContext', () => ({
+  useBootstrap: () => ({
+    data: bootstrapState.payload,
+    loading: bootstrapState.payload === null,
+    error: null,
+    refresh: vi.fn(),
+  }),
 }))
 
 vi.mock('@/lib/store', () => ({
@@ -30,8 +38,7 @@ import { CommandPalette } from './CommandPalette'
 describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSessionList.mockResolvedValue([])
-    mockModelList.mockResolvedValue([])
+    bootstrapState.payload = null
   })
   afterEach(cleanup)
 
@@ -89,10 +96,13 @@ describe('CommandPalette', () => {
     expect(mockPush).toHaveBeenCalledWith('/training')
   })
 
-  it('loads recent sessions on mount', () => {
-    mockSessionList.mockResolvedValue([{ id: 's1', name: 'My Chat' }])
+  it('lists recent sessions from the bootstrap payload on mount', () => {
+    bootstrapState.payload = {
+      members: { sessions: [{ id: 's1', name: 'My Chat' }], models: null, souls: null },
+      errors: {},
+    }
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
-    expect(mockSessionList).toHaveBeenCalled()
+    expect(screen.getByText('My Chat')).toBeDefined()
   })
 })

@@ -11,6 +11,7 @@ import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from 'react-rout
 
 import AppLayout from '@/components/AppLayout'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { BootstrapProvider } from '@/contexts/BootstrapContext'
 import { ModelProvider } from '@/contexts/ModelContext'
 import { LocaleProvider } from '@/hooks/useLocale'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
@@ -77,59 +78,63 @@ function App() {
   const hasHome = discoveredRoutes.some((r) => r.path === '/')
   return (
     <ThemeProvider>
-      <ModelProvider>
-        <LocaleProvider>
-          <ErrorLifecycle />
-          <StartupOverlay />
-          <BrowserRouter>
-            <Routes>
-              <Route element={<Shell />}>
-                {/* Legacy redirects first — Next proxy shadows real pages (30/39 have page.tsx) */}
-                {Object.entries(REDIRECTS).map(([from, to]) => {
-                  const { path, search } = splitTarget(to)
-                  return (
+      <BootstrapProvider>
+        <ModelProvider>
+          <LocaleProvider>
+            <ErrorLifecycle />
+            <StartupOverlay />
+            <BrowserRouter>
+              <Routes>
+                <Route element={<Shell />}>
+                  {/* Legacy redirects first — Next proxy shadows real pages (30/39 have page.tsx) */}
+                  {Object.entries(REDIRECTS).map(([from, to]) => {
+                    const { path, search } = splitTarget(to)
+                    return (
+                      <Route
+                        key={from}
+                        path={from}
+                        element={<Navigate to={{ pathname: path, search }} replace />}
+                      />
+                    )
+                  })}
+                  {/* The sentinel sits INSIDE each route's Suspense boundary,
+                      beside the (lazy) page: React mounts a suspended boundary's
+                      children only once its chunk has committed, so the
+                      data-app-ready flag can never lead the route content it
+                      declares readiness for. */}
+                  {discoveredRoutes.map(({ path, Component }) => (
                     <Route
-                      key={from}
-                      path={from}
-                      element={<Navigate to={{ pathname: path, search }} replace />}
+                      key={path}
+                      path={path}
+                      element={
+                        <Suspense fallback={<PageFallback />}>
+                          <Component />
+                          <AppReadySentinel />
+                        </Suspense>
+                      }
                     />
-                  )
-                })}
-                {/* The sentinel sits INSIDE each route's Suspense boundary,
-                    beside the (lazy) page: React mounts a suspended boundary's
-                    children only once its chunk has committed, so the
-                    data-app-ready flag can never lead the route content it
-                    declares readiness for. */}
-                {discoveredRoutes.map(({ path, Component }) => (
+                  ))}
+                  {!hasHome ? (
+                    <Route path="/" element={<Navigate to="/datasets" replace />} />
+                  ) : null}
+                  {/* 404s render a real (static) route — the sentinel still has to
+                      ride beside the content so readiness is declared for THIS
+                      commit, not for the shell that loaded before it. */}
                   <Route
-                    key={path}
-                    path={path}
+                    path="*"
                     element={
-                      <Suspense fallback={<PageFallback />}>
-                        <Component />
+                      <>
+                        <NotFound />
                         <AppReadySentinel />
-                      </Suspense>
+                      </>
                     }
                   />
-                ))}
-                {!hasHome ? <Route path="/" element={<Navigate to="/datasets" replace />} /> : null}
-                {/* 404s render a real (static) route — the sentinel still has to
-                    ride beside the content so readiness is declared for THIS
-                    commit, not for the shell that loaded before it. */}
-                <Route
-                  path="*"
-                  element={
-                    <>
-                      <NotFound />
-                      <AppReadySentinel />
-                    </>
-                  }
-                />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </LocaleProvider>
-      </ModelProvider>
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </LocaleProvider>
+        </ModelProvider>
+      </BootstrapProvider>
     </ThemeProvider>
   )
 }

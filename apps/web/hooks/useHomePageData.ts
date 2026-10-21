@@ -1,17 +1,16 @@
 'use client'
 
+// Home-page data hook — derives every landing-section value from the
+// /bootstrap payload (one request per app load) instead of the historical
+// per-section fan-out (sessions + training + knowledge + feedback +
+// datasets + models + souls). Model status / inference count still come
+// from the SSE health snapshot — streams stay streams by contract.
+
 import { useEffect, useState } from 'react'
-import type { HealthStatus } from '@/lib/model-controller'
-import { type Soul } from '@/lib/souls-controller'
-import { sessionController } from '@/lib/session-controller'
-import { trainingController } from '@/lib/training-controller'
-import { knowledgeController } from '@/lib/knowledge-controller'
-import { feedbackController, type FeedbackStats } from '@/lib/feedback-controller'
-import { datasetController } from '@/lib/dataset-controller'
+import type { Soul } from '@/lib/souls-controller'
+import { buildFeedbackStats, type FeedbackStats } from '@/lib/feedback-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
-import { useApiReady } from '@/hooks/useLiveStatus'
-import { useModels, useSouls } from '@/lib/cache/api-hooks'
-import { logger } from '@/lib/dev-log'
+import { useBootstrap } from '@/contexts/BootstrapContext'
 
 export interface HomePageData {
   modelCount: number | null
@@ -59,7 +58,7 @@ export interface HomePageData {
 
 export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const [modelCount, setModelCount] = useState<number | null>(null)
-  const [checkpointCount, setCheckpointCount] = useState<number>(0)
+  const [checkpointCount] = useState<number>(0)
   const [modelStatus, setModelStatus] = useState<{ loaded: boolean; model: string | null }>({
     loaded: false,
     model: null,
@@ -88,7 +87,13 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     Array<{ id: string; name: string; status: string; created_at?: string }>
   >([])
   const [recentDatasets, setRecentDatasets] = useState<
-    Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>
+    Array<{
+      id: string
+      name: string
+      updated_at?: string
+      size?: number
+      samples?: number
+    }>
   >([])
   const [testRunning, setTestRunning] = useState(false)
   const [testResponse, setTestResponse] = useState<string | null>(null)
@@ -103,29 +108,25 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     datasets: false,
   })
 
-  const ready = useApiReady()
+  const { data: bootstrap, error: bootstrapError } = useBootstrap()
 
-  // Use shared query cache for models and souls — eliminates 2 redundant API calls.
-  const { data: modelsData, isLoading: modelsLoading } = useModels()
-  const { data: soulsData, isLoading: soulsLoading } = useSouls()
-
-  // Derive model count from the query cache instead of a separate API call.
+  // Derive model count from the bootstrap slice (was the shared models
+  // query cache — same normalization, one less consumer of that call).
   useEffect(() => {
-    if (modelsData) {
-      const list = modelsData ?? []
-      setModelCount(list.length)
-    }
-  }, [modelsData])
+    const models = bootstrap?.members.models
+    if (models) setModelCount(models.length)
+  }, [bootstrap])
 
-  // Derive current soul from the query cache instead of a separate API call.
+  // Current soul from the souls slice.
   useEffect(() => {
+    const soulsData = bootstrap?.members.souls
     if (soulsData) {
       const active = soulsData.current_soul
         ? (soulsData.souls || [])?.find((s: Soul) => s.name === soulsData.current_soul)
         : null
       setCurrentSoul(active || null)
     }
-  }, [soulsData])
+  }, [bootstrap])
 
   // Use health snapshot for model status instead of a separate API call.
   useEffect(() => {
@@ -137,109 +138,107 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const inferenceCount = health && health !== 'offline' ? (health.inference_count ?? 0) : null
   const healthSummary = health && health !== 'offline' ? (health.model_type ?? null) : null
 
+  // The remaining landing sections arrive as members of the same payload.
+  // A null member with errors[key] === 'not_ready' is just the server still
+  // booting (members appear in later payloads) — only a real error entry
+  // raises the section's error flag.
   useEffect(() => {
-    if (!ready) return
-    const cancelled = { current: false }
-    // Sessions, training, knowledge, feedback, and datasets are NOT available
-    // via SSE/live status — these still need dedicated API calls.
-    sessionController
-      .list()
-      .then((sessions) => {
-        if (!cancelled.current) {
-          const sorted = [...sessions]
-            .filter((s) => s.name || s.id)
-            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-            .slice(0, 5)
-            .map((s) => ({
-              id: s.id,
-              name: s.name,
-              updated_at: s.updated_at,
-              message_count: s.messages?.length,
-              pinned: s.pinned,
-              starred: s.starred,
-            }))
-          setRecentSessions(sorted)
-        }
-      })
-      .catch((e) => {
-        logger.warning('Could not home sessions list', { exception: String(e?.message || e) })
-        if (!cancelled.current) setErrors((p) => ({ ...p, sessions: true }))
-      })
-    trainingController
-      .list()
-      .then((jobs) => {
-        if (!cancelled.current) {
-          const running = jobs.find((j) => j.status === 'running')
-          setRunningTraining(
-            running
-              ? {
-                  name: running.name || running.id,
-                  status_message: running.status_message || 'Training...',
-                }
-              : null,
-          )
-          const recent = [...jobs]
-            .sort(
-              (a, b) =>
-                new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
-            )
-            .slice(0, 3)
-          setRecentJobs(recent)
-        }
-      })
-      .catch((e) => {
-        logger.warning('Could not home training list', { exception: String(e?.message || e) })
-        if (!cancelled.current) setErrors((p) => ({ ...p, training: true }))
-      })
-    knowledgeController
-      .stats()
-      .then((s) => {
-        if (!cancelled.current) setKnowledgeCount(s.total_items)
-      })
-      .catch((e) => {
-        logger.warning('Could not home knowledge stats', { exception: String(e?.message || e) })
-        if (!cancelled.current) setErrors((p) => ({ ...p, knowledge: true }))
-      })
-    feedbackController
-      .getFeedbackStats()
-      .then((s) => {
-        if (!cancelled.current) setFeedbackStats(s)
-      })
-      .catch((e) => {
-        logger.warning('Could not home feedback stats', { exception: String(e?.message || e) })
-        if (!cancelled.current) setErrors((p) => ({ ...p, feedback: true }))
-      })
-    datasetController
-      .list()
-      .then((list) => {
-        if (!cancelled.current) {
-          const sorted = [...list]
-            .sort(
-              (a, b) =>
-                new Date(b.updated_at || b.created_at || 0).getTime() -
-                new Date(a.updated_at || a.created_at || 0).getTime(),
-            )
-            .slice(0, 5)
-            .map((ds) => ({
-              id: ds.id,
-              name: ds.name,
-              updated_at: ds.updated_at || ds.created_at,
-              size: ds.size,
-              samples: ds.samples,
-            }))
-          setRecentDatasets(sorted)
-        }
-      })
-      .catch((e) => {
-        logger.warning('Could not home datasets list', { exception: String(e?.message || e) })
-        if (!cancelled.current) setErrors((p) => ({ ...p, datasets: true }))
-      })
-    return () => {
-      cancelled.current = true
+    if (!bootstrap) return
+    const { members, errors: memberErrors } = bootstrap
+    const failed = (key: string) => {
+      const err = memberErrors[key]
+      return err !== undefined && err !== 'not_ready'
     }
-  }, [ready])
 
-  const loading = modelsLoading || soulsLoading || health === null
+    if (members.sessions) {
+      const sorted = [...members.sessions]
+        .filter((s) => s.name || s.id)
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 5)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          updated_at: s.updated_at,
+          message_count: s.messages?.length,
+          pinned: s.pinned,
+          starred: s.starred,
+        }))
+      setRecentSessions(sorted)
+    }
+
+    if (members.training_jobs) {
+      const jobs = members.training_jobs
+      const running = jobs.find((j) => j.status === 'running')
+      setRunningTraining(
+        running
+          ? {
+              name: running.name || running.id,
+              status_message:
+                (running as { status_message?: string }).status_message || 'Training...',
+            }
+          : null,
+      )
+      const recent = [...jobs]
+        .sort(
+          (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+        )
+        .slice(0, 3)
+      setRecentJobs(recent)
+    }
+
+    if (members.knowledge_stats) setKnowledgeCount(members.knowledge_stats.total_items)
+
+    if (members.feedback_stats) {
+      setFeedbackStats(buildFeedbackStats(members.feedback_stats, members.meta_weights_stats ?? {}))
+    }
+
+    if (members.datasets) {
+      const list = members.datasets.datasets
+      const sorted = [...list]
+        .sort(
+          (a, b) =>
+            new Date(b.updated_at || b.created_at || 0).getTime() -
+            new Date(a.updated_at || a.created_at || 0).getTime(),
+        )
+        .slice(0, 5)
+        .map((ds) => ({
+          id: ds.id,
+          name: ds.name,
+          updated_at: ds.updated_at || ds.created_at,
+          size: ds.size,
+          samples: ds.samples,
+        }))
+      setRecentDatasets(sorted)
+    }
+
+    setErrors({
+      models: failed('models'),
+      soul: failed('souls'),
+      sessions: failed('sessions'),
+      training: failed('training_jobs'),
+      knowledge: failed('knowledge_stats'),
+      feedback: failed('feedback_stats'),
+      datasets: failed('datasets'),
+    })
+  }, [bootstrap])
+
+  // The whole payload failed (server unreachable at boot): every section
+  // failed — same flags the old per-section catch blocks would raise.
+  useEffect(() => {
+    if (bootstrapError && !bootstrap) {
+      setErrors({
+        models: true,
+        soul: true,
+        sessions: true,
+        training: true,
+        knowledge: true,
+        feedback: true,
+        datasets: true,
+      })
+    }
+  }, [bootstrapError, bootstrap])
+
+  const loading = bootstrap === null || health === null
 
   return {
     modelCount,

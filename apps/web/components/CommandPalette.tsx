@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
-import { sessionController } from '@/lib/session-controller'
 import { soulsController } from '@/lib/souls-controller'
+import { useBootstrap } from '@/contexts/BootstrapContext'
+import { normalizeHfModels } from '@/lib/bootstrap-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { NAV_SECTIONS } from '@/lib/navigation'
 import { chatDB } from '@/lib/db'
@@ -32,61 +33,144 @@ export function CommandPalette() {
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
 
+  // Sessions/models/souls for the palette come from the /bootstrap payload
+  // (the same slices the landing consumes) — no mount prewarm fetches.
+  // Freshness after actions is action-owned (load/switch refresh their own
+  // surfaces); the palette is a boot-time snapshot by design.
+  const { data: bootstrap } = useBootstrap()
   useEffect(() => {
-    sessionController.list().then(sessions => {
-      setRecentSessions(sessions.slice(0, 5).map(s => ({ id: s.id, name: s.name || 'Untitled' })))
-    }).catch(() => /* session list unavailable */ {})
-    modelController.list().then(list => {
-      setModels(list.map(m => ({
+    if (!bootstrap) return
+    const { sessions, souls } = bootstrap.members
+    setRecentSessions(
+      (sessions ?? []).slice(0, 5).map((s) => ({ id: s.id, name: s.name || 'Untitled' })),
+    )
+    setModels(
+      normalizeHfModels(bootstrap.members.models).map((m) => ({
         id: m.id || m.name,
         name: (m.id || m.name).replace(/^hf\//, ''),
         loaded: m.loaded || false,
-      })))
-    }).catch(() => /* model list unavailable */ {})
-    soulsController.list().then(res => {
-      setSouls(res.souls.map(s => ({ name: s.name, description: s.description })))
-    }).catch(() => /* soul list unavailable */ {})
-  }, [])
+      })),
+    )
+    setSouls((souls?.souls ?? []).map((s) => ({ name: s.name, description: s.description })))
+  }, [bootstrap])
 
   const actions: CommandAction[] = useMemo(() => {
-    const nav: CommandAction[] = NAV_SECTIONS.flatMap(section =>
-      section.routes.map(route => ({
+    const nav: CommandAction[] = NAV_SECTIONS.flatMap((section) =>
+      section.routes.map((route) => ({
         id: `nav-${route.path}`,
         label: route.description || route.path,
         description: route.description || '',
         icon: route.icon || '📄',
         category: 'navigation' as const,
         run: () => router.push(route.path),
-      }))
+      })),
     )
 
-    const modelActs: CommandAction[] = models.map(m => ({
-      id: `model-${m.id}`, label: `Switch to ${m.name}`, description: m.loaded ? 'Currently loaded' : 'Load and switch',
-      icon: m.loaded ? '✓' : '🧠', category: 'model' as const,
+    const modelActs: CommandAction[] = models.map((m) => ({
+      id: `model-${m.id}`,
+      label: `Switch to ${m.name}`,
+      description: m.loaded ? 'Currently loaded' : 'Load and switch',
+      icon: m.loaded ? '✓' : '🧠',
+      category: 'model' as const,
       run: async () => {
-        if (!m.loaded) { try { await modelController.load(m.id) } catch { /* ignore */ } }
+        if (!m.loaded) {
+          try {
+            await modelController.load(m.id)
+          } catch {
+            /* ignore */
+          }
+        }
         router.push('/chat')
       },
     }))
 
     const acts: CommandAction[] = [
-      { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: '➕', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },
-      { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: '🔍', category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
-      { id: 'act-export', label: 'Export Chat', description: 'Download current chat as markdown', icon: '📥', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('export-chat')); setOpen(false) } },
-      { id: 'act-theme', label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`, description: 'Toggle theme', icon: '🌓', category: 'action', run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }) },
-      { id: 'act-clear', label: 'Clear Chat History', description: 'Remove all saved conversations', icon: '🗑️', category: 'action', run: () => { chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {}); window.location.reload() } },
-      { id: 'act-shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', icon: '⌨️', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('open-shortcuts')); setOpen(false) } },
+      {
+        id: 'act-newchat',
+        label: 'New Chat',
+        description: 'Start a new conversation',
+        icon: '➕',
+        category: 'action',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('new-chat'))
+          router.push('/chat')
+        },
+      },
+      {
+        id: 'act-search',
+        label: 'Search Conversations',
+        description: 'Search across all conversations',
+        icon: '🔍',
+        category: 'action',
+        run: () => {
+          setOpen(false)
+          window.dispatchEvent(new CustomEvent('search-conversations'))
+        },
+      },
+      {
+        id: 'act-export',
+        label: 'Export Chat',
+        description: 'Download current chat as markdown',
+        icon: '📥',
+        category: 'action',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('export-chat'))
+          setOpen(false)
+        },
+      },
+      {
+        id: 'act-theme',
+        label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`,
+        description: 'Toggle theme',
+        icon: '🌓',
+        category: 'action',
+        run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }),
+      },
+      {
+        id: 'act-clear',
+        label: 'Clear Chat History',
+        description: 'Remove all saved conversations',
+        icon: '🗑️',
+        category: 'action',
+        run: () => {
+          chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {})
+          window.location.reload()
+        },
+      },
+      {
+        id: 'act-shortcuts',
+        label: 'Keyboard Shortcuts',
+        description: 'View all shortcuts',
+        icon: '⌨️',
+        category: 'action',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('open-shortcuts'))
+          setOpen(false)
+        },
+      },
     ]
 
-    const conv: CommandAction[] = recentSessions.map(s => ({
-      id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: '💭', category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),
+    const conv: CommandAction[] = recentSessions.map((s) => ({
+      id: `conv-${s.id}`,
+      label: s.name,
+      description: 'Open conversation',
+      icon: '💭',
+      category: 'conversation' as const,
+      run: () => router.push(`/chat?session=${s.id}`),
     }))
 
-    const soulActs: CommandAction[] = souls.map(s => ({
-      id: `soul-${s.name}`, label: `Switch soul: ${s.name}`, description: s.description || 'Switch personality',
-      icon: '🎭', category: 'soul' as const,
+    const soulActs: CommandAction[] = souls.map((s) => ({
+      id: `soul-${s.name}`,
+      label: `Switch soul: ${s.name}`,
+      description: s.description || 'Switch personality',
+      icon: '🎭',
+      category: 'soul' as const,
       run: async () => {
-        try { await soulsController.switch(s.name) } catch { /* soul switch failed — navigate anyway */ }
+        try {
+          await soulsController.switch(s.name)
+        } catch {
+          /* soul switch failed — navigate anyway */
+        }
         router.push('/chat')
       },
     }))
@@ -97,17 +181,21 @@ export function CommandPalette() {
   const filtered = useMemo(() => {
     if (!query.trim()) return actions
     const q = query.toLowerCase()
-    return actions.filter(a =>
-      a.label.toLowerCase().includes(q) ||
-      a.description.toLowerCase().includes(q)
+    return actions.filter(
+      (a) => a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q),
     )
   }, [actions, query])
 
   useEffect(() => {
-    if (!open) { setQuery(''); setSelectedIdx(0) }
+    if (!open) {
+      setQuery('')
+      setSelectedIdx(0)
+    }
   }, [open])
 
-  useEffect(() => { setSelectedIdx(0) }, [query])
+  useEffect(() => {
+    setSelectedIdx(0)
+  }, [query])
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 50)
@@ -117,7 +205,7 @@ export function CommandPalette() {
     const down = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setOpen(o => !o)
+        setOpen((o) => !o)
       }
       if (e.key === 'Escape') setOpen(false)
     }
@@ -125,20 +213,32 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', down)
   }, [])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIdx(i => Math.min(i + 1, filtered.length - 1)) }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIdx(i => Math.max(i - 1, 0)) }
-    if (e.key === 'Enter' && filtered[selectedIdx]) {
-      setOpen(false)
-      filtered[selectedIdx].run()
-    }
-  }, [filtered, selectedIdx])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIdx((i) => Math.min(i + 1, filtered.length - 1))
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIdx((i) => Math.max(i - 1, 0))
+      }
+      if (e.key === 'Enter' && filtered[selectedIdx]) {
+        setOpen(false)
+        filtered[selectedIdx].run()
+      }
+    },
+    [filtered, selectedIdx],
+  )
 
   if (!open) return null
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
+      <div
+        className="fixed inset-0 z-[100] bg-background/60 backdrop-blur-sm"
+        onClick={() => setOpen(false)}
+      />
       <div className="fixed left-1/2 top-[15%] z-[101] w-full max-w-lg -translate-x-1/2">
         <div
           role="dialog"
@@ -153,9 +253,15 @@ export function CommandPalette() {
               const first = focusable[0] as HTMLElement
               const last = focusable[focusable.length - 1] as HTMLElement
               if (e.shiftKey) {
-                if (document.activeElement === first) { last.focus(); e.preventDefault() }
+                if (document.activeElement === first) {
+                  last.focus()
+                  e.preventDefault()
+                }
               } else {
-                if (document.activeElement === last) { first.focus(); e.preventDefault() }
+                if (document.activeElement === last) {
+                  first.focus()
+                  e.preventDefault()
+                }
               }
             }
           }}
@@ -165,21 +271,31 @@ export function CommandPalette() {
             <input
               ref={inputRef}
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search pages, models, actions..."
               className="flex-1 bg-transparent py-3 text-sm outline-none focus:ring-2 focus:ring-ring/30 rounded placeholder:text-muted-foreground/50"
             />
-            <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Esc</kbd>
+            <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              Esc
+            </kbd>
           </div>
           <div className="max-h-80 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground">No results for &ldquo;{query}&rdquo;</p>
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                No results for &ldquo;{query}&rdquo;
+              </p>
             ) : (
               filtered.map((action, i) => {
                 const cat = action.category
                 const showHeader = i === 0 || filtered[i - 1].category !== cat
-                const catLabel = { navigation: 'Pages', model: 'Models', soul: 'Souls', action: 'Actions', conversation: 'Conversations' }[cat]
+                const catLabel = {
+                  navigation: 'Pages',
+                  model: 'Models',
+                  soul: 'Souls',
+                  action: 'Actions',
+                  conversation: 'Conversations',
+                }[cat]
                 return (
                   <div key={action.id}>
                     {showHeader && (
@@ -190,15 +306,20 @@ export function CommandPalette() {
                     <button
                       className={cn(
                         'flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
-                        i === selectedIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                        i === selectedIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted',
                       )}
-                      onClick={() => { setOpen(false); action.run() }}
+                      onClick={() => {
+                        setOpen(false)
+                        action.run()
+                      }}
                       onMouseEnter={() => setSelectedIdx(i)}
                     >
                       <span className="text-base">{action.icon}</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{action.label}</p>
-                        <p className="truncate text-xs text-muted-foreground">{action.description}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {action.description}
+                        </p>
                       </div>
                     </button>
                   </div>
