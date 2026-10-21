@@ -1,15 +1,20 @@
 'use client'
 
+// Images section, extracted verbatim from the retired `/images` page so the
+// "Create Images" journey runs through `/files` (route-map row:
+// `/files` <- `/files` + `/images`, card 7839a7c6). No redesign — the cards,
+// copy, and interaction flow are byte-for-byte the ones the standalone page
+// rendered; only the PageContainer wrapper is gone, because the host page
+// owns it.
+
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, cn } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { PageContainer } from '@/components/PageContainer'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { imagesController, type GalleryImage, type ImageStyle } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface Style {
@@ -17,7 +22,7 @@ interface Style {
   name: string
 }
 
-export default function ImagesPage() {
+export function ImagesPanel() {
   const router = useRouter()
   const [gallery, setGallery] = useState<GalleryImage[]>([])
   const [styles, setStyles] = useState<Style[]>([])
@@ -28,7 +33,6 @@ export default function ImagesPage() {
   const [generating, setGenerating] = useState(false)
   const [lastGenerated, setLastGenerated] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
-  const addToast = useToastStore(s => s.addToast)
 
   const fetchData = async () => {
     try {
@@ -67,14 +71,12 @@ export default function ImagesPage() {
     }
   }
 
+  if (loading) return null
+
   return (
-    <PageContainer
-      title="Images"
-      subtitle={`${gallery.length} images generated`}
-      loading={loading}
-      error={loadError}
-      onRetry={fetchData}
-    >
+    <>
+      {loadError && <StatusBanner variant="error" message={loadError} dismissible={false} />}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
           <CardTitle className="text-[11px] font-medium">Generate</CardTitle>
@@ -158,6 +160,6 @@ export default function ImagesPage() {
       </Card>
 
       {gallery.length > 0 && <ImageGalleryInsightsCard gallery={gallery} styles={styles} />}
-    </PageContainer>
+    </>
   )
 }

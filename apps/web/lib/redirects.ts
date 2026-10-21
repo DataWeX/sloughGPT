@@ -27,9 +27,14 @@ export const REDIRECTS: Record<string, string> = {
   '/export': '/settings',
   '/errors': '/monitoring',
   '/security': '/monitoring',
-  '/images': '/developer',
+  // Route-map row `/files` <- `/files` + `/images` (card 7839a7c6): the images
+  // page was absorbed into /files, so the old path now 307s there. Note that
+  // /files itself is a LIVE route — never add it as a redirect source, or the
+  // 307 fires before routing and the page becomes unreachable (that exact bug
+  // shipped once: both /files and /images pointed at /developer). The entry
+  // count and that live-route invariant are pinned in redirect-plugin.test.ts.
+  '/images': '/files',
   '/session': '/chat',
-  '/files': '/developer',
   '/voice': '/chat?mode=talk',
   '/writing': '/chat?mode=write',
   '/rewrite': '/chat?mode=rewrite',
