@@ -1122,6 +1122,24 @@ git push -u origin feat/<name>   # push your own branch when done
   `e23fdb2d7` (bench), `05df4b22d` (evidence). LANDING: tail of the
   7-branch stack (after `feat/wire-py`). From `.wt-worldbrain`.
 
+- **2026-10-21 · vq-huffman-04 benchmark truth-up (stack tail `feat/npu-caps`,
+  `b4fda3edc`; card `vq-huffman-04` DONE).**
+  `scripts/benchmark_block_quantization.py` was the card's deliverable all
+  along (exact title match) — fixed, ran, recorded: `zlib.crc32` seeds replace
+  PYTHONHASHSEED `hash()` (history now comparable), cluster serialize measured
+  + **bit-exact integrity-gated** (stale block-only guard; series cards 01-03
+  landed `ClusterCodec` streams), median-of-rounds timings, JSON history
+  (`benchmark_block_quantization.json`, downcraft precedent). Verdict avg over
+  5 realistic NN shapes: **block_q4 5.33x / cos 0.99695 / 0.9 ms encode =
+  storage default**, **block_q8 3.20x / MSE 8.39e-09 = fidelity pick**,
+  cluster dominated (3.43x, 248 ms encode, ~275x slower) on weight-like data
+  — its niche is discrete/heavy-tailed input. Suite gate `-05`: pugqeep/
+  compressor 2020 tests **0 fail**; wire-py 83/83; canonical remainder 3784
+  tests with 8+2 reds **all stash-proven pre-existing** (drift-baseline lane
+  `56b49cf1`/`33773fce`); the 24 core-py collection errors pre-date the fork
+  (`merge-base` lacks `domain/shell/_internal/cmds/*` too — main gained them
+  after; zero deletions on my side). From `.wt-worldbrain`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
