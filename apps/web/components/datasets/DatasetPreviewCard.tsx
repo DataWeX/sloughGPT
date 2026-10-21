@@ -5,7 +5,7 @@ import { Search } from 'lucide-react'
 
 interface DatasetPreview {
   columns: string[]
-  rows: any[][]
+  rows: unknown[][]
 }
 
 interface DatasetPreviewCardProps {
