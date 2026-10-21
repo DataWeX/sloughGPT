@@ -3,6 +3,7 @@
 import { create } from 'zustand'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { chatDB } from '@/lib/db'
+import { extractErrorMessage } from '@/lib/error-utils'
 import { trackEvent } from '@/lib/dev-log'
 import { settingsController, type AllSettings } from '@/lib/settings-controller'
 
@@ -84,8 +85,8 @@ function _flushSettings(get: () => AppStore) {
   const partial = _pendingSettings
   _pendingSettings = null
   const full = { ...get().settings, ...partial }
-  chatDB.setKV(SETTINGS_KEY, full).catch((err: any) => {
-    console.warn('Settings persistence failed:', err?.message || err)
+  chatDB.setKV(SETTINGS_KEY, full).catch((err: unknown) => {
+    console.warn('Settings persistence failed:', extractErrorMessage(err))
     if (_pendingSettings) {
       _pendingSettings = { ..._pendingSettings, ...partial }
     } else {

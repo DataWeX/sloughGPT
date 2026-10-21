@@ -101,6 +101,26 @@ interface ErrorEntry {
   timestamp: number
 }
 
+/** One match line from GET /chat/sessions/search (router index builder). */
+interface SearchMatch {
+  role: string
+  content: string
+  timestamp: string
+}
+
+/** One session search hit — field set per _session_search_index.search(). */
+interface SearchSessionHit {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+  match_count: number
+  matches: SearchMatch[]
+}
+
+/** apiGet unwraps success_response to the array; keep the raw-envelope fallbacks typed. */
+type SearchEnvelope = SearchSessionHit[] | { results?: SearchSessionHit[]; data?: SearchSessionHit[] }
+
 const DOCSTORE = '/docstore'
 
 function docUrl(collection: string, id?: string): string {
@@ -277,16 +297,16 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     ): Promise<Array<{ session: ChatSession; matches: ChatMessage[] }>> {
       if (!query.trim()) return []
       try {
-        const data = await apiGet<any>(
+        const data = await apiGet<SearchEnvelope>(
           `/chat/sessions/search?q=${encodeURIComponent(query)}&limit=30`,
         )
         const results = Array.isArray(data) ? data : (data?.results ?? data?.data ?? [])
-        return results.map((r: any) => ({
+        return results.map((r) => ({
           session: {
             id: r.id,
             name: r.name || `Chat ${r.id}`,
-            messages: (r.matches || []).map((m: any) => ({
-              id: m.id || `msg_${Date.now()}`,
+            messages: (r.matches || []).map((m) => ({
+              id: `msg_${Date.now()}`,
               role: (m.role || 'user') as 'user' | 'assistant',
               content: m.content || '',
               timestamp: new Date(m.timestamp || Date.now()),
@@ -297,8 +317,8 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
             starred: false,
             pinned: false,
           },
-          matches: (r.matches || []).map((m: any) => ({
-            id: m.id || `msg_${Date.now()}`,
+          matches: (r.matches || []).map((m) => ({
+            id: `msg_${Date.now()}`,
             role: (m.role || 'user') as 'user' | 'assistant',
             content: m.content || '',
             timestamp: new Date(m.timestamp || Date.now()),
