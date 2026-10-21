@@ -36,6 +36,7 @@ from schemas.common import endpoint, success_response
 _BOOTSTRAP_MEMBERS: dict[str, tuple[str, str]] = {
     "health": ("/health", "GET"),
     "startup_progress": ("/health/startup-progress", "GET"),
+    "models": ("/models/hf", "GET"),
     "consciousness_status": ("/consciousness/status", "GET"),
     "souls": ("/souls", "GET"),
     "sessions": ("/chat/sessions", "GET"),

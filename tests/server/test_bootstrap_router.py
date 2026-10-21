@@ -19,6 +19,7 @@ from apps.api.server.routers.bootstrap import router
 MEMBER_KEYS = {
     "health",
     "startup_progress",
+    "models",
     "consciousness_status",
     "souls",
     "sessions",
