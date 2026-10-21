@@ -12,6 +12,8 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 
+from domain.infrastructure.asset_store import get_asset_store
+
 logger = logging.getLogger("slo.routers.images")
 
 
@@ -42,6 +44,7 @@ class ImagesRouter:
             "sketch": "Sketch",
             "fantasy": "Fantasy",
         }
+        self._store = get_asset_store()
         self._register_routes()
 
     def _register_routes(self):
@@ -293,7 +296,12 @@ class ImagesRouter:
         return generator(prompt)
 
     def _save_image(self, image_bytes: bytes, style: str) -> str:
-        """Save image to gallery and return relative path."""
+        """Save image to the gallery (URL projection) + asset store (canonical).
+
+        The gallery file keeps ``/data/gallery/<name>`` resolvable (the ``<img>`
+        src contract); the store copy carries origin=generated metadata and
+        feeds history/operator surfaces.
+        """
         gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
         gallery_dir.mkdir(parents=True, exist_ok=True)
 
@@ -303,6 +311,14 @@ class ImagesRouter:
         filepath = gallery_dir / filename
 
         filepath.write_bytes(image_bytes)
+        self._store.put(
+            image_bytes,
+            original_name=filename,
+            origin="generated",
+            media_type="image/png",
+            kind="image",
+            extra={"style": style},
+        )
 
         return f"/data/gallery/{filename}"
 
@@ -321,7 +337,7 @@ class ImagesRouter:
         _t0 = _time.monotonic()
         image_bytes = self._generate_image(request.prompt, request.style)
 
-        image_path = self._save_image(image_bytes, request.style)
+        image_path = await asyncio.to_thread(self._save_image, image_bytes, request.style)
 
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
         data_url = f"data:image/png;base64,{base64_image}"
@@ -345,6 +361,17 @@ class ImagesRouter:
         gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
 
         def _scan_gallery():
+            # Adopt pre-existing gallery files into the store (idempotent) so
+            # history/operator surfaces know them. The DISK stays the serving
+            # projection: the response lists files whose /data/gallery URL
+            # actually resolves, exactly like the legacy glob.
+            if not getattr(self, "_gallery_migrated", False):
+                self._gallery_migrated = True
+                if gallery_dir.exists():
+                    try:
+                        self._store.migrate_gallery(sorted(gallery_dir.glob("generated_*.png")))
+                    except Exception as e:
+                        logger.warning("gallery adoption into asset store failed: %s", e)
             if not gallery_dir.exists():
                 return []
             images = []

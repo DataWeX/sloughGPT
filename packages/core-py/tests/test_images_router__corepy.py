@@ -8,6 +8,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
@@ -17,6 +19,17 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.images import ImagesRouter  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _tmp_asset_store(tmp_path, monkeypatch):
+    """Point the router's asset store at tmp_path so tests never write the real
+    data/assets CAS or adopt the real gallery into it."""
+    from routers import images as images_mod
+
+    from domain.infrastructure.asset_store import AssetStore
+
+    monkeypatch.setattr(images_mod, "get_asset_store", lambda: AssetStore(tmp_path / "assets"))
 
 
 def _app(ir: ImagesRouter) -> FastAPI:

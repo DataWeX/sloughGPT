@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
@@ -24,6 +26,26 @@ from routers.files import FilesRouter  # noqa: E402
 # Bind domain.cognition into the attr chain: py3.12 mock.patch resolves targets via
 # pkgutil.resolve_name (getattr-only), so the lazy package chain must be materialised.
 import domain.cognition  # noqa: E402,F401
+from domain.infrastructure.asset_store import AssetStore  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _isolate_files_collection():
+    """Empty the worktree-local files collection before each test.
+
+    Rows persist in the file-backed store across tests within a session (and a
+    fresh worktree adopts main's data/uploads_mogdb on first use), so the
+    list/total assertions need a clean slate. Only THIS repo's store is
+    touched: db_pool resolves data/ from this tree; the legacy main-checkout
+    dir is read-only there (copied in, never written).
+    """
+    from infrastructure.db_pool import get_db
+
+    try:
+        get_db("uploads_mogdb").collection("files").delete_many({})
+    except Exception:
+        pass
+    yield
 
 
 def _app(fr: FilesRouter) -> FastAPI:
@@ -44,6 +66,7 @@ def _make_router(tmp_path: Path) -> FilesRouter:
     fr.UPLOADS_DIR = tmp_path
     fr.METADATA_FILE = tmp_path / "_metadata.json"
     fr.SUPPORTED_EXTENSIONS = {".txt": "text/plain", ".pdf": "application/pdf"}
+    fr._store = AssetStore(tmp_path / "assets")
     fr._register_routes()
     return fr
 
@@ -171,3 +194,60 @@ class TestIngest:
             resp = client.post(f"/files/{fid}/ingest")
         assert resp.status_code == 200
         assert resp.json()["facts_stored"] == 1
+
+
+class TestAssetStoreBacking:
+    """Slice 2: uploads land in the content-addressed store; legacy rows adopted."""
+
+    def test_upload_goes_to_store_not_uploads_dir(self, tmp_path):
+        fr = _make_router(tmp_path)
+        client = TestClient(_app(fr))
+        r = client.post(
+            "/files/upload", files={"file": ("cas.txt", io.BytesIO(b"cas payload"), "text/plain")}
+        )
+        assert r.status_code == 200
+        fid = r.json()["id"]
+        # Bytes live in the CAS (one blob, sha256 layout)...
+        blobs = [p for p in (tmp_path / "assets" / "blobs").rglob("*") if p.is_file()]
+        assert len(blobs) == 1
+        # ...nothing was written to the legacy uploads layout...
+        assert not any(p.is_file() and p.suffix == ".txt" for p in tmp_path.iterdir())
+        # ...and content resolves through the store.
+        detail = client.get(f"/files/{fid}")
+        assert detail.status_code == 200
+        assert detail.json()["text"] == "cas payload"
+
+    def test_legacy_row_adopted_and_backfilled(self, tmp_path):
+        fr = _make_router(tmp_path)
+        # Legacy layout: bytes on disk, metadata row WITHOUT asset_id.
+        (tmp_path / "1717_legacy.txt").write_text("legacy bytes")
+        fr._upsert_file_metadata(
+            "1717_legacy",
+            {
+                "filename": "1717_legacy.txt",
+                "original_name": "legacy.txt",
+                "extension": ".txt",
+                "size_bytes": 11,
+                "chars": 0,
+                "pages": 1,
+                "uploaded_at": 1717.0,
+                "tags": ["old"],
+            },
+        )
+        client = TestClient(_app(fr))
+        listed = client.get("/files")
+        assert listed.status_code == 200
+        assert listed.json()["total"] == 1
+        # Row backfilled with store ids; original untouched (copy-not-move).
+        row = fr._load_metadata()["1717_legacy"]
+        assert row["asset_id"]
+        assert row["sha256"]
+        assert (tmp_path / "1717_legacy.txt").read_text() == "legacy bytes"
+        # Content resolves through the store; download lands in history.
+        detail = client.get("/files/1717_legacy")
+        assert detail.status_code == 200
+        assert detail.json()["text"] == "legacy bytes"
+        actions = {e["action"] for e in fr._store.history(asset_id=row["asset_id"])}
+        assert {"put", "migrate", "download"} <= actions
+        # Cleanup the row (polite to any later consumer of the shared collection).
+        assert client.delete("/files/1717_legacy").status_code == 200

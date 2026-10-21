@@ -16,6 +16,8 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
 from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 
+from domain.infrastructure.asset_store import get_asset_store
+
 logger = logging.getLogger("slo.routers.files")
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
@@ -103,6 +105,7 @@ class FilesRouter:
             ".xml": "text/xml",
             ".log": "text/plain",
         }
+        self._store = get_asset_store()
         self._register_routes()
 
     def _register_routes(self):
@@ -144,6 +147,8 @@ class FilesRouter:
                         "pages": doc.get("pages", 1),
                         "uploaded_at": doc.get("uploaded_at", 0.0),
                         "tags": doc.get("tags", []),
+                        "asset_id": doc.get("asset_id", ""),
+                        "sha256": doc.get("sha256", ""),
                     }
             return meta
         except Exception as e:
@@ -169,6 +174,8 @@ class FilesRouter:
                         "pages": m.get("pages", 1),
                         "uploaded_at": m.get("uploaded_at", 0.0),
                         "tags": m.get("tags", []),
+                        "asset_id": m.get("asset_id", ""),
+                        "sha256": m.get("sha256", ""),
                     }
                 )
         except Exception as e:
@@ -189,6 +196,8 @@ class FilesRouter:
                 "pages": meta.get("pages", 1),
                 "uploaded_at": meta.get("uploaded_at", 0.0),
                 "tags": meta.get("tags", []),
+                "asset_id": meta.get("asset_id", ""),
+                "sha256": meta.get("sha256", ""),
             }
             existing = col.find_one({"file_id": file_id})
             if existing:
@@ -217,6 +226,68 @@ class FilesRouter:
         safe_name = re.sub(r"[^\w\-]", "_", filename)
         return f"{int(time.time())}_{safe_name}"
 
+    def _ensure_migrated(self) -> None:
+        """One-shot adoption of legacy ``data/uploads`` files into the asset store.
+
+        Bytes are COPIED into the CAS — originals stay on disk (file-safety) —
+        and each adopted row gains ``asset_id``/``sha256`` so later reads
+        resolve through the store. Idempotent (rows already carrying an
+        ``asset_id``, and paths the store recognises via ``legacy_path``, are
+        skipped), so concurrent first requests may both run it harmlessly.
+        """
+        if getattr(self, "_migrated", False):
+            return
+        self._migrated = True
+        try:
+            meta = self._load_metadata()
+            entries: list[tuple[str, Path, dict]] = []
+            for fid, m in meta.items():
+                if m.get("asset_id"):
+                    continue
+                path = self.UPLOADS_DIR / m.get("filename", "")
+                if not path.exists():
+                    continue
+                entries.append((fid, path, m))
+            if not entries:
+                return
+            stats = self._store.migrate_uploads(
+                [
+                    (
+                        path,
+                        {
+                            "filename": m.get("filename", ""),
+                            "original_name": m.get("original_name", ""),
+                            "tags": m.get("tags", []),
+                        },
+                    )
+                    for _fid, path, m in entries
+                ]
+            )
+            by_legacy = {a.legacy_path: a for a in self._store.list(origin="upload")}
+            for fid, path, m in entries:
+                asset = by_legacy.get(str(path))
+                if asset is None:
+                    continue
+                row = dict(m)
+                row["asset_id"] = asset.id
+                row["sha256"] = asset.sha256
+                self._upsert_file_metadata(fid, row)
+            logger.info("asset store migration: %s", stats)
+        except Exception as e:
+            logger.warning("asset store migration failed: %s", e)
+
+    def _read_text(self, m: dict) -> str | None:
+        """Read an asset's text: store-first, legacy disk fallback. None if absent."""
+        asset_id = m.get("asset_id", "")
+        if asset_id:
+            data = self._store.get_bytes(asset_id)
+            if data is not None:
+                return data.decode("utf-8", errors="replace")
+        try:
+            return (self.UPLOADS_DIR / m.get("filename", "")).read_text(errors="replace")
+        except FileNotFoundError:
+            return None
+
     # ── Endpoints ──
 
     @endpoint("files.list_files")
@@ -228,14 +299,16 @@ class FilesRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """List all uploaded files with metadata."""
+        await asyncio.to_thread(self._ensure_migrated)
         meta = await self._async_load_metadata()
         items = []
         for fid, m in meta.items():
-            file_path = self.UPLOADS_DIR / m["filename"]
-            try:
-                file_path.stat()
-            except FileNotFoundError:
-                continue
+            if not m.get("asset_id"):
+                file_path = self.UPLOADS_DIR / m["filename"]
+                try:
+                    file_path.stat()
+                except FileNotFoundError:
+                    continue
             if tag and tag not in m.get("tags", []):
                 continue
             items.append(
@@ -275,18 +348,21 @@ class FilesRouter:
                 status_code=413,
             )
         fid = self._file_id(file.filename)
-        file_path = self.UPLOADS_DIR / f"{fid}{ext}"
-
-        def _write_file():
-            with open(file_path, "wb") as f:
-                f.write(contents)
-
-        await asyncio.to_thread(_write_file)
 
         try:
             tag_list = json.loads(tags) if isinstance(tags, str) else (tags or [])
         except (json.JSONDecodeError, TypeError):
             tag_list = []
+
+        await asyncio.to_thread(self._ensure_migrated)
+        asset = await asyncio.to_thread(
+            self._store.put,
+            contents,
+            original_name=file.filename,
+            origin="upload",
+            media_type=self.SUPPORTED_EXTENSIONS.get(ext),
+            tags=tag_list,
+        )
 
         file_meta = {
             "filename": f"{fid}{ext}",
@@ -297,6 +373,8 @@ class FilesRouter:
             "pages": 1,
             "uploaded_at": time.time(),
             "tags": tag_list,
+            "asset_id": asset.id,
+            "sha256": asset.sha256,
         }
         await asyncio.to_thread(self._upsert_file_metadata, fid, file_meta)
 
@@ -320,14 +398,16 @@ class FilesRouter:
     ) -> dict:
         """Search uploaded files by name substring match."""
         query = q.lower()
+        await asyncio.to_thread(self._ensure_migrated)
         meta = await self._async_load_metadata()
         items = []
         for fid, m in meta.items():
-            file_path = self.UPLOADS_DIR / m["filename"]
-            try:
-                file_path.stat()
-            except FileNotFoundError:
-                continue
+            if not m.get("asset_id"):
+                file_path = self.UPLOADS_DIR / m["filename"]
+                try:
+                    file_path.stat()
+                except FileNotFoundError:
+                    continue
             name = m.get("original_name", m["filename"]).lower()
             if query not in name:
                 continue
@@ -353,15 +433,22 @@ class FilesRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Get file details including content."""
+        await asyncio.to_thread(self._ensure_migrated)
         meta = await self._async_load_metadata()
         if file_id not in meta:
             raise_error("File not found", "E_NOT_FOUND", status_code=404)
         m = meta[file_id]
-        file_path = self.UPLOADS_DIR / m["filename"]
-        try:
-            text = file_path.read_text(errors="replace")
-        except FileNotFoundError:
+        text = await asyncio.to_thread(self._read_text, m)
+        if text is None:
             raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
+        if m.get("asset_id"):
+            await asyncio.to_thread(
+                self._store.record_event,
+                "download",
+                asset_id=m["asset_id"],
+                original_name=m.get("original_name", ""),
+                origin="upload",
+            )
         return FileDetail(
             id=file_id,
             filename=m.get("original_name", m["filename"]),
@@ -379,10 +466,13 @@ class FilesRouter:
         self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Delete a file and its metadata."""
+        await asyncio.to_thread(self._ensure_migrated)
         meta = await self._async_load_metadata()
         if file_id not in meta:
             raise_error("File not found", "E_NOT_FOUND", status_code=404)
         m = meta[file_id]
+        if m.get("asset_id"):
+            await asyncio.to_thread(self._store.delete, m["asset_id"], purge_blob=True)
         file_path = self.UPLOADS_DIR / m["filename"]
         try:
             file_path.unlink(missing_ok=True)
@@ -397,14 +487,13 @@ class FilesRouter:
         self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Ingest file content into the RAG/knowledge store."""
+        await asyncio.to_thread(self._ensure_migrated)
         meta = await self._async_load_metadata()
         if file_id not in meta:
             raise_error("File not found", "E_NOT_FOUND", status_code=404)
         m = meta[file_id]
-        file_path = self.UPLOADS_DIR / m["filename"]
-        try:
-            text = file_path.read_text(errors="replace")
-        except FileNotFoundError:
+        text = await asyncio.to_thread(self._read_text, m)
+        if text is None:
             raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
         # Update chars count
         m["chars"] = len(text)
