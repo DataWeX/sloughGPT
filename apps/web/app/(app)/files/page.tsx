@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Checkbox, Input, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { filesController, type FileEntry, type FileDetail } from '@/lib/files-controller'
+import { filesController, type FileEntry, type FileDetail, type AssetEvent } from '@/lib/files-controller'
+import { imagesController, type GalleryImage } from '@/lib/images-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -21,6 +22,11 @@ export default function FilesPage() {
   const [batchDeleting, setBatchDeleting] = useState(false)
   const [previewFile, setPreviewFile] = useState<FileDetail | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [tab, setTab] = useState<'files' | 'images' | 'history'>('files')
+  const [gallery, setGallery] = useState<GalleryImage[]>([])
+  const [galleryLoading, setGalleryLoading] = useState(false)
+  const [history, setHistory] = useState<AssetEvent[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const addToast = useToastStore(s => s.addToast)
 
@@ -86,6 +92,35 @@ export default function FilesPage() {
     } catch {
       addToast('Could not search files', 'error')
     }
+  }
+
+  const fetchGallery = async () => {
+    setGalleryLoading(true)
+    try {
+      const res = await imagesController.gallery()
+      setGallery(res?.images ?? [])
+    } catch {
+      addToast('Could not load gallery', 'error')
+    } finally {
+      setGalleryLoading(false)
+    }
+  }
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      setHistory(await filesController.history())
+    } catch {
+      addToast('Could not load history', 'error')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const selectTab = (t: 'files' | 'images' | 'history') => {
+    setTab(t)
+    if (t === 'images' && gallery.length === 0 && !galleryLoading) void fetchGallery()
+    if (t === 'history' && history.length === 0 && !historyLoading) void fetchHistory()
   }
 
   const toggleSelect = (id: string) => {
@@ -165,6 +200,26 @@ export default function FilesPage() {
       error={loadError}
       onRetry={fetchFiles}
     >
+        <div role="tablist" aria-label="Files sections" className="flex gap-1 border-b border-border/40 pb-1.5">
+          {(['files', 'images', 'history'] as const).map(t => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => selectTab(t)}
+              className={cn(
+                'rounded-lg px-3 py-1 text-[11px] font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                tab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground/60 hover:bg-muted/20',
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'files' && (
+          <>
         <FileStatsCard files={files} />
 
         <Card>
@@ -286,6 +341,80 @@ export default function FilesPage() {
                 </pre>
               ) : (
                 <p className="text-[10px] text-muted-foreground/60 text-center py-3">No text content extracted</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+          </>
+        )}
+
+        {tab === 'images' && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Gallery</CardTitle>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchGallery} aria-label="Refresh gallery">
+                <IconRefresh className="h-3 w-3" />
+              </Button>
+            </CardHeader>
+            <CardContent className="px-2.5 pb-2.5">
+              {galleryLoading ? (
+                <div className="h-32 animate-pulse bg-muted/20 rounded-lg" />
+              ) : gallery.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/60">No generated images yet.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {gallery.map(img => (
+                    <figure key={img.id} className="rounded-lg border border-border/40 overflow-hidden">
+                      <img src={img.path} alt={img.id} loading="lazy" className="w-full aspect-square object-cover" />
+                      <figcaption className="px-1.5 py-1 text-[9px] text-muted-foreground/60 font-mono truncate">
+                        {img.id} · {new Date(img.created * 1000).toLocaleDateString()}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {tab === 'history' && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">History</CardTitle>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchHistory} aria-label="Refresh history">
+                <IconRefresh className="h-3 w-3" />
+              </Button>
+            </CardHeader>
+            <CardContent className="px-2.5 pb-2.5">
+              {historyLoading ? (
+                <div className="h-32 animate-pulse bg-muted/20 rounded-lg" />
+              ) : history.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/60">No asset events recorded yet.</p>
+              ) : (
+                <div className="space-y-0.5 max-h-96 overflow-y-auto">
+                  {history.map((e, i) => (
+                    <div key={`${e.ts}-${i}`} className="flex items-center gap-2 rounded-lg border border-border/40 px-2.5 py-1.5 text-[10px]">
+                      <span
+                        className={cn(
+                          'px-1.5 py-0.5 rounded-full font-medium shrink-0',
+                          e.action === 'delete' ? 'bg-destructive/10 text-destructive'
+                            : e.action === 'download' ? 'bg-success/10 text-success'
+                            : e.action === 'migrate' ? 'bg-muted/40 text-muted-foreground'
+                            : 'bg-primary/10 text-primary',
+                        )}
+                      >
+                        {e.action}
+                      </span>
+                      <span className="font-medium truncate flex-1">
+                        {e.original_name || (e.asset_id ? e.asset_id.slice(0, 8) : '—')}
+                      </span>
+                      {e.origin && <span className="text-muted-foreground/60 shrink-0">{e.origin}</span>}
+                      <span className="font-mono tabular-nums text-muted-foreground/60 shrink-0">
+                        {new Date(e.ts * 1000).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

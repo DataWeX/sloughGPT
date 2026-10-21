@@ -32,6 +32,16 @@ export interface SearchResult {
   count?: number
 }
 
+export interface AssetEvent {
+  ts: number
+  action: string
+  asset_id?: string
+  sha256?: string
+  original_name?: string
+  origin?: string
+  detail?: Record<string, unknown>
+}
+
 interface BackendFileItem {
   id: string
   filename: string
@@ -84,6 +94,17 @@ class FilesController {
     )
     if (!data) return []
     return (data.files ?? []).map(mapFileEntry)
+  }
+
+  /** Asset event history from the store collector (newest first). */
+  async history(opts: { assetId?: string; action?: string; limit?: number } = {}): Promise<AssetEvent[]> {
+    const params = new URLSearchParams()
+    if (opts.assetId) params.set('asset_id', opts.assetId)
+    if (opts.action) params.set('action', opts.action)
+    if (opts.limit) params.set('limit', String(opts.limit))
+    const qs = params.toString()
+    const data = await apiGet<{ events?: AssetEvent[] }>(`/files/history${qs ? `?${qs}` : ''}`)
+    return data?.events ?? []
   }
 
   async getDetail(id: string): Promise<FileDetail | null> {

@@ -83,4 +83,23 @@ describe('filesController', () => {
     const result = await filesController.search('test')
     expect(result).toEqual([])
   })
+
+  it('history calls apiGet on /files/history and unwraps events', async () => {
+    const events = [{ ts: 1, action: 'put', asset_id: 'a1', original_name: 'x.txt', origin: 'upload' }]
+    apiGet.mockResolvedValue({ events })
+    const result = await filesController.history()
+    expect(result).toEqual(events)
+    expect(apiGet).toHaveBeenCalledWith('/files/history')
+  })
+
+  it('history builds query params for filters', async () => {
+    apiGet.mockResolvedValue({ events: [] })
+    await filesController.history({ assetId: 'a1', action: 'download', limit: 50 })
+    expect(apiGet).toHaveBeenCalledWith('/files/history?asset_id=a1&action=download&limit=50')
+  })
+
+  it('history handles empty/undefined response', async () => {
+    apiGet.mockResolvedValue(undefined)
+    expect(await filesController.history()).toEqual([])
+  })
 })

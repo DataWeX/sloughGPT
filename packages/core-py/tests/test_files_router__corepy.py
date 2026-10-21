@@ -251,3 +251,22 @@ class TestAssetStoreBacking:
         assert {"put", "migrate", "download"} <= actions
         # Cleanup the row (polite to any later consumer of the shared collection).
         assert client.delete("/files/1717_legacy").status_code == 200
+
+    def test_history_endpoint(self, tmp_path):
+        fr = _make_router(tmp_path)
+        client = TestClient(_app(fr))
+        r = client.post(
+            "/files/upload", files={"file": ("hist.txt", io.BytesIO(b"hist"), "text/plain")}
+        )
+        fid = r.json()["id"]
+        client.get(f"/files/{fid}")  # records a download event
+        resp = client.get("/files/history")
+        assert resp.status_code == 200
+        actions = [e["action"] for e in resp.json()["events"]]
+        assert "put" in actions and "download" in actions
+        assert actions.index("download") < actions.index("put")  # newest first
+        # Action filter narrows the stream.
+        only_dl = client.get("/files/history?action=download").json()["events"]
+        assert only_dl and all(e["action"] == "download" for e in only_dl)
+        # "/files/history" is a literal route, not a {file_id} match.
+        assert all("text" not in e for e in only_dl)

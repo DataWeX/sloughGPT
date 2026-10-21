@@ -7,6 +7,7 @@ const mockDelete = vi.fn()
 const mockDeleteBatch = vi.fn()
 const mockIngest = vi.fn()
 const mockSearch = vi.fn()
+const mockHistory = vi.fn()
 
 vi.mock('@/lib/files-controller', () => ({
   filesController: {
@@ -16,6 +17,15 @@ vi.mock('@/lib/files-controller', () => ({
     deleteBatch: (...args: unknown[]) => mockDeleteBatch(...args),
     ingest: (...args: unknown[]) => mockIngest(...args),
     search: (...args: unknown[]) => mockSearch(...args),
+    history: (...args: unknown[]) => mockHistory(...args),
+  },
+}))
+
+const mockGallery = vi.fn()
+
+vi.mock('@/lib/images-controller', () => ({
+  imagesController: {
+    gallery: (...args: unknown[]) => mockGallery(...args),
   },
 }))
 
@@ -379,5 +389,58 @@ describe('FilesPage — file metadata display', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/1\.0 MB/).length).toBeGreaterThanOrEqual(1)
     })
+  })
+})
+
+describe('FilesPage — section tabs (files | images | history)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue([])
+    mockSearch.mockResolvedValue([])
+    mockGallery.mockResolvedValue({ images: [] })
+    mockHistory.mockResolvedValue([])
+  })
+  afterEach(() => { cleanup() })
+
+  it('defaults to the Files tab', async () => {
+    render(<FilesPage />)
+    expect((await screen.findByRole('tab', { name: 'files' })).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'images' }).getAttribute('aria-selected')).toBe('false')
+  })
+
+  it('switches to History tab and renders events', async () => {
+    mockHistory.mockResolvedValue([
+      { ts: 1761000000, action: 'download', original_name: 'readme.md', origin: 'upload' },
+      { ts: 1760000000, action: 'put', original_name: 'readme.md', origin: 'upload' },
+    ])
+    render(<FilesPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'history' }))
+    await waitFor(() => expect(mockHistory).toHaveBeenCalledTimes(1))
+    expect(await screen.findByText('download')).toBeTruthy()
+    expect(screen.getByText('put')).toBeTruthy()
+    // Files-tab-only affordances are not shown on the History tab.
+    expect(screen.queryByLabelText('Upload file')).toBeNull()
+  })
+
+  it('switches to Images tab and renders the gallery', async () => {
+    mockGallery.mockResolvedValue({
+      images: [{ id: 'generated_abc12345', path: '/data/gallery/generated_abc12345.png', created: 1761000000 }],
+    })
+    render(<FilesPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'images' }))
+    await waitFor(() => expect(mockGallery).toHaveBeenCalledTimes(1))
+    const img = await screen.findByAltText('generated_abc12345')
+    expect(img.getAttribute('src')).toBe('/data/gallery/generated_abc12345.png')
+  })
+
+  it('does not refetch history when switching back and forth', async () => {
+    mockHistory.mockResolvedValue([{ ts: 1761000000, action: 'put', original_name: 'a.txt', origin: 'upload' }])
+    render(<FilesPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'history' }))
+    await waitFor(() => expect(mockHistory).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('tab', { name: 'files' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'history' }))
+    expect(mockHistory).toHaveBeenCalledTimes(1) // cached in state
+    expect(screen.getByText('put')).toBeTruthy()
   })
 })

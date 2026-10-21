@@ -75,6 +75,20 @@ class IngestResponse(BaseModel):
     facts_stored: int
 
 
+class AssetEvent(BaseModel):
+    ts: float
+    action: str
+    asset_id: str = ""
+    sha256: str = ""
+    original_name: str = ""
+    origin: str = ""
+    detail: dict = {}
+
+
+class HistoryResponse(BaseModel):
+    events: list[AssetEvent]
+
+
 def _get_db():
     from infrastructure.db_pool import get_db
 
@@ -117,6 +131,10 @@ class FilesRouter:
         )
         self.router.add_api_route(
             "/search", self.search_files, methods=["GET"], response_model=FileListResponse
+        )
+        # Registered before "/{file_id}" so the literal path wins the match.
+        self.router.add_api_route(
+            "/history", self.list_history, methods=["GET"], response_model=HistoryResponse
         )
         self.router.add_api_route(
             "/{file_id}", self.get_file, methods=["GET"], response_model=FileDetail
@@ -425,6 +443,22 @@ class FilesRouter:
             )
         items.sort(key=lambda x: x.uploaded_at, reverse=True)
         return FileListResponse(files=items, total=len(items))
+
+    @endpoint("files.list_history")
+    async def list_history(
+        self,
+        asset_id: str | None = Query(None, description="Filter by asset id"),
+        action: str | None = Query(
+            None, description="Filter by action (put/download/delete/migrate)"
+        ),
+        limit: int = Query(100, ge=1, le=500, description="Max events returned"),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Asset event history from the store collector (newest first)."""
+        events = await asyncio.to_thread(
+            self._store.history, asset_id=asset_id or "", action=action or "", limit=limit
+        )
+        return HistoryResponse(events=[AssetEvent(**e) for e in events])
 
     @endpoint("files.get_file")
     async def get_file(
