@@ -1140,6 +1140,21 @@ git push -u origin feat/<name>   # push your own branch when done
   (`merge-base` lacks `domain/shell/_internal/cmds/*` too — main gained them
   after; zero deletions on my side). From `.wt-worldbrain`.
 
+- **2026-10-21 · vq-huffman-06 — `benchmark_vq_approaches.py` truth-up
+  (stack tail `feat/npu-caps`, card `202365ec` created+closed this session).**
+  The script's "current baseline" was its own local quantile-init `vq_core`
+  and it listed adaptive-k + k-means++ as *proposals* — both shipped by series
+  card 02. Re-anchored rows on the REAL `PointCompressor`
+  (`shipped_vq` + `shipped_vq_k16`), kept `legacy_quantile_k16` as history,
+  kept PQ/RVQ/FSQ as the exploration set (documented as-un-Huffman-coded);
+  median-of-3 timings, bit-exact decode gate, JSON history. Verdict over 6
+  BERT-scale layers: no exploration row beats the shipped codec (PQ 0.71x
+  ratio/13.6x MSE, RVQ 0.26x, FSQ 0.81x/28x — FSQ encodes 60x faster, the one
+  interesting signal). **Headline: fixed k=16 + the codec's residual fallback
+  (accuracy < residual_threshold 0.99, compressor.py:357) dominates adaptive-k
+  lossy VQ — 8.22x ratio AND lossless (MSE 3e-21) vs 4.91x lossy.** Cite when
+  tuning n_clusters/residual_threshold. From `.wt-worldbrain`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
