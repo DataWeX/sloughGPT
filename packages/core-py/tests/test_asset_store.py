@@ -5,6 +5,7 @@ Tests for the AssetStore (unified file/image namespace: CAS blobs + metadata
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -228,3 +229,161 @@ def test_events_jsonl_is_valid_json_lines(tmp_path):
     events_path = tmp_path / "assets" / "events.jsonl"
     for line in events_path.read_text(encoding="utf-8").splitlines():
         json.loads(line)
+
+
+# ── LRU cache ──
+
+
+def _blob_path(tmp_path: Path, meta) -> Path:
+    return tmp_path / "assets" / "blobs" / meta.sha256[:2] / meta.sha256[2:4] / meta.sha256
+
+
+def test_lru_cache_hit_serves_cached_bytes(tmp_path):
+    store = AssetStore(tmp_path / "assets", cache_bytes=1024 * 1024)
+    meta = store.put(b"cache me", original_name="c.txt", origin="upload")
+    assert store.get_bytes(meta.id) == b"cache me"  # populates the cache
+    _blob_path(tmp_path, meta).write_bytes(b"tampered on disk")
+    assert store.get_bytes(meta.id) == b"cache me"  # served from cache
+
+
+def test_lru_evicts_oldest_at_budget(tmp_path):
+    store = AssetStore(tmp_path / "assets", cache_bytes=10)
+    a = store.put(b"12345", original_name="a.txt", origin="upload")
+    b = store.put(b"67890", original_name="b.txt", origin="upload")
+    c = store.put(b"abcde", original_name="c.txt", origin="upload")
+    store.get_bytes(a.id)  # 5 B cached
+    store.get_bytes(b.id)  # 10 B == budget
+    store.get_bytes(c.id)  # 15 B > budget -> evict a (oldest)
+    _blob_path(tmp_path, a).write_bytes(b"EVICT")  # 5 B: re-reading a evicts exactly b
+    _blob_path(tmp_path, c).write_bytes(b"CHANG")
+    assert store.get_bytes(a.id) == b"EVICT"  # evicted -> disk read
+    assert store.get_bytes(c.id) == b"abcde"  # still cached
+
+
+def test_delete_evicts_cache_entry(tmp_path):
+    store = AssetStore(tmp_path / "assets", cache_bytes=1024)
+    meta = store.put(b"gone", original_name="g.txt", origin="upload")
+    assert store.get_bytes(meta.id) == b"gone"
+    store.delete(meta.id, purge_blob=True)
+    assert store.get_bytes(meta.id) is None
+
+
+def test_cache_disabled_with_zero_budget(tmp_path):
+    store = AssetStore(tmp_path / "assets", cache_bytes=0)
+    meta = store.put(b"x", original_name="x.txt", origin="upload")
+    assert store.get_bytes(meta.id) == b"x"
+    _blob_path(tmp_path, meta).write_bytes(b"fresh")
+    assert store.get_bytes(meta.id) == b"fresh"  # no caching at all
+
+
+# ── operator surface ──
+
+
+def test_verify_integrity_healthy(tmp_path):
+    store = _store(tmp_path)
+    store.put(b"a", original_name="a.txt", origin="upload")
+    store.put(b"b", original_name="b.png", origin="generated")
+    report = store.verify_integrity()
+    assert report["assets"] == 2
+    assert report["blobs_on_disk"] == 2
+    assert report["missing_blobs"] == 0
+    assert report["sha_mismatches"] == 0
+    assert report["orphan_blobs"] == 0
+    assert report["healthy"] is True
+
+
+def test_verify_detects_missing_mismatch_and_orphan(tmp_path):
+    store = _store(tmp_path)
+    a = store.put(b"a-bytes", original_name="a.txt", origin="upload")
+    b = store.put(b"b-bytes", original_name="b.txt", origin="upload")
+    c = store.put(b"c-bytes", original_name="c.txt", origin="upload")
+    _blob_path(tmp_path, b).write_bytes(b"tampered")  # sha mismatch
+    _blob_path(tmp_path, c).unlink()  # missing blob
+    store.delete(a.id)  # blob stays -> orphan
+    report = store.verify_integrity()
+    assert report["missing_blobs"] == 1
+    assert report["sha_mismatches"] == 1
+    assert report["orphan_blobs"] == 1
+    assert report["healthy"] is False
+
+
+def test_prune_removes_orphans_only(tmp_path):
+    store = _store(tmp_path)
+    a = store.put(b"aaa", original_name="a.txt", origin="upload")
+    b = store.put(b"bbb", original_name="b.txt", origin="upload")
+    store.delete(a.id)  # blob kept -> orphan
+    result = store.prune_orphan_blobs()
+    assert result == {"removed": 1, "freed_bytes": 3}
+    assert not _blob_path(tmp_path, a).exists()
+    assert store.get_bytes(b.id) == b"bbb"  # referenced blob untouched
+
+
+def test_reindex_repairs_drift_from_blob(tmp_path):
+    store = _store(tmp_path)
+    meta = store.put(b"original", original_name="r.txt", origin="upload")
+    _blob_path(tmp_path, meta).write_bytes(b"rewritten-content")  # drifts sha + size
+    result = store.reindex()
+    assert result["repaired"] == 1
+    reloaded = store.get_meta(meta.id)
+    assert reloaded.sha256 == hashlib.sha256(b"rewritten-content").hexdigest()
+    assert reloaded.size_bytes == len(b"rewritten-content")
+    assert store.verify_integrity()["healthy"] is True
+
+
+def test_reindex_reports_missing_blob_without_deleting(tmp_path):
+    store = _store(tmp_path)
+    meta = store.put(b"soon gone", original_name="m.txt", origin="upload")
+    _blob_path(tmp_path, meta).unlink()
+    result = store.reindex()
+    assert result["missing_blobs"] == [meta.id]
+    assert store.get_meta(meta.id) is not None  # row preserved — human decides
+
+
+# ── operator CLI (external utility tier) ──
+
+
+def _run_cli(tmp_path: Path, *args: str):
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).resolve().parents[3]
+    env = {**os.environ, "SLO_DATA_DIR": str(tmp_path / "data")}
+    return subprocess.run(
+        [sys.executable, str(repo_root / "scripts" / "asset_store_ops.py"), *args],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
+        env=env,
+        timeout=60,
+    )
+
+
+def test_cli_verify_and_history(tmp_path):
+    proc = _run_cli(tmp_path, "verify")
+    assert proc.returncode == 0, proc.stderr
+    report = json.loads(proc.stdout)
+    assert report == {
+        "assets": 0,
+        "blobs_on_disk": 0,
+        "missing_blobs": 0,
+        "sha_mismatches": 0,
+        "orphan_blobs": 0,
+        "orphan_bytes": 0,
+        "healthy": True,
+    }
+    proc = _run_cli(tmp_path, "history")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == ""
+
+
+def test_cli_prune_and_reindex_on_seeded_store(tmp_path):
+    store = AssetStore(tmp_path / "data" / "assets")
+    a = store.put(b"seed-a", original_name="a.txt", origin="upload")
+    store.put(b"seed-b", original_name="b.txt", origin="upload")
+    store.delete(a.id)  # orphan blob
+    proc = _run_cli(tmp_path, "prune")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout) == {"removed": 1, "freed_bytes": 6}
+    proc = _run_cli(tmp_path, "reindex")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["repaired"] == 0

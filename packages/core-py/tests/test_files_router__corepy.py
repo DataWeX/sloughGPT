@@ -270,3 +270,27 @@ class TestAssetStoreBacking:
         assert only_dl and all(e["action"] == "download" for e in only_dl)
         # "/files/history" is a literal route, not a {file_id} match.
         assert all("text" not in e for e in only_dl)
+
+    def test_get_file_etag_304(self, tmp_path):
+        fr = _make_router(tmp_path)
+        client = TestClient(_app(fr))
+        r = client.post(
+            "/files/upload",
+            files={"file": ("etag.txt", io.BytesIO(b"etag me"), "text/plain")},
+        )
+        fid = r.json()["id"]
+        first = client.get(f"/files/{fid}")
+        assert first.status_code == 200
+        etag = first.headers.get("etag")
+        assert etag  # strong ETag from the content sha256
+        # Conditional repeat: 304 with no body, and no download event recorded.
+        before = len(fr._store.history(asset_id=fr._load_metadata()[fid]["asset_id"]))
+        second = client.get(f"/files/{fid}", headers={"If-None-Match": etag})
+        assert second.status_code == 304
+        assert not second.content
+        after = len(fr._store.history(asset_id=fr._load_metadata()[fid]["asset_id"]))
+        assert after == before
+        # A different validator -> normal 200.
+        third = client.get(f"/files/{fid}", headers={"If-None-Match": '"stale"'})
+        assert third.status_code == 200
+        assert third.json()["text"] == "etag me"

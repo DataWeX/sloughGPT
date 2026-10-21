@@ -30,8 +30,10 @@ import json
 import mimetypes
 import os
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock
 from typing import Any
 from uuid import uuid4
 
@@ -107,7 +109,7 @@ class AssetStore:
     host go through ``asyncio.to_thread`` at the seam.
     """
 
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, *, cache_bytes: int = 64 * 1024 * 1024):
         self._root = Path(root)
         self._blobs = self._root / "blobs"
         self._blobs.mkdir(parents=True, exist_ok=True)
@@ -116,6 +118,12 @@ class AssetStore:
             serializer=AssetMeta,
         )
         self._events_path = self._root / "events.jsonl"
+        # LRU of asset_id -> bytes, bounded by total cached bytes. Per-asset
+        # entries: two assets sharing one blob each hold their own copy.
+        self._cache: OrderedDict[str, bytes] = OrderedDict()
+        self._cache_bytes = 0
+        self._cache_budget = cache_bytes
+        self._cache_lock = Lock()
 
     # ── Paths ──
 
@@ -190,6 +198,10 @@ class AssetStore:
         meta = self._meta.get(asset_id)
         if meta is None:
             return False
+        with self._cache_lock:
+            evicted = self._cache.pop(asset_id, None)
+            if evicted is not None:
+                self._cache_bytes -= len(evicted)
         if purge_blob:
             shared = any(m.sha256 == meta.sha256 for m in self._meta.list() if m.id != asset_id)
             if not shared:
@@ -212,13 +224,28 @@ class AssetStore:
         return self._meta.get(asset_id)
 
     def get_bytes(self, asset_id: str) -> bytes | None:
+        if self._cache_budget:
+            with self._cache_lock:
+                cached = self._cache.get(asset_id)
+                if cached is not None:
+                    self._cache.move_to_end(asset_id)
+                    return cached
         meta = self._meta.get(asset_id)
         if meta is None:
             return None
         blob = self._root / meta.storage_path
         if not blob.exists():
             return None
-        return blob.read_bytes()
+        data = blob.read_bytes()
+        if self._cache_budget:
+            with self._cache_lock:
+                self._cache[asset_id] = data
+                self._cache_bytes += len(data)
+                self._cache.move_to_end(asset_id)
+                while self._cache_bytes > self._cache_budget and self._cache:
+                    _k, evicted = self._cache.popitem(last=False)
+                    self._cache_bytes -= len(evicted)
+        return data
 
     def list(self, *, kind: str | None = None, origin: str | None = None) -> list[AssetMeta]:
         items = self._meta.list()
@@ -239,6 +266,91 @@ class AssetStore:
 
     def find_by_sha(self, sha256: str) -> list[AssetMeta]:
         return [m for m in self._meta.list() if m.sha256 == sha256]
+
+    # ── Operator surface (external utility tier — never a chat/agent tool) ──
+
+    def verify_integrity(self) -> dict[str, Any]:
+        """Read-only integrity report: metadata rows vs CAS blobs.
+
+        Reports missing blobs (meta without bytes), sha mismatches (bytes
+        changed under metadata), and orphan blobs (CAS objects no row
+        references). Mutates nothing — the probe-style check an operator runs
+        before deciding anything.
+        """
+        metas = self._meta.list()
+        referenced: set[str] = set()
+        missing_blobs = 0
+        sha_mismatches = 0
+        for m in metas:
+            referenced.add(Path(m.storage_path).name)
+            blob = self._root / m.storage_path
+            if not blob.exists():
+                missing_blobs += 1
+                continue
+            if hashlib.sha256(blob.read_bytes()).hexdigest() != m.sha256:
+                sha_mismatches += 1
+        blobs_on_disk = 0
+        orphan_blobs = 0
+        orphan_bytes = 0
+        for blob in self._blobs.rglob("*"):
+            if not blob.is_file():
+                continue
+            blobs_on_disk += 1
+            if blob.name not in referenced:
+                orphan_blobs += 1
+                orphan_bytes += blob.stat().st_size
+        return {
+            "assets": len(metas),
+            "blobs_on_disk": blobs_on_disk,
+            "missing_blobs": missing_blobs,
+            "sha_mismatches": sha_mismatches,
+            "orphan_blobs": orphan_blobs,
+            "orphan_bytes": orphan_bytes,
+            "healthy": missing_blobs == 0 and sha_mismatches == 0,
+        }
+
+    def prune_orphan_blobs(self) -> dict[str, Any]:
+        """Remove CAS blobs no metadata row references.
+
+        Only unreferenced blob files under ``<root>/blobs`` are in scope —
+        metadata, events, and legacy directories (user data) are never
+        touched (file-safety).
+        """
+        referenced = {Path(m.storage_path).name for m in self._meta.list()}
+        removed = 0
+        freed = 0
+        for blob in self._blobs.rglob("*"):
+            if blob.is_file() and blob.name not in referenced:
+                size = blob.stat().st_size
+                blob.unlink(missing_ok=True)
+                removed += 1
+                freed += size
+        return {"removed": removed, "freed_bytes": freed}
+
+    def reindex(self) -> dict[str, Any]:
+        """Reconcile metadata drift from blob content (the blob wins).
+
+        Repairs ``sha256``/``size_bytes`` when the stored bytes disagree with
+        the record; rows whose blob is gone are reported, never deleted —
+        losing the last reference to user data is a human decision.
+        """
+        metas = self._meta.list()
+        repaired = 0
+        missing_blobs: list[str] = []
+        for m in metas:
+            blob = self._root / m.storage_path
+            if not blob.exists():
+                missing_blobs.append(m.id)
+                continue
+            data = blob.read_bytes()
+            sha = hashlib.sha256(data).hexdigest()
+            if sha != m.sha256 or len(data) != m.size_bytes:
+                m.sha256 = sha
+                m.size_bytes = len(data)
+                if not self._meta.save(m.id, m):
+                    raise RuntimeError(f"failed to reindex asset metadata for {m.id}")
+                repaired += 1
+        return {"assets": len(metas), "repaired": repaired, "missing_blobs": missing_blobs}
 
     # ── Events / history ──
 

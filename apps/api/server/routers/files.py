@@ -11,7 +11,7 @@ import re
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
 from schemas.common import endpoint, raise_error, safe_audit_log, success_response
@@ -464,14 +464,28 @@ class FilesRouter:
     async def get_file(
         self,
         file_id: str,
+        request: Request,
+        response: Response,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Get file details including content."""
+        """Get file details including content.
+
+        Serves a strong ETag (the content sha256 when known) so preview
+        refetches can come back as 304; a 304 is not a download and records
+        no event.
+        """
         await asyncio.to_thread(self._ensure_migrated)
         meta = await self._async_load_metadata()
         if file_id not in meta:
             raise_error("File not found", "E_NOT_FOUND", status_code=404)
         m = meta[file_id]
+        sha = m.get("sha256", "")
+        if sha:
+            etag = f'"{sha}"'
+        else:
+            etag = f'"{file_id}-{int(m.get("uploaded_at", 0))}"'
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers={"ETag": etag})
         text = await asyncio.to_thread(self._read_text, m)
         if text is None:
             raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
@@ -483,6 +497,7 @@ class FilesRouter:
                 original_name=m.get("original_name", ""),
                 origin="upload",
             )
+        response.headers["ETag"] = etag
         return FileDetail(
             id=file_id,
             filename=m.get("original_name", m["filename"]),
