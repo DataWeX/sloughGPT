@@ -1002,6 +1002,35 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-21 · quantization: interleave fp32 release during `from_slnc`
+  quantization — PR #172 (`feat/quant-interleaved-release`, off `0292d28bd`).**
+  Each layer's float32 original is now freed immediately after its quantized
+  array is set (all three quantize priorities: pre-quantized `.npz`,
+  metadata-only `.json`, fresh encode) instead of only in the end-of-load
+  sweep, so the full-fp32 model and the full quantized copy never co-reside at
+  load peak (which made `malloc_trim` load-bearing). Gated on the existing
+  `free_quantized_originals` flag (ModelLoader already sets it True for
+  inference) → inference-only by construction; the end sweep stays as an
+  idempotent safety net for point layers and its released-count log is
+  unaffected (per-layer free short-circuits on `_freed_shape`). Proven by
+  `test_fp32_released_interleaved_during_quantize` (set/free event ordering —
+  fails on pre-change code). **Deeper write-time fusion (quant declared in
+  `LoadPlan`, executed at write) HELD:** `SloLinear(_lazy=True)` still
+  allocates `np.zeros((out,in), float32)` at build, so it peaks at ~fp32 — no
+  gain over this — unless the build allocates packed buffers directly.
+
+- **2026-10-21 · clear all 28 `test-core-py` failures (the only red CI job on
+  main) — PR #173 (`fix/core-py-red-logic-bugs`, off `0292d28bd`).** Four
+  commits by root cause: `5abe1ce61` clamp pugqeep index-of-efficiency into
+  Point's `[0,1]` via shared `accuracy_from_error` + un-stale the negative-k
+  recall pin; `e29372e99` live-TUI scratch path → `tempfile.gettempdir()`
+  (hardcoded `/tmp/opencode` is absent on CI → 9 FileNotFoundError before any
+  frame); `1a0965952` syscall-VM run budget 200k→20k (PIT divider needs
+  ~1.19M cycles for preemption → fork child never scheduled, output
+  byte-identical); `13cc7bde2` mark the 15 heavy-but-correct quantization
+  benchmark tests `@slow` (module-scoped `int8_bench` fixture + 4 standalone
+  `run_all`) → fast lane 79→62. Merging this turns `test-core-py` green.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +

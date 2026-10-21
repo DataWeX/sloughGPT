@@ -6,6 +6,7 @@ Covers:
     - nbytes(): all function types, with/without residual
     - to_bytes()/from_bytes(): round-trip for all function types
     - to_dict()/from_dict(): round-trip for all function types
+    - accuracy_from_error(): index of efficiency clamped to Point's [0, 1]
     - Edge cases: empty arrays, residual addition, unknown type
 """
 
@@ -19,7 +20,8 @@ _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.infrastructure._internal.pugqeep.point import Point, accuracy_from_error
 
 # ── generate() ────────────────────────────────────────────────────────
 
@@ -342,3 +344,63 @@ class TestPointEdgeCases:
         data = p.to_bytes()
         p2 = Point.from_bytes(data)
         assert p2.residual is None
+
+
+# ── accuracy_from_error() ─────────────────────────────────────────────
+
+
+class TestAccuracyFromError:
+    """Regression for the unclamped index of efficiency.
+
+    ``1 - mse/var`` is bounded *above* (``mse >= 0`` => <= 1) but not below:
+    once reconstruction error exceeds the signal's variance it runs
+    arbitrarily negative, which violated Point's ``0 <= accuracy <= 1``
+    contract. PointLibrary._validate_point then raised
+    ``Accuracy must be 0-1, got -6.59`` at store time — the CI failure in
+    test-core-py's token-tree adoption path.
+    """
+
+    def test_perfect_reconstruction_returns_one(self):
+        assert accuracy_from_error(0.0, 1.0) == 1.0
+
+    def test_error_below_variance_is_unclamped(self):
+        # Healthy case: byte-identical to the pre-fix inline formula.
+        assert accuracy_from_error(0.25, 1.0) == pytest.approx(0.75)
+
+    def test_error_above_variance_floors_to_zero(self):
+        # The failing shape: 1 - 7.59 == -6.59.
+        assert accuracy_from_error(7.59, 1.0) == 0.0
+
+    def test_zero_variance_perfect_data_returns_one(self):
+        # Degenerate/constant data: the 1e-8 epsilon keeps this a clean 1.0.
+        assert accuracy_from_error(0.0, 0.0) == 1.0
+
+    @pytest.mark.parametrize(
+        "mse,var",
+        [(0.0, 1.0), (0.5, 2.0), (9.0, 1.0), (1e-12, 1e-12), (100.0, 1e-9)],
+    )
+    def test_result_always_satisfies_the_point_contract(self, mse, var):
+        assert 0.0 <= accuracy_from_error(mse, var) <= 1.0
+
+
+class TestFlooredAccuracyStores:
+    """The clamp has to be enough for the store path that used to raise."""
+
+    def test_point_from_a_negative_index_is_accepted(self):
+        acc = accuracy_from_error(7.59, 1.0)  # raw index would be -6.59
+        lib = PointLibrary()
+        p = Point(
+            identity="floored", function_type="linear", params={"a": 1.0, "b": 0.0}, accuracy=acc
+        )
+        lib.add(p)  # previously ValueError: Accuracy must be 0-1, got -6.59
+
+    def test_validation_still_rejects_unclamped_values(self):
+        # The clamp lives at computation time only; validation stays strict so a
+        # hand-built Point can never carry an out-of-range accuracy (guards the
+        # tempting "fix" of widening the accepted range instead).
+        lib = PointLibrary()
+        p = Point(
+            identity="bad", function_type="linear", params={"a": 1.0, "b": 0.0}, accuracy=-6.59
+        )
+        with pytest.raises(ValueError, match="Accuracy must be 0-1"):
+            lib.add(p)
