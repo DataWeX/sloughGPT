@@ -306,6 +306,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Explicit so the preflight-amortization contract is documented, not
+    # inherited: one OPTIONS per (origin, path, method) per 10 minutes (the
+    # measured first-load preflight cost is ~22 round trips per origin and
+    # zero on every load inside the window — card 342d729f).
+    max_age=600,
 )
 
 # Register health/status routes IMMEDIATELY — before lifespan runs.
@@ -313,6 +318,7 @@ app.add_middleware(
 # real responses from /health, /health/startup-progress, /health/summary
 # instead of connection errors.  These lightweight routers have zero
 # heavy imports.
+from routers.bootstrap import router as _bootstrap_router
 from routers.consciousness import router as _consciousness_router
 from routers.dashboard import router as _dashboard_router
 from routers.health import router as _health_router
@@ -322,7 +328,8 @@ app.include_router(_health_router)
 app.include_router(_consciousness_router)
 app.include_router(_status_router)
 app.include_router(_dashboard_router)
-# Health/status/dashboard routes are now registered pre-lifespan.
+app.include_router(_bootstrap_router)
+# Health/status/dashboard/bootstrap routes are now registered pre-lifespan.
 # _phase6_routers() skips them by checking existing route prefixes.
 
 # Feature routers are registered by StartupOrchestrator._phase6_routers()
