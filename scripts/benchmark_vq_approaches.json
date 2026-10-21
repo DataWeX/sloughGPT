@@ -578,5 +578,585 @@
     "decompress_ms": 2.6878859995728512
    }
   }
+ },
+ {
+  "ts": "2026-10-21T09:05:20+00:00",
+  "rounds": 3,
+  "python": "3.12.14",
+  "numpy": "2.5.3",
+  "rows": [
+   {
+    "approach": "shipped_vq",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "compressed_bytes": 1769570,
+    "ratio": 3.9997784772571867,
+    "cosine": 0.9972571730613708,
+    "mse": 2.1659482172253774e-06,
+    "compress_ms": 1172.116145999098,
+    "decompress_ms": 2517.7793149996432,
+    "accuracy": 0.9945797920227051
+   },
+   {
+    "approach": "shipped_vq_k16",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "compressed_bytes": 8847423,
+    "ratio": 0.7999943034259807,
+    "cosine": 1.0,
+    "mse": 1.248584100157438e-21,
+    "compress_ms": 888.2670259990846,
+    "decompress_ms": 1718.745961001332,
+    "accuracy": 0.9328725934028625
+   },
+   {
+    "approach": "legacy_quantile_k16",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "compressed_bytes": 1769536,
+    "ratio": 3.9998553293066657,
+    "cosine": 0.9683644771575928,
+    "mse": 2.49955992330797e-05,
+    "compress_ms": 402.1413099999336,
+    "decompress_ms": 6.3550400009262376,
+    "accuracy": 0.9374497220674455
+   },
+   {
+    "approach": "pq_8x16",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "compressed_bytes": 1769984,
+    "ratio": 3.998842927393694,
+    "cosine": 0.9684063792228699,
+    "mse": 2.499716356396675e-05,
+    "compress_ms": 392.8173619988229,
+    "decompress_ms": 7.345677000557771,
+    "accuracy": 0.9374458074050742
+   },
+   {
+    "approach": "rvq_3stage",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "compressed_bytes": 5308608,
+    "ratio": 1.3332851097688885,
+    "cosine": 0.9934210181236267,
+    "mse": 5.570127086684806e-06,
+    "compress_ms": 1253.1612720013072,
+    "decompress_ms": 22.725592998540378,
+    "accuracy": 0.9860610264173748
+   },
+   {
+    "approach": "fsq_8level",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "compressed_bytes": 1769480,
+    "ratio": 3.9999819155910212,
+    "cosine": 0.9264862537384033,
+    "mse": 6.566677620867267e-05,
+    "compress_ms": 13.33884299856436,
+    "decompress_ms": 2.3087800000212155,
+    "accuracy": 0.8356720691316167
+   },
+   {
+    "approach": "shipped_vq",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "compressed_bytes": 589922,
+    "ratio": 3.9993355053718966,
+    "cosine": 0.997722864151001,
+    "mse": 1.8084704151988262e-06,
+    "compress_ms": 383.4192839985917,
+    "decompress_ms": 975.3326930003823,
+    "accuracy": 0.9954756498336792
+   },
+   {
+    "approach": "shipped_vq_k16",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "compressed_bytes": 2949183,
+    "ratio": 0.7999829105213206,
+    "cosine": 1.0000001192092896,
+    "mse": 3.669735088803223e-21,
+    "compress_ms": 324.4724349988246,
+    "decompress_ms": 587.9957979996107,
+    "accuracy": 0.9538376331329346
+   },
+   {
+    "approach": "legacy_quantile_k16",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "compressed_bytes": 589888,
+    "ratio": 3.9995660193121405,
+    "cosine": 0.9683388471603394,
+    "mse": 2.5096866011153907e-05,
+    "compress_ms": 130.43463400026667,
+    "decompress_ms": 2.166797999962,
+    "accuracy": 0.9372141085881893
+   },
+   {
+    "approach": "pq_8x16",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "compressed_bytes": 590336,
+    "ratio": 3.9965307892454467,
+    "cosine": 0.9683149456977844,
+    "mse": 2.509009573259391e-05,
+    "compress_ms": 145.94968100027472,
+    "decompress_ms": 2.4638139984745067,
+    "accuracy": 0.9372310460804765
+   },
+   {
+    "approach": "rvq_3stage",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "compressed_bytes": 1769664,
+    "ratio": 1.3331886731040468,
+    "cosine": 0.993404746055603,
+    "mse": 5.558826615015278e-06,
+    "compress_ms": 445.9834110002703,
+    "decompress_ms": 9.029666000060388,
+    "accuracy": 0.9860932482935392
+   },
+   {
+    "approach": "fsq_8level",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "compressed_bytes": 589832,
+    "ratio": 3.9999457472636277,
+    "cosine": 0.9300325512886047,
+    "mse": 6.244267569854856e-05,
+    "compress_ms": 4.564348999338108,
+    "decompress_ms": 0.6217539994395338,
+    "accuracy": 0.8437845165954362
+   },
+   {
+    "approach": "shipped_vq",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 2359394,
+    "ratio": 3.999833855642593,
+    "cosine": 0.9969691634178162,
+    "mse": 2.4256987671833485e-06,
+    "compress_ms": 1653.8686570002028,
+    "decompress_ms": 4650.69309700084,
+    "accuracy": 0.9939349293708801
+   },
+   {
+    "approach": "shipped_vq_k16",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 11796543,
+    "ratio": 0.7999957275618798,
+    "cosine": 1.0,
+    "mse": 1.2621119161005004e-21,
+    "compress_ms": 1537.6050310005667,
+    "decompress_ms": 3069.310654000219,
+    "accuracy": 0.944364607334137
+   },
+   {
+    "approach": "legacy_quantile_k16",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 2359360,
+    "ratio": 3.999891495998915,
+    "cosine": 0.9684411883354187,
+    "mse": 2.501880589989014e-05,
+    "compress_ms": 540.3607259995624,
+    "decompress_ms": 9.34213899927272,
+    "accuracy": 0.9374443157337289
+   },
+   {
+    "approach": "pq_8x16",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 2359808,
+    "ratio": 3.999132132783684,
+    "cosine": 0.9683823585510254,
+    "mse": 2.5022405679919757e-05,
+    "compress_ms": 531.1557719996927,
+    "decompress_ms": 9.73705000069458,
+    "accuracy": 0.9374353150362591
+   },
+   {
+    "approach": "rvq_3stage",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 7078080,
+    "ratio": 1.3332971653329717,
+    "cosine": 0.9934612512588501,
+    "mse": 5.5531395446450915e-06,
+    "compress_ms": 1939.0563430006296,
+    "decompress_ms": 34.859526000218466,
+    "accuracy": 0.9861152268644888
+   },
+   {
+    "approach": "fsq_8level",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 2359304,
+    "ratio": 3.9999864366779354,
+    "cosine": 0.926375687122345,
+    "mse": 6.6040811361745e-05,
+    "compress_ms": 23.979683999641566,
+    "decompress_ms": 3.589104000639054,
+    "accuracy": 0.8348750871338815
+   },
+   {
+    "approach": "shipped_vq",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 2359394,
+    "ratio": 3.999833855642593,
+    "cosine": 0.997641921043396,
+    "mse": 1.9594019704527454e-06,
+    "compress_ms": 1768.94140100012,
+    "decompress_ms": 4024.9591840001813,
+    "accuracy": 0.9951010346412659
+   },
+   {
+    "approach": "shipped_vq_k16",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 11796543,
+    "ratio": 0.7999957275618798,
+    "cosine": 0.9999999403953552,
+    "mse": 7.223229995987417e-22,
+    "compress_ms": 1368.4838509998372,
+    "decompress_ms": 2557.0663509988663,
+    "accuracy": 0.9482285976409912
+   },
+   {
+    "approach": "legacy_quantile_k16",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 2359360,
+    "ratio": 3.999891495998915,
+    "cosine": 0.9684298038482666,
+    "mse": 2.5020235625561327e-05,
+    "compress_ms": 676.1736560001737,
+    "decompress_ms": 8.434101000602823,
+    "accuracy": 0.9374435268786956
+   },
+   {
+    "approach": "pq_8x16",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 2359808,
+    "ratio": 3.999132132783684,
+    "cosine": 0.9684386849403381,
+    "mse": 2.5019266104209237e-05,
+    "compress_ms": 533.4223910012952,
+    "decompress_ms": 9.634926998842275,
+    "accuracy": 0.9374459509100801
+   },
+   {
+    "approach": "rvq_3stage",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 7078080,
+    "ratio": 1.3332971653329717,
+    "cosine": 0.993448793888092,
+    "mse": 5.553398295887746e-06,
+    "compress_ms": 1729.745066999385,
+    "decompress_ms": 33.42019599949708,
+    "accuracy": 0.9861151982568187
+   },
+   {
+    "approach": "fsq_8level",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "compressed_bytes": 2359304,
+    "ratio": 3.9999864366779354,
+    "cosine": 0.9266672730445862,
+    "mse": 6.577573367394507e-05,
+    "compress_ms": 23.19091000026674,
+    "decompress_ms": 4.040662999614142,
+    "accuracy": 0.8355451972081135
+   },
+   {
+    "approach": "shipped_vq",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 869,
+    "ratio": 3.535097813578826,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "compress_ms": 16.96077700034948,
+    "decompress_ms": 1.442682998458622,
+    "accuracy": 0.9969249963760376
+   },
+   {
+    "approach": "shipped_vq_k16",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 3903,
+    "ratio": 0.787086856264412,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "compress_ms": 4.534200999842142,
+    "decompress_ms": 0.9197840008710045,
+    "accuracy": 0.9445145130157471
+   },
+   {
+    "approach": "legacy_quantile_k16",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 832,
+    "ratio": 3.6923076923076925,
+    "cosine": 0.9689168930053711,
+    "mse": 2.4847598979249597e-05,
+    "compress_ms": 0.6055199992260896,
+    "decompress_ms": 0.007681999704800546,
+    "accuracy": 0.9380832842104586
+   },
+   {
+    "approach": "pq_8x16",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 1280,
+    "ratio": 2.4,
+    "cosine": 0.970579206943512,
+    "mse": 2.341957042517606e-05,
+    "compress_ms": 3.3892749997903593,
+    "decompress_ms": 0.028797001505154185,
+    "accuracy": 0.9416417301671791
+   },
+   {
+    "approach": "rvq_3stage",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 2496,
+    "ratio": 1.2307692307692308,
+    "cosine": 0.995128870010376,
+    "mse": 4.299784905015258e-06,
+    "compress_ms": 1.9563510013540508,
+    "decompress_ms": 0.0263639994955156,
+    "accuracy": 0.9892855418287168
+   },
+   {
+    "approach": "fsq_8level",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 776,
+    "ratio": 3.9587628865979383,
+    "cosine": 0.9743226766586304,
+    "mse": 2.1872770957998e-05,
+    "compress_ms": 0.12719299957097974,
+    "decompress_ms": 0.009192999641527422,
+    "accuracy": 0.9454961365052988
+   },
+   {
+    "approach": "shipped_vq",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 869,
+    "ratio": 3.535097813578826,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "compress_ms": 15.498157001275104,
+    "decompress_ms": 1.5201280002656858,
+    "accuracy": 0.9969249963760376
+   },
+   {
+    "approach": "shipped_vq_k16",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 3903,
+    "ratio": 0.787086856264412,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "compress_ms": 5.2560650001396425,
+    "decompress_ms": 0.9430350000911858,
+    "accuracy": 0.9445145130157471
+   },
+   {
+    "approach": "legacy_quantile_k16",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 832,
+    "ratio": 3.6923076923076925,
+    "cosine": 0.9689168930053711,
+    "mse": 2.4847598979249597e-05,
+    "compress_ms": 0.591471998632187,
+    "decompress_ms": 0.007495000318158418,
+    "accuracy": 0.9380832842104586
+   },
+   {
+    "approach": "pq_8x16",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 1280,
+    "ratio": 2.4,
+    "cosine": 0.970579206943512,
+    "mse": 2.341957042517606e-05,
+    "compress_ms": 3.3364009996148525,
+    "decompress_ms": 0.02839700027834624,
+    "accuracy": 0.9416417301671791
+   },
+   {
+    "approach": "rvq_3stage",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 2496,
+    "ratio": 1.2307692307692308,
+    "cosine": 0.995128870010376,
+    "mse": 4.299784905015258e-06,
+    "compress_ms": 1.89949100058584,
+    "decompress_ms": 0.02655400021467358,
+    "accuracy": 0.9892855418287168
+   },
+   {
+    "approach": "fsq_8level",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "compressed_bytes": 776,
+    "ratio": 3.9587628865979383,
+    "cosine": 0.9743226766586304,
+    "mse": 2.1872770957998e-05,
+    "compress_ms": 0.11084799916716293,
+    "decompress_ms": 0.009020999641506933,
+    "accuracy": 0.9454961365052988
+   }
+  ],
+  "summary": {
+   "shipped_vq": {
+    "ratio": 3.8448295535119867,
+    "cosine": 0.9977571964263916,
+    "mse": 1.804590510801063e-06,
+    "compress_ms": 835.1340703332729,
+    "decompress_ms": 2028.6211833332952
+   },
+   "shipped_vq_k16": {
+    "ratio": 0.7956903969333141,
+    "cosine": 1.0000000099341075,
+    "mse": 3.107344318661214e-21,
+    "compress_ms": 688.1031014997158,
+    "decompress_ms": 1322.496930500165
+   },
+   "legacy_quantile_k16": {
+    "ratio": 3.8973032875386706,
+    "cosine": 0.9685680170853933,
+    "mse": 2.4971117454697378e-05,
+    "compress_ms": 291.71788633296575,
+    "decompress_ms": 4.385542500131123
+   },
+   "pq_8x16": {
+    "ratio": 3.4656063303677516,
+    "cosine": 0.9691167970498403,
+    "mse": 2.449467865517363e-05,
+    "compress_ms": 268.34514699991513,
+    "decompress_ms": 4.8731103333921055
+   },
+   "rvq_3stage": {
+    "ratio": 1.2991010958462235,
+    "cosine": 0.9939989248911539,
+    "mse": 5.139176892043906e-06,
+    "compress_ms": 895.3003225005887,
+    "decompress_ms": 16.681316499671084
+   },
+   "fsq_8level": {
+    "ratio": 3.9862377182343995,
+    "cosine": 0.9430345197518667,
+    "mse": 5.0611923143151216e-05,
+    "compress_ms": 10.88530449942482,
+    "decompress_ms": 1.7630858331661632
+   }
+  }
  }
 ]

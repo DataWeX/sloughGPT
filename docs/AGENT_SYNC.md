@@ -1173,6 +1173,32 @@ git push -u origin feat/<name>   # push your own branch when done
   (the oscillation fix is on a planner branch, not in this fork). From
   `.wt-worldbrain`.
 
+- **2026-10-21 · vq-huffman-07 — compression-knob frontier + the storage-
+  accounting double-lie (stack tail `feat/npu-caps`, card `6eaa413c`
+  created+closed this session).** Grid adaptive x n_clusters{8..64} x
+  residual_threshold{0,0.99,1} on the real PointCompressor
+  (`scripts/benchmark_compression_knobs.py`, suite imported from -06). The
+  sweep exposed a measurement red flag (ratio identical across thresholds
+  while decode flipped lossless) → **two production accounting bugs**:
+  (1) `huffman_data` is written only in-memory (`compressor.py:375`) —
+  `serialize_params` packs dense uint8 assignments and `from_bytes` never
+  rebuilds the tree, so the Huffman compression **dies with the process**;
+  (2) `ClusterCodec.nbytes` (`codecs.py:217-232`) counts that phantom
+  Huffman (line 225) while omitting the residual serialize packs (line 249).
+  Consumers of the lie: `training/executor.py:527`, `pugqeep/library.py:461`,
+  `dedup.py:71`, `generic.py:693,696`, `point_interface.py:121`.
+  **RETRACTION: the -06 headline "fixed k16 + residual dominates adaptive-k
+  (8.22x AND lossless)" was an accounting artifact** — honest (to_bytes)
+  ratios: k16+residual = 0.80x lossless, adaptive = 3.84x lossy (0.21x).
+  Corrected frontier truths: lossy ratio is ~k-independent (3.8-3.9x — dense
+  assigns dominate; k is a fidelity knob), lossless class = 0.79-0.80x raw
+  (residual = the price of losslessness), fixed_k64 ≈ adaptive at equal bytes
+  (cos 0.99820 vs 0.99776, marginal). benchmark_vq_approaches.py re-anchored
+  to to_bytes + fresh history: shipped-beats-PQ/RVQ/legacy HOLDS (legacy 1.01x
+  ratio, 13.8x MSE), FSQ flips to **1.04x shipped's honest ratio at 77x
+  faster encode**. Storage fix filed as follow-up card (needs approval: nbytes
+  truth-up vs persist-Huffman wire-layout change). From `.wt-worldbrain`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +

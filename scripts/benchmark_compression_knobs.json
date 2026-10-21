@@ -1,0 +1,3546 @@
+[
+ {
+  "ts": "2026-10-21T08:43:12+00:00",
+  "python": "3.12.14",
+  "numpy": "2.5.3",
+  "grid": [
+   "fixed_k8_rt0",
+   "fixed_k8_rt0.99",
+   "fixed_k8_rt1",
+   "fixed_k16_rt0",
+   "fixed_k16_rt0.99",
+   "fixed_k16_rt1",
+   "fixed_k32_rt0",
+   "fixed_k32_rt0.99",
+   "fixed_k32_rt1",
+   "fixed_k64_rt0",
+   "fixed_k64_rt0.99",
+   "fixed_k64_rt1",
+   "adaptive_k16_rt0",
+   "adaptive_k16_rt0.99",
+   "adaptive_k16_rt1"
+  ],
+  "shipped_default": "adaptive_k16_rt0.99",
+  "rows": [
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 495475,
+    "ratio": 14.28505575457894,
+    "cosine": 0.8933335542678833,
+    "mse": 8.152248483384028e-05,
+    "accuracy": 0.7959939241409302,
+    "residual_fired": false,
+    "encode_ms": 1117.860465999911,
+    "decode_ms": 1562.8820790007012
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 179097,
+    "ratio": 13.17328598468986,
+    "cosine": 0.9089932441711426,
+    "mse": 6.967307854210958e-05,
+    "accuracy": 0.8256959319114685,
+    "residual_fired": false,
+    "encode_ms": 369.0420669990999,
+    "decode_ms": 578.9259260000108
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 572022,
+    "ratio": 16.497938890462255,
+    "cosine": 0.8654066920280457,
+    "mse": 0.00010094585741171613,
+    "accuracy": 0.7476003766059875,
+    "residual_fired": false,
+    "encode_ms": 1926.8375470001047,
+    "decode_ms": 2846.314059999713
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 543488,
+    "ratio": 17.36410739519548,
+    "cosine": 0.8468753099441528,
+    "mse": 0.00011356354661984369,
+    "accuracy": 0.716064453125,
+    "residual_fired": false,
+    "encode_ms": 1310.1449079986196,
+    "decode_ms": 1887.392775999615
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 253,
+    "ratio": 12.142292490118576,
+    "cosine": 0.8843241930007935,
+    "mse": 8.820262883091345e-05,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": false,
+    "encode_ms": 2.8542389991343953,
+    "decode_ms": 0.607411999226315
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 253,
+    "ratio": 12.142292490118576,
+    "cosine": 0.8843241930007935,
+    "mse": 8.820262883091345e-05,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": false,
+    "encode_ms": 2.625523999085999,
+    "decode_ms": 0.603176998993149
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 495475,
+    "ratio": 14.28505575457894,
+    "cosine": 1.0,
+    "mse": 3.328771240308865e-20,
+    "accuracy": 0.7959939241409302,
+    "residual_fired": true,
+    "encode_ms": 937.2693610002898,
+    "decode_ms": 1526.5987809998478
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 179097,
+    "ratio": 13.17328598468986,
+    "cosine": 1.0000001192092896,
+    "mse": 2.5105256323998302e-20,
+    "accuracy": 0.8256959319114685,
+    "residual_fired": true,
+    "encode_ms": 500.12472700109356,
+    "decode_ms": 656.7890080004872
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 572022,
+    "ratio": 16.497938890462255,
+    "cosine": 1.0,
+    "mse": 3.173000852502912e-20,
+    "accuracy": 0.7476003766059875,
+    "residual_fired": true,
+    "encode_ms": 2151.4086759998463,
+    "decode_ms": 2213.88358600052
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 543488,
+    "ratio": 17.36410739519548,
+    "cosine": 0.9999999403953552,
+    "mse": 4.249799047647728e-20,
+    "accuracy": 0.716064453125,
+    "residual_fired": true,
+    "encode_ms": 1325.1444170000468,
+    "decode_ms": 1692.080236000038
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 253,
+    "ratio": 12.142292490118576,
+    "cosine": 1.0,
+    "mse": 4.1118476165763306e-20,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": true,
+    "encode_ms": 2.8115159984736238,
+    "decode_ms": 0.6031749999237945
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 253,
+    "ratio": 12.142292490118576,
+    "cosine": 1.0,
+    "mse": 4.1118476165763306e-20,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": true,
+    "encode_ms": 2.656458998899325,
+    "decode_ms": 0.6081010014895583
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 495475,
+    "ratio": 14.28505575457894,
+    "cosine": 1.0,
+    "mse": 3.328771240308865e-20,
+    "accuracy": 0.7959939241409302,
+    "residual_fired": true,
+    "encode_ms": 998.5213079999085,
+    "decode_ms": 1633.2629919997999
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 179097,
+    "ratio": 13.17328598468986,
+    "cosine": 1.0000001192092896,
+    "mse": 2.5105256323998302e-20,
+    "accuracy": 0.8256959319114685,
+    "residual_fired": true,
+    "encode_ms": 351.1348080010066,
+    "decode_ms": 598.5517139997683
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 572022,
+    "ratio": 16.497938890462255,
+    "cosine": 1.0,
+    "mse": 3.173000852502912e-20,
+    "accuracy": 0.7476003766059875,
+    "residual_fired": true,
+    "encode_ms": 1318.6844830015616,
+    "decode_ms": 1949.8641560003307
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 543488,
+    "ratio": 17.36410739519548,
+    "cosine": 0.9999999403953552,
+    "mse": 4.249799047647728e-20,
+    "accuracy": 0.716064453125,
+    "residual_fired": true,
+    "encode_ms": 1580.3279769988876,
+    "decode_ms": 1993.544353001198
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 253,
+    "ratio": 12.142292490118576,
+    "cosine": 1.0,
+    "mse": 4.1118476165763306e-20,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": true,
+    "encode_ms": 2.8435429994715378,
+    "decode_ms": 0.6138049993751338
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 253,
+    "ratio": 12.142292490118576,
+    "cosine": 1.0,
+    "mse": 4.1118476165763306e-20,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": true,
+    "encode_ms": 2.639230999193387,
+    "decode_ms": 0.5969150006421842
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 784316,
+    "ratio": 9.024281029585014,
+    "cosine": 0.9660353660583496,
+    "mse": 2.6824653104995377e-05,
+    "accuracy": 0.9328725934028625,
+    "residual_fired": false,
+    "encode_ms": 1215.307947999463,
+    "decode_ms": 2186.1706220006454
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 270782,
+    "ratio": 8.712898198550864,
+    "cosine": 0.9767204523086548,
+    "mse": 1.8452097720000893e-05,
+    "accuracy": 0.9538376331329346,
+    "residual_fired": false,
+    "encode_ms": 376.7297280010098,
+    "decode_ms": 1094.678029001443
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1044881,
+    "ratio": 9.031826590779238,
+    "cosine": 0.9724617004394531,
+    "mse": 2.2251066184253432e-05,
+    "accuracy": 0.944364607334137,
+    "residual_fired": false,
+    "encode_ms": 2061.073564000253,
+    "decode_ms": 3117.666231999465
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1100331,
+    "ratio": 8.576677381624256,
+    "cosine": 0.9737878441810608,
+    "mse": 2.0706618670374155e-05,
+    "accuracy": 0.9482285976409912,
+    "residual_fired": false,
+    "encode_ms": 1492.723756999112,
+    "decode_ms": 3035.6486569999106
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 440,
+    "ratio": 6.9818181818181815,
+    "cosine": 0.9724728465080261,
+    "mse": 2.226670039817691e-05,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": false,
+    "encode_ms": 4.630368001016905,
+    "decode_ms": 0.9237900012522005
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 440,
+    "ratio": 6.9818181818181815,
+    "cosine": 0.9724728465080261,
+    "mse": 2.226670039817691e-05,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": false,
+    "encode_ms": 4.408796999996412,
+    "decode_ms": 0.9185510007228004
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 784316,
+    "ratio": 9.024281029585014,
+    "cosine": 1.0,
+    "mse": 1.248584100157438e-21,
+    "accuracy": 0.9328725934028625,
+    "residual_fired": true,
+    "encode_ms": 1227.154956000959,
+    "decode_ms": 2493.2296339993627
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 270782,
+    "ratio": 8.712898198550864,
+    "cosine": 1.0000001192092896,
+    "mse": 3.669735088803223e-21,
+    "accuracy": 0.9538376331329346,
+    "residual_fired": true,
+    "encode_ms": 534.1150429994741,
+    "decode_ms": 1147.4852169994847
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1044881,
+    "ratio": 9.031826590779238,
+    "cosine": 1.0,
+    "mse": 1.2621119161005004e-21,
+    "accuracy": 0.944364607334137,
+    "residual_fired": true,
+    "encode_ms": 2328.722189000473,
+    "decode_ms": 3497.3002549995726
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1100331,
+    "ratio": 8.576677381624256,
+    "cosine": 0.9999999403953552,
+    "mse": 7.223229995987417e-22,
+    "accuracy": 0.9482285976409912,
+    "residual_fired": true,
+    "encode_ms": 1593.8882299997204,
+    "decode_ms": 3796.501000999342
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 440,
+    "ratio": 6.9818181818181815,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": true,
+    "encode_ms": 5.746163998992415,
+    "decode_ms": 1.0680230006983038
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 440,
+    "ratio": 6.9818181818181815,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": true,
+    "encode_ms": 4.575987000862369,
+    "decode_ms": 0.9389049992023502
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 784316,
+    "ratio": 9.024281029585014,
+    "cosine": 1.0,
+    "mse": 1.248584100157438e-21,
+    "accuracy": 0.9328725934028625,
+    "residual_fired": true,
+    "encode_ms": 1611.1804570009554,
+    "decode_ms": 2694.098350999411
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 270782,
+    "ratio": 8.712898198550864,
+    "cosine": 1.0000001192092896,
+    "mse": 3.669735088803223e-21,
+    "accuracy": 0.9538376331329346,
+    "residual_fired": true,
+    "encode_ms": 550.9050910004589,
+    "decode_ms": 1186.8079079995368
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1044881,
+    "ratio": 9.031826590779238,
+    "cosine": 1.0,
+    "mse": 1.2621119161005004e-21,
+    "accuracy": 0.944364607334137,
+    "residual_fired": true,
+    "encode_ms": 2087.9216580015054,
+    "decode_ms": 3034.346581000136
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1100331,
+    "ratio": 8.576677381624256,
+    "cosine": 0.9999999403953552,
+    "mse": 7.223229995987417e-22,
+    "accuracy": 0.9482285976409912,
+    "residual_fired": true,
+    "encode_ms": 1960.8488049998414,
+    "decode_ms": 3584.462241999063
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 440,
+    "ratio": 6.9818181818181815,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": true,
+    "encode_ms": 4.714638000223204,
+    "decode_ms": 0.9344469999632565
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 440,
+    "ratio": 6.9818181818181815,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": true,
+    "encode_ms": 4.445225999006652,
+    "decode_ms": 0.9266189990739804
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1039608,
+    "ratio": 6.8082277166008724,
+    "cosine": 0.993635356426239,
+    "mse": 5.235709068074357e-06,
+    "accuracy": 0.986897885799408,
+    "residual_fired": false,
+    "encode_ms": 1792.1041190002143,
+    "decode_ms": 3509.6360500010633
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 348309,
+    "ratio": 6.77357174233224,
+    "cosine": 0.9931902885437012,
+    "mse": 5.417742613644805e-06,
+    "accuracy": 0.9864462018013,
+    "residual_fired": false,
+    "encode_ms": 669.746336998287,
+    "decode_ms": 1432.9034090005734
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1364857,
+    "ratio": 6.9144122790885785,
+    "cosine": 0.9933037161827087,
+    "mse": 5.380868060456123e-06,
+    "accuracy": 0.986545979976654,
+    "residual_fired": false,
+    "encode_ms": 2027.0681660003902,
+    "decode_ms": 3980.420084999423
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1395367,
+    "ratio": 6.763227165326398,
+    "cosine": 0.9898083209991455,
+    "mse": 8.224908924603369e-06,
+    "accuracy": 0.9794358015060425,
+    "residual_fired": false,
+    "encode_ms": 2673.101530999702,
+    "decode_ms": 5257.580862000395
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 665,
+    "ratio": 4.619548872180451,
+    "cosine": 0.9927323460578918,
+    "mse": 5.885512564418605e-06,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": false,
+    "encode_ms": 12.49867100159463,
+    "decode_ms": 1.887848000478698
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 665,
+    "ratio": 4.619548872180451,
+    "cosine": 0.9927323460578918,
+    "mse": 5.885512564418605e-06,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": false,
+    "encode_ms": 12.0279489983659,
+    "decode_ms": 1.7805920015234733
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1039608,
+    "ratio": 6.8082277166008724,
+    "cosine": 1.0,
+    "mse": 1.4571391830425813e-22,
+    "accuracy": 0.986897885799408,
+    "residual_fired": true,
+    "encode_ms": 1356.843517998641,
+    "decode_ms": 2954.4789330011554
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 348309,
+    "ratio": 6.77357174233224,
+    "cosine": 1.0000001192092896,
+    "mse": 5.484557336815257e-22,
+    "accuracy": 0.9864462018013,
+    "residual_fired": true,
+    "encode_ms": 370.95457399846055,
+    "decode_ms": 879.8493609992875
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1364857,
+    "ratio": 6.9144122790885785,
+    "cosine": 1.0,
+    "mse": 2.1581830825524314e-22,
+    "accuracy": 0.986545979976654,
+    "residual_fired": true,
+    "encode_ms": 1948.748157999944,
+    "decode_ms": 4765.526254999713
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1395367,
+    "ratio": 6.763227165326398,
+    "cosine": 0.9999999403953552,
+    "mse": 7.152133559805575e-23,
+    "accuracy": 0.9794358015060425,
+    "residual_fired": true,
+    "encode_ms": 2625.012800001059,
+    "decode_ms": 4552.649694998763
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 665,
+    "ratio": 4.619548872180451,
+    "cosine": 1.0,
+    "mse": 6.219364230633077e-23,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": true,
+    "encode_ms": 8.449483000731561,
+    "decode_ms": 1.1929520005651284
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 665,
+    "ratio": 4.619548872180451,
+    "cosine": 1.0,
+    "mse": 6.219364230633077e-23,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": true,
+    "encode_ms": 8.218643999498454,
+    "decode_ms": 1.190721999591915
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1039608,
+    "ratio": 6.8082277166008724,
+    "cosine": 1.0,
+    "mse": 1.4571391830425813e-22,
+    "accuracy": 0.986897885799408,
+    "residual_fired": true,
+    "encode_ms": 1298.5795549993782,
+    "decode_ms": 2375.1810339999793
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 348309,
+    "ratio": 6.77357174233224,
+    "cosine": 1.0000001192092896,
+    "mse": 5.484557336815257e-22,
+    "accuracy": 0.9864462018013,
+    "residual_fired": true,
+    "encode_ms": 341.88907600037055,
+    "decode_ms": 728.5394070004259
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1364857,
+    "ratio": 6.9144122790885785,
+    "cosine": 1.0,
+    "mse": 2.1581830825524314e-22,
+    "accuracy": 0.986545979976654,
+    "residual_fired": true,
+    "encode_ms": 1341.7191009993985,
+    "decode_ms": 2866.659047000212
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1395367,
+    "ratio": 6.763227165326398,
+    "cosine": 0.9999999403953552,
+    "mse": 7.152133559805575e-23,
+    "accuracy": 0.9794358015060425,
+    "residual_fired": true,
+    "encode_ms": 1632.6466200007417,
+    "decode_ms": 2934.440564000397
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 665,
+    "ratio": 4.619548872180451,
+    "cosine": 1.0,
+    "mse": 6.219364230633077e-23,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": true,
+    "encode_ms": 10.670751998986816,
+    "decode_ms": 1.3549810009862995
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 665,
+    "ratio": 4.619548872180451,
+    "cosine": 1.0,
+    "mse": 6.219364230633077e-23,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": true,
+    "encode_ms": 9.758255999258836,
+    "decode_ms": 0.9668919992691372
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1286903,
+    "ratio": 5.499939000841556,
+    "cosine": 0.9982399344444275,
+    "mse": 1.366202013741713e-06,
+    "accuracy": 0.9965811371803284,
+    "residual_fired": false,
+    "encode_ms": 1413.6976529989624,
+    "decode_ms": 2951.0303660008503
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 416183,
+    "ratio": 5.668890848496935,
+    "cosine": 0.9981912970542908,
+    "mse": 1.445808607059007e-06,
+    "accuracy": 0.9963829517364502,
+    "residual_fired": false,
+    "encode_ms": 386.25483899886603,
+    "decode_ms": 833.0622520006727
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1703027,
+    "ratio": 5.541417722678501,
+    "cosine": 0.9974209070205688,
+    "mse": 2.118405063811224e-06,
+    "accuracy": 0.9947032332420349,
+    "residual_fired": false,
+    "encode_ms": 1494.4868359998509,
+    "decode_ms": 4013.762217000476
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1699728,
+    "ratio": 5.552173053570924,
+    "cosine": 0.9979899525642395,
+    "mse": 1.5977377643139334e-06,
+    "accuracy": 0.9960052967071533,
+    "residual_fired": false,
+    "encode_ms": 1519.135472999551,
+    "decode_ms": 3473.003642999174
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 1039,
+    "ratio": 2.956689124157844,
+    "cosine": 0.9986840486526489,
+    "mse": 1.067969265022839e-06,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": false,
+    "encode_ms": 14.558532000592095,
+    "decode_ms": 1.1847200003103353
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 1039,
+    "ratio": 2.956689124157844,
+    "cosine": 0.9986840486526489,
+    "mse": 1.067969265022839e-06,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": false,
+    "encode_ms": 14.299181999376742,
+    "decode_ms": 1.1920870001631556
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1286903,
+    "ratio": 5.499939000841556,
+    "cosine": 0.9982399344444275,
+    "mse": 1.366202013741713e-06,
+    "accuracy": 0.9965811371803284,
+    "residual_fired": false,
+    "encode_ms": 1292.4687510003423,
+    "decode_ms": 2925.726093000776
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 416183,
+    "ratio": 5.668890848496935,
+    "cosine": 0.9981912970542908,
+    "mse": 1.445808607059007e-06,
+    "accuracy": 0.9963829517364502,
+    "residual_fired": false,
+    "encode_ms": 392.3833859989827,
+    "decode_ms": 842.1209129992349
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1703027,
+    "ratio": 5.541417722678501,
+    "cosine": 0.9974209070205688,
+    "mse": 2.118405063811224e-06,
+    "accuracy": 0.9947032332420349,
+    "residual_fired": false,
+    "encode_ms": 1489.646169999105,
+    "decode_ms": 3610.7878220009297
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1699728,
+    "ratio": 5.552173053570924,
+    "cosine": 0.9979899525642395,
+    "mse": 1.5977377643139334e-06,
+    "accuracy": 0.9960052967071533,
+    "residual_fired": false,
+    "encode_ms": 1513.9135629997327,
+    "decode_ms": 3450.369538999439
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 1039,
+    "ratio": 2.956689124157844,
+    "cosine": 0.9986840486526489,
+    "mse": 1.067969265022839e-06,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": false,
+    "encode_ms": 18.77353499912715,
+    "decode_ms": 1.6329730005963938
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 1039,
+    "ratio": 2.956689124157844,
+    "cosine": 0.9986840486526489,
+    "mse": 1.067969265022839e-06,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": false,
+    "encode_ms": 17.9618419988401,
+    "decode_ms": 2.680617000805796
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1286903,
+    "ratio": 5.499939000841556,
+    "cosine": 1.0,
+    "mse": 1.1001944855695278e-23,
+    "accuracy": 0.9965811371803284,
+    "residual_fired": true,
+    "encode_ms": 1394.2980390002049,
+    "decode_ms": 2712.5497510005516
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 416183,
+    "ratio": 5.668890848496935,
+    "cosine": 1.0000001192092896,
+    "mse": 3.472307905039068e-23,
+    "accuracy": 0.9963829517364502,
+    "residual_fired": true,
+    "encode_ms": 381.71307900120155,
+    "decode_ms": 899.2888789998688
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1703027,
+    "ratio": 5.541417722678501,
+    "cosine": 1.0,
+    "mse": 3.358727080816622e-23,
+    "accuracy": 0.9947032332420349,
+    "residual_fired": true,
+    "encode_ms": 1705.4454369990708,
+    "decode_ms": 3538.610145998973
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1699728,
+    "ratio": 5.552173053570924,
+    "cosine": 0.9999999403953552,
+    "mse": 2.651177224540361e-23,
+    "accuracy": 0.9960052967071533,
+    "residual_fired": true,
+    "encode_ms": 1608.7011330000678,
+    "decode_ms": 3456.7396090005786
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 1039,
+    "ratio": 2.956689124157844,
+    "cosine": 1.0,
+    "mse": 1.2011351548493454e-23,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": true,
+    "encode_ms": 14.7010959990439,
+    "decode_ms": 1.1903599988727365
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 1039,
+    "ratio": 2.956689124157844,
+    "cosine": 1.0,
+    "mse": 1.2011351548493454e-23,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": true,
+    "encode_ms": 14.307593999546953,
+    "decode_ms": 1.18555699918943
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1236838,
+    "ratio": 5.722566738732154,
+    "cosine": 0.9972571730613708,
+    "mse": 2.1659482172253774e-06,
+    "accuracy": 0.9945797920227051,
+    "residual_fired": false,
+    "encode_ms": 1122.3418059998949,
+    "decode_ms": 2490.6037349992403
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 400029,
+    "ratio": 5.897812408600377,
+    "cosine": 0.997722864151001,
+    "mse": 1.8084704151988262e-06,
+    "accuracy": 0.9954756498336792,
+    "residual_fired": false,
+    "encode_ms": 420.9796529994492,
+    "decode_ms": 843.4661280007276
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1646666,
+    "ratio": 5.731085721087337,
+    "cosine": 0.9969691634178162,
+    "mse": 2.4256987671833485e-06,
+    "accuracy": 0.9939349293708801,
+    "residual_fired": false,
+    "encode_ms": 1505.4735760004405,
+    "decode_ms": 3314.9020049986575
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1631955,
+    "ratio": 5.78274768605752,
+    "cosine": 0.997641921043396,
+    "mse": 1.9594019704527454e-06,
+    "accuracy": 0.9951010346412659,
+    "residual_fired": false,
+    "encode_ms": 1523.429478998878,
+    "decode_ms": 3816.2129379998078
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 974,
+    "ratio": 3.154004106776181,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": false,
+    "encode_ms": 13.825486001223908,
+    "decode_ms": 1.1538380003912607
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 974,
+    "ratio": 3.154004106776181,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": false,
+    "encode_ms": 13.168225999834249,
+    "decode_ms": 1.1470320005173562
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1236838,
+    "ratio": 5.722566738732154,
+    "cosine": 0.9972571730613708,
+    "mse": 2.1659482172253774e-06,
+    "accuracy": 0.9945797920227051,
+    "residual_fired": false,
+    "encode_ms": 1111.71059300068,
+    "decode_ms": 2492.3204530005023
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 400029,
+    "ratio": 5.897812408600377,
+    "cosine": 0.997722864151001,
+    "mse": 1.8084704151988262e-06,
+    "accuracy": 0.9954756498336792,
+    "residual_fired": false,
+    "encode_ms": 382.56006900155626,
+    "decode_ms": 808.861784000328
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1646666,
+    "ratio": 5.731085721087337,
+    "cosine": 0.9969691634178162,
+    "mse": 2.4256987671833485e-06,
+    "accuracy": 0.9939349293708801,
+    "residual_fired": false,
+    "encode_ms": 1492.1757619995333,
+    "decode_ms": 3791.100053000264
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1631955,
+    "ratio": 5.78274768605752,
+    "cosine": 0.997641921043396,
+    "mse": 1.9594019704527454e-06,
+    "accuracy": 0.9951010346412659,
+    "residual_fired": false,
+    "encode_ms": 1736.8740619986056,
+    "decode_ms": 3974.7226019990194
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 974,
+    "ratio": 3.154004106776181,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": false,
+    "encode_ms": 13.504491000276175,
+    "decode_ms": 1.1642429999483284
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 974,
+    "ratio": 3.154004106776181,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": false,
+    "encode_ms": 13.323750999916228,
+    "decode_ms": 1.1494580012367805
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1236838,
+    "ratio": 5.722566738732154,
+    "cosine": 1.0,
+    "mse": 6.0939106553566025e-24,
+    "accuracy": 0.9945797920227051,
+    "residual_fired": true,
+    "encode_ms": 1124.176000999796,
+    "decode_ms": 2810.7757690013386
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 400029,
+    "ratio": 5.897812408600377,
+    "cosine": 1.0000001192092896,
+    "mse": 2.1182306855820977e-23,
+    "accuracy": 0.9954756498336792,
+    "residual_fired": true,
+    "encode_ms": 425.3720610013261,
+    "decode_ms": 1012.9484339995543
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1646666,
+    "ratio": 5.731085721087337,
+    "cosine": 1.0,
+    "mse": 3.3890284903636097e-23,
+    "accuracy": 0.9939349293708801,
+    "residual_fired": true,
+    "encode_ms": 1762.3237150000932,
+    "decode_ms": 3772.5135350010532
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 1631955,
+    "ratio": 5.78274768605752,
+    "cosine": 0.9999999403953552,
+    "mse": 5.978268143158362e-23,
+    "accuracy": 0.9951010346412659,
+    "residual_fired": true,
+    "encode_ms": 1494.5433430002595,
+    "decode_ms": 3293.656791000103
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 974,
+    "ratio": 3.154004106776181,
+    "cosine": 1.0,
+    "mse": 1.2011351548493454e-23,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": true,
+    "encode_ms": 16.053981000368367,
+    "decode_ms": 1.2180670000816463
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 974,
+    "ratio": 3.154004106776181,
+    "cosine": 1.0,
+    "mse": 1.2011351548493454e-23,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": true,
+    "encode_ms": 24.806285999147804,
+    "decode_ms": 22.079602000303566
+   }
+  ],
+  "summary": {
+   "fixed_k8_rt0": {
+    "ratio": 14.267495500860614,
+    "cosine": 0.8805428644021353,
+    "min_cosine": 0.8468753099441528,
+    "mse": 9.035170417822276e-05,
+    "residual_fired": 0,
+    "encode_ms": 788.227458499326,
+    "decode_ms": 1146.1209049997099
+   },
+   "fixed_k8_rt0.99": {
+    "ratio": 14.267495500860614,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 3.5809653343353325e-20,
+    "residual_fired": 6,
+    "encode_ms": 819.9025259997749,
+    "decode_ms": 1015.0938145003844
+   },
+   "fixed_k8_rt1": {
+    "ratio": 14.267495500860614,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 3.5809653343353325e-20,
+    "residual_fired": 6,
+    "encode_ms": 709.0252250000049,
+    "decode_ms": 1029.405655833519
+   },
+   "fixed_k16_rt0": {
+    "ratio": 8.218219927362624,
+    "cosine": 0.9723251760005951,
+    "min_cosine": 0.9660353660583496,
+    "mse": 2.2127972745996278e-05,
+    "residual_fired": 0,
+    "encode_ms": 859.1456936668086,
+    "decode_ms": 1572.6676468339065
+   },
+   "fixed_k16_rt0.99": {
+    "ratio": 8.218219927362624,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 3.107344318661214e-21,
+    "residual_fired": 6,
+    "encode_ms": 949.0337615000802,
+    "decode_ms": 1822.7538391662772
+   },
+   "fixed_k16_rt1": {
+    "ratio": 8.218219927362624,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 3.107344318661214e-21,
+    "residual_fired": 6,
+    "encode_ms": 1036.669312500332,
+    "decode_ms": 1750.262691332864
+   },
+   "fixed_k32_rt0": {
+    "ratio": 6.083089441284833,
+    "cosine": 0.9925670623779297,
+    "min_cosine": 0.9898083209991455,
+    "mse": 6.00504229926931e-06,
+    "residual_fired": 0,
+    "encode_ms": 1197.757795499759,
+    "decode_ms": 2364.034807667243
+   },
+   "fixed_k32_rt0.99": {
+    "ratio": 6.083089441284833,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 1.8431609674195737e-22,
+    "residual_fired": 6,
+    "encode_ms": 1053.0378628330557,
+    "decode_ms": 2192.4813196665127
+   },
+   "fixed_k32_rt1": {
+    "ratio": 6.083089441284833,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 1.8431609674195737e-22,
+    "residual_fired": 6,
+    "encode_ms": 772.5438933330224,
+    "decode_ms": 1484.5236541668783
+   },
+   "fixed_k64_rt0": {
+    "ratio": 4.695966478983934,
+    "cosine": 0.9982016980648041,
+    "min_cosine": 0.9974209070205688,
+    "mse": 1.4440153298285925e-06,
+    "residual_fired": 0,
+    "encode_ms": 807.0720858328665,
+    "decode_ms": 1878.8725475002745
+   },
+   "fixed_k64_rt0.99": {
+    "ratio": 4.695966478983934,
+    "cosine": 0.9982016980648041,
+    "min_cosine": 0.9974209070205688,
+    "mse": 1.4440153298285925e-06,
+    "residual_fired": 0,
+    "encode_ms": 787.5245411660217,
+    "decode_ms": 1805.5529928336302
+   },
+   "fixed_k64_rt1": {
+    "ratio": 4.695966478983934,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 2.1641128342773782e-23,
+    "residual_fired": 6,
+    "encode_ms": 853.1943963331893,
+    "decode_ms": 1768.2607169996725
+   },
+   "adaptive_k16_rt0": {
+    "ratio": 4.907036794671625,
+    "cosine": 0.9977571964263916,
+    "min_cosine": 0.9969691634178162,
+    "mse": 1.804590510801063e-06,
+    "residual_fired": 0,
+    "encode_ms": 766.5363709999534,
+    "decode_ms": 1744.5809459998902
+   },
+   "adaptive_k16_rt0.99": {
+    "ratio": 4.907036794671625,
+    "cosine": 0.9977571964263916,
+    "min_cosine": 0.9969691634178162,
+    "mse": 1.804590510801063e-06,
+    "residual_fired": 0,
+    "encode_ms": 791.6914546667613,
+    "decode_ms": 1844.8864321668832
+   },
+   "adaptive_k16_rt1": {
+    "ratio": 4.907036794671625,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 2.4161981157230702e-23,
+    "residual_fired": 6,
+    "encode_ms": 807.8792311668318,
+    "decode_ms": 1818.865366333739
+   }
+  },
+  "verdict": {
+   "near-lossless (avg MSE < 1e-12)": "fixed_k8_rt0.99",
+   "high-fidelity (avg cosine >= 0.999, min >= 0.995)": "fixed_k8_rt0.99",
+   "any (max ratio)": "fixed_k8_rt0"
+  }
+ },
+ {
+  "ts": "2026-10-21T08:54:55+00:00",
+  "python": "3.12.14",
+  "numpy": "2.5.3",
+  "grid": [
+   "fixed_k8_rt0",
+   "fixed_k8_rt0.99",
+   "fixed_k8_rt1",
+   "fixed_k16_rt0",
+   "fixed_k16_rt0.99",
+   "fixed_k16_rt1",
+   "fixed_k32_rt0",
+   "fixed_k32_rt0.99",
+   "fixed_k32_rt1",
+   "fixed_k64_rt0",
+   "fixed_k64_rt0.99",
+   "fixed_k64_rt1",
+   "adaptive_k16_rt0",
+   "adaptive_k16_rt0.99",
+   "adaptive_k16_rt1"
+  ],
+  "shipped_default": "adaptive_k16_rt0.99",
+  "rows": [
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1769523,
+    "reported_nbytes": 495475,
+    "nbytes_gap": 1274048,
+    "ratio": 3.999884714694299,
+    "cosine": 0.8933335542678833,
+    "mse": 8.152248483384028e-05,
+    "accuracy": 0.7959939241409302,
+    "residual_fired": false,
+    "encode_ms": 800.3340300001582,
+    "decode_ms": 1197.1968359994207
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 589875,
+    "reported_nbytes": 179097,
+    "nbytes_gap": 410778,
+    "ratio": 3.9996541640178003,
+    "cosine": 0.9089932441711426,
+    "mse": 6.967307854210958e-05,
+    "accuracy": 0.8256959319114685,
+    "residual_fired": false,
+    "encode_ms": 262.1371229997749,
+    "decode_ms": 414.9501899992174
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359347,
+    "reported_nbytes": 572022,
+    "nbytes_gap": 1787325,
+    "ratio": 3.999913535397718,
+    "cosine": 0.8654066920280457,
+    "mse": 0.00010094585741171613,
+    "accuracy": 0.7476003766059875,
+    "residual_fired": false,
+    "encode_ms": 1045.8617910007888,
+    "decode_ms": 1405.9507969996048
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359347,
+    "reported_nbytes": 543488,
+    "nbytes_gap": 1815859,
+    "ratio": 3.999913535397718,
+    "cosine": 0.8468753099441528,
+    "mse": 0.00011356354661984369,
+    "accuracy": 0.716064453125,
+    "residual_fired": false,
+    "encode_ms": 1006.490849000329,
+    "decode_ms": 1342.9844269994646
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 819,
+    "reported_nbytes": 253,
+    "nbytes_gap": 566,
+    "ratio": 3.750915750915751,
+    "cosine": 0.8843241930007935,
+    "mse": 8.820262883091345e-05,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": false,
+    "encode_ms": 2.416447998257354,
+    "decode_ms": 0.4942460000165738
+   },
+   {
+    "config": "fixed_k8_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 819,
+    "reported_nbytes": 253,
+    "nbytes_gap": 566,
+    "ratio": 3.750915750915751,
+    "cosine": 0.8843241930007935,
+    "mse": 8.820262883091345e-05,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": false,
+    "encode_ms": 2.2030799991625827,
+    "decode_ms": 0.48240800060739275
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 8847415,
+    "reported_nbytes": 495475,
+    "nbytes_gap": 8351940,
+    "ratio": 0.7999950267959625,
+    "cosine": 1.0,
+    "mse": 3.328771240308865e-20,
+    "accuracy": 0.7959939241409302,
+    "residual_fired": true,
+    "encode_ms": 752.0661399994424,
+    "decode_ms": 1615.81221599954
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 2949175,
+    "reported_nbytes": 179097,
+    "nbytes_gap": 2770078,
+    "ratio": 0.7999850805733807,
+    "cosine": 1.0000001192092896,
+    "mse": 2.5105256323998302e-20,
+    "accuracy": 0.8256959319114685,
+    "residual_fired": true,
+    "encode_ms": 269.8173399985535,
+    "decode_ms": 416.2466440011485
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796535,
+    "reported_nbytes": 572022,
+    "nbytes_gap": 11224513,
+    "ratio": 0.7999962700911751,
+    "cosine": 1.0,
+    "mse": 3.173000852502912e-20,
+    "accuracy": 0.7476003766059875,
+    "residual_fired": true,
+    "encode_ms": 1032.4202840001817,
+    "decode_ms": 1427.049703001103
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796535,
+    "reported_nbytes": 543488,
+    "nbytes_gap": 11253047,
+    "ratio": 0.7999962700911751,
+    "cosine": 0.9999999403953552,
+    "mse": 4.249799047647728e-20,
+    "accuracy": 0.716064453125,
+    "residual_fired": true,
+    "encode_ms": 1007.7485590009019,
+    "decode_ms": 1619.9995759998274
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3895,
+    "reported_nbytes": 253,
+    "nbytes_gap": 3642,
+    "ratio": 0.7887034659820282,
+    "cosine": 1.0,
+    "mse": 4.1118476165763306e-20,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": true,
+    "encode_ms": 2.3616470007254975,
+    "decode_ms": 0.5210879990045214
+   },
+   {
+    "config": "fixed_k8_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3895,
+    "reported_nbytes": 253,
+    "nbytes_gap": 3642,
+    "ratio": 0.7887034659820282,
+    "cosine": 1.0,
+    "mse": 4.1118476165763306e-20,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": true,
+    "encode_ms": 2.225565000117058,
+    "decode_ms": 0.6246789998840541
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 8847415,
+    "reported_nbytes": 495475,
+    "nbytes_gap": 8351940,
+    "ratio": 0.7999950267959625,
+    "cosine": 1.0,
+    "mse": 3.328771240308865e-20,
+    "accuracy": 0.7959939241409302,
+    "residual_fired": true,
+    "encode_ms": 748.800437000682,
+    "decode_ms": 1181.114869999874
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 2949175,
+    "reported_nbytes": 179097,
+    "nbytes_gap": 2770078,
+    "ratio": 0.7999850805733807,
+    "cosine": 1.0000001192092896,
+    "mse": 2.5105256323998302e-20,
+    "accuracy": 0.8256959319114685,
+    "residual_fired": true,
+    "encode_ms": 283.10139200038975,
+    "decode_ms": 419.43977599839855
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796535,
+    "reported_nbytes": 572022,
+    "nbytes_gap": 11224513,
+    "ratio": 0.7999962700911751,
+    "cosine": 1.0,
+    "mse": 3.173000852502912e-20,
+    "accuracy": 0.7476003766059875,
+    "residual_fired": true,
+    "encode_ms": 1034.8228100010601,
+    "decode_ms": 1403.8110689998575
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796535,
+    "reported_nbytes": 543488,
+    "nbytes_gap": 11253047,
+    "ratio": 0.7999962700911751,
+    "cosine": 0.9999999403953552,
+    "mse": 4.249799047647728e-20,
+    "accuracy": 0.716064453125,
+    "residual_fired": true,
+    "encode_ms": 1451.7055039996194,
+    "decode_ms": 1577.5510889998259
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3895,
+    "reported_nbytes": 253,
+    "nbytes_gap": 3642,
+    "ratio": 0.7887034659820282,
+    "cosine": 1.0,
+    "mse": 4.1118476165763306e-20,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": true,
+    "encode_ms": 2.872725000997889,
+    "decode_ms": 0.49552100063010585
+   },
+   {
+    "config": "fixed_k8_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3895,
+    "reported_nbytes": 253,
+    "nbytes_gap": 3642,
+    "ratio": 0.7887034659820282,
+    "cosine": 1.0,
+    "mse": 4.1118476165763306e-20,
+    "accuracy": 0.7802114486694336,
+    "residual_fired": true,
+    "encode_ms": 2.2741429984307615,
+    "decode_ms": 0.545389999388135
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1769531,
+    "reported_nbytes": 784316,
+    "nbytes_gap": 985215,
+    "ratio": 3.999866631327736,
+    "cosine": 0.9660353660583496,
+    "mse": 2.6824653104995377e-05,
+    "accuracy": 0.9328725934028625,
+    "residual_fired": false,
+    "encode_ms": 884.1543229991657,
+    "decode_ms": 1691.4054689987097
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 589883,
+    "reported_nbytes": 270782,
+    "nbytes_gap": 319101,
+    "ratio": 3.999599920662233,
+    "cosine": 0.9767204523086548,
+    "mse": 1.8452097720000893e-05,
+    "accuracy": 0.9538376331329346,
+    "residual_fired": false,
+    "encode_ms": 297.34531299982336,
+    "decode_ms": 586.096611999892
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359355,
+    "reported_nbytes": 1044881,
+    "nbytes_gap": 1314474,
+    "ratio": 3.99989997266202,
+    "cosine": 0.9724617004394531,
+    "mse": 2.2251066184253432e-05,
+    "accuracy": 0.944364607334137,
+    "residual_fired": false,
+    "encode_ms": 1271.3481899991166,
+    "decode_ms": 2468.067969000913
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359355,
+    "reported_nbytes": 1100331,
+    "nbytes_gap": 1259024,
+    "ratio": 3.99989997266202,
+    "cosine": 0.9737878441810608,
+    "mse": 2.0706618670374155e-05,
+    "accuracy": 0.9482285976409912,
+    "residual_fired": false,
+    "encode_ms": 1460.9048700003768,
+    "decode_ms": 2431.5167109998583
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 827,
+    "reported_nbytes": 440,
+    "nbytes_gap": 387,
+    "ratio": 3.7146311970979444,
+    "cosine": 0.9724728465080261,
+    "mse": 2.226670039817691e-05,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": false,
+    "encode_ms": 3.9049999995768303,
+    "decode_ms": 0.7494889996451093
+   },
+   {
+    "config": "fixed_k16_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 827,
+    "reported_nbytes": 440,
+    "nbytes_gap": 387,
+    "ratio": 3.7146311970979444,
+    "cosine": 0.9724728465080261,
+    "mse": 2.226670039817691e-05,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": false,
+    "encode_ms": 3.771835999941686,
+    "decode_ms": 0.7796840000082739
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 8847423,
+    "reported_nbytes": 784316,
+    "nbytes_gap": 8063107,
+    "ratio": 0.7999943034259807,
+    "cosine": 1.0,
+    "mse": 1.248584100157438e-21,
+    "accuracy": 0.9328725934028625,
+    "residual_fired": true,
+    "encode_ms": 990.5419180013268,
+    "decode_ms": 2121.9197760001407
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 2949183,
+    "reported_nbytes": 270782,
+    "nbytes_gap": 2678401,
+    "ratio": 0.7999829105213206,
+    "cosine": 1.0000001192092896,
+    "mse": 3.669735088803223e-21,
+    "accuracy": 0.9538376331329346,
+    "residual_fired": true,
+    "encode_ms": 294.42093500074407,
+    "decode_ms": 578.5645060004754
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796543,
+    "reported_nbytes": 1044881,
+    "nbytes_gap": 10751662,
+    "ratio": 0.7999957275618798,
+    "cosine": 1.0,
+    "mse": 1.2621119161005004e-21,
+    "accuracy": 0.944364607334137,
+    "residual_fired": true,
+    "encode_ms": 1182.6448169995274,
+    "decode_ms": 2246.2546970000403
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796543,
+    "reported_nbytes": 1100331,
+    "nbytes_gap": 10696212,
+    "ratio": 0.7999957275618798,
+    "cosine": 0.9999999403953552,
+    "mse": 7.223229995987417e-22,
+    "accuracy": 0.9482285976409912,
+    "residual_fired": true,
+    "encode_ms": 1207.176117999552,
+    "decode_ms": 2381.296651001321
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3903,
+    "reported_nbytes": 440,
+    "nbytes_gap": 3463,
+    "ratio": 0.787086856264412,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": true,
+    "encode_ms": 4.015423000964802,
+    "decode_ms": 0.7747899999230867
+   },
+   {
+    "config": "fixed_k16_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3903,
+    "reported_nbytes": 440,
+    "nbytes_gap": 3463,
+    "ratio": 0.787086856264412,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": true,
+    "encode_ms": 4.900838999674306,
+    "decode_ms": 0.8712250000826316
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 8847423,
+    "reported_nbytes": 784316,
+    "nbytes_gap": 8063107,
+    "ratio": 0.7999943034259807,
+    "cosine": 1.0,
+    "mse": 1.248584100157438e-21,
+    "accuracy": 0.9328725934028625,
+    "residual_fired": true,
+    "encode_ms": 918.8008060009452,
+    "decode_ms": 1744.9704699993163
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 2949183,
+    "reported_nbytes": 270782,
+    "nbytes_gap": 2678401,
+    "ratio": 0.7999829105213206,
+    "cosine": 1.0000001192092896,
+    "mse": 3.669735088803223e-21,
+    "accuracy": 0.9538376331329346,
+    "residual_fired": true,
+    "encode_ms": 299.90127200107963,
+    "decode_ms": 594.4194570001855
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796543,
+    "reported_nbytes": 1044881,
+    "nbytes_gap": 10751662,
+    "ratio": 0.7999957275618798,
+    "cosine": 1.0,
+    "mse": 1.2621119161005004e-21,
+    "accuracy": 0.944364607334137,
+    "residual_fired": true,
+    "encode_ms": 1455.4386440013332,
+    "decode_ms": 2546.8005379989336
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796543,
+    "reported_nbytes": 1100331,
+    "nbytes_gap": 10696212,
+    "ratio": 0.7999957275618798,
+    "cosine": 0.9999999403953552,
+    "mse": 7.223229995987417e-22,
+    "accuracy": 0.9482285976409912,
+    "residual_fired": true,
+    "encode_ms": 1189.947647999361,
+    "decode_ms": 2343.8589140005206
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3903,
+    "reported_nbytes": 440,
+    "nbytes_gap": 3463,
+    "ratio": 0.787086856264412,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": true,
+    "encode_ms": 3.9394880004692823,
+    "decode_ms": 0.786085998697672
+   },
+   {
+    "config": "fixed_k16_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3903,
+    "reported_nbytes": 440,
+    "nbytes_gap": 3463,
+    "ratio": 0.787086856264412,
+    "cosine": 1.0,
+    "mse": 5.870655903653691e-21,
+    "accuracy": 0.9445145130157471,
+    "residual_fired": true,
+    "encode_ms": 3.7445900015882216,
+    "decode_ms": 0.7520210001530359
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1769547,
+    "reported_nbytes": 1039608,
+    "nbytes_gap": 729939,
+    "ratio": 3.999830465085132,
+    "cosine": 0.993635356426239,
+    "mse": 5.235709068074357e-06,
+    "accuracy": 0.986897885799408,
+    "residual_fired": false,
+    "encode_ms": 1010.3540700001759,
+    "decode_ms": 2616.6527870009304
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 589899,
+    "reported_nbytes": 348309,
+    "nbytes_gap": 241590,
+    "ratio": 3.9994914383648728,
+    "cosine": 0.9931902885437012,
+    "mse": 5.417742613644805e-06,
+    "accuracy": 0.9864462018013,
+    "residual_fired": false,
+    "encode_ms": 338.95304200086684,
+    "decode_ms": 718.3399320001627
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359371,
+    "reported_nbytes": 1364857,
+    "nbytes_gap": 994514,
+    "ratio": 3.9998728474665493,
+    "cosine": 0.9933037161827087,
+    "mse": 5.380868060456123e-06,
+    "accuracy": 0.986545979976654,
+    "residual_fired": false,
+    "encode_ms": 1326.3167639997846,
+    "decode_ms": 2825.029984000139
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359371,
+    "reported_nbytes": 1395367,
+    "nbytes_gap": 964004,
+    "ratio": 3.9998728474665493,
+    "cosine": 0.9898083209991455,
+    "mse": 8.224908924603369e-06,
+    "accuracy": 0.9794358015060425,
+    "residual_fired": false,
+    "encode_ms": 1358.8636679996853,
+    "decode_ms": 3047.2821170005773
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 843,
+    "reported_nbytes": 665,
+    "nbytes_gap": 178,
+    "ratio": 3.6441281138790034,
+    "cosine": 0.9927323460578918,
+    "mse": 5.885512564418605e-06,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": false,
+    "encode_ms": 7.247560999530833,
+    "decode_ms": 0.9816199999477249
+   },
+   {
+    "config": "fixed_k32_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 843,
+    "reported_nbytes": 665,
+    "nbytes_gap": 178,
+    "ratio": 3.6441281138790034,
+    "cosine": 0.9927323460578918,
+    "mse": 5.885512564418605e-06,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": false,
+    "encode_ms": 8.970887998657417,
+    "decode_ms": 0.9551279999868711
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 8847439,
+    "reported_nbytes": 1039608,
+    "nbytes_gap": 7807831,
+    "ratio": 0.7999928566899416,
+    "cosine": 1.0,
+    "mse": 1.4571391830425813e-22,
+    "accuracy": 0.986897885799408,
+    "residual_fired": true,
+    "encode_ms": 1038.373817998945,
+    "decode_ms": 2126.384062999932
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 2949199,
+    "reported_nbytes": 348309,
+    "nbytes_gap": 2600890,
+    "ratio": 0.7999785704525195,
+    "cosine": 1.0000001192092896,
+    "mse": 5.484557336815257e-22,
+    "accuracy": 0.9864462018013,
+    "residual_fired": true,
+    "encode_ms": 335.2111389995116,
+    "decode_ms": 712.9113179998967
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796559,
+    "reported_nbytes": 1364857,
+    "nbytes_gap": 10431702,
+    "ratio": 0.7999946425054967,
+    "cosine": 1.0,
+    "mse": 2.1581830825524314e-22,
+    "accuracy": 0.986545979976654,
+    "residual_fired": true,
+    "encode_ms": 1462.5978929998382,
+    "decode_ms": 3126.8533669990575
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796559,
+    "reported_nbytes": 1395367,
+    "nbytes_gap": 10401192,
+    "ratio": 0.7999946425054967,
+    "cosine": 0.9999999403953552,
+    "mse": 7.152133559805575e-23,
+    "accuracy": 0.9794358015060425,
+    "residual_fired": true,
+    "encode_ms": 1373.7739259995578,
+    "decode_ms": 3007.3988570002257
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3919,
+    "reported_nbytes": 665,
+    "nbytes_gap": 3254,
+    "ratio": 0.7838734371013013,
+    "cosine": 1.0,
+    "mse": 6.219364230633077e-23,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": true,
+    "encode_ms": 7.1574289995623985,
+    "decode_ms": 0.9567199995217379
+   },
+   {
+    "config": "fixed_k32_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3919,
+    "reported_nbytes": 665,
+    "nbytes_gap": 3254,
+    "ratio": 0.7838734371013013,
+    "cosine": 1.0,
+    "mse": 6.219364230633077e-23,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": true,
+    "encode_ms": 6.944387998373713,
+    "decode_ms": 0.9461609988647979
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 8847439,
+    "reported_nbytes": 1039608,
+    "nbytes_gap": 7807831,
+    "ratio": 0.7999928566899416,
+    "cosine": 1.0,
+    "mse": 1.4571391830425813e-22,
+    "accuracy": 0.986897885799408,
+    "residual_fired": true,
+    "encode_ms": 1032.7037379993271,
+    "decode_ms": 2197.3077149996243
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 2949199,
+    "reported_nbytes": 348309,
+    "nbytes_gap": 2600890,
+    "ratio": 0.7999785704525195,
+    "cosine": 1.0000001192092896,
+    "mse": 5.484557336815257e-22,
+    "accuracy": 0.9864462018013,
+    "residual_fired": true,
+    "encode_ms": 342.49871099927987,
+    "decode_ms": 1262.127504000091
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796559,
+    "reported_nbytes": 1364857,
+    "nbytes_gap": 10431702,
+    "ratio": 0.7999946425054967,
+    "cosine": 1.0,
+    "mse": 2.1581830825524314e-22,
+    "accuracy": 0.986545979976654,
+    "residual_fired": true,
+    "encode_ms": 1561.7198609998013,
+    "decode_ms": 3365.4992539995874
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796559,
+    "reported_nbytes": 1395367,
+    "nbytes_gap": 10401192,
+    "ratio": 0.7999946425054967,
+    "cosine": 0.9999999403953552,
+    "mse": 7.152133559805575e-23,
+    "accuracy": 0.9794358015060425,
+    "residual_fired": true,
+    "encode_ms": 1354.0818359997502,
+    "decode_ms": 3029.8528539988183
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3919,
+    "reported_nbytes": 665,
+    "nbytes_gap": 3254,
+    "ratio": 0.7838734371013013,
+    "cosine": 1.0,
+    "mse": 6.219364230633077e-23,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": true,
+    "encode_ms": 7.130246000087936,
+    "decode_ms": 0.9537309997540433
+   },
+   {
+    "config": "fixed_k32_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3919,
+    "reported_nbytes": 665,
+    "nbytes_gap": 3254,
+    "ratio": 0.7838734371013013,
+    "cosine": 1.0,
+    "mse": 6.219364230633077e-23,
+    "accuracy": 0.9853341579437256,
+    "residual_fired": true,
+    "encode_ms": 6.921546999365091,
+    "decode_ms": 0.9480480002821423
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1769579,
+    "reported_nbytes": 1286903,
+    "nbytes_gap": 482676,
+    "ratio": 3.9997581345619495,
+    "cosine": 0.9982399344444275,
+    "mse": 1.366202013741713e-06,
+    "accuracy": 0.9965811371803284,
+    "residual_fired": false,
+    "encode_ms": 1108.690012999432,
+    "decode_ms": 2568.769102999795
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 589931,
+    "reported_nbytes": 416183,
+    "nbytes_gap": 173748,
+    "ratio": 3.999274491423573,
+    "cosine": 0.9981912970542908,
+    "mse": 1.445808607059007e-06,
+    "accuracy": 0.9963829517364502,
+    "residual_fired": false,
+    "encode_ms": 389.6086559998366,
+    "decode_ms": 887.9534480001894
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359403,
+    "reported_nbytes": 1703027,
+    "nbytes_gap": 656376,
+    "ratio": 3.999818598179285,
+    "cosine": 0.9974209070205688,
+    "mse": 2.118405063811224e-06,
+    "accuracy": 0.9947032332420349,
+    "residual_fired": false,
+    "encode_ms": 1518.9820759987924,
+    "decode_ms": 3398.2612370000425
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359403,
+    "reported_nbytes": 1699728,
+    "nbytes_gap": 659675,
+    "ratio": 3.999818598179285,
+    "cosine": 0.9979899525642395,
+    "mse": 1.5977377643139334e-06,
+    "accuracy": 0.9960052967071533,
+    "residual_fired": false,
+    "encode_ms": 1878.7546580006165,
+    "decode_ms": 3487.8899329996784
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 875,
+    "reported_nbytes": 1039,
+    "nbytes_gap": -164,
+    "ratio": 3.5108571428571427,
+    "cosine": 0.9986840486526489,
+    "mse": 1.067969265022839e-06,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": false,
+    "encode_ms": 14.376418001120328,
+    "decode_ms": 1.192551000713138
+   },
+   {
+    "config": "fixed_k64_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 875,
+    "reported_nbytes": 1039,
+    "nbytes_gap": -164,
+    "ratio": 3.5108571428571427,
+    "cosine": 0.9986840486526489,
+    "mse": 1.067969265022839e-06,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": false,
+    "encode_ms": 14.398911998796393,
+    "decode_ms": 1.1882089984283084
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1769579,
+    "reported_nbytes": 1286903,
+    "nbytes_gap": 482676,
+    "ratio": 3.9997581345619495,
+    "cosine": 0.9982399344444275,
+    "mse": 1.366202013741713e-06,
+    "accuracy": 0.9965811371803284,
+    "residual_fired": false,
+    "encode_ms": 1118.7017350002861,
+    "decode_ms": 2722.290982999766
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 589931,
+    "reported_nbytes": 416183,
+    "nbytes_gap": 173748,
+    "ratio": 3.999274491423573,
+    "cosine": 0.9981912970542908,
+    "mse": 1.445808607059007e-06,
+    "accuracy": 0.9963829517364502,
+    "residual_fired": false,
+    "encode_ms": 386.94399800078827,
+    "decode_ms": 833.9435159996356
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359403,
+    "reported_nbytes": 1703027,
+    "nbytes_gap": 656376,
+    "ratio": 3.999818598179285,
+    "cosine": 0.9974209070205688,
+    "mse": 2.118405063811224e-06,
+    "accuracy": 0.9947032332420349,
+    "residual_fired": false,
+    "encode_ms": 1688.1119009995018,
+    "decode_ms": 3737.7935999993497
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359403,
+    "reported_nbytes": 1699728,
+    "nbytes_gap": 659675,
+    "ratio": 3.999818598179285,
+    "cosine": 0.9979899525642395,
+    "mse": 1.5977377643139334e-06,
+    "accuracy": 0.9960052967071533,
+    "residual_fired": false,
+    "encode_ms": 1513.0051340001955,
+    "decode_ms": 3468.6846540007537
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 875,
+    "reported_nbytes": 1039,
+    "nbytes_gap": -164,
+    "ratio": 3.5108571428571427,
+    "cosine": 0.9986840486526489,
+    "mse": 1.067969265022839e-06,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": false,
+    "encode_ms": 15.868356000282802,
+    "decode_ms": 1.1907369989785366
+   },
+   {
+    "config": "fixed_k64_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 875,
+    "reported_nbytes": 1039,
+    "nbytes_gap": -164,
+    "ratio": 3.5108571428571427,
+    "cosine": 0.9986840486526489,
+    "mse": 1.067969265022839e-06,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": false,
+    "encode_ms": 14.348830000017188,
+    "decode_ms": 1.1785349997808225
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 8847471,
+    "reported_nbytes": 1286903,
+    "nbytes_gap": 7560568,
+    "ratio": 0.7999899632335613,
+    "cosine": 1.0,
+    "mse": 1.1001944855695278e-23,
+    "accuracy": 0.9965811371803284,
+    "residual_fired": true,
+    "encode_ms": 1145.2458840012696,
+    "decode_ms": 2628.4523810008977
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 2949231,
+    "reported_nbytes": 416183,
+    "nbytes_gap": 2533048,
+    "ratio": 0.7999698904561902,
+    "cosine": 1.0000001192092896,
+    "mse": 3.472307905039068e-23,
+    "accuracy": 0.9963829517364502,
+    "residual_fired": true,
+    "encode_ms": 386.9087729999592,
+    "decode_ms": 846.2059740013501
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796591,
+    "reported_nbytes": 1703027,
+    "nbytes_gap": 10093564,
+    "ratio": 0.7999924724015608,
+    "cosine": 1.0,
+    "mse": 3.358727080816622e-23,
+    "accuracy": 0.9947032332420349,
+    "residual_fired": true,
+    "encode_ms": 1498.6283959988214,
+    "decode_ms": 3424.4205899994995
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796591,
+    "reported_nbytes": 1699728,
+    "nbytes_gap": 10096863,
+    "ratio": 0.7999924724015608,
+    "cosine": 0.9999999403953552,
+    "mse": 2.651177224540361e-23,
+    "accuracy": 0.9960052967071533,
+    "residual_fired": true,
+    "encode_ms": 1525.3280959987023,
+    "decode_ms": 3590.050623000934
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3951,
+    "reported_nbytes": 1039,
+    "nbytes_gap": 2912,
+    "ratio": 0.7775246772968869,
+    "cosine": 1.0,
+    "mse": 1.2011351548493454e-23,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": true,
+    "encode_ms": 14.822340999671724,
+    "decode_ms": 1.218096000229707
+   },
+   {
+    "config": "fixed_k64_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3951,
+    "reported_nbytes": 1039,
+    "nbytes_gap": 2912,
+    "ratio": 0.7775246772968869,
+    "cosine": 1.0,
+    "mse": 1.2011351548493454e-23,
+    "accuracy": 0.9973387718200684,
+    "residual_fired": true,
+    "encode_ms": 14.61865300007048,
+    "decode_ms": 1.1852520001411904
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1769570,
+    "reported_nbytes": 1236838,
+    "nbytes_gap": 532732,
+    "ratio": 3.9997784772571867,
+    "cosine": 0.9972571730613708,
+    "mse": 2.1659482172253774e-06,
+    "accuracy": 0.9945797920227051,
+    "residual_fired": false,
+    "encode_ms": 1109.9552579999,
+    "decode_ms": 2534.322258001339
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 589922,
+    "reported_nbytes": 400029,
+    "nbytes_gap": 189893,
+    "ratio": 3.9993355053718966,
+    "cosine": 0.997722864151001,
+    "mse": 1.8084704151988262e-06,
+    "accuracy": 0.9954756498336792,
+    "residual_fired": false,
+    "encode_ms": 387.34154000121634,
+    "decode_ms": 808.744256000864
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359394,
+    "reported_nbytes": 1646666,
+    "nbytes_gap": 712728,
+    "ratio": 3.999833855642593,
+    "cosine": 0.9969691634178162,
+    "mse": 2.4256987671833485e-06,
+    "accuracy": 0.9939349293708801,
+    "residual_fired": false,
+    "encode_ms": 1495.2567950003868,
+    "decode_ms": 3363.3286509993923
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359394,
+    "reported_nbytes": 1631955,
+    "nbytes_gap": 727439,
+    "ratio": 3.999833855642593,
+    "cosine": 0.997641921043396,
+    "mse": 1.9594019704527454e-06,
+    "accuracy": 0.9951010346412659,
+    "residual_fired": false,
+    "encode_ms": 1501.2841940006183,
+    "decode_ms": 3293.071169999166
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 869,
+    "reported_nbytes": 974,
+    "nbytes_gap": -105,
+    "ratio": 3.535097813578826,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": false,
+    "encode_ms": 13.28614900012326,
+    "decode_ms": 1.1689300008583814
+   },
+   {
+    "config": "adaptive_k16_rt0",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 869,
+    "reported_nbytes": 974,
+    "nbytes_gap": -105,
+    "ratio": 3.535097813578826,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": false,
+    "encode_ms": 13.150668999514892,
+    "decode_ms": 1.148301000284846
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 1769570,
+    "reported_nbytes": 1236838,
+    "nbytes_gap": 532732,
+    "ratio": 3.9997784772571867,
+    "cosine": 0.9972571730613708,
+    "mse": 2.1659482172253774e-06,
+    "accuracy": 0.9945797920227051,
+    "residual_fired": false,
+    "encode_ms": 1106.6867890003778,
+    "decode_ms": 2489.3580339994514
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 589922,
+    "reported_nbytes": 400029,
+    "nbytes_gap": 189893,
+    "ratio": 3.9993355053718966,
+    "cosine": 0.997722864151001,
+    "mse": 1.8084704151988262e-06,
+    "accuracy": 0.9954756498336792,
+    "residual_fired": false,
+    "encode_ms": 481.48581700115756,
+    "decode_ms": 979.3056400012574
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359394,
+    "reported_nbytes": 1646666,
+    "nbytes_gap": 712728,
+    "ratio": 3.999833855642593,
+    "cosine": 0.9969691634178162,
+    "mse": 2.4256987671833485e-06,
+    "accuracy": 0.9939349293708801,
+    "residual_fired": false,
+    "encode_ms": 1514.0481920007005,
+    "decode_ms": 3318.8267429995904
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 2359394,
+    "reported_nbytes": 1631955,
+    "nbytes_gap": 727439,
+    "ratio": 3.999833855642593,
+    "cosine": 0.997641921043396,
+    "mse": 1.9594019704527454e-06,
+    "accuracy": 0.9951010346412659,
+    "residual_fired": false,
+    "encode_ms": 1534.8445790004916,
+    "decode_ms": 4645.752447000632
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 869,
+    "reported_nbytes": 974,
+    "nbytes_gap": -105,
+    "ratio": 3.535097813578826,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": false,
+    "encode_ms": 20.530100000542006,
+    "decode_ms": 2.318687000297359
+   },
+   {
+    "config": "adaptive_k16_rt0.99",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 869,
+    "reported_nbytes": 974,
+    "nbytes_gap": -105,
+    "ratio": 3.535097813578826,
+    "cosine": 0.9984760284423828,
+    "mse": 1.23401184737304e-06,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": false,
+    "encode_ms": 21.887595999942278,
+    "decode_ms": 1.2090229993191315
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "attn_qkv",
+    "shape": [
+     768,
+     2304
+    ],
+    "raw_bytes": 7077888,
+    "stored_bytes": 8847462,
+    "reported_nbytes": 1236838,
+    "nbytes_gap": 7610624,
+    "ratio": 0.7999907770160527,
+    "cosine": 1.0,
+    "mse": 6.0939106553566025e-24,
+    "accuracy": 0.9945797920227051,
+    "residual_fired": true,
+    "encode_ms": 1891.99604499845,
+    "decode_ms": 4286.849728001471
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "attn_out",
+    "shape": [
+     768,
+     768
+    ],
+    "raw_bytes": 2359296,
+    "stored_bytes": 2949222,
+    "reported_nbytes": 400029,
+    "nbytes_gap": 2549193,
+    "ratio": 0.7999723316861193,
+    "cosine": 1.0000001192092896,
+    "mse": 2.1182306855820977e-23,
+    "accuracy": 0.9954756498336792,
+    "residual_fired": true,
+    "encode_ms": 536.1973930012027,
+    "decode_ms": 1159.8889689994394
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "ffn_up",
+    "shape": [
+     768,
+     3072
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796582,
+    "reported_nbytes": 1646666,
+    "nbytes_gap": 10149916,
+    "ratio": 0.7999930827421028,
+    "cosine": 1.0,
+    "mse": 3.3890284903636097e-23,
+    "accuracy": 0.9939349293708801,
+    "residual_fired": true,
+    "encode_ms": 2172.690479999801,
+    "decode_ms": 5200.738997998997
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "ffn_down",
+    "shape": [
+     3072,
+     768
+    ],
+    "raw_bytes": 9437184,
+    "stored_bytes": 11796582,
+    "reported_nbytes": 1631955,
+    "nbytes_gap": 10164627,
+    "ratio": 0.7999930827421028,
+    "cosine": 0.9999999403953552,
+    "mse": 5.978268143158362e-23,
+    "accuracy": 0.9951010346412659,
+    "residual_fired": true,
+    "encode_ms": 1887.2716780006158,
+    "decode_ms": 4514.780503999646
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "ln_weight",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3945,
+    "reported_nbytes": 974,
+    "nbytes_gap": 2971,
+    "ratio": 0.7787072243346007,
+    "cosine": 1.0,
+    "mse": 1.2011351548493454e-23,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": true,
+    "encode_ms": 22.917553998922813,
+    "decode_ms": 2.114344999426976
+   },
+   {
+    "config": "adaptive_k16_rt1",
+    "layer": "bias",
+    "shape": [
+     768
+    ],
+    "raw_bytes": 3072,
+    "stored_bytes": 3945,
+    "reported_nbytes": 974,
+    "nbytes_gap": 2971,
+    "ratio": 0.7787072243346007,
+    "cosine": 1.0,
+    "mse": 1.2011351548493454e-23,
+    "accuracy": 0.9969249963760376,
+    "residual_fired": true,
+    "encode_ms": 23.96454699919559,
+    "decode_ms": 2.0677369993791217
+   }
+  ],
+  "summary": {
+   "fixed_k8_rt0": {
+    "ratio": 3.91686624188984,
+    "reported_ratio": 14.267495500860614,
+    "nbytes_gap": 5289142,
+    "cosine": 0.8805428644021353,
+    "min_cosine": 0.8468753099441528,
+    "mse": 9.035170417822276e-05,
+    "residual_fired": 0,
+    "encode_ms": 519.9072201664118,
+    "decode_ms": 727.0098173330553
+   },
+   "fixed_k8_rt0.99": {
+    "ratio": 0.7962299299192916,
+    "reported_ratio": 14.267495500860614,
+    "nbytes_gap": 33606862,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 3.5809653343353325e-20,
+    "residual_fired": 6,
+    "encode_ms": 511.1065891666537,
+    "decode_ms": 846.7089843334179
+   },
+   "fixed_k8_rt1": {
+    "ratio": 0.7962299299192916,
+    "reported_ratio": 14.267495500860614,
+    "nbytes_gap": 33606862,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 3.5809653343353325e-20,
+    "residual_fired": 6,
+    "encode_ms": 587.2628351668633,
+    "decode_ms": 763.8262858329957
+   },
+   "fixed_k16_rt0": {
+    "ratio": 3.9047548152516494,
+    "reported_ratio": 8.218219927362624,
+    "nbytes_gap": 3878588,
+    "cosine": 0.9723251760005951,
+    "min_cosine": 0.9660353660583496,
+    "mse": 2.2127972745996278e-05,
+    "residual_fired": 0,
+    "encode_ms": 653.5715886663335,
+    "decode_ms": 1196.4359889998377
+   },
+   "fixed_k16_rt0.99": {
+    "ratio": 0.7956903969333141,
+    "reported_ratio": 8.218219927362624,
+    "nbytes_gap": 32196308,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 3.107344318661214e-21,
+    "residual_fired": 6,
+    "encode_ms": 613.9500083336316,
+    "decode_ms": 1221.6136075003305
+   },
+   "fixed_k16_rt1": {
+    "ratio": 0.7956903969333141,
+    "reported_ratio": 8.218219927362624,
+    "nbytes_gap": 32196308,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 3.107344318661214e-21,
+    "residual_fired": 6,
+    "encode_ms": 645.2954080007961,
+    "decode_ms": 1205.2645809996345
+   },
+   "fixed_k32_rt0": {
+    "ratio": 3.8812206376901845,
+    "reported_ratio": 6.083089441284833,
+    "nbytes_gap": 2930403,
+    "cosine": 0.9925670623779297,
+    "min_cosine": 0.9898083209991455,
+    "mse": 6.00504229926931e-06,
+    "residual_fired": 0,
+    "encode_ms": 675.1176654997835,
+    "decode_ms": 1534.8735946669574
+   },
+   "fixed_k32_rt0.99": {
+    "ratio": 0.7946179310593428,
+    "reported_ratio": 6.083089441284833,
+    "nbytes_gap": 31248123,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 1.8431609674195737e-22,
+    "residual_fired": 6,
+    "encode_ms": 704.0097654992982,
+    "decode_ms": 1495.9084143329164
+   },
+   "fixed_k32_rt1": {
+    "ratio": 0.7946179310593428,
+    "reported_ratio": 6.083089441284833,
+    "nbytes_gap": 31248123,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 1.8431609674195737e-22,
+    "residual_fired": 6,
+    "encode_ms": 717.5093231662686,
+    "decode_ms": 1642.7815176663596
+   },
+   "fixed_k64_rt0": {
+    "ratio": 3.8367306846763967,
+    "reported_ratio": 4.695966478983934,
+    "nbytes_gap": 1972147,
+    "cosine": 0.9982016980648041,
+    "min_cosine": 0.9974209070205688,
+    "mse": 1.4440153298285925e-06,
+    "residual_fired": 0,
+    "encode_ms": 820.8017888330991,
+    "decode_ms": 1724.2090801664745
+   },
+   "fixed_k64_rt0.99": {
+    "ratio": 3.8367306846763967,
+    "reported_ratio": 4.695966478983934,
+    "nbytes_gap": 1972147,
+    "cosine": 0.9982016980648041,
+    "min_cosine": 0.9974209070205688,
+    "mse": 1.4440153298285925e-06,
+    "residual_fired": 0,
+    "encode_ms": 789.4966590001786,
+    "decode_ms": 1794.1803374997107
+   },
+   "fixed_k64_rt1": {
+    "ratio": 0.7924990255144411,
+    "reported_ratio": 4.695966478983934,
+    "nbytes_gap": 30289867,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 2.1641128342773782e-23,
+    "residual_fired": 6,
+    "encode_ms": 764.2586904997492,
+    "decode_ms": 1748.5888193338421
+   },
+   "adaptive_k16_rt0": {
+    "ratio": 3.8448295535119867,
+    "reported_ratio": 4.907036794671625,
+    "nbytes_gap": 2162582,
+    "cosine": 0.9977571964263916,
+    "min_cosine": 0.9969691634178162,
+    "mse": 1.804590510801063e-06,
+    "residual_fired": 0,
+    "encode_ms": 753.3791008336266,
+    "decode_ms": 1666.963927666984
+   },
+   "adaptive_k16_rt0.99": {
+    "ratio": 3.8448295535119867,
+    "reported_ratio": 4.907036794671625,
+    "nbytes_gap": 2162582,
+    "cosine": 0.9977571964263916,
+    "min_cosine": 0.9969691634178162,
+    "mse": 1.804590510801063e-06,
+    "residual_fired": 0,
+    "encode_ms": 779.9138455005353,
+    "decode_ms": 1906.1284290000913
+   },
+   "adaptive_k16_rt1": {
+    "ratio": 0.7928939538092631,
+    "reported_ratio": 4.907036794671625,
+    "nbytes_gap": 30480302,
+    "cosine": 1.0000000099341075,
+    "min_cosine": 0.9999999403953552,
+    "mse": 2.4161981157230702e-23,
+    "residual_fired": 6,
+    "encode_ms": 1089.172949499698,
+    "decode_ms": 2527.7400468330598
+   }
+  },
+  "verdict": {
+   "near-lossless (avg MSE < 1e-12)": "fixed_k8_rt0.99",
+   "high-fidelity (avg cosine >= 0.999, min >= 0.995)": "fixed_k8_rt0.99",
+   "any (max ratio)": "fixed_k8_rt0"
+  }
+ }
+]

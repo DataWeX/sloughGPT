@@ -19,20 +19,24 @@ assignments). Rows are now anchored on the real codec:
                           unexplored candidates, still worth measuring.
 
 Measures per BERT-scale layer (attn/ffn/ln/bias, make_weight low-rank
-distribution): compression ratio (raw float32 bytes / stored bytes — shipped
-rows include the Huffman bitstream; exploration rows are centroids + dense
-uint8 assignments, i.e. as-implemented, NOT Huffman-coded: their ratio would
-improve if shipped), cosine similarity, MSE of decompress(compress(w)), and
+distribution): compression ratio (raw float32 bytes / point.to_bytes() length —
+the on-disk/wire layout: dense uint8 assignments + residual; huffman_data is
+in-memory-only and never persisted — vq-huffman-07 truth-up), cosine
+similarity, MSE of decompress(compress(w)), and
 encode/decode wall time — median of --rounds samples. Integrity gate: a second
 decode must be bit-exact (SystemExit otherwise) — numbers are meaningless
 without it.
 
 Reading the results: `shipped_vq_k16` reporting near-zero MSE is the codec's
 residual fallback firing (accuracy < residual_threshold=0.99 → the leftover is
-stored too, compressor.py:357). That is a REAL shipped behavior, not a
-benchmark artifact: on clean low-rank weight-like data, fixed k=16 + residual
-dominates adaptive-k lossy VQ on BOTH ratio and fidelity — worth citing when
-tuning n_clusters / residual_threshold for the model stack.
+stored too, compressor.py:357) — lossless storage that COSTS ratio: on disk it
+is ~0.80x raw, not a free lunch. CORRECTED 2026-10-21 (vq-huffman-07): this
+script's pre-correction history recorded shipped rows via point.nbytes(), which
+counts the Huffman bitstream serialization never persists AND omits the
+residual it does persist — the old "fixed k16 + residual dominates adaptive-k
+(8.22x AND lossless)" headline was an accounting artifact and is RETRACTED.
+Honest ratios: lossy ~3.8x (k barely moves storage — dense uint8 assignments
+dominate), lossless ~0.80x. See benchmark_compression_knobs.json.
 
 History appended to scripts/benchmark_vq_approaches.json (downcraft precedent).
 
@@ -102,13 +106,13 @@ def make_test_suite() -> dict[str, np.ndarray]:
 def bench_shipped(flat):
     c = PointCompressor()
     p = c.compress_cluster(flat, "bench", seed=0)
-    return p, float(p.accuracy), p.nbytes()
+    return p, float(p.accuracy), len(p.to_bytes())
 
 
 def bench_shipped_k16(flat):
     c = PointCompressor(adaptive_k=False, n_clusters=16)
     p = c.compress_cluster(flat, "bench", seed=0)
-    return p, float(p.accuracy), p.nbytes()
+    return p, float(p.accuracy), len(p.to_bytes())
 
 
 def decompress_shipped(r, n):
