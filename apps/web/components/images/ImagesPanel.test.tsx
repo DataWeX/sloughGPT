@@ -6,8 +6,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
-const { mockGet, mockPost, mockAddToast } = vi.hoisted(() => ({
-  mockGet: vi.fn(), mockPost: vi.fn(), mockAddToast: vi.fn(),
+const { mockGet, mockPost } = vi.hoisted(() => ({
+  mockGet: vi.fn(), mockPost: vi.fn(),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
@@ -19,50 +19,11 @@ vi.mock('@sloughgpt/strui', () => {
     Button: ({ children, onClick, disabled }: any) => (
       <button onClick={onClick} disabled={disabled}>{children}</button>
     ),
-    Input: ({ value, onChange, placeholder }: any) => (
-      <input value={value} onChange={onChange} placeholder={placeholder} />
-    ),
     Textarea: ({ value, onChange, placeholder }: any) => (
       <textarea value={value} onChange={onChange} placeholder={placeholder} />
     ),
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
-    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-  
-    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/lib/http-client', () => ({
@@ -74,8 +35,8 @@ vi.mock('@/lib/config', () => ({
   PUBLIC_API_URL: 'http://localhost:8000',
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({ message }: any) => <div data-testid="status-banner">{message}</div>,
 }))
 
 vi.mock('@/components/images/ImageGalleryInsightsCard', () => ({
@@ -86,7 +47,7 @@ vi.mock('@/components/images/ImageGalleryInsightsCard', () => ({
   ),
 }))
 
-import ImagesPage from './page'
+import { ImagesPanel } from './ImagesPanel'
 
 afterEach(cleanup)
 
@@ -100,38 +61,39 @@ beforeEach(() => {
   mockPost.mockResolvedValue({ image: 'base64data' })
 })
 
-describe('ImagesPage — initial load flow', () => {
-  it('renders page header', async () => {
-    render(<ImagesPage />)
-    await waitFor(() => {
-      expect(screen.getAllByText('Images').length).toBeGreaterThanOrEqual(1)
-    })
-  })
-
+describe('ImagesPanel — load flow (Create Images journey on /files)', () => {
   it('fetches gallery and styles on mount', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => {
       expect(mockGet).toHaveBeenCalledTimes(2)
     })
   })
 
-  it('shows loading state', () => {
+  it('renders the generate card once loaded', async () => {
+    render(<ImagesPanel />)
+    await waitFor(() => {
+      // "Generate" is both the card title and the button label — getAllByText.
+      expect(screen.getAllByText('Generate').length).toBeGreaterThanOrEqual(2)
+    })
+  })
+
+  it('renders nothing while the first load is pending', () => {
     mockGet.mockReturnValue(new Promise(() => {}))
-    render(<ImagesPage />)
-    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<ImagesPanel />)
+    expect(container.textContent).toBe('')
   })
 })
 
-describe('ImagesPage — prompt flow', () => {
+describe('ImagesPanel — prompt flow', () => {
   it('renders prompt textarea after loading', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => {
       expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
     })
   })
 
   it('allows typing a prompt', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
@@ -140,9 +102,9 @@ describe('ImagesPage — prompt flow', () => {
   })
 })
 
-describe('ImagesPage — style selection flow', () => {
+describe('ImagesPanel — style selection flow', () => {
   it('displays available styles', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => {
       expect(screen.getByText('Realistic')).toBeTruthy()
       expect(screen.getByText('Cartoon')).toBeTruthy()
@@ -150,18 +112,17 @@ describe('ImagesPage — style selection flow', () => {
   })
 
   it('allows selecting a style', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => { expect(screen.getByText('Realistic')).toBeTruthy() })
 
     fireEvent.click(screen.getByText('Cartoon'))
-    // No crash = success
     expect(screen.getByText('Cartoon')).toBeTruthy()
   })
 })
 
-describe('ImagesPage — generate flow', () => {
+describe('ImagesPanel — generate flow', () => {
   it('generate button triggers image generation', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
@@ -170,19 +131,19 @@ describe('ImagesPage — generate flow', () => {
     const genBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.toLowerCase().includes('generate')
     )
-    if (genBtn) {
-      await act(async () => { fireEvent.click(genBtn) })
-      await waitFor(() => {
-        expect(mockPost).toHaveBeenCalledWith(
-          expect.stringContaining('generate'),
-          expect.objectContaining({ prompt: 'A cat' })
-        )
-      })
-    }
+    expect(genBtn).toBeTruthy()
+
+    await act(async () => { fireEvent.click(genBtn!) })
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith(
+        expect.stringContaining('generate'),
+        expect.objectContaining({ prompt: 'A cat' })
+      )
+    })
   })
 
   it('empty prompt does not trigger generation', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
 
     const genBtn = screen.getAllByRole('button').find(b =>
@@ -190,15 +151,14 @@ describe('ImagesPage — generate flow', () => {
     )
     if (genBtn) {
       fireEvent.click(genBtn)
-      // Should not call API with empty prompt
       expect(mockPost).not.toHaveBeenCalled()
     }
   })
 })
 
-describe('ImagesPage — gallery display', () => {
+describe('ImagesPanel — gallery display', () => {
   it('shows empty gallery state', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => {
       expect(screen.getByText(/no images generated/i)).toBeTruthy()
     })
@@ -212,26 +172,39 @@ describe('ImagesPage — gallery display', () => {
       if (url.includes('styles')) return Promise.resolve({ styles: [] })
       return Promise.resolve(null)
     })
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => {
-      // Page renders without crashing with gallery items
-      expect(screen.getAllByText('Images').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByTestId('image-insights')).toBeTruthy()
+    })
+  })
+
+  it('insights card reports the gallery contents', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('gallery')) return Promise.resolve({
+        images: [{ id: '1', path: '/a.png', created: Date.now() }, { id: '2', path: '/b.png', created: Date.now() }]
+      })
+      if (url.includes('styles')) return Promise.resolve({ styles: [['realistic', 'Realistic']] })
+      return Promise.resolve(null)
+    })
+    render(<ImagesPanel />)
+    await waitFor(() => {
+      expect(screen.getByTestId('image-insights').textContent).toContain('2 images, 1 styles')
     })
   })
 })
 
-describe('ImagesPage — error handling', () => {
+describe('ImagesPanel — error handling', () => {
   it('handles gallery load failure gracefully', async () => {
     mockGet.mockRejectedValue(new Error('network'))
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => {
-      expect(screen.getAllByText('Images').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByTestId('status-banner').textContent).toContain('Could not load image data')
     })
   })
 
   it('handles generation failure gracefully', async () => {
     mockPost.mockRejectedValue(new Error('generation failed'))
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
@@ -240,21 +213,17 @@ describe('ImagesPage — error handling', () => {
     const genBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.toLowerCase().includes('generate')
     )
-    if (genBtn) {
-      await act(async () => { fireEvent.click(genBtn) })
-      await waitFor(() => {
-        // Page should still render after error
-        expect(screen.getAllByText('Images').length).toBeGreaterThanOrEqual(1)
-      })
-    }
+    await act(async () => { fireEvent.click(genBtn!) })
+    await waitFor(() => {
+      expect(screen.getByTestId('status-banner').textContent).toContain('generation failed')
+    })
   })
 })
 
-describe('ImagesPage — insights card', () => {
+describe('ImagesPanel — insights gating', () => {
   it('does not render insights card when gallery is empty', async () => {
-    render(<ImagesPage />)
+    render(<ImagesPanel />)
     await waitFor(() => {
-      // Insights card only renders when gallery has items
       expect(screen.queryByTestId('image-insights')).toBeNull()
     })
   })

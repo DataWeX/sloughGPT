@@ -34,8 +34,17 @@ describe('resolveRedirect / splitTarget', () => {
     expect(splitTarget('/datasets')).toEqual({ path: '/datasets', search: '' })
   })
 
-  it('has 47 entries matching proxy table', () => {
-    expect(Object.keys(REDIRECTS).length).toBe(47)
+  it('has 46 entries matching proxy table', () => {
+    expect(Object.keys(REDIRECTS).length).toBe(46)
+  })
+
+  it('never redirects a live route away from itself', () => {
+    // /files absorbed the /images page (card 7839a7c6). A redirect source on a
+    // live route fires before routing (applyRedirect is unconditional), which
+    // silently makes the page unreachable — that already happened once when
+    // both /files and /images pointed at /developer.
+    expect(resolveRedirect('/images')).toBe('/files')
+    expect(resolveRedirect('/files')).toBeNull()
   })
 
   it('maps workspace legacy paths to consolidated routes', () => {

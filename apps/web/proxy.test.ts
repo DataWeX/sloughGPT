@@ -59,7 +59,7 @@ describe('proxy', () => {
     )
 
     const paths = Object.keys(REDIRECTS)
-    expect(paths.length).toBeGreaterThanOrEqual(47) // count pin: keep in step
+    expect(paths.length).toBeGreaterThanOrEqual(46) // count pin: keep in step (46 after card 7839a7c6 dropped the `/files` source that was shadowing the live route)
     for (const from of paths) {
       const response = proxy(makeRequest(from, 'GET'))
       expect(response.status, `${from} must redirect`).toBeGreaterThanOrEqual(300)

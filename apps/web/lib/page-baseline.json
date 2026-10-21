@@ -51,7 +51,6 @@
     "app/(app)/export/page.tsx",
     "app/(app)/feedback/page.tsx",
     "app/(app)/files/page.tsx",
-    "app/(app)/images/page.tsx",
     "app/(app)/infer/page.tsx",
     "app/(app)/kb/page.tsx",
     "app/(app)/knowledge/[id]/page.tsx",

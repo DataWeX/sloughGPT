@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry, type FileDetail } from '@/lib/files-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
+import { ImagesPanel } from '@/components/images/ImagesPanel'
 import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
@@ -290,6 +291,10 @@ export default function FilesPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Create Images journey — absorbed from the retired /images route
+            (route-map row: /files <- /files + /images, card 7839a7c6). */}
+        <ImagesPanel />
     </PageContainer>
   )
 }

@@ -23,6 +23,12 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: vi.fn() }),
 }))
 
+// The Create Images journey was absorbed from the retired /images route
+// (card 7839a7c6) — /files is now its host page, so the page must render it.
+vi.mock('@/components/images/ImagesPanel', () => ({
+  ImagesPanel: () => <div data-testid="images-panel">Images</div>,
+}))
+
 import FilesPage from './page'
 
 const SAMPLE_FILES = [
@@ -378,6 +384,24 @@ describe('FilesPage — file metadata display', () => {
     render(<FilesPage />)
     await waitFor(() => {
       expect(screen.getAllByText(/1\.0 MB/).length).toBeGreaterThanOrEqual(1)
+    })
+  })
+})
+
+/**
+ * Journey-level assertion (Page Rule point 4) — "Create Images" (UX_FLOWS
+ * journey 6) now runs through /files, since the /images page was absorbed into
+ * it by the route-map merge (card 7839a7c6). This pins that the journey is
+ * reachable on the host page rather than only asserting the page renders.
+ */
+describe('FilesPage — hosts the Create Images journey', () => {
+  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue([]); mockSearch.mockResolvedValue([]) })
+  afterEach(() => { cleanup() })
+
+  it('renders the images panel on /files', async () => {
+    render(<FilesPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('images-panel')).toBeTruthy()
     })
   })
 })
