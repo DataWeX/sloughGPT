@@ -1155,6 +1155,24 @@ git push -u origin feat/<name>   # push your own branch when done
   lossy VQ — 8.22x ratio AND lossless (MSE 3e-21) vs 4.91x lossy.** Cite when
   tuning n_clusters/residual_threshold. From `.wt-worldbrain`.
 
+- **2026-10-21 · board reconciliation — worktree board stale-row graveyard
+  cleaned (card `b19e29eb` created+closed this session).** Every unowned todo
+  candidate on the fork board was re-pickaxe-verified (10th consecutive
+  "continue building" round burning minutes on the same rot rows): **32 cards
+  closed with sha-cited evidence** (ancestry-tested against origin/main where
+  possible — deliveries like `93286c6fe`/`dd83baf9a`/`b53487b3b`/`3f73ff956`/
+  `91e81243b` IN-main; `ca167dbd` proven by origin/main's own `pytest.ini`
+  carrying its card id), **10 byte-identical dup-id rows collapsed**
+  (`8182563a`×4, `f74b9e75`×3, `90839119`/`a25e490b`/`13aed9ad`/`ec2ae5c1`/
+  `7e2af9fe`×2). **Two honesty exceptions: `ccad389e` stays OPEN** — its close
+  claims "landed on main 356d73b83" but that sha is only in `chore/*`
+  branches, never reached origin/main (note appended); `44c63b91` untouched
+  (frontend lane + conflicting board states). Unowned todo: 75 → 38, every
+  remaining row intentional (cleanup/lint/ux/My-Note/user-parked/window-
+  blocked). Board-only via PlannerStore; NO sync run — fork lacks `cf89ac6a4`
+  (the oscillation fix is on a planner branch, not in this fork). From
+  `.wt-worldbrain`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
