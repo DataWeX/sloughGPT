@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi.responses import FileResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, safe_audit_log, success_response
@@ -57,6 +58,11 @@ class ImagesRouter:
         self.router.add_api_route(
             "/gallery",
             self.list_gallery,
+            methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/gallery/{filename}",
+            self.get_gallery_image,
             methods=["GET"],
         )
         self.router.add_api_route(
@@ -298,9 +304,9 @@ class ImagesRouter:
     def _save_image(self, image_bytes: bytes, style: str) -> str:
         """Save image to the gallery (URL projection) + asset store (canonical).
 
-        The gallery file keeps ``/data/gallery/<name>`` resolvable (the ``<img>`
-        src contract); the store copy carries origin=generated metadata and
-        feeds history/operator surfaces.
+        The gallery file keeps ``/images/gallery/<name>`` resolvable — the
+        ``<img>`` src contract served by ``get_gallery_image``; the store copy
+        carries origin=generated metadata and feeds history/operator surfaces.
         """
         gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
         gallery_dir.mkdir(parents=True, exist_ok=True)
@@ -320,7 +326,7 @@ class ImagesRouter:
             extra={"style": style},
         )
 
-        return f"/data/gallery/{filename}"
+        return f"/images/gallery/{filename}"
 
     # ── Endpoints ─────────────────────────────────────────────────────────
 
@@ -363,7 +369,7 @@ class ImagesRouter:
         def _scan_gallery():
             # Adopt pre-existing gallery files into the store (idempotent) so
             # history/operator surfaces know them. The DISK stays the serving
-            # projection: the response lists files whose /data/gallery URL
+            # projection: the response lists files whose /images/gallery URL
             # actually resolves, exactly like the legacy glob.
             if not getattr(self, "_gallery_migrated", False):
                 self._gallery_migrated = True
@@ -383,7 +389,7 @@ class ImagesRouter:
                 images.append(
                     {
                         "id": filepath.stem,
-                        "path": f"/data/gallery/{filepath.name}",
+                        "path": f"/images/gallery/{filepath.name}",
                         "created": int(filepath.stat().st_mtime),
                     }
                 )
@@ -391,6 +397,24 @@ class ImagesRouter:
 
         images = await asyncio.to_thread(_scan_gallery)
         return success_response(data={"images": images})
+
+    @endpoint("images.get_gallery_image")
+    async def get_gallery_image(self, filename: str) -> FileResponse:
+        """Serve one gallery image's bytes (the ``<img>`` src contract).
+
+        ``list_gallery`` and ``_save_image`` hand out ``/images/gallery/<name>``
+        paths — this route is what makes them resolve, for both the /images
+        page and the /files Images tab. Serves only bare ``generated_*`` names
+        from the gallery disk projection; any path-shaped input is rejected
+        before it can touch the filesystem.
+        """
+        name = Path(filename).name
+        if name != filename or not filename.startswith("generated_"):
+            raise_error("Invalid image name", "E_INVALID_REQUEST", status_code=400)
+        filepath = Path(__file__).resolve().parents[4] / "data" / "gallery" / filename
+        if not filepath.is_file():
+            raise_error("Image not found", "E_NOT_FOUND", status_code=404)
+        return FileResponse(filepath, media_type="image/png")
 
     @endpoint("images.list_styles")
     async def list_styles(self) -> dict:

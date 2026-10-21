@@ -6,6 +6,8 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry, type FileDetail, type AssetEvent } from '@/lib/files-controller'
 import { imagesController, type GalleryImage } from '@/lib/images-controller'
+import { GalleryGrid } from '@/components/files/GalleryGrid'
+import { HistoryStream } from '@/components/files/HistoryStream'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -357,22 +359,7 @@ export default function FilesPage() {
               </Button>
             </CardHeader>
             <CardContent className="px-2.5 pb-2.5">
-              {galleryLoading ? (
-                <div className="h-32 animate-pulse bg-muted/20 rounded-lg" />
-              ) : gallery.length === 0 ? (
-                <p className="text-[10px] text-muted-foreground/60">No generated images yet.</p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {gallery.map(img => (
-                    <figure key={img.id} className="rounded-lg border border-border/40 overflow-hidden">
-                      <img src={img.path} alt={img.id} loading="lazy" className="w-full aspect-square object-cover" />
-                      <figcaption className="px-1.5 py-1 text-[9px] text-muted-foreground/60 font-mono truncate">
-                        {img.id} · {new Date(img.created * 1000).toLocaleDateString()}
-                      </figcaption>
-                    </figure>
-                  ))}
-                </div>
-              )}
+              <GalleryGrid images={gallery} loading={galleryLoading} />
             </CardContent>
           </Card>
         )}
@@ -386,36 +373,7 @@ export default function FilesPage() {
               </Button>
             </CardHeader>
             <CardContent className="px-2.5 pb-2.5">
-              {historyLoading ? (
-                <div className="h-32 animate-pulse bg-muted/20 rounded-lg" />
-              ) : history.length === 0 ? (
-                <p className="text-[10px] text-muted-foreground/60">No asset events recorded yet.</p>
-              ) : (
-                <div className="space-y-0.5 max-h-96 overflow-y-auto">
-                  {history.map((e, i) => (
-                    <div key={`${e.ts}-${i}`} className="flex items-center gap-2 rounded-lg border border-border/40 px-2.5 py-1.5 text-[10px]">
-                      <span
-                        className={cn(
-                          'px-1.5 py-0.5 rounded-full font-medium shrink-0',
-                          e.action === 'delete' ? 'bg-destructive/10 text-destructive'
-                            : e.action === 'download' ? 'bg-success/10 text-success'
-                            : e.action === 'migrate' ? 'bg-muted/40 text-muted-foreground'
-                            : 'bg-primary/10 text-primary',
-                        )}
-                      >
-                        {e.action}
-                      </span>
-                      <span className="font-medium truncate flex-1">
-                        {e.original_name || (e.asset_id ? e.asset_id.slice(0, 8) : '—')}
-                      </span>
-                      {e.origin && <span className="text-muted-foreground/60 shrink-0">{e.origin}</span>}
-                      <span className="font-mono tabular-nums text-muted-foreground/60 shrink-0">
-                        {new Date(e.ts * 1000).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <HistoryStream events={history} loading={historyLoading} />
             </CardContent>
           </Card>
         )}

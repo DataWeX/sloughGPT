@@ -3,7 +3,11 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 vi.mock('@/lib/files-controller', () => ({
-  filesController: { list: vi.fn() },
+  filesController: { list: vi.fn(), history: vi.fn() },
+}))
+
+vi.mock('@/lib/images-controller', () => ({
+  imagesController: { gallery: vi.fn() },
 }))
 
 vi.mock('@/lib/voice-controller', () => ({
@@ -48,7 +52,9 @@ vi.mock('@/components/models/EngineStatusCard', () => ({
 
 import DeveloperPage from './page'
 import { filesController } from '@/lib/files-controller'
+import { imagesController } from '@/lib/images-controller'
 import { voiceController } from '@/lib/voice-controller'
+import { PUBLIC_API_URL } from '@/lib/config'
 
 describe('DeveloperPage', () => {
   beforeEach(() => {
@@ -136,5 +142,58 @@ describe('DeveloperPage', () => {
     expect(screen.getByTestId('quantization-card')).toBeTruthy()
     expect(screen.getByTestId('downloads-card')).toBeTruthy()
     expect(screen.getByTestId('engine-status-card')).toBeTruthy()
+  })
+})
+
+describe('DeveloperPage — asset store tabs (Images | History)', () => {
+  const mockGallery = vi.mocked(imagesController.gallery)
+  const mockHistory = vi.mocked(filesController.history)
+
+  beforeEach(() => {
+    vi.mocked(filesController.list).mockResolvedValue([])
+    vi.mocked(voiceController.getStatus).mockResolvedValue({
+      server_tts: false,
+      model: null,
+      error: null,
+    })
+    mockGallery.mockResolvedValue({ images: [] })
+    mockHistory.mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('exposes Images and History tabs in the live tab strip', () => {
+    render(<DeveloperPage />)
+    expect(screen.getByRole('tab', { name: /images/i })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /history/i })).toBeTruthy()
+  })
+
+  it('Images tab fetches the gallery and renders API-origin img src', async () => {
+    mockGallery.mockResolvedValue({
+      images: [{ id: 'generated_live99', path: '/images/gallery/generated_live99.png', created: 1761000000 }],
+    })
+    const user = userEvent.setup()
+    render(<DeveloperPage />)
+    await user.click(screen.getByRole('tab', { name: /images/i }))
+    await waitFor(() => expect(mockGallery).toHaveBeenCalledTimes(1))
+    const img = await screen.findByAltText('generated_live99')
+    expect(img.getAttribute('src')).toBe(`${PUBLIC_API_URL}/images/gallery/generated_live99.png`)
+  })
+
+  it('History tab fetches and renders asset events', async () => {
+    mockHistory.mockResolvedValue([
+      { ts: 1761000000, action: 'put', original_name: 'report.pdf', origin: 'upload' },
+      { ts: 1760000000, action: 'delete', original_name: 'old.txt', origin: 'upload' },
+    ])
+    const user = userEvent.setup()
+    render(<DeveloperPage />)
+    await user.click(screen.getByRole('tab', { name: /history/i }))
+    await waitFor(() => expect(mockHistory).toHaveBeenCalledTimes(1))
+    expect(await screen.findByText('report.pdf')).toBeTruthy()
+    expect(screen.getByText('old.txt')).toBeTruthy()
+    expect(screen.getByTestId('history-stream')).toBeTruthy()
   })
 })

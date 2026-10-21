@@ -148,3 +148,63 @@ class TestGenerateImage:
         client = TestClient(_app(ir))
         resp = client.post("/images/generate", json={})
         assert resp.status_code == 422  # validation error
+
+
+class TestGetGalleryImage:
+    """GET /images/gallery/{filename} — the <img> src contract (J6)."""
+
+    def test_serves_png_bytes(self):
+        ir = ImagesRouter()
+        client = TestClient(_app(ir))
+        gallery_dir = Path(__file__).resolve().parents[3] / "data" / "gallery"
+        gallery_dir.mkdir(parents=True, exist_ok=True)
+        probe = gallery_dir / "generated_ztestprobe.png"
+        probe.write_bytes(b"\x89PNG\r\n\x1a\nprobe-bytes")
+        try:
+            resp = client.get("/images/gallery/generated_ztestprobe.png")
+            assert resp.status_code == 200
+            assert resp.headers["content-type"].startswith("image/png")
+            assert resp.content.startswith(b"\x89PNG")
+        finally:
+            probe.unlink(missing_ok=True)
+
+    def test_missing_image_is_404(self):
+        ir = ImagesRouter()
+        client = TestClient(_app(ir))
+        resp = client.get("/images/gallery/generated_zdoesnotexist.png")
+        assert resp.status_code == 404
+
+    def test_rejects_path_shaped_names(self):
+        ir = ImagesRouter()
+        client = TestClient(_app(ir))
+        # Layered defense: URL layers normalize `..` away (404) and the
+        # handler's bare-name guard rejects anything that still reaches it
+        # (400). Either way no traversal ever serves bytes.
+        for url in (
+            "/images/gallery/..%2F..%2Fetc%2Fpasswd",
+            "/images/gallery/%2E%2E%2F%2E%2E%2Fetc%2Fpasswd",
+            "/images/gallery/%2e%2e%2fsecret.png",
+        ):
+            resp = client.get(url)
+            assert resp.status_code in (400, 404), (url, resp.status_code)
+            assert b"root:" not in resp.content
+
+    def test_rejects_non_generated_names(self):
+        ir = ImagesRouter()
+        client = TestClient(_app(ir))
+        resp = client.get("/images/gallery/secrets.png")
+        assert resp.status_code == 400
+
+    def test_generate_then_gallery_path_resolves(self):
+        """J6 round trip: generate -> the returned id serves bytes from the URL."""
+        ir = ImagesRouter()
+        client = TestClient(_app(ir))
+        gen = client.post("/images/generate", json={"prompt": "a lighthouse", "style": "sketch"})
+        assert gen.status_code == 200
+        image_id = gen.json()["id"]
+        listing = client.get("/images/gallery").json()["data"]["images"]
+        ours = [i for i in listing if i["id"] == image_id]
+        assert ours, f"{image_id} missing from gallery listing"
+        served = client.get(ours[0]["path"])
+        assert served.status_code == 200
+        assert served.content.startswith(b"\x89PNG")

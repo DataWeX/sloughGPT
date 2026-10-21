@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react'
+import { PUBLIC_API_URL } from '@/lib/config'
 
 const mockList = vi.fn()
 const mockUpload = vi.fn()
@@ -424,13 +425,13 @@ describe('FilesPage — section tabs (files | images | history)', () => {
 
   it('switches to Images tab and renders the gallery', async () => {
     mockGallery.mockResolvedValue({
-      images: [{ id: 'generated_abc12345', path: '/data/gallery/generated_abc12345.png', created: 1761000000 }],
+      images: [{ id: 'generated_abc12345', path: '/images/gallery/generated_abc12345.png', created: 1761000000 }],
     })
     render(<FilesPage />)
     fireEvent.click(await screen.findByRole('tab', { name: 'images' }))
     await waitFor(() => expect(mockGallery).toHaveBeenCalledTimes(1))
     const img = await screen.findByAltText('generated_abc12345')
-    expect(img.getAttribute('src')).toBe('/data/gallery/generated_abc12345.png')
+    expect(img.getAttribute('src')).toBe(`${PUBLIC_API_URL}/images/gallery/generated_abc12345.png`)
   })
 
   it('does not refetch history when switching back and forth', async () => {

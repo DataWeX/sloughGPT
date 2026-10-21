@@ -8,7 +8,10 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { TerminalPanel } from '@/components/shell/TerminalPanel'
 import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
-import { filesController, type FileEntry } from '@/lib/files-controller'
+import { filesController, type FileEntry, type AssetEvent } from '@/lib/files-controller'
+import { imagesController, type GalleryImage } from '@/lib/images-controller'
+import { GalleryGrid } from '@/components/files/GalleryGrid'
+import { HistoryStream } from '@/components/files/HistoryStream'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { authFetch } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -95,6 +98,8 @@ export default function DeveloperPage() {
         <TabsList aria-label="Developer tools">
           <TabsTrigger value="shell">Terminal</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="gallery">Images</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="voice">Voice</TabsTrigger>
           <TabsTrigger value="models">Models</TabsTrigger>
           <TabsTrigger value="api">API</TabsTrigger>
@@ -107,6 +112,12 @@ export default function DeveloperPage() {
         </TabsContent>
         <TabsContent value="files">
           <FilesTab />
+        </TabsContent>
+        <TabsContent value="gallery">
+          <GalleryTab />
+        </TabsContent>
+        <TabsContent value="history">
+          <HistoryTab />
         </TabsContent>
         <TabsContent value="voice">
           <VoiceTab />
@@ -259,6 +270,46 @@ function FilesTab() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function GalleryTab() {
+  const [images, setImages] = useState<GalleryImage[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    imagesController
+      .gallery()
+      .then((d) => setImages(d.images))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <div className="rounded-xl border border-border/20 bg-card p-3">
+      <div className="mb-2 text-[11px] font-medium text-muted-foreground/80">Generated images</div>
+      <GalleryGrid images={images} loading={loading} />
+    </div>
+  )
+}
+
+function HistoryTab() {
+  const [events, setEvents] = useState<AssetEvent[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    filesController
+      .history()
+      .then(setEvents)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <div className="rounded-xl border border-border/20 bg-card p-3">
+      <div className="mb-2 text-[11px] font-medium text-muted-foreground/80">Asset events</div>
+      <HistoryStream events={events} loading={loading} />
     </div>
   )
 }
