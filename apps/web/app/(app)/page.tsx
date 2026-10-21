@@ -227,6 +227,7 @@ export default function HomePage() {
   useEffect(() => {
     if (apiStatus === 'loading' || apiStatus === 'offline') return
     let cancelled = false
+    let id: ReturnType<typeof setInterval> | undefined
     const poll = async () => {
       try {
         const result = await apiGet<{
@@ -235,7 +236,15 @@ export default function HomePage() {
           total: number
           message: string
         }>('/health/startup-progress')
-        if (!cancelled) setModelReadiness({ ...result, ready: result.phase === 'ready' })
+        if (cancelled) return
+        setModelReadiness({ ...result, ready: result.phase === 'ready' })
+        // Startup phases are process-lifetime and end at 'ready' — stop the 3s
+        // poll then, or it runs for the life of the page (~20 req/min for ever).
+        // `id` is assigned synchronously below, before any fetch can resolve.
+        if (result.phase === 'ready' && id !== undefined) {
+          clearInterval(id)
+          id = undefined
+        }
       } catch {
         if (!cancelled)
           setModelReadiness({
@@ -248,7 +257,7 @@ export default function HomePage() {
       }
     }
     poll()
-    const id = setInterval(poll, 3000)
+    id = setInterval(poll, 3000)
     return () => {
       cancelled = true
       clearInterval(id)
