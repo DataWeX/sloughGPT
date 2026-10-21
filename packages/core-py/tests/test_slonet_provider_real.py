@@ -431,6 +431,51 @@ def test_quantize_skipped_without_avx2(slnc, tmp_path, monkeypatch):
     assert provider.generate("hi", max_tokens=3, temperature=0.0)
 
 
+def test_fp32_released_interleaved_during_quantize(slnc, tmp_path, monkeypatch, avx2_available):
+    """Interleaved release bounds load-time peak memory.
+
+    With ``free_quantized_originals=True`` each layer's float32 original is
+    released right after its quantized array is set — not only in the
+    end-of-load sweep — so the full-fp32 model and the full quantized copy
+    never co-reside at peak. Proven by event ordering: the first ``free``
+    lands before the last ``set``. (Without interleaving every free happens in
+    the end sweep, i.e. after all sets.)
+    """
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    _build_tokenizer(str(tmp_path))
+
+    from domain.training._internal.slonet import SloLinear
+
+    events: list[tuple[str, int]] = []
+    orig_set = SloLinear.set_quantized_weight
+    orig_free = SloLinear.free_quantized_originals
+
+    def spy_set(self, info):
+        events.append(("set", id(self)))
+        return orig_set(self, info)
+
+    def spy_free(self):
+        events.append(("free", id(self)))
+        return orig_free(self)
+
+    monkeypatch.setattr(SloLinear, "set_quantized_weight", spy_set)
+    monkeypatch.setattr(SloLinear, "free_quantized_originals", spy_free)
+
+    provider = SloNetChatProvider.from_slnc(
+        slnc, model_id="gpt2", quantize=True, free_quantized_originals=True
+    )
+    assert provider.quantization_report()["quantized"] is True
+
+    first_free = next((i for i, (k, _) in enumerate(events) if k == "free"), None)
+    last_set = max((i for i, (k, _) in enumerate(events) if k == "set"), default=None)
+    assert first_free is not None and last_set is not None, (
+        f"expected set/free calls during quantize, got events={events}"
+    )
+    assert first_free < last_set, (
+        f"fp32 originals released only in end sweep, not interleaved: {events}"
+    )
+
+
 # ── lazy_from_slnc (server autoload deferred-weight path) ─────────────────────
 
 
