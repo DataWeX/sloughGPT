@@ -47,6 +47,7 @@
 - **NEVER delete user data files (notes, configs, data stores) without explicit user approval first.** Ask before removing any file that contains user-created content. Propose the change, explain consequences, and wait for confirmation.
 - When consolidating or migrating data, always preserve the original as a backup before modifying.
 - If a file is not git-tracked, treat it as irreplaceable — ask twice.
+- **NEVER bulk-delete `~/.cache` directories by name pattern (`wt-*`, `slog-*`, …).** Many are live git worktrees — `git worktree list` is the source of truth for liveness. A heuristic glob over `~/.cache` once deleted 75 dirs including ~60 session worktrees (incident 2026-10-21). Disk-pressure recovery = package caches (`conda clean`, npm, pip), never sibling worktrees. Prevention + prune/recreate runbook: `docs/WORKTREE_RECOVERY.md`.
 
 ## Architecture
 
