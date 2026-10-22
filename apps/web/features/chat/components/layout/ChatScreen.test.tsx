@@ -2,15 +2,48 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('./../messages/MessageBubble', () => ({ MessageBubble: ({ content, role }: any) => <div data-testid="msg-bubble" data-role={role}>{content}</div> }))
-vi.mock('./../messages/EmptyState', () => ({ EmptyState: ({ hasModel, onSuggestionClick }: any) => <div data-testid="empty-state" data-has-model={hasModel} /> }))
-vi.mock('./../messages/SystemBanner', () => ({ SystemBanner: ({ type, title }: any) => <div data-testid="sys-banner" data-type={type}>{title}</div> }))
-vi.mock('./../messages/ReasoningPanel', () => ({ ReasoningPanel: ({ isThinking }: any) => isThinking ? <div>Reasoning</div> : null }))
-vi.mock('./../messages/ToolCallPanel', () => ({ ToolCallPanel: () => <div data-testid="tool-call-panel" /> }))
+vi.mock('./../messages/MessageBubble', () => ({
+  MessageBubble: ({ content, role }: any) => (
+    <div data-testid="msg-bubble" data-role={role}>
+      {content}
+    </div>
+  ),
+}))
+vi.mock('./../messages/EmptyState', () => ({
+  EmptyState: ({ hasModel, onSuggestionClick }: any) => (
+    <div data-testid="empty-state" data-has-model={hasModel} />
+  ),
+}))
+vi.mock('./../messages/SystemBanner', () => ({
+  SystemBanner: ({ type, title }: any) => (
+    <div data-testid="sys-banner" data-type={type}>
+      {title}
+    </div>
+  ),
+}))
+vi.mock('./../messages/ReasoningPanel', () => ({
+  ReasoningPanel: ({ isThinking }: any) => (isThinking ? <div>Reasoning</div> : null),
+}))
+vi.mock('./../messages/ToolCallPanel', () => ({
+  ToolCallPanel: () => <div data-testid="tool-call-panel" />,
+}))
 
 vi.mock('react-virtuoso', () => ({
-  Virtuoso: ({ data, itemContent, computeItemKey, components, 'aria-label': ariaLabel, 'aria-busy': ariaBusy, ...rest }: any) => (
-    <div role="feed" aria-label={ariaLabel} aria-busy={ariaBusy ?? false} data-testid="virtuoso-scroller">
+  Virtuoso: ({
+    data,
+    itemContent,
+    computeItemKey,
+    components,
+    'aria-label': ariaLabel,
+    'aria-busy': ariaBusy,
+    ...rest
+  }: any) => (
+    <div
+      role="feed"
+      aria-label={ariaLabel}
+      aria-busy={ariaBusy ?? false}
+      data-testid="virtuoso-scroller"
+    >
       {components?.Header && <components.Header />}
       {data?.map((item: any, index: number) => (
         <div key={computeItemKey?.(index, item) ?? index} data-index={index}>
@@ -27,121 +60,254 @@ vi.mock('react-virtuoso', () => ({
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(' '),
 
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { ChatScreen } from './ChatScreen'
 
 const baseHealth = { status: 'ok', model_loaded: true, model_type: 'gpt2' } as any
-const msg = (id: string, role: 'user' | 'assistant' = 'user', content = 'hello') => ({ id, role, content, timestamp: new Date() })
+const msg = (id: string, role: 'user' | 'assistant' = 'user', content = 'hello') => ({
+  id,
+  role,
+  content,
+  timestamp: new Date(),
+})
 
 describe('ChatScreen', () => {
   afterEach(cleanup)
 
   it('renders empty state when no messages', () => {
-    render(<ChatScreen messages={[]} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={[]}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.getByTestId('empty-state')).toBeDefined()
   })
 
   it('renders message bubbles', () => {
     const messages = [msg('m1', 'user', 'Hello'), msg('m2', 'assistant', 'Hi there')]
-    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     const bubbles = screen.getAllByTestId('msg-bubble')
     expect(bubbles).toHaveLength(2)
     expect(bubbles[0].textContent).toContain('Hello')
     expect(bubbles[1].textContent).toContain('Hi there')
   })
 
+  it('constrains every message row to the centered transcript column', () => {
+    const messages = [msg('m1', 'user', 'Hello'), msg('m2', 'assistant', 'Hi there')]
+    const { container } = render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
+    const rowWrappers = [...container.querySelectorAll('div')].filter((d) =>
+      d.className.includes('mx-auto w-full max-w-4xl px-4 sm:px-6 py-1.5'),
+    )
+    expect(rowWrappers).toHaveLength(2)
+  })
+
   it('renders system banner when offline', () => {
-    render(<ChatScreen messages={[]} loading={false} health={'offline' as any} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={[]}
+        loading={false}
+        health={'offline' as any}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.getByTestId('sys-banner')).toBeDefined()
     expect(screen.getByText('API Server Offline')).toBeDefined()
   })
 
   it('does not show empty state when offline', () => {
-    render(<ChatScreen messages={[]} loading={false} health={'offline' as any} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={[]}
+        loading={false}
+        health={'offline' as any}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.queryByTestId('empty-state')).toBeNull()
   })
 
   it('shows session loading skeleton', () => {
-    render(<ChatScreen messages={[]} loading={false} sessionLoading={true} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={[]}
+        loading={false}
+        sessionLoading={true}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.getByLabelText('Loading messages')).toBeDefined()
   })
 
   it('does not show empty state during session loading', () => {
-    render(<ChatScreen messages={[]} loading={false} sessionLoading={true} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={[]}
+        loading={false}
+        sessionLoading={true}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.queryByTestId('empty-state')).toBeNull()
   })
 
   it('shows thinking indicator when loading and last message is user', () => {
     const messages = [msg('m1', 'user', 'Tell me something')]
-    render(<ChatScreen messages={messages} loading={true} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={true}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.getByText('Reasoning')).toBeDefined()
   })
 
   it('shows suggestion buttons after assistant message', () => {
     const messages = [msg('m1', 'user', 'What is Python?'), msg('m2', 'assistant', 'A language')]
-    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} onSuggestionClick={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+        onSuggestionClick={vi.fn()}
+      />,
+    )
     expect(screen.getByText('Tell me more')).toBeDefined()
     expect(screen.getByText('Give an example')).toBeDefined()
-    expect(screen.getByText("Why is that?")).toBeDefined()
+    expect(screen.getByText('Why is that?')).toBeDefined()
   })
 
   it('shows code-related suggestions when last message contains code block', () => {
-    const messages = [msg('m1', 'user', 'How do I sort?'), msg('m2', 'assistant', 'Use sorted()\n```python\nsorted(list)\n```')]
-    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} onSuggestionClick={vi.fn()} />)
+    const messages = [
+      msg('m1', 'user', 'How do I sort?'),
+      msg('m2', 'assistant', 'Use sorted()\n```python\nsorted(list)\n```'),
+    ]
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+        onSuggestionClick={vi.fn()}
+      />,
+    )
     expect(screen.getByText('Explain this code')).toBeDefined()
   })
 
   it('shows summarize suggestions for long messages', () => {
     const longContent = 'a'.repeat(250)
     const messages = [msg('m1', 'user', 'What?'), msg('m2', 'assistant', longContent)]
-    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} onSuggestionClick={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+        onSuggestionClick={vi.fn()}
+      />,
+    )
     expect(screen.getByText('Summarize this')).toBeDefined()
   })
 
   it('has message feed role for accessibility', () => {
-    render(<ChatScreen messages={[]} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={[]}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.getByRole('feed')).toBeDefined()
   })
 
   it('passes hasModel to empty state', () => {
-    render(<ChatScreen messages={[]} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={[]}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.getByTestId('empty-state').getAttribute('data-has-model')).toBe('true')
   })
 
@@ -151,7 +317,15 @@ describe('ChatScreen', () => {
       { id: 'm1', role: 'user' as const, content: 'Hi', timestamp: now },
       { id: 'm2', role: 'assistant' as const, content: 'Hello', timestamp: now },
     ]
-    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     expect(screen.getByText('Today')).toBeDefined()
   })
 
@@ -163,7 +337,15 @@ describe('ChatScreen', () => {
       { id: 'm2', role: 'assistant' as const, content: 'Reply', timestamp: yesterday },
       { id: 'm3', role: 'user' as const, content: 'New', timestamp: today },
     ]
-    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     const separators = screen.getAllByRole('separator')
     expect(separators).toHaveLength(2)
     expect(separators[0]).toHaveAttribute('aria-label', 'Yesterday')
@@ -171,8 +353,18 @@ describe('ChatScreen', () => {
   })
 
   it('renders all messages without duplicate key issues', () => {
-    const messages = Array.from({ length: 20 }, (_, i) => msg(`m${i}`, i % 2 === 0 ? 'user' : 'assistant', `Message ${i}`))
-    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    const messages = Array.from({ length: 20 }, (_, i) =>
+      msg(`m${i}`, i % 2 === 0 ? 'user' : 'assistant', `Message ${i}`),
+    )
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     const bubbles = screen.getAllByTestId('msg-bubble')
     expect(bubbles).toHaveLength(20)
   })
@@ -184,7 +376,15 @@ describe('ChatScreen', () => {
       msg('m3', 'user', 'How are you?'),
       msg('m4', 'assistant', 'Good, thanks!'),
     ]
-    render(<ChatScreen messages={messages} loading={false} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={false}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     const bubbles = screen.getAllByTestId('msg-bubble')
     expect(bubbles[0].textContent).toContain('Hello')
     expect(bubbles[1].textContent).toContain('Hi there')
@@ -194,7 +394,15 @@ describe('ChatScreen', () => {
 
   it('shows streaming indicator on last assistant message during loading', () => {
     const messages = [msg('m1', 'user', 'Hi'), msg('m2', 'assistant', 'Hello')]
-    render(<ChatScreen messages={messages} loading={true} health={baseHealth} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
+    render(
+      <ChatScreen
+        messages={messages}
+        loading={true}
+        health={baseHealth}
+        onRefreshHealth={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    )
     const bubbles = screen.getAllByTestId('msg-bubble')
     expect(bubbles).toHaveLength(2)
   })

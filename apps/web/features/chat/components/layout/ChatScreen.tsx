@@ -346,7 +346,7 @@ export const ChatScreen = memo(function ChatScreen({
       const showDateDivider = !prevMsg || isDifferentDay(prevMsg.timestamp, message.timestamp)
 
       return (
-        <div className="px-4 sm:px-6 py-1.5">
+        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 py-1.5">
           {showDateDivider && (
             <div
               className="relative flex items-center py-2"
