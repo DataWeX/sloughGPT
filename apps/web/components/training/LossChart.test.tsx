@@ -13,6 +13,7 @@ vi.mock('recharts', () => ({
   CartesianGrid: () => <div data-testid="cartesian-grid" />,
   Tooltip: ({ content }: any) => <div data-testid="tooltip">{content}</div>,
   Legend: () => <div data-testid="legend" />,
+  Brush: () => <div data-testid="brush" />,
 }))
 
 vi.mock('@/lib/download-utils', () => ({
@@ -145,5 +146,40 @@ describe('LossChart', () => {
     render(<LossChart data={sixTrain} />)
     fireEvent.click(screen.getByLabelText('Export chart data as CSV'))
     expect(downloadBlob).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the detail toggle for short series (< 12 steps)', () => {
+    render(<LossChart data={sixTrain} />)
+    expect(screen.queryByLabelText('Toggle detailed chart view')).toBeNull()
+    expect(screen.queryByTestId('brush')).toBeNull()
+  })
+
+  it('detail toggle progressively discloses the range brush', () => {
+    const long = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(step => ({
+      step,
+      value: 1 / step,
+      type: 'train' as const,
+    }))
+    render(<LossChart data={long} />)
+    const toggle = screen.getByLabelText('Toggle detailed chart view')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.queryByTestId('brush')).toBeNull()
+
+    fireEvent.click(toggle)
+    expect(screen.getByTestId('brush')).toBeDefined()
+    expect(screen.getByLabelText('Toggle detailed chart view').getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.click(screen.getByLabelText('Toggle detailed chart view'))
+    expect(screen.queryByTestId('brush')).toBeNull()
+  })
+
+  it('detail toggle can be disabled by the caller', () => {
+    const long = Array.from({ length: 20 }, (_, i) => ({
+      step: i + 1,
+      value: 1 / (i + 1),
+      type: 'train' as const,
+    }))
+    render(<LossChart data={long} detailToggle={false} />)
+    expect(screen.queryByLabelText('Toggle detailed chart view')).toBeNull()
   })
 })

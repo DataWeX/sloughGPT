@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, memo } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ComposedChart } from 'recharts'
+import { useMemo, useState, memo } from 'react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ComposedChart, Brush } from 'recharts'
 import { downloadBlob } from '@/lib/download-utils'
 import { IconDownload } from '@sloughgpt/strui'
 import { todayDateString } from '@/lib/format-bytes'
@@ -33,6 +33,9 @@ export interface LossChartProps {
   /** Chart-scale error state — renders the ChartFrame alert with retry. */
   error?: string | null
   onRetry?: () => void
+  /** Progressive-disclosure "detailed view" toggle (range brush). Shown for
+   *  series longer than 12 steps; pass false to hide entirely. */
+  detailToggle?: boolean
 }
 
 function exportLossCSV(data: LossPoint[], rewardData?: RewardPoint[]) {
@@ -53,7 +56,7 @@ function exportLossCSV(data: LossPoint[], rewardData?: RewardPoint[]) {
   downloadBlob(csv, `loss-data-${todayDateString()}.csv`, 'text/csv')
 }
 
-export const LossChart = memo(function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40, onExportData, loading, error, onRetry }: LossChartProps) {
+export const LossChart = memo(function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40, onExportData, loading, error, onRetry, detailToggle: detailToggleEnabled = true }: LossChartProps) {
   // Memoize step union computation
   const { steps, hasTrain, hasEval } = useMemo(() => {
     const allSteps = new Set<number>()
@@ -99,6 +102,11 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
   const hasReward = Boolean(rewardData?.length)
   const empty = !data.length && !rewardData?.length
 
+  // Detailed-view brush (UX_FLOWS.md:352 power-user extra) — progressive
+  // disclosure: the toggle only appears on series long enough to navigate.
+  const [showBrush, setShowBrush] = useState(false)
+  const detailToggleVisible = detailToggleEnabled && steps.length > 12
+
   const seriesNames = [hasTrain && 'train loss', hasEval && 'validation loss', hasReward && 'reward']
     .filter(Boolean)
     .join(', ')
@@ -116,15 +124,30 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
       emptyMessage="No loss data yet"
       srSummary={empty ? undefined : `Series: ${seriesNames}. ${visibleSteps.length} steps.`}
       action={
-        data.length > 5 ? (
-          <button
-            type="button"
-            onClick={() => (onExportData ? onExportData() : exportLossCSV(data, rewardData))}
-            className="h-4 w-4 flex items-center justify-center rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-opacity focus-visible:text-foreground"
-            aria-label="Export chart data as CSV"
-          >
-            <IconDownload className="h-2.5 w-2.5" />
-          </button>
+        data.length > 5 || detailToggleVisible ? (
+          <>
+            {detailToggleVisible && (
+              <button
+                type="button"
+                onClick={() => setShowBrush(v => !v)}
+                aria-label="Toggle detailed chart view"
+                aria-pressed={showBrush}
+                className={`text-xs uppercase tracking-wider transition-colors ${showBrush ? 'text-foreground' : 'text-muted-foreground/60 hover:text-foreground'}`}
+              >
+                Detail
+              </button>
+            )}
+            {data.length > 5 && (
+              <button
+                type="button"
+                onClick={() => (onExportData ? onExportData() : exportLossCSV(data, rewardData))}
+                className="h-4 w-4 flex items-center justify-center rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-opacity focus-visible:text-foreground"
+                aria-label="Export chart data as CSV"
+              >
+                <IconDownload className="h-2.5 w-2.5" />
+              </button>
+            )}
+          </>
         ) : undefined
       }
     >
@@ -162,6 +185,9 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
             cursor={{ stroke: 'rgb(var(--border))' }}
           />
           {showLegend && <Legend />}
+          {showBrush && (
+            <Brush dataKey="step" height={20} stroke={AXIS} fill="rgb(var(--card))" travellerWidth={8} />
+          )}
           {hasTrain && (
             <Line
               yAxisId="loss"
