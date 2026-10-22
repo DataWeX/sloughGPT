@@ -157,6 +157,12 @@ class TestTrainingFeedsList:
         # missing file still listed with total 0
         assert feeds_map["feedback"]["total"] == 0
 
+    def test_rows_carry_trainable_spec(self):
+        resp = client.get("/training/feeds")
+        feeds_map = {f["name"]: f for f in resp.json()["data"]["feeds"]}
+        assert feeds_map["api-conversations"]["spec"] == "feed:api-conversations"
+        assert feeds_map["feedback"]["spec"] == "feed:feedback"
+
     def test_directory_source_lists_total_and_mtime(self, tmp_path, monkeypatch):
         shard_dir = tmp_path / "response_shards"
         shard_dir.mkdir()
@@ -206,6 +212,212 @@ class TestFeedSpec:
         # request model; a manifest-resolved job must not be treated as a feed.
         spec = _feed_spec(self._req(dataset=None, manifest_uri="data/manifests/corpus.json"))
         assert spec is None
+
+
+# ── feed dataset validation (fail fast at the API boundary) ───────────────────
+
+
+class TestFeedDatasetValidation:
+    """A feed typo is a 400 with the valid specs — not a thread-death later."""
+
+    def test_registered_source_passes(self):
+        assert feeds.validate_feed_dataset("feed:feedback") == "feed:feedback"
+
+    def test_non_feed_spec_passes_through(self):
+        assert feeds.validate_feed_dataset("data/foo/input.txt") == "data/foo/input.txt"
+
+    def test_empty_source_is_400(self):
+        from domain.infrastructure._internal.errors import AppError
+
+        with pytest.raises(AppError) as exc:
+            feeds.validate_feed_dataset("feed:")
+        assert exc.value.http_status == 400
+        assert "feed:api-conversations" in exc.value.message
+
+    def test_unknown_source_is_400_listing_valid_specs(self):
+        from domain.infrastructure._internal.errors import AppError
+
+        with pytest.raises(AppError) as exc:
+            feeds.validate_feed_dataset("feed:not-a-real-source")
+        assert exc.value.http_status == 400
+        assert "feed:api-conversations" in exc.value.message
+        assert "feed:feedback" in exc.value.message
+
+    def test_resolve_registered_source(self):
+        assert feeds.resolve_feed_source("feedback") is not None
+
+    def test_resolve_resolvable_unregistered_source(self):
+        # The corpus lives at data/api_conversations/ (underscore spelling);
+        # the unregistered spelling must still resolve, mirroring the trainer.
+        assert feeds.resolve_feed_source("api_conversations") is not None
+
+    def test_resolve_typo_returns_none(self):
+        assert feeds.resolve_feed_source("totally-not-a-corpus") is None
+
+    def test_feed_spec_rejects_unknown_source_before_enqueue(self):
+        from domain.infrastructure._internal.errors import AppError
+
+        req = TrainingRequest(name="typo", model="slonet", dataset="feed:not-a-real-source")
+        with pytest.raises(AppError) as exc:
+            _feed_spec(req)
+        assert exc.value.http_status == 400
+
+    def test_start_with_unknown_feed_is_400_and_creates_no_job(self):
+        from training.jobs import training_jobs
+
+        before = set(training_jobs.keys())
+        resp = client.post(
+            "/training/start",
+            json={"name": "typo job", "model": "slonet", "dataset": "feed:not-a-real-source"},
+        )
+        assert resp.status_code == 400
+        assert "Unknown feed source" in resp.text
+        assert set(training_jobs.keys()) == before
+
+
+# ── live snapshot builder (/training/live-stream) ─────────────────────────────
+
+
+class TestLiveSnapshot:
+    """build_live_snapshot: per-frame deltas + job change detection."""
+
+    @staticmethod
+    def _rows(totals: dict[str, int]) -> list[dict]:
+        return [
+            {"name": name, "source": name, "spec": f"feed:{name}", "total": total}
+            for name, total in sorted(totals.items())
+        ]
+
+    def test_first_frame_is_baseline_changed(self, monkeypatch):
+        from training import live_stream
+
+        monkeypatch.setattr(live_stream, "list_feed_sources", lambda: self._rows({"feedback": 7}))
+        monkeypatch.setattr(live_stream, "training_jobs", {})
+        snap, changed = live_stream.build_live_snapshot(None)
+        assert changed is True  # initial frame worth rendering
+        assert snap["totals"] == {"feedback": 7}
+        assert snap["sources"][0]["delta"] == 0
+        assert snap["jobs"] == {"active": [], "count": 0}
+
+    def test_growth_produces_delta_and_changed(self, monkeypatch):
+        from training import live_stream
+
+        monkeypatch.setattr(live_stream, "training_jobs", {})
+        monkeypatch.setattr(live_stream, "list_feed_sources", lambda: self._rows({"feedback": 7}))
+        prev, _ = live_stream.build_live_snapshot(None)
+
+        monkeypatch.setattr(live_stream, "list_feed_sources", lambda: self._rows({"feedback": 9}))
+        snap, changed = live_stream.build_live_snapshot(prev)
+        assert changed is True
+        assert snap["sources"][0]["delta"] == 2
+        assert snap["totals"]["feedback"] == 9
+
+    def test_static_frame_reports_unchanged(self, monkeypatch):
+        from training import live_stream
+
+        monkeypatch.setattr(live_stream, "list_feed_sources", lambda: self._rows({"feedback": 7}))
+        monkeypatch.setattr(live_stream, "training_jobs", {})
+        prev, _ = live_stream.build_live_snapshot(None)
+        snap, changed = live_stream.build_live_snapshot(prev)
+        assert changed is False
+        assert snap["sources"][0]["delta"] == 0
+
+    def test_job_appearance_marks_changed(self, monkeypatch):
+        from training import live_stream
+
+        monkeypatch.setattr(live_stream, "list_feed_sources", lambda: self._rows({"feedback": 7}))
+        monkeypatch.setattr(live_stream, "training_jobs", {})
+        prev, _ = live_stream.build_live_snapshot(None)
+
+        monkeypatch.setattr(
+            live_stream,
+            "training_jobs",
+            {
+                "job-1": {
+                    "id": "job-1",
+                    "name": "live job",
+                    "status": "running",
+                    "dataset": "feed:feedback",
+                    "progress": 40,
+                }
+            },
+        )
+        snap, changed = live_stream.build_live_snapshot(prev)
+        assert changed is True
+        assert snap["jobs"]["count"] == 1
+        assert snap["jobs"]["active"][0]["dataset"] == "feed:feedback"
+
+    def test_terminal_jobs_are_excluded(self, monkeypatch):
+        from training import live_stream
+
+        monkeypatch.setattr(live_stream, "list_feed_sources", lambda: self._rows({}))
+        monkeypatch.setattr(
+            live_stream,
+            "training_jobs",
+            {
+                "done": {"id": "done", "status": "completed", "progress": 100},
+                "dead": {"id": "dead", "status": "failed", "progress": 10},
+            },
+        )
+        snap, _ = live_stream.build_live_snapshot(None)
+        assert snap["jobs"]["active"] == []
+        assert snap["jobs"]["count"] == 0
+
+    def test_live_stream_endpoint_emits_envelope(self, monkeypatch):
+        # Drive the generator directly (repo SSE-test idiom): one frame, then
+        # a scripted disconnect — proves wiring, headers, and envelope shape.
+        import asyncio
+        from unittest.mock import MagicMock
+
+        from training import live_stream
+
+        monkeypatch.setattr(live_stream, "LIVE_STREAM_INTERVAL", 0.01)
+
+        # FastAPI may wrap includes as lazy _IncludedRouter — walk nested routers.
+        def _paths(router_obj):
+            for entry in router_obj.routes:
+                path = getattr(entry, "path", None)
+                if path:
+                    yield path
+                inner = getattr(entry, "original_router", None)
+                if inner is not None:
+                    yield from _paths(inner)
+
+        assert "/training/live-stream" in list(_paths(router))
+        checks = {"n": 0}
+
+        async def fake_is_disconnected() -> bool:
+            checks["n"] += 1
+            return checks["n"] > 1  # first cycle runs; second breaks the loop
+
+        mock_request = MagicMock()
+        mock_request.is_disconnected = fake_is_disconnected
+
+        async def run() -> tuple[str, str, list[dict]]:
+            response = await live_stream.training_live_stream(
+                request=mock_request, auth_user=None
+            )
+            frames: list[dict] = []
+            async for chunk in response.body_iterator:
+                text = chunk if isinstance(chunk, str) else chunk.decode()
+                for line in text.splitlines():
+                    if line.startswith("data: "):
+                        frames.append(json.loads(line[len("data: ") :]))
+            return (
+                response.media_type,
+                response.headers.get("Cache-Control", ""),
+                frames,
+            )
+
+        media_type, cache_header, frames = asyncio.run(run())
+        assert media_type == "text/event-stream"
+        assert cache_header == "no-cache"
+        assert frames, "expected at least one SSE frame"
+        frame = frames[0]
+        assert frame["stream"] == "training-live"
+        assert frame["status"] == "working"
+        assert "sources" in frame["data"]
+        assert "jobs" in frame["data"]
 
 
 # ── POST /training/start with a feed dataset (full API journey) ────────────────
