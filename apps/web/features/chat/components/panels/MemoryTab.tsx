@@ -151,7 +151,7 @@ export const MemoryTab = memo(function MemoryTab() {
               type="button"
               onClick={handleConsolidate}
               disabled={consolidating}
-              className="text-[10px] text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
               title="Merge near-duplicate facts"
             >
               {consolidating ? 'Consolidating…' : 'Consolidate'}
@@ -175,7 +175,7 @@ export const MemoryTab = memo(function MemoryTab() {
             type="button"
             onClick={fetchData}
             disabled={loading}
-            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
             aria-label="Refresh memory"
           >
             <Spinner className="h-3 w-3" />
@@ -184,7 +184,7 @@ export const MemoryTab = memo(function MemoryTab() {
             type="button"
             onClick={() => setPendingClear(true)}
             disabled={items.length === 0}
-            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
             aria-label="Clear memory"
           >
             <IconTrash className="h-3 w-3" />
@@ -210,7 +210,7 @@ export const MemoryTab = memo(function MemoryTab() {
                 <button
                   type="button"
                   onClick={() => setSearch('')}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Clear search"
                 >
                   <IconX className="h-3 w-3" />
@@ -266,6 +266,7 @@ export const MemoryTab = memo(function MemoryTab() {
                   activeTopic === null
                     ? 'bg-primary/15 text-primary'
                     : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 )}
               >
                 All
@@ -280,6 +281,7 @@ export const MemoryTab = memo(function MemoryTab() {
                     activeTopic === topic
                       ? 'bg-primary/15 text-primary'
                       : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                   )}
                 >
                   {topic}
@@ -313,7 +315,7 @@ export const MemoryTab = memo(function MemoryTab() {
           <button
             type="button"
             onClick={() => setSearch('')}
-            className="mt-1 text-[10px] text-primary hover:underline"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-[10px] text-primary hover:underline"
             aria-label="Clear search"
           >
             Clear search
@@ -399,7 +401,7 @@ export const MemoryTab = memo(function MemoryTab() {
                   <button
                     type="button"
                     onClick={() => startEdit(item)}
-                    className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
                     aria-label="Edit memory item"
                   >
                     <IconEdit className="h-3 w-3" />
@@ -407,7 +409,7 @@ export const MemoryTab = memo(function MemoryTab() {
                   <button
                     type="button"
                     onClick={() => deleteItem(item)}
-                    className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
                     aria-label="Delete memory item"
                   >
                     <IconTrash className="h-3 w-3" />
@@ -420,7 +422,7 @@ export const MemoryTab = memo(function MemoryTab() {
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
               aria-expanded={showAll}
             >
               {showAll ? 'Show fewer' : `Show all ${topicFiltered.length}`}

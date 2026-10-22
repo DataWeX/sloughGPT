@@ -4,8 +4,8 @@ import { ConvRow } from './ConvRow'
 import type { Conversation } from '@/lib/session-controller'
 
 vi.mock('@/lib/conversations-utils', () => ({
-  formatDate: (d: string) => d ? new Date(d).toLocaleDateString() : '',
-  truncateMessage: (c: string, max: number) => c.length > max ? c.slice(0, max) + '…' : c,
+  formatDate: (d: string) => (d ? new Date(d).toLocaleDateString() : ''),
+  truncateMessage: (c: string, max: number) => (c.length > max ? c.slice(0, max) + '…' : c),
 }))
 
 vi.mock('@sloughgpt/strui', () => ({
@@ -13,6 +13,7 @@ vi.mock('@sloughgpt/strui', () => ({
   IconPin: (props: any) => <span data-testid="icon-pin" {...props} />,
   IconStar: (props: any) => <span data-testid="icon-star" {...props} />,
   IconDot: (props: any) => <span data-testid="icon-dot" {...props} />,
+  IconChat: (props: any) => <span data-testid="icon-chat" {...props} />,
   IconDotOutline: (props: any) => <span data-testid="icon-dot-outline" {...props} />,
   IconDownload: (props: any) => <span data-testid="icon-download" {...props} />,
   IconDocument: (props: any) => <span data-testid="icon-document" {...props} />,
@@ -41,7 +42,9 @@ describe('ConvRow', () => {
   const onPin = vi.fn()
   const onRename = vi.fn()
 
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('renders without crashing', () => {
     render(<ConvRow conversation={createConv('1')} isActive={false} onSelect={onSelect} />)
@@ -55,8 +58,19 @@ describe('ConvRow', () => {
   })
 
   it('shows message count from messages array', () => {
-    const msgs = Array.from({ length: 8 }, (_, i) => ({ id: `m${i}`, role: 'user' as const, content: `msg ${i}`, timestamp: Date.now() }))
-    render(<ConvRow conversation={createConv('1', { messages: msgs })} isActive={false} onSelect={onSelect} />)
+    const msgs = Array.from({ length: 8 }, (_, i) => ({
+      id: `m${i}`,
+      role: 'user' as const,
+      content: `msg ${i}`,
+      timestamp: Date.now(),
+    }))
+    render(
+      <ConvRow
+        conversation={createConv('1', { messages: msgs })}
+        isActive={false}
+        onSelect={onSelect}
+      />,
+    )
     expect(screen.getByText('8')).toBeInTheDocument()
   })
 
@@ -66,32 +80,61 @@ describe('ConvRow', () => {
   })
 
   it('highlights active conversation', () => {
-    const { container } = render(<ConvRow conversation={createConv('1')} isActive={true} onSelect={onSelect} />)
+    const { container } = render(
+      <ConvRow conversation={createConv('1')} isActive={true} onSelect={onSelect} />,
+    )
     const row = container.querySelector('[role="button"]')
     expect(row?.className).toContain('bg-primary/10')
   })
 
   it('double-click enters rename mode', () => {
-    const { container } = render(<ConvRow conversation={createConv('1')} isActive={false} onSelect={onSelect} onRename={onRename} />)
+    const { container } = render(
+      <ConvRow
+        conversation={createConv('1')}
+        isActive={false}
+        onSelect={onSelect}
+        onRename={onRename}
+      />,
+    )
     fireEvent.doubleClick(screen.getByText('Test Conversation 1'))
-    const input = container.querySelector('input[aria-label="Rename conversation"]') as HTMLInputElement
+    const input = container.querySelector(
+      'input[aria-label="Rename conversation"]',
+    ) as HTMLInputElement
     expect(input).not.toBeNull()
     expect(input.value).toBe('Test Conversation 1')
   })
 
   it('saves rename on Enter', () => {
-    const { container } = render(<ConvRow conversation={createConv('1')} isActive={false} onSelect={onSelect} onRename={onRename} />)
+    const { container } = render(
+      <ConvRow
+        conversation={createConv('1')}
+        isActive={false}
+        onSelect={onSelect}
+        onRename={onRename}
+      />,
+    )
     fireEvent.doubleClick(screen.getByText('Test Conversation 1'))
-    const input = container.querySelector('input[aria-label="Rename conversation"]') as HTMLInputElement
+    const input = container.querySelector(
+      'input[aria-label="Rename conversation"]',
+    ) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Renamed' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onRename).toHaveBeenCalledWith('1', 'Renamed')
   })
 
   it('cancels rename on Escape', () => {
-    const { container } = render(<ConvRow conversation={createConv('1')} isActive={false} onSelect={onSelect} onRename={onRename} />)
+    const { container } = render(
+      <ConvRow
+        conversation={createConv('1')}
+        isActive={false}
+        onSelect={onSelect}
+        onRename={onRename}
+      />,
+    )
     fireEvent.doubleClick(screen.getByText('Test Conversation 1'))
-    const input = container.querySelector('input[aria-label="Rename conversation"]') as HTMLInputElement
+    const input = container.querySelector(
+      'input[aria-label="Rename conversation"]',
+    ) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Changed' } })
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(onRename).not.toHaveBeenCalled()

@@ -1,7 +1,17 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback, memo } from 'react'
-import { cn, IconX, IconTrash, IconThumbUp, IconThumbDown, IconChat, IconCopy, IconCheck, IconDownload } from '@sloughgpt/strui'
+import {
+  cn,
+  IconX,
+  IconTrash,
+  IconThumbUp,
+  IconThumbDown,
+  IconChat,
+  IconCopy,
+  IconCheck,
+  IconDownload,
+} from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { formatDateTimeUS } from '@/lib/time-format'
 
@@ -71,7 +81,7 @@ export const ConversationViewer = memo(function ConversationViewer({
     if (e.key !== 'Tab' || !dialogRef.current) return
 
     const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     )
     const firstElement = focusableElements[0]
     const lastElement = focusableElements[focusableElements.length - 1]
@@ -93,7 +103,9 @@ export const ConversationViewer = memo(function ConversationViewer({
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
-      return () => { document.body.style.overflow = '' }
+      return () => {
+        document.body.style.overflow = ''
+      }
     }
   }, [isOpen])
 
@@ -117,25 +129,39 @@ export const ConversationViewer = memo(function ConversationViewer({
       <div className="relative z-10 flex h-[90dvh] w-[90vw] max-w-3xl flex-col min-h-0 rounded-lg border border-border bg-background shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <div className="min-w-0 flex-1">
-            <h2 id="viewer-title" className="truncate text-base font-semibold text-foreground">{title}</h2>
-            <p className="text-xs text-muted-foreground">
+            <h2 id="viewer-title" className="truncate text-base font-semibold text-foreground">
+              {title}
+            </h2>
+            <p className="text-xs text-muted-foreground tabular-nums">
               {messages.length} message{messages.length !== 1 ? 's' : ''}
             </p>
           </div>
           <div className="flex items-center gap-1">
             {onExport && (
               <>
-                <Button variant="ghost" size="icon-sm" onClick={() => onExport('md')} aria-label="Export as Markdown" title="Export Markdown">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onExport('md')}
+                  aria-label="Export as Markdown"
+                  title="Export Markdown"
+                >
                   <IconDownload className="h-4 w-4" />
                   <span className="text-xs ml-0.5">MD</span>
                 </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => onExport('json')} aria-label="Export as JSON" title="Export JSON">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onExport('json')}
+                  aria-label="Export as JSON"
+                  title="Export JSON"
+                >
                   <IconDownload className="h-4 w-4" />
                   <span className="text-xs ml-0.5">JSON</span>
                 </Button>
               </>
             )}
-{onDelete && (
+            {onDelete && (
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -169,22 +195,30 @@ export const ConversationViewer = memo(function ConversationViewer({
                     'group rounded-lg p-3',
                     message.role === 'user'
                       ? 'bg-primary/5 border border-primary/10'
-                      : 'bg-muted/30 border border-border/50'
+                      : 'bg-muted/30 border border-border/50',
                   )}
                 >
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className={cn(
-                      'text-xs font-medium',
-                      message.role === 'user' ? 'text-primary' : 'text-muted-foreground'
-                    )}>
-                      {message.role === 'user' ? 'You' : message.role === 'assistant' ? 'Assistant' : 'System'}
+                    <span
+                      className={cn(
+                        'text-xs font-medium',
+                        message.role === 'user' ? 'text-primary' : 'text-muted-foreground',
+                      )}
+                    >
+                      {message.role === 'user'
+                        ? 'You'
+                        : message.role === 'assistant'
+                          ? 'Assistant'
+                          : 'System'}
                     </span>
                     <div className="flex items-center gap-2">
                       {message.feedback && (
-                        <span className={cn(
-                          'flex items-center gap-0.5 text-xs',
-                          message.feedback === 'positive' ? 'text-success' : 'text-destructive'
-                        )}>
+                        <span
+                          className={cn(
+                            'flex items-center gap-0.5 text-xs',
+                            message.feedback === 'positive' ? 'text-success' : 'text-destructive',
+                          )}
+                        >
                           {message.feedback === 'positive' ? (
                             <IconThumbUp className="h-4 w-4" />
                           ) : (
@@ -208,7 +242,7 @@ export const ConversationViewer = memo(function ConversationViewer({
                         setCopiedId(message.id)
                         setTimeout(() => setCopiedId(null), 1500)
                       }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       aria-label="Copy message"
                     >
                       {copiedId === message.id ? (
@@ -218,7 +252,7 @@ export const ConversationViewer = memo(function ConversationViewer({
                       )}
                       {copiedId === message.id ? 'Copied' : 'Copy'}
                     </button>
-                    <span className="text-xs text-muted-foreground/40">
+                    <span className="text-xs text-muted-foreground/40 tabular-nums">
                       {message.content.length} chars
                     </span>
                   </div>
@@ -230,7 +264,8 @@ export const ConversationViewer = memo(function ConversationViewer({
 
         <div className="shrink-0 border-t border-border px-4 py-3">
           <p className="text-xs text-muted-foreground text-center">
-            Press <kbd className="mx-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs">Esc</kbd> to close
+            Press <kbd className="mx-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs">Esc</kbd>{' '}
+            to close
           </p>
         </div>
       </div>

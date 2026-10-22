@@ -33,10 +33,7 @@ function savePresets(presets: Preset[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets))
 }
 
-export const ChatPresets = memo(function ChatPresets({
-  onSelect,
-  className,
-}: ChatPresetsProps) {
+export const ChatPresets = memo(function ChatPresets({ onSelect, className }: ChatPresetsProps) {
   const [presets, setPresets] = useState<Preset[]>([])
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
@@ -69,15 +66,21 @@ export const ChatPresets = memo(function ChatPresets({
     setTimeout(() => setJustCreated(null), 1500)
   }, [name, prompt, presets])
 
-  const handleDelete = useCallback((id: string) => {
-    const next = presets.filter(p => p.id !== id)
-    setPresets(next)
-    savePresets(next)
-  }, [presets])
+  const handleDelete = useCallback(
+    (id: string) => {
+      const next = presets.filter((p) => p.id !== id)
+      setPresets(next)
+      savePresets(next)
+    },
+    [presets],
+  )
 
-  const handleSelect = useCallback((presetPrompt: string) => {
-    onSelect(presetPrompt)
-  }, [onSelect])
+  const handleSelect = useCallback(
+    (presetPrompt: string) => {
+      onSelect(presetPrompt)
+    },
+    [onSelect],
+  )
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -100,13 +103,15 @@ export const ChatPresets = memo(function ChatPresets({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Preset name..." aria-label="Preset name"
+            placeholder="Preset name..."
+            aria-label="Preset name"
             className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Prompt template..." aria-label="Prompt template"
+            placeholder="Prompt template..."
+            aria-label="Prompt template"
             className="w-full text-xs bg-transparent border rounded px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 min-h-[60px]"
           />
           <div className="flex gap-1">
@@ -139,7 +144,7 @@ export const ChatPresets = memo(function ChatPresets({
           </p>
         ) : (
           <div className="divide-y">
-            {presets.map(preset => (
+            {presets.map((preset) => (
               <div
                 key={preset.id}
                 className={cn(
@@ -149,12 +154,13 @@ export const ChatPresets = memo(function ChatPresets({
               >
                 <button
                   type="button"
-                  className="flex-1 text-left min-w-0"
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
                   onClick={() => handleSelect(preset.prompt)}
                 >
                   <div className="text-xs font-medium truncate">{preset.name}</div>
                   <div className="text-[10px] text-muted-foreground truncate">
-                    {preset.prompt.slice(0, 80)}{preset.prompt.length > 80 ? '…' : ''}
+                    {preset.prompt.slice(0, 80)}
+                    {preset.prompt.length > 80 ? '…' : ''}
                   </div>
                 </button>
                 <Button

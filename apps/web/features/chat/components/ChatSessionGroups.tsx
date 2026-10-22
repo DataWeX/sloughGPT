@@ -17,10 +17,22 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
   className,
 }: ChatSessionGroupsProps) {
   const {
-    groups, creating, newName, newColor, selectedColor, assigningTo,
+    groups,
+    creating,
+    newName,
+    newColor,
+    selectedColor,
+    assigningTo,
     sessionsByGroup,
-    setCreating, setNewName, setNewColor, setSelectedColor, setAssigningTo,
-    handleCreate, handleDelete, handleAssign, handleUnassign,
+    setCreating,
+    setNewName,
+    setNewColor,
+    setSelectedColor,
+    setAssigningTo,
+    handleCreate,
+    handleDelete,
+    handleAssign,
+    handleUnassign,
   } = useSessionGroups(sessions, onAssignGroup)
 
   return (
@@ -49,7 +61,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
           <div className="flex gap-1 flex-wrap">
-            {COLORS.map(color => (
+            {COLORS.map((color) => (
               <button
                 key={color}
                 type="button"
@@ -57,6 +69,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                 className={cn(
                   'w-5 h-5 rounded-full border-2 transition-transform',
                   newColor === color ? 'border-foreground scale-110' : 'border-transparent',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 )}
                 style={{ backgroundColor: color }}
               />
@@ -91,25 +104,28 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
           onClick={() => setSelectedColor(null)}
           className={cn(
             'text-[10px] px-2 py-0.5 rounded transition-colors',
-            selectedColor === null ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted/50',
+            selectedColor === null
+              ? 'bg-primary/20 text-primary'
+              : 'text-muted-foreground hover:bg-muted/50',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           )}
         >
           All
         </button>
-        {groups.map(group => (
+        {groups.map((group) => (
           <button
             key={group.id}
             type="button"
             onClick={() => setSelectedColor(group.color)}
             className={cn(
               'text-[10px] px-2 py-0.5 rounded transition-colors flex items-center gap-1',
-              selectedColor === group.color ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted/50',
+              selectedColor === group.color
+                ? 'bg-primary/20 text-primary'
+                : 'text-muted-foreground hover:bg-muted/50',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
           >
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: group.color }}
-            />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: group.color }} />
             {group.name}
           </button>
         ))}
@@ -122,7 +138,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
           </p>
         ) : (
           <div className="divide-y">
-            {groups.map(group => (
+            {groups.map((group) => (
               <div key={group.id} className="px-3 py-2 hover:bg-muted/30 group">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
@@ -148,11 +164,8 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                 </div>
 
                 <div className="pl-4 space-y-1">
-                  {(sessionsByGroup.map[group.id] || []).map(session => (
-                    <div
-                      key={session.id}
-                      className="flex items-center justify-between text-xs"
-                    >
+                  {(sessionsByGroup.map[group.id] || []).map((session) => (
+                    <div key={session.id} className="flex items-center justify-between text-xs">
                       <span className="truncate">{session.title}</span>
                       <Button
                         variant="ghost"
@@ -179,11 +192,8 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
             Ungrouped ({sessionsByGroup.ungrouped.length})
           </div>
           <div className="space-y-1 max-h-[100px] overflow-y-auto">
-            {sessionsByGroup.ungrouped.map(session => (
-              <div
-                key={session.id}
-                className="flex items-center justify-between text-xs"
-              >
+            {sessionsByGroup.ungrouped.map((session) => (
+              <div key={session.id} className="flex items-center justify-between text-xs">
                 <span className="truncate">{session.title}</span>
                 <Button
                   variant="ghost"

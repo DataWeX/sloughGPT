@@ -36,18 +36,18 @@ export const ToolApprovalDialog = memo(function ToolApprovalDialog({
     <div
       className={cn(
         'flex items-center gap-3 p-3 rounded-lg border border-border bg-card',
-        className
+        className,
       )}
       role="alert"
       aria-label={`Tool approval required: ${toolName}`}
     >
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">
-          {toolName}
-        </p>
+        <p className="text-sm font-medium text-foreground truncate">{toolName}</p>
         {args && Object.keys(args).length > 0 && (
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {Object.entries(args).map(([k, v]) => `${k}: ${String(v)}`).join(', ')}
+            {Object.entries(args)
+              .map(([k, v]) => `${k}: ${String(v)}`)
+              .join(', ')}
           </p>
         )}
       </div>
@@ -55,14 +55,14 @@ export const ToolApprovalDialog = memo(function ToolApprovalDialog({
         <button
           type="button"
           onClick={handleDeny}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset px-3 py-1.5 text-xs font-medium rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
         >
           Deny
         </button>
         <button
           type="button"
           onClick={handleApprove}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           Approve
         </button>

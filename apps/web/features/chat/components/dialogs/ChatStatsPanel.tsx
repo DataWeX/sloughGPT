@@ -16,16 +16,19 @@ export const ChatStatsPanel = memo(function ChatStatsPanel({
   messages,
 }: ChatStatsPanelProps) {
   const stats = useMemo(() => {
-    const userMessages = messages.filter(m => m.role === 'user')
-    const assistantMessages = messages.filter(m => m.role === 'assistant')
+    const userMessages = messages.filter((m) => m.role === 'user')
+    const assistantMessages = messages.filter((m) => m.role === 'assistant')
     const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0)
     const userChars = userMessages.reduce((sum, m) => sum + m.content.length, 0)
     const assistantChars = assistantMessages.reduce((sum, m) => sum + m.content.length, 0)
     const avgUserLength = userMessages.length > 0 ? Math.round(userChars / userMessages.length) : 0
-    const avgAssistantLength = assistantMessages.length > 0 ? Math.round(assistantChars / assistantMessages.length) : 0
+    const avgAssistantLength =
+      assistantMessages.length > 0 ? Math.round(assistantChars / assistantMessages.length) : 0
     const estimatedTokens = Math.round(totalChars / 4)
-    const pinnedMessages = messages.filter(m => m.pinned).length
-    const messagesWithNotes = messages.filter(m => m.reactions && Object.keys(m.reactions).length > 0).length
+    const pinnedMessages = messages.filter((m) => m.pinned).length
+    const messagesWithNotes = messages.filter(
+      (m) => m.reactions && Object.keys(m.reactions).length > 0,
+    ).length
 
     const firstTimestamp = messages[0]?.timestamp
     const lastTimestamp = messages[messages.length - 1]?.timestamp
@@ -74,7 +77,10 @@ export const ChatStatsPanel = memo(function ChatStatsPanel({
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
       <div
         className="bg-background border border-border rounded-lg shadow-xl w-[380px] max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -87,7 +93,7 @@ export const ChatStatsPanel = memo(function ChatStatsPanel({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md hover:bg-muted transition-colors"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded-md hover:bg-muted transition-colors"
             aria-label="Close"
           >
             <IconX className="h-4 w-4 text-muted-foreground" />

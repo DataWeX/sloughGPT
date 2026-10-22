@@ -13,7 +13,12 @@ interface ConversationPickerProps {
   currentConversationId?: string
 }
 
-export function ConversationPicker({ open, onClose, onSelect, currentConversationId }: ConversationPickerProps) {
+export function ConversationPicker({
+  open,
+  onClose,
+  onSelect,
+  currentConversationId,
+}: ConversationPickerProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -22,32 +27,38 @@ export function ConversationPicker({ open, onClose, onSelect, currentConversatio
     if (!open) return
 
     setLoading(true)
-    sessionController.list()
-      .then(sessions => {
-        setConversations(sessions.map(s => ({
-          id: s.id,
-          name: s.name || 'Untitled',
-          session_id: s.id,
-          created_at: s.created_at,
-          updated_at: s.updated_at,
-          pinned: s.pinned ?? false,
-          starred: s.starred ?? false,
-          message_count: s.messages?.length ?? 0,
-        })))
+    sessionController
+      .list()
+      .then((sessions) => {
+        setConversations(
+          sessions.map((s) => ({
+            id: s.id,
+            name: s.name || 'Untitled',
+            session_id: s.id,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+            pinned: s.pinned ?? false,
+            starred: s.starred ?? false,
+            message_count: s.messages?.length ?? 0,
+          })),
+        )
       })
       .catch(() => setConversations([]))
       .finally(() => setLoading(false))
   }, [open])
 
-  const filtered = conversations.filter(c =>
-    c.id !== currentConversationId &&
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filtered = conversations.filter(
+    (c) =>
+      c.id !== currentConversationId && c.name.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
-  const handleSelect = useCallback((id: string) => {
-    onSelect(id)
-    onClose()
-  }, [onSelect, onClose])
+  const handleSelect = useCallback(
+    (id: string) => {
+      onSelect(id)
+      onClose()
+    },
+    [onSelect, onClose],
+  )
 
   if (!open) return null
 
@@ -86,21 +97,21 @@ export function ConversationPicker({ open, onClose, onSelect, currentConversatio
             </div>
           )}
 
-          {!loading && filtered.length > 0 && (
+          {!loading &&
+            filtered.length > 0 &&
             filtered.map((conv) => (
               <button
                 key={conv.id}
                 type="button"
                 onClick={() => handleSelect(conv.id)}
-                className="w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
               >
                 <p className="text-sm font-medium text-foreground line-clamp-1">{conv.name}</p>
                 <p className="text-[11px] text-muted-foreground/60 mt-0.5">
                   {conv.message_count} messages · {new Date(conv.updated_at).toLocaleDateString()}
                 </p>
               </button>
-            ))
-          )}
+            ))}
         </div>
       </div>
     </div>

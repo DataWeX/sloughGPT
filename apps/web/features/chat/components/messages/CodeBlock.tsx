@@ -23,10 +23,7 @@ async function ensureLanguage(lang: string) {
 }
 
 function escapeHtml(code: string): string {
-  return code
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function highlightCode(code: string, language: string): string {
@@ -39,7 +36,13 @@ function highlightCode(code: string, language: string): string {
       const highlighted = Prism.highlight(code, grammar, lang)
       // Strip unsafe HTML tags from Prism output
       return highlighted.replace(/<(?!\/?span\b|\/?code\b)[^>]*>/g, (tag: string) => {
-        if (tag.startsWith('<script') || tag.startsWith('<iframe') || tag.startsWith('<object') || tag.startsWith('<embed')) return ''
+        if (
+          tag.startsWith('<script') ||
+          tag.startsWith('<iframe') ||
+          tag.startsWith('<object') ||
+          tag.startsWith('<embed')
+        )
+          return ''
         return tag.replace(/</g, '&lt;').replace(/>/g, '&gt;')
       })
     }
@@ -77,7 +80,9 @@ export const CodeBlock = memo(function CodeBlock({ language, code, isStreaming }
         setHighlighted(highlightCode(code, language))
       }
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [code, language, isStreaming])
 
   const displayHtml = useMemo(() => {
@@ -88,18 +93,26 @@ export const CodeBlock = memo(function CodeBlock({ language, code, isStreaming }
   return (
     <div className="relative my-3 rounded-xl border border-border/40 bg-muted overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-white/[0.03]">
-        <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">{language || 'code'}</span>
+        <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">
+          {language || 'code'}
+        </span>
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground/80 transition-colors"
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground/80 transition-colors"
           aria-label="Copy code"
         >
           {copied ? (
             <span className="text-success">Copied</span>
           ) : (
             <>
-              <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg
+                className="h-3 w-3"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
                 <rect x="5" y="5" width="8" height="8" rx="1.5" />
                 <path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" />
               </svg>

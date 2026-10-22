@@ -86,7 +86,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
           estimatedCost,
         })
 
-        stream.getTracks().forEach(t => t.stop())
+        stream.getTracks().forEach((t) => t.stop())
         URL.revokeObjectURL(audioUrl)
       }
 
@@ -156,10 +156,12 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          <div className={cn(
-            'w-2 h-2 rounded-full',
-            isRecording ? 'bg-destructive animate-pulse' : 'bg-muted',
-          )} />
+          <div
+            className={cn(
+              'w-2 h-2 rounded-full',
+              isRecording ? 'bg-destructive animate-pulse motion-reduce:animate-none' : 'bg-muted',
+            )}
+          />
           <span className="text-xs font-medium">
             {isRecording ? (isPaused ? 'Paused' : 'Recording') : 'Voice Input'}
           </span>
@@ -173,10 +175,12 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
       <div className="p-4">
         {/* Timer */}
         <div className="text-center mb-4">
-          <span className={cn(
-            'text-3xl font-mono',
-            isRecording ? 'text-destructive' : 'text-muted-foreground',
-          )}>
+          <span
+            className={cn(
+              'text-3xl font-mono',
+              isRecording ? 'text-destructive' : 'text-muted-foreground',
+            )}
+          >
             {formatSeconds(duration)}
           </span>
         </div>
@@ -236,11 +240,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
               placeholder="Transcript will appear here..."
             />
             <div className="flex justify-end mt-2">
-              <Button
-                size="sm"
-                onClick={handleSendTranscript}
-                disabled={!transcript.trim()}
-              >
+              <Button size="sm" onClick={handleSendTranscript} disabled={!transcript.trim()}>
                 Send Transcript
               </Button>
             </div>
@@ -248,9 +248,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
         )}
 
         {/* Error */}
-        {error && (
-          <StatusBanner variant="error" message={error} dismissible={false} />
-        )}
+        {error && <StatusBanner variant="error" message={error} dismissible={false} />}
       </div>
 
       {/* Stats bar */}

@@ -50,38 +50,47 @@ export const MessagePinning = memo(function MessagePinning({
     setPinned(loadPinned())
   }, [])
 
-  const handlePin = useCallback((msg: ChatMessage) => {
-    if (pinned.some(p => p.messageId === msg.id)) return
+  const handlePin = useCallback(
+    (msg: ChatMessage) => {
+      if (pinned.some((p) => p.messageId === msg.id)) return
 
-    const newPin: PinnedMessage = {
-      id: crypto.randomUUID(),
-      messageId: msg.id,
-      content: msg.content,
-      role: msg.role,
-      pinnedAt: Date.now(),
-    }
+      const newPin: PinnedMessage = {
+        id: crypto.randomUUID(),
+        messageId: msg.id,
+        content: msg.content,
+        role: msg.role,
+        pinnedAt: Date.now(),
+      }
 
-    const next = [newPin, ...pinned]
-    setPinned(next)
-    savePinned(next)
-  }, [pinned])
+      const next = [newPin, ...pinned]
+      setPinned(next)
+      savePinned(next)
+    },
+    [pinned],
+  )
 
-  const handleUnpin = useCallback((id: string) => {
-    const next = pinned.filter(p => p.id !== id)
-    setPinned(next)
-    savePinned(next)
-  }, [pinned])
+  const handleUnpin = useCallback(
+    (id: string) => {
+      const next = pinned.filter((p) => p.id !== id)
+      setPinned(next)
+      savePinned(next)
+    },
+    [pinned],
+  )
 
-  const handleAddNote = useCallback((id: string) => {
-    setEditingId(id)
-    const existing = pinned.find(p => p.id === id)
-    setNoteDraft(existing?.note || '')
-  }, [pinned])
+  const handleAddNote = useCallback(
+    (id: string) => {
+      setEditingId(id)
+      const existing = pinned.find((p) => p.id === id)
+      setNoteDraft(existing?.note || '')
+    },
+    [pinned],
+  )
 
   const handleSaveNote = useCallback(() => {
     if (!editingId) return
-    const next = pinned.map(p =>
-      p.id === editingId ? { ...p, note: noteDraft.trim() || undefined } : p
+    const next = pinned.map((p) =>
+      p.id === editingId ? { ...p, note: noteDraft.trim() || undefined } : p,
     )
     setPinned(next)
     savePinned(next)
@@ -99,9 +108,12 @@ export const MessagePinning = memo(function MessagePinning({
     savePinned([])
   }, [])
 
-  const isPinned = useCallback((messageId: string) => {
-    return pinned.some(p => p.messageId === messageId)
-  }, [pinned])
+  const isPinned = useCallback(
+    (messageId: string) => {
+      return pinned.some((p) => p.messageId === messageId)
+    },
+    [pinned],
+  )
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -131,12 +143,12 @@ export const MessagePinning = memo(function MessagePinning({
           </p>
         ) : (
           <div className="divide-y">
-            {pinned.map(pin => (
+            {pinned.map((pin) => (
               <div key={pin.id} className="px-3 py-2 hover:bg-muted/30 group">
                 <div className="flex items-start justify-between gap-2">
                   <button
                     type="button"
-                    className="flex-1 text-left min-w-0"
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
                     onClick={() => onJumpToMessage(pin.messageId)}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -217,7 +229,7 @@ export const MessagePinning = memo(function MessagePinning({
       </div>
 
       <div className="px-3 py-2 border-t text-[10px] text-muted-foreground">
-        {messages.filter(m => isPinned(m.id)).length} of {messages.length} messages pinned
+        {messages.filter((m) => isPinned(m.id)).length} of {messages.length} messages pinned
       </div>
     </div>
   )

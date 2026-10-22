@@ -17,7 +17,10 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
     <div className="space-y-4">
       <div
         ref={vs.dropRef}
-        onDragOver={(e) => { e.preventDefault(); vs.setDragOver(true) }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          vs.setDragOver(true)
+        }}
         onDragLeave={() => vs.setDragOver(false)}
         onDrop={vs.handleDrop}
         onClick={() => vs.fileInputRef.current?.click()}
@@ -43,11 +46,15 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
 
       {vs.previewUrl && (
         <div className="relative rounded-lg overflow-hidden border border-border/50">
-          <img src={vs.previewUrl} alt="Preview" className="w-full max-h-64 object-contain bg-muted/5" />
+          <img
+            src={vs.previewUrl}
+            alt="Preview"
+            className="w-full max-h-64 object-contain bg-muted/5"
+          />
           <button
             type="button"
             onClick={vs.clearPreview}
-            className="absolute top-2 right-2 h-7 w-7 flex items-center justify-center rounded-full bg-background/80 hover:bg-background border border-border/50 shadow-sm"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute top-2 right-2 h-7 w-7 flex items-center justify-center rounded-full bg-background/80 hover:bg-background border border-border/50 shadow-sm"
             aria-label="Clear preview"
           >
             <IconX className="h-3.5 w-3.5" />
@@ -70,7 +77,9 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
       {vs.analyzeResult && (
         <div className="space-y-3">
           <div className="p-3 rounded-lg bg-muted/30 border border-border/40">
-            <div className="text-[10px] text-muted-foreground font-medium mb-1 uppercase tracking-wider">Caption</div>
+            <div className="text-[10px] text-muted-foreground font-medium mb-1 uppercase tracking-wider">
+              Caption
+            </div>
             <div className="text-sm leading-relaxed">{vs.analyzeResult.caption}</div>
           </div>
 
@@ -84,10 +93,16 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
               <div className="text-[10px] text-muted-foreground">Images learned</div>
             </div>
             <div className="p-2 rounded bg-muted/30 border border-border/40 text-center">
-              <div className={cn(
-                'text-sm font-semibold',
-                vs.analyzeResult.mean_accuracy >= 80 ? 'text-success' : vs.analyzeResult.mean_accuracy >= 50 ? 'text-warning' : 'text-muted-foreground',
-              )}>
+              <div
+                className={cn(
+                  'text-sm font-semibold',
+                  vs.analyzeResult.mean_accuracy >= 80
+                    ? 'text-success'
+                    : vs.analyzeResult.mean_accuracy >= 50
+                      ? 'text-warning'
+                      : 'text-muted-foreground',
+                )}
+              >
                 {vs.analyzeResult.mean_accuracy.toFixed(1)}%
               </div>
               <div className="text-[10px] text-muted-foreground">Mean accuracy</div>
@@ -97,21 +112,34 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
           {vs.analyzeResult.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {vs.analyzeResult.tags.map((tag) => (
-                <span key={tag} className="px-1.5 py-0.5 rounded-full bg-muted/50 text-[10px] border border-border/30">{tag}</span>
+                <span
+                  key={tag}
+                  className="px-1.5 py-0.5 rounded-full bg-muted/50 text-[10px] border border-border/30"
+                >
+                  {tag}
+                </span>
               ))}
             </div>
           )}
 
-          {(vs.analyzeResult.confidence < 0.3 || vs.analyzeResult.caption === '[caption failed]') && (
+          {(vs.analyzeResult.confidence < 0.3 ||
+            vs.analyzeResult.caption === '[caption failed]') && (
             <div className="p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm space-y-2">
               <div className="flex items-center gap-2 text-warning font-medium">
                 <IconAlert className="h-4 w-4 shrink-0" />
                 Low confidence — consider retrying
               </div>
               <p className="text-xs text-muted-foreground">
-                The model isn&apos;t confident about this result. Try again — the model may produce a better result on a second pass.
+                The model isn&apos;t confident about this result. Try again — the model may produce
+                a better result on a second pass.
               </p>
-              <Button size="sm" variant="outline" onClick={vs.retryAnalyze} disabled={vs.retryLoading} className="h-7 text-xs">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={vs.retryAnalyze}
+                disabled={vs.retryLoading}
+                className="h-7 text-xs"
+              >
                 <IconRefresh className="h-3 w-3 mr-1" />
                 {vs.retryLoading ? 'Retrying…' : 'Retry analysis'}
               </Button>
@@ -122,7 +150,9 @@ export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTa
               size="sm"
               variant="outline"
               onClick={() => onSendText(vs.analyzeResult!.caption)}
-              disabled={!vs.analyzeResult.caption || vs.analyzeResult.caption === '[caption failed]'}
+              disabled={
+                !vs.analyzeResult.caption || vs.analyzeResult.caption === '[caption failed]'
+              }
             >
               <IconSend className="h-3.5 w-3.5 mr-1" />
               Send caption to chat

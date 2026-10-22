@@ -54,7 +54,7 @@ export function SoulSelectorDropdown() {
               setOpen(false)
               router.push('/souls')
             }}
-            className="inline-flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors mt-1"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors mt-1"
           >
             View full profile
             <IconChevronRight className="h-2.5 w-2.5" />

@@ -42,10 +42,34 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { id: 'explain', label: 'Explain', icon: <IconExplain className="h-4 w-4" />, action: 'Explain this concept in simple terms:', category: 'prompt' },
-  { id: 'summarize', label: 'Summarize', icon: <IconDocument className="h-4 w-4" />, action: 'Summarize the key points:', category: 'prompt' },
-  { id: 'debug', label: 'Debug', icon: <IconCog className="h-4 w-4" />, action: 'Help me debug this code:', category: 'prompt' },
-  { id: 'review', label: 'Review', icon: <IconEye className="h-4 w-4" />, action: 'Review this code and suggest improvements:', category: 'prompt' },
+  {
+    id: 'explain',
+    label: 'Explain',
+    icon: <IconExplain className="h-4 w-4" />,
+    action: 'Explain this concept in simple terms:',
+    category: 'prompt',
+  },
+  {
+    id: 'summarize',
+    label: 'Summarize',
+    icon: <IconDocument className="h-4 w-4" />,
+    action: 'Summarize the key points:',
+    category: 'prompt',
+  },
+  {
+    id: 'debug',
+    label: 'Debug',
+    icon: <IconCog className="h-4 w-4" />,
+    action: 'Help me debug this code:',
+    category: 'prompt',
+  },
+  {
+    id: 'review',
+    label: 'Review',
+    icon: <IconEye className="h-4 w-4" />,
+    action: 'Review this code and suggest improvements:',
+    category: 'prompt',
+  },
   { id: 'bold', label: 'Bold', icon: '**', action: '**text**', category: 'format' },
   { id: 'italic', label: 'Italic', icon: '_', action: '_text_', category: 'format' },
   { id: 'code', label: 'Code', icon: '`', action: '`code`', category: 'format' },
@@ -93,25 +117,31 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
 
   const filteredActions = useMemo(() => {
     return actionCategory
-      ? QUICK_ACTIONS.filter(a => a.category === actionCategory)
+      ? QUICK_ACTIONS.filter((a) => a.category === actionCategory)
       : QUICK_ACTIONS
   }, [actionCategory])
 
-  const handleInsert = useCallback((action: string) => {
-    onInsertAction(action)
-    setShowActions(false)
-    textareaRef.current?.focus()
-  }, [onInsertAction])
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      onSend()
-    }
-    if (e.key === 'Escape') {
+  const handleInsert = useCallback(
+    (action: string) => {
+      onInsertAction(action)
       setShowActions(false)
-    }
-  }, [onSend])
+      textareaRef.current?.focus()
+    },
+    [onInsertAction],
+  )
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        onSend()
+      }
+      if (e.key === 'Escape') {
+        setShowActions(false)
+      }
+    },
+    [onSend],
+  )
 
   const formatCost = (cost: number) => {
     if (cost < 0.001) return '<$0.001'
@@ -123,11 +153,16 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
       {/* Header with context indicator */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          <div className={cn(
-            'w-2 h-2 rounded-full',
-            contextUsage.isCritical ? 'bg-destructive animate-pulse' :
-            contextUsage.isWarning ? 'bg-warning' : 'bg-success',
-          )} />
+          <div
+            className={cn(
+              'w-2 h-2 rounded-full',
+              contextUsage.isCritical
+                ? 'bg-destructive animate-pulse motion-reduce:animate-none'
+                : contextUsage.isWarning
+                  ? 'bg-warning'
+                  : 'bg-success',
+            )}
+          />
           <span className="text-[10px] text-muted-foreground">
             Context: {contextUsage.percentage.toFixed(0)}% used
           </span>
@@ -164,11 +199,16 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">Tokens:</span>
-              <span className={cn(
-                'text-[10px] font-medium',
-                stats.tokens > 4000 ? 'text-destructive' :
-                stats.tokens > 2000 ? 'text-warning' : 'text-foreground',
-              )}>
+              <span
+                className={cn(
+                  'text-[10px] font-medium',
+                  stats.tokens > 4000
+                    ? 'text-destructive'
+                    : stats.tokens > 2000
+                      ? 'text-warning'
+                      : 'text-foreground',
+                )}
+              >
                 {stats.tokens.toLocaleString()}
               </span>
             </div>
@@ -234,11 +274,12 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
                 actionCategory === null
                   ? 'bg-primary/20 text-primary'
                   : 'text-muted-foreground hover:bg-muted/50',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
               )}
             >
               All
             </button>
-            {['prompt', 'format', 'context', 'tool'].map(cat => (
+            {['prompt', 'format', 'context', 'tool'].map((cat) => (
               <button
                 key={cat}
                 type="button"
@@ -248,6 +289,7 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
                   actionCategory === cat
                     ? 'bg-primary/20 text-primary'
                     : 'text-muted-foreground hover:bg-muted/50',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 )}
               >
                 {cat}
@@ -255,12 +297,12 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
             ))}
           </div>
           <div className="grid grid-cols-5 gap-1">
-            {filteredActions.map(action => (
+            {filteredActions.map((action) => (
               <button
                 key={action.id}
                 type="button"
                 onClick={() => handleInsert(action.action)}
-                className="flex flex-col items-center gap-0.5 p-1.5 rounded hover:bg-muted/50 transition-colors"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex flex-col items-center gap-0.5 p-1.5 rounded hover:bg-muted/50 transition-colors"
                 title={action.label}
               >
                 <span className="text-sm text-muted-foreground">{action.icon}</span>

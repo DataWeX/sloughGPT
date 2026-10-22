@@ -114,7 +114,7 @@ export const ConversationSearch = memo(function ConversationSearch({
                 setResults([])
                 inputRef.current?.focus()
               }}
-              className="text-muted-foreground hover:text-foreground p-0.5"
+              className="text-muted-foreground hover:text-foreground p-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label="Clear"
             >
               <IconX className="h-4 w-4" />
@@ -125,7 +125,11 @@ export const ConversationSearch = memo(function ConversationSearch({
           </kbd>
         </div>
 
-        <div className="max-h-[50vh] overflow-y-auto p-2" aria-busy={loading} aria-live="polite">
+        <div
+          className="max-h-[50vh] min-h-[12rem] overflow-y-auto p-2"
+          aria-busy={loading}
+          aria-live="polite"
+        >
           {loading && (
             <div className="flex items-center justify-center py-8">
               <Spinner size="sm" />
@@ -140,7 +144,7 @@ export const ConversationSearch = memo(function ConversationSearch({
 
           {!loading && results.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground/60 px-1.5 py-1 uppercase tracking-wider font-medium">
+              <p className="text-xs text-muted-foreground/60 px-1.5 py-1 uppercase tracking-wider font-medium tabular-nums">
                 {results.length} conversation{results.length !== 1 ? 's' : ''} found
               </p>
               {results.map((r) => (
@@ -151,12 +155,12 @@ export const ConversationSearch = memo(function ConversationSearch({
                     onNavigate(r.session.id)
                     onClose()
                   }}
-                  className="w-full text-left p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40"
+                  className="w-full text-left p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 >
                   <div className="flex items-center gap-2 mb-1.5">
                     <IconMessage className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="text-sm font-medium truncate">{r.session.name}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium shrink-0">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium shrink-0 tabular-nums">
                       {r.matches.length} match{r.matches.length !== 1 ? 'es' : ''}
                     </span>
                   </div>

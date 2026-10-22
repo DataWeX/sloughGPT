@@ -56,7 +56,7 @@ function ContextWindowItemCard({
     <div className="border border-border/30 rounded-lg overflow-hidden">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-2">
           <span

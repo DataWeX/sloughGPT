@@ -31,9 +31,13 @@ const EXIT_MS = 250
 function ToastIcon({ type, className }: { type: ToastType; className?: string }) {
   return (
     <span className={cn('text-sm', className)}>
-      {type === 'success' ? <IconCheckCircle className="h-4 w-4 text-success" /> :
-       type === 'error' ? <IconError className="h-4 w-4 text-destructive" /> :
-       <IconInfo className="h-4 w-4 text-primary" />}
+      {type === 'success' ? (
+        <IconCheckCircle className="h-4 w-4 text-success" />
+      ) : type === 'error' ? (
+        <IconError className="h-4 w-4 text-destructive" />
+      ) : (
+        <IconInfo className="h-4 w-4 text-primary" />
+      )}
     </span>
   )
 }
@@ -76,7 +80,9 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       }
     }
     frameRef.current = requestAnimationFrame(tick)
-    return () => { cancelAnimationFrame(frameRef.current) }
+    return () => {
+      cancelAnimationFrame(frameRef.current)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast.id])
 
@@ -122,8 +128,11 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
           {toast.verbose && (
             <button
               type="button"
-              onClick={e => { e.stopPropagation(); setShowVerbose(v => !v) }}
-              className="sl-toast__verbose"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowVerbose((v) => !v)
+              }}
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__verbose"
             >
               {showVerbose ? 'Hide' : 'Details'}
             </button>
@@ -132,16 +141,23 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         {toast.onUndo && (
           <button
             type="button"
-            onClick={e => { e.stopPropagation(); toast.onUndo!(); dismiss() }}
-            className="sl-toast__undo"
+            onClick={(e) => {
+              e.stopPropagation()
+              toast.onUndo!()
+              dismiss()
+            }}
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__undo"
           >
             Undo
           </button>
         )}
         <button
           type="button"
-          onClick={e => { e.stopPropagation(); dismiss() }}
-          className="sl-toast__close"
+          onClick={(e) => {
+            e.stopPropagation()
+            dismiss()
+          }}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__close"
           aria-label={`Dismiss notification: ${toast.message}`}
         >
           <IconX className="h-3 w-3" />
@@ -153,10 +169,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       )}
 
       <span className="sl-toast__track">
-        <span
-          className={cn('sl-toast__fill', styles.bar)}
-          style={{ width: `${progress}%` }}
-        />
+        <span className={cn('sl-toast__fill', styles.bar)} style={{ width: `${progress}%` }} />
       </span>
     </div>
   )
@@ -168,7 +181,11 @@ interface ToastContainerProps {
   onClearAll?: () => void
 }
 
-export const ToastContainer = memo(function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainerProps) {
+export const ToastContainer = memo(function ToastContainer({
+  toasts,
+  onDismiss,
+  onClearAll,
+}: ToastContainerProps) {
   if (toasts.length === 0) return null
   return (
     <div className="sl-toast-container" role="region" aria-label="Notifications">
@@ -176,7 +193,7 @@ export const ToastContainer = memo(function ToastContainer({ toasts, onDismiss, 
         <button
           type="button"
           onClick={onClearAll}
-          className="absolute top-1 right-1 z-10 text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute top-1 right-1 z-10 text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
           aria-label="Dismiss all notifications"
         >
           Clear all
@@ -192,8 +209,12 @@ export const ToastContainer = memo(function ToastContainer({ toasts, onDismiss, 
 // ── Radix Toast Bridge ──────────────────────────────────────────
 
 import {
-  ToastProvider, ToastViewport, Toast,
-  ToastTitle, ToastDescription, ToastClose,
+  ToastProvider,
+  ToastViewport,
+  Toast,
+  ToastTitle,
+  ToastDescription,
+  ToastClose,
 } from '@sloughgpt/strui'
 
 const TYPE_BORDER: Record<ToastType, string> = {
@@ -222,7 +243,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
             <button
               type="button"
               onClick={onClearAll}
-              className="fixed bottom-20 right-4 z-[301] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset fixed bottom-20 right-4 z-[301] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
               aria-label="Dismiss all notifications"
             >
               Clear all
@@ -237,7 +258,13 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
               <Toast key={t.id} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>
                 <div className="flex items-start gap-3 w-full">
                   <span className="mt-0.5 text-sm shrink-0">
-                    {t.type === 'success' ? <IconCheckCircle className="h-4 w-4 text-success" /> : t.type === 'error' ? <IconError className="h-4 w-4 text-destructive" /> : <IconInfo className="h-4 w-4 text-primary" />}
+                    {t.type === 'success' ? (
+                      <IconCheckCircle className="h-4 w-4 text-success" />
+                    ) : t.type === 'error' ? (
+                      <IconError className="h-4 w-4 text-destructive" />
+                    ) : (
+                      <IconInfo className="h-4 w-4 text-primary" />
+                    )}
                   </span>
                   <div className="flex-1 min-w-0">
                     <ToastTitle className="text-sm">{t.message}</ToastTitle>

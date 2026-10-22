@@ -24,7 +24,9 @@ function loadTemplates(): Template[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 function saveTemplates(templates: Template[]) {
@@ -61,7 +63,7 @@ export const TemplateDialog = memo(function TemplateDialog({
       createdAt: Date.now(),
     }
     const updated = editingId
-      ? templates.map(t => t.id === editingId ? newTemplate : t)
+      ? templates.map((t) => (t.id === editingId ? newTemplate : t))
       : [...templates, newTemplate]
     setTemplates(updated)
     saveTemplates(updated)
@@ -77,7 +79,7 @@ export const TemplateDialog = memo(function TemplateDialog({
   }
 
   const handleDelete = (id: string) => {
-    const updated = templates.filter(t => t.id !== id)
+    const updated = templates.filter((t) => t.id !== id)
     setTemplates(updated)
     saveTemplates(updated)
   }
@@ -90,7 +92,10 @@ export const TemplateDialog = memo(function TemplateDialog({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
       <div
         className="bg-background border border-border rounded-lg shadow-xl w-[480px] max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -100,7 +105,7 @@ export const TemplateDialog = memo(function TemplateDialog({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md hover:bg-muted transition-colors"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded-md hover:bg-muted transition-colors"
             aria-label="Close"
           >
             <IconX className="h-4 w-4 text-muted-foreground" />
@@ -114,13 +119,15 @@ export const TemplateDialog = memo(function TemplateDialog({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Template name" aria-label="Template name"
+              placeholder="Template name"
+              aria-label="Template name"
               className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/50"
             />
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Template content (prompt, system message, etc.)" aria-label="Template content"
+              placeholder="Template content (prompt, system message, etc.)"
+              aria-label="Template content"
               rows={3}
               className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
             />
@@ -132,8 +139,12 @@ export const TemplateDialog = memo(function TemplateDialog({
                 {editingId && (
                   <button
                     type="button"
-                    onClick={() => { setEditingId(null); setName(''); setContent('') }}
-                    className="px-2 py-1 text-xs rounded-md hover:bg-muted transition-colors"
+                    onClick={() => {
+                      setEditingId(null)
+                      setName('')
+                      setContent('')
+                    }}
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset px-2 py-1 text-xs rounded-md hover:bg-muted transition-colors"
                   >
                     Cancel
                   </button>
@@ -142,7 +153,7 @@ export const TemplateDialog = memo(function TemplateDialog({
                   type="button"
                   onClick={handleSave}
                   disabled={!name.trim() || !content.trim()}
-                  className="px-2 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset px-2 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   {editingId ? 'Update' : 'Save'}
                 </button>
@@ -162,8 +173,8 @@ export const TemplateDialog = memo(function TemplateDialog({
                 <div
                   key={template.id}
                   className={cn(
-                    "group p-3 rounded-md border border-border/40 hover:border-border transition-colors",
-                    editingId === template.id && "border-primary/40 bg-primary/5"
+                    'group p-3 rounded-md border border-border/40 hover:border-border transition-colors',
+                    editingId === template.id && 'border-primary/40 bg-primary/5',
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -178,7 +189,7 @@ export const TemplateDialog = memo(function TemplateDialog({
                         <button
                           type="button"
                           onClick={() => handleUse(template)}
-                          className="p-1 rounded hover:bg-primary/10 text-primary"
+                          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded hover:bg-primary/10 text-primary"
                           title="Use template"
                         >
                           <IconCheck className="h-3.5 w-3.5" />
@@ -187,7 +198,7 @@ export const TemplateDialog = memo(function TemplateDialog({
                       <button
                         type="button"
                         onClick={() => handleEdit(template)}
-                        className="p-1 rounded hover:bg-muted text-muted-foreground"
+                        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded hover:bg-muted text-muted-foreground"
                         title="Edit template"
                       >
                         <IconPlus className="h-3.5 w-3.5 rotate-45" />
@@ -195,7 +206,7 @@ export const TemplateDialog = memo(function TemplateDialog({
                       <button
                         type="button"
                         onClick={() => handleDelete(template.id)}
-                        className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded hover:bg-destructive/10 text-destructive"
                         title="Delete template"
                       >
                         <IconTrash className="h-3.5 w-3.5" />

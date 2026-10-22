@@ -31,9 +31,9 @@ export const MessageThreading = memo(function MessageThreading({
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
 
   const threadsWithMessages = useMemo(() => {
-    return threads.map(thread => ({
+    return threads.map((thread) => ({
       ...thread,
-      parentMessage: messages.find(m => m.id === thread.parentMessageId),
+      parentMessage: messages.find((m) => m.id === thread.parentMessageId),
     }))
   }, [threads, messages])
 
@@ -57,21 +57,22 @@ export const MessageThreading = memo(function MessageThreading({
       timestamp: new Date(),
     }
 
-    setThreads(prev => {
-      const existing = prev.find(t => t.parentMessageId === replyingTo)
+    setThreads((prev) => {
+      const existing = prev.find((t) => t.parentMessageId === replyingTo)
       if (existing) {
-        return prev.map(t =>
-          t.parentMessageId === replyingTo
-            ? { ...t, replies: [...t.replies, newReply] }
-            : t
+        return prev.map((t) =>
+          t.parentMessageId === replyingTo ? { ...t, replies: [...t.replies, newReply] } : t,
         )
       } else {
-        return [...prev, {
-          id: crypto.randomUUID(),
-          parentMessageId: replyingTo,
-          replies: [newReply],
-          createdAt: Date.now(),
-        }]
+        return [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            parentMessageId: replyingTo,
+            replies: [newReply],
+            createdAt: Date.now(),
+          },
+        ]
       }
     })
 
@@ -80,19 +81,25 @@ export const MessageThreading = memo(function MessageThreading({
     setReplyDraft('')
   }, [replyingTo, replyDraft, onReply])
 
-  const handleDeleteThread = useCallback((threadId: string) => {
-    setThreads(prev => prev.filter(t => t.id !== threadId))
-    if (selectedThread === threadId) {
-      setSelectedThread(null)
-    }
-  }, [selectedThread])
+  const handleDeleteThread = useCallback(
+    (threadId: string) => {
+      setThreads((prev) => prev.filter((t) => t.id !== threadId))
+      if (selectedThread === threadId) {
+        setSelectedThread(null)
+      }
+    },
+    [selectedThread],
+  )
 
-  const getThreadForMessage = useCallback((messageId: string) => {
-    return threads.find(t => t.parentMessageId === messageId)
-  }, [threads])
+  const getThreadForMessage = useCallback(
+    (messageId: string) => {
+      return threads.find((t) => t.parentMessageId === messageId)
+    },
+    [threads],
+  )
 
   const messagesWithThreads = useMemo(() => {
-    return messages.filter(m => getThreadForMessage(m.id))
+    return messages.filter((m) => getThreadForMessage(m.id))
   }, [messages, getThreadForMessage])
 
   return (
@@ -111,15 +118,15 @@ export const MessageThreading = memo(function MessageThreading({
           </p>
         ) : (
           <div className="divide-y">
-            {threadsWithMessages.map(thread => (
+            {threadsWithMessages.map((thread) => (
               <div key={thread.id} className="px-3 py-2 hover:bg-muted/30">
                 <div className="flex items-start justify-between gap-2">
                   <button
                     type="button"
-                    className="flex-1 text-left min-w-0"
-                    onClick={() => setSelectedThread(
-                      selectedThread === thread.id ? null : thread.id
-                    )}
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
+                    onClick={() =>
+                      setSelectedThread(selectedThread === thread.id ? null : thread.id)
+                    }
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
@@ -149,7 +156,7 @@ export const MessageThreading = memo(function MessageThreading({
 
                 {selectedThread === thread.id && (
                   <div className="mt-2 space-y-2 pl-4 border-l-2 border-primary/20">
-                    {thread.replies.map(reply => (
+                    {thread.replies.map((reply) => (
                       <div key={reply.id} className="text-xs">
                         <span className="text-[10px] text-muted-foreground mr-1">
                           {reply.role === 'user' ? 'You' : 'AI'}:
@@ -164,7 +171,8 @@ export const MessageThreading = memo(function MessageThreading({
                           type="text"
                           value={replyDraft}
                           onChange={(e) => setReplyDraft(e.target.value)}
-                          placeholder="Reply to thread..." aria-label="Reply to thread"
+                          placeholder="Reply to thread..."
+                          aria-label="Reply to thread"
                           className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSubmitReply()

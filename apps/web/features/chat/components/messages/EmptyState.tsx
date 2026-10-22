@@ -41,6 +41,7 @@ function ToolModeCard({ mode, label, description, icon, color, onClick }: ToolMo
         'group relative flex flex-col items-start gap-1.5 p-3 rounded-xl border border-border/30 bg-card/30',
         'hover:border-primary/30 hover:bg-primary/[0.03] hover:shadow-sm hover:shadow-primary/5',
         'hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 cursor-pointer text-left',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
       )}
     >
       <div className="flex items-center gap-2">
@@ -211,7 +212,7 @@ export const EmptyState = memo(function EmptyState({
                 key={s.text}
                 type="button"
                 onClick={() => onSuggestionClick?.(s.text)}
-                className="w-full text-left px-3 py-2 text-xs rounded-xl border border-border/30 bg-card/30 hover:border-primary/20 hover:bg-primary/[0.03] hover:shadow-sm transition-all duration-200 cursor-pointer flex items-center gap-2 group"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-3 py-2 text-xs rounded-xl border border-border/30 bg-card/30 hover:border-primary/20 hover:bg-primary/[0.03] hover:shadow-sm transition-all duration-200 cursor-pointer flex items-center gap-2 group"
               >
                 <span className="text-muted-foreground/30 group-hover:text-primary/50 shrink-0 transition-colors">
                   {s.icon}

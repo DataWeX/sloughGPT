@@ -3,7 +3,23 @@
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
-import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconThumbUp, IconThumbDown, IconSpeaker, IconRewrite, IconExplain, IconTranslate, IconPlay, IconMapPin, IconCheckCircle } from '@sloughgpt/strui'
+import {
+  IconCopy,
+  IconCheck,
+  IconRefresh,
+  IconEdit,
+  IconStar,
+  IconTrash,
+  IconThumbUp,
+  IconThumbDown,
+  IconSpeaker,
+  IconRewrite,
+  IconExplain,
+  IconTranslate,
+  IconPlay,
+  IconMapPin,
+  IconCheckCircle,
+} from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
@@ -46,7 +62,9 @@ function ThumbsDownIcon({ className, animated }: { className?: string; animated?
 const sparkles = ['✦', '✧', '⋆', '⁂', '✶', '✴']
 
 function ConfettiBurst({ active }: { active: boolean }) {
-  const [particles, setParticles] = useState<Array<{ x: number; y: number; char: string; delay: number }>>([])
+  const [particles, setParticles] = useState<
+    Array<{ x: number; y: number; char: string; delay: number }>
+  >([])
 
   useEffect(() => {
     if (!active) {
@@ -90,7 +108,21 @@ function ConfettiBurst({ active }: { active: boolean }) {
 
 const QUICK_REACTIONS = ['👍', '👎', '❤️', '🔥', '🎉', '🤔', '👀', '💯']
 
-export const MessageActions = memo(function MessageActions({ content, messageId, role, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete, onSaveToKnowledge }: MessageActionsProps) {
+export const MessageActions = memo(function MessageActions({
+  content,
+  messageId,
+  role,
+  onCopy,
+  onRegenerate,
+  onThumbsUp,
+  onThumbsDown,
+  onEdit,
+  onSuggestionClick,
+  isBookmarked,
+  onBookmark,
+  onDelete,
+  onSaveToKnowledge,
+}: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
   const [thumbsUp, setThumbsUp] = useState(false)
   const [thumbsDown, setThumbsDown] = useState(false)
@@ -102,12 +134,14 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
 
   useEffect(() => {
     let cancelled = false
-    getReactions(messageId).then(reactions => {
+    getReactions(messageId).then((reactions) => {
       if (!cancelled) setLocalReactions(reactions)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [messageId])
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -126,7 +160,9 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
       onCopy(content)
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
       copiedTimerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
-    } catch { /* clipboard API may be unavailable */ }
+    } catch {
+      /* clipboard API may be unavailable */
+    }
   }, [content, onCopy])
 
   const handleThumbsUp = useCallback(() => {
@@ -177,174 +213,179 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
     }
   }, [content, savedToKnowledge, addToast])
 
-  const handleToggleReaction = useCallback((emoji: string) => {
-    return toggleReaction(messageId, emoji).then(() => {
-      return getReactions(messageId)
-    }).then(setLocalReactions)
-  }, [messageId])
+  const handleToggleReaction = useCallback(
+    (emoji: string) => {
+      return toggleReaction(messageId, emoji)
+        .then(() => {
+          return getReactions(messageId)
+        })
+        .then(setLocalReactions)
+    },
+    [messageId],
+  )
 
   return (
     <>
-    <div
-      className="flex items-center gap-0 mt-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity relative"
-      role="group"
-      aria-label="Message actions"
-    >
-      <ConfettiBurst active={celebrate} />
+      <div
+        className="flex items-center gap-0 mt-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity relative"
+        role="group"
+        aria-label="Message actions"
+      >
+        <ConfettiBurst active={celebrate} />
 
-      {onCopy && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleCopy}
-          className="p-2"
-          aria-label={copied ? "Copied" : "Copy message"}
-          aria-pressed={copied}
-        >
-          {copied ? <IconCheck className="h-3.5 w-3.5" /> : <IconCopy className="h-3.5 w-3.5" />}
-        </Button>
-      )}
-
-      {onRegenerate && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onRegenerate(messageId)}
-          className="p-2"
-          aria-label="Regenerate response"
-        >
-          <IconRefresh className="h-3.5 w-3.5" />
-        </Button>
-      )}
-
-      {onThumbsUp && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleThumbsUp}
-          className="p-2"
-          aria-label="Mark as helpful"
-          aria-pressed={thumbsUp}
-        >
-          <ThumbsUpIcon className="h-3.5 w-3.5" animated={thumbsUp} />
-        </Button>
-      )}
-
-      {onThumbsDown && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleThumbsDown}
-          className="p-2"
-          aria-label="Mark as unhelpful"
-          aria-pressed={thumbsDown}
-        >
-          <ThumbsDownIcon className="h-3.5 w-3.5" animated={thumbsDown} />
-        </Button>
-      )}
-
-      {onBookmark && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onBookmark(messageId)}
-          className="p-2"
-          aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark message'}
-        >
-          <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />
-        </Button>
-      )}
-
-      {onSaveToKnowledge && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleSaveToKnowledge}
-          className="p-2"
-          aria-label={savedToKnowledge ? 'Already saved to knowledge' : 'Save to knowledge'}
-          disabled={savedToKnowledge}
-        >
-          {savedToKnowledge ? (
-            <IconCheckCircle className={cn('h-3.5 w-3.5 text-success')} aria-hidden="true" />
-          ) : (
-            <IconMapPin className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-        </Button>
-      )}
-
-      {role === 'assistant' && 'speechSynthesis' in window && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleSpeak}
-          className="p-2"
-          aria-label={speaking ? 'Stop reading aloud' : 'Read aloud'}
-        >
-          {speaking ? (
-            <IconPlay className="h-3.5 w-3.5" />
-          ) : (
-            <IconSpeaker className="h-3.5 w-3.5" />
-          )}
-        </Button>
-      )}
-
-      {onEdit && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onEdit(messageId)}
-          aria-label="Edit and resend message"
-        >
-          <IconEdit className="h-3.5 w-3.5" />
-        </Button>
-      )}
-
-      {onDelete && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onDelete(messageId)}
-          aria-label="Delete message"
-          className="hover:text-destructive text-muted-foreground p-2"
-        >
-          <IconTrash className="h-3.5 w-3.5" />
-        </Button>
-      )}
-
-      {onSuggestionClick && (
-        <>
-          <span className="w-px h-4 mx-0.5 bg-border/50" aria-hidden="true" />
+        {onCopy && (
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => onSuggestionClick(`Rewrite this:\n\n${content}`)}
-            aria-label="Rewrite this message"
-            title="Rewrite"
+            onClick={handleCopy}
+            className="p-2"
+            aria-label={copied ? 'Copied' : 'Copy message'}
+            aria-pressed={copied}
           >
-            <IconRewrite className="h-3.5 w-3.5" />
+            {copied ? <IconCheck className="h-3.5 w-3.5" /> : <IconCopy className="h-3.5 w-3.5" />}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onSuggestionClick(`Explain this simply:\n\n${content}`)}
-            aria-label="Explain this message"
-            title="Explain"
-          >
-            <IconExplain className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onSuggestionClick(`Translate this to Spanish:\n\n${content}`)}
-            aria-label="Translate to Spanish"
-            title="Translate"
-          >
-            <IconTranslate className="h-3.5 w-3.5" />
-          </Button>
-        </>
-      )}
+        )}
 
-      <div className="relative">
+        {onRegenerate && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onRegenerate(messageId)}
+            className="p-2"
+            aria-label="Regenerate response"
+          >
+            <IconRefresh className="h-3.5 w-3.5" />
+          </Button>
+        )}
+
+        {onThumbsUp && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleThumbsUp}
+            className="p-2"
+            aria-label="Mark as helpful"
+            aria-pressed={thumbsUp}
+          >
+            <ThumbsUpIcon className="h-3.5 w-3.5" animated={thumbsUp} />
+          </Button>
+        )}
+
+        {onThumbsDown && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleThumbsDown}
+            className="p-2"
+            aria-label="Mark as unhelpful"
+            aria-pressed={thumbsDown}
+          >
+            <ThumbsDownIcon className="h-3.5 w-3.5" animated={thumbsDown} />
+          </Button>
+        )}
+
+        {onBookmark && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onBookmark(messageId)}
+            className="p-2"
+            aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark message'}
+          >
+            <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />
+          </Button>
+        )}
+
+        {onSaveToKnowledge && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleSaveToKnowledge}
+            className="p-2"
+            aria-label={savedToKnowledge ? 'Already saved to knowledge' : 'Save to knowledge'}
+            disabled={savedToKnowledge}
+          >
+            {savedToKnowledge ? (
+              <IconCheckCircle className={cn('h-3.5 w-3.5 text-success')} aria-hidden="true" />
+            ) : (
+              <IconMapPin className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+          </Button>
+        )}
+
+        {role === 'assistant' && 'speechSynthesis' in window && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleSpeak}
+            className="p-2"
+            aria-label={speaking ? 'Stop reading aloud' : 'Read aloud'}
+          >
+            {speaking ? (
+              <IconPlay className="h-3.5 w-3.5" />
+            ) : (
+              <IconSpeaker className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        )}
+
+        {onEdit && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onEdit(messageId)}
+            aria-label="Edit and resend message"
+          >
+            <IconEdit className="h-3.5 w-3.5" />
+          </Button>
+        )}
+
+        {onDelete && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onDelete(messageId)}
+            aria-label="Delete message"
+            className="hover:text-destructive text-muted-foreground p-2"
+          >
+            <IconTrash className="h-3.5 w-3.5" />
+          </Button>
+        )}
+
+        {onSuggestionClick && (
+          <>
+            <span className="w-px h-4 mx-0.5 bg-border/50" aria-hidden="true" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onSuggestionClick(`Rewrite this:\n\n${content}`)}
+              aria-label="Rewrite this message"
+              title="Rewrite"
+            >
+              <IconRewrite className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onSuggestionClick(`Explain this simply:\n\n${content}`)}
+              aria-label="Explain this message"
+              title="Explain"
+            >
+              <IconExplain className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onSuggestionClick(`Translate this to Spanish:\n\n${content}`)}
+              aria-label="Translate to Spanish"
+              title="Translate"
+            >
+              <IconTranslate className="h-3.5 w-3.5" />
+            </Button>
+          </>
+        )}
+
+        <div className="relative">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -356,14 +397,14 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           </Button>
           {showEmojiPicker && (
             <div className="absolute bottom-full left-0 mb-1 flex gap-0.5 bg-popover/95 backdrop-blur-sm border border-border/40 rounded-lg p-1 shadow-xl z-50">
-              {QUICK_REACTIONS.map(emoji => (
+              {QUICK_REACTIONS.map((emoji) => (
                 <button
                   key={emoji}
                   onClick={() => {
                     handleToggleReaction(emoji)
                     setShowEmojiPicker(false)
                   }}
-                  className="w-7 h-7 flex items-center justify-center hover:bg-accent/50 rounded transition-colors text-sm"
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-7 h-7 flex items-center justify-center hover:bg-accent/50 rounded transition-colors text-sm"
                   aria-label={`React with ${emoji}`}
                 >
                   {emoji}
@@ -372,25 +413,28 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             </div>
           )}
         </div>
-    </div>
-
-    {Object.keys(localReactions).length > 0 && (
-      <div className="flex flex-wrap gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-        {Object.entries(localReactions).map(([emoji, users]) => (
-          <button
-            key={emoji}
-            onClick={() => handleToggleReaction(emoji)}
-            className={cn(
-              "inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border transition-colors",
-              users.includes('user') ? "bg-primary/15 border-primary/30 text-primary" : "bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted/80"
-            )}
-          >
-            <span>{emoji}</span>
-            <span>{users.length}</span>
-          </button>
-        ))}
       </div>
-    )}
+
+      {Object.keys(localReactions).length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          {Object.entries(localReactions).map(([emoji, users]) => (
+            <button
+              key={emoji}
+              onClick={() => handleToggleReaction(emoji)}
+              className={cn(
+                'inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border transition-colors',
+                users.includes('user')
+                  ? 'bg-primary/15 border-primary/30 text-primary'
+                  : 'bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted/80',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              )}
+            >
+              <span>{emoji}</span>
+              <span>{users.length}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </>
   )
 })

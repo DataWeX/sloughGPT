@@ -27,12 +27,14 @@ const shortcuts: Shortcut[] = [
 ]
 
 function formatKeys(keys: string[]): string {
-  return keys.map(k => {
-    if (k === 'Ctrl') return '⌘/Ctrl'
-    if (k === 'Shift') return '⇧'
-    if (k === 'Escape') return 'Esc'
-    return k
-  }).join(' + ')
+  return keys
+    .map((k) => {
+      if (k === 'Ctrl') return '⌘/Ctrl'
+      if (k === 'Shift') return '⇧'
+      if (k === 'Escape') return 'Esc'
+      return k
+    })
+    .join(' + ')
 }
 
 interface KeyboardShortcutsPanelProps {
@@ -47,7 +49,10 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
       <div
         className="bg-background border border-border rounded-lg shadow-xl w-[420px] max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -60,7 +65,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md hover:bg-muted transition-colors"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded-md hover:bg-muted transition-colors"
             aria-label="Close"
           >
             <IconX className="h-4 w-4 text-muted-foreground" />
@@ -78,10 +83,12 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({
                 <div className="flex items-center gap-1">
                   {shortcut.keys.map((key, j) => (
                     <span key={j}>
-                      <kbd className={cn(
-                        "px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border",
-                        "bg-muted/50 text-muted-foreground border-border/60"
-                      )}>
+                      <kbd
+                        className={cn(
+                          'px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border',
+                          'bg-muted/50 text-muted-foreground border-border/60',
+                        )}
+                      >
                         {formatKeys([key])}
                       </kbd>
                       {j < shortcut.keys.length - 1 && (

@@ -48,10 +48,13 @@ export const ChatHistoryTimeline = memo(function ChatHistoryTimeline({
 
   const groups = useMemo(() => groupMessagesByTime(messages), [messages])
 
-  const handleSelect = useCallback((msgId: string) => {
-    setSelectedId(msgId)
-    onNavigate(msgId)
-  }, [onNavigate])
+  const handleSelect = useCallback(
+    (msgId: string) => {
+      setSelectedId(msgId)
+      onNavigate(msgId)
+    },
+    [onNavigate],
+  )
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -61,7 +64,13 @@ export const ChatHistoryTimeline = memo(function ChatHistoryTimeline({
           <span className="text-xs font-medium">History Timeline</span>
           <span className="text-[10px] text-muted-foreground">({messages.length} messages)</span>
         </div>
-        <Button variant="ghost" size="icon-sm" className="h-5 w-5" onClick={onClose} aria-label="Close timeline">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="h-5 w-5"
+          onClick={onClose}
+          aria-label="Close timeline"
+        >
           <IconX className="h-3 w-3" />
         </Button>
       </div>
@@ -84,11 +93,13 @@ export const ChatHistoryTimeline = memo(function ChatHistoryTimeline({
                         'w-full text-left px-2 py-1 rounded text-xs transition-colors',
                         'hover:bg-muted/50',
                         selectedId === msg.id && 'bg-primary/10 text-primary',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate">
-                          {msg.content.slice(0, 60)}{msg.content.length > 60 ? '…' : ''}
+                          {msg.content.slice(0, 60)}
+                          {msg.content.length > 60 ? '…' : ''}
                         </span>
                         <span className="text-[10px] text-muted-foreground shrink-0">
                           {formatTimeWithSeconds(msg.timestamp)}

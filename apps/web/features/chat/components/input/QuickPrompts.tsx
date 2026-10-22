@@ -4,8 +4,29 @@ import { useState, useCallback, useMemo, useEffect, type ReactNode } from 'react
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button, Input } from '@sloughgpt/strui'
 import type { QuickPrompt } from '@/lib/quick-prompts'
-import { listPromptsByCategory, createPrompt, updatePrompt, deletePrompt, resetToDefaults, applyPrompt } from '@/lib/quick-prompts'
-import { Lightbulb, FileText, Brain, Zap, ListTodo, Search, Palette, Pencil, Scale, Recycle, FlaskConical, BookOpen, MessageCircle } from 'lucide-react'
+import {
+  listPromptsByCategory,
+  createPrompt,
+  updatePrompt,
+  deletePrompt,
+  resetToDefaults,
+  applyPrompt,
+} from '@/lib/quick-prompts'
+import {
+  Lightbulb,
+  FileText,
+  Brain,
+  Zap,
+  ListTodo,
+  Search,
+  Palette,
+  Pencil,
+  Scale,
+  Recycle,
+  FlaskConical,
+  BookOpen,
+  MessageCircle,
+} from 'lucide-react'
 
 const EMOJI_TO_ICON: Record<string, ReactNode> = {
   '💡': <Lightbulb className="h-3.5 w-3.5" />,
@@ -61,7 +82,9 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
       if (active) setGrouped(result)
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [])
 
   const filtered = useMemo(() => {
@@ -69,10 +92,11 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
     const q = search.toLowerCase()
     const result: Record<string, QuickPrompt[]> = {}
     for (const [cat, prompts] of Object.entries(grouped)) {
-      const matched = prompts.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.prompt.toLowerCase().includes(q)
+      const matched = prompts.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q) ||
+          p.prompt.toLowerCase().includes(q),
       )
       if (matched.length > 0) result[cat] = matched
     }
@@ -128,10 +152,23 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Quick Prompts</span>
         <div className="flex gap-1">
-          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={async () => { await resetToDefaults(); await refresh() }}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={async () => {
+              await resetToDefaults()
+              await refresh()
+            }}
+          >
             Reset
           </Button>
-          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowCreate(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={() => setShowCreate(true)}
+          >
             + New
           </Button>
         </div>
@@ -140,24 +177,43 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
       <Input
         placeholder="Search prompts..."
         value={search}
-        onChange={e => setSearch(e.target.value)}
+        onChange={(e) => setSearch(e.target.value)}
         className="h-7 text-xs"
       />
 
       {showCreate && (
         <div className="space-y-1.5 p-2 rounded border border-border/40 bg-muted/20">
-          <Input placeholder="Name" value={newName} onChange={e => setNewName(e.target.value)} className="h-7 text-xs" />
-          <Input placeholder="Description (optional)" value={newDesc} onChange={e => setNewDesc(e.target.value)} className="h-7 text-xs" />
+          <Input
+            placeholder="Name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            className="h-7 text-xs"
+          />
+          <Input
+            placeholder="Description (optional)"
+            value={newDesc}
+            onChange={(e) => setNewDesc(e.target.value)}
+            className="h-7 text-xs"
+          />
           <textarea
             placeholder="Prompt template. Use {{text}} where user input goes."
             value={newPrompt}
-            onChange={e => setNewPrompt(e.target.value)}
+            onChange={(e) => setNewPrompt(e.target.value)}
             className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
             aria-label="New prompt template"
           />
           <div className="flex gap-1">
-            <Button size="sm" className="h-6 text-[10px] flex-1" onClick={handleCreate}>Save</Button>
-            <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button size="sm" className="h-6 text-[10px] flex-1" onClick={handleCreate}>
+              Save
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px]"
+              onClick={() => setShowCreate(false)}
+            >
+              Cancel
+            </Button>
           </div>
         </div>
       )}
@@ -171,39 +227,93 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
               {CATEGORY_LABELS[category] || category}
             </div>
             <div className="space-y-1">
-              {prompts.map(p => (
-                <div key={p.id} className="group rounded border border-border/30 bg-muted/10 p-2 hover:bg-muted/20 transition-colors">
+              {prompts.map((p) => (
+                <div
+                  key={p.id}
+                  className="group rounded border border-border/30 bg-muted/10 p-2 hover:bg-muted/20 transition-colors"
+                >
                   {editingId === p.id ? (
                     <div className="space-y-1">
-                      <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-7 text-xs" />
-                      <Input value={editDesc} onChange={e => setEditDesc(e.target.value)} className="h-7 text-xs" />
-                      <textarea value={editPrompt} onChange={e => setEditPrompt(e.target.value)} className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40" aria-label="Edit prompt template" />
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                      <Input
+                        value={editDesc}
+                        onChange={(e) => setEditDesc(e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                      <textarea
+                        value={editPrompt}
+                        onChange={(e) => setEditPrompt(e.target.value)}
+                        className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        aria-label="Edit prompt template"
+                      />
                       <div className="flex gap-1">
-                        <Button size="sm" className="h-5 text-[10px] px-2 flex-1" onClick={() => handleEdit(p.id)}>Save</Button>
-                        <Button variant="outline" size="sm" className="h-5 text-[10px] px-2" onClick={() => setEditingId(null)}>Cancel</Button>
+                        <Button
+                          size="sm"
+                          className="h-5 text-[10px] px-2 flex-1"
+                          onClick={() => handleEdit(p.id)}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-5 text-[10px] px-2"
+                          onClick={() => setEditingId(null)}
+                        >
+                          Cancel
+                        </Button>
                       </div>
                     </div>
                   ) : (
                     <>
                       <button
                         type="button"
-                        className="w-full text-left"
+                        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left"
                         onClick={() => handleUse(p)}
                         title="Use this prompt"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground">{EMOJI_TO_ICON[p.icon as string] ?? <MessageCircle className="h-3.5 w-3.5" />}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {EMOJI_TO_ICON[p.icon as string] ?? (
+                              <MessageCircle className="h-3.5 w-3.5" />
+                            )}
+                          </span>
                           <span className="text-xs font-medium">{p.name}</span>
                           {p.category === 'custom' && (
                             <span className="text-[9px] text-muted-foreground ml-auto">custom</span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{p.description}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
+                          {p.description}
+                        </div>
                       </button>
                       <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5" onClick={() => { setEditingId(p.id); setEditName(p.name); setEditDesc(p.description); setEditPrompt(p.prompt) }}>Edit</Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 text-[9px] px-1.5"
+                          onClick={() => {
+                            setEditingId(p.id)
+                            setEditName(p.name)
+                            setEditDesc(p.description)
+                            setEditPrompt(p.prompt)
+                          }}
+                        >
+                          Edit
+                        </Button>
                         {p.category === 'custom' && (
-                          <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5 text-error hover:text-error" onClick={() => handleDelete(p.id)}>Delete</Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-[9px] px-1.5 text-error hover:text-error"
+                            onClick={() => handleDelete(p.id)}
+                          >
+                            Delete
+                          </Button>
                         )}
                       </div>
                     </>

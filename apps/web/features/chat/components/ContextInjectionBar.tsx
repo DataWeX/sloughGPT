@@ -25,15 +25,18 @@ export const ContextInjectionBar = memo(function ContextInjectionBar({
     }
   }, [context, onInject])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleInject()
-    } else if (e.key === 'Escape') {
-      setShowInput(false)
-      setContext('')
-    }
-  }, [handleInject])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        handleInject()
+      } else if (e.key === 'Escape') {
+        setShowInput(false)
+        setContext('')
+      }
+    },
+    [handleInject],
+  )
 
   if (!showInput) {
     return (
@@ -44,7 +47,8 @@ export const ContextInjectionBar = memo(function ContextInjectionBar({
         className={cn(
           'text-xs text-muted-foreground hover:text-foreground transition-colors',
           disabled && 'opacity-50 cursor-not-allowed',
-          className
+          className,
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
         )}
         aria-label="Inject context"
       >
@@ -60,7 +64,8 @@ export const ContextInjectionBar = memo(function ContextInjectionBar({
         value={context}
         onChange={(e) => setContext(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Add context..." aria-label="Add context"
+        placeholder="Add context..."
+        aria-label="Add context"
         className="flex-1 text-xs bg-muted/50 border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
         autoFocus
       />
@@ -68,14 +73,17 @@ export const ContextInjectionBar = memo(function ContextInjectionBar({
         type="button"
         onClick={handleInject}
         disabled={!context.trim()}
-        className="text-xs text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Send
       </button>
       <button
         type="button"
-        onClick={() => { setShowInput(false); setContext('') }}
-        className="text-xs text-muted-foreground hover:text-foreground"
+        onClick={() => {
+          setShowInput(false)
+          setContext('')
+        }}
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-muted-foreground hover:text-foreground"
       >
         Cancel
       </button>

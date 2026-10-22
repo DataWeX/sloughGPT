@@ -28,16 +28,19 @@ export const ChatSessionCloning = memo(function ChatSessionCloning({
   const [newTitle, setNewTitle] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
 
-  const selectedSession = sessions.find(s => s.id === selectedId)
+  const selectedSession = sessions.find((s) => s.id === selectedId)
 
-  const handleSelect = useCallback((id: string) => {
-    setSelectedId(id)
-    const session = sessions.find(s => s.id === id)
-    if (session) {
-      setNewTitle(`${session.title} (Copy)`)
-    }
-    setShowConfirm(true)
-  }, [sessions])
+  const handleSelect = useCallback(
+    (id: string) => {
+      setSelectedId(id)
+      const session = sessions.find((s) => s.id === id)
+      if (session) {
+        setNewTitle(`${session.title} (Copy)`)
+      }
+      setShowConfirm(true)
+    },
+    [sessions],
+  )
 
   const handleClone = useCallback(() => {
     if (!selectedId || !newTitle.trim()) return
@@ -68,7 +71,7 @@ export const ChatSessionCloning = memo(function ChatSessionCloning({
           {sessions.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-2">No sessions</p>
           ) : (
-            sessions.map(session => (
+            sessions.map((session) => (
               <button
                 key={session.id}
                 type="button"
@@ -77,6 +80,7 @@ export const ChatSessionCloning = memo(function ChatSessionCloning({
                   'w-full text-left px-2 py-1.5 rounded text-xs transition-colors',
                   'hover:bg-muted/50',
                   selectedId === session.id && 'bg-primary/10',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 )}
               >
                 <div className="font-medium truncate">{session.title}</div>
@@ -113,12 +117,7 @@ export const ChatSessionCloning = memo(function ChatSessionCloning({
                 <IconCheck className="h-3 w-3 mr-1" />
                 Clone
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-[10px] h-6"
-                onClick={handleCancel}
-              >
+              <Button variant="ghost" size="sm" className="text-[10px] h-6" onClick={handleCancel}>
                 Cancel
               </Button>
             </div>

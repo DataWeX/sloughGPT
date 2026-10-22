@@ -87,17 +87,20 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
     setCreating(false)
   }, [newName, folders])
 
-  const handleDelete = useCallback((id: string) => {
-    const next = folders.filter(f => f.id !== id)
-    setFolders(next)
-    saveFolders(next)
-    for (const session of sessionsByFolder.map[id] || []) {
-      onMoveSession(session.id, null)
-    }
-  }, [folders, sessionsByFolder, onMoveSession])
+  const handleDelete = useCallback(
+    (id: string) => {
+      const next = folders.filter((f) => f.id !== id)
+      setFolders(next)
+      saveFolders(next)
+      for (const session of sessionsByFolder.map[id] || []) {
+        onMoveSession(session.id, null)
+      }
+    },
+    [folders, sessionsByFolder, onMoveSession],
+  )
 
   const toggleFolder = useCallback((id: string) => {
-    setExpandedFolders(prev => {
+    setExpandedFolders((prev) => {
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
@@ -117,14 +120,17 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
     setDragOverFolder(null)
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent, folderId: string) => {
-    e.preventDefault()
-    const sessionId = e.dataTransfer.getData('text/plain')
-    if (sessionId) {
-      onMoveSession(sessionId, folderId)
-    }
-    setDragOverFolder(null)
-  }, [onMoveSession])
+  const handleDrop = useCallback(
+    (e: React.DragEvent, folderId: string) => {
+      e.preventDefault()
+      const sessionId = e.dataTransfer.getData('text/plain')
+      if (sessionId) {
+        onMoveSession(sessionId, folderId)
+      }
+      setDragOverFolder(null)
+    },
+    [onMoveSession],
+  )
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -147,7 +153,8 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Folder name..." aria-label="Folder name"
+            placeholder="Folder name..."
+            aria-label="Folder name"
             className="flex-1 text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
@@ -169,7 +176,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
           <p className="text-xs text-muted-foreground text-center py-4">No folders</p>
         ) : (
           <div className="divide-y">
-            {folders.map(folder => {
+            {folders.map((folder) => {
               const folderSessions = sessionsByFolder.map[folder.id] || []
               const isExpanded = expandedFolders.has(folder.id)
               const isDragOver = dragOverFolder === folder.id
@@ -185,12 +192,14 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
                   <div className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 group">
                     <button
                       type="button"
-                      className="flex-1 text-left flex items-center gap-2"
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left flex items-center gap-2"
                       onClick={() => toggleFolder(folder.id)}
                     >
                       <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
                       <span className="text-xs font-medium">{folder.name}</span>
-                      <span className="text-[10px] text-muted-foreground">({folderSessions.length})</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        ({folderSessions.length})
+                      </span>
                     </button>
                     <Button
                       variant="ghost"
@@ -206,7 +215,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
 
                   {isExpanded && folderSessions.length > 0 && (
                     <div className="pl-6 pb-2 space-y-1">
-                      {folderSessions.map(session => (
+                      {folderSessions.map((session) => (
                         <div
                           key={session.id}
                           draggable
@@ -230,7 +239,9 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
                 className={cn(dragOverFolder === '__unfiled__' && 'bg-primary/10')}
               >
                 <div className="px-3 py-2">
-                  <span className="text-[10px] text-muted-foreground">Unfiled ({sessionsByFolder.unfiled.length})</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Unfiled ({sessionsByFolder.unfiled.length})
+                  </span>
                 </div>
               </div>
             )}

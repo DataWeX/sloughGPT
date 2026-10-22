@@ -63,11 +63,11 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             className={cn(
               'w-2 h-2 rounded-full',
               isListening
-                ? 'bg-primary animate-pulse'
+                ? 'bg-primary animate-pulse motion-reduce:animate-none'
                 : isSpeaking
-                  ? 'bg-success animate-pulse'
+                  ? 'bg-success animate-pulse motion-reduce:animate-none'
                   : isProcessing
-                    ? 'bg-warning animate-pulse'
+                    ? 'bg-warning animate-pulse motion-reduce:animate-none'
                     : 'bg-muted-foreground/30',
             )}
           />
@@ -90,6 +90,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               showTranscript
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label={showTranscript ? 'Hide transcript' : 'Show transcript'}
           >
@@ -103,6 +104,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               showSettings
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label="Voice settings"
           >
@@ -111,7 +113,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-2 rounded-lg text-muted-foreground hover:text-foreground"
             aria-label="Exit voice mode"
           >
             <IconX className="h-4 w-4" />
@@ -167,6 +169,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
                 : isProcessing
                   ? 'bg-muted text-muted-foreground cursor-wait'
                   : 'bg-primary/10 text-primary hover:bg-primary/20',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label={isListening ? 'Tap to stop listening' : 'Tap to start listening'}
           >

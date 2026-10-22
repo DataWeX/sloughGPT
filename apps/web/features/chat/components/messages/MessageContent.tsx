@@ -23,9 +23,13 @@ function highlightText(text: string, query: string): (string | React.JSX.Element
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
   return parts.map((part, i) =>
-    part.toLowerCase() === query.toLowerCase()
-      ? <mark key={i} className="bg-primary/20 rounded px-0.5 text-inherit">{part}</mark>
-      : part
+    part.toLowerCase() === query.toLowerCase() ? (
+      <mark key={i} className="bg-primary/20 rounded px-0.5 text-inherit">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
   )
 }
 
@@ -47,8 +51,10 @@ export const MessageContent = memo(function MessageContent({
 
   const id = messageId || 'msg'
   const hasContent = content && content.trim().length > 0
-  const isCollapsible = collapsibleLength > 0 && content.length > collapsibleLength && !isEditing && !isStreaming
-  const visibleContent = isCollapsible && isCollapsed ? content.slice(0, collapsibleLength) : content
+  const isCollapsible =
+    collapsibleLength > 0 && content.length > collapsibleLength && !isEditing && !isStreaming
+  const visibleContent =
+    isCollapsible && isCollapsed ? content.slice(0, collapsibleLength) : content
   const highlightedContent = useMemo(() => {
     if (!searchQuery || !content) return null
     return highlightText(content, searchQuery)
@@ -69,7 +75,11 @@ export const MessageContent = memo(function MessageContent({
 
   if (role === 'assistant') {
     if (searchQuery && content.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightedContent}</p>
+      return (
+        <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
+          {highlightedContent}
+        </p>
+      )
     }
     return (
       <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
@@ -78,13 +88,18 @@ export const MessageContent = memo(function MessageContent({
           <span className="text-muted-foreground/40 select-none">…</span>
         )}
         {isStreaming && (
-          <span className="inline-block ml-0.5 animate-pulse text-primary" aria-hidden="true">▊</span>
+          <span
+            className="inline-block ml-0.5 animate-pulse motion-reduce:animate-none text-primary"
+            aria-hidden="true"
+          >
+            ▊
+          </span>
         )}
         {isCollapsible && (
           <button
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
             aria-expanded={!isCollapsed}
           >
             {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}
@@ -103,8 +118,17 @@ export const MessageContent = memo(function MessageContent({
       }
     }
     return (
-      <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); handleSave() }} aria-label="Edit message form">
-        <label className="sr-only" htmlFor={`edit-${id}`}>Edit message</label>
+      <form
+        className="space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          handleSave()
+        }}
+        aria-label="Edit message form"
+      >
+        <label className="sr-only" htmlFor={`edit-${id}`}>
+          Edit message
+        </label>
         <Textarea
           id={`edit-${id}`}
           value={editContent}
@@ -120,9 +144,19 @@ export const MessageContent = memo(function MessageContent({
           }}
           aria-describedby={`edit-hint-${id}`}
         />
-        <p id={`edit-hint-${id}`} className="sr-only">Press Enter to save, Escape to cancel</p>
+        <p id={`edit-hint-${id}`} className="sr-only">
+          Press Enter to save, Escape to cancel
+        </p>
         <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setEditContent(content); onEditCancel?.() }} aria-label="Cancel editing">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEditContent(content)
+              onEditCancel?.()
+            }}
+            aria-label="Cancel editing"
+          >
             Cancel
           </Button>
           <Button size="sm" aria-label="Save and resend message">
@@ -145,7 +179,7 @@ export const MessageContent = memo(function MessageContent({
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
           aria-expanded={!isCollapsed}
         >
           {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}

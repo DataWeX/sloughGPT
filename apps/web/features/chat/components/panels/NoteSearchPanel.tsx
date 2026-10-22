@@ -45,17 +45,23 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
     }
   }, [])
 
-  const handleQueryChange = useCallback((value: string) => {
-    setQuery(value)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => handleSearch(value), 300)
-  }, [handleSearch])
+  const handleQueryChange = useCallback(
+    (value: string) => {
+      setQuery(value)
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => handleSearch(value), 300)
+    },
+    [handleSearch],
+  )
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose()
-    }
-  }, [onClose])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    },
+    [onClose],
+  )
 
   if (!open) return null
 
@@ -78,8 +84,11 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
           {query && (
             <button
               type="button"
-              onClick={() => { setQuery(''); setResults([]) }}
-              className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground"
+              onClick={() => {
+                setQuery('')
+                setResults([])
+              }}
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground"
               aria-label="Clear search"
             >
               <IconX className="h-3.5 w-3.5" />
@@ -99,7 +108,9 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
 
           {!loading && query && results.length === 0 && (
             <div className="text-center py-8 px-4">
-              <p className="text-sm text-muted-foreground">No notes found for &ldquo;{query}&rdquo;</p>
+              <p className="text-sm text-muted-foreground">
+                No notes found for &ldquo;{query}&rdquo;
+              </p>
             </div>
           )}
 
@@ -116,7 +127,7 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
                     onNavigateToNote(note.sessionId, note.messageId)
                     onClose()
                   }}
-                  className="w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-[10px] text-muted-foreground/50 font-mono">
@@ -136,7 +147,9 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
 
           {!loading && !query && (
             <div className="text-center py-8 px-4">
-              <p className="text-sm text-muted-foreground/60">Type to search notes across all conversations</p>
+              <p className="text-sm text-muted-foreground/60">
+                Type to search notes across all conversations
+              </p>
             </div>
           )}
         </div>
@@ -150,8 +163,12 @@ function highlightQuery(text: string, query: string): React.ReactNode {
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
   return parts.map((part, i) =>
-    part.toLowerCase() === query.toLowerCase()
-      ? <mark key={i} className="bg-primary/20 rounded px-0.5">{part}</mark>
-      : part
+    part.toLowerCase() === query.toLowerCase() ? (
+      <mark key={i} className="bg-primary/20 rounded px-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
   )
 }
