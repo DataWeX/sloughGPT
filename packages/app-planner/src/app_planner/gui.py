@@ -250,6 +250,8 @@ class GuiHandler(BaseHTTPRequestHandler):
                 return self._handle_create_note(body)
             if path == "/api/board/move":
                 return self._handle_move(body)
+            if path == "/api/board/transition":
+                return self._handle_transition(body)
             if path == "/api/board/export":
                 return self._handle_export_board()
             if path == "/api/board/import":
@@ -352,12 +354,28 @@ class GuiHandler(BaseHTTPRequestHandler):
     def _handle_move(self, body: dict) -> None:
         card_id = (body.get("id") or "").strip()
         column = (body.get("column") or "").strip()
+        actor = (body.get("actor") or "").strip()
+        force = bool(body.get("force", False))
         if not card_id or not column:
             return self._error(400, "id and column are required")
         with self.stores.lock:
-            card = self.stores.kanban_store.move_card(card_id, column)
+            card = self.stores.kanban_store.move_card(
+                card_id,
+                column,
+                validate=True,
+                actor=actor,
+                force=force,
+            )
             if card is None:
-                return self._error(404, f"card not found or unknown column: {card_id}")
+                # Distinguish "not found" from "illegal transition / WIP"
+                board = self.stores.kanban_store.load_board()
+                exists = any(c.id == card_id or c.id.startswith(card_id) for c in board.cards)
+                if not exists:
+                    return self._error(404, f"card not found: {card_id}")
+                return self._error(
+                    409,
+                    f"illegal transition or WIP limit: {card_id} → {column}",
+                )
             new_status = COLUMN_TO_STATUS.get(column)
             if new_status:
                 for note in self.stores.note_store.list_notes(limit=9999):
@@ -365,6 +383,60 @@ class GuiHandler(BaseHTTPRequestHandler):
                         self.stores.note_store.update(note.id, status=new_status)
                         break
         self._send(200, {"card": _card_to_dict(card)})
+
+    def _handle_transition(self, body: dict) -> None:
+        """POST /api/board/transition — engine-validated move with full result."""
+        card_id = (body.get("card_id") or body.get("id") or "").strip()
+        to_state = (body.get("to_state") or body.get("column") or "").strip()
+        actor = (body.get("actor") or "").strip()
+        force = bool(body.get("force", False))
+        if not card_id or not to_state:
+            return self._error(400, "card_id and to_state are required")
+
+        from planner.engine import KanbanEngine
+
+        with self.stores.lock:
+            board = self.stores.kanban_store.load_board()
+            cols_dict = [
+                {"name": c.name, "wip_limit": c.wip_limit, "order": c.order} for c in board.columns
+            ]
+            cards_dict = [{"id": c.id, "column": c.column, "title": c.title} for c in board.cards]
+            engine = KanbanEngine()
+            result = engine.transition(
+                cols_dict,
+                cards_dict,
+                card_id,
+                to_state,
+                actor=actor,
+                force=force,
+            )
+            if result.ok and not result.event.metadata.get("noop"):
+                # Persist the transition
+                card = self.stores.kanban_store.move_card(
+                    card_id,
+                    to_state,
+                    validate=False,
+                )
+                # Sync note status
+                new_status = COLUMN_TO_STATUS.get(to_state)
+                if card and new_status:
+                    for note in self.stores.note_store.list_notes(limit=9999):
+                        if note.title == card.title and note.status != new_status:
+                            self.stores.note_store.update(note.id, status=new_status)
+                            break
+
+        resp = {
+            "ok": result.ok,
+            "card_id": result.card_id,
+            "from_state": result.from_state,
+            "to_state": result.to_state,
+            "error": result.error,
+            "wip_count": result.wip_count,
+            "wip_limit": result.wip_limit,
+            "event": result.event.to_dict() if result.event else None,
+        }
+        status = 200 if result.ok else 409
+        self._send(status, resp)
 
     def _handle_export_board(self) -> None:
         board = self.stores.kanban_store.load_board()
