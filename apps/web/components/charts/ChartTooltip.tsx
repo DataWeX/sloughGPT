@@ -15,6 +15,8 @@ export interface ChartTooltipProps {
   label?: string | number
   /** Converts the x-axis label (e.g. step number) to display text. */
   labelFormatter?: (label: string | number) => string
+  /** Formats each value (e.g. percent, ms) — defaults to 4-decimal numbers. */
+  valueFormatter?: (value: number | string) => string
   className?: string
 }
 
@@ -24,7 +26,7 @@ export interface ChartTooltipProps {
  * tooltip is active. Numeric values use the 4-decimal chart convention;
  * colors come from the series token passed through by recharts.
  */
-export function ChartTooltip({ active, payload, label, labelFormatter, className }: ChartTooltipProps) {
+export function ChartTooltip({ active, payload, label, labelFormatter, valueFormatter, className }: ChartTooltipProps) {
   if (!active || !payload?.length) return null
 
   return (
@@ -49,7 +51,11 @@ export function ChartTooltip({ active, payload, label, labelFormatter, className
             />
             <span className="text-muted-foreground">{entry.name}</span>
             <span className="ml-auto font-numeric text-foreground">
-              {typeof entry.value === 'number' ? entry.value.toFixed(4) : String(entry.value ?? '')}
+              {valueFormatter && entry.value != null
+                ? valueFormatter(entry.value)
+                : typeof entry.value === 'number'
+                  ? entry.value.toFixed(4)
+                  : String(entry.value ?? '')}
             </span>
           </div>
         ))}

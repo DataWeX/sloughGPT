@@ -3,6 +3,9 @@
 import { useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@sloughgpt/strui'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { ChartFrame } from '@/components/charts/ChartFrame'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { seriesColor } from '@/components/charts/chart-tokens'
 import { usePhonemeStore } from '@/lib/phoneme-store'
 import { PHONEME_LANGUAGES } from '@/lib/phoneme-controller'
 
@@ -127,43 +130,45 @@ export default function ProgressSummary() {
           </div>
         </div>
 
-        {stats.recentTrend.length > 1 && (
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Recent Trend</p>
-            <div className="h-[120px]">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground mb-2">Recent Trend</p>
+          <div className="h-[120px]">
+            <ChartFrame
+              label="Recent practice trend chart"
+              empty={stats.recentTrend.length <= 1}
+              emptyMessage="Trend builds after two practice attempts"
+              srSummary={`Practice score from 0 to 100 across ${stats.recentTrend.length} recent attempts.`}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stats.recentTrend}>
                   <defs>
                     <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="rgb(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="rgb(var(--primary))" stopOpacity={0} />
+                      <stop offset="5%" stopColor="rgb(var(--chart-1))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="rgb(var(--chart-1))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="index" hide />
                   <YAxis domain={[0, 100]} hide />
                   <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null
-                      const data = payload[0].payload
-                      return (
-                        <div className="rounded-lg border bg-background p-2 shadow-sm">
-                          <p className="text-sm font-medium">{data.word}</p>
-                          <p className="text-xs text-muted-foreground">{data.score}%</p>
-                        </div>
-                      )
-                    }}
+                    content={
+                      <ChartTooltip
+                        labelFormatter={(i) => stats.recentTrend[Number(i) - 1]?.word ?? String(i)}
+                        valueFormatter={(v) => `${v}%`}
+                      />
+                    }
                   />
                   <Area
                     type="monotone"
                     dataKey="score"
-                    stroke="rgb(var(--primary))"
+                    name="Score"
+                    stroke={seriesColor(0)}
                     fill="url(#scoreGradient)"
                   />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+            </ChartFrame>
           </div>
-        )}
+        </div>
 
         {stats.languageBreakdown.length > 0 && (
           <div>

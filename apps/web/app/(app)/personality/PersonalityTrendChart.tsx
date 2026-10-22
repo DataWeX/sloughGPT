@@ -11,6 +11,8 @@ import {
   YAxis,
 } from 'recharts'
 import { cn } from '@sloughgpt/strui'
+import { ChartFrame } from '@/components/charts/ChartFrame'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
 
 interface HistoryPoint {
   timestamp: number
@@ -121,52 +123,52 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
         ))}
       </div>
 
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid
-            vertical={false}
-            strokeDasharray="3 3"
-            className="stroke-border/30"
-          />
-          <XAxis
-            dataKey="time"
-            tick={{ fontSize: 10 }}
-            tickLine={false}
-            stroke="rgb(var(--muted-foreground))"
-            interval="preserveStartEnd"
-            minTickGap={32}
-          />
-          <YAxis
-            domain={[0, 1]}
-            ticks={[0, 0.25, 0.5, 0.75, 1]}
-            tickFormatter={(value: number) => formatPercent(value)}
-            tick={{ fontSize: 10 }}
-            tickLine={false}
-            stroke="rgb(var(--muted-foreground))"
-            width={36}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'rgb(var(--card))',
-              border: '1px solid rgb(var(--border))',
-              borderRadius: '6px',
-              fontSize: '12px',
-            }}
-            labelStyle={{ color: 'rgb(var(--muted-foreground))' }}
-            formatter={(value) => formatPercent(Number(value))}
-          />
-          {keys.map((key) => (
-            <Line
-              key={key}
-              type="monotone"
-              dataKey={key}
-              stroke={SERIES_COLORS[key] ?? FALLBACK_COLOR}
-              strokeWidth={1.5}
-              dot={false}
+      <ChartFrame
+        label={`${title} trend chart`}
+        height={200}
+        empty={rows.length === 0}
+        emptyMessage="No history yet — your first interaction starts the trend"
+        srSummary={`Series: ${keys.map((k) => labels[k] ?? k).join(', ')} — across ${history.length} interactions.`}
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid
+              vertical={false}
+              strokeDasharray="3 3"
+              className="stroke-border/30"
             />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
+            <XAxis
+              dataKey="time"
+              tick={{ fontSize: 10 }}
+              tickLine={false}
+              stroke="rgb(var(--muted-foreground))"
+              interval="preserveStartEnd"
+              minTickGap={32}
+            />
+            <YAxis
+              domain={[0, 1]}
+              ticks={[0, 0.25, 0.5, 0.75, 1]}
+              tickFormatter={(value: number) => formatPercent(value)}
+              tick={{ fontSize: 10 }}
+              tickLine={false}
+              stroke="rgb(var(--muted-foreground))"
+              width={36}
+            />
+            <Tooltip content={<ChartTooltip valueFormatter={(v) => formatPercent(Number(v))} />} />
+            {keys.map((key) => (
+              <Line
+                key={key}
+                type="monotone"
+                dataKey={key}
+                name={labels[key] ?? key}
+                stroke={SERIES_COLORS[key] ?? FALLBACK_COLOR}
+                strokeWidth={1.5}
+                dot={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartFrame>
     </div>
   )
 })

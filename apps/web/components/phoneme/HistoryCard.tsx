@@ -10,6 +10,9 @@ import { usePhonemeStore, type HistoryEntry } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
 import { PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { ChartFrame } from '@/components/charts/ChartFrame'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { AXIS, GRID, seriesColor } from '@/components/charts/chart-tokens'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 function HistoryRow({ entry }: { entry: HistoryEntry }) {
@@ -45,8 +48,6 @@ function ProgressChart({ history }: { history: HistoryEntry[] }) {
     }))
   }, [history])
 
-  if (chartData.length < 2) return null
-
   return (
     <Collapsible>
       <CollapsibleTrigger className="w-full">
@@ -57,44 +58,50 @@ function ProgressChart({ history }: { history: HistoryEntry[] }) {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="p-2 h-[200px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgb(var(--primary))" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="rgb(var(--primary))" stopOpacity={0.05} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
-              <XAxis
-                dataKey="index"
-                tick={{ fontSize: 10, fill: 'rgb(var(--muted-foreground))' }}
-                axisLine={{ stroke: 'rgb(var(--border))' }}
-              />
-              <YAxis
-                domain={[0, 100]}
-                tick={{ fontSize: 10, fill: 'rgb(var(--muted-foreground))' }}
-                axisLine={{ stroke: 'rgb(var(--border))' }}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgb(var(--card))',
-                  border: '1px solid rgb(var(--border))',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.75rem',
-                }}
-                formatter={(value: number) => [`${value}%`, 'Score']}
-                labelFormatter={(label) => `#${label}`}
-              />
-              <Area
-                type="monotone"
-                dataKey="score"
-                stroke="rgb(var(--primary))"
-                strokeWidth={2}
-                fill="url(#scoreGradient)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          <ChartFrame
+            label="Practice score progress chart"
+            empty={chartData.length < 2}
+            emptyMessage="Practice twice to build your progress trend"
+            srSummary={`Practice score from 0 to 100 across ${chartData.length} attempts.`}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgb(var(--chart-1))" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="rgb(var(--chart-1))" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
+                <XAxis
+                  dataKey="index"
+                  tick={{ fontSize: 10, fill: AXIS }}
+                  axisLine={{ stroke: GRID }}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 10, fill: AXIS }}
+                  axisLine={{ stroke: GRID }}
+                />
+                <Tooltip
+                  content={
+                    <ChartTooltip
+                      labelFormatter={(label) => `#${label}`}
+                      valueFormatter={(v) => `${v}%`}
+                    />
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  name="Score"
+                  stroke={seriesColor(0)}
+                  strokeWidth={2}
+                  fill="url(#scoreGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </ChartFrame>
         </div>
       </CollapsibleContent>
     </Collapsible>

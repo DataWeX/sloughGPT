@@ -545,19 +545,17 @@ export default function SystemHealthPage() {
       {/* Row 2: Server errors — always visible */}
       {loaded && <ServerErrorsCard liveHealth={liveHealth} />}
 
-      {/* Row 3: Health & memory trend — always visible */}
-      {loaded && (
-        <Card className="p-4">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-            Health &amp; memory trend
-          </span>
-          <CardContent className="p-0">
-            <div className="h-40">
-              <TrendChart liveHealth={liveHealth} />
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Row 3: Health & memory trend — always visible (frame skeletons until the first snapshot) */}
+      <Card className="p-4">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+          Health &amp; memory trend
+        </span>
+        <CardContent className="p-0">
+          <div className="h-40">
+            <TrendChart liveHealth={liveHealth} loading={!loaded} />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Collapsible: Diagnostics (SSE-driven real-time data) */}
       {loaded && (
@@ -653,31 +651,25 @@ export default function SystemHealthPage() {
             </div>
             {detailed?.kv_sessions?.enabled && <KVCacheCard kvSessions={detailed.kv_sessions} />}
             <InferencePoolCard onRefresh={fetchAll} />
-            {chartHistory.length > 1 && (
-              <Card className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Real-time chart
-                  </span>
-                  <button
-                    onClick={handleExportHistory}
-                    className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
-                    aria-label="Export history"
-                  >
-                    Export
-                  </button>
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Real-time chart
+                </span>
+                <button
+                  onClick={handleExportHistory}
+                  className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                  aria-label="Export history"
+                >
+                  Export
+                </button>
+              </div>
+              <CardContent className="p-0">
+                <div className="h-48">
+                  <SystemChart data={chartHistory} />
                 </div>
-                <CardContent className="p-0">
-                  <div
-                    className="h-48"
-                    role="img"
-                    aria-label="CPU and memory usage chart over time"
-                  >
-                    <SystemChart data={chartHistory} />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+              </CardContent>
+            </Card>
           </div>
         </FoldSection>
       )}

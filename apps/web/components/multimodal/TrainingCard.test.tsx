@@ -50,14 +50,15 @@ describe('TrainingCard', () => {
     expect(screen.getByText(/learning\.\.\./)).toBeDefined()
   })
 
-  it('skips chart when accuracy_history has only 1 entry', () => {
-    const { container } = render(<TrainingCard report={{ ...base.report, accuracy_history: [0.5], caption_history: [] }} />)
-    expect(container.querySelector('[data-testid="line-chart"]')).toBeNull()
+  it('shows empty state when accuracy_history has only 1 entry', () => {
+    render(<TrainingCard report={{ ...base.report, accuracy_history: [0.5], caption_history: [] }} />)
+    expect(screen.getByTestId('chart-frame').getAttribute('data-state')).toBe('empty')
   })
 
-  it('skips chart when accuracy_history is empty', () => {
-    const { container } = render(<TrainingCard report={{ ...base.report, accuracy_history: [], caption_history: [] }} />)
-    expect(container.querySelector('[data-testid="line-chart"]')).toBeNull()
+  it('shows empty state when accuracy_history is empty', () => {
+    render(<TrainingCard report={{ ...base.report, accuracy_history: [], caption_history: [] }} />)
+    expect(screen.getByTestId('chart-frame').getAttribute('data-state')).toBe('empty')
+    expect(screen.getByText('Accuracy history builds as training runs')).toBeDefined()
   })
 
   it('renders without trainStatus', () => {

@@ -62,9 +62,13 @@ export function ChartFrame({
 }: ChartFrameProps) {
   const state = chartFrameState({ loading, error, empty })
   const regionStyle = height != null ? { height } : undefined
+  // Without an explicit height the frame chains a caller-supplied container
+  // height (h-full → h-full → ResponsiveContainer 100%); with an explicit
+  // height the inline style on the region wins.
+  const full = height == null ? 'h-full' : undefined
 
   return (
-    <div className={cn('w-full', className)} data-testid="chart-frame" data-state={state}>
+    <div className={cn('w-full', full, className)} data-testid="chart-frame" data-state={state}>
       {(title || action) && (
         <div className="mb-2 flex items-center justify-between gap-2">
           {title && (
@@ -79,7 +83,7 @@ export function ChartFrame({
       {srSummary && <p className="sr-only">{srSummary}</p>}
 
       {state === 'loading' && (
-        <div aria-busy="true" aria-live="polite" style={regionStyle}>
+        <div className={full} aria-busy="true" aria-live="polite" style={regionStyle}>
           <Skeleton className="h-full w-full" />
         </div>
       )}
@@ -99,7 +103,7 @@ export function ChartFrame({
           role="img"
           aria-label={label}
           tabIndex={0}
-          className="w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn('w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', full)}
           style={regionStyle}
         >
           {children}

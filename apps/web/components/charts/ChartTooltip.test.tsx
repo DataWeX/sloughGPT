@@ -38,4 +38,16 @@ describe('ChartTooltip', () => {
     render(<ChartTooltip active payload={[{ name: 'Reward', value: 'n/a' }]} />)
     expect(screen.getByText('n/a')).toBeDefined()
   })
+
+  it('applies valueFormatter when given', () => {
+    render(
+      <ChartTooltip
+        active
+        payload={[{ name: 'Score', value: 72.3456 }]}
+        valueFormatter={v => `${Number(v).toFixed(0)}%`}
+      />,
+    )
+    expect(screen.getByText('72%')).toBeDefined()
+    expect(screen.queryByText('72.3456')).toBeNull()
+  })
 })

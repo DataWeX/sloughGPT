@@ -3,6 +3,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, ProgressBar } from '@sloughgpt/strui'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { ChartFrame } from '@/components/charts/ChartFrame'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { AXIS, GRID, seriesColor } from '@/components/charts/chart-tokens'
 import type { TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 
 interface TrainingCardProps {
@@ -33,22 +36,26 @@ export default function TrainingCard({ report, trainStatus }: TrainingCardProps)
             )}
           </div>
         )}
-        {report.accuracy_history.length > 1 && (
-          <div className="mt-4">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Accuracy over time</p>
-            <div className="h-32">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={report.accuracy_history.map((acc, i) => ({ step: i + 1, accuracy: acc }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="step" stroke="var(--muted-foreground)" fontSize={10} />
-                  <YAxis stroke="var(--muted-foreground)" fontSize={10} domain={[0, 1]} />
-                  <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '11px' }} labelStyle={{ color: 'var(--foreground)' }} />
-                  <Line type="monotone" dataKey="accuracy" stroke="var(--primary)" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
+        <div className="mt-4">
+          <ChartFrame
+            label="Accuracy over time chart"
+            title="Accuracy over time"
+            height={128}
+            empty={report.accuracy_history.length <= 1}
+            emptyMessage="Accuracy history builds as training runs"
+            srSummary={`Training accuracy over ${report.accuracy_history.length} recorded steps.`}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={report.accuracy_history.map((acc, i) => ({ step: i + 1, accuracy: acc }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
+                <XAxis dataKey="step" stroke={AXIS} fontSize={10} />
+                <YAxis stroke={AXIS} fontSize={10} domain={[0, 1]} />
+                <Tooltip content={<ChartTooltip valueFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} />} />
+                <Line type="monotone" dataKey="accuracy" stroke={seriesColor(0)} strokeWidth={2} dot={false} name="Accuracy" />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+        </div>
         {report.caption_history.length > 0 && (
           <div className="mt-3">
             <p className="text-xs font-medium text-muted-foreground mb-1">Recent captions</p>

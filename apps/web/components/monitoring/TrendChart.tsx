@@ -1,8 +1,11 @@
 'use client'
 
 import { useMemo, memo } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
+import { Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import { ChartFrame } from '@/components/charts/ChartFrame'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { AXIS, GRID, seriesColor } from '@/components/charts/chart-tokens'
 
 interface TrendPoint {
   ago: string
@@ -13,6 +16,8 @@ interface TrendPoint {
 
 interface TrendChartProps {
   liveHealth: LiveHealthSnapshot | null
+  /** True while the first health snapshot is loading — renders the frame skeleton. */
+  loading?: boolean
 }
 
 function nearestMemory(ts: number, memory: LiveHealthSnapshot['memory_history']): { system_percent: number; rss_mb: number } | undefined {
@@ -54,93 +59,84 @@ function buildPoints(liveHealth: LiveHealthSnapshot | null): TrendPoint[] {
   return points
 }
 
-function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-lg text-xs font-numeric">
-      <p className="text-muted-foreground mb-1">{label} ago</p>
-      {payload.map((entry, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-          <span className="text-muted-foreground">{entry.name}:</span>
-          <span className="font-medium">{typeof entry.value === 'number' ? entry.value.toFixed(0) : entry.value}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export const TrendChart = memo(function TrendChart({ liveHealth }: TrendChartProps) {
+export const TrendChart = memo(function TrendChart({ liveHealth, loading }: TrendChartProps) {
   const data = useMemo(() => buildPoints(liveHealth), [liveHealth])
 
-  if (!data.length) {
-    return (
-      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        No trend data yet — history builds after a few health snapshots
-      </div>
-    )
-  }
-
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-        <XAxis
-            dataKey="ago"
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-            interval="preserveStartEnd"
-            tickLine={false}
-            axisLine={false}
+    <ChartFrame
+      label="Health and memory trend chart"
+      loading={loading}
+      empty={data.length === 0}
+      emptyMessage="No trend data yet — history builds after a few health snapshots"
+      srSummary={`Health score, memory percent and process RSS across ${data.length} recent snapshots, labelled seconds ago.`}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" stroke={GRID} opacity={0.5} />
+          <XAxis
+              dataKey="ago"
+              tick={{ fontSize: 10, fill: AXIS }}
+              interval="preserveStartEnd"
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              yAxisId="left"
+              domain={[0, 100]}
+              tick={{ fontSize: 10, fill: AXIS }}
+              width={35}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              yAxisId="right"
+            orientation="right"
+              tick={{ fontSize: 10, fill: AXIS }}
+              width={45}
+              tickLine={false}
+              axisLine={false}
+            />
+          <Tooltip
+            content={
+              <ChartTooltip
+                labelFormatter={(l) => `${l} ago`}
+                valueFormatter={(v) => Number(v).toFixed(0)}
+              />
+            }
           />
-          <YAxis
+          <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
+          <Area
             yAxisId="left"
-            domain={[0, 100]}
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-            width={35}
-            tickLine={false}
-            axisLine={false}
+            type="monotone"
+            dataKey="health"
+            stroke={seriesColor(0)}
+            fill={seriesColor(0)}
+            fillOpacity={0.08}
+            strokeWidth={1.5}
+            dot={false}
+            name="Health"
           />
-          <YAxis
+          <Line
+            yAxisId="left"
+            type="monotone"
+            dataKey="mem"
+            stroke={seriesColor(1)}
+            strokeWidth={1.5}
+            dot={false}
+            name="Memory %"
+            strokeDasharray="4 2"
+          />
+          <Line
             yAxisId="right"
-          orientation="right"
-          tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-          width={45}
-          tickLine={false}
-          axisLine={false}
-        />
-        <Tooltip content={<TrendTooltip />} />
-        <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
-        <Area
-          yAxisId="left"
-          type="monotone"
-          dataKey="health"
-          stroke="rgb(var(--success))"
-          fill="rgb(var(--success))"
-          fillOpacity={0.08}
-          strokeWidth={1.5}
-          dot={false}
-          name="Health"
-        />
-        <Line
-          yAxisId="left"
-          type="monotone"
-          dataKey="mem"
-          stroke="rgb(var(--warning))"
-          strokeWidth={1.5}
-          dot={false}
-          name="Memory %"
-          strokeDasharray="4 2"
-        />
-        <Line
-          yAxisId="right"
-          type="monotone"
-          dataKey="rss"
-          stroke="rgb(var(--primary))"
-          strokeWidth={1.5}
-          dot={false}
-          name="Process RSS (MB)"
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+            type="monotone"
+            dataKey="rss"
+            stroke={seriesColor(2)}
+            strokeWidth={1.5}
+            dot={false}
+            name="Process RSS (MB)"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </ChartFrame>
   )
 })

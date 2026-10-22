@@ -18,6 +18,8 @@ vi.mock('recharts', () => ({
 }))
 
 vi.mock('@sloughgpt/strui', () => ({
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
+  EmptyCard: ({ message, ...props }: any) => <div data-testid="empty-card" {...props}>{message}</div>,
   Card: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   CardHeader: ({ children }: any) => <div>{children}</div>,
   CardTitle: ({ children, ...props }: any) => <div {...props}>{children}</div>,
@@ -64,16 +66,18 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
 import VisualComparisonCard from '@/components/compare/VisualComparisonCard'
 
 describe('VisualComparisonCard', () => {
-  it('returns null when < 2 data points', () => {
-    const { container } = render(<VisualComparisonCard chartData={[]} />)
-    expect(container.innerHTML).toBe('')
+  it('renders empty state when < 2 data points', () => {
+    render(<VisualComparisonCard chartData={[]} />)
+    expect(screen.getByTestId('chart-frame').getAttribute('data-state')).toBe('empty')
+    expect(screen.getByText('Add at least two models to compare')).toBeDefined()
   })
 
-  it('returns null with single data point', () => {
-    const { container } = render(
+  it('renders empty state with single data point', () => {
+    render(
       <VisualComparisonCard chartData={[{ name: 'A', throughput: 10, latency: 50, memory: 100 }]} />,
     )
-    expect(container.innerHTML).toBe('')
+    expect(screen.getByTestId('chart-frame').getAttribute('data-state')).toBe('empty')
+    expect(screen.getByText('Add at least two models to compare')).toBeDefined()
   })
 
   it('renders when >= 2 data points', () => {
