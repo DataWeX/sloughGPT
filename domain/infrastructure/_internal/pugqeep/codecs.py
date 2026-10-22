@@ -13,13 +13,20 @@ self-contained registration.
 
 Backward compatibility: the on-disk binary layout produced by
 ``serialize_params``/``deserialize_params`` is byte-identical to the legacy
-hand-rolled format. An optional metadata trailer (accuracy/dtype/shape) is
-appended only when present; blobs without it still parse.
+hand-rolled format for points WITHOUT huffman params. Cluster points that
+carry ``huffman_data`` serialize under a self-identifying ``b"CLH1"`` marker
+(card d9028c8f): the Huffman bitstream replaces the dense assignments on the
+wire (the compression used to die with the process — it was computed in
+memory, never persisted), and old readers fail loudly on the outer ``CLH1``
+type code rather than misparsing. An optional metadata trailer
+(accuracy/dtype/shape) is appended only when present; blobs without it still
+parse.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 import struct
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -215,27 +222,69 @@ class ClusterCodec:
         return values
 
     def nbytes(self, point: Point) -> int:
-        centroids = point.params.get("centroids")
-        assignments = point.params.get("assignments")
+        """Stored payload size in bytes — residual counted in EVERY branch.
+
+        Card d9028c8f: the pre-fix version counted a phantom Huffman
+        bitstream (written to params in memory but never serialized) while
+        OMITTING the real residual — a 2,359,296-B residual reported a
+        byte-identical nbytes (proven by card 6eaa413c). Now the huffman
+        branch counts the persisted bitstream + tree JSON (both real since
+        the CLH1 wire format), and the residual is counted everywhere.
+
+        Contract (pinned by tests/test_pugqeep_huffman_wire.py): payload
+        accounting per codec — centroids, assignments/bitstream, quantized
+        scale/zp, residual — and never overstates the wire size
+        (``nbytes <= len(to_bytes())``). The delta between a point and its
+        residual-carrying twin is exactly ``residual.nbytes``.
+        """
+        p = point.params
+        centroids = p.get("centroids")
+        assignments = p.get("assignments")
         if centroids is None or assignments is None:
             return 0
-        huffman_data = point.params.get("huffman_data")
+        residual_bytes = point.residual.nbytes if point.residual is not None else 0
+        huffman_data = p.get("huffman_data")
         if huffman_data is not None:
-            tree_size = sum(len(v) for v in point.params.get("huffman_codes", {}).values())
-            return centroids.nbytes + len(huffman_data) + tree_size + 8
-        if point.params.get("centroid_quantized"):
-            return len(centroids) + 8 + assignments.nbytes
-        return (
-            centroids.nbytes
-            + assignments.nbytes
-            + (point.residual.nbytes if point.residual is not None else 0)
-        )
+            tree_json_len = len(json.dumps(p["huffman_codes"]).encode())
+            total = centroids.nbytes + len(huffman_data) + tree_json_len
+            if p.get("centroid_quantized"):
+                total += 8  # centroid_scale + centroid_zero_point
+            return total + residual_bytes
+        if p.get("centroid_quantized"):
+            return len(centroids) + 8 + assignments.nbytes + residual_bytes
+        return centroids.nbytes + assignments.nbytes + residual_bytes
 
     def serialize_params(self, point: Point) -> bytes:
         p = point.params
         centroids = p["centroids"]
         assignments = p["assignments"]
         is_quantized = p.get("centroid_quantized", False)
+        huffman_data = p.get("huffman_data")
+        if huffman_data is not None:
+            # CLH1 (card d9028c8f): assignments travel as the huffman
+            # bitstream instead of dense uint8 — the 4-byte marker leads so
+            # deserialize can dispatch without the outer type code (a legacy
+            # dense blob starts with n_centroids, a count that can never
+            # spell "CLH1").
+            out = b"CLH1"
+            out += struct.pack("<I", centroids.size)
+            out += struct.pack("<B", 1 if is_quantized else 0)
+            if is_quantized:
+                out += centroids.tobytes()  # uint8
+                out += struct.pack("f", p["centroid_scale"])
+                out += struct.pack("f", p["centroid_zero_point"])
+            else:
+                out += centroids.astype(np.float32).tobytes()
+            tree_json = json.dumps(p["huffman_codes"]).encode()
+            out += struct.pack("<I", len(tree_json))
+            out += tree_json
+            out += struct.pack("<I", int(p["huffman_bits"]))
+            out += struct.pack("<I", len(huffman_data))
+            out += huffman_data
+            out += struct.pack("<I", len(assignments))  # logical n for decode
+            out += _pack_residual(point.residual)
+            return out
+        # legacy dense layout — byte-identical to pre-CLH1 blobs
         out = struct.pack("<I", centroids.size)
         out += struct.pack("<B", 1 if is_quantized else 0)
         if is_quantized:
@@ -250,7 +299,8 @@ class ClusterCodec:
         return out
 
     def deserialize_params(self, buf: bytes) -> tuple[dict, np.ndarray | None]:
-        offset = 0
+        offset = 4 if buf[:4] == b"CLH1" else 0
+        huffman = offset == 4
         n_centroids = struct.unpack("<I", buf[offset : offset + 4])[0]
         offset += 4
         is_quantized = struct.unpack("<B", buf[offset : offset + 1])[0]
@@ -273,10 +323,41 @@ class ClusterCodec:
             centroids = np.frombuffer(buf[offset : offset + n_centroids * 4], dtype=np.float32)
             offset += n_centroids * 4
             params = {"centroids": centroids}
-        n_assignments = struct.unpack("<I", buf[offset : offset + 4])[0]
-        offset += 4
-        params["assignments"] = np.frombuffer(buf[offset : offset + n_assignments], dtype=np.uint8)
-        offset += n_assignments
+        if huffman:
+            # CLH1 tail: [tree_len][tree_json][total_bits][stream_len][bits]
+            # [n_assign]. Rebuild the tree, decode the bitstream, and
+            # MATERIALIZE dense assignments so every params["assignments"]
+            # consumer (dedup fingerprints, ratios, lazy slices, to_dict)
+            # sees the same shape a fresh compression produces. The huffman
+            # keys are restored alongside so re-serialization is idempotent.
+            from .compressor import HuffmanTree
+
+            tree_len = struct.unpack("<I", buf[offset : offset + 4])[0]
+            offset += 4
+            codes = json.loads(buf[offset : offset + tree_len].decode())
+            offset += tree_len
+            total_bits = struct.unpack("<I", buf[offset : offset + 4])[0]
+            offset += 4
+            stream_len = struct.unpack("<I", buf[offset : offset + 4])[0]
+            offset += 4
+            huffman_data = bytes(buf[offset : offset + stream_len])
+            offset += stream_len
+            n_assignments = struct.unpack("<I", buf[offset : offset + 4])[0]
+            offset += 4
+            tree = HuffmanTree.from_dict(codes).tree
+            params["assignments"] = HuffmanTree.decode(
+                huffman_data, total_bits, tree, n_assignments
+            )
+            params["huffman_codes"] = codes
+            params["huffman_bits"] = total_bits
+            params["huffman_data"] = huffman_data
+        else:
+            n_assignments = struct.unpack("<I", buf[offset : offset + 4])[0]
+            offset += 4
+            params["assignments"] = np.frombuffer(
+                buf[offset : offset + n_assignments], dtype=np.uint8
+            )
+            offset += n_assignments
         residual, _ = _unpack_residual(buf, offset)
         return params, residual
 

@@ -1199,6 +1199,41 @@ git push -u origin feat/<name>   # push your own branch when done
   faster encode**. Storage fix filed as follow-up card (needs approval: nbytes
   truth-up vs persist-Huffman wire-layout change). From `.wt-worldbrain`.
 
+- **2026-10-21 · pugqeep storage truth-up option B — Huffman persists (CLH1)
+  + honest nbytes (stack tail `feat/npu-caps`, card `d9028c8f` closed this
+  session).** The vq-huffman-07 follow-up landed as the user-chosen option B:
+  `ClusterCodec.serialize_params` writes the Huffman bitstream under a
+  self-identifying `CLH1` marker (legacy dense blobs keep parsing; the outer
+  type code `b"CLH1"` → old readers fail loudly instead of misparsing the
+  bitstream as dense assignments), `deserialize_params` rebuilds the tree,
+  decodes, and MATERIALIZES dense assignments so every params consumer
+  (dedup fingerprints, ratios, lazy slices, to_dict) sees the same shape a
+  fresh compression produces — huffman keys restored alongside, so
+  re-serialization is idempotent. `nbytes` rewritten to the payload
+  contract: residual in EVERY branch; the huffman branch counts the
+  persisted bitstream + tree JSON (was: a phantom bitstream counted + a real
+  residual omitted); invariants `nbytes <= len(to_bytes())` and
+  point-vs-residual-twin delta = exactly `residual.nbytes`. TDD: 11 contract
+  tests RED→GREEN (`test_pugqeep_huffman_wire.py`), full pugqeep suite 2151
+  green / 3 skipped, ruff clean; 3 stale pins updated with why-comments
+  (compressor nbytes formula + the 2 checkpoint `compression_ratio` pins).
+  Benchmarks re-recorded post-B (third history record; honest accounting,
+  `nbytes_gap` = 306 B per 6-layer config = headers only, under the new
+  512-B tripwire): **CLH1 lifts the shipped codec's honest ratio — knobs
+  sweep adaptive_k16 3.84x -> 4.50x, fixed_k16_rt0 3.90x -> 7.49x (+92% —
+  dense assignments were the dominant cost); vq-approaches shipped_vq
+  4.00x -> 5.75x, shipped_vq_k16 (lossless) 0.80x -> 0.90x, while PQ/RVQ/
+  FSQ/legacy rows are byte-identical pre/post — the wire change moves
+  exactly and only huffman-carrying cluster points.** DISCOVERY needing a user decision:
+  `compress_checkpoint`'s default rt=0.99 stores full-size float32 residuals
+  on real weights → honest ratio < 1.0 (0.86-0.91 measured) — checkpoint
+  "compression" INFLATES the library on disk; the old nbytes omission was
+  masking it. Options: lossy checkpoint path (rt=0) vs reframe the stat —
+  behavior change, deliberately out of this card's scope. Capacity nuance:
+  k=64 clears the 0.99 threshold on all 6 benchmark layers (0 residuals
+  fired, genuine compression) — the inflation is a low-k capacity effect.
+  From `.wt-worldbrain`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +

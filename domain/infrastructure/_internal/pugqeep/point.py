@@ -86,6 +86,11 @@ class Point(PointProtocol):
         "block_q8": b"BQ8 ",
     }
     _TYPE_DECODE = {v: k for k, v in _TYPE_CODES.items()}
+    # CLH1: cluster point whose params carry a Huffman bitstream (card
+    # d9028c8f). Same codec as CLUS — only the payload layout differs; old
+    # readers without this entry fail loudly on the unknown code instead of
+    # misparsing the bitstream as dense assignments.
+    _TYPE_DECODE[b"CLH1"] = "cluster"
 
     @staticmethod
     def _pack_block_header(params: dict) -> bytes:
@@ -114,6 +119,10 @@ class Point(PointProtocol):
         Legacy blobs without the trailer still parse (defaults applied).
         """
         type_bytes = self._TYPE_CODES.get(self.function_type, b"\0\0\0\0")
+        if self.function_type == "cluster" and self.params.get("huffman_data") is not None:
+            # Huffman-carrying cluster params use the CLH1 layout (see
+            # ClusterCodec.serialize_params); plain dense clusters keep CLUS.
+            type_bytes = b"CLH1"
         if self.function_type not in codec_registry:
             # Legacy contract: unknown types serialize to the bare zero code.
             return type_bytes

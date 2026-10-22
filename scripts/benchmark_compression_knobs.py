@@ -24,14 +24,16 @@ Huffman bitstream AND any stored residual), cosine, MSE of decode(encode(w)),
 residual actually fired (reported accuracy < rt), encode/decode wall time.
 Integrity gate: a second decode must be bit-exact (SystemExit otherwise).
 
-MEASUREMENT TRUTH (discovered by this sweep, vq-huffman-07): ratio is computed
-from point.to_bytes() — the on-disk/wire layout, which packs the residual
-(codecs.py:249) — NOT point.nbytes(). ClusterCodec.nbytes counts the residual
-only in the plain-centroids branch and omits it in the Huffman and quantized
-branches (codecs.py:217-232), which compress_cluster always takes, so every
-residual-carrying point's reported nbytes is short by residual.nbytes (= the
-FULL raw size, float32). Reported-vs-true ratios are kept side by side in the
-JSON (nbytes_gap); the codec fix is a separate, user-approved card.
+MEASUREMENT TRUTH (discovered by vq-huffman-07, FIXED by card d9028c8f,
+2026-10-21): ratio is computed from point.to_bytes() — the on-disk/wire
+layout, which packs the residual. The pre-fix ClusterCodec.nbytes omitted
+the residual in the Huffman and quantized branches (which compress_cluster
+always takes), so every residual-carrying point's reported nbytes was short
+by residual.nbytes (= the FULL raw size, float32), and the Huffman bitstream
+itself never survived serialization. nbytes is now the honest payload
+contract — residual in every branch, and the Huffman bitstream persists on
+the wire under the CLH1 marker. Reported-vs-true ratios are kept side by
+side in the JSON (nbytes_gap) — post-fix the gap is wire headers only.
 
 Output: compact per-config frontier table (6-layer averages) + best-config-per-
 fidelity-class verdict vs the shipped default. Per-layer rows live in JSON
@@ -127,12 +129,12 @@ def measure(config_name: str, kw: dict, layer_name: str, flat: np.ndarray) -> di
     if not np.array_equal(decoded, again):
         raise SystemExit(f"decode non-deterministic for {config_name}/{layer_name} — aborting")
 
-    # Ground truth = to_bytes() (serialize_params packs the residual,
-    # codecs.py:249). point.nbytes() UNDERCOUNTS residual-carrying points —
-    # ClusterCodec.nbytes only adds residual in the plain branch, not the
-    # Huffman/quantized ones (codecs.py:217-232), so every fired-residual
-    # config's reported ratio is inflated. Measure the wire/disk truth; keep
-    # the reported number alongside to expose the gap.
+    # Ground truth = to_bytes() (serialize_params packs the residual).
+    # Pre-d9028c8f, point.nbytes() UNDERCOUNTED residual-carrying points
+    # (residual omitted in the Huffman/quantized branches) — the reported
+    # ratio was inflated. nbytes is now the honest payload contract; the
+    # remaining gap is wire headers only. Keep both numbers side by side:
+    # the gap doubles as a tripwire against accounting regressions.
     stored_bytes = int(len(point.to_bytes()))
     reported_nbytes = int(point.nbytes())
     acc = float(point.accuracy)
@@ -213,13 +215,15 @@ def run(history: bool) -> dict:
         )
 
     # verdict: best ratio within each fidelity class vs shipped default
-    gaps = [n for n, s in summary.items() if s["nbytes_gap"] > 0]
+    # tripwire: post-d9028c8f, nbytes is honest payload — the gap vs the
+    # wire should be headers only (~50 B/point, ~300 B per 6-layer config).
+    # Anything approaching residual scale (>512/config) is a regression.
+    gaps = [n for n, s in summary.items() if s["nbytes_gap"] > 512]
     if gaps:
         print(
-            f"\n  NOTE: point.nbytes() underreports storage for {len(gaps)}/{len(grid)} "
-            "residual-carrying configs (ClusterCodec.nbytes omits the residual in the "
-            "Huffman/quantized branches, codecs.py:217-232) — ratios above are to_bytes() "
-            "ground truth; reported ratios kept in JSON (reported_ratio)."
+            f"\n  NOTE: point.nbytes() understates the wire by >512 B for "
+            f"{len(gaps)}/{len(grid)} configs — EXPECTED ~300 B (headers only) "
+            "post-d9028c8f; investigate as an accounting regression."
         )
 
     def best_in(pred) -> str:
