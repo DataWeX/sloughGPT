@@ -2,7 +2,16 @@
 
 import time
 
+import pytest
+
 from domain.shell._internal.vm import CPU, X86CPU, Assembler, X86Assembler
+
+# Assertion-free ns/run benchmarks, not correctness tests. The whole module is
+# interpreter-dispatch bound, so CI's --cov tracing balloons them past the
+# 120s pytest-timeout (test_loop_100 alone is 93s untraced). Keep them out of
+# the fast lane like the #173 quant benchmarks; real VM coverage lives in the
+# other test_vm_*.py files. Run explicitly with: -m slow.
+pytestmark = pytest.mark.slow
 
 
 def bench(label, fn, iterations=1000):
