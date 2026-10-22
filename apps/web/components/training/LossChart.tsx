@@ -5,6 +5,9 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { downloadBlob } from '@/lib/download-utils'
 import { IconDownload } from '@sloughgpt/strui'
 import { todayDateString } from '@/lib/format-bytes'
+import { ChartFrame } from '@/components/charts/ChartFrame'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { AXIS, seriesColor } from '@/components/charts/chart-tokens'
 
 export interface LossPoint {
   step: number
@@ -25,6 +28,11 @@ export interface LossChartProps {
   live?: boolean
   windowSize?: number
   onExportData?: () => void
+  /** Chart-scale loading state — renders the ChartFrame skeleton. */
+  loading?: boolean
+  /** Chart-scale error state — renders the ChartFrame alert with retry. */
+  error?: string | null
+  onRetry?: () => void
 }
 
 function exportLossCSV(data: LossPoint[], rewardData?: RewardPoint[]) {
@@ -45,7 +53,7 @@ function exportLossCSV(data: LossPoint[], rewardData?: RewardPoint[]) {
   downloadBlob(csv, `loss-data-${todayDateString()}.csv`, 'text/csv')
 }
 
-export const LossChart = memo(function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40, onExportData }: LossChartProps) {
+export const LossChart = memo(function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40, onExportData, loading, error, onRetry }: LossChartProps) {
   // Memoize step union computation
   const { steps, hasTrain, hasEval } = useMemo(() => {
     const allSteps = new Set<number>()
@@ -89,63 +97,69 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
   }, [visibleSteps, data, rewardData])
 
   const hasReward = Boolean(rewardData?.length)
+  const empty = !data.length && !rewardData?.length
 
-  if (!data.length && !rewardData?.length) return null
+  const seriesNames = [hasTrain && 'train loss', hasEval && 'validation loss', hasReward && 'reward']
+    .filter(Boolean)
+    .join(', ')
 
   const Chart = hasReward ? ComposedChart : LineChart
 
   return (
-    <div className="w-full relative group">
-      {(data.length > 5) && (
-        <button
-          type="button"
-          onClick={() => onExportData ?? exportLossCSV(data, rewardData)}
-          className="absolute top-1 right-1 z-10 h-4 w-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity text-muted-foreground/60 hover:text-foreground hover:bg-muted/60"
-          aria-label="Export chart data as CSV"
-        >
-          <IconDownload className="h-2.5 w-2.5" />
-        </button>
-      )}
+    <ChartFrame
+      label={hasReward ? 'Loss and reward chart' : 'Loss chart'}
+      height={height}
+      loading={loading}
+      error={error}
+      onRetry={onRetry}
+      empty={empty}
+      emptyMessage="No loss data yet"
+      srSummary={empty ? undefined : `Series: ${seriesNames}. ${visibleSteps.length} steps.`}
+      action={
+        data.length > 5 ? (
+          <button
+            type="button"
+            onClick={() => (onExportData ? onExportData() : exportLossCSV(data, rewardData))}
+            className="h-4 w-4 flex items-center justify-center rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-opacity focus-visible:text-foreground"
+            aria-label="Export chart data as CSV"
+          >
+            <IconDownload className="h-2.5 w-2.5" />
+          </button>
+        ) : undefined
+      }
+    >
       <ResponsiveContainer width="100%" height={height}>
         <Chart data={chartData} margin={{ top: 8, right: hasReward ? 48 : 8, bottom: 8, left: 8 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
         <XAxis
           dataKey="step"
           tick={{ fontSize: 10 }}
-          stroke="rgb(var(--muted-foreground))"
+          stroke={AXIS}
           tickLine={false}
-          label={{ value: 'Step', position: 'insideBottomRight', offset: -4, style: { fontSize: 9, fill: 'rgb(var(--muted-foreground))' } }}
+          label={{ value: 'Step', position: 'insideBottomRight', offset: -4, style: { fontSize: 9, fill: AXIS } }}
         />
           <YAxis
             yAxisId="loss"
             tick={{ fontSize: 10 }}
-            stroke="rgb(var(--muted-foreground))"
+            stroke={AXIS}
             tickLine={false}
             domain={['auto', 'auto']}
-            label={{ value: 'Loss', angle: -90, position: 'insideLeft', offset: 4, style: { fontSize: 9, fill: 'rgb(var(--muted-foreground))' } }}
+            label={{ value: 'Loss', angle: -90, position: 'insideLeft', offset: 4, style: { fontSize: 9, fill: AXIS } }}
           />
           {hasReward && (
             <YAxis
               yAxisId="reward"
               orientation="right"
               tick={{ fontSize: 10 }}
-              stroke="rgb(var(--success))"
+              stroke={seriesColor(2)}
               tickLine={false}
               domain={['auto', 'auto']}
-              label={{ value: 'Reward', angle: 90, position: 'insideRight', offset: 4, style: { fontSize: 9, fill: 'rgb(var(--success))' } }}
+              label={{ value: 'Reward', angle: 90, position: 'insideRight', offset: 4, style: { fontSize: 9, fill: seriesColor(2) } }}
             />
           )}
           <Tooltip
-            contentStyle={{
-              backgroundColor: 'rgb(var(--background))',
-              border: '1px solid rgb(var(--border))',
-              borderRadius: '6px',
-              fontSize: '11px',
-              padding: '6px 8px',
-            }}
-            labelStyle={{ color: 'rgb(var(--foreground))' }}
-            labelFormatter={(label) => `Step ${label}`}
-            formatter={(value: number | string, name: string) => [Number(value).toFixed(4), name]}
+            content={<ChartTooltip labelFormatter={(l) => `Step ${l}`} />}
+            cursor={{ stroke: 'rgb(var(--border))' }}
           />
           {showLegend && <Legend />}
           {hasTrain && (
@@ -153,7 +167,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
               yAxisId="loss"
               type="monotone"
               dataKey="train"
-              stroke="rgb(var(--primary))"
+              stroke={seriesColor(0)}
               strokeWidth={1.5}
               dot={false}
               name="Train loss"
@@ -165,7 +179,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
               yAxisId="loss"
               type="monotone"
               dataKey="eval"
-              stroke="rgb(var(--warning))"
+              stroke={seriesColor(1)}
               strokeWidth={1.5}
               dot={false}
               name="Validation loss"
@@ -177,7 +191,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
               yAxisId="reward"
               type="monotone"
               dataKey="reward"
-              stroke="rgb(var(--success))"
+              stroke={seriesColor(2)}
               strokeWidth={1.5}
               dot={false}
               name="Reward"
@@ -187,6 +201,6 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
           )}
         </Chart>
       </ResponsiveContainer>
-    </div>
+    </ChartFrame>
   )
 })
