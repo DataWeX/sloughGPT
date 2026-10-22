@@ -49,6 +49,7 @@ export const ContextInjectionBar = memo(function ContextInjectionBar({
           disabled && 'opacity-50 cursor-not-allowed',
           className,
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+          'active:bg-muted',
         )}
         aria-label="Inject context"
       >
@@ -73,7 +74,7 @@ export const ContextInjectionBar = memo(function ContextInjectionBar({
         type="button"
         onClick={handleInject}
         disabled={!context.trim()}
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Send
       </button>
@@ -83,7 +84,7 @@ export const ContextInjectionBar = memo(function ContextInjectionBar({
           setShowInput(false)
           setContext('')
         }}
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-muted-foreground hover:text-foreground"
+        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-xs text-muted-foreground hover:text-foreground"
       >
         Cancel
       </button>

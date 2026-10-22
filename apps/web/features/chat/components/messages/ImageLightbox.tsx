@@ -41,7 +41,7 @@ export const ImageLightbox = memo(function ImageLightbox({
       <button
         type="button"
         onClick={onClose}
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-full bg-background/80 hover:bg-background border border-border/50 shadow-lg transition-colors"
+        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-full bg-background/80 hover:bg-background border border-border/50 shadow-lg transition-colors"
         aria-label="Close preview"
       >
         <IconX className="h-4 w-4" aria-hidden="true" />

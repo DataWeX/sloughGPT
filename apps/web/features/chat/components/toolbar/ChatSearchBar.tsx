@@ -46,7 +46,7 @@ export function ChatSearchBar() {
           <button
             type="button"
             onClick={onPrevMatch}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             disabled={matchCount === 0}
             aria-label="Previous match"
           >
@@ -55,7 +55,7 @@ export function ChatSearchBar() {
           <button
             type="button"
             onClick={onNextMatch}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             disabled={matchCount === 0}
             aria-label="Next match"
           >
@@ -64,7 +64,7 @@ export function ChatSearchBar() {
           <button
             type="button"
             onClick={onClear}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground transition-colors h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground transition-colors h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             aria-label="Clear search"
           >
             <IconX className="h-3 w-3" />

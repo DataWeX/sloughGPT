@@ -272,7 +272,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                     <>
                       <button
                         type="button"
-                        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left"
+                        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left"
                         onClick={() => handleUse(p)}
                         title="Use this prompt"
                       >

@@ -123,7 +123,7 @@ export function ContextTab() {
           type="button"
           onClick={fetchData}
           disabled={loading}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
           aria-label="Refresh context"
         >
           <Spinner className="h-3 w-3" />
@@ -229,7 +229,7 @@ export function ContextTab() {
                   <button
                     type="button"
                     onClick={() => setShowPrompt((s) => !s)}
-                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-muted-foreground hover:text-foreground transition-colors"
                     aria-expanded={showPrompt}
                   >
                     {showPrompt ? 'Hide' : 'Show'} system prompt

@@ -132,7 +132,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
                 e.stopPropagation()
                 setShowVerbose((v) => !v)
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__verbose"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__verbose"
             >
               {showVerbose ? 'Hide' : 'Details'}
             </button>
@@ -146,7 +146,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
               toast.onUndo!()
               dismiss()
             }}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__undo"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__undo"
           >
             Undo
           </button>
@@ -157,7 +157,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
             e.stopPropagation()
             dismiss()
           }}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__close"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sl-toast__close"
           aria-label={`Dismiss notification: ${toast.message}`}
         >
           <IconX className="h-3 w-3" />
@@ -193,7 +193,7 @@ export const ToastContainer = memo(function ToastContainer({
         <button
           type="button"
           onClick={onClearAll}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute top-1 right-1 z-10 text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute top-1 right-1 z-10 text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
           aria-label="Dismiss all notifications"
         >
           Clear all
@@ -243,7 +243,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
             <button
               type="button"
               onClick={onClearAll}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset fixed bottom-20 right-4 z-[301] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset fixed bottom-20 right-4 z-[301] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
               aria-label="Dismiss all notifications"
             >
               Clear all

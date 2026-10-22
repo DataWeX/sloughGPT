@@ -65,7 +65,7 @@ export const KeyboardShortcutsPanel = memo(function KeyboardShortcutsPanel({
           <button
             type="button"
             onClick={onClose}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded-md hover:bg-muted transition-colors"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded-md hover:bg-muted transition-colors"
             aria-label="Close"
           >
             <IconX className="h-4 w-4 text-muted-foreground" />

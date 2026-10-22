@@ -54,7 +54,7 @@ export const MessageReactions = memo(function MessageReactions({
           key={emoji}
           type="button"
           onClick={() => handleReact(emoji)}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           aria-label={`${emoji} reaction, ${count} ${count === 1 ? 'person' : 'people'}`}
         >
           <span>{emoji}</span>
@@ -66,7 +66,7 @@ export const MessageReactions = memo(function MessageReactions({
         <button
           type="button"
           onClick={() => setShowPicker(!showPicker)}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 transition-colors transition-opacity duration-150 opacity-0 group-hover:opacity-100"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 transition-colors transition-opacity duration-150 opacity-0 group-hover:opacity-100"
           aria-label="Add reaction"
         >
           <svg
@@ -90,7 +90,7 @@ export const MessageReactions = memo(function MessageReactions({
                 key={emoji}
                 type="button"
                 onClick={() => handleReact(emoji)}
-                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-8 h-8 flex items-center justify-center rounded hover:bg-muted text-lg transition-colors"
+                className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-8 h-8 flex items-center justify-center rounded hover:bg-muted text-lg transition-colors"
                 aria-label={`React with ${emoji}`}
               >
                 {emoji}

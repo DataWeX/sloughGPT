@@ -192,7 +192,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
                   <div className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 group">
                     <button
                       type="button"
-                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left flex items-center gap-2"
+                      className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left flex items-center gap-2"
                       onClick={() => toggleFolder(folder.id)}
                     >
                       <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>

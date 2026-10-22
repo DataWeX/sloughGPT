@@ -23,7 +23,7 @@ export const MessageImages = memo(function MessageImages({ images, role }: Messa
             key={img.id}
             type="button"
             onClick={() => setLightboxSrc(img.dataUrl)}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-0 border-0 bg-transparent rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-0 border-0 bg-transparent rounded-xl cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
             aria-label={`View ${img.name} full size`}
           >
             <img

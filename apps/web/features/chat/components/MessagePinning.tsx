@@ -148,7 +148,7 @@ export const MessagePinning = memo(function MessagePinning({
                 <div className="flex items-start justify-between gap-2">
                   <button
                     type="button"
-                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
+                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
                     onClick={() => onJumpToMessage(pin.messageId)}
                   >
                     <div className="flex items-center gap-2 mb-1">

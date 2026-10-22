@@ -302,7 +302,7 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
                 key={action.id}
                 type="button"
                 onClick={() => handleInsert(action.action)}
-                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex flex-col items-center gap-0.5 p-1.5 rounded hover:bg-muted/50 transition-colors"
+                className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex flex-col items-center gap-0.5 p-1.5 rounded hover:bg-muted/50 transition-colors"
                 title={action.label}
               >
                 <span className="text-sm text-muted-foreground">{action.icon}</span>

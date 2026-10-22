@@ -105,7 +105,7 @@ export const TemplateDialog = memo(function TemplateDialog({
           <button
             type="button"
             onClick={onClose}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded-md hover:bg-muted transition-colors"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded-md hover:bg-muted transition-colors"
             aria-label="Close"
           >
             <IconX className="h-4 w-4 text-muted-foreground" />
@@ -144,7 +144,7 @@ export const TemplateDialog = memo(function TemplateDialog({
                       setName('')
                       setContent('')
                     }}
-                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset px-2 py-1 text-xs rounded-md hover:bg-muted transition-colors"
+                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset px-2 py-1 text-xs rounded-md hover:bg-muted transition-colors"
                   >
                     Cancel
                   </button>
@@ -198,7 +198,7 @@ export const TemplateDialog = memo(function TemplateDialog({
                       <button
                         type="button"
                         onClick={() => handleEdit(template)}
-                        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded hover:bg-muted text-muted-foreground"
+                        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-1 rounded hover:bg-muted text-muted-foreground"
                         title="Edit template"
                       >
                         <IconPlus className="h-3.5 w-3.5 rotate-45" />

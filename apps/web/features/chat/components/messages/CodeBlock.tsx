@@ -99,7 +99,7 @@ export const CodeBlock = memo(function CodeBlock({ language, code, isStreaming }
         <button
           type="button"
           onClick={handleCopy}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground/80 transition-colors"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground/80 transition-colors"
           aria-label="Copy code"
         >
           {copied ? (

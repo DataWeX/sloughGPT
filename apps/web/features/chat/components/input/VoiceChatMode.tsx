@@ -113,7 +113,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           <button
             type="button"
             onClick={onClose}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-2 rounded-lg text-muted-foreground hover:text-foreground"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-2 rounded-lg text-muted-foreground hover:text-foreground"
             aria-label="Exit voice mode"
           >
             <IconX className="h-4 w-4" />

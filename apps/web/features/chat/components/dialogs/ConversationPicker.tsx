@@ -104,7 +104,7 @@ export function ConversationPicker({
                 key={conv.id}
                 type="button"
                 onClick={() => handleSelect(conv.id)}
-                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
+                className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
               >
                 <p className="text-sm font-medium text-foreground line-clamp-1">{conv.name}</p>
                 <p className="text-[11px] text-muted-foreground/60 mt-0.5">

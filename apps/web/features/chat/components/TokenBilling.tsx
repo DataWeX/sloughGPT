@@ -159,6 +159,7 @@ export const TokenBilling = memo(function TokenBilling({ className }: TokenBilli
                 ? 'border-b-2 border-primary text-primary'
                 : 'text-muted-foreground hover:text-foreground',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              'active:bg-muted',
             )}
           >
             {tab}

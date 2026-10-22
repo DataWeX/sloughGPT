@@ -154,7 +154,7 @@ export const ChatPresets = memo(function ChatPresets({ onSelect, className }: Ch
               >
                 <button
                   type="button"
-                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
+                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
                   onClick={() => handleSelect(preset.prompt)}
                 >
                   <div className="text-xs font-medium truncate">{preset.name}</div>

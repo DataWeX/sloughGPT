@@ -150,7 +150,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
                       <button
                         type="button"
                         onClick={() => applyPreset(p)}
-                        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[11px] text-foreground/80 hover:text-foreground whitespace-nowrap"
+                        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[11px] text-foreground/80 hover:text-foreground whitespace-nowrap"
                         title={p.prompt}
                       >
                         {p.name}
@@ -158,7 +158,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
                       <button
                         type="button"
                         onClick={() => handleDeletePreset(p.name)}
-                        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive transition-all"
                         title="Delete preset"
                         aria-label="Delete preset"
                       >

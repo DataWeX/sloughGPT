@@ -181,7 +181,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
               type="button"
               onClick={() => setKnowledgeSearch('')}
               aria-label="Clear search"
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <IconX className="h-2.5 w-2.5" />
             </button>
@@ -298,7 +298,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
                         setEditingId(item.id)
                         setEditText(item.content)
                       }}
-                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground p-0.5"
+                      className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground p-0.5"
                       aria-label="Edit knowledge"
                     >
                       <IconEdit className="h-3 w-3" />
@@ -306,7 +306,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
                     <button
                       type="button"
                       onClick={() => removeKnowledge(item.id)}
-                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-destructive p-0.5"
+                      className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-destructive p-0.5"
                       aria-label="Remove knowledge"
                     >
                       <IconX className="h-3 w-3" />
@@ -324,7 +324,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
           <button
             type="button"
             onClick={() => saveKnowledge([])}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[10px] text-muted-foreground hover:text-destructive transition-colors"
           >
             Clear all
           </button>

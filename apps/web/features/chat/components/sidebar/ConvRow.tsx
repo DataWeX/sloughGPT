@@ -142,7 +142,7 @@ export const ConvRow = memo(function ConvRow({
           <button
             type="button"
             onClick={(e) => onPin?.(e, c.id, !c.pinned)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="active:bg-muted h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             aria-label={c.pinned ? 'Unpin' : 'Pin'}
           >
             <IconPin
@@ -160,6 +160,7 @@ export const ConvRow = memo(function ConvRow({
               c.unread
                 ? 'opacity-100 text-primary'
                 : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 text-muted-foreground/40',
+              'active:bg-muted',
             )}
             aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
           >
@@ -172,7 +173,7 @@ export const ConvRow = memo(function ConvRow({
           <button
             type="button"
             onClick={(e) => onStar?.(e, c.id, !c.starred)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="active:bg-muted h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             aria-label={c.starred ? 'Unstar' : 'Star'}
           >
             <IconStar
@@ -232,7 +233,7 @@ export const ConvRow = memo(function ConvRow({
             <button
               type="button"
               onClick={(e) => onExport?.(e, c, 'json')}
-              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label="Export as JSON"
               title="Export as JSON"
             >
@@ -241,7 +242,7 @@ export const ConvRow = memo(function ConvRow({
             <button
               type="button"
               onClick={(e) => onExport?.(e, c, 'markdown')}
-              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label="Export as Markdown"
               title="Export as Markdown"
             >
@@ -253,7 +254,7 @@ export const ConvRow = memo(function ConvRow({
           <button
             type="button"
             onClick={(e) => onDuplicate?.(e, c.id, c.name)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="active:bg-muted h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             aria-label={`Duplicate ${c.name}`}
             title="Duplicate conversation"
           >
@@ -264,7 +265,7 @@ export const ConvRow = memo(function ConvRow({
           <button
             type="button"
             onClick={(e) => onArchive?.(e, c.id, false)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="active:bg-muted h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             aria-label="Archive"
             title="Archive conversation"
           >
@@ -275,7 +276,7 @@ export const ConvRow = memo(function ConvRow({
           <button
             type="button"
             onClick={(e) => onDelete?.(e, c.id)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="active:bg-muted h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             aria-label={`Delete ${c.name}`}
             title="Delete conversation"
           >

@@ -57,6 +57,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
             'h-5 w-5 flex items-center justify-center rounded transition-colors',
             n <= value ? 'text-warning' : 'text-muted-foreground/30 hover:text-muted-foreground/60',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+            'active:bg-muted',
           )}
           aria-label={`${n} ${t('consciousness_chat.star')}`}
         >
@@ -121,7 +122,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
           aria-label={expanded ? 'Collapse panel' : 'Expand panel'}
         >
           <IconBrain className="h-3.5 w-3.5 text-primary/70" />

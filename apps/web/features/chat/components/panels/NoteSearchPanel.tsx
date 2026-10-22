@@ -88,7 +88,7 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
                 setQuery('')
                 setResults([])
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground"
               aria-label="Clear search"
             >
               <IconX className="h-3.5 w-3.5" />
@@ -127,7 +127,7 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
                     onNavigateToNote(note.sessionId, note.messageId)
                     onClose()
                   }}
-                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
+                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset w-full text-left px-4 py-2 hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-[10px] text-muted-foreground/50 font-mono">

@@ -75,6 +75,7 @@ export const ChatToolPanel = memo(function ChatToolPanel({
                   'h-6 w-6 flex items-center justify-center rounded hover:bg-muted/60 transition-colors',
                   showVision && 'text-primary',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                  'active:bg-muted',
                 )}
                 title={showVision ? 'Show tools' : 'Show vision'}
                 aria-label={showVision ? 'Show tools panel' : 'Show vision panel'}

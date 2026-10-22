@@ -277,7 +277,7 @@ function SidebarContent({
           {!isDrawer && onToggleCollapse && (
             <button
               onClick={onToggleCollapse}
-              className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label="Collapse sidebar"
               title="Collapse"
             >
@@ -296,7 +296,7 @@ function SidebarContent({
                     .filter((c) => c.unread)
                     .forEach((c) => onToggleUnreadConversation?.(c.id, false))
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset rounded"
+                className="active:bg-muted text-xs text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset rounded"
                 aria-label="Mark all as read"
               >
                 Mark read
@@ -309,6 +309,7 @@ function SidebarContent({
               className={cn(
                 'h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 sortMode !== 'updated' ? 'text-primary' : 'text-muted-foreground/60',
+                'active:bg-muted',
               )}
               aria-label="Sort conversations"
               aria-haspopup="menu"
@@ -351,6 +352,7 @@ function SidebarContent({
                       className={cn(
                         'w-full text-left px-3 py-1.5 text-xs hover:bg-muted/40 transition-colors flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:bg-muted/40',
                         sortMode === opt.value && 'text-primary font-medium',
+                        'active:bg-muted',
                       )}
                     >
                       {sortMode === opt.value && <IconCheck className="h-4 w-4 shrink-0" />}
@@ -378,7 +380,7 @@ function SidebarContent({
           {isDrawer && onClose && (
             <button
               onClick={onClose}
-              className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label="Close sidebar"
             >
               <IconX className="h-4 w-4" />
@@ -428,7 +430,7 @@ function SidebarContent({
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('search-conversations'))}
-              className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             >
               Search all conversations
             </button>
@@ -554,7 +556,7 @@ function SidebarContent({
                   setArchivedLoading(false)
                 }
               }}
-              className="flex items-center gap-2 w-full px-2 py-1 text-left group rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted flex items-center gap-2 w-full px-2 py-1 text-left group rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-expanded={archivedExpanded}
               aria-controls="archived-conversations-list"
             >

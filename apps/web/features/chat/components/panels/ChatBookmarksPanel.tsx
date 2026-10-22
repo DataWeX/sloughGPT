@@ -27,7 +27,7 @@ export const ChatBookmarksPanel = memo(function ChatBookmarksPanel({
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex items-center justify-between w-full px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/30 transition-colors"
+        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex items-center justify-between w-full px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/30 transition-colors"
         aria-expanded={!collapsed}
         aria-controls="bookmarks-panel-content"
       >
@@ -64,7 +64,7 @@ export const ChatBookmarksPanel = memo(function ChatBookmarksPanel({
                 <button
                   type="button"
                   onClick={() => onJumpToMessage?.(bm.id)}
-                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 min-w-0 text-left"
+                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 min-w-0 text-left"
                   title={bm.content.slice(0, 120)}
                 >
                   <div

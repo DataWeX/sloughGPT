@@ -242,7 +242,7 @@ export const ConversationViewer = memo(function ConversationViewer({
                         setCopiedId(message.id)
                         setTimeout(() => setCopiedId(null), 1500)
                       }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                      className="active:bg-muted flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       aria-label="Copy message"
                     >
                       {copiedId === message.id ? (

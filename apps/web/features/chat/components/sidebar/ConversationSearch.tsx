@@ -114,7 +114,7 @@ export const ConversationSearch = memo(function ConversationSearch({
                 setResults([])
                 inputRef.current?.focus()
               }}
-              className="text-muted-foreground hover:text-foreground p-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted text-muted-foreground hover:text-foreground p-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label="Clear"
             >
               <IconX className="h-4 w-4" />
@@ -155,7 +155,7 @@ export const ConversationSearch = memo(function ConversationSearch({
                     onNavigate(r.session.id)
                     onClose()
                   }}
-                  className="w-full text-left p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  className="active:bg-muted w-full text-left p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 >
                   <div className="flex items-center gap-2 mb-1.5">
                     <IconMessage className="h-4 w-4 text-muted-foreground shrink-0" />

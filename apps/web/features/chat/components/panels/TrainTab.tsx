@@ -38,7 +38,7 @@ export function TrainTab({ vs }: TrainTabProps) {
                 e.stopPropagation()
                 vs.clearPreview()
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full bg-background border border-border/50 shadow-sm"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full bg-background border border-border/50 shadow-sm"
               aria-label="Remove"
             >
               <IconX className="h-3 w-3" />

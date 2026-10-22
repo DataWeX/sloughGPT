@@ -56,7 +56,7 @@ export const TagInput = memo(function TagInput({
             <button
               type="button"
               onClick={() => onRemove(tag)}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset hover:text-primary/70"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset hover:text-primary/70"
               aria-label={`Remove ${tag}`}
             >
               <IconX className="h-2.5 w-2.5" />

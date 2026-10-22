@@ -93,7 +93,7 @@ export function MemoryItemList({
             <button
               type="button"
               onClick={() => onEdit(item)}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
               aria-label="Edit memory item"
             >
               <IconEdit className="h-3 w-3" />
@@ -101,7 +101,7 @@ export function MemoryItemList({
             <button
               type="button"
               onClick={() => onDelete(item)}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
+              className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
               aria-label="Delete memory item"
             >
               <IconTrash className="h-3 w-3" />

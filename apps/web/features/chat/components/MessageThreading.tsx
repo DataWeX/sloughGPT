@@ -123,7 +123,7 @@ export const MessageThreading = memo(function MessageThreading({
                 <div className="flex items-start justify-between gap-2">
                   <button
                     type="button"
-                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
+                    className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 text-left min-w-0"
                     onClick={() =>
                       setSelectedThread(selectedThread === thread.id ? null : thread.id)
                     }
