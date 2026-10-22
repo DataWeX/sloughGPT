@@ -1,129 +1,48 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { cn, Button, IconPlus, IconSearch, IconRefresh, Spinner } from '@sloughgpt/strui'
-import type { Card, DragState, SyncState } from './types'
+import { useState, useCallback, useMemo, useRef } from 'react'
+import { cn, Button, IconPlus, IconSearch, Spinner } from '@sloughgpt/strui'
+import type { Card } from './types'
 import { usePlannerBoard } from '@/lib/usePlannerBoard'
-import * as planner from '@/lib/planner-client'
-import { Scene } from './Scene'
+import { Table } from './Table'
 import { CardEditor } from './CardEditor'
 
-const DEFAULT_COLUMNS = [
-  { name: 'todo', label: 'To Do', wip_limit: 5, order: 0 },
-  { name: 'wip', label: 'In Progress', wip_limit: 3, order: 1 },
-  { name: 'review', label: 'Review', wip_limit: 2, order: 2 },
-  { name: 'done', label: 'Done', wip_limit: 0, order: 3 },
-]
-
 export function BuffetEngine() {
-  const { board, tags, loading, error, refresh, optimisticMove, optimisticAdd, optimisticDelete } =
-    usePlannerBoard(500)
+  const {
+    board,
+    columns,
+    tags,
+    loading,
+    error,
+    refresh,
+    moveCard,
+    createCard,
+    updateCard,
+    deleteCard,
+    undo,
+    canUndo,
+    isOverWip,
+    canDrop,
+    syncNotes,
+    drag,
+    setDrag,
+  } = usePlannerBoard(500)
 
-  const [input, setInput] = useState<{ drag: DragState | null; selected: Card | null }>({
-    drag: null,
-    selected: null,
-  })
-  const [sync, setSync] = useState<SyncState>({ status: 'idle', lastSync: null, error: null })
+  const [selected, setSelected] = useState<Card | null>(null)
+  const [focusCol, setFocusCol] = useState(0)
+  const [focusCard, setFocusCard] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterTag, setFilterTag] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [light, setLight] = useState({ x: 50, y: 30 })
+  const boardRef = useRef<HTMLDivElement>(null)
 
-  const handleMove = useCallback(
-    async (cardId: string, toColumn: string) => {
-      optimisticMove(cardId, toColumn)
-      try {
-        await planner.moveCard({ card_id: cardId, column: toColumn })
-      } catch {
-        refresh()
-      }
-    },
-    [optimisticMove, refresh],
-  )
-
-  const handleCreate = useCallback(
-    async (data: { title: string; column: string; priority: string; description: string }) => {
-      try {
-        const { card } = await planner.createCard(data)
-        optimisticAdd(card)
-        setShowCreate(false)
-      } catch (err) {
-        refresh()
-      }
-    },
-    [optimisticAdd, refresh],
-  )
-
-  const handleUpdate = useCallback(
-    async (cardId: string, data: Partial<Card>) => {
-      optimisticMove(cardId, data.column || '')
-      setInput((prev) => ({ ...prev, selected: null }))
-      try {
-        await planner.updateCard(cardId, data)
-      } catch {
-        refresh()
-      }
-    },
-    [optimisticMove, refresh],
-  )
-
-  const handleDelete = useCallback(
-    async (cardId: string) => {
-      optimisticDelete(cardId)
-      setInput((prev) => ({ ...prev, selected: null }))
-      try {
-        await planner.deleteCard(cardId)
-      } catch {
-        refresh()
-      }
-    },
-    [optimisticDelete, refresh],
-  )
-
-  const handleSync = useCallback(async () => {
-    setSync({ status: 'syncing', lastSync: null, error: null })
-    try {
-      await planner.syncNotes()
-      setSync({ status: 'idle', lastSync: new Date().toISOString(), error: null })
-      refresh()
-    } catch (err) {
-      setSync({
-        status: 'error',
-        lastSync: null,
-        error: err instanceof Error ? err.message : 'Sync failed',
-      })
-    }
-  }, [refresh])
-
-  const handleDragStart = useCallback((e: React.DragEvent, cardId: string, column: string) => {
-    e.dataTransfer.setData('text/plain', cardId)
-    e.dataTransfer.effectAllowed = 'move'
-    setInput((prev) => ({ ...prev, drag: { cardId, fromColumn: column } }))
-  }, [])
-
-  const handleDragEnd = useCallback(() => {
-    setInput((prev) => ({ ...prev, drag: null }))
-  }, [])
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.dataTransfer.dropEffect = 'move'
-  }, [])
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent, targetColumn: string) => {
-      const cardId = e.dataTransfer.getData('text/plain')
-      if (cardId && (!input.drag || input.drag.fromColumn !== targetColumn)) {
-        handleMove(cardId, targetColumn)
-      }
-      setInput((prev) => ({ ...prev, drag: null }))
-    },
-    [input.drag, handleMove],
-  )
+  const sortedColumns = useMemo(() => [...columns].sort((a, b) => a.order - b.order), [columns])
 
   const filteredCards = useMemo(() => {
     let cards = board?.cards || []
-    if (filterTag) {
-      cards = cards.filter((c) => c.tags.includes(filterTag))
-    }
+    if (filterTag) cards = cards.filter((c) => c.tags.includes(filterTag))
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       cards = cards.filter(
@@ -136,87 +55,228 @@ export function BuffetEngine() {
     return cards
   }, [board, filterTag, searchQuery])
 
+  const cardsByColumn = useMemo(() => {
+    const map: Record<string, Card[]> = {}
+    for (const col of sortedColumns) {
+      map[col.name] = filteredCards
+        .filter((c) => c.column === col.name)
+        .sort((a, b) => {
+          const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+          const pa = order[a.priority] ?? 4
+          const pb = order[b.priority] ?? 4
+          if (pa !== pb) return pa - pb
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        })
+    }
+    return map
+  }, [filteredCards, sortedColumns])
+
   const uniqueTags = useMemo(() => tags.map((t) => t.name).sort(), [tags])
+
+  const handleLight = useCallback((e: React.MouseEvent) => {
+    if (!boardRef.current) return
+    const r = boardRef.current.getBoundingClientRect()
+    setLight({
+      x: ((e.clientX - r.left) / r.width) * 100,
+      y: ((e.clientY - r.top) / r.height) * 100,
+    })
+  }, [])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (selected || showCreate) return
+      const col = sortedColumns[focusCol]
+      if (!col) return
+      const colCards = cardsByColumn[col.name] || []
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          setFocusCol((c) => Math.max(0, c - 1))
+          setFocusCard(0)
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          setFocusCol((c) => Math.min(sortedColumns.length - 1, c + 1))
+          setFocusCard(0)
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setFocusCard((c) => Math.max(0, c - 1))
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          setFocusCard((c) => Math.min(colCards.length - 1, c + 1))
+          break
+        case 'Enter':
+        case ' ':
+          if (colCards[focusCard]) {
+            e.preventDefault()
+            setSelected(colCards[focusCard])
+          }
+          break
+        case 'z':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            undo()
+          }
+          break
+      }
+    },
+    [sortedColumns, focusCol, focusCard, cardsByColumn, selected, showCreate, undo],
+  )
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent, cardId: string, column: string) => {
+      e.dataTransfer.setData('text/plain', cardId)
+      e.dataTransfer.effectAllowed = 'move'
+      setDrag({ cardId, fromColumn: column })
+    },
+    [setDrag],
+  )
+
+  const handleDragEnd = useCallback(() => setDrag(null), [setDrag])
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, column: string) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = canDrop(column) ? 'move' : 'none'
+    },
+    [canDrop],
+  )
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetColumn: string) => {
+      e.preventDefault()
+      const cardId = e.dataTransfer.getData('text/plain')
+      if (cardId && (!drag || drag.fromColumn !== targetColumn)) moveCard(cardId, targetColumn)
+      setDrag(null)
+    },
+    [drag, moveCard, setDrag],
+  )
+
+  const handleUpdate = useCallback(
+    (cardId: string, data: Partial<Card>) => {
+      setSelected(null)
+      updateCard(cardId, data)
+    },
+    [updateCard],
+  )
+
+  const handleDelete = useCallback(
+    (cardId: string) => {
+      setSelected(null)
+      deleteCard(cardId)
+    },
+    [deleteCard],
+  )
+
+  const handleCreate = useCallback(
+    async (data: { title: string; column: string; priority: string; description: string }) => {
+      try {
+        await createCard(data)
+        setShowCreate(false)
+      } catch {
+        refresh()
+      }
+    },
+    [createCard, refresh],
+  )
+
+  const handleSync = useCallback(async () => {
+    setSyncing(true)
+    try {
+      await syncNotes()
+    } catch {
+      /* noop */
+    } finally {
+      setSyncing(false)
+    }
+  }, [syncNotes])
 
   if (loading && !board) {
     return (
-      <div className="relative min-h-screen bg-background overflow-hidden">
-        <div
-          className={cn(
-            'absolute inset-0 pointer-events-none opacity-20',
-            '[background-image:',
-            'radial-gradient(circle,rgb(var(--border))_1.5px,transparent_1.5px)',
-            ']',
-            '[background-size:12px_12px]',
-            '[background-position:0_0]',
-          )}
-          aria-hidden="true"
-        />
-        <div className="relative sl-page mx-auto max-w-7xl">
-          <div className="flex items-center justify-center min-h-[40vh]">
-            <div className="text-sm text-muted-foreground">Loading board...</div>
-          </div>
-        </div>
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-sm text-zinc-500 font-mono animate-pulse">loading board...</div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="relative min-h-screen bg-background overflow-hidden">
-        <div
-          className={cn(
-            'absolute inset-0 pointer-events-none opacity-20',
-            '[background-image:',
-            'radial-gradient(circle,rgb(var(--border))_1.5px,transparent_1.5px)',
-            ']',
-            '[background-size:12px_12px]',
-            '[background-position:0_0]',
-          )}
-          aria-hidden="true"
-        />
-        <div className="relative sl-page mx-auto max-w-7xl">
-          <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button size="sm" variant="outline" onClick={refresh}>
-              <IconRefresh className="h-4 w-4 mr-1.5" />
-              Retry
-            </Button>
-          </div>
-        </div>
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
+        <p className="text-sm text-red-400 font-mono">{error}</p>
+        <Button size="sm" variant="outline" onClick={refresh}>
+          Retry
+        </Button>
       </div>
     )
   }
 
   return (
-    <div className="relative min-h-screen bg-background overflow-hidden">
-      {/* Token-tinted dot pattern overlay */}
+    <div
+      ref={boardRef}
+      className="relative h-screen flex flex-col overflow-hidden select-none bg-zinc-950"
+      onMouseMove={handleLight}
+      onKeyDown={handleKeyDown}
+      tabIndex={-1}
+      role="application"
+      aria-label="Kanban board"
+      style={{
+        backgroundImage: `radial-gradient(ellipse 900px 500px at ${light.x}% ${light.y}%, rgba(255,245,220,0.035), transparent 65%)`,
+      }}
+    >
+      {/* Vignette */}
       <div
-        className={cn(
-          'absolute inset-0 pointer-events-none opacity-20',
-          '[background-image:',
-          'radial-gradient(circle,rgb(var(--border))_1.5px,transparent_1.5px)',
-          ']',
-          '[background-size:12px_12px]',
-          '[background-position:0_0]',
-        )}
-        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(0,0,0,0.45) 100%)',
+        }}
+        aria-hidden
       />
 
-      <div className="relative sl-page mx-auto max-w-7xl space-y-4">
-        {/* Header */}
+      {/* Header — fixed top bar */}
+      <header
+        className="relative shrink-0 px-5 py-3"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+      >
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-medium text-foreground">Planner</h1>
-            <p className="text-sm text-muted-foreground">Board</p>
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-lg font-light tracking-tight text-zinc-200">Planner</h1>
+            <p className="text-[11px] font-mono text-zinc-600">
+              {board?.cards.length ?? 0} cards · {uniqueTags.length} tags
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+              aria-label="Undo"
+              className="text-zinc-500 hover:text-zinc-300"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 10h10a5 5 0 015 5v2m0 0l-3-3m3 3l3-3"
+                />
+              </svg>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={refresh}
               disabled={loading}
-              aria-label="Refresh board"
+              aria-label="Refresh"
+              className="text-zinc-500 hover:text-zinc-300"
             >
               <Spinner className="h-4 w-4" />
             </Button>
@@ -224,83 +284,126 @@ export function BuffetEngine() {
               variant="ghost"
               size="sm"
               onClick={handleSync}
-              disabled={sync.status === 'syncing'}
+              disabled={syncing}
               title="Sync notes to board"
-              aria-label="Sync notes to board"
+              aria-label="Sync notes"
+              className="text-zinc-500 hover:text-zinc-300"
             >
-              <Spinner className="h-4 w-4" />
+              {syncing ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              )}
             </Button>
-            <Button size="sm" onClick={() => setShowCreate(true)} aria-label="Create card">
-              <IconPlus className="h-4 w-4 mr-1" />
-              New card
-            </Button>
+            <button
+              onClick={() => setShowCreate(true)}
+              className={cn(
+                'px-3 py-1.5 rounded-md text-sm font-medium',
+                'bg-zinc-800 text-zinc-300 border border-zinc-700',
+                'hover:bg-zinc-700 hover:text-zinc-100 hover:border-zinc-600',
+                'active:scale-[0.97] transition-all duration-150',
+                'shadow-[0_1px_2px_rgba(0,0,0,0.3)]',
+              )}
+            >
+              <IconPlus className="h-3.5 w-3.5 mr-1 inline" />
+              New
+            </button>
           </div>
         </div>
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-3">
+        {/* Toolbar row */}
+        <div className="flex items-center gap-3 mt-3">
           <div className="relative flex-1 max-w-xs">
-            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-600" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search cards..."
+              placeholder="Search..."
               aria-label="Search cards"
-              className="w-full rounded-lg border border-input bg-card pl-8 pr-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full rounded-md bg-zinc-900 border border-zinc-800 pl-8 pr-3 py-1.5 text-sm text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:border-zinc-600 transition-colors"
             />
           </div>
           {uniqueTags.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap">
-              <Button
-                variant={filterTag === null ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setFilterTag(null)}
-              >
-                All
-              </Button>
               {uniqueTags.slice(0, 6).map((tag) => (
-                <Button
+                <button
                   key={tag}
-                  variant={filterTag === tag ? 'default' : 'ghost'}
-                  size="sm"
                   onClick={() => setFilterTag(filterTag === tag ? null : tag)}
+                  className={cn(
+                    'px-2 py-0.5 rounded text-[11px] font-mono transition-all duration-150',
+                    filterTag === tag
+                      ? 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                      : 'text-zinc-600 hover:text-zinc-400 border border-transparent',
+                  )}
                 >
                   {tag}
-                </Button>
+                </button>
               ))}
-              {uniqueTags.length > 6 && (
-                <span className="text-xs text-muted-foreground">+{uniqueTags.length - 6}</span>
-              )}
             </div>
           )}
         </div>
+      </header>
 
-        {/* Scene */}
-        <Scene
-          board={board || { columns: DEFAULT_COLUMNS, cards: [] }}
-          filteredCards={filteredCards}
+      {/* Board — fills remaining height */}
+      <main className="relative flex-1 min-h-0 px-5 py-4 overflow-hidden">
+        <Table
+          columns={sortedColumns}
+          cardsByColumn={cardsByColumn}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          onCardClick={(card) => setInput((prev) => ({ ...prev, selected: card }))}
-          draggingId={input.drag?.cardId ?? null}
+          onCardClick={setSelected}
+          draggingId={drag?.cardId ?? null}
+          focusCol={focusCol}
+          focusCard={focusCard}
+          canDrop={canDrop}
+          isOverWip={isOverWip}
         />
+      </main>
 
-        {/* Card Editor */}
-        <CardEditor
-          card={input.selected}
-          onClose={() => setInput((prev) => ({ ...prev, selected: null }))}
-          onUpdate={handleUpdate}
-          onDelete={handleDelete}
-        />
+      {/* Status bar */}
+      <footer
+        className="relative shrink-0 px-5 py-1.5 flex items-center justify-between text-[10px] font-mono text-zinc-700"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+      >
+        <div className="flex items-center gap-4">
+          <span>←→ columns</span>
+          <span>↑↓ cards</span>
+          <span>↵ open</span>
+          <span>ctrl+z undo</span>
+        </div>
+        <div className="flex items-center gap-4">
+          {filterTag && <span className="text-zinc-500">filter: {filterTag}</span>}
+          {searchQuery && <span className="text-zinc-500">search: &quot;{searchQuery}&quot;</span>}
+          <span>
+            {filteredCards.length} / {board?.cards.length ?? 0}
+          </span>
+        </div>
+      </footer>
 
-        {/* Create Card Dialog */}
-        {showCreate && (
-          <CreateCardDialog onClose={() => setShowCreate(false)} onCreate={handleCreate} />
-        )}
-      </div>
+      <CardEditor
+        card={selected}
+        onClose={() => setSelected(null)}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+      />
+      {showCreate && (
+        <CreateCardDialog onClose={() => setShowCreate(false)} onCreate={handleCreate} />
+      )}
     </div>
   )
 }
@@ -319,70 +422,67 @@ function CreateCardDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (title.trim()) {
+    if (title.trim())
       onCreate({ title: title.trim(), column, priority, description: description.trim() })
-    }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-card rounded-lg border border-border shadow-lg p-6 w-full max-w-md">
-        <h2 className="text-base font-medium mb-4 text-foreground">New Card</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
+        <h2 className="text-base font-medium mb-4 text-zinc-200">New Card</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-sm font-medium text-foreground">Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-foreground">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
-              rows={3}
-            />
-          </div>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            autoFocus
+            className="w-full rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+          />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description"
+            rows={3}
+            className="w-full rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+          />
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-foreground">Column</label>
-              <select
-                value={column}
-                onChange={(e) => setColumn(e.target.value)}
-                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
-              >
-                <option value="todo">To Do</option>
-                <option value="wip">In Progress</option>
-                <option value="review">Review</option>
-                <option value="done">Done</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">Priority</label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
-            </div>
+            <select
+              value={column}
+              onChange={(e) => setColumn(e.target.value)}
+              className="rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200"
+            >
+              <option value="todo">To Do</option>
+              <option value="wip">In Progress</option>
+              <option value="review">Review</option>
+              <option value="done">Done</option>
+            </select>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-md text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
               Cancel
-            </Button>
-            <Button type="submit" disabled={!title.trim()}>
+            </button>
+            <button
+              type="submit"
+              disabled={!title.trim()}
+              className="px-3 py-1.5 rounded-md text-sm bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+            >
               Create
-            </Button>
+            </button>
           </div>
         </form>
       </div>

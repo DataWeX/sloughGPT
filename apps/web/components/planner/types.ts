@@ -115,15 +115,6 @@ export interface HashTree {
     note_id: string
     timestamp: string
   }[]
-  commits: {
-    commit_hash: string
-    parent_hash: string
-    root_ref: string
-    changes: any[]
-    color: string
-    pixel: string
-    timestamp: string
-  }[]
 }
 
 export const COLUMN_LABELS: Record<string, string> = {
