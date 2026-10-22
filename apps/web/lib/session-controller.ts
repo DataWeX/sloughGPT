@@ -80,11 +80,28 @@ export interface Session {
   source?: string
 }
 
+/**
+ * Single source of truth for conversation display titles (frontend-owned
+ * derivation — POING walkthrough decision 2026-10-22): sanitize what the API
+ * returns and guarantee a non-empty title so sidebar rows never render blank.
+ * Idempotent; the search path and list() both go through here.
+ */
+export function deriveConversationTitle(name: unknown): string {
+  const cleaned = (typeof name === 'string' ? name : '')
+    // strip C0/C1 control chars, collapse all whitespace runs to one space
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60)
+  return cleaned || 'Untitled'
+}
+
 export const sessionController = {
   async list(archived?: boolean): Promise<Session[]> {
     const suffix = archived !== undefined ? `?archived=${archived}` : ''
     const data = await apiGet<Session[] | { sessions: Session[] }>(`/chat/sessions${suffix}`)
-    return Array.isArray(data) ? data : (data.sessions ?? [])
+    const sessions = Array.isArray(data) ? data : (data.sessions ?? [])
+    return sessions.map(s => ({ ...s, name: deriveConversationTitle(s.name) }))
   },
 
   async listArchived(): Promise<Session[]> {
@@ -125,7 +142,8 @@ export const sessionController = {
   async search(q: string, limit = 20): Promise<SearchResult[]> {
     if (!q.trim()) return []
     const data = await apiGet<SearchResult[] | { results: SearchResult[] }>(`/chat/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}`)
-    return Array.isArray(data) ? data : (data.results ?? [])
+    const results = Array.isArray(data) ? data : (data.results ?? [])
+    return results.map(r => ({ ...r, name: deriveConversationTitle(r.name) }))
   },
 
   async saveContext(id: string, messages: { role: string; content: string }[]): Promise<void> {

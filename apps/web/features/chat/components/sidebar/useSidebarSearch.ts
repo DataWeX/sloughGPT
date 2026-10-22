@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Conversation } from '@/lib/session-controller'
-import { sessionController } from '@/lib/session-controller'
+import { sessionController, deriveConversationTitle } from '@/lib/session-controller'
 import { MS_PER_DAY } from '@/lib/format-bytes'
 
 const SORT_KEY = 'sloughgpt:sidebar-sort'
@@ -66,7 +66,7 @@ export function useSidebarSearch(conversations: Conversation[]): UseSidebarSearc
         const results = await sessionController.search(q, 30)
         setServerSearchResults(results.map(r => ({
           id: r.id,
-          name: r.name || 'Untitled',
+          name: deriveConversationTitle(r.name),
           session_id: r.id,
           messages: r.matches?.map(m => ({ id: m.timestamp, role: m.role, content: m.content })) || [],
           updated_at: r.updated_at,
