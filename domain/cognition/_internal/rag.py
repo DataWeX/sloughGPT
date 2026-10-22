@@ -67,46 +67,57 @@ class BM25Indexer:
         self.inverted_index: dict[str, list[tuple[int, int]]] = {}
 
     def index(self, chunks: list[TextChunk]):
-        """Build BM25 index (idempotent: resets before rebuilding)."""
-        self.num_docs = len(chunks)
-        # Reset first — index() rebuilds from the full chunk list, so without
-        # this every call re-counts all docs (inflated frequencies, O(n^2)
-        # memory on bulk loads).
-        self.doc_lengths = []
-        self.doc_freq = Counter()
-        self.inverted_index = {}
-        logger.debug("BM25 indexing started: %d documents", self.num_docs)
+        """Build BM25 index (idempotent: resets before rebuilding).
+
+        Structures are built into locals and published at the end so a
+        concurrent score() never observes an emptied or half-built index
+        (which silently returned wrong or empty results mid-rebuild).
+        """
+        num_docs = len(chunks)
+        doc_lengths: list[int] = []
+        doc_freq: Counter = Counter()
+        inverted_index: dict[str, list[tuple[int, int]]] = {}
+        logger.debug("BM25 indexing started: %d documents", num_docs)
 
         for doc_id, chunk in enumerate(chunks):
             tokens = self._tokenize(chunk.content)
-            self.doc_lengths.append(len(tokens))
+            doc_lengths.append(len(tokens))
 
             # Count document frequencies
             for token in set(tokens):
-                self.doc_freq[token] += 1
+                doc_freq[token] += 1
 
             # Build inverted index
             for pos, token in enumerate(tokens):
-                if token not in self.inverted_index:
-                    self.inverted_index[token] = []
-                self.inverted_index[token].append((doc_id, pos))
+                if token not in inverted_index:
+                    inverted_index[token] = []
+                inverted_index[token].append((doc_id, pos))
 
-        self.avg_doc_length = sum(self.doc_lengths) / max(len(self.doc_lengths), 1)
-        logger.debug(
-            "BM25 indexing complete: avg_doc_length=%.1f, unique_terms=%d",
-            self.avg_doc_length,
-            len(self.doc_freq),
-        )
+        avg_doc_length = sum(doc_lengths) / max(len(doc_lengths), 1)
 
         # Structural invariants — a term can occur in at most every chunk,
         # and there is exactly one length entry per chunk. If either breaks,
         # the index was double-counted: fail loud, never silently wrong.
-        assert len(self.doc_lengths) == len(chunks), (
-            f"BM25 index corrupt: {len(self.doc_lengths)} lengths for {len(chunks)} chunks"
+        assert len(doc_lengths) == num_docs, (
+            f"BM25 index corrupt: {len(doc_lengths)} lengths for {num_docs} chunks"
         )
-        assert all(df <= len(chunks) for df in self.doc_freq.values()), (
+        assert all(df <= num_docs for df in doc_freq.values()), (
             "BM25 index corrupt: term frequency exceeds chunk count"
         )
+
+        logger.debug(
+            "BM25 indexing complete: avg_doc_length=%.1f, unique_terms=%d",
+            avg_doc_length,
+            len(doc_freq),
+        )
+
+        # Publish atomically (plain stores run without dropping the GIL, so
+        # readers see either the old complete index or the new one).
+        self.num_docs = num_docs
+        self.doc_lengths = doc_lengths
+        self.doc_freq = doc_freq
+        self.avg_doc_length = avg_doc_length
+        self.inverted_index = inverted_index
 
     def _tokenize(self, text: str) -> list[str]:
         """Tokenize text."""
@@ -116,33 +127,36 @@ class BM25Indexer:
 
     def score(self, query: str) -> list[tuple[int, float]]:
         """
-        Score all documents against query.
+        Score all documents against query (standard BM25).
         Returns list of (doc_id, score) tuples.
         """
         query_tokens = self._tokenize(query)
-        scores = np.zeros(self.num_docs)
+        scores = [0.0] * self.num_docs
 
         for token in query_tokens:
-            if token not in self.inverted_index:
+            postings = self.inverted_index.get(token)
+            if not postings:
                 continue
 
             # IDF for this term
             df = self.doc_freq.get(token, 0)
-            idf = np.log((self.num_docs - df + 0.5) / (df + 0.5) + 1)
+            idf = float(np.log((self.num_docs - df + 0.5) / (df + 0.5) + 1))
 
-            for doc_id, _ in self.inverted_index[token]:
+            # Term frequency counted ONCE per doc, O(postings). The old
+            # per-occurrence full rescan was O(postings^2): a common term
+            # in a large index burned minutes, tripped the chat pipeline's
+            # 15s RAG wait_for (TTFT +15s) and leaked a grinding thread.
+            for doc_id, tf in Counter(d for d, _ in postings).items():
                 doc_len = self.doc_lengths[doc_id]
-                tf = sum(1 for d, _ in self.inverted_index.get(token, []) if d == doc_id)
 
-                # BM25 formula
+                # BM25 formula, added once per doc (plain-float list — a
+                # numpy elementwise add costs ~10x per scalar update here)
                 numerator = tf * (self.k1 + 1)
                 denominator = tf + self.k1 * (1 - self.b + self.b * doc_len / self.avg_doc_length)
-                score = idf * numerator / denominator
-
-                scores[doc_id] += score
+                scores[doc_id] += idf * numerator / denominator
 
         # Return top docs with scores
-        results = [(i, float(scores[i])) for i in range(self.num_docs) if scores[i] > 0]
+        results = [(i, s) for i, s in enumerate(scores) if s > 0]
         results.sort(key=lambda x: -x[1])
         return results
 
