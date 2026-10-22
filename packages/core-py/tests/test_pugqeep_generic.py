@@ -135,6 +135,24 @@ class TestClusterStrategy:
         point = s.compress(data, "test")
         assert point.function_type == "cluster"
 
+    def test_mixed_row_nearest_assignment(self):
+        """Card 9565bd2d / finding bdda0736: the degenerate ``token_emb::71``
+        row (13x0 + 0.9999975 + -0.002249 + 5.975798e-10) must assign every
+        element to its NEAREST cluster. The old ceiling lookup pushed the
+        5.975798e-10 element into the far ~0.5 cluster (recon 0.49999874,
+        accuracy 0.467); nearest assignment reconstructs it as itself."""
+        s = ClusterStrategy(n_clusters=4)
+        row = np.array([0.0] * 13 + [0.9999975, -0.002249, 5.975798e-10], dtype=np.float32)
+        point = s.compress(row, "mixed.row")
+        recon = s.decompress(point, len(row))
+        # The finding element reconstructs ~0 (own value), never a far cluster.
+        assert abs(float(row[15]) - float(recon[15])) < 1e-6
+        # The 13 zeros and the negative outlier stay in the zero region.
+        assert float(np.max(np.abs(recon[:13]))) < 1e-6
+        assert abs(float(recon[14]) + 0.002249) < 1e-4
+        # Accuracy contract stays [0, 1].
+        assert 0.0 <= point.accuracy <= 1.0
+
 
 class TestFunctionStrategy:
     def test_compress_linear(self):

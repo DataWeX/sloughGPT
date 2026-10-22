@@ -38,6 +38,8 @@ from pathlib import Path
 
 import numpy as np
 
+from domain.infrastructure._internal.vq_assign import nearest_assignments
+
 from .point import Point, accuracy_from_error
 from .store import DirectoryStore, JSONStore, MemoryStore
 
@@ -303,7 +305,7 @@ class ClusterStrategy(CompressionStrategy):
 
         nc = len(centroids)
         for _ in range(self.lloyd_iterations):
-            assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
+            assignments = nearest_assignments(flat, centroids).astype(np.uint8)
             sums = np.bincount(assignments, weights=flat, minlength=nc)
             counts = np.bincount(assignments, minlength=nc).astype(np.float64)
             alive = counts > 0

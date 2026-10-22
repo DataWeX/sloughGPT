@@ -20,10 +20,18 @@ Metrics:
 
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
+
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from domain.infrastructure._internal.vq_assign import nearest_assignments  # noqa: E402
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Data generation — realistic NN weight distributions
@@ -115,13 +123,13 @@ def vq_core(
         raise ValueError(f"Unknown init: {init}")
 
     for _ in range(lloyd_iters):
-        assigns = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.intp)
+        assigns = nearest_assignments(flat, centroids).astype(np.intp)
         sums = np.bincount(assigns, weights=flat, minlength=nc)
         counts = np.bincount(assigns, minlength=nc).astype(np.float64)
         alive = counts > 0
         centroids[alive] = (sums[alive] / counts[alive]).astype(np.float32)
 
-    assigns = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
+    assigns = nearest_assignments(flat, centroids).astype(np.uint8)
     recon = centroids[assigns]
     mse = float(np.mean((flat - recon) ** 2))
     var = float(np.var(flat))

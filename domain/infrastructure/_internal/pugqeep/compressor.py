@@ -17,6 +17,8 @@ from collections import Counter
 
 import numpy as np
 
+from domain.infrastructure._internal.vq_assign import nearest_assignments
+
 from .config import CompressorConfig
 from .point import Point, accuracy_from_error
 
@@ -295,7 +297,7 @@ class PointCompressor:
             fit = flat[fit_idx]
         prev_inertia = float("inf")
         for _ in range(self.lloyd_iterations):
-            assignments = np.clip(np.searchsorted(centroids, fit), 0, nc - 1).astype(np.uint8)
+            assignments = nearest_assignments(fit, centroids).astype(np.uint8)
             sums = np.bincount(assignments, weights=fit, minlength=nc)
             counts = np.bincount(assignments, minlength=nc).astype(np.float64)
             alive = counts > 0
@@ -309,9 +311,9 @@ class PointCompressor:
                 break
             prev_inertia = inertia
         if fit_idx is not None:
-            assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
+            assignments = nearest_assignments(flat, centroids).astype(np.uint8)
         elif n > 0 and self.lloyd_iterations > 0:
-            assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
+            assignments = nearest_assignments(flat, centroids).astype(np.uint8)
 
         # Quantize centroids to int8 if enabled and safe
         centroid_quantized = False

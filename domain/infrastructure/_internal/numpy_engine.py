@@ -38,6 +38,7 @@ from .compression import CompressedWeight, LRUCache
 from .kv_cache.native import NativeKVState
 from .numpy_forward import forward_cached
 from .numpy_ops import softmax
+from .vq_assign import nearest_assignments
 
 logger = logging.getLogger("slo.infrastructure.numpy_engine")
 
@@ -232,7 +233,7 @@ class NumpyEngine:
 
             # Lloyd's refinement
             for _ in range(5):
-                assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
+                assignments = nearest_assignments(flat, centroids).astype(np.uint8)
                 sums = np.bincount(assignments, weights=flat, minlength=nc)
                 counts = np.bincount(assignments, minlength=nc).astype(np.float64)
                 alive = counts > 0
