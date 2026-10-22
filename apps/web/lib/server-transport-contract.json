@@ -1,0 +1,29 @@
+{
+  "description": "Server transport chokepoint pin (AGENTS.md — http-client.ts is the single source of truth for all API communication). Every file below performs raw network egress (fetch / EventSource / WebSocket) instead of going through the transport facade at lib/http-client.ts, which re-exports the split transport in apps/lib/ (url, corr-id, interceptors, retry, verbs, streamSSE, authFetch). HAND-MAINTAINED: a generated baseline verifies nothing. Entries may only shrink — a new file doing raw egress must route through the transport, not be added here.",
+  "measuredOn": "2026-10-22",
+  "rawEgressCeiling": 22,
+  "knownRawEgress": [
+    "app/(app)/calendar/page.tsx",
+    "app/(app)/consciousness/api-explorer/page.tsx",
+    "app/(app)/consciousness/benchmark/page.tsx",
+    "app/(app)/consciousness/debug/page.tsx",
+    "app/(app)/consciousness/docs/page.tsx",
+    "app/(app)/consciousness/test-runner/page.tsx",
+    "app/(app)/consciousness/testing/page.tsx",
+    "app/(app)/developer/page.tsx",
+    "components/DebugOverlay.tsx",
+    "components/startup/StartupHistoryChart.tsx",
+    "features/chat/components/panels/useVisionStudio.ts",
+    "features/chat/hooks/useChatLocalEngine.ts",
+    "hooks/useErrorStream.ts",
+    "hooks/useTrainingStream.ts",
+    "hooks/useV86.ts",
+    "lib/dev-log.ts",
+    "lib/error-reporter.ts",
+    "lib/multimodal-controller.ts",
+    "lib/planner-proxy.ts",
+    "lib/soulnet-webgpu/engine.ts",
+    "lib/soulnet-webgpu/transformer-engine.ts",
+    "lib/soulnet-webgpu/worker.ts"
+  ]
+}
