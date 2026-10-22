@@ -3,7 +3,36 @@ Train command group — training, evaluation, and monitoring.
 """
 
 from core.framework import click
+from core.helpers import api_get, output_json
 from core.helpers import ns as _ns
+
+from domain.logging import get_global
+
+log = get_global()
+
+
+def _resolve_dataset(feed, dataset):
+    """Map ``--feed`` to a ``feed:<source>`` dataset spec (``--feed`` wins).
+
+    Tolerates an accidental ``feed:`` prefix on ``--feed`` so the spec never
+    doubles to ``feed:feed:...``.
+
+    Args:
+        feed: value of ``--feed`` (source name), or None/empty when unset.
+        dataset: value of ``--dataset`` (used as-is when ``--feed`` is unset).
+
+    Returns:
+        The dataset spec to train on.
+
+    Raises:
+        click.UsageError: when ``--feed`` is set but resolves to no source.
+    """
+    if not feed:
+        return dataset
+    source = feed.strip().removeprefix("feed:").strip()
+    if not source:
+        raise click.UsageError("--feed needs a source name, e.g. --feed api-conversations")
+    return f"feed:{source}"
 
 
 def register(cli):
@@ -14,29 +43,81 @@ def register(cli):
     def train(ctx):
         pass
 
+    @train.command("feeds", help="List live training feed sources (usable with --feed)")
+    @click.pass_context
+    def train_feeds(ctx):
+        """Show the server's registered feed sources and record totals.
+
+        \b
+        Examples:
+          sloughgpt train feeds                                # what can I train on live?
+          sloughgpt train start --api --feed api-conversations # train on the live API logs
+        """
+        r = api_get(ctx, "/training/feeds")
+        if r.status_code != 200:
+            log.error(f"Failed ({r.status_code}): {r.text}")
+            return
+        feeds = (r.json().get("data") or {}).get("feeds") or []
+        if output_json(ctx, feeds):
+            return
+        if not feeds:
+            log.info("No feed sources registered on the server.")
+            return
+        log.header("Training feeds")
+        for f in feeds:
+            log.key_value(
+                f.get("spec") or f"feed:{f.get('name', '?')}",
+                f"{f.get('total', 0)} records",
+            )
+        log.info("Train one with: sloughgpt train start --api --feed <source>")
+
     @train.command("start", help="Full training pipeline")
-    @click.option("--dataset", default="shakespeare", help="Dataset name")
+    @click.option(
+        "--dataset", default="shakespeare", help="Dataset name, path, or feed spec (feed:<source>)"
+    )
+    @click.option(
+        "--feed",
+        default=None,
+        metavar="SOURCE",
+        help="Train on a live feed source (list: 'train feeds'); sets --dataset feed:<SOURCE>",
+    )
     @click.option("--epochs", default=3, type=int, help="Training epochs")
-    @click.option("--batch-size", default=32, type=int, help="Batch size")
+    @click.option("--batch-size", default=32, type=int, help="Training batch size")
     @click.option("--lr", default=0.01, type=float, help="Learning rate")
     @click.option("--api", is_flag=True, help="Use API training")
     @click.option("--resume", default=None, help="Resume from checkpoint")
     @click.option("--resume-latest", is_flag=True, help="Resume latest")
     @click.option("--save-stem", default=None, help="Output filename stem")
     @click.pass_context
-    def train_start(ctx, dataset, epochs, batch_size, lr, api, resume, resume_latest, save_stem):
+    def train_start(
+        ctx, dataset, feed, epochs, batch_size, lr, api, resume, resume_latest, save_stem
+    ):
         from commands.train import cmd_train
+
         kwargs = dict(
-            dataset=dataset, epochs=epochs, batch_size=batch_size, lr=lr,
-            api=api, resume=resume, resume_latest=resume_latest,
+            dataset=_resolve_dataset(feed, dataset),
+            epochs=epochs,
+            batch_size=batch_size,
+            lr=lr,
+            api=api,
+            resume=resume,
+            resume_latest=resume_latest,
             save_stem=save_stem,
-            host=ctx.obj["host"], port=ctx.obj["port"], config=ctx.obj["config"],
+            host=ctx.obj["host"],
+            port=ctx.obj["port"],
+            config=ctx.obj["config"],
         )
         cmd_train(_ns(**kwargs))
 
     @train.command("native", help="Train a SloNet model from scratch (.soul checkpoints)")
-    @click.option("--dataset", default="datasets/tinyshakespeare/input.txt", help="Corpus file or dataset name")
-    @click.option("--steps", default=None, type=int, help="Max training steps (default: epoch budget)")
+    @click.option(
+        "--dataset",
+        default="datasets/tinyshakespeare/input.txt",
+        help="Corpus file or dataset name",
+    )
+    @click.option(
+        "--steps", default=None, type=int, help="Max training steps (default: epoch budget)"
+    )
     @click.option("--embed", default=64, type=int, help="Embedding dimension")
     @click.option("--layers", default=2, type=int, help="Transformer layers")
     @click.option("--heads", default=4, type=int, help="Attention heads")
@@ -48,26 +129,50 @@ def register(cli):
     @click.option("--scheduler", default="cosine", help="LR scheduler (cosine/linear/constant)")
     @click.option("--warmup", default=100, type=int, help="Warmup steps")
     @click.option("--min-lr", default=1e-5, type=float, help="Minimum learning rate")
-    @click.option("--grad-norm", default=1.0, type=float, help="Max gradient norm (0 disables clipping)")
+    @click.option(
+        "--grad-norm", default=1.0, type=float, help="Max gradient norm (0 disables clipping)"
+    )
     @click.option("--dropout", default=0.1, type=float, help="Dropout")
     @click.option("--checkpoint-dir", default="models/slonet-native", help="Checkpoint directory")
-    @click.option("--checkpoint-interval", default=500, type=int, help="Checkpoint interval (steps)")
+    @click.option(
+        "--checkpoint-interval", default=500, type=int, help="Checkpoint interval (steps)"
+    )
     @click.option("--max-checkpoints", default=3, type=int, help="Max checkpoints to keep")
     @click.option("--save-best-only", is_flag=True, help="Only keep best-eval checkpoints")
     @click.option("--eval-interval", default=250, type=int, help="Eval interval (steps)")
     @click.option("--log-interval", default=50, type=int, help="Progress log interval (steps)")
     @click.option("--soul-name", default="sloughgpt-native", help="Soul name for the checkpoint")
     @click.option("--save-stem", default=None, help="Output filename stem (default: soul name)")
-    @click.option("--save-format", default="soul", type=click.Choice(["soul", "sou", "npz"]), help="DEPRECATED — ignored; SloughGPTTrainer.save() always writes .soul")
+    @click.option(
+        "--save-format",
+        default="soul",
+        type=click.Choice(["soul", "sou", "npz"]),
+        help="DEPRECATED — ignored; SloughGPTTrainer.save() always writes .soul",
+    )
     @click.option("--resume", default=None, help="Resume from a .soul/.npz checkpoint path")
-    @click.option("--resume-latest", is_flag=True, help="Resume from latest checkpoint in --checkpoint-dir")
+    @click.option(
+        "--resume-latest", is_flag=True, help="Resume from latest checkpoint in --checkpoint-dir"
+    )
     @click.option("--device", default="cpu", help="Device (cpu/auto)")
-    @click.option("--tokenizer", default="char", type=click.Choice(["char", "token-tree"]), help="Tokenization strategy for the corpus")
-    @click.option("--token-vocab-size", default=512, type=int, help="Token tree vocabulary size (token-tree tokenizer)")
-    @click.option("--prompt", default=None, help="Generate a sample from this prompt after training")
+    @click.option(
+        "--tokenizer",
+        default="char",
+        type=click.Choice(["char", "token-tree"]),
+        help="Tokenization strategy for the corpus",
+    )
+    @click.option(
+        "--token-vocab-size",
+        default=512,
+        type=int,
+        help="Token tree vocabulary size (token-tree tokenizer)",
+    )
+    @click.option(
+        "--prompt", default=None, help="Generate a sample from this prompt after training"
+    )
     @click.pass_context
     def train_native(ctx, **kwargs):
         from commands.train import cmd_train_native
+
         kwargs["host"] = ctx.obj["host"]
         kwargs["port"] = ctx.obj["port"]
         cmd_train_native(_ns(**kwargs))
@@ -90,10 +195,13 @@ def register(cli):
     @click.option("--soul-name", default="SloughGPT-Quick", help="Slo name")
     @click.option("--datasets", help="Comma-separated datasets (overrides --dataset)")
     @click.option("--ratios", help="Comma-separated dataset ratios")
-    @click.option("--preset", type=click.Choice(["tiny", "small", "medium", "large"]), help="Model preset")
+    @click.option(
+        "--preset", type=click.Choice(["tiny", "small", "medium", "large"]), help="Model preset"
+    )
     @click.pass_context
     def train_quick(ctx, **kwargs):
         from commands.train import cmd_quick
+
         kwargs["host"] = ctx.obj["host"]
         kwargs["port"] = ctx.obj["port"]
         cmd_quick(_ns(**kwargs))
@@ -106,9 +214,14 @@ def register(cli):
     @click.pass_context
     def train_auto(ctx, action, teacher, temperature, steps):
         from commands.train import _cmd_autotrain
+
         args = _ns(
-            action=action, teacher=teacher, temperature=temperature,
-            steps=steps, host=ctx.obj["host"], port=ctx.obj["port"],
+            action=action,
+            teacher=teacher,
+            temperature=temperature,
+            steps=steps,
+            host=ctx.obj["host"],
+            port=ctx.obj["port"],
         )
         _cmd_autotrain(args)
 
@@ -121,9 +234,14 @@ def register(cli):
     @click.option("--forever", is_flag=True, help="Run until Ctrl+C")
     def train_self(steps, model, temperature, max_tokens, seed, forever):
         from commands.train import _cmd_self_train
+
         args = _ns(
-            steps=steps, model=model, temperature=temperature,
-            max_tokens=max_tokens, seed=seed, forever=forever,
+            steps=steps,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            seed=seed,
+            forever=forever,
         )
         _cmd_self_train(args)
 
@@ -133,6 +251,7 @@ def register(cli):
     @click.option("--benchmark", is_flag=True, help="Run benchmark")
     def train_eval(checkpoint, data, benchmark):
         from commands.train import cmd_eval
+
         args = _ns(checkpoint=checkpoint, data=data, benchmark=benchmark)
         cmd_eval(args)
 
@@ -143,21 +262,28 @@ def register(cli):
         from commands.logs import run_dashboard
 
         run_dashboard(
-            ctx.obj["host"], ctx.obj["port"], float(interval),
-            output_json=False, no_clear=False,
+            ctx.obj["host"],
+            ctx.obj["port"],
+            float(interval),
+            output_json=False,
+            no_clear=False,
         )
 
     @train.command("rlhf", help="Run RLHF demo")
     @click.option("--steps", default=20, type=int, help="PPO steps")
     def train_rlhf(steps):
         from commands.train import cmd_rlhf
+
         args = _ns(steps=steps)
         cmd_rlhf(args)
 
     @train.command("demo", help="Run system demos (RAG, KG, EWC)")
-    @click.option("--component", type=click.Choice(["all", "rag", "kg", "ewc", "inference"]), default="all")
+    @click.option(
+        "--component", type=click.Choice(["all", "rag", "kg", "ewc", "inference"]), default="all"
+    )
     def train_demo(component):
         from commands.train import cmd_demo
+
         args = _ns(component=component)
         cmd_demo(args)
 
@@ -168,11 +294,16 @@ def register(cli):
     @click.option("--environment", default="us-east-1", help="Pinecone environment")
     def train_cloud(api_key, index, dimension, environment):
         from commands.train import cmd_cloud_setup
+
         args = _ns(api_key=api_key, index=index, dimension=dimension, environment=environment)
         cmd_cloud_setup(args)
 
     @train.command("embed", help="Train a text embedder on your corpus (no downloads)")
-    @click.option("--corpus", default=None, help="Text file or directory to train on (default: knowledge + chat history)")
+    @click.option(
+        "--corpus",
+        default=None,
+        help="Text file or directory to train on (default: knowledge + chat history)",
+    )
     @click.option("--epochs", default=20, type=int, help="Training epochs")
     @click.option("--lr", default=3e-4, type=float, help="Learning rate")
     @click.option("--batch-size", default=32, type=int, help="Batch size")
@@ -191,9 +322,16 @@ def register(cli):
           sloughgpt train embed --test "neural networks" # embed a test query
         """
         from commands.train import cmd_train_embed
+
         args = _ns(
-            corpus=corpus, epochs=epochs, lr=lr, batch_size=batch_size,
-            embed_dim=embed_dim, vocab_size=vocab_size, output=output, test=test,
+            corpus=corpus,
+            epochs=epochs,
+            lr=lr,
+            batch_size=batch_size,
+            embed_dim=embed_dim,
+            vocab_size=vocab_size,
+            output=output,
+            test=test,
         )
         cmd_train_embed(args)
 
@@ -211,14 +349,33 @@ def register(cli):
     @click.option("--dropout", default=0.1, type=float, help="Dropout rate")
     @click.option("--checkpoint-dir", default="models/auto-training", help="Save directory")
     @click.option("--log-interval", default=10, type=int, help="Log every N steps")
-    @click.option("--preset", type=click.Choice(["tiny", "small", "medium"]), help="Architecture preset")
+    @click.option(
+        "--preset", type=click.Choice(["tiny", "small", "medium"]), help="Architecture preset"
+    )
     @click.option("--api", is_flag=True, help="Use server API instead of local")
     @click.option("--json", "json_output", is_flag=True, help="JSON output")
     @click.option("--resume", default=None, help="Resume from checkpoint path (.soul file)")
     @click.pass_context
-    def train_distill(ctx, text_source, file, epochs, lr, batch_size, n_embed, n_layer,
-                      n_head, block_size, temperature, dropout, checkpoint_dir,
-                      log_interval, preset, api, json_output, resume):
+    def train_distill(
+        ctx,
+        text_source,
+        file,
+        epochs,
+        lr,
+        batch_size,
+        n_embed,
+        n_layer,
+        n_head,
+        block_size,
+        temperature,
+        dropout,
+        checkpoint_dir,
+        log_interval,
+        preset,
+        api,
+        json_output,
+        resume,
+    ):
         """Distill GPT-2 into a smaller, faster student model.
 
         \b
@@ -230,13 +387,26 @@ def register(cli):
           sloughgpt train distill datasets/shakespeare/input.txt --resume models/auto-training/checkpoint.soul
         """
         from commands.train import cmd_distill
+
         args = _ns(
-            text_source=text_source, file=file, epochs=epochs, lr=lr,
-            batch_size=batch_size, n_embed=n_embed, n_layer=n_layer,
-            n_head=n_head, block_size=block_size, temperature=temperature,
-            dropout=dropout, checkpoint_dir=checkpoint_dir,
-            log_interval=log_interval, preset=preset, api=api,
-            json_output=json_output, host=ctx.obj["host"], port=ctx.obj["port"],
+            text_source=text_source,
+            file=file,
+            epochs=epochs,
+            lr=lr,
+            batch_size=batch_size,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=n_head,
+            block_size=block_size,
+            temperature=temperature,
+            dropout=dropout,
+            checkpoint_dir=checkpoint_dir,
+            log_interval=log_interval,
+            preset=preset,
+            api=api,
+            json_output=json_output,
+            host=ctx.obj["host"],
+            port=ctx.obj["port"],
             resume=resume,
         )
         cmd_distill(args)
@@ -254,12 +424,28 @@ def register(cli):
     @click.option("--min-quality", default=2.0, type=float, help="Min pair quality (0-5)")
     @click.option("--max-pairs", default=500, type=int, help="Max training pairs to use")
     @click.option("--session-ids", default=None, help="Comma-separated session IDs (default: all)")
-    @click.option("--load", "auto_load", is_flag=True, help="Auto-load checkpoint into chat after training")
+    @click.option(
+        "--load", "auto_load", is_flag=True, help="Auto-load checkpoint into chat after training"
+    )
     @click.option("--json", "json_output", is_flag=True, help="JSON output")
     @click.pass_context
-    def train_from_sessions(ctx, epochs, lr, batch_size, n_embed, n_layer, n_head,
-                            block_size, dropout, soul_name, min_quality, max_pairs,
-                            session_ids, auto_load, json_output):
+    def train_from_sessions(
+        ctx,
+        epochs,
+        lr,
+        batch_size,
+        n_embed,
+        n_layer,
+        n_head,
+        block_size,
+        dropout,
+        soul_name,
+        min_quality,
+        max_pairs,
+        session_ids,
+        auto_load,
+        json_output,
+    ):
         """Train a model on your API chat logs.
 
         \b
@@ -270,14 +456,24 @@ def register(cli):
           sloughgpt train from-sessions --max-pairs 1000         # use more data
         """
         from commands.train import cmd_train_from_sessions
+
         args = _ns(
-            epochs=epochs, lr=lr, batch_size=batch_size,
-            n_embed=n_embed, n_layer=n_layer, n_head=n_head,
-            block_size=block_size, dropout=dropout,
-            soul_name=soul_name, min_quality=min_quality,
-            max_pairs=max_pairs, session_ids=session_ids,
-            auto_load=auto_load, json_output=json_output,
-            host=ctx.obj["host"], port=ctx.obj["port"],
+            epochs=epochs,
+            lr=lr,
+            batch_size=batch_size,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=n_head,
+            block_size=block_size,
+            dropout=dropout,
+            soul_name=soul_name,
+            min_quality=min_quality,
+            max_pairs=max_pairs,
+            session_ids=session_ids,
+            auto_load=auto_load,
+            json_output=json_output,
+            host=ctx.obj["host"],
+            port=ctx.obj["port"],
         )
         cmd_train_from_sessions(args)
 

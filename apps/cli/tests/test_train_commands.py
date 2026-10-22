@@ -421,3 +421,96 @@ class TestCmdTrainEmbed:
         # Should not crash — verifies _FakeEmbedder works with retrieval check
         _embedder_retrieval_check(_FakeEmbedder(), texts)
         assert True  # Smoke test: no exception thrown
+
+
+class TestFeedShortcut:
+    """--feed sugar + 'train feeds' discovery (live-feed lane, e338068a4)."""
+
+    @staticmethod
+    def _root_group():
+        """Build a scaffold root group with the train commands registered."""
+        import groups.train as gt
+        from core.framework import click as fclick
+
+        def root():
+            pass
+
+        root_grp = fclick.group("slo", help="root")(root)
+        gt.register(root_grp)
+        return root_grp, gt
+
+    def test_resolve_dataset_maps_feed_to_spec(self):
+        from groups.train import _resolve_dataset
+
+        assert _resolve_dataset("api-conversations", "shakespeare") == "feed:api-conversations"
+
+    def test_resolve_dataset_tolerates_feed_prefix(self):
+        from groups.train import _resolve_dataset
+
+        assert _resolve_dataset("feed:api-conversations", "x") == "feed:api-conversations"
+
+    def test_resolve_dataset_without_feed_is_passthrough(self):
+        from groups.train import _resolve_dataset
+
+        assert _resolve_dataset(None, "shakespeare") == "shakespeare"
+        assert _resolve_dataset("", "tiny") == "tiny"
+
+    def test_resolve_dataset_empty_feed_raises_usage_error(self):
+        from core.framework import click as fclick
+        from groups.train import _resolve_dataset
+
+        with pytest.raises(fclick.UsageError):
+            _resolve_dataset("feed:", "shakespeare")
+
+    def test_start_command_exposes_feed_option(self):
+        root_grp, _ = self._root_group()
+        start = root_grp.groups["train"].commands["start"]
+        names = [n for opt in start.options for n in opt.names]
+        assert "--feed" in names
+        assert "--dataset" in names
+
+    def test_feeds_command_gets_training_feeds(self, monkeypatch):
+        from core.framework import Context
+
+        calls: list[str] = []
+
+        def fake_get(url, **kwargs):
+            calls.append(url)
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = {
+                "data": {"feeds": [{"name": "feedback", "spec": "feed:feedback", "total": 7}]}
+            }
+            return resp
+
+        monkeypatch.setattr("requests.get", fake_get)
+        root_grp, gt = self._root_group()
+        monkeypatch.setattr(gt, "log", MagicMock())
+        feeds_cmd = root_grp.groups["train"].commands["feeds"]
+        ctx = Context({"host": "127.0.0.1", "port": 8000, "timeout": 5, "json": False})
+
+        feeds_cmd.func(ctx)
+
+        assert calls and calls[0].endswith("/training/feeds")
+        assert gt.log.key_value.called
+        assert gt.log.key_value.call_args[0][0] == "feed:feedback"
+
+    def test_feeds_command_error_logs_and_stops(self, monkeypatch):
+        from core.framework import Context
+
+        def fake_get(url, **kwargs):
+            resp = MagicMock()
+            resp.status_code = 503
+            resp.text = "down"
+            return resp
+
+        monkeypatch.setattr("requests.get", fake_get)
+        root_grp, gt = self._root_group()
+        monkeypatch.setattr(gt, "log", MagicMock())
+        feeds_cmd = root_grp.groups["train"].commands["feeds"]
+        ctx = Context({"host": "127.0.0.1", "port": 8000, "timeout": 5, "json": False})
+
+        feeds_cmd.func(ctx)
+
+        gt.log.error.assert_called_once()
+        assert not gt.log.key_value.called
