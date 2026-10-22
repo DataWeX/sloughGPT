@@ -19,6 +19,8 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { useConsciousnessStats } from '@/hooks/useConsciousnessStats'
 import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
 import { useLocale } from '@/hooks/useLocale'
+import { ChartFrame } from '@/components/charts/ChartFrame'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import {
   LineChart,
   Line,
@@ -389,8 +391,14 @@ export default function ConsciousnessMasterDashboardPage() {
               <CardDescription>{t('consciousness_master.qualia_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              {Object.keys(currentQualia).length > 0 ? (
-                <ResponsiveContainer width="100%" height={280}>
+              <ChartFrame
+                label="Qualia radar chart"
+                height={280}
+                empty={Object.keys(currentQualia).length === 0}
+                emptyMessage={t('consciousness_master.no_data')}
+                srSummary="Qualia dimensions from -1 to 1, current snapshot."
+              >
+                <ResponsiveContainer width="100%" height="100%">
                   <RadarChart data={qualiaRadarData}>
                     <PolarGrid stroke="rgb(var(--border))" />
                     <PolarAngleAxis
@@ -407,11 +415,7 @@ export default function ConsciousnessMasterDashboardPage() {
                     />
                   </RadarChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                  {t('consciousness_master.no_data')}
-                </div>
-              )}
+              </ChartFrame>
             </CardContent>
           </Card>
 
@@ -421,8 +425,14 @@ export default function ConsciousnessMasterDashboardPage() {
               <CardDescription>{t('consciousness_master.beliefs_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              {beliefsBarData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={280}>
+              <ChartFrame
+                label="Belief strength chart"
+                height={280}
+                empty={beliefsBarData.length === 0}
+                emptyMessage={t('consciousness_master.no_data')}
+                srSummary="Belief strengths from 0 to 100 per belief."
+              >
+                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={beliefsBarData} layout="vertical" margin={{ left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                     <XAxis
@@ -438,14 +448,7 @@ export default function ConsciousnessMasterDashboardPage() {
                       stroke="rgb(var(--muted-foreground))"
                       width={80}
                     />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'rgb(var(--card))',
-                        border: '1px solid rgb(var(--border))',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                      }}
-                    />
+                    <Tooltip content={<ChartTooltip />} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                       {beliefsBarData.map((entry, idx) => (
                         <rect key={idx} fill={entry.color} />
@@ -453,11 +456,7 @@ export default function ConsciousnessMasterDashboardPage() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                  {t('consciousness_master.no_data')}
-                </div>
-              )}
+              </ChartFrame>
             </CardContent>
           </Card>
         </div>
@@ -469,26 +468,27 @@ export default function ConsciousnessMasterDashboardPage() {
               <CardDescription>{t('consciousness_master.rating_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={ratingDist}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
-                  <XAxis
-                    dataKey="rating"
-                    tick={{ fontSize: 10 }}
-                    stroke="rgb(var(--muted-foreground))"
-                  />
-                  <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgb(var(--card))',
-                      border: '1px solid rgb(var(--border))',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Bar dataKey="count" fill="rgb(var(--chart-1))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <ChartFrame
+                label="Rating distribution chart"
+                height={200}
+                empty={ratingDist.length === 0}
+                emptyMessage={t('consciousness_master.no_data')}
+                srSummary="Count of ratings per rating value."
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={ratingDist}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
+                    <XAxis
+                      dataKey="rating"
+                      tick={{ fontSize: 10 }}
+                      stroke="rgb(var(--muted-foreground))"
+                    />
+                    <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="count" fill="rgb(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartFrame>
             </CardContent>
           </Card>
 
@@ -498,8 +498,14 @@ export default function ConsciousnessMasterDashboardPage() {
               <CardDescription>{t('consciousness_master.growth_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              {growthData.length > 1 ? (
-                <ResponsiveContainer width="100%" height={200}>
+              <ChartFrame
+                label="Growth and moving average chart"
+                height={200}
+                empty={growthData.length <= 1}
+                emptyMessage={t('consciousness_master.no_data')}
+                srSummary="Growth score and its moving average across recent interactions."
+              >
+                <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={growthData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                     <XAxis
@@ -508,14 +514,7 @@ export default function ConsciousnessMasterDashboardPage() {
                       stroke="rgb(var(--muted-foreground))"
                     />
                     <YAxis tick={{ fontSize: 9 }} stroke="rgb(var(--muted-foreground))" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'rgb(var(--card))',
-                        border: '1px solid rgb(var(--border))',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                      }}
-                    />
+                    <Tooltip content={<ChartTooltip />} />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
                     <Line
                       type="monotone"
@@ -534,11 +533,7 @@ export default function ConsciousnessMasterDashboardPage() {
                     />
                   </LineChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-                  {t('consciousness_master.no_data')}
-                </div>
-              )}
+              </ChartFrame>
             </CardContent>
           </Card>
 

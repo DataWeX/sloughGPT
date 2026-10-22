@@ -30,6 +30,8 @@ import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
 import { useLocale } from '@/hooks/useLocale'
+import { ChartFrame } from '@/components/charts/ChartFrame'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import {
   LineChart,
   Line,
@@ -496,8 +498,14 @@ export default function ConsciousnessDashboardPage() {
           <CardDescription>How self-beliefs change over interactions</CardDescription>
         </CardHeader>
         <CardContent>
-          {beliefsData.length > 1 ? (
-            <ResponsiveContainer width="100%" height={300}>
+          <ChartFrame
+            label="Beliefs evolution chart"
+            height={300}
+            empty={beliefsData.length <= 1}
+            emptyMessage="Need at least 2 data points. Chat with consciousness enabled to generate data."
+            srSummary="Self-belief scores from 0 to 1 across recent interactions."
+          >
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart data={beliefsData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                 <XAxis
@@ -510,14 +518,7 @@ export default function ConsciousnessDashboardPage() {
                   tick={{ fontSize: 10 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgb(var(--card))',
-                    border: '1px solid rgb(var(--border))',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                  }}
-                />
+                <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 {Object.entries(BELIEF_COLORS).map(([key, color]) => (
                   <Line
@@ -532,11 +533,7 @@ export default function ConsciousnessDashboardPage() {
                 ))}
               </LineChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="flex h-48 sm:h-64 items-center justify-center text-sm text-muted-foreground">
-              Need at least 2 data points. Chat with consciousness enabled to generate data.
-            </div>
-          )}
+          </ChartFrame>
         </CardContent>
       </Card>
 
@@ -546,8 +543,14 @@ export default function ConsciousnessDashboardPage() {
           <CardDescription>Emotional and cognitive state over time</CardDescription>
         </CardHeader>
         <CardContent>
-          {qualiaData.length > 1 ? (
-            <ResponsiveContainer width="100%" height={300}>
+          <ChartFrame
+            label="Qualia history chart"
+            height={300}
+            empty={qualiaData.length <= 1}
+            emptyMessage="Need at least 2 data points. Chat with consciousness enabled to generate data."
+            srSummary="Valence, arousal, novelty and coherence from -1 to 1 across recent interactions."
+          >
+            <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={qualiaData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                 <XAxis
@@ -560,14 +563,7 @@ export default function ConsciousnessDashboardPage() {
                   tick={{ fontSize: 10 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgb(var(--card))',
-                    border: '1px solid rgb(var(--border))',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                  }}
-                />
+                <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 {Object.entries(QUALIA_COLORS).map(([key, color]) => (
                   <Area
@@ -582,51 +578,46 @@ export default function ConsciousnessDashboardPage() {
                 ))}
               </AreaChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="flex h-48 sm:h-64 items-center justify-center text-sm text-muted-foreground">
-              Need at least 2 data points. Chat with consciousness enabled to generate data.
-            </div>
-          )}
+          </ChartFrame>
         </CardContent>
       </Card>
 
-      {growthData.length > 1 && (
         <Card>
           <CardHeader>
             <CardTitle>Growth Trajectory</CardTitle>
             <CardDescription>Cumulative growth across interactions</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={growthData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
-                <XAxis
-                  dataKey="time"
-                  tick={{ fontSize: 10 }}
-                  stroke="rgb(var(--muted-foreground))"
-                />
-                <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgb(var(--card))',
-                    border: '1px solid rgb(var(--border))',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="cumulative"
-                  stroke="rgb(var(--chart-1))"
-                  fill="rgb(var(--chart-1))"
-                  fillOpacity={0.15}
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <ChartFrame
+              label="Growth trajectory chart"
+              height={200}
+              empty={growthData.length <= 1}
+              emptyMessage="Need at least 2 data points. Chat with consciousness enabled to generate data."
+              srSummary="Cumulative growth across recent interactions."
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={growthData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
+                  <XAxis
+                    dataKey="time"
+                    tick={{ fontSize: 10 }}
+                    stroke="rgb(var(--muted-foreground))"
+                  />
+                  <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="cumulative"
+                    stroke="rgb(var(--chart-1))"
+                    fill="rgb(var(--chart-1))"
+                    fillOpacity={0.15}
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartFrame>
           </CardContent>
         </Card>
-      )}
 
       {/* Timeline */}
       <SectionHeader
