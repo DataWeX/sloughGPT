@@ -13,6 +13,7 @@ import {
 import { cn } from '@sloughgpt/strui'
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 
 interface HistoryPoint {
   timestamp: number
@@ -77,6 +78,7 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
   labels,
   className,
 }: PersonalityTrendChartProps) {
+  const reduced = usePrefersReducedMotion()
   const { rows, latest, sameDay } = useMemo(() => {
     const sorted = [...history].sort(
       (a, b) => Number(a.timestamp) - Number(b.timestamp),
@@ -158,6 +160,7 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
             {keys.map((key) => (
               <Line
                 key={key}
+                {...chartAnimation(reduced)}
                 type="monotone"
                 dataKey={key}
                 name={labels[key] ?? key}

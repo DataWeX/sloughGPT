@@ -6,6 +6,7 @@ import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import { AXIS, GRID, seriesColor } from '@/components/charts/chart-tokens'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 
 interface TrendPoint {
   ago: string
@@ -60,6 +61,7 @@ function buildPoints(liveHealth: LiveHealthSnapshot | null): TrendPoint[] {
 }
 
 export const TrendChart = memo(function TrendChart({ liveHealth, loading }: TrendChartProps) {
+  const reduced = usePrefersReducedMotion()
   const data = useMemo(() => buildPoints(liveHealth), [liveHealth])
 
   return (
@@ -106,6 +108,7 @@ export const TrendChart = memo(function TrendChart({ liveHealth, loading }: Tren
           />
           <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
           <Area
+            {...chartAnimation(reduced)}
             yAxisId="left"
             type="monotone"
             dataKey="health"
@@ -117,6 +120,7 @@ export const TrendChart = memo(function TrendChart({ liveHealth, loading }: Tren
             name="Health"
           />
           <Line
+            {...chartAnimation(reduced)}
             yAxisId="left"
             type="monotone"
             dataKey="mem"
@@ -127,6 +131,7 @@ export const TrendChart = memo(function TrendChart({ liveHealth, loading }: Tren
             strokeDasharray="4 2"
           />
           <Line
+            {...chartAnimation(reduced)}
             yAxisId="right"
             type="monotone"
             dataKey="rss"

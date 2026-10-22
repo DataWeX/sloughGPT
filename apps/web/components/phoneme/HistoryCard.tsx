@@ -13,6 +13,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import { AXIS, GRID, seriesColor } from '@/components/charts/chart-tokens'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 function HistoryRow({ entry }: { entry: HistoryEntry }) {
@@ -37,6 +38,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
 }
 
 function ProgressChart({ history }: { history: HistoryEntry[] }) {
+  const reduced = usePrefersReducedMotion()
   const chartData = useMemo(() => {
     if (history.length < 2) return []
     const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp)
@@ -92,6 +94,7 @@ function ProgressChart({ history }: { history: HistoryEntry[] }) {
                   }
                 />
                 <Area
+                  {...chartAnimation(reduced)}
                   type="monotone"
                   dataKey="score"
                   name="Score"

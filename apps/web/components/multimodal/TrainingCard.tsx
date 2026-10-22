@@ -6,6 +6,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import { AXIS, GRID, seriesColor } from '@/components/charts/chart-tokens'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 import type { TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
 
 interface TrainingCardProps {
@@ -14,6 +15,7 @@ interface TrainingCardProps {
 }
 
 export default function TrainingCard({ report, trainStatus }: TrainingCardProps) {
+  const reduced = usePrefersReducedMotion()
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">Training</CardTitle></CardHeader>
@@ -51,7 +53,7 @@ export default function TrainingCard({ report, trainStatus }: TrainingCardProps)
                 <XAxis dataKey="step" stroke={AXIS} fontSize={10} />
                 <YAxis stroke={AXIS} fontSize={10} domain={[0, 1]} />
                 <Tooltip content={<ChartTooltip valueFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} />} />
-                <Line type="monotone" dataKey="accuracy" stroke={seriesColor(0)} strokeWidth={2} dot={false} name="Accuracy" />
+                <Line {...chartAnimation(reduced)} type="monotone" dataKey="accuracy" stroke={seriesColor(0)} strokeWidth={2} dot={false} name="Accuracy" />
               </LineChart>
             </ResponsiveContainer>
           </ChartFrame>

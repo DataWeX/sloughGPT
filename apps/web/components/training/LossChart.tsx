@@ -8,6 +8,7 @@ import { todayDateString } from '@/lib/format-bytes'
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import { AXIS, seriesColor } from '@/components/charts/chart-tokens'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 
 export interface LossPoint {
   step: number
@@ -57,6 +58,8 @@ function exportLossCSV(data: LossPoint[], rewardData?: RewardPoint[]) {
 }
 
 export const LossChart = memo(function LossChart({ data, rewardData, height = 200, showLegend = true, live = false, windowSize = 40, onExportData, loading, error, onRetry, detailToggle: detailToggleEnabled = true }: LossChartProps) {
+  const reduced = usePrefersReducedMotion()
+
   // Memoize step union computation
   const { steps, hasTrain, hasEval } = useMemo(() => {
     const allSteps = new Set<number>()
@@ -190,6 +193,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
           )}
           {hasTrain && (
             <Line
+              {...chartAnimation(reduced)}
               yAxisId="loss"
               type="monotone"
               dataKey="train"
@@ -202,6 +206,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
           )}
           {hasEval && (
             <Line
+              {...chartAnimation(reduced)}
               yAxisId="loss"
               type="monotone"
               dataKey="eval"
@@ -214,6 +219,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
           )}
           {hasReward && (
             <Line
+              {...chartAnimation(reduced)}
               yAxisId="reward"
               type="monotone"
               dataKey="reward"

@@ -32,6 +32,7 @@ import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
 import { useLocale } from '@/hooks/useLocale'
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 import {
   LineChart,
   Line,
@@ -111,6 +112,7 @@ function levelName(lvl: number): string {
 }
 
 export default function ConsciousnessDashboardPage() {
+  const reduced = usePrefersReducedMotion()
   const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
@@ -523,6 +525,7 @@ export default function ConsciousnessDashboardPage() {
                 {Object.entries(BELIEF_COLORS).map(([key, color]) => (
                   <Line
                     key={key}
+                    {...chartAnimation(reduced)}
                     type="monotone"
                     dataKey={key}
                     stroke={color}
@@ -568,6 +571,7 @@ export default function ConsciousnessDashboardPage() {
                 {Object.entries(QUALIA_COLORS).map(([key, color]) => (
                   <Area
                     key={key}
+                    {...chartAnimation(reduced)}
                     type="monotone"
                     dataKey={key}
                     stroke={color}
@@ -606,6 +610,7 @@ export default function ConsciousnessDashboardPage() {
                   <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
                   <Tooltip content={<ChartTooltip />} />
                   <Area
+                    {...chartAnimation(reduced)}
                     type="monotone"
                     dataKey="cumulative"
                     stroke="rgb(var(--chart-1))"

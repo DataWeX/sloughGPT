@@ -6,10 +6,12 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import { seriesColor } from '@/components/charts/chart-tokens'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 import { usePhonemeStore } from '@/lib/phoneme-store'
 import { PHONEME_LANGUAGES } from '@/lib/phoneme-controller'
 
 export default function ProgressSummary() {
+  const reduced = usePrefersReducedMotion()
   const history = usePhonemeStore(s => s.history)
   const pronunciationBestStreak = usePhonemeStore(s => s.pronunciationBestStreak)
 
@@ -158,6 +160,7 @@ export default function ProgressSummary() {
                     }
                   />
                   <Area
+                    {...chartAnimation(reduced)}
                     type="monotone"
                     dataKey="score"
                     name="Score"

@@ -6,12 +6,14 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import { AXIS, GRID, seriesColor } from '@/components/charts/chart-tokens'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 
 interface VisualComparisonCardProps {
   chartData: { name: string; throughput: number; latency: number; memory: number }[]
 }
 
 export default memo(function VisualComparisonCard({ chartData }: VisualComparisonCardProps) {
+  const reduced = usePrefersReducedMotion()
   const maxThroughput = Math.max(...chartData.map(d => d.throughput))
   const maxLatency = Math.max(...chartData.map(d => d.latency))
   const maxMemory = Math.max(...chartData.map(d => d.memory))
@@ -47,7 +49,7 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
                 <XAxis type="number" tick={{ fontSize: 9 }} stroke={AXIS} />
                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke={AXIS} />
                 <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(1)} tok/s`} />} />
-                <Bar dataKey="throughput" name="Throughput" fill={seriesColor(0)} radius={[0, 4, 4, 0]} />
+                <Bar {...chartAnimation(reduced)} dataKey="throughput" name="Throughput" fill={seriesColor(0)} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -61,7 +63,7 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
                 <XAxis type="number" tick={{ fontSize: 9 }} stroke={AXIS} />
                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke={AXIS} hide />
                 <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(0)} ms`} />} />
-                <Bar dataKey="latency" name="Latency" fill={seriesColor(1)} radius={[0, 4, 4, 0]} />
+                <Bar {...chartAnimation(reduced)} dataKey="latency" name="Latency" fill={seriesColor(1)} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -75,7 +77,7 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
                 <XAxis type="number" tick={{ fontSize: 9 }} stroke={AXIS} />
                 <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 9 }} stroke={AXIS} hide />
                 <Tooltip content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(0)} MB`} />} />
-                <Bar dataKey="memory" name="Memory" fill={seriesColor(2)} radius={[0, 4, 4, 0]} />
+                <Bar {...chartAnimation(reduced)} dataKey="memory" name="Memory" fill={seriesColor(2)} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -89,9 +91,9 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
                   <PolarGrid stroke={GRID} />
                   <PolarAngleAxis dataKey="name" tick={{ fontSize: 9 }} />
                   <PolarRadiusAxis tick={{ fontSize: 8 }} domain={[0, 100]} />
-                  <Radar name="Throughput" dataKey="throughput" stroke={seriesColor(0)} fill={seriesColor(0)} fillOpacity={0.15} />
-                  <Radar name="Latency" dataKey="latency" stroke={seriesColor(1)} fill={seriesColor(1)} fillOpacity={0.15} />
-                  <Radar name="Memory" dataKey="memory" stroke={seriesColor(2)} fill={seriesColor(2)} fillOpacity={0.15} />
+                  <Radar {...chartAnimation(reduced)} name="Throughput" dataKey="throughput" stroke={seriesColor(0)} fill={seriesColor(0)} fillOpacity={0.15} />
+                  <Radar {...chartAnimation(reduced)} name="Latency" dataKey="latency" stroke={seriesColor(1)} fill={seriesColor(1)} fillOpacity={0.15} />
+                  <Radar {...chartAnimation(reduced)} name="Memory" dataKey="memory" stroke={seriesColor(2)} fill={seriesColor(2)} fillOpacity={0.15} />
                   <Legend wrapperStyle={{ fontSize: 9 }} />
                 </RadarChart>
               </ResponsiveContainer>

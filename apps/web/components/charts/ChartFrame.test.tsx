@@ -85,4 +85,25 @@ describe('ChartFrame', () => {
     // The summary must NOT be swallowed by the role="img" region.
     expect(screen.getByRole('img').contains(sr!)).toBe(false)
   })
+
+  it('adds the enter-fade to the ready region, disabled by motion-reduce', () => {
+    render(
+      <ChartFrame label="Loss chart">
+        <svg />
+      </ChartFrame>,
+    )
+    const region = screen.getByRole('img')
+    expect(region.className).toContain('animate-in')
+    expect(region.className).toContain('fade-in')
+    expect(region.className).toContain('motion-reduce:animate-none')
+  })
+
+  it('omits the fade when motion="none"', () => {
+    render(
+      <ChartFrame label="Loss chart" motion="none">
+        <svg />
+      </ChartFrame>,
+    )
+    expect(screen.getByRole('img').className).not.toContain('animate-in')
+  })
 })

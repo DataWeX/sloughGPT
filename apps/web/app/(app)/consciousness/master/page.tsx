@@ -21,6 +21,7 @@ import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
 import { useLocale } from '@/hooks/useLocale'
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 import {
   LineChart,
   Line,
@@ -72,6 +73,7 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function ConsciousnessMasterDashboardPage() {
+  const reduced = usePrefersReducedMotion()
   const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const { stats, loading: statsLoading } = useConsciousnessStats()
@@ -407,6 +409,7 @@ export default function ConsciousnessMasterDashboardPage() {
                     />
                     <PolarRadiusAxis angle={30} domain={[-1, 1]} tick={{ fontSize: 9 }} />
                     <Radar
+                      {...chartAnimation(reduced)}
                       name="Current"
                       dataKey="value"
                       stroke="rgb(var(--chart-1))"
@@ -449,7 +452,7 @@ export default function ConsciousnessMasterDashboardPage() {
                       width={80}
                     />
                     <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    <Bar {...chartAnimation(reduced)} dataKey="value" radius={[0, 4, 4, 0]}>
                       {beliefsBarData.map((entry, idx) => (
                         <rect key={idx} fill={entry.color} />
                       ))}
@@ -485,7 +488,7 @@ export default function ConsciousnessMasterDashboardPage() {
                     />
                     <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
                     <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="count" fill="rgb(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                    <Bar {...chartAnimation(reduced)} dataKey="count" fill="rgb(var(--chart-1))" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartFrame>
@@ -517,6 +520,7 @@ export default function ConsciousnessMasterDashboardPage() {
                     <Tooltip content={<ChartTooltip />} />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
                     <Line
+                      {...chartAnimation(reduced)}
                       type="monotone"
                       dataKey="growth"
                       stroke="rgb(var(--chart-1))"
@@ -524,6 +528,7 @@ export default function ConsciousnessMasterDashboardPage() {
                       dot={false}
                     />
                     <Line
+                      {...chartAnimation(reduced)}
                       type="monotone"
                       dataKey="ma"
                       stroke="rgb(var(--chart-2))"

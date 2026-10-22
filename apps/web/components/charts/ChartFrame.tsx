@@ -24,6 +24,9 @@ export interface ChartFrameProps {
   height?: number
   /** sr-only text alternative rendered above the chart region. */
   srSummary?: ReactNode
+  /** Mount fade for the ready region ('enter', default) — a duration-150
+   *  fade-in disabled for reduced-motion users via motion-reduce:. */
+  motion?: 'none' | 'enter'
   className?: string
   children?: ReactNode
 }
@@ -57,6 +60,7 @@ export function ChartFrame({
   emptyDescription,
   height,
   srSummary,
+  motion = 'enter',
   className,
   children,
 }: ChartFrameProps) {
@@ -66,6 +70,7 @@ export function ChartFrame({
   // height (h-full → h-full → ResponsiveContainer 100%); with an explicit
   // height the inline style on the region wins.
   const full = height == null ? 'h-full' : undefined
+  const enter = motion === 'enter' && 'animate-in fade-in motion-reduce:animate-none'
 
   return (
     <div className={cn('w-full', full, className)} data-testid="chart-frame" data-state={state}>
@@ -103,7 +108,7 @@ export function ChartFrame({
           role="img"
           aria-label={label}
           tabIndex={0}
-          className={cn('w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', full)}
+          className={cn('w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', full, enter)}
           style={regionStyle}
         >
           {children}

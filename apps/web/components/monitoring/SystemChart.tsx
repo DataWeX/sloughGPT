@@ -5,6 +5,7 @@ import { Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend
 import { ChartFrame } from '@/components/charts/ChartFrame'
 import { ChartTooltip } from '@/components/charts/ChartTooltip'
 import { AXIS, GRID, seriesColor } from '@/components/charts/chart-tokens'
+import { usePrefersReducedMotion, chartAnimation } from '@/components/charts/chart-motion'
 
 interface ChartPoint {
   time: string
@@ -21,6 +22,8 @@ interface SystemChartProps {
 }
 
 export const SystemChart = memo(function SystemChart({ data, showTokens = true, showLatency = true }: SystemChartProps) {
+  const reduced = usePrefersReducedMotion()
+
   return (
     <ChartFrame
       label="System metrics chart"
@@ -60,6 +63,7 @@ export const SystemChart = memo(function SystemChart({ data, showTokens = true, 
           <Tooltip content={<ChartTooltip valueFormatter={(v) => Number(v).toFixed(1)} />} />
           <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
           <Area
+            {...chartAnimation(reduced)}
             yAxisId="left"
             type="monotone"
             dataKey="cpu"
@@ -71,6 +75,7 @@ export const SystemChart = memo(function SystemChart({ data, showTokens = true, 
             name="CPU %"
           />
           <Line
+            {...chartAnimation(reduced)}
             yAxisId="left"
             type="monotone"
             dataKey="mem"
@@ -82,6 +87,7 @@ export const SystemChart = memo(function SystemChart({ data, showTokens = true, 
           />
           {showTokens && (
             <Line
+              {...chartAnimation(reduced)}
               yAxisId="right"
               type="monotone"
               dataKey="tokens"
@@ -93,6 +99,7 @@ export const SystemChart = memo(function SystemChart({ data, showTokens = true, 
           )}
           {showLatency && (
             <Line
+              {...chartAnimation(reduced)}
               yAxisId="right"
               type="monotone"
               dataKey="latency"
