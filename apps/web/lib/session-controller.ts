@@ -88,8 +88,8 @@ export interface Session {
  */
 export function deriveConversationTitle(name: unknown): string {
   const cleaned = (typeof name === 'string' ? name : '')
-    // strip C0/C1 control chars, collapse all whitespace runs to one space
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+    // strip C0/C1 control chars (\p{Cc}), collapse all whitespace runs to one space
+    .replace(/\p{Cc}/gu, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 60)
