@@ -343,6 +343,18 @@ _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
 _META_WEIGHT_CACHE_LOCK = threading.Lock()
 
+# Bounds mirroring GenerateRequest's Field constraints (:temperature ge=0 le=2,
+# :top_p ge=0 le=1, :top_k ge=0 le=500, :repetition_penalty ge=0.5 le=2). Nudged
+# values are clamped here so a feedback-derived adjustment can never push a
+# defaulted param outside the schema the request itself is validated against
+# (drift-gated by tests/test_meta_weights_clamp.py).
+_META_WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
+    "temperature": (0.0, 2.0),
+    "top_p": (0.0, 1.0),
+    "top_k": (0.0, 500.0),
+    "repetition_penalty": (0.5, 2.0),
+}
+
 
 def _apply_meta_weights(
     temperature: float,
@@ -438,10 +450,20 @@ def _apply_meta_weights(
             logger.debug("Meta-weight adjustment failed: %s", e)
             nudge = {}  # no signal -- the request's own values stand
 
-    return {
-        param: value if param in explicit else value + nudge.get(param, 0)
-        for param, value in requested.items()
-    }
+    merged: dict[str, float] = {}
+    for param, value in requested.items():
+        if param in explicit:
+            # Explicit user intent: pydantic already validated it against the
+            # request schema — pass through verbatim.
+            merged[param] = value
+            continue
+        nudged = value + nudge.get(param, 0)
+        lo, hi = _META_WEIGHT_BOUNDS[param]
+        nudged = min(max(nudged, lo), hi)
+        if param == "top_k":
+            nudged = int(round(nudged))
+        merged[param] = nudged
+    return merged
 
 
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
