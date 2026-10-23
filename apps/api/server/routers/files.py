@@ -1,24 +1,32 @@
-"""File Management Router - upload, list, search, delete files with metadata.
+"""File Management Router — upload, list, search, delete, download files.
 
-Uses MogDB as the storage engine with automatic JSON sync.
-File metadata is stored in MogDB and synced to JSON for human readability.
+Business logic lives in the ``domain.files.FileStore`` core (sync,
+standalone-runnable); this module is the HTTP projection only. The store
+applies the proven codec policy (card fba1ce5e): text/code files are
+zstd-compressed at rest (~7x — the stored frame doubles as the wire format
+via ``Content-Encoding: zstd``), model-weight artifacts are stored raw
+(proven incompressible), unknown classes get a zstd-if-smaller probe.
+
+Grandfathering: same ``data/uploads`` directory, same MogDB ``files``
+collection, same response shapes. Legacy entries (no ``codec`` field)
+are read back exactly as before.
 """
 
 import asyncio
 import json
 import logging
-import re
-import time
+import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
 from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.files")
 
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+MAX_UPLOAD_SIZE = int(os.environ.get("SLO_MAX_UPLOAD_MB", "2048")) * 1024 * 1024
 
 
 class FileMetadata(BaseModel):
@@ -84,8 +92,9 @@ class FilesRouter:
 
     def __init__(self):
         self.router = APIRouter(prefix="/files", tags=["files"])
-        self.UPLOADS_DIR = Path(__file__).resolve().parents[4] / "data" / "uploads"
-        self.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        from domain.files import FileStore
+
+        self.store = FileStore(db=_get_db())
         self.SUPPORTED_EXTENSIONS = {
             ".pdf": "application/pdf",
             ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -102,8 +111,28 @@ class FilesRouter:
             ".yml": "text/yaml",
             ".xml": "text/xml",
             ".log": "text/plain",
+            # model-weight artifacts (stored raw — proven incompressible)
+            ".gguf": "application/octet-stream",
+            ".safetensors": "application/octet-stream",
+            ".pt": "application/octet-stream",
+            ".pth": "application/octet-stream",
+            ".ckpt": "application/octet-stream",
+            ".onnx": "application/octet-stream",
+            ".bin": "application/octet-stream",
+            ".npz": "application/octet-stream",
         }
         self._register_routes()
+
+    # ``UPLOADS_DIR`` stays an attribute for legacy callers/tests, but is
+    # bound to the store root so overrides redirect blob storage too.
+    @property
+    def UPLOADS_DIR(self) -> Path:
+        return self.store.root
+
+    @UPLOADS_DIR.setter
+    def UPLOADS_DIR(self, value) -> None:
+        self.store.root = Path(value)
+        self.store.root.mkdir(parents=True, exist_ok=True)
 
     def _register_routes(self):
         self.router.add_api_route(
@@ -120,104 +149,19 @@ class FilesRouter:
         )
         self.router.add_api_route("/{file_id}", self.delete_file, methods=["DELETE"])
         self.router.add_api_route(
+            "/{file_id}/download", self.download_file, methods=["GET"]
+        )
+        self.router.add_api_route(
             "/{file_id}/ingest", self.ingest_file, methods=["POST"], response_model=IngestResponse
         )
 
-    # ── Metadata persistence via MogDB ──
-
-    def _load_metadata(self) -> dict[str, dict]:
-        """Load file metadata from MogDB."""
+    def _meta_or_404(self, file_id: str) -> dict:
         try:
-            db = _get_db()
-            col = db.collection("files")
-            docs = col.find()
-            meta = {}
-            for doc in docs:
-                fid = doc.get("file_id", "")
-                if fid:
-                    meta[fid] = {
-                        "filename": doc.get("filename", ""),
-                        "original_name": doc.get("original_name", ""),
-                        "extension": doc.get("extension", ""),
-                        "size_bytes": doc.get("size_bytes", 0),
-                        "chars": doc.get("chars", 0),
-                        "pages": doc.get("pages", 1),
-                        "uploaded_at": doc.get("uploaded_at", 0.0),
-                        "tags": doc.get("tags", []),
-                    }
-            return meta
-        except Exception as e:
-            logger.warning("Failed to load metadata from MogDB: %s", e)
-            return {}
+            return self.store.get_meta(file_id)
+        except FileNotFoundError:
+            raise_error("File not found", "E_NOT_FOUND", status_code=404)
 
-    def _save_metadata(self, meta: dict[str, dict]) -> None:
-        """Save file metadata to MogDB (replaces all entries)."""
-        try:
-            db = _get_db()
-            col = db.collection("files")
-            # Clear and rewrite
-            col.delete_many({})
-            for fid, m in meta.items():
-                col.insert_one(
-                    {
-                        "file_id": fid,
-                        "filename": m.get("filename", ""),
-                        "original_name": m.get("original_name", ""),
-                        "extension": m.get("extension", ""),
-                        "size_bytes": m.get("size_bytes", 0),
-                        "chars": m.get("chars", 0),
-                        "pages": m.get("pages", 1),
-                        "uploaded_at": m.get("uploaded_at", 0.0),
-                        "tags": m.get("tags", []),
-                    }
-                )
-        except Exception as e:
-            logger.warning("Failed to save metadata to MogDB: %s", e)
-
-    def _upsert_file_metadata(self, file_id: str, meta: dict) -> None:
-        """Insert or update a single file's metadata in MogDB."""
-        try:
-            db = _get_db()
-            col = db.collection("files")
-            doc = {
-                "file_id": file_id,
-                "filename": meta.get("filename", ""),
-                "original_name": meta.get("original_name", ""),
-                "extension": meta.get("extension", ""),
-                "size_bytes": meta.get("size_bytes", 0),
-                "chars": meta.get("chars", 0),
-                "pages": meta.get("pages", 1),
-                "uploaded_at": meta.get("uploaded_at", 0.0),
-                "tags": meta.get("tags", []),
-            }
-            existing = col.find_one({"file_id": file_id})
-            if existing:
-                col.update_one({"file_id": file_id}, {"$set": doc})
-            else:
-                col.insert_one(doc)
-        except Exception as e:
-            logger.warning("Failed to upsert file metadata: %s", e)
-
-    def _delete_file_metadata(self, file_id: str) -> None:
-        """Delete a single file's metadata from MogDB."""
-        try:
-            db = _get_db()
-            col = db.collection("files")
-            col.delete_one({"file_id": file_id})
-        except Exception as e:
-            logger.warning("Failed to delete file metadata: %s", e)
-
-    async def _async_load_metadata(self) -> dict[str, dict]:
-        return await asyncio.to_thread(self._load_metadata)
-
-    async def _async_save_metadata(self, meta: dict[str, dict]) -> None:
-        await asyncio.to_thread(self._save_metadata, meta)
-
-    def _file_id(self, filename: str) -> str:
-        safe_name = re.sub(r"[^\w\-]", "_", filename)
-        return f"{int(time.time())}_{safe_name}"
-
-    # ── Endpoints ──
+    # ── Endpoints ──────────────────────────────────────────────────
 
     @endpoint("files.list_files")
     async def list_files(
@@ -228,26 +172,17 @@ class FilesRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """List all uploaded files with metadata."""
-        meta = await self._async_load_metadata()
-        items = []
-        for fid, m in meta.items():
-            file_path = self.UPLOADS_DIR / m["filename"]
-            try:
-                file_path.stat()
-            except FileNotFoundError:
-                continue
-            if tag and tag not in m.get("tags", []):
-                continue
-            items.append(
-                FileItem(
-                    id=fid,
-                    filename=m["filename"],
-                    extension=m.get("extension", ""),
-                    size_bytes=m.get("size_bytes", 0),
-                    uploaded_at=m.get("uploaded_at", 0.0),
-                    tags=m.get("tags", []),
-                )
+        items = [
+            FileItem(
+                id=m["file_id"],
+                filename=m["filename"],
+                extension=m.get("extension", ""),
+                size_bytes=m.get("size_bytes", 0),
+                uploaded_at=m.get("uploaded_at", 0.0),
+                tags=m.get("tags", []),
             )
+            for m in await asyncio.to_thread(self.store.list, tag)
+        ]
         reverse = order.lower() != "asc"
         items.sort(key=lambda x: getattr(x, sort, 0), reverse=reverse)
         return FileListResponse(files=items, total=len(items))
@@ -259,7 +194,7 @@ class FilesRouter:
         tags: str = Form("[]"),
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Upload a file and save it to the server."""
+        """Upload a file; stored via the FileStore codec policy (chunked)."""
         if not file.filename:
             raise_error("No filename provided", "E_BAD_REQUEST", status_code=400)
 
@@ -267,48 +202,38 @@ class FilesRouter:
         if not ext:
             raise_error("File must have an extension", "E_BAD_REQUEST", status_code=400)
 
-        contents = await file.read()
-        if len(contents) > MAX_UPLOAD_SIZE:
-            raise_error(
-                f"File too large ({len(contents)} bytes, max {MAX_UPLOAD_SIZE})",
-                "E_BAD_REQUEST",
-                status_code=413,
-            )
-        fid = self._file_id(file.filename)
-        file_path = self.UPLOADS_DIR / f"{fid}{ext}"
-
-        def _write_file():
-            with open(file_path, "wb") as f:
-                f.write(contents)
-
-        await asyncio.to_thread(_write_file)
-
         try:
             tag_list = json.loads(tags) if isinstance(tags, str) else (tags or [])
         except (json.JSONDecodeError, TypeError):
             tag_list = []
 
-        file_meta = {
-            "filename": f"{fid}{ext}",
-            "original_name": file.filename,
-            "extension": ext,
-            "size_bytes": len(contents),
-            "chars": 0,
-            "pages": 1,
-            "uploaded_at": time.time(),
-            "tags": tag_list,
-        }
-        await asyncio.to_thread(self._upsert_file_metadata, fid, file_meta)
+        # Chunked through the store — the payload never lands whole in memory.
+        try:
+            meta = await asyncio.to_thread(
+                self.store.put_stream,
+                file.file,
+                file.filename,
+                tag_list,
+                MAX_UPLOAD_SIZE,
+            )
+        except ValueError as e:
+            status = 413 if "too large" in str(e).lower() else 400
+            raise_error(str(e), "E_BAD_REQUEST", status_code=status)
 
         safe_audit_log(
-            "file.upload", resource=fid, detail=f"filename={file.filename}, size={len(contents)}"
+            "file.upload",
+            resource=meta["file_id"],
+            detail=(
+                f"filename={file.filename}, size={meta['size_bytes']}, "
+                f"stored={meta['stored_size']}, codec={meta['codec']}"
+            ),
         )
         return UploadResponse(
-            id=fid,
+            id=meta["file_id"],
             filename=file.filename,
             chars=0,
             pages=1,
-            size_bytes=len(contents),
+            size_bytes=meta["size_bytes"],
         )
 
     @endpoint("files.search_files")
@@ -320,22 +245,14 @@ class FilesRouter:
     ) -> dict:
         """Search uploaded files by name substring match."""
         query = q.lower()
-        meta = await self._async_load_metadata()
         items = []
-        for fid, m in meta.items():
-            file_path = self.UPLOADS_DIR / m["filename"]
-            try:
-                file_path.stat()
-            except FileNotFoundError:
-                continue
+        for m in await asyncio.to_thread(self.store.list, tag):
             name = m.get("original_name", m["filename"]).lower()
             if query not in name:
                 continue
-            if tag and tag not in m.get("tags", []):
-                continue
             items.append(
                 FileItem(
-                    id=fid,
+                    id=m["file_id"],
                     filename=m.get("original_name", m["filename"]),
                     extension=m.get("extension", ""),
                     size_bytes=m.get("size_bytes", 0),
@@ -352,16 +269,14 @@ class FilesRouter:
         file_id: str,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Get file details including content."""
-        meta = await self._async_load_metadata()
-        if file_id not in meta:
-            raise_error("File not found", "E_NOT_FOUND", status_code=404)
-        m = meta[file_id]
-        file_path = self.UPLOADS_DIR / m["filename"]
+        """Get file details including content (decompressed text)."""
+        m = self._meta_or_404(file_id)
         try:
-            text = file_path.read_text(errors="replace")
+            data = await asyncio.to_thread(lambda: self.store.get(file_id)[0])
         except FileNotFoundError:
             raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
+        except ValueError as e:
+            raise_error(str(e), "E_CORRUPT", status_code=500)
         return FileDetail(
             id=file_id,
             filename=m.get("original_name", m["filename"]),
@@ -371,7 +286,44 @@ class FilesRouter:
             pages=m.get("pages", 1),
             uploaded_at=m.get("uploaded_at", 0.0),
             tags=m.get("tags", []),
-            text=text,
+            text=data.decode("utf-8", errors="replace"),
+        )
+
+    @endpoint("files.download_file")
+    async def download_file(
+        self,
+        file_id: str,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ):
+        """Download raw file bytes.
+
+        Text/code files are stored zstd-compressed; when the client sends
+        ``Accept-Encoding: zstd`` the stored frame is served untouched (zero
+        transcoding — the at-rest format *is* the wire format). Otherwise the
+        stream is decompressed on the way out.
+        """
+        from starlette.responses import StreamingResponse
+        m = self._meta_or_404(file_id)
+        accept = request.headers.get("accept-encoding", "")
+        common = {
+            "Vary": "Accept-Encoding",
+            "X-Slo-Raw-Size": str(m.get("size_bytes", 0)),
+            "X-Slo-Codec": str(m.get("codec", "raw")),
+        }
+        if m.get("codec") == "zstd" and "zstd" in accept:
+            stored, _ = self.store.open_stored(file_id)
+            return FileResponse(
+                str(stored),
+                media_type="application/octet-stream",
+                filename=m.get("original_name", file_id),
+                headers={**common, "Content-Encoding": "zstd"},
+            )
+        headers = {**common, "Content-Length": str(m.get("size_bytes", 0))}
+        return StreamingResponse(
+            self.store.iter_chunks(file_id),
+            media_type="application/octet-stream",
+            headers=headers,
         )
 
     @endpoint("files.delete_file")
@@ -379,16 +331,11 @@ class FilesRouter:
         self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Delete a file and its metadata."""
-        meta = await self._async_load_metadata()
-        if file_id not in meta:
-            raise_error("File not found", "E_NOT_FOUND", status_code=404)
-        m = meta[file_id]
-        file_path = self.UPLOADS_DIR / m["filename"]
+        self._meta_or_404(file_id)
         try:
-            file_path.unlink(missing_ok=True)
-        except Exception as e:
-            logger.warning("Failed to delete file %s: %s", file_path, e)
-        await asyncio.to_thread(self._delete_file_metadata, file_id)
+            await asyncio.to_thread(self.store.delete, file_id)
+        except FileNotFoundError:
+            raise_error("File not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("file.delete", resource=file_id)
         return success_response(data={"deleted": file_id})
 
@@ -397,18 +344,17 @@ class FilesRouter:
         self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Ingest file content into the RAG/knowledge store."""
-        meta = await self._async_load_metadata()
-        if file_id not in meta:
-            raise_error("File not found", "E_NOT_FOUND", status_code=404)
-        m = meta[file_id]
-        file_path = self.UPLOADS_DIR / m["filename"]
+        m = self._meta_or_404(file_id)
         try:
-            text = file_path.read_text(errors="replace")
+            data = await asyncio.to_thread(lambda: self.store.get(file_id)[0])
         except FileNotFoundError:
             raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
+        except ValueError as e:
+            raise_error(str(e), "E_CORRUPT", status_code=500)
+        text = data.decode("utf-8", errors="replace")
         # Update chars count
         m["chars"] = len(text)
-        await asyncio.to_thread(self._upsert_file_metadata, file_id, m)
+        await asyncio.to_thread(self.store.update_meta, m)
         # Integrate with RAG service
         facts_stored = 0
         try:

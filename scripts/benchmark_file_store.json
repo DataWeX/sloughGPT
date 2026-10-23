@@ -1,0 +1,33 @@
+{
+  "ts": "2026-10-23T11:01:32+0100",
+  "rows": [
+    {
+      "class": "code(text/zstd)",
+      "files": 40,
+      "raw_bytes": 2621440,
+      "stored_bytes": 153099,
+      "ratio": 0.0584,
+      "codecs": [
+        "zstd"
+      ],
+      "put_ops_s": 226.5,
+      "get_ops_s": 255.2,
+      "stream_mibs": 34.9,
+      "del_ops_s": 1544.2
+    },
+    {
+      "class": "model(raw)",
+      "files": 40,
+      "raw_bytes": 2621440,
+      "stored_bytes": 2621440,
+      "ratio": 1.0,
+      "codecs": [
+        "raw"
+      ],
+      "put_ops_s": 689.3,
+      "get_ops_s": 693.0,
+      "stream_mibs": 167.2,
+      "del_ops_s": 2702.3
+    }
+  ]
+}
