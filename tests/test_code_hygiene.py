@@ -36,10 +36,21 @@ ROOT = Path(__file__).resolve().parents[1]
 SELF = Path(__file__).resolve()
 
 # Never descend into these (a 7.5G node_modules lives under apps/mobile).
-SKIP_DIRS = frozenset({
-    "node_modules", ".venv", "__pycache__", "dist", "build", ".git",
-    ".next", "coverage", ".mypy_cache", ".ruff_cache", "test_results",
-})
+SKIP_DIRS = frozenset(
+    {
+        "node_modules",
+        ".venv",
+        "__pycache__",
+        "dist",
+        "build",
+        ".git",
+        ".next",
+        "coverage",
+        ".mypy_cache",
+        ".ruff_cache",
+        "test_results",
+    }
+)
 
 SCAN_ROOTS = ("domain", "packages", "apps", "scripts")
 PY = (".py",)
@@ -52,35 +63,32 @@ FUTURE_ROOTS = ("domain", "packages/core-py/domains")
 LOGGER_FSTRING = re.compile(r"(?:logger|logging)\.(?:info|warning|error|debug)\(f['\"]")
 BARE_EXCEPT = re.compile(r"except\s*:")
 # Built from parts so this source file does not match its own scan.
-MARKER = re.compile(r"\b(?:" + "|".join(("TO" + "DO", "FIX" + "ME", "HA" + "CK", "X" + "XX")) + r"):")
+MARKER = re.compile(
+    r"\b(?:" + "|".join(("TO" + "DO", "FIX" + "ME", "HA" + "CK", "X" + "XX")) + r"):"
+)
 
 # Custom loggers whose contract rejects lazy %-args — there the f-string
 # IS the correct call (StructuredLogger.info(message, **fields): one
 # positional message only). Extend only via review.
 FSTRING_EXEMPT = {
-    "packages/avion/src/avion/core/session.py":
-        "avion StructuredLogger.info(message, **fields) — single positional; f-string required",
+    "packages/avion/src/avion/core/session.py": "avion StructuredLogger.info(message, **fields) — single positional; f-string required",
 }
 
 # Existing prints that ARE the product surface (2026-10-04 sweep: 92/92
 # legitimate). New files are never pre-exempted; extend only via review.
 PRINT_ALLOWLIST = {
-    "domain/shell/_internal/world_driver.py":
-        "TUI/world renderer — print is the frame writer",
-    "domain/multimodal/_internal/phoneme_encoder_cli.py":
-        "CLI tool — stdout is its output channel",
-    "domain/infrastructure/_internal/inference_engine.py":
-        "ENGINE_READY parent-process protocol handshake",
-    "domain/logging/_internal/config.py":
-        "bootstrap warning — cannot log while configuring logging",
-    "domain/shell/_internal/input_device.py":
-        "terminal echo in readline()",
-    "domain/shell/_internal/realm_live.py":
-        "argparse CLI run summary",
-    "domain/training/_internal/lm_eval_char.py":
-        "--json machine-readable stdout mode",
-    "domain/journeys/runner.py":
-        "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
+    "domain/shell/_internal/world_driver.py": "TUI/world renderer — print is the frame writer",
+    "domain/multimodal/_internal/phoneme_encoder_cli.py": "CLI tool — stdout is its output channel",
+    "domain/infrastructure/_internal/inference_engine.py": "ENGINE_READY parent-process protocol handshake",
+    "domain/logging/_internal/config.py": "bootstrap warning — cannot log while configuring logging",
+    "domain/shell/_internal/input_device.py": "terminal echo in readline()",
+    "domain/shell/_internal/vm.py": "guest console: _sys_write sends VM stdout/stderr to the process console (the capsys syscall contract)",
+    "domain/shell/_internal/realm_live.py": "argparse CLI run summary",
+    "domain/shell/_internal/world_stream.py": "argparse CLI run summary in main() — python -m entry, stdout is its report",
+    "domain/training/_internal/lm_eval_char.py": "--json machine-readable stdout mode",
+    "domain/journeys/runner.py": "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
+    "domain/shell/_internal/cmds/dashboard.py": "dashboard watch-loop renderer — terminal frames ARE its output",
+    "domain/shell/_internal/cmds/status.py": "status --json machine-readable stdout mode (CLI result channel)",
 }
 
 
@@ -133,8 +141,25 @@ def test_no_fstring_logger_calls():
 
 
 def test_no_bare_except():
-    """Bare except: swallows SystemExit/KeyboardInterrupt — catch types."""
-    found = line_hits(BARE_EXCEPT, PY)
+    """Bare except: swallows SystemExit/KeyboardInterrupt — catch types.
+
+    AST-based on purpose: a line regex also matches prose *describing* the
+    anti-pattern (``atomic_write.py`` documents ``except: unlink``), and a
+    guard that fires on documentation gets ignored. Parsing finds only real
+    ``ExceptHandler`` nodes with no type, and it catches multi-line
+    ``except :`` forms a per-line scan misses.
+    """
+    found = []
+    for path in iter_files(PY):
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError as exc:
+            found.append(f"{rel}: syntax error: {exc}")
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler) and node.type is None:
+                found.append(f"{rel}:{node.lineno}: bare except: — catch a type")
     assert not found, "bare except clauses (catch explicit types):\n" + fmt(found)
 
 
@@ -152,11 +177,11 @@ def _main_guard_ranges(tree):
         test = node.test
         if not (isinstance(test.left, ast.Name) and test.left.id == "__name__"):
             continue
-        if not any(isinstance(c, ast.Constant) and c.value == "__main__"
-                   for c in test.comparators):
+        if not any(isinstance(c, ast.Constant) and c.value == "__main__" for c in test.comparators):
             continue
-        end = max((getattr(s, "end_lineno", node.lineno) for s in ast.walk(node)),
-                  default=node.lineno)
+        end = max(
+            (getattr(s, "end_lineno", node.lineno) for s in ast.walk(node)), default=node.lineno
+        )
         ranges.append((node.lineno, end))
     return ranges
 
@@ -181,8 +206,11 @@ def test_print_only_in_exempted_stdout_channels():
             continue
         guards = _main_guard_ranges(tree)
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id == "print"):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "print"
+            ):
                 continue
             if any(kw.arg == "file" for kw in node.keywords):
                 continue  # stderr/stderr-targeted warnings
@@ -218,6 +246,6 @@ def test_domain_files_carry_future_annotations():
         ):
             missing.append(rel)
     assert not broken, "unparseable domain files:\n" + fmt(broken)
-    assert not missing, (
-        "domain files missing `from __future__ import annotations`:\n" + fmt(missing)
+    assert not missing, "domain files missing `from __future__ import annotations`:\n" + fmt(
+        missing
     )
