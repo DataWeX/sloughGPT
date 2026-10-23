@@ -241,3 +241,76 @@ class TestPoolStartMethod:
         # Ctx-level only — no live Pool (see class docstring: live fork workers
         # deadlocked into the suite's server threads in run-3).
         assert mp.get_context(_pool_start_method()).get_start_method() == "fork"
+
+
+class TestResourceTrackerHygiene:
+    """card ccad389e: no /psm_* resource_tracker warning flood at exit.
+
+    Subprocess by design: the warnings surface when pool WORKERS and the
+    tracker daemon exit, and the class above documents that live fork pools
+    deadlock the suite's server threads (run-3). One subprocess owns the
+    whole lifecycle — construct -> dispatch -> teardown -> interpreter
+    exit -> worker/daemon reap — with every descendant's stderr (the
+    tracker daemons inherit fd 2) captured by a single pipe.
+
+    Acceptance (card ccad389e): zero resource_tracker warnings, no leaked
+    /dev/shm segments, BOTH start methods green.
+    """
+
+    _LIFECYCLE_SCRIPT = """
+import importlib.util, sys, warnings
+warnings.simplefilter("always")
+sys.path.insert(0, ".")
+sys.path.insert(0, "packages/core-py")
+spec = importlib.util.spec_from_file_location(
+    "tvb", "packages/core-py/tests/test_vector_backend.py"
+)
+tvb = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tvb)
+import numpy as np
+from domain.infrastructure._internal.vector_backend import VectorBE
+arch = tvb._make_arch()
+weights = tvb._make_weights(arch)
+be = VectorBE.from_weights(weights, arch)
+be.forward(np.random.randint(0, arch.vocab_size, size=(1, 4)).astype(np.int64))
+# The flood mechanism is WORKER-side attach (gh-82344): only the 2D
+# pool-dispatched primitives (_matmul_worker/_softmax_worker/...) make
+# workers call SharedMemory(name=...) — forward()'s 3D tensors stay
+# in-process. Exercise them explicitly or the test is vacuous.
+be.matmul(np.random.rand(256, 128).astype(np.float32),
+          np.random.rand(128, 64).astype(np.float32))
+be.softmax(np.random.rand(512, 64).astype(np.float32))
+del be
+import gc
+gc.collect()
+"""
+
+    @pytest.mark.parametrize("method", ["fork", "forkserver"])
+    def test_lifecycle_emits_no_resource_tracker_warnings(self, method):
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[3]
+        before = {p.name for p in Path("/dev/shm").glob("psm_*")}
+        env = {
+            **os.environ,
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONPATH": f"{root}{os.pathsep}{root / 'packages' / 'core-py'}",
+            "SLO_VECTOR_START_METHOD": method,
+        }
+        proc = subprocess.run(
+            [sys.executable, "-c", self._LIFECYCLE_SCRIPT],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=root,
+            env=env,
+        )
+        assert proc.returncode == 0, f"[{method}] lifecycle crashed:\n{proc.stderr}"
+        assert "resource_tracker" not in proc.stderr, (
+            f"[{method}] resource_tracker warning flood:\n{proc.stderr[-2000:]}"
+        )
+        after = {p.name for p in Path("/dev/shm").glob("psm_*")}
+        assert after == before, f"[{method}] leaked /dev/shm segments: {after - before}"
