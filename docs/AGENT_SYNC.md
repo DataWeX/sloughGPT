@@ -988,6 +988,24 @@ git push -u origin feat/<name>   # push your own branch when done
   vs origin); deliberately NOT rebased here — a naive rebase replayed 11
   foreign local-main commits before being aborted.
 
+- **2026-10-23 · `feat/file-store-compressed` — compressed file store
+  (card `ff2ecade`, stacked on `feat/compression-bench-baselines`).**
+  `domain/files` `FileStore` core (sync, standalone): chunked `put_stream`,
+  codec policy from the proven benchmark — text/code → zstd-3 at rest (~7x;
+  the stored frame doubles as the wire format), model weights → raw (proven
+  incompressible), unknown → zstd-if-smaller; sha256 + raw/stored sizes;
+  legacy entries (no `codec` field) read back raw, same `data/uploads` dir
+  and MogDB `files` collection (schema additive only). Grandfathered
+  `/files` router migrated next-touched: memory-safe chunked upload
+  (`SLO_MAX_UPLOAD_MB`, default 2 GiB), model extensions accepted, new
+  `GET /files/{id}/download` — `Content-Encoding: zstd` passthrough (zero
+  transcoding) when advertised, else decompressed stream. Gotcha found:
+  httpx 0.28+ *advertises and auto-decodes* zstd — tests pin the wire via
+  header asserts, not body decode. 46 tests green (store core 19, both
+  router trees 14+37), `benchmark_file_store.py` gate PASS (code 0.058x @
+  227 put/s, model raw 1.0x @ 689 put/s). **Land from the api-std
+  worktree**, stacked on the branch above.
+
 - **2026-10-19 · `feat/wire-py` — we own the HTTP wire, phase 1 (card
   `ecea49c8`, stacked on `feat/scene-build`).** `packages/wire-py` is the
   stdlib-only sync framing layer: `wire/framing.py` (request parser —
