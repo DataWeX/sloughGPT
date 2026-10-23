@@ -208,6 +208,7 @@ vi.mock('@/components/training/StopTrainingButton', () => ({
     </button>
   ),
 }))
+vi.mock('@/components/training/LiveFeedStream', () => ({ LiveFeedStream: () => null }))
 
 import Page from './page'
 
