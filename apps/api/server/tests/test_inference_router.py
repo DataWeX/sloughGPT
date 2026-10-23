@@ -1,5 +1,6 @@
 """Tests for inference router endpoints (non-streaming, sessions, suggestions, tools, operations, context)."""
 
+import json
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -211,6 +212,78 @@ class TestSessionCRUD:
         resp = client.get("/chat/sessions/search?q=test")
         assert resp.status_code == 200
         assert isinstance(resp.json()["data"], list)
+
+
+class TestSessionMetadataIndex:
+    """Regressions for the /chat/sessions metadata index (card 6b728f97)."""
+
+    @staticmethod
+    def _router():
+        from main import app
+
+        def walk(routes):
+            for r in routes:
+                inner = getattr(r, "original_router", None)
+                if inner is not None and hasattr(inner, "routes"):
+                    yield from walk(inner.routes)
+                else:
+                    yield r
+
+        for r in walk(app.routes):
+            ep = getattr(r, "endpoint", None)
+            if getattr(r, "path", None) == "/chat/sessions" and getattr(ep, "__self__", None):
+                return ep.__self__
+        raise AssertionError("inference router instance not found on /chat/sessions")
+
+    def test_large_session_survives_metadata_index(self, tmp_path, monkeypatch):
+        # >4KB session files truncated the 4KB header read; json.loads on the
+        # prefix raised and the except clause silently dropped the session.
+        fat = {
+            "id": "fat_session_4kb",
+            "name": "",
+            "created_at": "2026-10-23T00:00:00",
+            "updated_at": "2026-10-23T00:00:00",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "How do I configure the gateway?\n" + ("context " * 400),
+                },
+                {
+                    "role": "assistant",
+                    "content": "Use the gateway config file.\n" + ("detail " * 400),
+                },
+            ],
+        }
+        session_file = tmp_path / "fat_session_4kb.json"
+        session_file.write_text(json.dumps(fat), encoding="utf-8")
+        assert session_file.stat().st_size > 4096
+        router = self._router()
+        monkeypatch.setattr(router, "_SESSIONS_DIR", tmp_path)
+        router._session_metadata_cache = None
+        router._session_metadata_cache_ts = 0
+        try:
+            rows = router._build_session_metadata_index()
+        finally:
+            router._session_metadata_cache = None
+            router._session_metadata_cache_ts = 0
+        by_id = {row["id"]: row for row in rows}
+        assert "fat_session_4kb" in by_id
+        # Name derives from the FIRST message's first line via the shared helper.
+        assert by_id["fat_session_4kb"]["name"] == "How do I configure the gateway?"
+        assert by_id["fat_session_4kb"]["message_count"] == 2
+
+    def test_save_session_invalidates_metadata_index(self):
+        router = self._router()
+        router._session_metadata_cache = [{"id": "stale"}]
+        router._save_session(f"sess_inv_{uuid.uuid4().hex[:8]}", {"messages": []})
+        assert router._session_metadata_cache is None
+
+    def test_derive_session_name_rules(self):
+        derive = self._router()._derive_session_name
+        assert derive([{"content": "Topic line\nlong body"}], "sid") == "Topic line"
+        assert derive([{"content": ""}], "sid") == "sid"
+        assert derive([], "sid") == "sid"
+        assert derive([{"content": "x" * 80}], "sid") == "x" * 60
 
 
 class TestContextEndpoints:
