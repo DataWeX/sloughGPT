@@ -1376,3 +1376,28 @@ git push -u origin feat/<name>   # push your own branch when done
   `app_planner board ls` or by parsing `board.jsonl`; claim a legacy card by
   `board add`-ing a fresh card that references the legacy id in its
   description (`board add` appends exactly one line — no chain cascade).
+
+- **2026-10-23 · review-column screening — 9 review cards flipped to done with
+  origin/main sha evidence, 6 correctly left (fork board; stack tail
+  `feat/npu-caps`).** Heeded this file's own warning (`0dcdefda1`: review-column
+  state is stale vs code — flip, don't re-implement). A prior session had
+  already closed 5 on the main checkout's board (`d62873e8a`, ancestor-verified)
+  but could not touch this fork's board. Flipped: `9d8319fb` + `83f01763`
+  (StartupOverlay.tsx:160 / AppLayout.tsx:123 contract comments on main;
+  `sl-app-banner` only in sanctioned GlobalBanner), `d484f48a` (`4e37b70df`),
+  avion trio `e26dc68c`/`24676ff2`/`553da7a7` (`b777b4384`/`68aeec952`/
+  `fc56789e3` + content probes), `a101ee3a` (PR#135 `9dcee3fed`, re-homed as
+  mole), `b2136a14` (`9791f0df9`), `96d06ef3` voice orb (PR #167 `8ec274820`
+  merged `d9761588d` — the land call happened; pre-merge head `2a4132c81` is
+  not an ancestor because the PR tip was re-rebased). Left in review (work NOT
+  on main, branches exist): `752ca443` (rides stack landing `2cec0811`),
+  `74032dd0`, `f2836f6c`, `8fe718f5`, `88fe100b` (main still ships only the
+  macOS `.dylib`), `117429ed` (no gemv in main C). Also closed: 5 stale ux-*
+  rows (React19/next16 in package.json; gateway rustls + 0 openssl; gateway
+  repoint landed `d949eb509`, rollback premise falsified; `halfA` referent
+  exists nowhere) and `44c63b91` strui Checkbox+Radio (both dup twins; source
+  note `status: done`, all gates checked, files on main, 8/8 adoption).
+  Dup-line collapse untouched — dup-ids note forbids deletion without user
+  confirmation; store card `89c58cfb` (wip) owns it. Evidence note:
+  `2026-10-23-review-column-screening-flips.md`. Board done 897→906,
+  review 15→6, todo 22→15, no sync run. From `.wt-worldbrain`.
