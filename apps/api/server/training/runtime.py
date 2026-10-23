@@ -93,7 +93,19 @@ class TrainingRuntime:
     def _ensure_row(self, job_id: str, job: dict[str, Any], config: dict[str, Any] | None) -> None:
         """Create a store row for the job if it does not already exist."""
         store = self._get_store()
-        if store.get(job_id) is not None:
+        existing = store.get(job_id)
+        if existing is not None:
+            # Backfill: register() hands the authoritative request snapshot; a
+            # row that already exists with an EMPTY config (persisted from the
+            # configless in-memory job dict before register ran) is incomplete,
+            # not intentional. Recovery reads the config column to rebuild
+            # trainer kwargs — an empty one silently falls back to defaults
+            # (job_1438982c). A non-empty config is first-registration-wins.
+            if config and not existing.get("config"):
+                try:
+                    store.update(job_id, config=dict(config))
+                except Exception as e:
+                    logger.warning("JobStore config backfill failed for %s: %s", job_id, e, extra={"tag": "TRAIN"})
             return
         cfg = config if config is not None else job.get("config")
         if not isinstance(cfg, dict):
