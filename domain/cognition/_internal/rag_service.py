@@ -117,13 +117,19 @@ class RAGService:
         # Fallback: load from legacy JSONL file
         if not _DOCUMENTS_FILE.exists():
             return
+        skipped = 0
         try:
             with open(_DOCUMENTS_FILE, encoding="utf-8") as f:
-                for line in f:
+                for lineno, line in enumerate(f, 1):
                     line = line.strip()
                     if not line:
                         continue
-                    doc = json.loads(line)
+                    try:
+                        doc = json.loads(line)
+                    except json.JSONDecodeError as e:
+                        skipped += 1
+                        logger.warning("Skipping corrupt RAG store line %d: %s", lineno, e)
+                        continue
                     content = doc.get("content")
                     if not content:
                         continue
@@ -136,13 +142,16 @@ class RAGService:
                         rebuild_index=False,
                     )
                     loaded += 1
-            if loaded:
-                # Single index build for the whole bulk load (per-document
-                # rebuilds are O(n^2)).
-                self.rag.retriever.build_index()
-            logger.debug("Loaded %d documents from legacy JSONL RAG store", loaded)
-        except (OSError, json.JSONDecodeError) as e:
+        except OSError as e:
             logger.warning("Failed to load RAG documents: %s", e)
+        if loaded:
+            # Single index build for the whole bulk load (per-document
+            # rebuilds are O(n^2)); outside the try so a mid-file error
+            # cannot skip it.
+            self.rag.retriever.build_index()
+        if skipped:
+            logger.warning("Skipped %d corrupt line(s) in %s", skipped, _DOCUMENTS_FILE)
+        logger.debug("Loaded %d documents from legacy JSONL RAG store", loaded)
 
     def _save_document(self, doc: dict[str, Any]) -> None:
         """Persist a document to MogDB (and legacy JSONL for backward compat)."""
