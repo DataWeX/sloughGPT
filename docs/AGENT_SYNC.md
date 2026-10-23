@@ -1002,6 +1002,27 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-23 · FOREMAN board hygiene: sync-revert root cause fixed + review
+  queue 17→12 (5 closures, each re-verified by hand on origin/main).**
+  Durable flips: 96d1507c→wip (journal `449cdc60` + board; slices a/b1/a2/c +
+  d-floor landed, d-pixel browser-blocked, b2 intake-gated) and 28267883→done
+  (journal `9d418337` + board). review→done closes: **9d8319fb** (stuck
+  variant markers `StartupOverlay.tsx:160-196` + test file on main),
+  **83f01763** (AppLayout one-banner effect, key `backend-connection`, no
+  `sl-app-banner`), **d85d77a6** (`test_no_bare_except` now `ast.walk`-based,
+  `1 passed` locally), **2deae375** (CLI `--web` = vite: `"dev": "vite"`,
+  dev.py "no Node build step"), **7f87197d** (card's 5F repro re-run on fresh
+  `origin/main` → `59 passed ×2`, path-drift-corrected to
+  `test_status_router__corepy.py`). Kept in review: 96d06ef3 (orb hero absent
+  from main; `feat/voice-orb-rebased` unmerged), 1fc4b3ec/338b1098/759c69cf/
+  eaf7e291/75183457/32a36793/eeae7101 (fix markers ABSENT from origin/main —
+  work sits on unmerged branches), 6b14be03 (phase-3 product sign-off),
+  e511e8dc (fix needs a ruling), 5379c245 (scoped campaign, no landing),
+  f74b9e75 (other session owns `board/close-f74b9e75`). Commits
+  `f0e08bf6b..249911e02` ride `feat/aml-cruncher` (shared checkout,
+  local-only — not pushed). Two of that session's live claim-moves
+  (8125c86e→wip, 0464c3d4→wip) rode into `249911e02` via the shared file.
+
 - **2026-10-21 · quantization: interleave fp32 release during `from_slnc`
   quantization — PR #172 (`feat/quant-interleaved-release`, off `0292d28bd`).**
   Each layer's float32 original is now freed immediately after its quantized
@@ -1071,6 +1092,18 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Gotchas that cost hours (add yours here)
 
+- **Board flips silently revert unless the JOURNAL status flips too
+  (2026-10-23)**: `.kanban/board.jsonl` columns are re-derived from
+  `.dev-notes/notes.journal.jsonl` statuses (matched by title) on sync runs —
+  a `board move`-only flip (the old norm) survives only until the next
+  session's `board move`/`sync`, which rebuilds the column from the still-`todo`
+  note and reverts it (this is what reverted 96d1507c wip→todo and 28267883
+  done→todo in `3368228c1`). Durable flip = `note update <journal-id> --status
+  <status>` FIRST — journal ids ≠ card ids, look the record up by title
+  (`note show <id>` works with either) — then `board move <card-uuid>
+  <column>` (surgical, rewrites only that line). Cards with `notes: []` are
+  board-only: sync has no note to derive from and never touches them, so
+  `board move` alone sticks (precedent: 88fe100b/117429ed).
 - **`PYTHONNOUSERSITE=1` (AGENTS.md) breaks browser suites**: playwright is
   installed in `~/.local/lib/python3.12/site-packages/` (user site), not in
   the conda env — with the flag, `import playwright` dies and every
