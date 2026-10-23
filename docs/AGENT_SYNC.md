@@ -1234,6 +1234,39 @@ git push -u origin feat/<name>   # push your own branch when done
   fired, genuine compression) — the inflation is a low-k capacity effect.
   From `.wt-worldbrain`.
 
+- **2026-10-23 · lint + hygiene-gate + cleanup-row sweep (cards `lint-fix-01`
+  closed, `ccad389e` test half landed; stack tail `feat/npu-caps`).** (1)
+  `lint-fix-01` "3417 ruff errors" proven stale: repo-wide `ruff check .` was
+  8 `I001`s → **0** after auto-fix (`511be7c86`); the 7/8 touched test files
+  that fail collection do so identically at HEAD — the stack's fork point
+  predates main's shell-tree restore `eb48feab2`, zero regressions (proven by
+  stash-diff collection). (2) `ccad389e` acceptance now under test:
+  `TestResourceTrackerHygiene` (`e97c8fb85`) — subprocess lifecycle asserting
+  0 `resource_tracker` warnings + 0 `/dev/shm` leaks, fork AND forkserver;
+  **RED-proven** with `resource_tracker.getfd()` removed (fork arm floods the
+  card's exact `'/psm_*': [Errno 2]` class; forkserver was already clean via
+  the spawn-list tracker fd). First test attempt was vacuous — `forward()`'s
+  3D tensors never pool-dispatch, so workers never attached; the script now
+  exercises the 2D `matmul`/`softmax` primitives explicitly. The fix itself
+  rides `a0c0561bb`; card stays open until it reaches origin/main. (3)
+  Hygiene ratchet was 2/5 red on the stack: `atomic_write.py:7` bare-except =
+  docstring false positive main already fixed AST-based (`b94452570`);
+  `world_stream.py:170` = REAL stack-side violation (card `a3b39114` /
+  `72076fbcf`) that would break main's gate at landing → adopted origin/main's
+  ratchet wholesale + `PRINT_ALLOWLIST` exemption in main's format
+  (`edf4b960b`, `git diff origin/main` on that file = 1 line, auto-merge).
+  Hygiene 5/5. (4) **15 `cleanup-NN` todo rows closed with per-row pickaxe
+  evidence** — all sourced from `2026-09-03-code-cleanup-slnc-refactor.md`,
+  a note with NO frontmatter status, so sync parked every "What Was Done"
+  row in todo forever (root cause; `status: done` frontmatter on that note
+  proposed, not done). Two rows were real, not stale: `domain/cognition/
+  _internal/rag.py` still reseeded the global RNG per `_default_embedding`
+  (the note's RandomState fix had only landed on the deleted `core-py/domains`
+  tree) → fixed as the note specified, byte-identical vectors, RED-proven
+  (`76c815d06`, rag suites 247 green); plus the world_stream print above.
+  Evidence note: `2026-10-23-cleanup-rows-batch-closure.md`. Board todo
+  38 → 22, no sync run. From `.wt-worldbrain`.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
