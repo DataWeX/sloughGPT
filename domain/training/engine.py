@@ -603,6 +603,99 @@ class TrainingEngine:
             logger.error("Cancel cloud job failed: %s", e)
             return TrainingResult(success=False, error=str(e))
 
+    # ── Router delegation (raw passthrough, build order #4 part 1) ──
+    #
+    # Thin delegations for apps/api/server/training/router.py. Unlike the
+    # TrainingResult-wrapped methods above, these return RAW values and let
+    # exceptions bubble: the router owns HTTP error classification and relies
+    # on the underlying exception types (HTTP semantics unchanged). Their job
+    # is to move the domain.training._internal import boundary into the engine
+    # so routers never import _internal directly (module docstring contract).
+
+    async def get_log(self) -> Any:
+        """Raw passthrough: training log lines (service.get_log)."""
+        from domain.training._internal.service import get_log
+
+        return await get_log()
+
+    async def list_stored_checkpoints(self) -> Any:
+        """Raw passthrough: stored checkpoint list (service.list_checkpoints)."""
+        from domain.training._internal.service import list_checkpoints
+
+        return await list_checkpoints()
+
+    async def delete_checkpoint(self, name: str) -> Any:
+        """Raw passthrough: delete a stored checkpoint (service.delete_checkpoint)."""
+        from domain.training._internal.service import delete_checkpoint
+
+        return await delete_checkpoint(name)
+
+    async def load_stored_checkpoint(self, name: str) -> Any:
+        """Raw passthrough: load a stored checkpoint (service.load_checkpoint)."""
+        from domain.training._internal.service import load_checkpoint
+
+        return await load_checkpoint(name)
+
+    async def download_checkpoint_path(self, name: str) -> Any:
+        """Raw passthrough: checkpoint file path or None (service.download_checkpoint_path)."""
+        from domain.training._internal.service import download_checkpoint_path
+
+        return await download_checkpoint_path(name)
+
+    async def checkpoint_info(self, name: str) -> Any:
+        """Raw passthrough: checkpoint metadata (service.checkpoint_info)."""
+        from domain.training._internal.service import checkpoint_info
+
+        return await checkpoint_info(name)
+
+    async def get_all_checkpoint_data(self) -> Any:
+        """Raw passthrough: all checkpoint data for export (service.get_all_checkpoint_data)."""
+        from domain.training._internal.service import get_all_checkpoint_data
+
+        return await get_all_checkpoint_data()
+
+    def get_state(self) -> Any:
+        """Raw passthrough: training state object with .config (service.get_state)."""
+        from domain.training._internal.service import get_state
+
+        return get_state()
+
+    def is_valid_ckpt_name(self, name: str) -> bool:
+        """Raw passthrough: VALID_CKPT_NAME regex check (state.VALID_CKPT_NAME)."""
+        from domain.training._internal.state import VALID_CKPT_NAME
+
+        return bool(VALID_CKPT_NAME.match(name))
+
+    def get_training_tips(self, **kwargs: Any) -> Any:
+        """Raw passthrough: training tips (training_advisor.get_training_tips)."""
+        from domain.training._internal.training_advisor import get_training_tips
+
+        return get_training_tips(**kwargs)
+
+    def recommend_training_config(self, **kwargs: Any) -> Any:
+        """Raw passthrough: config recommendation (training_advisor.recommend_training_config)."""
+        from domain.training._internal.training_advisor import recommend_training_config
+
+        return recommend_training_config(**kwargs)
+
+    def load_outcomes(self) -> Any:
+        """Raw passthrough: training outcome records (outcome_tracker)."""
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+
+        return TrainingOutcomeTracker().load_outcomes()
+
+    def get_training_monitor(self) -> Any:
+        """Raw passthrough: training monitor singleton (monitor.get_training_monitor)."""
+        from domain.training._internal.monitor import get_training_monitor
+
+        return get_training_monitor()
+
+    def alert_severity(self, value: str) -> Any:
+        """Raw passthrough: AlertSeverity enum member (raises ValueError on bad input)."""
+        from domain.training._internal.monitor import AlertSeverity
+
+        return AlertSeverity(value)
+
 
 _engine: TrainingEngine | None = None
 
