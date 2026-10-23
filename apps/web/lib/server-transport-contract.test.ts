@@ -40,6 +40,8 @@ interface TransportContract {
   measuredOn: string
   rawEgressCeiling: number
   knownRawEgress: string[]
+  /** Why each remaining bypass is pinned — exactly one entry per file. */
+  allowListReasons: Record<string, string>
 }
 
 const pin = contract as TransportContract
@@ -111,6 +113,21 @@ describe('Server transport — raw egress chokepoint', () => {
   it('never exceeds the measured ceiling', () => {
     expect(onDisk.length).toBeLessThanOrEqual(pin.rawEgressCeiling)
     expect(pin.knownRawEgress.length).toBeLessThanOrEqual(pin.rawEgressCeiling)
+  })
+
+  it('documents every pinned bypass with a reason', () => {
+    const reasons = Object.keys(pin.allowListReasons).sort()
+    expect(
+      reasons,
+      `allowListReasons must mirror knownRawEgress exactly — a pinned file with ` +
+        `no reason is an oversight, and a reason with no file is dead prose`
+    ).toEqual(pinned)
+    for (const [file, reason] of Object.entries(pin.allowListReasons)) {
+      expect(
+        reason.length,
+        `${file} needs a real justification, not a placeholder`
+      ).toBeGreaterThan(30)
+    }
   })
 
   it('keeps the facade wired to the split transport', () => {

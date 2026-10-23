@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { authFetch } from '@/lib/http-client'
 
 interface StartupRecord {
   timestamp: number
@@ -22,7 +23,7 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const res = await fetch('/health/startup-history')
+        const res = await authFetch('/health/startup-history')
         const json = await res.json()
         setRecords(json.data?.records ?? [])
       } catch {
