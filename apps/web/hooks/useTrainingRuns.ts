@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { settingsController } from '@/lib/settings-controller'
 import { downloadBlob, type TrainingRun } from '@/components/training/training-run'
+import { addGlobalError } from '@/lib/error-store'
 
 export interface UseTrainingRunsReturn {
   runs: TrainingRun[]
@@ -79,7 +80,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       const resp = await settingsController.filterTrainingRuns(params)
       setRuns((resp.runs as unknown as TrainingRun[]) || [])
     } catch (err) {
-      console.error('Failed to fetch training runs:', err)
+      addGlobalError(err, 'TrainingRuns')
     } finally {
       setLoading(false)
     }
@@ -103,7 +104,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      console.error('Export failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -115,7 +116,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       setRuns((prev) => prev.filter((r) => r.run_id !== runId))
       if (selectedRun?.run_id === runId) setSelectedRun(null)
     } catch (err) {
-      console.error('Delete failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     } finally {
       setDeleting(null)
     }
@@ -133,7 +134,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       )
       setNewTag('')
     } catch (err) {
-      console.error('Add tag failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -148,7 +149,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
         ),
       )
     } catch (err) {
-      console.error('Remove tag failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -164,7 +165,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       )
       setEditingNotes(false)
     } catch (err) {
-      console.error('Save notes failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -173,7 +174,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       const resp = await settingsController.exportTrainingRun(runId, 'json')
       downloadBlob(resp.content, `training-run-${runId}.json`, 'application/json')
     } catch (err) {
-      console.error('Export failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -183,7 +184,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       const result = await settingsController.compareTrainingRuns(selectedRun.run_id, compareRunId)
       setCompareResult(result)
     } catch (err) {
-      console.error('Compare failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -201,7 +202,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
         ),
       )
     } catch (err) {
-      console.error('Bookmark failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -210,7 +211,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       const newRun = await settingsController.duplicateTrainingRun(runId)
       setRuns((prev) => [newRun as unknown as TrainingRun, ...prev])
     } catch (err) {
-      console.error('Duplicate failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -242,7 +243,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       setSelectedIds(new Set())
       if (selectedRun && selectedIds.has(selectedRun.run_id)) setSelectedRun(null)
     } catch (err) {
-      console.error('Bulk delete failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -253,7 +254,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       setBulkTag('')
       fetchRuns()
     } catch (err) {
-      console.error('Bulk tag failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 
@@ -263,7 +264,7 @@ export function useTrainingRuns(): UseTrainingRunsReturn {
       await settingsController.bulkBookmark(Array.from(selectedIds), bookmarked)
       fetchRuns()
     } catch (err) {
-      console.error('Bulk bookmark failed:', err)
+      addGlobalError(err, 'TrainingRuns')
     }
   }
 

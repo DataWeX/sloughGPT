@@ -13,6 +13,7 @@ import { AutoTrainStatusCard } from '@/components/auto-train/AutoTrainStatusCard
 import { AutoTrainConfigCard } from '@/components/auto-train/AutoTrainConfigCard'
 import { AutoTrainHistoryCard } from '@/components/auto-train/AutoTrainHistoryCard'
 import { Zap, Play, Pause, Settings, Clock, Database, AlertCircle, CheckCircle } from 'lucide-react'
+import { addGlobalError } from '@/lib/error-store'
 
 interface AutoTrainStatus {
   enabled: boolean
@@ -57,7 +58,7 @@ export default function AutoTrainPage() {
         setStats(statsData as unknown as TrainingStats)
       }
     } catch (err) {
-      console.error('Failed to fetch auto-train data:', err)
+      addGlobalError(err, 'AutoTrain')
     } finally {
       setLoading(false)
     }
@@ -73,7 +74,7 @@ export default function AutoTrainPage() {
       await autoTrain.updateAutoTrainConfig({ threshold, interval_s: intervalS })
       fetchData()
     } catch (err) {
-      console.error('Failed to update config:', err)
+      addGlobalError(err, 'AutoTrain')
     } finally {
       setUpdating(false)
     }
