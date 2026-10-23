@@ -176,5 +176,402 @@
         "sha_ok": true
       }
     ]
+  },
+  {
+    "ts": "2026-10-23T09:55:11+0100",
+    "payload": "8 MiB synthetic download records",
+    "bytes": 8388608,
+    "tier1": [
+      {
+        "codec": "identity",
+        "raw_bytes": 8388608,
+        "wire_bytes": 8388608,
+        "ratio": 1.0,
+        "enc_mibs": 601.4,
+        "dec_mibs": null
+      },
+      {
+        "codec": "slz4-lv1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1791931,
+        "ratio": 0.2136,
+        "enc_mibs": 99.8,
+        "dec_mibs": 145.1
+      },
+      {
+        "codec": "slz4-lv6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1568613,
+        "ratio": 0.187,
+        "enc_mibs": 36.2,
+        "dec_mibs": 145.0
+      },
+      {
+        "codec": "slz4-lv16",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1565022,
+        "ratio": 0.1866,
+        "enc_mibs": 4.0,
+        "dec_mibs": 222.6
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1090648,
+        "ratio": 0.13,
+        "enc_mibs": 50.1,
+        "dec_mibs": 143.5
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1046140,
+        "ratio": 0.1247,
+        "enc_mibs": 157.0,
+        "dec_mibs": 279.2
+      }
+    ],
+    "tier2": [
+      {
+        "scenario": "file.bin-oneshot",
+        "bytes": 8388608,
+        "attempts": 1,
+        "wall_s": 0.124,
+        "mibs": 64.7,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.lz4-oneshot",
+        "bytes": 8388608,
+        "attempts": 1,
+        "wall_s": 0.513,
+        "mibs": 15.6,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.bin-interrupted",
+        "bytes": 8388608,
+        "attempts": 2,
+        "wall_s": 0.177,
+        "mibs": 45.1,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.lz4-interrupted",
+        "bytes": 8388608,
+        "attempts": 2,
+        "wall_s": 0.668,
+        "mibs": 12.0,
+        "sha_ok": true
+      }
+    ]
+  },
+  {
+    "ts": "2026-10-23T10:19:42+0100",
+    "payload": "8 MiB synthetic download records",
+    "bytes": 8388608,
+    "tier1": [
+      {
+        "codec": "identity",
+        "raw_bytes": 8388608,
+        "wire_bytes": 8388608,
+        "ratio": 1.0,
+        "enc_mibs": 390.4,
+        "dec_mibs": null
+      },
+      {
+        "codec": "slz4-lv1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1791931,
+        "ratio": 0.2136,
+        "enc_mibs": 48.1,
+        "dec_mibs": 54.5
+      },
+      {
+        "codec": "slz4-lv6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1568613,
+        "ratio": 0.187,
+        "enc_mibs": 39.2,
+        "dec_mibs": 121.3
+      },
+      {
+        "codec": "slz4-lv16",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1565022,
+        "ratio": 0.1866,
+        "enc_mibs": 1.9,
+        "dec_mibs": 38.5
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1090648,
+        "ratio": 0.13,
+        "enc_mibs": 29.1,
+        "dec_mibs": 173.9
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1046140,
+        "ratio": 0.1247,
+        "enc_mibs": 172.1,
+        "dec_mibs": 228.8
+      }
+    ],
+    "tier1b": [
+      {
+        "codec": "ext-gzip-1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1202666,
+        "ratio": 0.1434,
+        "enc_mibs": 14.5,
+        "dec_mibs": 25.9
+      },
+      {
+        "codec": "ext-gzip-9",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1088787,
+        "ratio": 0.1298,
+        "enc_mibs": 25.3,
+        "dec_mibs": 113.4
+      },
+      {
+        "codec": "ext-zstd-1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 886051,
+        "ratio": 0.1056,
+        "enc_mibs": 68.4,
+        "dec_mibs": 119.0
+      },
+      {
+        "codec": "ext-zstd-19",
+        "raw_bytes": 8388608,
+        "wire_bytes": 867175,
+        "ratio": 0.1034,
+        "enc_mibs": 0.5,
+        "dec_mibs": 76.0
+      },
+      {
+        "codec": "ext-lz4-1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1789930,
+        "ratio": 0.2134,
+        "enc_mibs": 187.0,
+        "dec_mibs": 196.5
+      },
+      {
+        "codec": "ext-lz4-9",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1567529,
+        "ratio": 0.1869,
+        "enc_mibs": 21.7,
+        "dec_mibs": 252.1
+      },
+      {
+        "codec": "ext-xz-1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1126152,
+        "ratio": 0.1342,
+        "enc_mibs": 5.1,
+        "dec_mibs": 36.9
+      },
+      {
+        "codec": "ext-xz-9",
+        "raw_bytes": 8388608,
+        "wire_bytes": 871936,
+        "ratio": 0.1039,
+        "enc_mibs": 1.0,
+        "dec_mibs": 48.2
+      },
+      {
+        "codec": "ext-bzip2-1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 897713,
+        "ratio": 0.107,
+        "enc_mibs": 11.2,
+        "dec_mibs": 31.1
+      },
+      {
+        "codec": "ext-bzip2-9",
+        "raw_bytes": 8388608,
+        "wire_bytes": 904066,
+        "ratio": 0.1078,
+        "enc_mibs": 8.0,
+        "dec_mibs": 21.7
+      },
+      {
+        "codec": "ext-7z-1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1155943,
+        "ratio": 0.1378,
+        "enc_mibs": 16.6,
+        "dec_mibs": 45.1
+      },
+      {
+        "codec": "ext-7z-9",
+        "raw_bytes": 8388608,
+        "wire_bytes": 888563,
+        "ratio": 0.1059,
+        "enc_mibs": 1.4,
+        "dec_mibs": 22.1
+      }
+    ],
+    "tier2": []
+  },
+  {
+    "ts": "2026-10-23T10:24:06+0100",
+    "payload": "deterministic repo-source tar (code corpus)",
+    "bytes": 9082880,
+    "tier1": [
+      {
+        "codec": "identity",
+        "raw_bytes": 9082880,
+        "wire_bytes": 9082880,
+        "ratio": 1.0,
+        "enc_mibs": 570.6,
+        "dec_mibs": null
+      },
+      {
+        "codec": "slz4-lv1",
+        "raw_bytes": 9082880,
+        "wire_bytes": 2798580,
+        "ratio": 0.3081,
+        "enc_mibs": 80.6,
+        "dec_mibs": 138.1
+      },
+      {
+        "codec": "slz4-lv6",
+        "raw_bytes": 9082880,
+        "wire_bytes": 2038124,
+        "ratio": 0.2244,
+        "enc_mibs": 21.9,
+        "dec_mibs": 152.1
+      },
+      {
+        "codec": "slz4-lv16",
+        "raw_bytes": 9082880,
+        "wire_bytes": 2008580,
+        "ratio": 0.2211,
+        "enc_mibs": 3.7,
+        "dec_mibs": 103.5
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1761654,
+        "ratio": 0.194,
+        "enc_mibs": 21.4,
+        "dec_mibs": 126.4
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1728738,
+        "ratio": 0.1903,
+        "enc_mibs": 91.2,
+        "dec_mibs": 285.6
+      }
+    ],
+    "tier1b": [
+      {
+        "codec": "ext-gzip-1",
+        "raw_bytes": 9082880,
+        "wire_bytes": 2189917,
+        "ratio": 0.2411,
+        "enc_mibs": 29.6,
+        "dec_mibs": 59.2
+      },
+      {
+        "codec": "ext-gzip-9",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1743039,
+        "ratio": 0.1919,
+        "enc_mibs": 5.6,
+        "dec_mibs": 53.5
+      },
+      {
+        "codec": "ext-zstd-1",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1925001,
+        "ratio": 0.2119,
+        "enc_mibs": 60.3,
+        "dec_mibs": 150.2
+      },
+      {
+        "codec": "ext-zstd-19",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1287981,
+        "ratio": 0.1418,
+        "enc_mibs": 0.7,
+        "dec_mibs": 36.5
+      },
+      {
+        "codec": "ext-lz4-1",
+        "raw_bytes": 9082880,
+        "wire_bytes": 2798771,
+        "ratio": 0.3081,
+        "enc_mibs": 2.4,
+        "dec_mibs": 63.0
+      },
+      {
+        "codec": "ext-lz4-9",
+        "raw_bytes": 9082880,
+        "wire_bytes": 2031330,
+        "ratio": 0.2236,
+        "enc_mibs": 12.0,
+        "dec_mibs": 1.3
+      },
+      {
+        "codec": "ext-xz-1",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1566316,
+        "ratio": 0.1724,
+        "enc_mibs": 4.1,
+        "dec_mibs": 7.8
+      },
+      {
+        "codec": "ext-xz-9",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1280188,
+        "ratio": 0.1409,
+        "enc_mibs": 0.2,
+        "dec_mibs": 37.9
+      },
+      {
+        "codec": "ext-bzip2-1",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1620137,
+        "ratio": 0.1784,
+        "enc_mibs": 1.1,
+        "dec_mibs": 0.3
+      },
+      {
+        "codec": "ext-bzip2-9",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1339242,
+        "ratio": 0.1474,
+        "enc_mibs": 0.2,
+        "dec_mibs": 0.2
+      },
+      {
+        "codec": "ext-7z-1",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1573735,
+        "ratio": 0.1733,
+        "enc_mibs": 12.5,
+        "dec_mibs": 57.0
+      },
+      {
+        "codec": "ext-7z-9",
+        "raw_bytes": 9082880,
+        "wire_bytes": 1279739,
+        "ratio": 0.1409,
+        "enc_mibs": 0.4,
+        "dec_mibs": 39.6
+      }
+    ],
+    "tier2": []
   }
 ]
