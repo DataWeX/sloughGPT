@@ -2,6 +2,8 @@
 Tests for Production-Grade RAG System
 """
 
+import json
+
 import pytest
 
 from domain.cognition._internal.rag import (
@@ -259,6 +261,50 @@ class TestAutoIngestBulk:
 
         assert ingested == 5
         assert len(builds) == 1, f"build_index called {len(builds)}x, want 1 (bulk)"
+
+
+class TestJSONLStoreRobustness:
+    """Corrupt lines in the JSONL store must not abort load or the index build."""
+
+    def test_corrupt_line_is_skipped_and_rest_still_loads(self, monkeypatch, tmp_path):
+        from domain.cognition._internal import rag_service as rs
+
+        store = tmp_path / "documents.jsonl"
+        good = [
+            json.dumps(
+                {
+                    "content": "Online presence means being discoverable on search engines.",
+                    "metadata": {"id": "a"},
+                }
+            ),
+            "not-json{{",
+            json.dumps(
+                {
+                    "content": "Marketing a business online uses SEO and social media.",
+                    "metadata": {"id": "b"},
+                }
+            ),
+            "\x00\x00\x00\x00",
+            json.dumps(
+                {
+                    "content": "Search engines index web pages so customers can find them.",
+                    "metadata": {"id": "c"},
+                }
+            ),
+        ]
+        store.write_text("\n".join(good), encoding="utf-8")
+        monkeypatch.setattr(rs, "_DOCUMENTS_FILE", store)
+        # Force the JSONL fallback: without this, an importable mogdb makes
+        # _init_mogdb load the real DB and _load_documents never reads the file.
+        monkeypatch.setattr(rs.RAGService, "_init_mogdb", lambda self: None)
+
+        svc = rs.RAGService()
+
+        # All three good docs survive — including the ones AFTER the corrupt
+        # lines (a single bad line used to abort the whole load).
+        assert len(svc._documents) == 3
+        out = svc.query("How do I improve my business online presence?", top_k=3)
+        assert out["num_results"] > 0
 
 
 if __name__ == "__main__":
