@@ -131,4 +131,23 @@ describe('Server transport — raw egress chokepoint', () => {
       expect(barrel, `transport no longer exposes ${surface}`).toContain(surface)
     }
   })
+
+  it('never imports the app upward — ports, not upward imports', () => {
+    const UPWARD = /from ['"]\.\.\/web\/lib/
+    const leaks: string[] = []
+    for (const entry of readdirSync(APPS_LIB, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name.includes('.test.'))
+        continue
+      if (UPWARD.test(readFileSync(join(APPS_LIB, entry.name), 'utf8'))) {
+        leaks.push(`apps/lib/${entry.name}`)
+      }
+    }
+    expect(
+      leaks,
+      `apps/lib must never import apps/web: it couples the transport to one host ` +
+        `app and blocks reuse by any other. Supply the value through ` +
+        `apps/lib/ports.ts (wired by configureTransport in ` +
+        `apps/web/lib/http-client.ts) instead:\n  ${leaks.join('\n  ')}`
+    ).toEqual([])
+  })
 })

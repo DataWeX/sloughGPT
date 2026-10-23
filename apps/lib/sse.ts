@@ -1,5 +1,4 @@
-import { logger } from '../web/lib/dev-log'
-import { useAuthStore } from '../web/lib/auth'
+import { _getToken, _log } from './ports'
 import { consumeSSEChunk, consumeSSEDrain } from './sse-parse'
 import { _corrId, _trackCorrId } from './corr-id'
 import { _resolveUrl } from './url'
@@ -52,7 +51,7 @@ export async function fetchSSE(url: string, opts: SSEFetchOptions = {}): Promise
   const headers: Record<string, string> = {}
   if (method !== 'GET') headers['Content-Type'] = 'application/json'
   if (!opts.noAuth) {
-    const token = useAuthStore.getState().token
+    const token = _getToken()
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
   if (opts.lastEventId) headers['Last-Event-ID'] = opts.lastEventId
@@ -76,7 +75,7 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
 
     _trackCorrId(corrId, url)
 
-    logger.debug(`>>> SSE ${method} ${url} corr=${corrId}`, { corrId, method, url })
+    _log().debug(`>>> SSE ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
     let res: Response
     try {
@@ -94,15 +93,15 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
       const aborted =
         opts?.signal?.aborted === true || (e instanceof Error && e.name === 'AbortError')
       if (aborted) {
-        logger.debug(`<<< SSE ${method} ${url} aborted corr=${corrId}`, { corrId, reason: msg })
+        _log().debug(`<<< SSE ${method} ${url} aborted corr=${corrId}`, { corrId, reason: msg })
       } else {
-        logger.error(`<<< SSE ${method} ${url} FAILED corr=${corrId}: ${msg}`, { corrId })
+        _log().error(`<<< SSE ${method} ${url} FAILED corr=${corrId}: ${msg}`, { corrId })
       }
       yield { status: 'error', message: `Connection error: ${msg}` }
       return
     }
 
-    logger.debug(`<<< SSE ${method} ${url} ${res.status} corr=${corrId}`, {
+    _log().debug(`<<< SSE ${method} ${url} ${res.status} corr=${corrId}`, {
       corrId,
       status: res.status,
     })
@@ -111,7 +110,7 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
       const status = res.status
       if (status === 503 && attempt < maxRetries) {
         const delay = baseDelay * Math.pow(2, attempt)
-        logger.warning(
+        _log().warning(
           `SSE retry ${attempt + 1}/${maxRetries} ${method} ${url} ${status} delay=${delay}ms corr=${corrId}`,
           { corrId, method, url, status, attempt, maxRetries, delay },
         )
@@ -154,7 +153,7 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
           decoder,
           chunk.value,
           (payload) =>
-            logger.warning('SSE malformed JSON payload skipped', {
+            _log().warning('SSE malformed JSON payload skipped', {
               payload,
               exception: 'parse error',
             }),

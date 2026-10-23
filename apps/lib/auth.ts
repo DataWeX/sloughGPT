@@ -1,4 +1,4 @@
-import { useAuthStore } from '../web/lib/auth'
+import { _getToken } from './ports'
 import { _corrId, _trackCorrId } from './corr-id'
 
 interface AuthFetchOptions extends RequestInit {
@@ -9,7 +9,7 @@ export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<R
   const corrId = _corrId()
   const headers: Record<string, string> = {}
   if (!opts?.noAuth) {
-    const token = useAuthStore.getState().token
+    const token = _getToken()
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
   if (opts?.headers) {
