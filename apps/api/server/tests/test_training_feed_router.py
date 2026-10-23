@@ -246,10 +246,16 @@ class TestFeedDatasetValidation:
     def test_resolve_registered_source(self):
         assert feeds.resolve_feed_source("feedback") is not None
 
-    def test_resolve_resolvable_unregistered_source(self):
+    def test_resolve_resolvable_unregistered_source(self, tmp_path, monkeypatch):
         # The corpus lives at data/api_conversations/ (underscore spelling);
         # the unregistered spelling must still resolve, mirroring the trainer.
-        assert feeds.resolve_feed_source("api_conversations") is not None
+        # Fixture data lives in tmp_path so the test is self-contained on
+        # fresh checkouts and CI (no repo-local data/ required).
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        corpus.write_text('{"messages": []}\n', encoding="utf-8")
+        monkeypatch.setattr(feeds, "find_repo_root", lambda _p: tmp_path)
+        assert feeds.resolve_feed_source("api_conversations") == corpus
 
     def test_resolve_typo_returns_none(self):
         assert feeds.resolve_feed_source("totally-not-a-corpus") is None
@@ -394,9 +400,7 @@ class TestLiveSnapshot:
         mock_request.is_disconnected = fake_is_disconnected
 
         async def run() -> tuple[str, str, list[dict]]:
-            response = await live_stream.training_live_stream(
-                request=mock_request, auth_user=None
-            )
+            response = await live_stream.training_live_stream(request=mock_request, auth_user=None)
             frames: list[dict] = []
             async for chunk in response.body_iterator:
                 text = chunk if isinstance(chunk, str) else chunk.decode()
