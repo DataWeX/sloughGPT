@@ -7,8 +7,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
-from domain.shell._internal.addons import neural
 from domain.shell._internal.addons.neural import (
     BatchProcessor,
     BatchRequest,
@@ -27,6 +25,8 @@ from domain.shell._internal.addons.neural import (
     NeuralSyscall,
     TokenizerDevice,
 )
+
+from domain.shell._internal.addons import neural
 from domain.shell._internal.kernel import Kernel
 from domain.shell._internal.kernel_devices import DeviceType
 from domain.shell._internal.kernel_interrupts import InterruptType

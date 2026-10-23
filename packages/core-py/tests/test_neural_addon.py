@@ -7,7 +7,6 @@ import time
 
 import numpy as np
 import pytest
-
 from domain.shell._internal.addons.neural import (
     BatchProcessor,
     BatchRequest,
@@ -30,6 +29,7 @@ from domain.shell._internal.addons.neural import (
     NeuralSyscall,
     TokenizerDevice,
 )
+
 from domain.shell._internal.kernel_devices import DeviceType
 from domain.shell._internal.kernel_interrupts import InterruptType
 from domain.shell._internal.kernel_process import Process, ProcessState

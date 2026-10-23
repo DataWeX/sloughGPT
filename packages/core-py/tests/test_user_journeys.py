@@ -36,8 +36,7 @@ _avion_src = str(Path(__file__).resolve().parents[2] / "avion" / "src")
 if _avion_src not in sys.path:
     sys.path.insert(0, _avion_src)
 
-from avion import Arken, ElementLocator, PageControls, SyncRunner
-from avion import waits
+from avion import Arken, ElementLocator, PageControls, SyncRunner, waits
 
 # Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
 # stale :3000 default). Override with SLO_WEB_URL for non-standard setups.
