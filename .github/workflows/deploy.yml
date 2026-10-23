@@ -1,6 +1,6 @@
 name: Deploy Website — Git Sync (Tailscale + Cloudflare)
 
-true:
+'on':
   push:
     branches: [main]
     paths:
