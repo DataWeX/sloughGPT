@@ -4,13 +4,15 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-23 ~11:15 — OPENCODE (speech-engine lane): `feat/voice-speech-engine` @ `7fc009cfe` PUSHED (card `631e6181`) — voice chat now works in the OpenCode desktop pane + Android WebView; NOT merged, `origin/main` untouched, awaiting your land call + a live speak-test.** Root cause: `useVoiceChat.ts` had ONE STT path — `window.SpeechRecognition || webkitSpeechRecognition`, which only works in real Chrome (it phones Google's speech servers); in Electron panes and Android WebView the constructor is absent or errors `network` (no Google keys), and the UX dead-ended at "Speech recognition not supported — try Chrome or Safari". Fix = `features/chat/voice/speech-engine.ts` `createSpeechEngine`: pluggable recognizers behind one surface — **browser** (existing Web Speech wiring) vs **server** (getUserMedia → AudioContext 16 kHz → RMS-VAD utterance segmentation → Int16 PCM → `POST /multimodal/transcribe` → domain `VoiceEngine` → **vosk, fully offline**). Fatal SR errors (`not-allowed`/`network`/`service-not-allowed`/`audio-capture`) fail over to server exactly once, silently; `aborted` ignored. **The PCM contract is raw s16le mono @ 16 kHz — the server does no container parsing** (`AudioData(data,16000,2)` / `KaldiRecognizer(16000)`), so a MediaRecorder webm/ogg blob would decode as garbage; `voiceController.transcribe()` goes through `apiPostForm` (http-client single-source rule). Semantics locked by tests: `stop()` flushes captured speech (final still delivered), `abort()` drops it, `stop()` during in-flight getUserMedia releases the owned stream (no leaked capture), a caller-provided stream is never stopped by the engine (the hook's level monitor owns it). **Contract change, tests rewritten deliberately:** SR `not-allowed` now fails over to server instead of erroring (webviews grant getUserMedia independently) — the old "not supported"/"not allowed" banner assertions in `useVoiceChat.test.ts` + `VoiceChatMode.test.tsx` now assert fallback-engaged; a NEW combined case covers not-allowed AND mic-denied → "Microphone access denied". Gates (apps/web): `tsc --noEmit` clean, eslint **0 errors** (5 warnings pre-existing on main: 2 exhaustive-deps, sentenceQueue/speaking dead locals, voice-controller sampleRate), vitest `features/chat` **137 files / 1555 tests passed** (voice suites: engine 14, hook 9, VoiceChatMode 15, voice-controller 8 = 46). TTS left alone (`speechSynthesis` exists in the pane) — a backend-TTS fallback via `/voice/tts` is the follow-up card IF the pane reports zero voices. **To close card `631e6181`: open the chat voice mode INSIDE the OpenCode pane, grant mic, speak — expect listening → transcript → reply (server mode banner-free); the engine reports `mode` via `onMode` for debugging.**
+
 **2026-10-23 — MAIN'S LAST RED FIXED (branch `fix/dockerignore-copy-sources`, card `0464c3d4` — lands with this entry).** CI/CD `build` un-broken: root `.dockerignore` stopped excluding `packages/strui/`, `apps/web/`, `apps/cli/` — exactly the COPY sources of `apps/web/Dockerfile`, `apps/web/Dockerfile.vite` and `infra/docker/Dockerfile.cli`, so the build context arrived at **2B** and buildx 404'd every COPY (since `d9d500b02`; **never green in 60 CI/CD runs**). Fix = junk-only excludes (`**/node_modules`, `apps/web/.next`, `apps/web/dist-vite`), ported from local-main `870ab1bad` (the settled fix that never reached origin/main). Gate: static checker over 12 Dockerfiles' context-COPY sources vs `.dockerignore` — 15 excluded → 1 known remainder (`infra/docker/Dockerfile.test` COPYs `tests/` — local deploy tooling, not built by CI; 76MB context tradeoff, left for a ruling on card `0464c3d4`). **Verification = the `build` job on main's next CI/CD run** (it runs only `if: github.event_name != 'pull_request'`). ⚠ Card `0464c3d4` shows wip/`OPENCODE` (claimed 08:38 UTC while this fix was already built here) — work is on this branch, **do not duplicate**.
 
-**2026-10-22 ~08:10 — MAIN GREEN + POING TITLE-DERIVATION (this session).** **MERGED: `#174` (`9483282e0`, branch `fix/vm-bench-slow`)** — main's CI/CD `test-core-py` red closed: the 120s-timeout failures were `test_vm_benchmark.py`'s **71 zero-assertion benchmarks** (`test_loop_100` 93s, `test_dense_branches` 92s untraced; CI's `--cov` tracing balloons them past budget; run-1 vs run-2 timed out on *different* tests ⇒ boundary, not regression — none of the day's 7 PRs touched `vm.py`), fixed by module-level `pytestmark = pytest.mark.slow` per #173 precedent; the other 20 `test_vm_*.py` keep fast-lane coverage. **PUSHED — lands with this entry: `#175` (branch `fix/sidebar-title-derivation`, card `b36499e3-e0f9-4fe0-8df8-44ff8449f5ba`).** The "weird UI in chat" screenshot walkthrough: **"POING" is a real conversation**, titled from its last message (Oct 18 test *"Reply with exactly: POING"*) — group labels can only be Today/Yesterday/Last 7 days/Older (verified in both grouping impls), and the title's all-caps just mimics the `uppercase` header style; the **blank-title rows** were empty names with no frontend fallback. Fix = frontend owns derivation (user decision; `soulsController` ruled out — `soulController` never existed in git history): `deriveConversationTitle()` in `session-controller.ts` (strip C0/C1, collapse whitespace, 60-cap, `Untitled` fallback, **no all-caps suppression**), applied in `list()`/`search()`, reused by `useSidebarSearch`; gates 20/20 + sidebar 80/80 + lib 1543/1543 + tsc exit 0. **Backend follow-ups carded (todo):** 3 contradictory derivation sites (`inference.py:1026-1033`, `:1065-1068`, docstore writer) + `_build_session_metadata_index` **4KB skip bug** (reads 4096 bytes, `json.loads` fails → `continue` silently drops any session file >4KB; docstring promises a full-read fallback the code doesn't do). **Main CI truth at landing:** `test-core-py` GREEN post-#174; the **only remaining main red = CI/CD `build`** — `.dockerignore` excludes `packages/strui/`, `apps/web/`, `apps/cli/` (added in `d9d500b02`, Jul 16), exactly the trees `apps/web/Dockerfile` COPYs, so the build context arrives at **2 bytes** and every COPY 404s (pre-existing since at least Oct 21 — NOT #174); carded as `fix(docker): .dockerignore excludes COPY sources`. #175's first `test-web` run was red on **my own** `no-control-regex` (the C0/C1 strip regex) — fixed with `\p{Cc}`, and **eslint is now part of my local gates** (vitest+tsc missed what CI caught). **Ops lesson: `/tmp/opencode` is wiped on every server restart — worktrees go in-repo `.wt-*`** (`wt-red` lost twice; this work lives in `.wt-title`; `docs/WORKTREE_RECOVERY.md` on `feat/worktree-runbook` covers the `~/.cache` half).
+**2026-10-22 ~08:10 — MAIN GREEN + POING TITLE-DERIVATION (this session).** **MERGED: `#174` (`9483282e0`, branch `fix/vm-bench-slow`)** — main's CI/CD `test-core-py` red closed: the 120s-timeout failures were `test_vm_benchmark.py`'s **71 zero-assertion benchmarks** (`test_loop_100` 93s, `test_dense_branches` 92s untraced; CI's `--cov` tracing balloons them past budget; run-1 vs run-2 timed out on _different_ tests ⇒ boundary, not regression — none of the day's 7 PRs touched `vm.py`), fixed by module-level `pytestmark = pytest.mark.slow` per #173 precedent; the other 20 `test_vm_*.py` keep fast-lane coverage. **PUSHED — lands with this entry: `#175` (branch `fix/sidebar-title-derivation`, card `b36499e3-e0f9-4fe0-8df8-44ff8449f5ba`).** The "weird UI in chat" screenshot walkthrough: **"POING" is a real conversation**, titled from its last message (Oct 18 test _"Reply with exactly: POING"_) — group labels can only be Today/Yesterday/Last 7 days/Older (verified in both grouping impls), and the title's all-caps just mimics the `uppercase` header style; the **blank-title rows** were empty names with no frontend fallback. Fix = frontend owns derivation (user decision; `soulsController` ruled out — `soulController` never existed in git history): `deriveConversationTitle()` in `session-controller.ts` (strip C0/C1, collapse whitespace, 60-cap, `Untitled` fallback, **no all-caps suppression**), applied in `list()`/`search()`, reused by `useSidebarSearch`; gates 20/20 + sidebar 80/80 + lib 1543/1543 + tsc exit 0. **Backend follow-ups carded (todo):** 3 contradictory derivation sites (`inference.py:1026-1033`, `:1065-1068`, docstore writer) + `_build_session_metadata_index` **4KB skip bug** (reads 4096 bytes, `json.loads` fails → `continue` silently drops any session file >4KB; docstring promises a full-read fallback the code doesn't do). **Main CI truth at landing:** `test-core-py` GREEN post-#174; the **only remaining main red = CI/CD `build`** — `.dockerignore` excludes `packages/strui/`, `apps/web/`, `apps/cli/` (added in `d9d500b02`, Jul 16), exactly the trees `apps/web/Dockerfile` COPYs, so the build context arrives at **2 bytes** and every COPY 404s (pre-existing since at least Oct 21 — NOT #174); carded as `fix(docker): .dockerignore excludes COPY sources`. #175's first `test-web` run was red on **my own** `no-control-regex` (the C0/C1 strip regex) — fixed with `\p{Cc}`, and **eslint is now part of my local gates** (vitest+tsc missed what CI caught). **Ops lesson: `/tmp/opencode` is wiped on every server restart — worktrees go in-repo `.wt-*`** (`wt-red` lost twice; this work lives in `.wt-title`; `docs/WORKTREE_RECOVERY.md` on `feat/worktree-runbook` covers the `~/.cache` half).
 
 **2026-10-20 ~16:20 — DUP-TEST-BASENAMES batch 1 (card d79237cd, branch `chore/dup-test-basenames-b1`) + a LANDMINE the card's rationale misses.** Inventory re-measured on current `origin/main`: still **55 basenames / 110 files** — card's numbers accurate. **The card says "importlib mode makes renames safe (no package coupling)" — true but INCOMPLETE: path pins are a second coupling.** 8 of the 55 are pinned in CI/config/scripts and must NOT be renamed without updating the pin in the same commit: `test_chat_trainer`, `test_checkpoint_utils`, `test_config`, `test_knowledge_graph`, `test_lm_eval_char`, `test_rag`, `test_training_status`, `test_wandb_helpers`. Pins: `.github/workflows/ci_cd.yml` (`--ignore=tests/...`), `reusable-ci-core.yml`, `scripts/test_all.sh`, `scripts/verify.sh:117` (explicit run list incl. `test_config` + `test_lm_eval_char`), `Makefile:45`. **`test_training_status.py` is the trap case — `Makefile:45` does `cd packages/core-py && pytest ... test_training_status.py`, so it pins the CORE-PY copy, not the tests/ copy**; every other pin points at `tests/`. Also verified: **0 cross-file imports** of any duplicated test module, and `packages/core-py/conftest.py` `collect_ignore` has **no overlap** with the 55. Batch 1 = 6 UNPINNED pairs, core-py copy renamed to `*__corepy.py` (chosen because most pins target `tests/`). Gates: renamed files collect **93 == 93** pre-rename (exact parity), **93 passed**, full `packages/core-py/tests` still 42699/43220. **Remaining: 41 safe pairs, then the 8 pinned ones — each needs its pin updated atomically with the rename or CI silently un-ignores a test.**
 
-**2026-10-20 ~15:20 — OPENCODE (revalidate lane): `fix/revalidate-not-reload` @ `99348588a` PUSHED (card `759c69cf`) — mechanism + 7 call sites, 8068 tests green; NOT merged, `origin/main` untouched, awaiting landing call.** Root cause was a **generation-counter invariant break**, not "too many reloads": `invalidateQuery` wrote staleness as a *value* (`updatedAt: 0` at `client.ts:190`) while the `useQuery` fetch effect keyed off `[sk, enabled]` (`hooks.ts:150`) — neither changes, so an already-mounted view was **never woken** and stayed on stale data forever. Every refresh path worked around it with `window.location.reload()`, discarding drafts, open panels, timers and live terminal sessions. Fix: monotonic `refreshVersion` in the store + `revalidateAll()` marking every entry stale and bumping it in **one atomic `setState`** (one subscriber notification, not one per entry); `useQuery` remembers the version it last fetched under and refetches on advance, keeping `data`/`error`/`status`/`_promise` so the spinner never flashes and an in-flight `_promise` suppresses a duplicate request. **Call sites converted to per-page loaders, NOT a blanket `revalidateAll`** — those pages hold raw `useState` the cache cannot see, so a blanket call would be a silent no-op: tokenizer/companion/benchmark extract the mount fetch into a `useCallback` shared by mount + the `r` shortcut + `PageContainer`'s `onRetry` (companion preserves its `ignoreRef` unmount race guard); vm guards with `*Touched` refs so refresh cannot overwrite an edited field while training timer + form state survive; developer remounts tab panels via a `refreshKey`; CommandPalette/StatusBar use `revalidateAll()` where the intent genuinely is "refetch everything". **Deliberately NOT converted: `useLiveStatus`** — health lives in `liveStatusStore`, `useQuery`/`fetchQuery` refs in that file = **0**, so `revalidateAll` would be a pure no-op while deleting the terminal `setConnectionStatus('error')` state (only `connected`/`connecting` left) and resetting `failureCount` to 0 each hit = a non-terminating cycle of no-op revalidations; the reload ladder's 3-call-site rate limit stays. **`navigation.ts` shim reverted to `window.location.reload()`** — no `router.refresh()` callers remain, so the change was moot either way. Gates: vitest **843 files / 8068 tests**, `tsc --noEmit` exit 0, eslint **0 errors** (12 warnings, all pre-existing on `origin/main` in untouched files); no benchmark applies (frontend cache, all 42 `scripts/benchmark_*.py` are Python training/inference). **NEXT: `lib/query/` is a DEAD stale duplicate of `lib/cache/`** — its only importer is itself (`lib/query/api-hooks.ts:5`), and its `client.ts` now trails by the `refreshVersion` mechanism (84 diff lines) ⇒ retiring it is the follow-up card, not this one.
+**2026-10-20 ~15:20 — OPENCODE (revalidate lane): `fix/revalidate-not-reload` @ `99348588a` PUSHED (card `759c69cf`) — mechanism + 7 call sites, 8068 tests green; NOT merged, `origin/main` untouched, awaiting landing call.** Root cause was a **generation-counter invariant break**, not "too many reloads": `invalidateQuery` wrote staleness as a _value_ (`updatedAt: 0` at `client.ts:190`) while the `useQuery` fetch effect keyed off `[sk, enabled]` (`hooks.ts:150`) — neither changes, so an already-mounted view was **never woken** and stayed on stale data forever. Every refresh path worked around it with `window.location.reload()`, discarding drafts, open panels, timers and live terminal sessions. Fix: monotonic `refreshVersion` in the store + `revalidateAll()` marking every entry stale and bumping it in **one atomic `setState`** (one subscriber notification, not one per entry); `useQuery` remembers the version it last fetched under and refetches on advance, keeping `data`/`error`/`status`/`_promise` so the spinner never flashes and an in-flight `_promise` suppresses a duplicate request. **Call sites converted to per-page loaders, NOT a blanket `revalidateAll`** — those pages hold raw `useState` the cache cannot see, so a blanket call would be a silent no-op: tokenizer/companion/benchmark extract the mount fetch into a `useCallback` shared by mount + the `r` shortcut + `PageContainer`'s `onRetry` (companion preserves its `ignoreRef` unmount race guard); vm guards with `*Touched` refs so refresh cannot overwrite an edited field while training timer + form state survive; developer remounts tab panels via a `refreshKey`; CommandPalette/StatusBar use `revalidateAll()` where the intent genuinely is "refetch everything". **Deliberately NOT converted: `useLiveStatus`** — health lives in `liveStatusStore`, `useQuery`/`fetchQuery` refs in that file = **0**, so `revalidateAll` would be a pure no-op while deleting the terminal `setConnectionStatus('error')` state (only `connected`/`connecting` left) and resetting `failureCount` to 0 each hit = a non-terminating cycle of no-op revalidations; the reload ladder's 3-call-site rate limit stays. **`navigation.ts` shim reverted to `window.location.reload()`** — no `router.refresh()` callers remain, so the change was moot either way. Gates: vitest **843 files / 8068 tests**, `tsc --noEmit` exit 0, eslint **0 errors** (12 warnings, all pre-existing on `origin/main` in untouched files); no benchmark applies (frontend cache, all 42 `scripts/benchmark_*.py` are Python training/inference). **NEXT: `lib/query/` is a DEAD stale duplicate of `lib/cache/`** — its only importer is itself (`lib/query/api-hooks.ts:5`), and its `client.ts` now trails by the `refreshVersion` mechanism (84 diff lines) ⇒ retiring it is the follow-up card, not this one.
 
 **2026-10-20 ~14:25 — VOICE ORB verified + rebased, awaiting your land call (card 96d06ef3). Nothing merged to main.** Card claimed work in `.wt-orb` on `feat/voice-orb`; found **1 real commit `a4411e615`** (4 files, +173/−74) but the branch was **531 commits behind `origin/main`** (merge-base `e3b5db62c`, 2026-10-04) — so its green evidence was against a stale tree, not landable. Touched files barely drifted (VoiceChatMode.tsx 0, useVoiceChat.ts 0, globals.css 3, VoiceWaveform.tsx 1) ⇒ cherry-picked onto current `origin/main` as `feat/voice-orb-rebased` = `2a4132c81`, **0 conflicts, identical stat**. Gates re-run on the REBASED tree: vitest 3 voice files **42 passed** (VoiceWaveform 20 + VoiceChatMode 14 + VoiceInput 8 — VoiceInput matters, it imports VoiceWaveform separately), `tsc --noEmit` exit 0, eslint **0 errors**. The 6 eslint warnings are **pre-existing, not introduced**: `VoiceExchange`/`VoiceSettings` unused imports and `sentenceQueue`/`speaking` dead locals are byte-identical counts vs `origin/main` (13 hits both revs) — do NOT attribute them to this commit. **Both branches pushed; `origin/main` untouched; main checkout's dirty `board.jsonl`/`AGENT_SYNC.md`/deleted `apps/mobile/sloughgpt-sidebar-fixed.apk` belong to another session and were not touched.** **CORRECTION (same session, ~14:40) — ALL THREE orb cards are already implemented on `origin/main`; the board's `review` column is stale, not the code. Do not re-do any of them.** My first pass read the board and wrongly concluded two cards were unbuilt/stranded. Proven on `origin/main` (`6ee2b4832`): (a) `9d8319fb` startup-overlay de-stack — `components/startup/StartupOverlay.tsx:160` reads `// "Stuck" is its own variant, not an extra row bolted onto the startup UI.` with the `if (stuck)` early return (:163), `role="alert"` (:175), `Retry` (:191), `overlay_stuck` (:77) — verbatim the card's "mutually exclusive variants" fix; 11/11 tests; reduced-motion for `sl-bar-shimmer`/`sl-dot-pulse`/`sl-dot-wave` lives in `globals.css:863-874`, not the TSX. The "stranded" `6d7249e13` is a **backport of main's own structure** onto the stale branch — cherry-picking it would have REGRESSED main (349 vs main's 324 lines). (b) `83f01763` one banner surface — `components/AppLayout.tsx:123` `// Backend health lives on ONE banner surface (GlobalBanner + useBannerStore).` + `showBanner({key:'backend-connection'})` :130, cleanup :136, `<GlobalBanner/>` :144, and `grep sl-app-banner` = **ABSENT** (the hand-rolled div is gone). Card 3's named branch `fix/startup-overlay-busy` has 0 commits — the work landed via a different path and the column was never flipped. **Only `96d06ef3` (voice orb) needed real work, and it was stale by 531 commits — see above.** Reading `.kanban/board.jsonl` column state as "what is unbuilt" is unsafe in this repo; screen against `origin/main` code first. The 3 cards need a review→done flip with this evidence, NOT re-implementation (main checkout's board is dirty with another session's work, so I did not edit it).
 
@@ -23,7 +25,7 @@ commits, 828638485 → tip).** Merges: `decb73828` ruff format-gate fix (9dfb7b5
 `9f9cbd16c` G2 non-streaming turns record a substrate episode (5a5c4f874; real gap parent 3b6a5ca2 — merge msg
 mislabels 38c105b3), `7e6b7c414` model-health+memory-router state isolation (522c1cc0b, cards
 7245f655+6b68e2b1; the two server copies patch the facade per their tests now). Cherry-picks: `3009b35e1` G7
-agent runs record through ONE domain seam (7919fb77a — resolved __init__.py conflict keeping main's lazy-attr
+agent runs record through ONE domain seam (7919fb77a — resolved **init**.py conflict keeping main's lazy-attr
 machinery + record_experience export; the audit ratchet test file is trimmed to main-applicable subset (G7
 trail+behavioral+G2 guard) because mind_log/locus features are audit-lane-only, 3P/6XF), `de248a1fe` RAG
 one-spelling (c3f336f62 — ALL 15 get_rag_service/is_rag_service_ready imports now `from domain.cognition`;
@@ -46,9 +48,9 @@ cancellation (VocabCard/MergesCard now also gated in the same uncommitted pass �
 green-suite run); cleanup-03 + e0844f51 closed as audit-verdict stale claims; f74b9e75 memory card -> review
 (foreman gates 24P on feat/atomic-save-domain-sweep).
 
-**2026-10-17 ~16:30 — DEV AUTO-PORTS LANDED (`9053127b6` on ports/origin-sync = origin `c989dc66a` + feature FF, pushed with this entry).** `cmd_dev` now resolves both ports once, before the status block and both spawns (`_resolve_dev_ports` on existing `_is_port_bound`/`_find_free_port`): busy → next free, **shift-only** — dev never reuses a healthy listener (`/health` carries no repo identity; reuse could silently attach a session to another checkout's backend — this session's live failure mode with the main tree holding `:8000`/`:5173`). `_web_dev_env(env, web_port, api_port)` injects `NEXT_PUBLIC_API_URL` from the **resolved** API port when the caller hasn't set it — vite.config.ts:62 bakes `?? 'http://localhost:8000'` at config load, so a shifted API port must reach the web process as env *before spawn* or the UI silently talks to a foreign backend; explicit values (incl. empty string, same-origin gateway mode) always win. cmd_serve's three reuse blocks untouched (grandfathered), CORS already covers any loopback port (`main.py:295` regex). Manual gate: bare `./sloughgpt dev` with 8000/5173 held → `WRN API port 8000 busy, using 8001`, TUI 8001/3000, web-process env `NEXT_PUBLIC_API_URL=http://localhost:8001`, both endpoints 200 — **worktree dev stack left running at :8001/:3000** (the session's original goal; the earlier lifespan hang did not reproduce). Gates: ruff clean, mypy 11 errors = stashed baseline (pre-existing), apps/cli **465 passed/1 skipped** (resolver tests use kernel-assigned ports — fixed high ports collide with live listeners; cmd_dev scaffolds patch `_is_port_bound` False for deterministic exact-port assertions). Card 143a2bfa done (board card `12b33f47`); wire-layer build card filed note `799a355f` / board `ecea49c8` (sockets-first plan, awaiting implementation go-ahead). Pitfall logged: `pkill -f` with a `.*` pattern matches the calling shell's **own cmdline** (the pattern text itself) and SIGTERMs your command mid-run — bracket every literal (`port 800[1]`, `main:ap[p]`) or exclude by PID.
+**2026-10-17 ~16:30 — DEV AUTO-PORTS LANDED (`9053127b6` on ports/origin-sync = origin `c989dc66a` + feature FF, pushed with this entry).** `cmd_dev` now resolves both ports once, before the status block and both spawns (`_resolve_dev_ports` on existing `_is_port_bound`/`_find_free_port`): busy → next free, **shift-only** — dev never reuses a healthy listener (`/health` carries no repo identity; reuse could silently attach a session to another checkout's backend — this session's live failure mode with the main tree holding `:8000`/`:5173`). `_web_dev_env(env, web_port, api_port)` injects `NEXT_PUBLIC_API_URL` from the **resolved** API port when the caller hasn't set it — vite.config.ts:62 bakes `?? 'http://localhost:8000'` at config load, so a shifted API port must reach the web process as env _before spawn_ or the UI silently talks to a foreign backend; explicit values (incl. empty string, same-origin gateway mode) always win. cmd_serve's three reuse blocks untouched (grandfathered), CORS already covers any loopback port (`main.py:295` regex). Manual gate: bare `./sloughgpt dev` with 8000/5173 held → `WRN API port 8000 busy, using 8001`, TUI 8001/3000, web-process env `NEXT_PUBLIC_API_URL=http://localhost:8001`, both endpoints 200 — **worktree dev stack left running at :8001/:3000** (the session's original goal; the earlier lifespan hang did not reproduce). Gates: ruff clean, mypy 11 errors = stashed baseline (pre-existing), apps/cli **465 passed/1 skipped** (resolver tests use kernel-assigned ports — fixed high ports collide with live listeners; cmd_dev scaffolds patch `_is_port_bound` False for deterministic exact-port assertions). Card 143a2bfa done (board card `12b33f47`); wire-layer build card filed note `799a355f` / board `ecea49c8` (sockets-first plan, awaiting implementation go-ahead). Pitfall logged: `pkill -f` with a `.*` pattern matches the calling shell's **own cmdline** (the pattern text itself) and SIGTERMs your command mid-run — bracket every literal (`port 800[1]`, `main:ap[p]`) or exclude by PID.
 
-**2026-10-16 ~21:40 — DIVERGENCE PART 2 BATCH 14: PEP 563 scope (a) ported — domain/ future-annotations ratchet (card ef64a931 wip; source card 7d5e5a7c).** `9a1b4c492` → `09ae6a20a` (clean pick `-x`; origin already carried the import in 501 files, so the pick landed the remaining **122 `domain/`** one-liners + ruff UP037/UP045/I001 fixes + hygiene ratchet **#5** (`test_domain_files_carry_future_annotations`) + `docs/PYTHON_FIRST.md` mandate; `domain/` coverage now 523/523, 0 missing). **Format folded into the pick**: source hunks were wrapped at line-length 88 — 102 touched files re-run through `ruff format` at origin's canonical 100 and amended into the pick (per-file attribution: only 2 touched files were dirty pre-pick). **Follow-up pick `b94452570`**: bare-except ratchet made **AST-based** (`ast.ExceptHandler` walk) — origin's line-regex scanner false-positived on atomic_write.py's batch-5-ported docstring prose (``except: unlink``), a pre-existing red on origin/main (verified in a clean origin/main worktree: 4/5 pre-pick). The source tree's fix was *uncommitted* in the api-std worktree at port time, so it was replicated here as its own commit (foreign hunks untouched); negative control verified (multi-line `except :` now caught, prose no longer is); origin's PRINT_ALLOWLIST entries retained. Gates: ruff check+format clean on all touched files, py_compile clean, hygiene **5/5** (was 4/5 pre-pick), docs parity 11/11, **full backend suite** (pytest.ini testpaths + domain/): `tests/`+`domain/` **3306 passed**, `apps/cli` **442 passed/1 skipped**, `packages/core-py` **42415 passed / 114 failed / 106 skipped** — failure triage = **no port regressions**: 77 of 114 fail identically on a clean pre-pick `93e0807c5` worktree (pre-existing/env), the other 37 are load flakes (27 pass in isolation on our tree; the residual set — `test_pair_extractor` MogDB-first reads, `test_lora_eval_router`, `test_quantization_benchmark_e2e` — sits in modules with a **zero-line diff vs origin**, driven by repo-local `data/response_mogdb` pollution of a pre-existing test-isolation defect (tests monkeypatch only the JSONL fallback, not the tracker) + a quantization e2e flake that also failed once on baseline; fresh CI checkouts stay green, consistent with origin). AST-equivalence spot-check vs source tree (124 files; 8 diffs all origin-side drift, our per-file diffs verified minimal). **Scope (b) (tests/scripts/packages future-imports) remains open on card 7d5e5a7c.**
+**2026-10-16 ~21:40 — DIVERGENCE PART 2 BATCH 14: PEP 563 scope (a) ported — domain/ future-annotations ratchet (card ef64a931 wip; source card 7d5e5a7c).** `9a1b4c492` → `09ae6a20a` (clean pick `-x`; origin already carried the import in 501 files, so the pick landed the remaining **122 `domain/`** one-liners + ruff UP037/UP045/I001 fixes + hygiene ratchet **#5** (`test_domain_files_carry_future_annotations`) + `docs/PYTHON_FIRST.md` mandate; `domain/` coverage now 523/523, 0 missing). **Format folded into the pick**: source hunks were wrapped at line-length 88 — 102 touched files re-run through `ruff format` at origin's canonical 100 and amended into the pick (per-file attribution: only 2 touched files were dirty pre-pick). **Follow-up pick `b94452570`**: bare-except ratchet made **AST-based** (`ast.ExceptHandler` walk) — origin's line-regex scanner false-positived on atomic_write.py's batch-5-ported docstring prose (`except: unlink`), a pre-existing red on origin/main (verified in a clean origin/main worktree: 4/5 pre-pick). The source tree's fix was _uncommitted_ in the api-std worktree at port time, so it was replicated here as its own commit (foreign hunks untouched); negative control verified (multi-line `except :` now caught, prose no longer is); origin's PRINT_ALLOWLIST entries retained. Gates: ruff check+format clean on all touched files, py_compile clean, hygiene **5/5** (was 4/5 pre-pick), docs parity 11/11, **full backend suite** (pytest.ini testpaths + domain/): `tests/`+`domain/` **3306 passed**, `apps/cli` **442 passed/1 skipped**, `packages/core-py` **42415 passed / 114 failed / 106 skipped** — failure triage = **no port regressions**: 77 of 114 fail identically on a clean pre-pick `93e0807c5` worktree (pre-existing/env), the other 37 are load flakes (27 pass in isolation on our tree; the residual set — `test_pair_extractor` MogDB-first reads, `test_lora_eval_router`, `test_quantization_benchmark_e2e` — sits in modules with a **zero-line diff vs origin**, driven by repo-local `data/response_mogdb` pollution of a pre-existing test-isolation defect (tests monkeypatch only the JSONL fallback, not the tracker) + a quantization e2e flake that also failed once on baseline; fresh CI checkouts stay green, consistent with origin). AST-equivalence spot-check vs source tree (124 files; 8 diffs all origin-side drift, our per-file diffs verified minimal). **Scope (b) (tests/scripts/packages future-imports) remains open on card 7d5e5a7c.**
 
 **2026-10-16 ~21:05 — DIVERGENCE PART 2 BATCH 13: chat surfaces + Evolution panel ported (cards 96a5f7db/15948ab7/180aae13, card ef64a931 wip).** Chain `0ff3d1004`→`e7c1f7855`→`a327f1222` → `a5a4eafd4`+`e1c4bf6c6`+`9b06a6001` (1 conflict: `personality/page.tsx` — took the rebuild; origin's drift there was exactly part-1's hsl→rgb lines inside the replaced markup). **Design-system adaptation folded into `e1c4bf6c6`:** the picked chart's 6 `hsl(var(--…))` chrome spots → `rgb(var(--…))` (origin has **zero** `hsl(var(` post-part-1); series colors already `rgb(var(--chart-N))` matching house style; zero hex literals in all 3 picks). Gates: vitest **838 files / 8037 tests**, web tsc clean, eslint 0 errors (13 warnings), hygiene checks OK, `check_contract` OK. **Also fixed batch 9's drift:** `check_docs_api_parity` went red when batch 9 grew `controllers/health.py` (+68 lines/+2 defs) — claims refreshed in `docs/DOC_VS_CODE_GAP_AUDIT.md` (2844→2908, 93→95), now 11/11. Known pre-existing on origin: `apps/mobile` has no node_modules in this worktree (source commit: structure untouched); origin's own `logs.py` format-check failure. **Queue state: PORT list exhausted** — `origin/main..main` = 0 (api-std `main` synced to origin by another lane); only **PEP 563 `9a1b4c492`** remains, deferred for scope decision (card 0d4ad67b/7d5e5a7c).
 
@@ -64,7 +66,7 @@ green-suite run); cleanup-03 + e0844f51 closed as audit-verdict stale claims; f7
 
 **2026-10-16 ~18:05 — DIVERGENCE PART 2 BATCH 6: NotesController ported (card ef64a931 wip).** Local `d49aba1d0`+`61442a1b7`+**`0afbdebbc`** → `93fd98287`+`ef33f2432`+`2ce5f57d6` (picked in logical order — module first, then routing; upstream's own order has the routing commit importing a not-yet-created module). **Queue correction:** `d49aba1d0`/`61442a1b7` are NOT on local main (side branch `feat/notes-controller`, legacy `in_progress/doing` vocabulary) and the PORT list omitted **`0afbdebbc`** — the adaptation of 3 stale assertions to the `wip→wip`/`todo→open` cutover (`3f8465164`) that sits directly on top of the chain; without it 3 tests fail against current `config.STATUS_TO_COLUMN`. Source probes must chain follow-up commits (`git log --all -- <file>`), not trust a two-commit PORT entry. Gates: app-planner suite **259 passed / 0 failed** (PYTHONPATH=packages/app-planner/src), ruff check+format clean, live smoke (NotesController real-read + refactored `cli.main --help` exit 0). Origin's `cli.py`/`gui.py` were byte-identical to pre-routing local — zero conflicts.
 
-**2026-10-16 ~17:35 — DIVERGENCE PART 2 BATCH 5: atomic_write durable tier + save-path routing ported (card ef64a931 wip).** Local `8de5784da`+`6be80e43d`+`d07cd7e05` → `03a92afa7`+`a31343390`+`812c7f5f6` (0 conflicts; `6be80e43d` required — corrects figures *inside* atomic_write.py; skipped `794a6e454` foreign journal line; `slo_format.py` origin drift preserved: top_p 0.85 / repeat_penalty 1.15 / temperature 0.7; ruff-format fixes folded into their origin picks via autosquash at origin's `line-length = 100`). **Stale-test fix approved by user:** `test_rename_failure_cleans_temp_and_reraises` injected failure at `os.rename`, but `d07cd7e05` deliberately routes saves through `os.replace` (atomic_write's documented primitive) — the test failed **identically on local main** (upstream-red, no card existed); injection now patches `os.replace`, preserving intent (propagate + no `.tmp` leak — `atomic_writer` unlinks on failure). Gates: ruff check+format clean, atomic_write 29/29, save-path suites 95 passed/1 skipped, slonet legacy/checkpoints/serialization at exact origin parity (only the 3 pre-existing origin failures), `scripts/benchmark_checkpoint_save.py` runs clean (tiny/1M/8M + tier-split flush-share measurements).
+**2026-10-16 ~17:35 — DIVERGENCE PART 2 BATCH 5: atomic_write durable tier + save-path routing ported (card ef64a931 wip).** Local `8de5784da`+`6be80e43d`+`d07cd7e05` → `03a92afa7`+`a31343390`+`812c7f5f6` (0 conflicts; `6be80e43d` required — corrects figures _inside_ atomic_write.py; skipped `794a6e454` foreign journal line; `slo_format.py` origin drift preserved: top_p 0.85 / repeat_penalty 1.15 / temperature 0.7; ruff-format fixes folded into their origin picks via autosquash at origin's `line-length = 100`). **Stale-test fix approved by user:** `test_rename_failure_cleans_temp_and_reraises` injected failure at `os.rename`, but `d07cd7e05` deliberately routes saves through `os.replace` (atomic_write's documented primitive) — the test failed **identically on local main** (upstream-red, no card existed); injection now patches `os.replace`, preserving intent (propagate + no `.tmp` leak — `atomic_writer` unlinks on failure). Gates: ruff check+format clean, atomic_write 29/29, save-path suites 95 passed/1 skipped, slonet legacy/checkpoints/serialization at exact origin parity (only the 3 pre-existing origin failures), `scripts/benchmark_checkpoint_save.py` runs clean (tiny/1M/8M + tier-split flush-share measurements).
 
 **2026-10-16 ~17:05 — DIVERGENCE PART 2 BATCH 4: stream-complete live-state persist ported (card ef64a931 wip).** Local `86b33d2a7` → `5bd345495` (0 conflicts; `apps/web/lib/chat-store.ts` line 630 carried the exact vulnerable `messagesWithNew.map` complete-time save; new `lib/chat-store.test.ts`). Gates: vitest `lib/` **118 files / 1518 tests green**, `tsc --noEmit` 0 errors, eslint on touched files 0 errors (5 pre-existing warnings). Origin also advanced mid-batch (`54c9d300c` nogil + `f56e6125e` parallel/prange — **queue items `8a63a053c`/`952068f2b` landed by another lane, removed from PORT list**); batch-3 rebased clean onto them and pushed `f56e6125e..55e8aa77e`. NEXT: batch 5 = atomic_write family `8de5784da`+`6be80e43d`(figures, inside module)+`d07cd7e05` (cards 7fad226b, d0788163); skip `794a6e454` (foreign journal line); watch `slo_format.py` — origin drifts 3 lines (top_p 0.85, repeat_penalty 1.15, temperature 0.7), favor origin there while taking the atomic_write routing.
 
@@ -84,7 +86,7 @@ plain `pytest` from packages/core-py and from root now resolve the same
 configfile and collect identically (42541/43062, 521 deselected). PART 2
 (55 duplicate test basenames) split to card d79237cd (low). cleanup-14
 closed: SLNC fd-safety port `2e0dd9e64` (fd claimed before release, idempotent
-close/__del__) + audit verdict — SLNCCompiler IS the single conversion path,
+close/**del**) + audit verdict — SLNCCompiler IS the single conversion path,
 all 7 external SLNCParser users are read-only mmap loads; 154 slnc tests
 green. Also closed on evidence: 122109a9 (avion collection failure gone —
 369 collected, 368P/1S), lint-fix-01 (ruff over full prod scope: 0 errors —
@@ -178,8 +180,8 @@ you ever hit "bad object" / "object file is empty").** One external event
 (3 waves: 04:43, 05:15:53, 05:18 — correct size, all-zero content ⇒
 zeroing/partial write outside git; cause unknown) damaged BOTH the object
 store and a worktree file.
-**(A) Object store** — symptom: `git fetch` fails *"object file … is
-empty"* / *"did not send all necessary objects"*; `fsck` reports missing
+**(A) Object store** — symptom: `git fetch` fails _"object file … is
+empty"_ / _"did not send all necessary objects"_; `fsck` reports missing
 commit/tree/blobs. Plain fetch can't heal it: remote-tracking refs advertise
 we already HAVE the tips, so negotiation skips the missing mid-history
 objects. Recipe: (1) delete all zero-byte files under `.git/objects` (git
@@ -192,7 +194,7 @@ content-addressing verifies the result.
 file's content silently becomes a torn write (old header + untruncated tail
 remnant ⇒ duplicated paragraphs) while `git status` reports **clean**: the
 crash also stamped the index stat-cache to match, so git never re-hashes
-and even `git checkout HEAD -- <f>` *skips* the restore (it trusts stat).
+and even `git checkout HEAD -- <f>` _skips_ the restore (it trusts stat).
 Detect (bypasses stat): `git hash-object --path <f> <f>` vs
 `git rev-parse HEAD:<f>`; repo-wide: compare `git ls-files -s` shas against
 `git hash-object --stdin-paths` (hash 120000 symlinks manually — hash-object
@@ -229,7 +231,7 @@ vite image = nginx `listen 3000` + `/health`) ⇒ compose `3000:3000`,
 VALID. But `docker-compose.prod.yml` publishes **only nginx :80/:443** (no
 host :8000/:3000; grafana/prometheus internal — grafana's `:3000/api/health`
 is its own in-network default), so `infra/scripts/deploy.sh`'s host curls
-could never pass: every prod deploy died at *"API health check failed"*
+could never pass: every prod deploy died at _"API health check failed"_
 under `set -e`. Fixed: health now reads container health (`docker inspect`,
 target-aware, 180s), `deploy()` no longer passes `all` to compose up, the
 Grafana endpoint help line corrected, and a **"Port map (container truth)"
@@ -371,7 +373,7 @@ workflow_router/quality_guard), ruff + py_compile clean, 0 frontend consumers.
 
 Earlier 2026-10-08 ~04:20: `fix/shm-resource-tracker-warnings`
 **lands on main** (push `f5ccd713a`, card `ccad389e` → done): **resource_tracker
-`/psm_*` warning flood silenced** — root cause *proven* with a tracker-pid probe:
+`/psm_*` warning flood silenced** — root cause _proven_ with a tracker-pid probe:
 `VectorBE` forked its Pool before any shm op, so fork-arm workers each started
 their **own** tracker (pid mismatch, SHARED=False) and accumulated attach
 registrations (weights + unique per-dispatch out names) in per-worker caches;
@@ -380,7 +382,7 @@ lines** on the fork arm (99 `Errno 2` + 8 "leaked" notices). Fix, 2 sites with
 worker functions untouched: `resource_tracker.ensure_running()` **before** Pool
 construction (one shared tracker → attaches dedup against the creator's
 entries) + `__del__` `FileNotFoundError` fallback unregistering `block._name`
-(stdlib `unlink()` = shm_unlink *then* unregister, no try/finally) with
+(stdlib `unlink()` = shm_unlink _then_ unregister, no try/finally) with
 `_shm_blocks.clear()` idempotence (double-unregister KeyErrors the tracker —
 measured). Rejected: worker-side unregister — on the shared tracker it would
 pop the creator's entry. forkserver already shared via spawn prep `tracker_fd`
@@ -417,7 +419,7 @@ counts once on current main) across two root causes, both test-side, no
 production code touched. (1) `test_feedback_dataclasses` asserted
 `dataclasses.fields().type is float`, but `meta_weights.py`/`model_health.py`
 carry `from __future__ import annotations` (hygiene ratchet) so `f.type` is
-the *string* `"float"` → resolve via `typing.get_type_hints()` (pattern
+the _string_ `"float"` → resolve via `typing.get_type_hints()` (pattern
 verified unique: 0 other sites repo-wide). (2) `test_meta_weights_router`
 was stale vs impl **and** docs (both agree): `k` default is 5, and
 `APIRouter(prefix="/meta-weights")` applies at registration → routes are
@@ -499,67 +501,68 @@ locale, CLI `sloughgpt system mole` (validator class `Doctor` →
 `Validator`), tests renamed (`test_mole_probes.py`, `test_mole_router.py`),
 docs FEATURES/TESTING/INDEX/TRANSPORT reworded. **ONE CLI entry** (user
 decision): default = one-pass sweep + printed summary, `--watch` = cadence
-+ journal, no subcommands. Grandfathered kept: `$SLO_DOCTOR_*`,
-`~/.cache/slog-doctor/`, `scripts/test-doctor.py`, phoneme word-data,
-historical records — **import renames break in-flight branches** still
-using `run_doctor`/`DoctorReport`. Gates: canonical 5-tree
-**green-by-baseline** — 388 bad ids vs baseline 849; all 32 new ids
-attributed (18 journey route-loads + 2 whoami + 6 log-noise = environment,
-A/B on origin/main identical; 3 `build_test_app` collection errors
-reproduce on unmodified main; 3 flakes standalone-green), targeted 80 py +
-24 cli + 31 web vitest, ruff/contract/manifest green, full web vitest
-8072 passed + 3 standalone-green load flakes. Earlier 2026-10-05 ~13:15:
-`feat/mole-phase2-probes` **lands on
-main** (merge `74959c439`, card `1e57b2d9` → done): Mole phase 2 — two
-read-only probes registered in the existing `PROBES` registry (one
-registration each; watch/report pick them up automatically): **gates**
-(parses newest `~/.cache/slog-gates` suite artifact, verdict vs
-`SLO_GATES_DRIFT_MAX`, subset-scope guard + staleness check) and
-**benchmark-regression** (newest-vs-history per kind, importing
-`benchmark_results.py`'s `is_regression` — no reimplementation). No AI,
-suggest-only, ambient (no web surface). Gates: canonical 5-tree run
-**green-by-baseline** — 643 bad ids vs baseline 849 (PR #120 ci-baseline
-fixes landed between), 4 new ids all pass standalone (shared-state flakes:
-spinner/execute_code_js/ModelHealthMonitor tmp family `6369c03e`
-/chat_trainer). Doctor+mole+allowlist targeted **71 passed**, ruff clean,
-probe perf 0.9/0.05 ms per tick (phase-1 baseline 4.8 ms/tick). Earlier
-~10:15: `feat/wip-column-rename` **lands on
-main** (fast-forward `3f8465164`, card `ffaea823` → done): the kanban column
-is **`wip`, never `in_progress`** — `config` maps both directions, the default
-column schemas in Python **and** TS, 4 test files, package README + planner
-specs, and 31 board rows re-keyed (3 `in-progress` orphans folded in) with the
-card hash chain re-sealed because `chain_hash_for()` hashes `column`.
-Gates: app-planner **185**, web planner **89**, tsc/ruff clean, chain `[]`.
-Hard cutover — no compat alias. Earlier ~10:05: `feat/pugqeep-forkserver` **lands on
-main** (merge `d996f8ebc`; cards `df5affc7`+`e69915c1` → done, notes → done):
-gate run #4 green 621F ≤ baseline 683F, playwright-class E 0, 0 timeouts, no
-hang; post-merge targeted re-run = identical F-set, E 0 (see Landed). Earlier ~05:30: `feat/landing-7-cards` lands (7
-infra-review cards + campaign `d083e732`, cherry-picks `2127abb6e..344168b4f`,
-see Landed): startup finalizers + MogDB history + webhook facade + profiler
-feed + test hygiene — tests/server **1942/1/0 vs main's 5-failed baseline**.
-Earlier ~05:05: naming consolidated (card `43ca5222`):
-**Mole is the one app** — never "doctor"/"watcher" as names; docs realigned
-(TESTING/INDEX/FEATURES), legacy `/doctor` paths grandfathered until the
-unified `mole` CLI. Earlier ~04:45: `feat/mole-watcher` lands (card `e0c80774`,
-cherry-pick `e9fb80cec`, see Landed): Mole phase 1 — always-on, no-AI
-monitoring (cadence, identity-set delta dedupe, JSONL journal, load-context).
-Canonical 4-tree gate ≈ main baseline (833/839 nodeids
-identical; the 6 extras pass standalone → shared-`/tmp` test-isolation defect,
-card `6369c03e`). Earlier the same night: `feat/avion-transcript-batching`
-landed (card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit
-transcript flush, benchmark green at baseline (quiet window, load 1.6); and
-`fix/boot-overlay-stall` (card `cb089b43`, cherry-pick `8acb530be`, see
-Landed) — the boot overlay can no longer hang forever; firefox ux-flows
-benchmark **13/13**. Earlier 2026-10-03: `fix/journey-test-gates`
-landed on user sign-off (merge `e081ea9f4` + test stabilization `175d7db8c`,
-see Landed).
-Earlier the same day: the **avion stack** — cards `13f50db7` journeys takeover
-+ `e26dc68c` drivers + `24676ff2` event logger + `553da7a7` agent loop, see
-Landed — and downcraft compression (card `19cd41dc`); journey suites repointed
-to `:5173` (gate9's route-smoke F-class was a stale port, not a missing
-server). Gates and benchmarks now run on conda `sloughgpt` + `PYTHONPATH` —
-the root `.venv` is NOT authoritative (its green was hiding 2 zstd failures;
-`zstandard` is now installed into conda, user-approved).
+
+- journal, no subcommands. Grandfathered kept: `$SLO_DOCTOR_*`,
+  `~/.cache/slog-doctor/`, `scripts/test-doctor.py`, phoneme word-data,
+  historical records — **import renames break in-flight branches** still
+  using `run_doctor`/`DoctorReport`. Gates: canonical 5-tree
+  **green-by-baseline** — 388 bad ids vs baseline 849; all 32 new ids
+  attributed (18 journey route-loads + 2 whoami + 6 log-noise = environment,
+  A/B on origin/main identical; 3 `build_test_app` collection errors
+  reproduce on unmodified main; 3 flakes standalone-green), targeted 80 py +
+  24 cli + 31 web vitest, ruff/contract/manifest green, full web vitest
+  8072 passed + 3 standalone-green load flakes. Earlier 2026-10-05 ~13:15:
+  `feat/mole-phase2-probes` **lands on
+  main** (merge `74959c439`, card `1e57b2d9` → done): Mole phase 2 — two
+  read-only probes registered in the existing `PROBES` registry (one
+  registration each; watch/report pick them up automatically): **gates**
+  (parses newest `~/.cache/slog-gates` suite artifact, verdict vs
+  `SLO_GATES_DRIFT_MAX`, subset-scope guard + staleness check) and
+  **benchmark-regression** (newest-vs-history per kind, importing
+  `benchmark_results.py`'s `is_regression` — no reimplementation). No AI,
+  suggest-only, ambient (no web surface). Gates: canonical 5-tree run
+  **green-by-baseline** — 643 bad ids vs baseline 849 (PR #120 ci-baseline
+  fixes landed between), 4 new ids all pass standalone (shared-state flakes:
+  spinner/execute_code_js/ModelHealthMonitor tmp family `6369c03e`
+  /chat_trainer). Doctor+mole+allowlist targeted **71 passed**, ruff clean,
+  probe perf 0.9/0.05 ms per tick (phase-1 baseline 4.8 ms/tick). Earlier
+  ~10:15: `feat/wip-column-rename` **lands on
+  main** (fast-forward `3f8465164`, card `ffaea823` → done): the kanban column
+  is **`wip`, never `in_progress`** — `config` maps both directions, the default
+  column schemas in Python **and** TS, 4 test files, package README + planner
+  specs, and 31 board rows re-keyed (3 `in-progress` orphans folded in) with the
+  card hash chain re-sealed because `chain_hash_for()` hashes `column`.
+  Gates: app-planner **185**, web planner **89**, tsc/ruff clean, chain `[]`.
+  Hard cutover — no compat alias. Earlier ~10:05: `feat/pugqeep-forkserver` **lands on
+  main** (merge `d996f8ebc`; cards `df5affc7`+`e69915c1` → done, notes → done):
+  gate run #4 green 621F ≤ baseline 683F, playwright-class E 0, 0 timeouts, no
+  hang; post-merge targeted re-run = identical F-set, E 0 (see Landed). Earlier ~05:30: `feat/landing-7-cards` lands (7
+  infra-review cards + campaign `d083e732`, cherry-picks `2127abb6e..344168b4f`,
+  see Landed): startup finalizers + MogDB history + webhook facade + profiler
+  feed + test hygiene — tests/server **1942/1/0 vs main's 5-failed baseline**.
+  Earlier ~05:05: naming consolidated (card `43ca5222`):
+  **Mole is the one app** — never "doctor"/"watcher" as names; docs realigned
+  (TESTING/INDEX/FEATURES), legacy `/doctor` paths grandfathered until the
+  unified `mole` CLI. Earlier ~04:45: `feat/mole-watcher` lands (card `e0c80774`,
+  cherry-pick `e9fb80cec`, see Landed): Mole phase 1 — always-on, no-AI
+  monitoring (cadence, identity-set delta dedupe, JSONL journal, load-context).
+  Canonical 4-tree gate ≈ main baseline (833/839 nodeids
+  identical; the 6 extras pass standalone → shared-`/tmp` test-isolation defect,
+  card `6369c03e`). Earlier the same night: `feat/avion-transcript-batching`
+  landed (card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit
+  transcript flush, benchmark green at baseline (quiet window, load 1.6); and
+  `fix/boot-overlay-stall` (card `cb089b43`, cherry-pick `8acb530be`, see
+  Landed) — the boot overlay can no longer hang forever; firefox ux-flows
+  benchmark **13/13**. Earlier 2026-10-03: `fix/journey-test-gates`
+  landed on user sign-off (merge `e081ea9f4` + test stabilization `175d7db8c`,
+  see Landed).
+  Earlier the same day: the **avion stack** — cards `13f50db7` journeys takeover
+- `e26dc68c` drivers + `24676ff2` event logger + `553da7a7` agent loop, see
+  Landed — and downcraft compression (card `19cd41dc`); journey suites repointed
+  to `:5173` (gate9's route-smoke F-class was a stale port, not a missing
+  server). Gates and benchmarks now run on conda `sloughgpt` + `PYTHONPATH` —
+  the root `.venv` is NOT authoritative (its green was hiding 2 zstd failures;
+  `zstandard` is now installed into conda, user-approved).
 
 ## Sync recipe
 
@@ -592,7 +595,7 @@ git push -u origin feat/<name>   # push your own branch when done
   cpu/mem thresholds, err red-when-nonzero, GEN/MODEL colored, non-running processes
   print a colored status word (`_status_color`), empty sections omitted, health
   score folded into SERVER. **Gotchas:** (1) `logs.py` source contains literal
-  `\u2588`/`\u2026` *escape text* — edit anchors must dodge those lines (Edit-tool
+  `\u2588`/`\u2026` _escape text_ — edit anchors must dodge those lines (Edit-tool
   JSON-decodes `\uXXXX` into the char and silently mismatches); (2) root `./cli.py`
   shadows `apps/cli/src/cli.py` on `PYTHONPATH` — tests must
   `sys.path.insert(0, src)` like `test_logs_syslog.py`; (3) asserting "`monitor` not
@@ -610,7 +613,7 @@ git push -u origin feat/<name>   # push your own branch when done
   detector). Slow-marked + `timeout(300)`, skips without a live stack
   (`SLO_WEB_URL`/`:5173`, same contract as `test_user_journeys`).
   **Gotcha:** avion's source path (`packages/avion/src`) must be on
-  `sys.path` *before* `pytest.importorskip("avion")` or the module
+  `sys.path` _before_ `pytest.importorskip("avion")` or the module
   skips itself; the script's hardcoded `:3010` is the Cypress/Next e2e
   port — the live stack is vite `:5173` (retarget via module global).
 
@@ -696,7 +699,7 @@ git push -u origin feat/<name>   # push your own branch when done
   never `in_progress` (hard cutover).** Card `ffaea823` → done; ff `3f8465164`
   (`.wt-wip` worktree). The column name is a **primary key** joining card data,
   `config.STATUS_TO_COLUMN`/`COLUMN_TO_STATUS`, the default schemas in Python
-  *and* TS (`store.py`, `kanban.py`, `apps/web` planner helpers/BuffetEngine/
+  _and_ TS (`store.py`, `kanban.py`, `apps/web` planner helpers/BuffetEngine/
   types) and every card's `chain_hash` payload — all moved in one pass; 4 test
   files, the package README and the planner specs follow. `migrate_boards.py`
   / `migrate_planner.py` keep `in_progress` only as a **legacy source key**
@@ -709,7 +712,7 @@ git push -u origin feat/<name>   # push your own branch when done
   already 3-red (`[-1, 911, 912]`). Gates: app-planner **185 passed**, web
   planner **89 passed**, tsc clean, ruff clean, 0 eslint errors, `board stats`
   → `wip: 30`. **Gotchas:** (1) `.kanban/slot_history.jsonl` (root branch)
-  keys slots as `column:pos` *inside* `node_hash()` — an append-only ledger,
+  keys slots as `column:pos` _inside_ `node_hash()` — an append-only ledger,
   never rewrite its keys; (2) `board add` does **not** validate `--column`, so
   a stale session can reintroduce `in_progress`; (3) the long-lived
   `feat/create-router-projection` branch still carries `in_progress` and will
@@ -788,11 +791,11 @@ git push -u origin feat/<name>   # push your own branch when done
   parameters the caller left at their default; an explicitly-set parameter
   passes through verbatim.** Before this, `_apply_meta_weights` returned
   `get_adjustment()`'s absolute values, and `get_adjustment()` never receives
-  the request — so with an empty feedback DB *every* request answered with
+  the request — so with an empty feedback DB _every_ request answered with
   0.7/0.85/40/1.15 whatever was asked, while `GenerateRequest` still validated
   the field (`ge=0.0, le=2.0`) and telemetry logged the request value the
   provider never received. Changes: `MetaWeightManager.neutral_weights`
-  exposes the baseline so callers derive a *delta* (empty store ⇒ exactly zero
+  exposes the baseline so callers derive a _delta_ (empty store ⇒ exactly zero
   change rather than a silent default swap); `_apply_meta_weights` gains
   `explicit` (pydantic `model_fields_set`; the WebSocket derives it from keys
   present in the frame) — **5 call sites, not the 4 the card claimed** (chat
@@ -810,7 +813,7 @@ git push -u origin feat/<name>   # push your own branch when done
   pristine `a189d78eb` → card `37325860`:** the hygiene ratchet's
   `from __future__ import annotations` stringifies dataclass annotations, so
   `assert f.type is float` can never pass (3), plus 5 stale meta-weights
-  *router* tests where `docs/routers.md:594-596` sides with the impl.
+  _router_ tests where `docs/routers.md:594-596` sides with the impl.
 
 - **2026-10-04 · `fix/main-gate-green` lands — main's default test gate goes
   green (7 root-cause buckets).** Card `cbd2ffc3`, commit `ddd3b3d49` → landed
@@ -879,7 +882,7 @@ git push -u origin feat/<name>   # push your own branch when done
   never a finding); events fire only on change; a failed tick is journaled and
   contained (the loop never dies mid-run). CLI
   `python -m domain.core._internal.mole` (`--interval/--max-ticks/--skip/
-  --journal/--strict/--quiet/--json`); suggest-only, never applies. Docs:
+--journal/--strict/--quiet/--json`); suggest-only, never applies. Docs:
   TESTING.md section + INDEX row (FEATURES deferred until it has an app
   surface). **Gates:** mole 6 + doctor 41 + router 9 green, ruff clean, CLI
   smoke (tick 1 baseline / tick 2 silent on the live stack; 4.8 ms per-tick
@@ -1060,7 +1063,7 @@ git push -u origin feat/<name>   # push your own branch when done
   `apps/web/dist-vite` as its **document root** — file hit → asset, browser
   navigation (`Accept: text/html`) → `index.html` (SPA), data request →
   byte-relay; `/docs`, `/redoc`, `/openapi.json` stay proxied (path contract).
-  Routing is by request *kind*, not path prefix, because SPA and API share the
+  Routing is by request _kind_, not path prefix, because SPA and API share the
   same top-level names. `npm run build:vite` builds **same-origin** (empty
   `NEXT_PUBLIC_API_URL`; `??` not `||` in `lib/config.ts` — a `||` fallback
   would silently restore a second origin). `main.py --web` retired: no Node is
@@ -1080,7 +1083,7 @@ git push -u origin feat/<name>   # push your own branch when done
   the conda env — with the flag, `import playwright` dies and every
   Playwright suite fails at fixture setup. Browser suites
   (`test_user_journeys`, `test_computer_use_*`, `test_e2e_*`) currently run
-  *without* the flag — green, no `tests`-shadow hit observed for
+  _without_ the flag — green, no `tests`-shadow hit observed for
   `packages/core-py/tests`. Fix = install playwright into the conda env
   (needs user approval), then the flag can apply everywhere.
 - `app_planner` editable install (`.pth`) points at the **root repo** copy —
@@ -1091,7 +1094,7 @@ git push -u origin feat/<name>   # push your own branch when done
   `chain_index/chain_prev/chain_hash` and strips the seal.** Chain-aware
   copies re-seal automatically (`sync()` ends in `compute_chains()`); after
   such a write, run a chain-aware `store.sync()` or `git checkout main --
-  .kanban/board.jsonl`.
+.kanban/board.jsonl`.
 - Chunked-gate collect paths are relative to `packages/core-py` (nearest
   `pytest.ini`) — force-prefix `packages/core-py/`, or 16 colliding basenames
   poison `from conftest import build_test_app`.
