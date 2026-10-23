@@ -27,15 +27,58 @@ What are you testing?
 ## 1. Frontend Component Tests
 
 ### Run
+
 ```bash
 cd apps/web && npm test -- --run <relative-path-to-test>
 ```
 
 ### File Location
+
 Next to source: `app/(app)/my-page/page.test.tsx`
 
 ### Environment
+
 Vitest auto-selects `jsdom` for files in `app/`, `components/`, `hooks/`, `features/` via `vitest.config.ts` globs. No `@vitest-environment` comment needed.
+
+### Design Criteria Tests
+
+The `designer` agent owns the rules; you own encoding them. It hands criteria
+in the shape **criterion → file glob → assertion** — never vague "looks right".
+Criteria reference lives in `.opencode/skills/design-system-enforcement/SKILL.md`
+(token tables) and `.opencode/skills/accessibility-audit/SKILL.md` (WCAG rules).
+
+Standard criteria (write one spec file per rule, scanning the glob):
+
+| Criterion                  | Glob                                           | Assertion                                                            |
+| -------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
+| No raw colors              | `app/**`, `components/**`, `features/**/*.tsx` | no `#hex`, `hsl(`, `rgb(` literals in `className` or `style` strings |
+| Page wrapper               | `app/(app)/**/page.tsx`                        | render → root element has `sl-page` in class                         |
+| Icon-only buttons labelled | component under test                           | every `button` whose text is empty has `aria-label`                  |
+| Focus-visible ring         | interactive components                         | class list contains `focus-visible:ring`                             |
+
+```tsx
+// apps/web/app/(app)/design-criteria.test.tsx
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import React from 'react'
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/x',
+  useRouter: () => ({ push: vi.fn() }),
+}))
+vi.mock('@/hooks/useLocale', () => ({ useLocale: () => ({ t: (k: string) => k }), LOCALES: [] }))
+
+describe('design criteria', () => {
+  it('page root carries sl-page', async () => {
+    const { default: Page } = await import('./my-page/page')
+    const { container } = render(<Page />)
+    expect(container.querySelector('.sl-page')).toBeTruthy()
+  })
+})
+```
+
+New page/component PRs without its listed criteria → ask `designer` for them;
+do not invent rules, do not skip the check.
 
 ### How Mocking Works in This Codebase
 
@@ -86,7 +129,9 @@ import BrainstormPage from './page'
 import { generateTool } from '@/lib/tools-controller'
 
 describe('BrainstormPage', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('renders the page title', () => {
     render(<BrainstormPage />)
@@ -105,7 +150,7 @@ describe('BrainstormPage', () => {
         'brainstorm',
         expect.objectContaining({ history: expect.any(Array) }),
         expect.any(Object),
-        expect.any(Object)
+        expect.any(Object),
       )
     })
   })
@@ -113,6 +158,7 @@ describe('BrainstormPage', () => {
 ```
 
 **Key details:**
+
 - `useToastStore: (sel: any) => sel({ addToast: mockAddToast })` — the `(sel: any) => sel({...})` pattern is required because Zustand stores use selector functions
 - `vi.mocked(generateTool).mockResolvedValue(undefined)` — cast the mock for TypeScript
 - `expect.objectContaining({...})` — match partial payload, not exact shape
@@ -141,9 +187,12 @@ vi.mock('@/lib/download-utils', () => ({
 ```tsx
 it('renders after loading', async () => {
   render(<MyPage />)
-  await waitFor(() => {
-    expect(screen.getAllByText(/Analytics/i).length).toBeGreaterThan(0)
-  }, { timeout: 5000 })
+  await waitFor(
+    () => {
+      expect(screen.getAllByText(/Analytics/i).length).toBeGreaterThan(0)
+    },
+    { timeout: 5000 },
+  )
 })
 ```
 
@@ -239,49 +288,52 @@ it('renders after load', async () => {
 ```
 
 **Key: `screen.findByText` (async) vs `screen.getByText` (sync)**
+
 - Use `findByText` when data loads asynchronously (API calls, useEffect)
 - Use `getByText` when content is static (rendered immediately)
 
 ### Assertion Cheat Sheet
 
-| What to check | Code |
-|--------------|------|
-| Element exists | `screen.getByText('X')` |
-| Element absent | `expect(screen.queryByText('X')).toBeNull()` |
-| Multiple elements | `screen.getAllByText('X').length` |
-| Button disabled | `expect(btn).toBeDisabled()` |
-| Button enabled | `expect(btn).not.toBeDisabled()` |
-| Input value | `expect(input).toHaveValue('text')` |
-| Placeholder | `screen.getByPlaceholderText(/pattern/i)` |
-| Role | `screen.getByRole('button', { name: /x/i })` |
-| Label | `screen.getByLabelText('X')` |
-| API called | `expect(mockFn).toHaveBeenCalledWith(...)` |
-| API not called | `expect(mockFn).not.toHaveBeenCalled()` |
-| Toast shown | `expect(mockAddToast).toHaveBeenCalledWith('msg', 'error')` |
-| Loading state | `document.querySelectorAll('[class*="animate-pulse"]').length` |
-| CSS class | `element.className.toContain('primary')` |
-| Aria attribute | `expect(el.getAttribute('aria-checked')).toBe('true')` |
+| What to check     | Code                                                           |
+| ----------------- | -------------------------------------------------------------- |
+| Element exists    | `screen.getByText('X')`                                        |
+| Element absent    | `expect(screen.queryByText('X')).toBeNull()`                   |
+| Multiple elements | `screen.getAllByText('X').length`                              |
+| Button disabled   | `expect(btn).toBeDisabled()`                                   |
+| Button enabled    | `expect(btn).not.toBeDisabled()`                               |
+| Input value       | `expect(input).toHaveValue('text')`                            |
+| Placeholder       | `screen.getByPlaceholderText(/pattern/i)`                      |
+| Role              | `screen.getByRole('button', { name: /x/i })`                   |
+| Label             | `screen.getByLabelText('X')`                                   |
+| API called        | `expect(mockFn).toHaveBeenCalledWith(...)`                     |
+| API not called    | `expect(mockFn).not.toHaveBeenCalled()`                        |
+| Toast shown       | `expect(mockAddToast).toHaveBeenCalledWith('msg', 'error')`    |
+| Loading state     | `document.querySelectorAll('[class*="animate-pulse"]').length` |
+| CSS class         | `element.className.toContain('primary')`                       |
+| Aria attribute    | `expect(el.getAttribute('aria-checked')).toBe('true')`         |
 
 ### Common Errors
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `useToastStore.mockReturnValue is not a function` | Wrong mock pattern | Use `(sel: any) => sel({...})` |
-| `Found multiple elements` | StrictMode double-render | Use `getAllByText(...).length` |
-| `Unable to find role="button"` | Button text wrong | Check actual button label in source |
-| `Expected mock to have been called` | Missing `await waitFor` | Wrap assertion in `waitFor(() => ...)` |
-| `ReferenceError: ... is not defined` | Import before mock | Move `vi.mock()` above `import` |
+| Error                                             | Cause                    | Fix                                    |
+| ------------------------------------------------- | ------------------------ | -------------------------------------- |
+| `useToastStore.mockReturnValue is not a function` | Wrong mock pattern       | Use `(sel: any) => sel({...})`         |
+| `Found multiple elements`                         | StrictMode double-render | Use `getAllByText(...).length`         |
+| `Unable to find role="button"`                    | Button text wrong        | Check actual button label in source    |
+| `Expected mock to have been called`               | Missing `await waitFor`  | Wrap assertion in `waitFor(() => ...)` |
+| `ReferenceError: ... is not defined`              | Import before mock       | Move `vi.mock()` above `import`        |
 
 ---
 
 ## 2. Backend Unit Tests (Python)
 
 ### Run
+
 ```bash
 cd packages/core-py && .venv/bin/python -m pytest tests/test_<module>.py -x -v
 ```
 
 ### File Location
+
 `packages/core-py/tests/test_<module>.py`
 
 ### Pattern
@@ -325,6 +377,7 @@ class TestMyModule:
 ```
 
 **Rules:**
+
 - Import inside test methods (lazy imports)
 - Use `tmp_path` for file I/O
 - Use `DATA_TEXT` constant for test data
@@ -336,6 +389,7 @@ class TestMyModule:
 ## 3. Playwright Journey Tests
 
 ### Run
+
 ```bash
 cd packages/core-py && .venv/bin/python -m pytest tests/test_user_journeys.py -x -v
 ```
@@ -375,10 +429,12 @@ class TestToolsFlows:
 ```
 
 **Helpers:**
+
 - `go(page, path)` — navigate, wait for load, settle SSE streams, retry on error boundary, return body text
 - `ok(name, passed, detail)` — record non-fatal test result (won't stop suite)
 
 **Rules:**
+
 - Use `go()` not `page.goto()` — it handles settling
 - Use `ok()` for non-fatal checks, `assert` for fatal
 - If a page fails, log and continue — never stop on first failure
@@ -390,6 +446,7 @@ class TestToolsFlows:
 ## 4. Coverage Workflow
 
 ### Measure
+
 ```bash
 # Python
 cd packages/core-py
@@ -402,6 +459,7 @@ cd apps/web && npm test -- --coverage
 ```
 
 ### Process
+
 1. Read source → find uncovered lines
 2. Write test targeting that specific path
 3. Verify test passes + coverage increases
@@ -419,6 +477,7 @@ The `ROUTES` list in `test_user_journeys.py` accepts tuples of `(path, name)`:
 ```
 
 All routes in the list get a parametrized navigation test that:
+
 1. Navigates to `http://localhost:5173{path}`
 2. Waits for load + "Connecting..." to disappear
 3. Asserts `len(body) > 50`
