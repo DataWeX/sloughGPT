@@ -28,6 +28,12 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.chat_response_cache import (
+    chunk_replay,
+    get_chat_response_cache,
+    hash_messages,
+    set_chat_response_cache,
+)
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
 from schemas.chat import ChatRequest
@@ -110,6 +116,36 @@ class ChatRouter:
         async def generate():
             _start = time.time()
             _token_count = 0
+            turn_hash = hash_messages(messages)
+
+            # Reconnect replay: the same turn re-POSTs the same messages, so a
+            # completed cache for this exact hash replays at zero generation
+            # cost. A partial cache is NOT replayed — generation cannot resume
+            # mid-stream, and replay-without-done would put the frontend's
+            # retry loop into an infinite partial-replay cycle; the retry
+            # regenerates instead (card 8125c86e).
+            cached = get_chat_response_cache(session_id)
+            if cached and cached.get("complete") and cached.get("message_hash") == turn_hash:
+                cached_text = "".join(cached.get("tokens", []))
+                for chunk in chunk_replay(cached_text):
+                    yield self._sse_token("chat", chunk)
+                yield self._sse_token(
+                    "chat",
+                    "",
+                    done=True,
+                    meta={
+                        "usage_tokens": len(cached_text.split()),
+                        "cached": True,
+                    },
+                )
+                safe_audit_log(
+                    "chat.stream",
+                    resource=session_id,
+                    detail=f"replay tokens={len(cached_text.split())}",
+                )
+                return
+
+            collected: list[str] = []
             try:
                 async for item in manager.generate_stream_tracked(
                     session_id,
@@ -118,9 +154,23 @@ class ChatRouter:
                     text_of=lambda resp: resp.text,
                 ):
                     if await http_request.is_disconnected():
+                        # Cache partial for a possible reconnect, then stop the
+                        # turn — the model must not keep generating for a
+                        # client that is gone (the old path set the cancel
+                        # event here; cancel_session is its public twin).
+                        set_chat_response_cache(
+                            session_id,
+                            {
+                                "tokens": collected,
+                                "complete": False,
+                                "message_hash": turn_hash,
+                            },
+                        )
+                        manager.cancel_session(session_id)
                         return
                     if isinstance(item, str):
                         if item:
+                            collected.append(item)
                             _token_count += 1
                             yield self._sse_token("chat", item)
                     else:
@@ -128,6 +178,17 @@ class ChatRouter:
                         # usage/timing/finish on it, so surface them here — that
                         # detail is the point of the port, and folding callers
                         # read it off this frame.
+                        # Cache BEFORE yielding done: if the done frame is lost
+                        # to a disconnect, the reconnect still gets the full
+                        # answer replayed instead of paying for regeneration.
+                        set_chat_response_cache(
+                            session_id,
+                            {
+                                "tokens": collected,
+                                "complete": True,
+                                "message_hash": turn_hash,
+                            },
+                        )
                         yield self._sse_token(
                             "chat",
                             "",
@@ -145,6 +206,18 @@ class ChatRouter:
                     resource=session_id,
                     detail=f"tokens={_token_count} elapsed={_elapsed_ms}ms",
                 )
+            except GeneratorExit:
+                # Client vanished between frames: keep what was generated so
+                # the reconnect can resume from cache.
+                set_chat_response_cache(
+                    session_id,
+                    {
+                        "tokens": collected,
+                        "complete": False,
+                        "message_hash": turn_hash,
+                    },
+                )
+                raise
             except Exception as e:
                 logger.error("Chat stream error: %s", e, exc_info=True)
                 yield self._sse_error("chat", "STREAM", str(e))
