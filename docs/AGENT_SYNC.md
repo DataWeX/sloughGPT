@@ -1401,3 +1401,20 @@ git push -u origin feat/<name>   # push your own branch when done
   confirmation; store card `89c58cfb` (wip) owns it. Evidence note:
   `2026-10-23-review-column-screening-flips.md`. Board done 897→906,
   review 15→6, todo 22→15, no sync run. From `.wt-worldbrain`.
+
+- **2026-10-23 · wip-column screening — 4 unowned wip rows closed with
+  origin/main evidence (fork board; stack tail `feat/npu-caps`).**
+  `7d5e5a7c` hygiene sweep (ratchet `bb7162041`/`a189d78eb` ancestors; PEP563
+  in 626 main domain files; main's `test_code_hygiene.py` carries both scope
+  halves incl. the "2026-10-04 sweep: 92/92" print-allowlist marker);
+  `b8c37898` slot_chain crash (subsystem extinct in app-planner src — the
+  missing import cannot recur; was a transient main-checkout breakage);
+  `7f879f56` chargectl (`packages/chargectl/` complete on main, battery
+  endpoints in `system.py:70-72`, `getBattery()` wired into monitoring page,
+  old `charge_manager.py` removed); `cb089b43` stall watchdog
+  (`StartupOverlay.tsx:56` progress-based stall clock + `overlay_timeout`
+  event + degraded-banner test). Mechanical note-sweep false-positive
+  avoided: `294818b7` matched a done note that is `6d0ebf37`'s and lists it
+  as in-progress owner — not closed. Evidence note (WIP section):
+  `2026-10-23-review-column-screening-flips.md`. Board wip 32→28,
+  done 906→910, no sync run. From `.wt-worldbrain`.
