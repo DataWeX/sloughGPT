@@ -1433,3 +1433,22 @@ git push -u origin feat/<name>   # push your own branch when done
   execution/job_store are byte-identical to origin/main in this worktree —
   auto-applies at landing. Card af19fb40: wip → review. Evidence:
   `2026-10-23-af19fb40-config-backfill.md`. From `.wt-worldbrain`.
+
+- **2026-10-23 · 243016c3 built — reflection->prompt wiring
+  (CONSCIOUSNESS_PROC, stack tail `feat/npu-caps`, commit `3e0885625`).**
+  The engine had post-process+SSE hooks but no reflection->prompt path.
+  `ConsciousnessProcessor` (domain/models provider/processors — takes the
+  narrative as PLAIN TEXT, models stay decoupled from cognition), exported
+  from the domain.models facade; chat pipeline step after KNOWLEDGE_PROC
+  (right after the existing consciousness SSE block):
+  `ce.reflect(apply=False).narrative` -> processor via the established
+  `apply_processors` seam, mirroring the neighbor hook's
+  `domain.core.get_consciousness` + `is_enabled()` guard. Advisory by
+  design: disabled engine / empty narrative / ANY failure skips injection,
+  chat proceeds unchanged (skip-on-failure, unlike KNOWLEDGE_PROC).
+  RED-proven (3 unit + 5 injection tests incl. propose-only assert);
+  models surface 482 green; ruff clean; hygiene 5/5. New file needed
+  `git add -f` — local `.git/info/exclude` rule `models` (meant for
+  weights) also matches the tracked `domain/models/` code package; worth
+  knowing for other sessions. Card 243016c3: wip → review. From
+  `.wt-worldbrain`.
