@@ -2,6 +2,7 @@
 Tests for Production-Grade RAG System
 """
 
+import numpy as np
 import pytest
 
 from domain.cognition._internal.rag import (
@@ -169,6 +170,39 @@ class TestProductionRAG:
         assert "verification" in verification
         assert "confidence" in verification
         assert verification["confidence"] > 0
+
+
+class TestDefaultEmbeddingHygiene:
+    """cleanup-03: simulated embedding must not clobber the process-global RNG.
+
+    The 2026-09-03 cleanup note claims `np.random.seed() -> local RandomState
+    (thread-safe)` — that fix landed on the old `packages/core-py/domains`
+    tree (deleted in the dual-tree step-4) and never reached this surviving
+    `domain/cognition/_internal/rag.py`, which still reseeded the global RNG
+    on every `_default_embedding` call (thread-unsafe + destroys caller RNG
+    state).
+    """
+
+    def test_global_rng_state_untouched(self):
+        orig = np.random.get_state()
+        try:
+            np.random.seed(12345)
+            before = np.random.get_state()
+            HybridRetriever()._default_embedding("thread-safe probe")
+            after = np.random.get_state()
+            assert before[0] == after[0]
+            np.testing.assert_array_equal(before[1], after[1])
+            assert before[2:] == after[2:]
+        finally:
+            np.random.set_state(orig)
+
+    def test_deterministic_per_text_and_normalized(self):
+        a = HybridRetriever()._default_embedding("stable text")
+        b = HybridRetriever()._default_embedding("stable text")
+        np.testing.assert_array_equal(a, b)
+        c = HybridRetriever()._default_embedding("different text")
+        assert not np.array_equal(a, c)
+        assert abs(float(np.linalg.norm(a)) - 1.0) < 1e-6
 
 
 if __name__ == "__main__":

@@ -294,8 +294,12 @@ class HybridRetriever:
             return self.embedding_cache[text]
 
         # Simulated embedding (use real embeddings in production)
-        np.random.seed(hash(text) % (2**32))
-        embedding = np.random.randn(384)
+        # Local RNG: reseeding the process-global np.random here was
+        # thread-unsafe and clobbered every caller's RNG state
+        # (cleanup-03 residual — the note's RandomState fix only ever
+        # reached the deleted packages/core-py/domains copy).
+        rng = np.random.RandomState(hash(text) % (2**32))
+        embedding = rng.randn(384)
         embedding = embedding / np.linalg.norm(embedding)
 
         self.embedding_cache[text] = embedding
