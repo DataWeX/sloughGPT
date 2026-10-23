@@ -1418,3 +1418,18 @@ git push -u origin feat/<name>   # push your own branch when done
   as in-progress owner — not closed. Evidence note (WIP section):
   `2026-10-23-review-column-screening-flips.md`. Board wip 32→28,
   done 906→910, no sync run. From `.wt-worldbrain`.
+
+- **2026-10-23 · af19fb40 fixed — training register() backfills config on
+  pre-existing job rows (stack tail `feat/npu-caps`, commit `11aa66fc2`).**
+  Root cause verified still live on origin/main `4a25b8385`:
+  `_ensure_row` early-returned when the row existed, silently dropping
+  `register()`'s request snapshot — the configless in-memory job dict
+  (execution.py:288, no config key) gets persisted first, so the column
+  stayed `{}` and recovery rebuilt trainer kwargs from defaults (the
+  `job_1438982c` 4096>399 incident). Fix: existing row + EMPTY config →
+  backfill from the snapshot (`store.update`); non-empty config is
+  first-registration-wins. RED-proven (`assert {} == snapshot`), no-clobber
+  guard, training/runtime/job_store surface 68 green, ruff clean. runtime/
+  execution/job_store are byte-identical to origin/main in this worktree —
+  auto-applies at landing. Card af19fb40: wip → review. Evidence:
+  `2026-10-23-af19fb40-config-backfill.md`. From `.wt-worldbrain`.
