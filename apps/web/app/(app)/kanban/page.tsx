@@ -17,14 +17,11 @@ const STATUS_COLORS: Record<string, string> = {
   transition_rejected: 'rgb(var(--color-error))',
 }
 
-const LEGAL_TARGETS: Record<string, string[]> = {
-  inbox: ['ready'],
-  ready: ['doing', 'blocked'],
-  doing: ['review', 'ready', 'blocked'],
-  review: ['verify', 'doing', 'blocked'],
-  verify: ['done', 'review', 'blocked'],
-  done: [],
-  blocked: ['inbox', 'ready', 'doing'],
+function orderedNames(columns: Column[]): string[] {
+  return columns
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((c) => c.name)
 }
 
 export default function KanbanPage() {
@@ -33,7 +30,11 @@ export default function KanbanPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedCard, setSelectedCard] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [feedback, setFeedback] = useState<{ type: string; message: string } | null>(null)
+  const [feedback, setFeedback] = useState<{
+    type: string
+    message: string
+    target?: string
+  } | null>(null)
 
   const loadBoard = useCallback(async () => {
     setLoading(true)
@@ -53,29 +54,49 @@ export default function KanbanPage() {
   }, [loadBoard])
 
   const selected = board?.cards.find((c) => c.id === selectedCard) ?? null
-  const legalTargets = selected ? (LEGAL_TARGETS[selected.column] ?? []) : []
+  const colNames = board ? orderedNames(board.columns) : []
+  let legalTargets: string[] = []
+  if (selected && board) {
+    const fromIdx = colNames.indexOf(selected.column)
+    if (fromIdx === -1) {
+      legalTargets = colNames.filter((n) => n !== selected.column)
+    } else if (fromIdx === colNames.length - 1) {
+      legalTargets = [] // last column (done) is terminal
+    } else {
+      legalTargets = [...(fromIdx > 0 ? [colNames[fromIdx - 1]] : []), colNames[fromIdx + 1]]
+    }
+  }
 
   const handleMove = useCallback(
-    async (cardId: string, toState: string) => {
+    async (cardId: string, toState: string, force = false) => {
       setBusy(true)
       setFeedback(null)
       try {
         const result: TransitionResult = await transitionCard({
           card_id: cardId,
           to_state: toState,
+          force,
         })
         if (result.ok) {
           setFeedback({
             type: result.event?.type ?? 'card_moved',
-            message: `${result.from_state} → ${result.to_state}`,
+            message: `${result.from_state} → ${result.to_state}${result.event?.metadata?.forced ? ' (forced)' : ''}`,
           })
           setSelectedCard(null)
           await loadBoard()
         } else {
-          setFeedback({ type: 'transition_rejected', message: result.error })
+          setFeedback({
+            type: result.event?.type ?? 'transition_rejected',
+            message: result.error,
+            target: toState,
+          })
         }
       } catch {
-        setFeedback({ type: 'transition_rejected', message: 'Failed to reach planner backend' })
+        setFeedback({
+          type: 'transition_rejected',
+          message: 'Failed to reach planner API',
+          target: toState,
+        })
       } finally {
         setBusy(false)
       }
@@ -104,13 +125,26 @@ export default function KanbanPage() {
     >
       {feedback && (
         <div
-          className="mb-4 rounded-lg px-3 py-2 text-xs"
+          className="mb-4 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
           style={{
             backgroundColor: `rgb(${STATUS_COLORS[feedback.type] ?? 'var(--color-muted)'} / 0.1)`,
             color: STATUS_COLORS[feedback.type] ?? 'rgb(var(--color-muted))',
           }}
         >
-          {feedback.message}
+          <span>{feedback.message}</span>
+          {feedback.type === 'wip_exceeded' && feedback.target && selectedCard && (
+            <button
+              disabled={busy}
+              onClick={() => handleMove(selectedCard, feedback.target!, true)}
+              className="shrink-0 rounded px-2 py-1 text-xs font-medium disabled:opacity-50"
+              style={{
+                backgroundColor: 'rgb(var(--color-error) / 0.15)',
+                color: 'rgb(var(--color-error))',
+              }}
+            >
+              Force move
+            </button>
+          )}
         </div>
       )}
 
@@ -155,10 +189,8 @@ export default function KanbanPage() {
           className="rounded-lg border border-dashed p-8 text-center"
           style={{ borderColor: 'rgb(var(--color-border))', color: 'rgb(var(--color-muted))' }}
         >
-          <p className="text-sm">No board found. Start the planner backend:</p>
-          <code className="mt-2 block text-xs" style={{ color: 'rgb(var(--color-foreground))' }}>
-            planner gui --port 8787
-          </code>
+          <p className="text-sm">No board found.</p>
+          <p className="mt-1 text-xs">Expected .kanban/board.jsonl at the repo root.</p>
         </div>
       )}
     </PageContainer>
