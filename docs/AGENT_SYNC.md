@@ -972,6 +972,22 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-23 · `feat/compression-bench-baselines` — compression proof
+  before the file store (card `fba1ce5e`).** `benchmark_downcraft_compression.py`
+  gains Tier 1b external CLI baselines (gzip/zstd/lz4/xz/bzip2/7z at matched
+  budgets — speed class -1, ratio class max; SHA-256-gated; WinRAR proprietary
+  → 7z as the RAR/WinZip-school stand-in), `--corpus code` (deterministic
+  repo-source tar = the hosting-my-code corpus) and a Pareto verdict block.
+  Honest verdict on both corpora: **SLZ4 ratio rank 13–17/17 — zstd wins
+  ratio AND speed**; the file-store decision input is compress-at-rest per
+  payload class (zstd for code/text; model weights: quantize, don't gzip).
+  Knobs-frontier history appended (`fixed_k8_rt0` 12.94x @ cosine 0.88 vs
+  shipped `adaptive_k16_rt0.99` 4.50x @ 0.998). 72 compression tests green,
+  ruff check clean, benchmark green on both corpora. **Land from the api-std
+  worktree**: branch forked from stale local `main` (220 local-only commits
+  vs origin); deliberately NOT rebased here — a naive rebase replayed 11
+  foreign local-main commits before being aborted.
+
 - **2026-10-19 · `feat/wire-py` — we own the HTTP wire, phase 1 (card
   `ecea49c8`, stacked on `feat/scene-build`).** `packages/wire-py` is the
   stdlib-only sync framing layer: `wire/framing.py` (request parser —
