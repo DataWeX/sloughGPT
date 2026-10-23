@@ -1,6 +1,7 @@
 """Processors package."""
 from __future__ import annotations
 
+from .consciousness import ConsciousnessProcessor
 from .knowledge import KnowledgeProcessor
 from .personality import PersonalityProcessor
 from .style import StyleProcessor
@@ -10,6 +11,7 @@ from .vision import VisionProcessor
 __all__ = [
     "VisionProcessor",
     "KnowledgeProcessor",
+    "ConsciousnessProcessor",
     "ToolUseProcessor",
     "ToolDef",
     "PersonalityProcessor",

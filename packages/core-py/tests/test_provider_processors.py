@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from domain.models._internal.provider import (
+    ConsciousnessProcessor,
     KnowledgeProcessor,
     ModelCapabilities,
     PersonalityProcessor,
@@ -691,3 +692,27 @@ class TestUpdatePersonalityTraits:
         finally:
             if old is not None:
                 prov._providers["default"] = old
+
+
+class TestConsciousnessProcessor:
+    """Reflection narrative -> system message (card 243016c3, CONSCIOUSNESS_PROC)."""
+
+    async def test_empty_narrative_noop(self):
+        proc = ConsciousnessProcessor()
+        msgs = [{"role": "user", "content": "hi"}]
+        assert await proc.process(msgs) == msgs
+        proc_ws = ConsciousnessProcessor(narrative="   \n")
+        assert await proc_ws.process(msgs) == msgs
+
+    async def test_injects_narrative_as_leading_system_message(self):
+        proc = ConsciousnessProcessor(narrative="Curious about compilers.")
+        msgs = [{"role": "user", "content": "hi"}]
+        result = await proc.process(msgs)
+        assert result[0]["role"] == "system"
+        assert "Curious about compilers." in result[0]["content"]
+        assert result[1:] == msgs
+
+    def test_set_narrative(self):
+        proc = ConsciousnessProcessor(narrative="old")
+        proc.set_narrative("new")
+        assert proc._narrative == "new"
