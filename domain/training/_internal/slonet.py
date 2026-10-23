@@ -131,9 +131,6 @@ try:
         fused_attention_single as _nb_fused_attention_single,
     )
     from domain.training._internal.slonet_kernels import (
-        gqa_expand as _nb_gqa_expand,
-    )
-    from domain.training._internal.slonet_kernels import (
         lm_head_argmax as _nb_lm_head_argmax,
     )
     from domain.training._internal.slonet_kernels import (
@@ -1860,6 +1857,10 @@ class SloLinear(SloLayer):
         self._quant_info = quant_info
         self._quant_unpacked = None  # lazy unpack cache for int4
         self._weight_T_contig = None  # transpose cache no longer valid
+        # Fused-pack memos are keyed on _quant_info identity — drop them so
+        # the next _fuse_quant_weights(_int4) call rebuilds from the new info.
+        self._fuse_memo = None
+        self._fuse_memo4 = None
 
     def _get_quant_array(self) -> np.ndarray:
         if self._quant_info is None or not self._quant_info.is_quantized:
@@ -1924,6 +1925,8 @@ class SloLinear(SloLayer):
         arr = point_weight.generate()
         self.weight.data = arr.astype(np.float32)
         self._weight_T_contig = None  # transpose cache no longer valid
+        self._fuse_memo = None  # fused-pack memo (bias/weight layout) stale
+        self._fuse_memo4 = None
 
     def get_point_weight(self):
         """Return the PointWeight for this layer, or None."""
@@ -2852,7 +2855,7 @@ def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> tup
     return Q_out, K_out
 
 
-def _fuse_quant_weights(linears):
+def _fuse_quant_weights_uncached(linears):
     """Concatenate quantized int8 weight rows of ``linears`` into one matrix.
 
     Merges several per-layer projections that share the same float32 input
@@ -2905,7 +2908,45 @@ def _fuse_quant_weights(linears):
     return W, S, fused_bias
 
 
-def _fuse_quant_weights_int4(linears):
+def _fuse_quant_weights(linears):
+    """Memoized wrapper around :func:`_fuse_quant_weights_uncached`.
+
+    The fused pack depends only on each projection's ``_quant_info`` (weight
+    array + meta) and bias, which change only when a projection is
+    re-quantized — the same staleness contract as
+    ``SloTransformerBlock._fused_qkv`` (re-quantization rebuilds; in-place
+    weight edits are not reflected). The pack is therefore cached on
+    ``linears[0]`` keyed by the identity of every ``_quant_info``, so the
+    cache dies with the owning model, and ``set_quantized_weight``/
+    ``set_point_weight`` clear it. Rebuilding costs ~74 ms per generate
+    call, so every call site (generate_numpy, generate_numpy_stream, the
+    forward paths) benefits from the hit.
+
+    Args:
+        linears: sequence of SloLinear with quantized weights.
+
+    Returns:
+        Same as :func:`_fuse_quant_weights_uncached`.
+    """
+    infos = tuple(l._quant_info for l in linears)
+    key = tuple(id(qi) for qi in infos)
+    memo = getattr(linears[0], "_fuse_memo", None)
+    if memo is not None:
+        entry = memo.get(key)
+        # Key match + the entry's strong refs to ``infos`` imply identity: a
+        # live object cannot share another live object's id, and the entry
+        # keeps its infos alive, so their ids can never be recycled.
+        if entry is not None and all(a is b for a, b in zip(entry[0], infos)):
+            return entry[1]
+    result = _fuse_quant_weights_uncached(linears)
+    if memo is None:
+        memo = {}
+        linears[0]._fuse_memo = memo
+    memo[key] = (infos, result)
+    return result
+
+
+def _fuse_quant_weights_int4_uncached(linears):
     """Concatenate packed int4 weight rows of ``linears`` into one packed matrix.
 
     Same contract as ``_fuse_quant_weights`` but keeps the weights packed
@@ -2964,6 +3005,36 @@ def _fuse_quant_weights_int4(linears):
     W = np.concatenate(arrs, axis=0).astype(np.int8, copy=False)
     S = np.concatenate(scales)
     return W, S, int(zps[0]), fused_bias
+
+
+def _fuse_quant_weights_int4(linears):
+    """Memoized wrapper around :func:`_fuse_quant_weights_int4_uncached`.
+
+    Same caching contract as :func:`_fuse_quant_weights` (pack cached on
+    ``linears[0]``, keyed by ``_quant_info`` identity, cleared by
+    ``set_quantized_weight``/``set_point_weight``) but kept in a separate
+    ``_fuse_memo4`` memo so the int4 and int8 packs of the same projections
+    never collide.
+
+    Args:
+        linears: sequence of SloLinear with packed int4 quantized weights.
+
+    Returns:
+        Same as :func:`_fuse_quant_weights_int4_uncached`.
+    """
+    infos = tuple(l._quant_info for l in linears)
+    key = tuple(id(qi) for qi in infos)
+    memo = getattr(linears[0], "_fuse_memo4", None)
+    if memo is not None:
+        entry = memo.get(key)
+        if entry is not None and all(a is b for a, b in zip(entry[0], infos)):
+            return entry[1]
+    result = _fuse_quant_weights_int4_uncached(linears)
+    if memo is None:
+        memo = {}
+        linears[0]._fuse_memo4 = memo
+    memo[key] = (infos, result)
+    return result
 
 
 def _fused_qkv_matmul(
@@ -6544,16 +6615,17 @@ class SloTransformer(SloNet):
                     k = kv_buf_k[bi][:, :new_len]
                     v = kv_buf_v[bi][:, :new_len]
 
+                _k_unexpanded = False
                 if _use_gqa:
                     if _use_kernels:
-                        # GQA expand via numba — kernel expects (K_H, new_len, E)
-                        # then expands along the head axis; k[0] is (new_len, K_H, E)
-                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
-                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
+                        # GQA: the fused attention kernels index kv head
+                        # h // (H // K_H) directly — pass the cache
+                        # unexpanded as (1, K_H, new_len, E) and skip the
+                        # O(new_len) expansion (decode slope drag: repeated
+                        # full-cache rewrite of a 7x-larger buffer).
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
+                        _k_unexpanded = True
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
@@ -6568,9 +6640,15 @@ class SloTransformer(SloNet):
                 _use_einsum = not (step > 0 and _use_kernels) and not (
                     step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0
                 )
-                if _use_einsum and k.ndim == 4 and k.shape[1] == H:
-                    k = k.transpose(0, 2, 1, 3)
-                    v = v.transpose(0, 2, 1, 3)
+                if _use_einsum and k.ndim == 4:
+                    if _k_unexpanded:
+                        # einsum has no head mapping — expand here (only the
+                        # non-hot einsum path reaches this branch).
+                        k = np.repeat(k, _gqa_reps, axis=1)
+                        v = np.repeat(v, _gqa_reps, axis=1)
+                    if k.shape[1] == H:
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
 
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
@@ -7103,16 +7181,17 @@ class SloTransformer(SloNet):
                     k = kv_buf_k[bi][:, :new_len]
                     v = kv_buf_v[bi][:, :new_len]
 
+                _k_unexpanded = False
                 if _use_gqa:
                     if _use_kernels:
-                        # GQA expand via numba — kernel expects (K_H, new_len, E)
-                        # then expands along the head axis; k[0] is (new_len, K_H, E)
-                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
-                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
+                        # GQA: the fused attention kernels index kv head
+                        # h // (H // K_H) directly — pass the cache
+                        # unexpanded as (1, K_H, new_len, E) and skip the
+                        # O(new_len) expansion (decode slope drag: repeated
+                        # full-cache rewrite of a 7x-larger buffer).
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
+                        _k_unexpanded = True
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
@@ -7127,9 +7206,15 @@ class SloTransformer(SloNet):
                 _use_einsum = not (step > 0 and _use_kernels) and not (
                     step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0
                 )
-                if _use_einsum and k.ndim == 4 and k.shape[1] == H:
-                    k = k.transpose(0, 2, 1, 3)
-                    v = v.transpose(0, 2, 1, 3)
+                if _use_einsum and k.ndim == 4:
+                    if _k_unexpanded:
+                        # einsum has no head mapping — expand here (only the
+                        # non-hot einsum path reaches this branch).
+                        k = np.repeat(k, _gqa_reps, axis=1)
+                        v = np.repeat(v, _gqa_reps, axis=1)
+                    if k.shape[1] == H:
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
 
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:

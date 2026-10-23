@@ -1175,6 +1175,76 @@ def quantize_activation(
         return np.clip(np.round(x / scale) + zero_point, -128, 127).astype(np.int8)
 
 
+# ── KV-cache quantize/dequantize fast path ─────────────────────────────────
+#
+# In decode these run 48×/token on tiny slices ((1,1,2,64) ints in, full
+# cache out) where numpy's ufunc-chain + axis-reduction dispatch costs ~16µs
+# and ~8µs respectively — ~1ms/token of interpreter overhead. A compiled
+# kernel does the identical arithmetic elementwise (same f32 divisions,
+# round-half-to-even, clip bounds → bit-identical output) in ~2-3µs.
+# Built lazily; any shape/dtype/contiguity outside the fast-path contract
+# falls back to the numpy implementation below.
+
+_nb_kv_kernels = None
+_nb_kv_built = False
+
+
+def _get_nb_kv_kernels():
+    """Return (quantize_fn, dequantize_fn) or (None, None) when numba is
+    unavailable. Failures degrade to the numpy path, never raise."""
+    global _nb_kv_kernels, _nb_kv_built
+    if _nb_kv_built:
+        return _nb_kv_kernels
+    _nb_kv_built = True
+    try:
+        from numba import njit
+
+        @njit(cache=True)
+        def _qk(x):
+            B, T, KH, E = x.shape
+            out = np.empty(x.shape, dtype=np.int8)
+            scale = np.empty((B, T, KH, 1), dtype=np.float32)
+            for b in range(B):
+                for t in range(T):
+                    for kh in range(KH):
+                        m = np.float32(0.0)
+                        for e in range(E):
+                            v = x[b, t, kh, e]
+                            a = v if v >= np.float32(0.0) else -v
+                            if a > m:
+                                m = a
+                        if m > np.float32(0.0):
+                            s = m / np.float32(127.0)
+                        else:
+                            s = np.float32(1.0) / np.float32(127.0)
+                        scale[b, t, kh, 0] = s
+                        for e in range(E):
+                            q = np.rint(x[b, t, kh, e] / s)
+                            if q < np.float32(-128.0):
+                                q = np.float32(-128.0)
+                            elif q > np.float32(127.0):
+                                q = np.float32(127.0)
+                            out[b, t, kh, e] = np.int8(q)
+            return out, scale
+
+        @njit(cache=True)
+        def _dq(x, scale):
+            B, T, KH, E = x.shape
+            out = np.empty(x.shape, dtype=np.float32)
+            for b in range(B):
+                for t in range(T):
+                    for kh in range(KH):
+                        s = scale[b, t, kh, 0]
+                        for e in range(E):
+                            out[b, t, kh, e] = x[b, t, kh, e] * s
+            return out
+
+        _nb_kv_kernels = (_qk, _dq)
+    except Exception:  # numba missing/broken → numpy path
+        _nb_kv_kernels = (None, None)
+    return _nb_kv_kernels
+
+
 def quantize_kv_tensor(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Per-token, per-head symmetric int8 quantization for KV cache entries.
 
@@ -1192,6 +1262,10 @@ def quantize_kv_tensor(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         Zero vectors use a guard scale of ``1/127`` so no division by zero
         occurs and the row quantizes to zero (dequantizing returns zero).
     """
+    if x.ndim == 4 and x.dtype == np.float32 and x.flags.c_contiguous and x.size <= 262144:
+        qk, _ = _get_nb_kv_kernels()
+        if qk is not None:
+            return qk(x)
     max_abs = np.max(np.abs(x), axis=-1, keepdims=True)
     safe_max = np.where(max_abs > 0.0, max_abs, np.float32(1.0))
     scale = (safe_max / np.float32(127.0)).astype(np.float32)
@@ -1210,6 +1284,18 @@ def dequantize_kv_tensor(x_int8: np.ndarray, scale: np.ndarray) -> np.ndarray:
     Returns:
         float32 array of shape ``(B, T, K_H, E)``.
     """
+    if (
+        x_int8.ndim == 4
+        and x_int8.dtype == np.int8
+        and x_int8.flags.c_contiguous
+        and isinstance(scale, np.ndarray)
+        and scale.dtype == np.float32
+        and scale.flags.c_contiguous
+        and x_int8.size <= 262144
+    ):
+        _, dq = _get_nb_kv_kernels()
+        if dq is not None:
+            return dq(x_int8, scale)
     return x_int8.astype(np.float32) * scale
 
 
