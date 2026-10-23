@@ -137,4 +137,37 @@ describe('Kanban page', () => {
       vi.resetModules()
     }
   })
+
+  it('3D scene selection drives the shared action bar with engine targets', async () => {
+    const original = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({}),
+    ) as unknown as typeof HTMLCanvasElement.prototype.getContext
+
+    vi.doMock('@/components/kanban3d/KanbanScene', () => ({
+      default: ({ onSelect }: { onSelect: (id: string) => void }) => (
+        <button data-testid="scene3d" onClick={() => onSelect('card-1')}>
+          pick first
+        </button>
+      ),
+    }))
+    vi.resetModules()
+
+    try {
+      const mod = await import('./page')
+      render(<mod.default />)
+      await waitFor(() => expect(fetchBoard).toHaveBeenCalled())
+      fireEvent.click(screen.getByRole('button', { name: '3D' }))
+      fireEvent.click(await screen.findByTestId('scene3d'))
+      // selecting in 3D must surface the same adjacent-targets bar as the DOM view
+      await screen.findByText('→ wip')
+      expect(screen.queryByText('→ review')).toBeNull()
+      expect(screen.queryByText('→ done')).toBeNull()
+      expect(screen.getByText('Cancel')).toBeTruthy()
+    } finally {
+      HTMLCanvasElement.prototype.getContext = original
+      vi.doUnmock('@/components/kanban3d/KanbanScene')
+      vi.resetModules()
+    }
+  })
 })
