@@ -174,10 +174,5 @@ export async function transitionCard(payload: {
   actor?: string
   force?: boolean
 }): Promise<TransitionResult> {
-  const res = await fetch('/api/planner/transition', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  return res.json()
+  return apiPost<TransitionResult>('/api/planner/transition', payload)
 }
