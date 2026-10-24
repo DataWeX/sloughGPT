@@ -1,8 +1,6 @@
 """UI Journey Testing Library — public API."""
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.testing._internal.testing import (
     Browser,
     Journey,

@@ -3,6 +3,8 @@ Tests for the filesystem addon — VFS mount points, path resolution, read/write
 """
 
 import pytest
+
+from domain.shell._internal.addons import filesystem
 from domain.shell._internal.addons.filesystem import (
     VFS,
     VFSDirectory,
@@ -10,8 +12,6 @@ from domain.shell._internal.addons.filesystem import (
     VFSGeneratedFile,
     VFSWriteOnlyFile,
 )
-
-from domain.shell._internal.addons import filesystem
 from domain.shell._internal.kernel import Kernel
 
 # ---------------------------------------------------------------------------

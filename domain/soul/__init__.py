@@ -5,8 +5,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.soul._internal.cognitive import SentimentAnalyzer
 from domain.soul._internal.hd_memory import HDMemoryStore
 from domain.soul._internal.quantum import QuantumCognitiveEngine

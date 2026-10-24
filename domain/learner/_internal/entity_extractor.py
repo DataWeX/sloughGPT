@@ -6,8 +6,6 @@ of truth.
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.knowledge._internal.entity_extractor import (
     _is_valid_entity,
     extract_and_store,

@@ -35,8 +35,6 @@ from __future__ import annotations
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 import gc
 import itertools
 import logging

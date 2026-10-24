@@ -5,8 +5,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.tools._internal.profiles import (
     TOOL_PROFILES,
     ToolOption,

@@ -8,8 +8,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.infrastructure._internal import artifact_registry
 from domain.infrastructure._internal.config import (
     AppConfig,

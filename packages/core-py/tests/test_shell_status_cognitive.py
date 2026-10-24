@@ -1,5 +1,3 @@
-from domain.shell._internal.cmds.status import _fmt_uptime
-
 from domain.cognition._internal.core import (
     CognitiveCore,
     CreativeIdea,
@@ -8,6 +6,7 @@ from domain.cognition._internal.core import (
     ThinkingMode,
     ThoughtProcess,
 )
+from domain.shell._internal.cmds.status import _fmt_uptime
 
 
 class TestFmtUptime:

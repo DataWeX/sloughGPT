@@ -5,8 +5,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.learner._internal.continual import (
     ContinualLearner,
     get_learner,

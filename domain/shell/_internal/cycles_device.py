@@ -38,7 +38,8 @@ from .cycles import (
     create_sphere,
 )
 from .device_ops import OpTable
-from .vm import Device
+from .tensor_arena import TensorArena, resolve
+from .vm import Device, DeviceFault
 
 
 class CyclesDevice(Device):

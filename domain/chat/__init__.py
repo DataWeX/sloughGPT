@@ -9,8 +9,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.chat._internal.domain import (
     ChatDomain,
     ChatRequest,

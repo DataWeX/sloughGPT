@@ -425,12 +425,10 @@ class PlannerStore:
         """
         lines = self._read_board_lines()
         board = Board()
-        valid: list[str] | None = None
         for obj in lines:
             if obj.get("schema") == "planner/1" and obj.get("columns"):
                 board.name = obj.get("name", "Main")
                 board.columns = obj["columns"]
-                valid = [c.get("name") for c in obj["columns"]]
             elif obj.get("id") and obj.get("title"):
                 board.cards.append(Card.from_dict(obj))
         declared = [c.get("name") for c in board.columns]

@@ -13,6 +13,7 @@ from __future__ import annotations
 import numpy as np
 
 from .device_ops import OpTable
+from .tensor_arena import TensorArena, resolve
 from .vm import Device, DeviceFault
 
 # ---------------------------------------------------------------------------

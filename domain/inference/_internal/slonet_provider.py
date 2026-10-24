@@ -23,8 +23,6 @@ Features:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 import threading
 import time
 from collections.abc import AsyncIterator

@@ -7,8 +7,6 @@ The lazy multi-agent imports are handled by ``agents.py.__getattr__``.
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.agents._internal.agents import (  # noqa: F401
     Agent,
     AgentConfig,

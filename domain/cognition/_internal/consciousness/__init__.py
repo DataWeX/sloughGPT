@@ -5,8 +5,6 @@ Canonical implementation of the consciousness subsystem. Re-exported by
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.cognition._internal.consciousness.config import ConsciousnessConfig
 from domain.cognition._internal.consciousness.engine import (
     ConsciousnessEngine,

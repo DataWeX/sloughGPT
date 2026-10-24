@@ -7,8 +7,6 @@ their meaning here (data filtering, search indexes, dedup, gap detection).
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.knowledge._internal.data_filter import DataFilter, get_data_filter
 from domain.knowledge._internal.knowledge_ops import (
     AutoCategorizer,

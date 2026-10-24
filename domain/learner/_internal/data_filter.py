@@ -6,8 +6,6 @@ truth.
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.knowledge._internal.data_filter import (
     DEFAULT_CONFIG,
     DataFilter,

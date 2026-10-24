@@ -1,8 +1,6 @@
 """Processors package."""
 from __future__ import annotations
 
-from __future__ import annotations
-
 from .consciousness import ConsciousnessProcessor
 from .knowledge import KnowledgeProcessor
 from .personality import PersonalityProcessor

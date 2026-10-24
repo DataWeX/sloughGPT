@@ -13,8 +13,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.collections._internal.builders import (
     CollectorBuilder,
     DataSink,

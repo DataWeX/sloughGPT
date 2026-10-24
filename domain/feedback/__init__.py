@@ -10,8 +10,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.feedback._internal.database import (
     Feedback,
     FeedbackDB,

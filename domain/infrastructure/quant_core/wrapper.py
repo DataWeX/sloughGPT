@@ -9,8 +9,6 @@ hit the same object.
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 import sys as _sys
 
 from domain.infrastructure._internal.quant_core import wrapper as _canonical

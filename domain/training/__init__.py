@@ -12,8 +12,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.training._internal.checkpoints import (
     find_checkpoint,
     load_lora_soul,

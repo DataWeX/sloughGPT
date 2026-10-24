@@ -16,8 +16,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 
 def __getattr__(name):
     _lazy = {

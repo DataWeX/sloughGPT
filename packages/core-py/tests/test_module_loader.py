@@ -6,6 +6,7 @@ import sys
 from unittest.mock import MagicMock
 
 import pytest
+
 from domain.shell._internal.addons.module_loader import ModuleInfo, ModuleLoader
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

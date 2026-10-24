@@ -12,8 +12,6 @@ Public API:
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.inference._internal.slo_format import (
     BehavioralTraits,
     CognitiveSignature,

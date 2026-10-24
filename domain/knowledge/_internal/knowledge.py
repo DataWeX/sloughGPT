@@ -9,8 +9,6 @@ keep working; new code should import from ``domain.knowledge`` (facade) or
 """
 from __future__ import annotations
 
-from __future__ import annotations
-
 from domain.memory._internal.knowledge_store import FeedSubscription as FeedSubscription
 from domain.memory._internal.knowledge_store import KnowledgeFact as KnowledgeFact
 from domain.memory._internal.knowledge_store import KnowledgeIngestor as KnowledgeIngestor
