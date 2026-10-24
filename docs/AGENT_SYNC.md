@@ -1513,3 +1513,21 @@ git push -u origin feat/<name>   # push your own branch when done
   exact production TypeError, GREEN 113/113 (context_core), ruff clean. Card
   wip→review; the fix rides the stack, so the bug stays on main until landing.
   Evidence: `2026-10-24-tie-sort-port.md`. From `.wt-worldbrain`.
+
+- **2026-10-24 · wip screening pass 2 — 6 of 17 unowned wip rows resolved, 2
+  of them by BUILD (stack tail `feat/npu-caps`).** Flipped to done with
+  origin/main evidence: `a9bc8648` (moodboard skill shipped at
+  `.opencode/skills/moodboard/`), `278fdeaf` (chain-hash audit live — every
+  board row carries chain_hash/chain_prev + `test_store_chain.py`),
+  `656023ab` (http-client split: 1443→28-line facade over 14 `apps/lib/`
+  modules), `9fc4b4cf` (fault containment: staged_loader + startup_rollback +
+  health capability/degraded + startup tests on main). Ported-from-unlanded-
+  branch builds → review: the `5bfa16e5` tie-sort main bug (commit `6f3238f00`,
+  detail in prior bullet) and `8e9ee65d` (`aed61d144`'s compaction-tight.ts,
+  single-file 141-line exact port, commit `d2f14aa65` — SOP-field compaction
+  prompt, fail-open). Left open deliberately: `6edae3a7` (doctor orchestrator
+  rides `chore/ast-reachability`+`feat/app-ready-signal` cluster), `4a1e62fa`
+  (active lane `feat/generate-consolidation` cites the card), `284aa214`
+  (empty shell — deletion user-gated), legacy docs-truth-up rows (no guard
+  exists; editorial job, deferred). Evidence:
+  `2026-10-24-wip-screening-pass2.md`. From `.wt-worldbrain`.
