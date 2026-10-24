@@ -1011,14 +1011,34 @@ git push -u origin feat/<name>   # push your own branch when done
   `card-1792777482931-errfun`, `card-1792830567244-dcrit`,
   `card-1792831802223-watch`, `card-1792834103675-hex2`,
   `card-1792834472015-rgb1`, `card-1792835773838-grp`,
-  `card-1792836786754-rgb2`. Gates: web tsc
-  clean, `test:lib` 1545/1545, design-criteria 8/8, planner 110/110,
+  `card-1792836786754-rgb2`, `card-1792840183431-rbow3`,
+  `card-1792841273607-rbow4`. Gates: web tsc
+  clean, `test:lib` 1545/1545, design-criteria 11/11, planner 110/110,
   `.opencode` vitest 35/35. Burn-down terminal state: rgb baseline = 1
   (magazine styleguide's pinned palette preview) after the decoration
   ladder `--elevation-rgb`/`--sheen-rgb` cleared Tray/CardItem/
   CardEditor/BuffetEngine/kanban (`68963a1b7`); hex baseline = 2
-  (ThemeProvider picker data + session-group migration keys). The
-  ratchet runs in CI via `npx vitest run` (ci_cd.yml).
+  (ThemeProvider picker data + session-group migration keys).
+  **Stock-palette (AI-slop rainbow) debt zeroed** — the third ratchet
+  (`STOCK_PALETTE_RE`, per-file `STOCK_PALETTE_BASELINE` +
+  `STOCK_PALETTE_TOTAL_CEILING`, `STOCK_SCAN_ROOTS` = scan roots + lib +
+  contexts) landed with 37 files / 156 instances (`e89280e65`) and burned
+  to **empty map + ceiling 0** over four rounds: tray/editor/buffet
+  (`69d6d98cb`), ChatInput `MODE_CONFIG` + lib `archiveBadgeClass`
+  (`c60a496b6`), phoneme subsystem (13 files / 57, category maps unified
+  Keyboard↔Frequency legend: stops=info, fricatives=primary,
+  affricates=group-6, liquids=accent, glides=group-8) (`99827a8dc`),
+  final sweep incl. the copy-pasted knowledge-orange badge ×5 +
+  ThreatLog high=accent + HashChain ops (`6bc32432c`) — any stock-palette
+  utility now fails CI. The ratchet runs in CI via `npx vitest run`
+  (ci_cd.yml). **Pitfall:** root `.gitignore:219` bare `data/` shadows
+  `app/(app)/workspace/data/` (tracked but un-addable without `git add
+-f`; `git check-ignore` without `--no-index` lies — it hides rules for
+  tracked files), and lint-staged's apply step FAILS on those paths (commit
+  still lands; prettier reformatted whole touched files, e.g. StatusBar
+  247-line format-only diff). Anchor rule to `/data/` is a parked fix —
+  would unignore other untracked `data/` dirs (noise risk for concurrent
+  lanes).
   **Blocked:** local `main` is stale @ `f53190f7f` and checked out by the dirty
   worktree `/home/mana/Documents/sloughgpt-api-std` (658 uncommitted changes);
   `origin/main` = `68dd37ec8` (PR #189) has diverged and the branch also
