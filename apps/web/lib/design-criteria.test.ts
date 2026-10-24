@@ -87,19 +87,6 @@ const STOCK_PALETTE_BASELINE: Record<string, number> = {
   'components/StatusBar.tsx': 1,
   'components/consciousness/ConsciousnessSidebarWidget.tsx': 1,
   'components/personality/PersonalityConflictWarnings.tsx': 1,
-  'components/phoneme/DailyGoal.tsx': 2,
-  'components/phoneme/PhonemeFrequency.tsx': 10,
-  'components/phoneme/PhonemeKeyboard.tsx': 21,
-  'components/phoneme/PhonemePatternQuiz.tsx': 1,
-  'components/phoneme/PhonemeTypingMode.tsx': 1,
-  'components/phoneme/PracticeCalendar.tsx': 4,
-  'components/phoneme/ProficiencyTracker.tsx': 3,
-  'components/phoneme/PronunciationComparison.tsx': 1,
-  'components/phoneme/PronunciationDictation.tsx': 1,
-  'components/phoneme/PronunciationGame.tsx': 1,
-  'components/phoneme/PronunciationHeatmap.tsx': 8,
-  'components/phoneme/PronunciationRecording.tsx': 1,
-  'components/phoneme/WordDifficultyRanker.tsx': 3,
 
   'components/planner/HashChain.tsx': 4,
 
@@ -114,7 +101,7 @@ const STOCK_PALETTE_BASELINE: Record<string, number> = {
 }
 
 /** Total instance ceiling — additions to the map cannot lift it. */
-const STOCK_PALETTE_TOTAL_CEILING = 117
+const STOCK_PALETTE_TOTAL_CEILING = 60
 
 /** This rule also covers lib/ and contexts/ (class strings live there too). */
 const STOCK_SCAN_ROOTS = [...SCAN_ROOTS, 'lib', 'contexts'] as const
