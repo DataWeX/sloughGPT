@@ -1008,6 +1008,15 @@ git push -u origin feat/<name>   # push your own branch when done
   `source_sha256` provenance + deterministic-bytes dedup via
   `find_by_sha(..., exclude_id=…)`), ineligible artifacts map to 400,
   never a silent rewrite. 52 tests green across the four files.
+  Codec-probe follow-up landed on this same branch (`b884a087b`): extension
+  alone no longer forces `.pt`/`.pth`/`.ckpt`/`.bin` raw — `MODEL_EXTENSIONS`
+  split into `FORCE_RAW_EXTENSIONS` (proven ~1.0x containers: gguf/safetensors/
+  onnx/npz/tflite/engine) and `PROBE_MODEL_EXTENSIONS` (pickle-prone four →
+  `"unknown"`, the existing lossless zstd-if-smaller probe; never inflates).
+  Mixed-content checkpoints now compress (~0.77x) while pure-weight `.pt`
+  stays raw (1.00x). `quantize=1` stays 400 for these (torch absent,
+  numpy-first; format conversion = separate card). 23 store tests green,
+  `benchmark_file_store.py` gate extended + PASS.
   **Land from the api-std worktree**, stacked on the two branches
   above.
 
