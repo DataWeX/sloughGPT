@@ -27,15 +27,14 @@ const HEX_RE = /#[0-9a-fA-F]{6}\b/
  * Files allowed to contain hex today (measured 2026-10-24). Each row is debt:
  * - ThemeProvider: theme swatch *data* (a colour picker shows colours)
  * - planner/helpers: server-side card colour palette (distinct hue per card)
- * - chat useExportTemplates: standalone export stylesheet (no tokens available)
  * - chat useSessionGroups: group colour data (distinct hue per group)
  * Fix the file, delete the row. (Burned down 2026-10-24: CardItem priority
- * map + material and personality recharts strokes moved to tokens.)
+ * map + material and personality recharts strokes; export templates now
+ * snapshot live tokens into the standalone stylesheet via rgb(var(--…)).)
  */
 const HEX_BASELINE = [
   'app/api/planner/helpers.ts',
   'components/ThemeProvider.tsx',
-  'features/chat/components/useExportTemplates.ts',
   'features/chat/components/useSessionGroups.ts',
 ]
 
