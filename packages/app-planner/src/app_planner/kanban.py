@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import shutil
 import sys
 from dataclasses import asdict, dataclass, field
@@ -38,13 +37,13 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .ids import display_id, is_uuid_id, make_readable_id
 from .store import PlannerStore, _token_of
 
 logger = logging.getLogger("app_planner.kanban")
 
 _BOARD_FILE = "board.json"  # legacy whole-board file — read-only fallback
 _LIVE_BOARD_FILE = "board.jsonl"  # canonical JSONL board (PlannerStore format)
-_MAX_ID_SLUG = 60
 
 DEFAULT_COLUMNS: list[dict[str, Any]] = [
     {"name": "todo", "wip_limit": 0, "order": 0},
@@ -68,15 +67,8 @@ CARD_TYPE_ICONS = {
 }
 
 
-def _make_id(title: str) -> str:
-    slug = title.lower().strip()
-    slug = re.sub(r"[^\w\s-]", "", slug)
-    slug = re.sub(r"[\s_]+", "-", slug)
-    slug = re.sub(r"-+", "-", slug)
-    slug = slug[:_MAX_ID_SLUG].rstrip("-")
-    now = datetime.now(UTC)
-    ts = now.strftime("%Y%m%d_%H%M%S")
-    return f"{ts}_{slug}"
+def _make_id(title: str, taken: set[str] | None = None) -> str:
+    return make_readable_id(title, taken or ())
 
 
 def _abbrev(s: str, max_len: int = 50) -> str:
@@ -196,7 +188,7 @@ class Card:
 
     @property
     def short_id(self) -> str:
-        return self.id[:8] if self.id else ""
+        return display_id(self.id)
 
     @property
     def priority_icon(self) -> str:
@@ -809,7 +801,12 @@ class KanbanStore:
         if card is None:
             return None
         now = datetime.now(UTC).isoformat()
-        note = Note(id=_make_id(f"note-{card_id}"), text=text, author=author, created_at=now)
+        note = Note(
+            id=_make_id(f"note-{text[:40]}", {n.id for n in card.notes}),
+            text=text,
+            author=author,
+            created_at=now,
+        )
         card.notes.append(note)
         card.updated_at = now
         self._bk.save(board, baseline=baseline)
@@ -827,7 +824,11 @@ class KanbanStore:
         if card is None:
             return False
         before = len(card.notes)
-        card.notes = [n for n in card.notes if n.id[:8] != note_id and n.id != note_id]
+        card.notes = [
+            n
+            for n in card.notes
+            if not (n.id == note_id or (is_uuid_id(n.id) and n.id[:8] == note_id))
+        ]
         if len(card.notes) == before:
             return False
         card.updated_at = datetime.now(UTC).isoformat()
@@ -1170,7 +1171,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             print(f"\n  Notes ({len(card.notes)}):")
             for n in card.notes:
                 author_s = f"  [{n.author}]" if n.author else ""
-                print(f"    [{n.id[:8]}]  {n.created_at[:10]}{author_s}")
+                print(f"    [{display_id(n.id)}]  {n.created_at[:10]}{author_s}")
                 for line in n.text.split("\n"):
                     print(f"      {line}")
         return 0
@@ -1218,7 +1219,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         if card is None:
             print(f"Card not found: {args.card_id}")
             return 1
-        print(f"Blocked: {card.short_id}  {card.title}  by {args.blocker_id[:8]}")
+        print(f"Blocked: {card.short_id}  {card.title}  by {display_id(args.blocker_id)}")
         return 0
 
     if args.cmd == "unblock":
@@ -1236,7 +1237,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             print("No blocked cards.")
             return 0
         for c in blocked:
-            blockers = ", ".join(b[:8] for b in c.blocked_by)
+            blockers = ", ".join(display_id(b) for b in c.blocked_by)
             print(f"  {c.short_id}  {c.title}  [{c.column}]  blocked by: {blockers}")
         print(f"\n  {len(blocked)} blocked card(s)")
         return 0
@@ -1257,7 +1258,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             return 1
         if args.note_cmd == "add":
             note = store.add_note(args.card_id, args.text, author=args.author)
-            print(f"Note added: [{note.id[:8]}]" if note else "Card not found.")
+            print(f"Note added: [{display_id(note.id)}]" if note else "Card not found.")
             return 0 if note else 1
         if args.note_cmd == "list":
             notes = store.list_notes(args.card_id)
@@ -1269,7 +1270,7 @@ def cli_main(argv: list[str] | None = None) -> int:
                 return 0
             for n in notes:
                 author_s = f"  [{n.author}]" if n.author else ""
-                print(f"  [{n.id[:8]}]  {n.created_at[:10]}{author_s}")
+                print(f"  [{display_id(n.id)}]  {n.created_at[:10]}{author_s}")
                 print(f"    {n.text}")
             return 0
         if args.note_cmd in ("delete", "rm"):

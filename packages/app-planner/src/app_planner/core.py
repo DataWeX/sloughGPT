@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .ids import display_id
 
 logger = logging.getLogger("dev-notes")
 
@@ -63,7 +64,7 @@ class Note:
 
     @property
     def short_id(self) -> str:
-        return self.id[:8] if self.id else ""
+        return display_id(self.id)
 
     @property
     def gh_url(self) -> str:
