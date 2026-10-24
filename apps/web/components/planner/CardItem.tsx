@@ -12,10 +12,10 @@ interface CardItemProps {
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
-  critical: '#ef4444',
-  high: '#f59e0b',
-  medium: '#a1a1aa',
-  low: '#22c55e',
+  critical: 'rgb(var(--destructive))',
+  high: 'rgb(var(--warning))',
+  medium: 'rgb(var(--muted-foreground))',
+  low: 'rgb(var(--success))',
 }
 
 export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProps) {
@@ -49,9 +49,7 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
       )}
       style={{
         // Card material — off-white paper
-        background: hovered
-          ? 'linear-gradient(178deg, #fafaf9 0%, #f5f5f4 100%)'
-          : 'linear-gradient(178deg, #f0f0ef 0%, #e8e8e7 100%)',
+        background: 'rgb(var(--card))',
         borderRadius: '4px',
         border: '1px solid rgba(0,0,0,0.07)',
         // Shadow: lifts on hover

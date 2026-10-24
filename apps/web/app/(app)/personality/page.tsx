@@ -495,10 +495,7 @@ export default function PersonalityPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {conflicts.map((c, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5"
-                >
+                <div key={i} className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5">
                   <Badge
                     variant={c.severity === 'medium' ? 'destructive' : 'outline'}
                     className="text-[10px] mt-0.5"
@@ -650,9 +647,7 @@ export default function PersonalityPage() {
         {showComparison && originalProfile && profile && (
           <Card className="border-blue-500/50">
             <CardHeader>
-              <CardTitle className="text-info dark:text-info">
-                Imported Profile — Review
-              </CardTitle>
+              <CardTitle className="text-info dark:text-info">Imported Profile — Review</CardTitle>
               <CardDescription>Compare imported values with your current profile</CardDescription>
             </CardHeader>
             <CardContent>
@@ -746,28 +741,28 @@ export default function PersonalityPage() {
                       <Line
                         type="monotone"
                         dataKey="warmth"
-                        stroke="#ec4899"
+                        stroke="rgb(var(--chart-5))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="confidence"
-                        stroke="#6366f1"
+                        stroke="rgb(var(--chart-1))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="humor"
-                        stroke="#f59e0b"
+                        stroke="rgb(var(--chart-3))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="empathy"
-                        stroke="#22c55e"
+                        stroke="rgb(var(--chart-2))"
                         strokeWidth={1.5}
                         dot={false}
                       />
@@ -811,21 +806,21 @@ export default function PersonalityPage() {
                       <Line
                         type="monotone"
                         dataKey="openness"
-                        stroke="#8b5cf6"
+                        stroke="rgb(var(--chart-1))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="agreeableness"
-                        stroke="#22c55e"
+                        stroke="rgb(var(--chart-2))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="conscientiousness"
-                        stroke="#3b82f6"
+                        stroke="rgb(var(--chart-4))"
                         strokeWidth={1.5}
                         dot={false}
                       />
