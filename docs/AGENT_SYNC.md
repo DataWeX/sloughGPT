@@ -1471,3 +1471,22 @@ git push -u origin feat/<name>   # push your own branch when done
   comment too); 6→0 failures; router suite 70/70 (7 files); ruff clean.
   Card `50675952`: wip → review; closes on landing. Evidence:
   `2026-10-24-training-router-delegation-part1.md`. From `.wt-worldbrain`.
+
+- **2026-10-24 · training router delegation part 2 built (card `c48aaaad`,
+  stack tail `feat/npu-caps`, commit `118e11a23`) — build order #4 COMPLETE.**
+  Last 4 `_internal` sites retired from `training/router.py` (executor import,
+  `CheckpointManager` resume resolution, `SloughGPTTrainer` build+train,
+  `executor.submit`): engine gains `resolve_resume_checkpoint` (raises
+  ValueError; router maps to 422 — the one sanctioned mapping, identical
+  messages), `run_recovery_training(config, on_progress, resume, events)
+  -> trainer` (closure keeps ALL job-store/controller/webhook state;
+  `resume` = pre-loaded bundle preserves "no second disk load"), and
+  `executor_submit(fn, *args)`. **Zero `domain.training._internal` refs
+  remain in the router — the boundary invariant (routers never import
+  `_internal`; engine is the single seam) now holds repo-wide for training.**
+  Recovery fixture retargeted (executor patch follows the import to its
+  defining module — module-attr patch survives lazy import, same style as the
+  suite's existing SloughGPTTrainer patch). RED→GREEN 7→0; router suite
+  75/75 (7 files); ruff check+format clean. Card `c48aaaad`: wip → review.
+  Evidence: `2026-10-24-training-router-delegation-part2.md`. From
+  `.wt-worldbrain`.
