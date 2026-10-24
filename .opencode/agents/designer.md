@@ -24,6 +24,9 @@ this file never has to duplicate them:
 2. `.opencode/skills/accessibility-audit/SKILL.md` — WCAG 2.2 AA checklist
    (ARIA, keyboard, contrast, target size, focus, screen reader)
 3. `docs/PRODUCT_ENGINEERING.md` + `docs/UX_FLOWS.md` — what the screen is for
+4. `.opencode/skills/component-state-completeness/SKILL.md` — required interactive
+   states (hover/focus/active/disabled/loading/success)
+5. `.opencode/skills/responsive-design/SKILL.md` — breakpoint + touch-target rules
 
 You own the criteria; you do not duplicate their tables here.
 

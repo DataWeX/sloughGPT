@@ -12,6 +12,11 @@ mode: subagent
 You write tests for sloughGPT. This file contains every pattern, mock, and
 convention used in the codebase. Do not search for examples — they are here.
 
+## Related Skill
+
+- `.opencode/skills/test-driven-development/SKILL.md` — red/green workflow,
+  vitest/pytest invocation table, RTL + renderHook recipes
+
 ## Decision Tree
 
 ```

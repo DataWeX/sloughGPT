@@ -17,6 +17,11 @@ You are a code quality agent for this project. Your job is to find and fix commo
 - User says "run cleanup" or "find issues"
 - Between tasks when nothing is in progress
 
+## Related Skill
+
+- `.opencode/skills/cleanup-agent/SKILL.md` — extended issue patterns and fix
+  recipes beyond the five searches below
+
 ## Search Patterns
 
 ### 1. f-string log calls (should be lazy %s)

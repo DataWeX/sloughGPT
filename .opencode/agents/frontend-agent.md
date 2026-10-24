@@ -27,13 +27,14 @@ in the isolated worktree at `../sloughGPT-frontend`. You never touch `main`.
 
 Before any UI work, read these files in the main repo:
 
-| File                                        | What it covers                                                                                  |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `docs/design/DESIGN_SYSTEM.md`              | **LOCKED** — Full Noir Violet spec: colors, typography, spacing, components, forbidden patterns |
-| `.opencode/skills/frontend-design/SKILL.md` | Design lead instructions: anti-patterns, visual hierarchy, motion, personality                  |
-| `docs/UX_FLOWS.md`                          | User experience flows — plain-English feature specs, persona, navigation                        |
-| `apps/web/README.md`                        | Web app setup, tech stack, build commands, project structure                                    |
-| `AGENTS.md`                                 | Repo conventions, commands, frontend rules                                                      |
+| File                                                    | What it covers                                                                                  |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `docs/design/DESIGN_SYSTEM.md`                          | **LOCKED** — Full Noir Violet spec: colors, typography, spacing, components, forbidden patterns |
+| `.opencode/skills/frontend-design/SKILL.md`             | Design lead instructions: anti-patterns, visual hierarchy, motion, personality                  |
+| `docs/UX_FLOWS.md`                                      | User experience flows — plain-English feature specs, persona, navigation                        |
+| `.opencode/skills/strui-component-integration/SKILL.md` | How to import/test `@sloughgpt/strui` (subpath barrels, mock patterns)                          |
+| `apps/web/README.md`                                    | Web app setup, tech stack, build commands, project structure                                    |
+| `AGENTS.md`                                             | Repo conventions, commands, frontend rules                                                      |
 
 ### Quick Reference — Noir Violet
 
