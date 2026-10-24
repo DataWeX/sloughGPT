@@ -1001,10 +1001,18 @@ git push -u origin feat/<name>   # push your own branch when done
   orphan skills linked to owner agents, dead skill/doc refs fixed);
   `ui-error-watcher` runtime bridge (30s-throttled poll of `GET /errors/recent`
   → homedir log rows `category: 'runtime'`, dedup by backend record id, silent
-  when API down; `ui-error-fixer.md` documents the runtime template). Cards:
-  `card-1792758674654-design`, `card-1792777482931-errfun`,
-  `card-1792830567244-dcrit`, `card-1792831802223-watch`. Gates: web tsc
-  clean, `test:lib` 1537/1537, design-criteria 5/5, `.opencode` vitest 35/35.
+  when API down; `ui-error-fixer.md` documents the runtime template); design
+  burn-down continues — export templates snapshot live tokens (`9fb8112d6`),
+  hex gate strips comments (`d84757f29`), numeric-rgb ratchet (`eaa985ac6`),
+  group identity via `--group-1..10` theme-constant slots + dead
+  `COMMIT_COLORS` removed (`9217791ee`). Cards: `card-1792758674654-design`,
+  `card-1792777482931-errfun`, `card-1792830567244-dcrit`,
+  `card-1792831802223-watch`, `card-1792834103675-hex2`,
+  `card-1792834472015-rgb1`, `card-1792835773838-grp`. Gates: web tsc
+  clean, `test:lib` 1545/1545, design-criteria 8/8 (hex baseline now
+  ThemeProvider + migration-map keys; rgb baseline 8 decorative/data
+  files), planner 110/110, `.opencode` vitest 35/35. The ratchet runs in
+  CI via `npx vitest run` (ci_cd.yml).
   **Blocked:** local `main` is stale @ `f53190f7f` and checked out by the dirty
   worktree `/home/mana/Documents/sloughgpt-api-std` (658 uncommitted changes);
   `origin/main` = `68dd37ec8` (PR #189) has diverged and the branch also
