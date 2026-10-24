@@ -21,27 +21,6 @@ export interface Session {
  */
 export const COLORS = Array.from({ length: 10 }, (_, i) => `var(--group-${i + 1})`)
 
-/**
- * Persisted groups from before the token migration store raw hex. Map them
- * to their slot once, in order, so existing groups keep their hue.
- */
-const LEGACY_HEX_TO_TOKEN: Record<string, string> = {
-  '#8b5cf6': 'var(--group-1)',
-  '#3b82f6': 'var(--group-2)',
-  '#10b981': 'var(--group-3)',
-  '#f59e0b': 'var(--group-4)',
-  '#ef4444': 'var(--group-5)',
-  '#ec4899': 'var(--group-6)',
-  '#6366f1': 'var(--group-7)',
-  '#14b8a6': 'var(--group-8)',
-  '#f97316': 'var(--group-9)',
-  '#84cc16': 'var(--group-10)',
-}
-
-function migrateColor(color: string): string {
-  return LEGACY_HEX_TO_TOKEN[color.toLowerCase()] ?? color
-}
-
 const STORAGE_KEY = 'chat-session-groups'
 
 function loadGroups(): SessionGroup[] {
@@ -51,7 +30,7 @@ function loadGroups(): SessionGroup[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.map((g: SessionGroup) => ({ ...g, color: migrateColor(g.color) }))
+    return parsed
   } catch {
     return []
   }

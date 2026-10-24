@@ -23,8 +23,8 @@ describe('COLORS', () => {
   })
 })
 
-describe('legacy hex migration', () => {
-  it('maps persisted hex colours to group tokens on load', () => {
+describe('persisted colours', () => {
+  it('passes pre-token stored colours through untouched (migration retired 2026-10-24)', () => {
     const legacy: SessionGroup[] = [
       { id: 'g1', name: 'Work', color: '#8b5cf6', sessionIds: [], createdAt: 1 },
       { id: 'g2', name: 'Play', color: '#84cc16', sessionIds: ['s1'], createdAt: 2 },
@@ -32,8 +32,10 @@ describe('legacy hex migration', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy))
 
     const { result } = renderHook(() => useSessionGroups([], vi.fn()))
-    expect(result.current.groups[0].color).toBe('var(--group-1)')
-    expect(result.current.groups[1].color).toBe('var(--group-10)')
+    // `--group-N` slots are theme-constant and equal the retired hex values,
+    // so stale storage renders the same hue until the user re-picks a colour.
+    expect(result.current.groups[0].color).toBe('#8b5cf6')
+    expect(result.current.groups[1].color).toBe('#84cc16')
   })
 
   it('round-trips token references unchanged', () => {

@@ -38,19 +38,14 @@ export function stripComments(src: string): string {
  * - ThemeProvider: theme swatch *data* — the picker shows every theme's
  *   colour simultaneously while only one theme's tokens are live, so the
  *   swatch list cannot reference vars. Permanent data exemption.
- * - useSessionGroups: legacy hex KEYS in the one-time localStorage
- *   migration map (the stored values are hex; matching them needs the
- *   strings). Data, not markup colour — removable only by retiring
- *   the migration.
  * Fix the file, delete the row. (Burned down 2026-10-24: CardItem priority
  * map + glow, material and personality recharts strokes, export templates
  * (live token snapshot), useSessionGroups colours themselves now
- * --group-N identity slots, planner helpers (dead COMMIT_COLORS deleted).)
+ * --group-N identity slots + its legacy hex migration retired (slots are
+ * theme-constant and equal the old values), planner helpers (dead
+ * COMMIT_COLORS deleted).)
  */
-const HEX_BASELINE = [
-  'components/ThemeProvider.tsx',
-  'features/chat/components/useSessionGroups.ts',
-]
+const HEX_BASELINE = ['components/ThemeProvider.tsx']
 
 /**
  * Numeric rgb()/rgba() literals NOT routed through a token (`rgb(var(--…))`).
