@@ -558,7 +558,7 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `215a6eb6b`)
+## Landed on main (origin/main = `68dd37ec8`)
 
 - **2026-10-09 · logs unification — monitor folded into logs** (card `8182563a`, fix
   `6bb3a97ea`, gates 439 CLI passed + 17 new): `commands/monitor.py` deleted — its
@@ -985,6 +985,28 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-24 · root session on `feat/error-funnel` (NOT on main; merge
+  blocked).** Contents: browser error funnel (`error-store` fan-out →
+  GlobalBanner / opt-in toast / `state_events` / backend batch, ~39 bare
+  `console.error` sites routed through `addGlobalError`, `ErrorLifecycle`
+  `surface: 'global'`); design-criteria ratchets
+  (`apps/web/lib/design-criteria.test.ts` — shrink-only hex baseline 6→4 after
+  CardItem + personality charts → tokens; wrapper rule now strict zero-offender
+  with 11 redirect-only routes auto-exempt and `FULL_BLEED` chat/planner
+  shrink-only list); agent hygiene (`ui-ux-pro-max` folded into `designer`,
+  orphan skills linked to owner agents, dead skill/doc refs fixed);
+  `ui-error-watcher` runtime bridge (30s-throttled poll of `GET /errors/recent`
+  → homedir log rows `category: 'runtime'`, dedup by backend record id, silent
+  when API down; `ui-error-fixer.md` documents the runtime template). Cards:
+  `card-1792758674654-design`, `card-1792777482931-errfun`,
+  `card-1792830567244-dcrit`, `card-1792831802223-watch`. Gates: web tsc
+  clean, `test:lib` 1537/1537, design-criteria 5/5, `.opencode` vitest 35/35.
+  **Blocked:** local `main` is stale @ `f53190f7f` and checked out by the dirty
+  worktree `/home/mana/Documents/sloughgpt-api-std` (658 uncommitted changes);
+  `origin/main` = `68dd37ec8` (PR #189) has diverged and the branch also
+  carries ~80 commits from other sessions working in this tree. Landing needs
+  a human decision on the canonical line before any merge/PR.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
@@ -1024,6 +1046,13 @@ git push -u origin feat/<name>   # push your own branch when done
   Check it before treating a failure as yours.
 
 ## Gotchas that cost hours (add yours here)
+
+- **Stale `main` behind a foreign worktree is untouchable.** `main` may be
+  checked out by another session's worktree with hundreds of uncommitted
+  changes; git refuses checkout/merge/reset there and you must not disturb it.
+  Run `git worktree list` + `git status` on `main` BEFORE promising a merge.
+  Also: other sessions commit into YOUR current branch in the root worktree —
+  `git log main..feat/<name>` overcounts your work; cite your own hashes.
 
 - **`PYTHONNOUSERSITE=1` (AGENTS.md) breaks browser suites**: playwright is
   installed in `~/.local/lib/python3.12/site-packages/` (user site), not in
