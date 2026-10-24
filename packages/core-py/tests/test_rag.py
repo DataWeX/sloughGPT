@@ -302,6 +302,43 @@ class TestProductionRAG:
         ids = rag.add_document("hello world", metadata={"source": "test"})
         assert len(ids) == 1
 
+    def test_add_document_default_fine_char_windows(self):
+        """Default chunking must fit the ~400-char/rank injection budget."""
+        from domain.cognition._internal.rag import FINE_CHUNK_MAX_CHARS
+
+        rag = ProductionRAG()
+        content = " ".join(f"word{i}" for i in range(800))
+        ids = rag.add_document(content)
+        assert len(ids) > 1
+        by_id = {c.id: c for c in rag.retriever.chunks}
+        lens = [len(by_id[i].content) for i in ids]
+        assert max(lens) <= FINE_CHUNK_MAX_CHARS
+        assert sum(lens) / len(lens) >= 300  # not shredded into slivers
+        # coverage: every original word survives across the windows
+        covered: set[str] = set()
+        for i in ids:
+            covered.update(by_id[i].content.split())
+        assert covered == set(content.split())
+
+    def test_add_document_fine_windows_overlap(self):
+        rag = ProductionRAG()
+        prose = "The retriever combines BM25 sparse scoring with dense embeddings. " * 40
+        ids = rag.add_document(prose)
+        assert len(ids) > 1
+        by_id = {c.id: c for c in rag.retriever.chunks}
+        first = set(by_id[ids[0]].content.split())
+        second = set(by_id[ids[1]].content.split())
+        assert first & second  # adjacent windows share trailing words
+
+    def test_add_document_legacy_token_chunking_preserved(self):
+        rag = ProductionRAG()
+        content = " ".join(f"tok{i}" for i in range(1000))
+        ids = rag.add_document(content, chunk_size=100, overlap=20)
+        assert len(ids) > 1
+        by_id = {c.id: c for c in rag.retriever.chunks}
+        for i in ids:
+            assert len(by_id[i].content.split()) <= 100
+
     def test_query_returns_structure(self):
         rag = ProductionRAG()
         rag.add_document("Python is a programming language")
