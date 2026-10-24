@@ -139,6 +139,29 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+# Budget for the injected RAG block (card cad8ccf0). Measured 2026-10-24:
+# query(prompt, 5) returned 15,228 chars (~4k tokens) from 3-4KB chunks; an
+# uncut dump makes prefill alone exceed the 120s generation timeout (0 tokens
+# streamed). ~2000 chars ≈ 500 tokens keeps first-token ~20s worst-case
+# (8.7s measured @196 tok; prefill attention scales ~quadratically).
+_RAG_CONTEXT_MAX_CHARS = 2000
+
+
+def _build_rag_block(
+    rag_result: dict[str, Any], max_chars: int = _RAG_CONTEXT_MAX_CHARS
+) -> str | None:
+    """Build the RAG system block, capped to the prompt budget.
+
+    Returns None when there is nothing to inject (zero results).
+    """
+    if rag_result.get("num_results", 0) <= 0:
+        return None
+    ctx = rag_result.get("context", "") or ""
+    if len(ctx) > max_chars:
+        ctx = ctx[:max_chars].rstrip() + "\n[...]"
+    return f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{ctx}"
+
+
 def _trim_messages_to_budget(
     messages: list[dict[str, Any]], max_context: int, max_new_tokens: int
 ) -> list[dict[str, Any]]:
@@ -1927,10 +1950,12 @@ class InferenceRouter:
                         rag_result = await asyncio.wait_for(
                             asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0
                         )
-                        if rag_result.get("num_results", 0) > 0:
-                            rag_block = (
-                                f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} "
-                                f"relevant passages]\n\n{rag_result['context']}"
+                        rag_block = _build_rag_block(rag_result)
+                        if rag_block is not None:
+                            logger.info(
+                                "RAG context injected: %d chars (budget %d)",
+                                len(rag_block),
+                                _RAG_CONTEXT_MAX_CHARS,
                             )
                             messages.insert(0, {"role": "system", "content": rag_block})
             except Exception as e:
