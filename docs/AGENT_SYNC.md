@@ -972,6 +972,30 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-23 · `feat/filehub` — standalone download hub, own IP (card
+  `260d9478`, stacked on `feat/file-store-compressed`).** `FileHub` sync
+  core (`domain/files/_internal/hub.py`): downcraft-backed pull-through
+  into `FileStore` with sha256 dedup (re-pull of an identical artifact
+  transfers nothing) + constant-time token auth. `apps/filehub` standalone
+  process on our own `wire-py` `WireServer(asgi_app=…)` — not FastAPI; a
+  handful of routes (`/health`, `/files`, `/files/{id}/download`,
+  `POST /pull`, `POST /files?name=`), binds its own interface (default
+  port 8400, `SLO_FILEHUB_TOKEN`). Download path: zstd stored-frame
+  passthrough for text/code (`Content-Encoding: zstd`, zero transcoding),
+  Range 206 for raw model blobs (resumable), chunked stream otherwise.
+  Two wire-layer gotchas found and fixed: (1) wire's scope is uvicorn-style
+  — `path` is an unquoted str and `query_string` arrives separately, so
+  `urlparse(path).query` is always empty; (2) the ASGI adapter **rejects**
+  an app-declared `Content-Length` on a streamed body and owns chunked
+  framing — the last data frame must carry `more_body=False` (a trailing
+  empty frame would emit a second terminal chunk and desync keep-alive).
+  17 tests green (core 7, wire 10 incl. a >1 MiB multi-chunk case that
+  would have caught the framing bug), `benchmark_file_hub.py` gate PASS
+  (8-client fan-out 127 MiB/s aggregate, zstd passthrough 10.4x on the
+  wire). **Land from the api-std worktree**, stacked on the two branches
+  above. Follow-up card `019464d8` (opt-in quantize-on-ingest for
+  unquantized safetensors) is todo, not part of this branch.
+
 - **2026-10-23 · `feat/compression-bench-baselines` — compression proof
   before the file store (card `fba1ce5e`).** `benchmark_downcraft_compression.py`
   gains Tier 1b external CLI baselines (gzip/zstd/lz4/xz/bzip2/7z at matched

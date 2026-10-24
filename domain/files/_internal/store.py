@@ -316,6 +316,13 @@ class FileStore:
         meta = self.get_meta(file_id)
         return self.root / meta["filename"], meta
 
+    def find_by_sha(self, sha256: str) -> dict | None:
+        """Metadata of an existing intact blob with this digest (dedup seam)."""
+        meta = self._col().find_one({"sha256": sha256})
+        if meta and meta.get("file_id") and (self.root / meta["filename"]).is_file():
+            return meta
+        return None
+
     # ── collection ops ─────────────────────────────────────────────
 
     def list(self, tag: str | None = None) -> list[dict]:
