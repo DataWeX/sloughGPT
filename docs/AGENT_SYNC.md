@@ -1016,7 +1016,14 @@ git push -u origin feat/<name>   # push your own branch when done
   Mixed-content checkpoints now compress (~0.77x) while pure-weight `.pt`
   stays raw (1.00x). `quantize=1` stays 400 for these (torch absent,
   numpy-first; format conversion = separate card). 23 store tests green,
-  `benchmark_file_store.py` gate extended + PASS.
+  `benchmark_file_store.py` gate extended + PASS. Resume-journey landed
+  (`286ca2989`, card `b7516f98`): the Range 206 path was already correct
+  (seek+slice, terminal-frame discipline) but only asserted as a single
+  slice against an intact buffer — added the real client journey: start a
+  5 MiB download, kill it after one chunk, resume with `Range: bytes=N-`,
+  prove 206 + only the missing suffix is sent + sha256-identical reassembly;
+  plus a flaky-link case killed twice mid-slice. 16 wire tests green (+2),
+  `benchmark_file_hub.py` PASS (fan-out 1.7x, zstd 10.4x).
   **Land from the api-std worktree**, stacked on the two branches
   above.
 
