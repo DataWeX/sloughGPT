@@ -6,7 +6,9 @@ listing, zstd passthrough, Range on raw blobs, pull-through e2e.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import struct
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -212,6 +214,84 @@ class TestServing:
         )
         assert part.status_code == 206
         assert part.content == big[1048576 : 2097152]
+
+
+class TestResumeJourney:
+    """End-to-end kill-and-resume: the real proof of 'no wasted bytes'.
+
+    The Range tests above assert a single slice against an intact buffer.
+    These drive the actual client journey: start a download, kill it after a
+    partial read, resume with ``Range: bytes=N-``, and prove (a) the resume
+    returns 206 + only the missing suffix, and (b) the reassembled bytes are
+    byte-identical to the original (sha256), so nothing was lost or wasted.
+    """
+
+    # 5 MiB so the first read lands mid-file and the resume spans chunks.
+    SIZE = 5 * 1024 * 1024
+
+    @pytest.fixture
+    def big_blob(self):
+        return os.urandom(self.SIZE)
+
+    def test_kill_midflight_then_resume_sends_only_missing_suffix(self, base_url, big_blob):
+        meta = _upload(base_url, "resume.gguf", big_blob)
+        assert meta["codec"] == "raw"
+        url = f"{base_url}/files/{meta['id']}/download"
+        auth = {"X-FileHub-Token": "tok123"}
+
+        # Start a full download, read ONE chunk, then kill it (close the
+        # stream early — the connection drops with bytes still unsent).
+        got = bytearray()
+        with httpx.stream("GET", url, headers=auth, timeout=30) as r:
+            assert r.status_code == 200
+            for chunk in r.iter_bytes(chunk_size=65536):
+                got.extend(chunk)
+                break  # <- the kill: client aborts after the first chunk
+        killed_at = len(got)
+        assert 0 < killed_at < self.SIZE  # genuinely partial, not whole file
+
+        # Resume exactly where the client died. Only the suffix is owed.
+        resume = httpx.get(
+            url, headers={**auth, "Range": f"bytes={killed_at}-"}, timeout=30
+        )
+        assert resume.status_code == 206
+        expected_range = f"bytes {killed_at}-{self.SIZE - 1}/{self.SIZE}"
+        assert resume.headers["content-range"] == expected_range
+        # No wasted bytes: the server sent ONLY what was missing.
+        assert len(resume.content) == self.SIZE - killed_at
+        assert resume.content == big_blob[killed_at:]
+
+        # Reassembled bytes are byte-identical to the original.
+        reassembled = bytes(got) + resume.content
+        assert reassembled == big_blob
+        assert hashlib.sha256(reassembled).hexdigest() == hashlib.sha256(big_blob).hexdigest()
+
+    def test_resume_across_multiple_kills_stays_lossless(self, base_url, big_blob):
+        # A flaky link kills the transfer twice; the client resumes after
+        # each kill and still ends with the exact original bytes.
+        meta = _upload(base_url, "flaky.gguf", big_blob)
+        url = f"{base_url}/files/{meta['id']}/download"
+        auth = {"X-FileHub-Token": "tok123"}
+        chunks: list[bytes] = []
+        offset = 0
+        kills = 0
+
+        while offset < self.SIZE:
+            hdr = {**auth, "Range": f"bytes={offset}-"}
+            with httpx.stream("GET", url, headers=hdr, timeout=30) as r:
+                assert r.status_code == 206
+                for chunk in r.iter_bytes(chunk_size=32768):
+                    chunks.append(chunk)
+                    offset += len(chunk)
+                    if kills < 2 and offset >= (kills + 1) * (self.SIZE // 3):
+                        kills += 1
+                        break  # kill mid-slice; next loop resumes via Range
+            if kills >= 2 and offset >= self.SIZE:
+                break
+
+        assert kills == 2  # the journey actually got interrupted twice
+        reassembled = b"".join(chunks)
+        assert reassembled == big_blob
 
 
 class TestPullThrough:
