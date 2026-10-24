@@ -204,7 +204,7 @@ export function BuffetEngine() {
   if (error) {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
-        <p className="text-sm text-red-400 font-mono">{error}</p>
+        <p className="text-sm text-destructive font-mono">{error}</p>
         <Button size="sm" variant="outline" onClick={refresh}>
           Retry
         </Button>

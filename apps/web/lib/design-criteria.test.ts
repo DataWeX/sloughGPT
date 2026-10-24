@@ -100,10 +100,9 @@ const STOCK_PALETTE_BASELINE: Record<string, number> = {
   'components/phoneme/PronunciationHeatmap.tsx': 8,
   'components/phoneme/PronunciationRecording.tsx': 1,
   'components/phoneme/WordDifficultyRanker.tsx': 3,
-  'components/planner/BuffetEngine.tsx': 1,
-  'components/planner/CardEditor.tsx': 6,
+
   'components/planner/HashChain.tsx': 4,
-  'components/planner/Tray.tsx': 8,
+
   'components/security/ThreatLogCard.tsx': 4,
   'components/shared-data/IncomingSharesCard.tsx': 4,
   'components/shared-data/OutgoingSharesCard.tsx': 4,
@@ -116,7 +115,7 @@ const STOCK_PALETTE_BASELINE: Record<string, number> = {
 }
 
 /** Total instance ceiling — additions to the map cannot lift it. */
-const STOCK_PALETTE_TOTAL_CEILING = 156
+const STOCK_PALETTE_TOTAL_CEILING = 141
 
 /** This rule also covers lib/ and contexts/ (class strings live there too). */
 const STOCK_SCAN_ROOTS = [...SCAN_ROOTS, 'lib', 'contexts'] as const

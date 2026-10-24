@@ -273,7 +273,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           >
             <button
               onClick={() => onDelete(card.id)}
-              className="px-3 py-1.5 rounded-md text-sm text-red-400 hover:text-red-300 hover:bg-red-950/50 transition-colors"
+              className="px-3 py-1.5 rounded-md text-sm text-destructive hover:brightness-125 hover:bg-[rgb(var(--destructive)/0.15)] transition-colors"
             >
               Delete
             </button>
@@ -359,7 +359,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                             <button
                               onClick={() => handleDeleteNote(n.id)}
                               disabled={noteBusy}
-                              className="px-1.5 py-0.5 rounded text-[10px] text-zinc-600 hover:text-red-400 hover:bg-red-950/40 disabled:opacity-40 transition-colors"
+                              className="px-1.5 py-0.5 rounded text-[10px] text-zinc-600 hover:text-destructive hover:bg-[rgb(var(--destructive)/0.12)] disabled:opacity-40 transition-colors"
                               aria-label="Delete note"
                             >
                               delete
@@ -404,7 +404,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                 <span className="text-[9px] font-mono text-zinc-700 ml-auto">⌘↵</span>
               </div>
               {noteError && (
-                <p className="text-[11px] text-red-400 font-mono" role="alert">
+                <p className="text-[11px] text-destructive font-mono" role="alert">
                   {noteError}
                 </p>
               )}

@@ -82,9 +82,9 @@ export function Tray({
             'inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded',
             'transition-colors duration-200',
             showOverWip
-              ? 'bg-red-950/50 text-red-400 border border-red-900/50'
+              ? 'bg-[rgb(var(--destructive)/0.15)] text-destructive border border-[rgb(var(--destructive)/0.3)]'
               : wipFull
-                ? 'bg-amber-950/50 text-amber-400 border border-amber-900/50'
+                ? 'bg-[rgb(var(--warning)/0.15)] text-warning border border-[rgb(var(--warning)/0.3)]'
                 : 'bg-zinc-900 text-zinc-600 border border-zinc-800',
           )}
         >
@@ -108,13 +108,13 @@ export function Tray({
           <div
             className={cn(
               'rounded-md border border-dashed p-5 text-center transition-colors duration-200 h-20 flex items-center justify-center',
-              dropAllowed ? 'border-zinc-800' : 'border-red-900/40',
+              dropAllowed ? 'border-zinc-800' : 'border-[rgb(var(--destructive)/0.25)]',
             )}
           >
             <p
               className={cn(
                 'text-[10px] font-mono',
-                dropAllowed ? 'text-zinc-700' : 'text-red-800',
+                dropAllowed ? 'text-zinc-700' : 'text-destructive',
               )}
             >
               {dropAllowed ? 'drop here' : 'WIP full'}
