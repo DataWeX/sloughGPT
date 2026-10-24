@@ -696,6 +696,79 @@ class TrainingEngine:
 
         return AlertSeverity(value)
 
+    # ── Router delegation: recovery internals (build order #4 part 2) ──
+
+    def resolve_resume_checkpoint(
+        self, checkpoint_path: str, checkpoint_dir: str
+    ) -> tuple[str, Any]:
+        """Resolve the checkpoint a recovery run resumes from (card c48aaaad).
+
+        A recorded path is loaded exactly once here: missing, unsupported, or
+        unreadable raise ValueError (the router maps it to 422 — the one
+        sanctioned HTTP mapping). With no recorded path, fall back to the
+        newest file that actually loads in ``checkpoint_dir`` (a crash
+        mid-write can leave the newest file unreadable). Returns
+        ``(path, bundle)``; path is ``""`` when nothing is resumable.
+        """
+        from domain.training._internal.train_pipeline import CheckpointManager
+
+        if checkpoint_path:
+            if not CheckpointManager.is_resumable(checkpoint_path):
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                    "unsupported (use a .soul or .npz file)"
+                )
+            try:
+                bundle = CheckpointManager.load_from_path(checkpoint_path)
+            except Exception as exc:
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})"
+                ) from exc
+            if bundle is None:
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                    "unsupported (use a .soul or .npz file)"
+                )
+            return checkpoint_path, bundle
+        manager = CheckpointManager(checkpoint_dir)
+        path, bundle = manager.load_latest_with_path()
+        return path or "", bundle
+
+    def run_recovery_training(
+        self,
+        config: dict[str, Any],
+        on_progress: Any,
+        resume: Any,
+        events: dict[str, Any] | None = None,
+    ) -> Any:
+        """Build the recovery trainer from ``config``, train, return the trainer.
+
+        ``resume`` is the pre-loaded checkpoint bundle (or None) — recovery
+        always trains in resume mode; the bundle is handed to train() so no
+        second disk load happens in the worker thread. ``events`` carries
+        ``cancel_event``/``pause_event``. The trainer is returned so the
+        caller can read the produced checkpoint path (router closure keeps
+        all job-store/controller state).
+        """
+        from domain.training._internal.train_pipeline import SloughGPTTrainer
+
+        events = events or {}
+        trainer = SloughGPTTrainer(**config)
+        trainer.train(
+            on_progress=on_progress,
+            resume=True,
+            resume_checkpoint=resume,
+            cancel_event=events.get("cancel_event"),
+            pause_event=events.get("pause_event"),
+        )
+        return trainer
+
+    def executor_submit(self, fn: Any, *args: Any) -> Any:
+        """Raw passthrough: submit ``fn(*args)`` to the training executor."""
+        from domain.training._internal.executor import get_training_executor
+
+        return get_training_executor().submit(fn, *args)
+
 
 _engine: TrainingEngine | None = None
 
