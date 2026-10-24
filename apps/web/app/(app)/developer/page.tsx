@@ -806,8 +806,8 @@ function StartupTab() {
     const fetchStartup = async () => {
       try {
         const [progressRes, historyRes] = await Promise.all([
-          fetch('/health/startup-progress'),
-          fetch('/health/startup-history'),
+          authFetch('/health/startup-progress'),
+          authFetch('/health/startup-history'),
         ])
         const progressJson = await progressRes.json()
         const historyJson = await historyRes.json()
