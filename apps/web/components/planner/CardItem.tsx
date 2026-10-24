@@ -71,8 +71,11 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
           <p className="text-[13px] font-medium leading-snug flex-1 text-zinc-800">{card.title}</p>
           {card.root_hash && (
             <span
-              className="mt-1 h-1.5 w-1.5 rounded-full shrink-0 bg-emerald-500"
-              style={{ boxShadow: '0 0 4px rgba(16,185,129,0.4)' }}
+              className="mt-1 h-1.5 w-1.5 rounded-full shrink-0"
+              style={{
+                backgroundColor: 'rgb(var(--success))',
+                boxShadow: '0 0 4px rgb(var(--success) / 0.4)',
+              }}
               title="Hash chain active"
               aria-label="Hash chain active"
             />

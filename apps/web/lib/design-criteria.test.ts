@@ -49,6 +49,31 @@ const HEX_BASELINE = [
 ]
 
 /**
+ * Numeric rgb()/rgba() literals NOT routed through a token (`rgb(var(--…))`).
+ * Same contract as HEX_BASELINE: each row is debt, may only shrink.
+ * - magazine: the page IS the brand gallery (18 literals, design-owned)
+ * - world: 2 extra hues beyond the 5 chart slots in an inline palette
+ * - compare: recharts area fills (violet/cyan alpha ramps)
+ * - kanban: neutral elevation shadow
+ * - CardItem/BuffetEngine/CardEditor/Tray: dark-canvas decoration —
+ *   elevation shadows, hairline borders, scrims (no hue identity; the two
+ *   drag-state hairlines in Tray are pre-token tints pending a design pass)
+ */
+const RGB_BASELINE = [
+  'app/(app)/magazine/page.tsx',
+  'app/(app)/world/page.tsx',
+  'app/(app)/kanban/page.tsx',
+  'app/(app)/consciousness/compare/page.tsx',
+  'components/planner/BuffetEngine.tsx',
+  'components/planner/CardEditor.tsx',
+  'components/planner/CardItem.tsx',
+  'components/planner/Tray.tsx',
+]
+
+/** Numeric rgb()/rgba() — `rgb(var(--…))` is tokenised and does not match. */
+const RGB_RE = /\brgba?\(\s*\d/
+
+/**
  * Full-bleed surfaces (measured 2026-10-24: 2). These re-export workspace
  * layouts where a centered max-w column is wrong — the wrapper belongs to
  * their own layout, not PageContainer. Exemptions are debt too: this list
@@ -101,6 +126,29 @@ describe('Design criteria — Noir Violet ratchets', () => {
       `New hex literals in these files — use rgb(var(--token)) instead ` +
         `(design-system-enforcement skill). Offenders: ${unexpected.join(', ')}`,
     ).toEqual([])
+  })
+
+  it('no NEW source file introduces raw rgb() colours', () => {
+    const offenders = scanned.filter((rel) =>
+      RGB_RE.test(stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))),
+    )
+    const unexpected = offenders.filter((f) => !RGB_BASELINE.includes(f))
+    expect(
+      unexpected,
+      `Raw rgb() literals — use rgb(var(--token)) or a chart/semantic token ` +
+        `(design-system-enforcement skill). Offenders: ${unexpected.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('rgb baseline may only shrink', () => {
+    const offenders = scanned.filter((rel) =>
+      RGB_RE.test(stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))),
+    )
+    expect(
+      offenders.filter((f) => RGB_BASELINE.includes(f)).length,
+      `Raw-rgb debt grew past the baseline (${RGB_BASELINE.length} files). ` +
+        `Fix the file, delete the row.`,
+    ).toBeLessThanOrEqual(RGB_BASELINE.length)
   })
 
   it('hex baseline may only shrink', () => {
