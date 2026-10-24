@@ -992,9 +992,18 @@ git push -u origin feat/<name>   # push your own branch when done
   17 tests green (core 7, wire 10 incl. a >1 MiB multi-chunk case that
   would have caught the framing bug), `benchmark_file_hub.py` gate PASS
   (8-client fan-out 127 MiB/s aggregate, zstd passthrough 10.4x on the
-  wire). **Land from the api-std worktree**, stacked on the two branches
-  above. Follow-up card `019464d8` (opt-in quantize-on-ingest for
-  unquantized safetensors) is todo, not part of this branch.
+  wire). Follow-up card `019464d8` **landed on this same branch**
+  (`d1fc686d0`): opt-in quantize-on-ingest for unquantized fp32/bf16
+  safetensors — `FileStore.put_quantized()` reuses the proven `Quantine`
+  quantizer (no duplicate loop), int8 blob stored raw with `quantization`
+  provenance on the entry, refuses GGUF/NF4/GPTQ (loss-on-loss, never
+  silently); `benchmark_quant_ingest.py` gate PASS — 3.82x on-disk at
+  worst-tensor cosine 0.99997, dequant round-trip 351 MiB/s (proven
+  genuinely lossy: max rel err 0.39%). Two bugs found+fixed on the way:
+  `_read_header` re-read the 8-byte length prefix into the JSON body, and
+  a dead duplicate `_reserve_id` body was stranded after `put_quantized`.
+  **Land from the api-std worktree**, stacked on the two branches
+  above.
 
 - **2026-10-23 · `feat/compression-bench-baselines` — compression proof
   before the file store (card `fba1ce5e`).** `benchmark_downcraft_compression.py`
