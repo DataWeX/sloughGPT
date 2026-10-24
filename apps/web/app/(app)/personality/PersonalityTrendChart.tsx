@@ -88,7 +88,7 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
       return { time: formatWhen(Number(p.timestamp), isSameDay), ...values }
     })
     const last = sorted[sorted.length - 1]
-    const latest = ((last?.[field] ?? {}) as Record<string, number>) ?? {}
+    const latest = (last?.[field] ?? {}) as Record<string, number>
     return { rows: plotted, latest, sameDay: isSameDay }
   }, [history, field])
 

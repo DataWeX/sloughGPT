@@ -36,8 +36,12 @@
     "next": "^16.3.2"
   },
   "lint-staged": {
-    "{apps/web,packages/strui}/**/*.{ts,tsx}": [
+    "apps/web/**/*.{ts,tsx}": [
       "eslint --fix",
+      "prettier --write"
+    ],
+    "packages/strui/**/*.{ts,tsx}": [
+      "packages/strui/node_modules/.bin/eslint --config packages/strui/eslint.config.js --fix",
       "prettier --write"
     ],
     "*.{ts,tsx,js,jsx}": [

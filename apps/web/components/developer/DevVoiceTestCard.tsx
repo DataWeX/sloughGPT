@@ -9,14 +9,28 @@ export function DevVoiceTestCard() {
   const [loading, setLoading] = useState(true)
   const [ttsText, setTtsText] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string } | null>(null)
+  const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string } | null>(
+    null,
+  )
   const [ttsError, setTtsError] = useState<string | null>(null)
 
   useEffect(() => {
-    voiceController.getStatus()
-      .then(d => setStatus(d))
+    // Cancel on unmount: a post-teardown setLoading dispatch makes
+    // react-dom's update-priority path read a torn-down window
+    // (ReferenceError) inside .finally, whose rejection nobody handles.
+    let cancelled = false
+    voiceController
+      .getStatus()
+      .then((d) => {
+        if (!cancelled) setStatus(d)
+      })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleGenerate = async () => {
@@ -54,11 +68,15 @@ export function DevVoiceTestCard() {
           ) : status ? (
             <div className="space-y-2.5">
               <div className="flex items-center gap-2.5">
-                <span className={cn(
-                  'w-2 h-2 rounded-full',
-                  status.server_tts ? 'bg-term-zoom' : 'bg-term-close',
-                )} />
-                <span className="text-[12px] text-term-text">{status.server_tts ? 'TTS Available' : 'TTS Unavailable'}</span>
+                <span
+                  className={cn(
+                    'w-2 h-2 rounded-full',
+                    status.server_tts ? 'bg-term-zoom' : 'bg-term-close',
+                  )}
+                />
+                <span className="text-[12px] text-term-text">
+                  {status.server_tts ? 'TTS Available' : 'TTS Unavailable'}
+                </span>
               </div>
               <p className="text-[11px] text-term-text-dim font-mono">
                 {status.model ?? 'no model'}
@@ -84,7 +102,7 @@ export function DevVoiceTestCard() {
           <textarea
             placeholder="Type text to speak..."
             value={ttsText}
-            onChange={e => setTtsText(e.target.value)}
+            onChange={(e) => setTtsText(e.target.value)}
             className="w-full h-16 rounded-lg border border-white/[0.06] bg-term-surface-raised px-3 py-2 text-[12px] text-term-text placeholder:text-term-text-faint resize-none outline-none focus:border-white/[0.12] transition-colors font-mono"
             aria-label="Text to speech input"
           />

@@ -88,7 +88,10 @@ export const MessageContent = memo(function MessageContent({
           <span className="text-muted-foreground/40 select-none">…</span>
         )}
         {isStreaming && (
-          <span className="inline-block ml-0.5 animate-pulse text-primary" aria-hidden="true">
+          <span
+            className="inline-block ml-0.5 animate-pulse motion-reduce:animate-none text-primary"
+            aria-hidden="true"
+          >
             ▊
           </span>
         )}
@@ -96,7 +99,7 @@ export const MessageContent = memo(function MessageContent({
           <button
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
             aria-expanded={!isCollapsed}
           >
             {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}
@@ -179,7 +182,7 @@ export const MessageContent = memo(function MessageContent({
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
           aria-expanded={!isCollapsed}
         >
           {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}

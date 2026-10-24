@@ -443,12 +443,12 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
         onPDFDropped={handlePDFDropped}
       >
         {loading && (
-          <div className="px-4 py-2">
+          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 py-2">
             <ContextInjectionBar onInject={controller.chat.injectContext} disabled={!loading} />
           </div>
         )}
         {pendingToolApproval && (
-          <div className="px-4 py-2">
+          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 py-2">
             <ToolApprovalDialog
               toolName={pendingToolApproval.toolName}
               args={pendingToolApproval.args}

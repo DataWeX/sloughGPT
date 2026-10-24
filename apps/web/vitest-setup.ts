@@ -3,6 +3,12 @@ import { cleanup } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, vi } from 'vitest'
 
+// React 18 requirement: without this flag act() is non-conformant (every test
+// logs "The current testing environment is not configured to support act(...)")
+// and async updates can escape act windows across cleanup boundaries.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+
 // react-router Link needs a Router context; unit tests render leaves without one.
 vi.mock('@/vite/next-compat/link', () => ({
   default: ({
@@ -17,10 +23,13 @@ vi.mock('@/vite/next-compat/link', () => ({
     [key: string]: unknown
   }) => {
     const to = typeof href === 'string' ? href : String(href ?? '#')
-    const { replace: _r, scroll: _s, prefetch: _p, passHref: _ph, ...anchor } = rest as Record<
-      string,
-      unknown
-    >
+    const {
+      replace: _r,
+      scroll: _s,
+      prefetch: _p,
+      passHref: _ph,
+      ...anchor
+    } = rest as Record<string, unknown>
     return createElement('a', { href: to, className, ...anchor }, children as never)
   },
 }))
@@ -48,11 +57,7 @@ const _originalFetch = globalThis.fetch?.bind(globalThis)
 if (_originalFetch) {
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.href
-          : (input as Request).url
+      typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url
     if (url.includes('/errors/logs/ingest')) {
       return Promise.resolve(
         new Response(JSON.stringify({ ok: true }), {

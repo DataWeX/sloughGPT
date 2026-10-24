@@ -57,7 +57,11 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
           <div
-            className={cn('w-2 h-2 rounded-full', tone.dot, tone.pulse && 'animate-pulse')}
+            className={cn(
+              'w-2 h-2 rounded-full',
+              tone.dot,
+              tone.pulse && 'animate-pulse motion-reduce:animate-none',
+            )}
           />
           <span className="text-sm font-medium" aria-live="polite">
             {isListening
@@ -78,6 +82,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               showTranscript
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label={showTranscript ? 'Hide transcript' : 'Show transcript'}
           >
@@ -91,6 +96,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               showSettings
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label="Voice settings"
           >
@@ -99,7 +105,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-2 rounded-lg text-muted-foreground hover:text-foreground"
             aria-label="Exit voice mode"
           >
             <IconX className="h-4 w-4" />
@@ -145,6 +151,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
                 : isProcessing
                   ? 'bg-muted text-muted-foreground cursor-wait'
                   : 'bg-primary/10 text-primary hover:bg-primary/20',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label={isListening ? 'Tap to stop listening' : 'Tap to start listening'}
           >

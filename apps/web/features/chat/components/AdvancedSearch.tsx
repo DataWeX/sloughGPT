@@ -105,7 +105,7 @@ export const AdvancedSearch = memo(function AdvancedSearch({
   }, [])
 
   const toggleOption = useCallback((key: keyof SearchOptions) => {
-    setOptions(prev => ({ ...prev, [key]: !prev[key] }))
+    setOptions((prev) => ({ ...prev, [key]: !prev[key] }))
     setCurrentMatch(0)
   }, [])
 
@@ -116,7 +116,10 @@ export const AdvancedSearch = memo(function AdvancedSearch({
         <input
           type="text"
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setCurrentMatch(0) }}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setCurrentMatch(0)
+          }}
           placeholder="Search messages..."
           className="flex-1 text-xs bg-transparent border-0 p-0 focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50"
         />
@@ -133,7 +136,10 @@ export const AdvancedSearch = memo(function AdvancedSearch({
           onClick={() => toggleOption('caseSensitive')}
           className={cn(
             'text-[10px] px-1 py-0.5 rounded',
-            options.caseSensitive ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted/50',
+            options.caseSensitive
+              ? 'bg-primary/20 text-primary'
+              : 'text-muted-foreground hover:bg-muted/50',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           )}
           title="Case sensitive"
         >
@@ -144,7 +150,10 @@ export const AdvancedSearch = memo(function AdvancedSearch({
           onClick={() => toggleOption('wholeWord')}
           className={cn(
             'text-[10px] px-1 py-0.5 rounded',
-            options.wholeWord ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted/50',
+            options.wholeWord
+              ? 'bg-primary/20 text-primary'
+              : 'text-muted-foreground hover:bg-muted/50',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           )}
           title="Whole word"
         >
@@ -155,7 +164,10 @@ export const AdvancedSearch = memo(function AdvancedSearch({
           onClick={() => toggleOption('useRegex')}
           className={cn(
             'text-[10px] px-1 py-0.5 rounded',
-            options.useRegex ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted/50',
+            options.useRegex
+              ? 'bg-primary/20 text-primary'
+              : 'text-muted-foreground hover:bg-muted/50',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           )}
           title="Regex"
         >
