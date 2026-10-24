@@ -64,6 +64,123 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
+  "openai.chat.completions": {
+    "auth_scope": "authenticated",
+    "description": "OpenAI-compatible chat completion over the SloNet generation seam (stream + non-stream). Foreign wire shape: top-level choices/usage, SSE chat.completion.chunk frames terminated by [DONE].",
+    "idempotent": false,
+    "method": "POST",
+    "module": "routers.openai_compat",
+    "name": "openai.chat.completions",
+    "operation_id": "openai.chat.completions.post",
+    "params": {
+      "properties": {
+        "max_tokens": {
+          "description": "Sampling cap",
+          "type": "integer"
+        },
+        "messages": {
+          "description": "OpenAI message objects [{role, content}, ...]",
+          "type": "array"
+        },
+        "model": {
+          "description": "Model id (routing ignored)",
+          "type": "string"
+        },
+        "stream": {
+          "description": "SSE streaming toggle",
+          "type": "boolean"
+        },
+        "temperature": {
+          "description": "Sampling temperature",
+          "type": "number"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "path": "/v1/chat/completions",
+    "result": {
+      "properties": {
+        "choices": {
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "object": {
+          "type": "string"
+        },
+        "usage": {
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
+  "openai.embeddings.create": {
+    "auth_scope": "authenticated",
+    "description": "OpenAI-compatible embeddings through InferRouter.infer_embed.",
+    "idempotent": false,
+    "method": "POST",
+    "module": "routers.openai_compat",
+    "name": "openai.embeddings.create",
+    "operation_id": "openai.embeddings.create.post",
+    "params": {
+      "properties": {
+        "input": {
+          "description": "Text or batch of texts",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model id (routing ignored)",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "path": "/v1/embeddings",
+    "result": {
+      "properties": {
+        "data": {
+          "type": "array"
+        },
+        "model": {
+          "type": "string"
+        },
+        "usage": {
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
+  "openai.models.list": {
+    "auth_scope": "authenticated",
+    "description": "OpenAI-compatible model listing (the loaded SloNet model).",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.openai_compat",
+    "name": "openai.models.list",
+    "operation_id": "openai.models.list.get",
+    "params": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "path": "/v1/models",
+    "result": {
+      "properties": {
+        "data": {
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
 } as const satisfies Record<string, ContractDescriptor>
 
 export type ContractName = keyof typeof CONTRACTS
