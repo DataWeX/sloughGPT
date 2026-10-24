@@ -13,7 +13,7 @@ CLASS, never on an instance.
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -326,3 +326,169 @@ def test_chat_router_does_not_import_inference_router():
         "chat.py must not import routers.inference — use domain.inference.engine's port"
     )
     assert "from apps.api.server.routers.inference" not in src
+
+
+# --- Reconnect replay (card 8125c86e) ---------------------------------------
+# POST /chat stores partials on disconnect and completions after the closing
+# frame; a retry that proves itself with Last-Event-ID replays the cached
+# turn's *unseen tail* without ever calling the engine again.
+
+
+def test_complete_turn_populates_reconnect_cache(client, manager):
+    """DoD 1 (completion half): a finished turn lands in the reconnect cache."""
+    from infrastructure.chat_response_cache import get_chat_response_cache
+
+    sid = "s-cache-complete"
+    fake_engine = _engine_yielding("hi back", TurnResult(text="hi back", session_id=sid))
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+        patch.object(ChatManager, "_store"),
+        patch.object(ChatManager, "_track", return_value=("op-c1", None)),
+        patch.object(ChatManager, "_untrack"),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": sid, "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert resp.status_code == 200
+    cached = get_chat_response_cache(sid)
+    assert cached is not None, "a completed turn must be cached for reconnection"
+    assert cached["complete"] is True
+    assert cached["tokens"] == ["hi back"]
+    assert int(cached["event_counter"]) >= 2, "counter must cover the token frame + done frame"
+
+
+def test_replay_serves_unseen_tail_without_calling_engine(client, manager):
+    """DoD 2 + 3: complete cache + Last-Event-ID replays the tail; engine never runs."""
+    from infrastructure.chat_response_cache import set_chat_response_cache
+
+    sid = "s-cache-replay"
+    # 3 token frames (ids 1..3) + done (id 4); the client folded ids 1..2.
+    set_chat_response_cache(
+        sid,
+        {"tokens": ["Hel", "lo ", "world"], "complete": True, "event_counter": 4},
+    )
+    fake_engine = MagicMock()
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": sid, "messages": [{"role": "user", "content": "hi"}]},
+            headers={"Last-Event-ID": "2"},
+        )
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert "world" in body, "the unseen tail must reach the client"
+    assert "Hel" not in body and "lo " not in body, (
+        "already-folded tokens must not be re-emitted — the frontend appends "
+        "across retries without resetting its buffer"
+    )
+    assert '"status": "complete"' in body, "the closing frame must follow the tail"
+    fake_engine.stream.assert_not_called()
+
+
+def test_replay_sends_only_closing_frame_when_client_missed_done(client, manager):
+    """Client folded every token but never saw the done frame → done-only replay."""
+    from infrastructure.chat_response_cache import set_chat_response_cache
+
+    sid = "s-cache-doneonly"
+    set_chat_response_cache(
+        sid,
+        {"tokens": ["a", "b"], "complete": True, "event_counter": 3},
+    )
+    fake_engine = MagicMock()
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": sid, "messages": [{"role": "user", "content": "hi"}]},
+            headers={"Last-Event-ID": "2"},
+        )
+
+    assert resp.status_code == 200
+    assert '"status": "complete"' in resp.text
+    assert '"token": "a"' not in resp.text, "full re-emit would duplicate the client's buffer"
+    fake_engine.stream.assert_not_called()
+
+
+def test_fresh_request_without_header_regenerates_over_stale_cache(client, manager):
+    """A new user message has no Last-Event-ID — it must generate, never replay.
+
+    Pins the strict counter check: a stale complete cache left by the previous
+    turn must not be served as the answer to the next question.
+    """
+    from infrastructure.chat_response_cache import (
+        get_chat_response_cache,
+        set_chat_response_cache,
+    )
+
+    sid = "s-cache-fresh"
+    set_chat_response_cache(
+        sid,
+        {"tokens": ["stale answer"], "complete": True, "event_counter": 2},
+    )
+    fake_engine = _engine_yielding("fresh reply", TurnResult(text="fresh reply", session_id=sid))
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+        patch.object(ChatManager, "_store"),
+        patch.object(ChatManager, "_track", return_value=("op-c2", None)),
+        patch.object(ChatManager, "_untrack"),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": sid, "messages": [{"role": "user", "content": "second question"}]},
+        )
+
+    assert resp.status_code == 200
+    assert "fresh reply" in resp.text
+    assert "stale answer" not in resp.text, "replay must never answer a NEW message"
+    cached = get_chat_response_cache(sid)
+    assert cached["tokens"] == ["fresh reply"], "the new turn overwrites the cache"
+
+
+def test_disconnect_after_first_token_caches_partial(manager):
+    """DoD 1 (disconnect half): a mid-stream disconnect stores the partial text."""
+    from infrastructure.chat_response_cache import get_chat_response_cache
+
+    from apps.api.server.schemas.chat import ChatRequest
+
+    sid = "s-cache-partial"
+    fake_engine = _engine_yielding("Hel", TurnResult(text="Hel", session_id=sid))
+    http_req = SimpleNamespace(
+        headers={},
+        # First item streams; the client is gone by the second.
+        is_disconnected=AsyncMock(side_effect=[False, True]),
+    )
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+        patch.object(ChatManager, "_store"),
+        patch.object(ChatManager, "_track", return_value=("op-p1", None)),
+        patch.object(ChatManager, "_untrack"),
+    ):
+        request = ChatRequest(messages=[{"role": "user", "content": "hi"}], session_id=sid)
+        resp = asyncio.run(ChatRouter().stream(request, http_req, auth_user=None))
+
+        async def _drain() -> None:
+            async for _ in resp.body_iterator:  # pragma: no cover - loop consumed
+                pass
+
+        asyncio.run(_drain())
+
+    cached = get_chat_response_cache(sid)
+    assert cached is not None, "disconnect must cache what was already generated"
+    assert cached["complete"] is False
+    assert cached["tokens"] == ["Hel"]
