@@ -35,15 +35,19 @@ export function stripComments(src: string): string {
 
 /**
  * Files allowed to contain hex today (measured 2026-10-24). Each row is debt:
- * - ThemeProvider: theme swatch *data* (a colour picker shows colours)
- * - planner/helpers: server-side card colour palette (distinct hue per card)
- * - chat useSessionGroups: group colour data (distinct hue per group)
+ * - ThemeProvider: theme swatch *data* — the picker shows every theme's
+ *   colour simultaneously while only one theme's tokens are live, so the
+ *   swatch list cannot reference vars. Permanent data exemption.
+ * - useSessionGroups: legacy hex KEYS in the one-time localStorage
+ *   migration map (the stored values are hex; matching them needs the
+ *   strings). Data, not markup colour — removable only by retiring
+ *   the migration.
  * Fix the file, delete the row. (Burned down 2026-10-24: CardItem priority
- * map + material and personality recharts strokes; export templates now
- * snapshot live tokens into the standalone stylesheet via rgb(var(--…)).)
+ * map + glow, material and personality recharts strokes, export templates
+ * (live token snapshot), useSessionGroups colours themselves now
+ * --group-N identity slots, planner helpers (dead COMMIT_COLORS deleted).)
  */
 const HEX_BASELINE = [
-  'app/api/planner/helpers.ts',
   'components/ThemeProvider.tsx',
   'features/chat/components/useSessionGroups.ts',
 ]
