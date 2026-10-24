@@ -2,36 +2,53 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-const {
-  mockStatus, mockStart, mockStop, mockTrigger, mockAddToast,
-} = vi.hoisted(() => ({
-  mockStatus: vi.fn(), mockStart: vi.fn(), mockStop: vi.fn(),
-  mockTrigger: vi.fn(), mockAddToast: vi.fn(),
+const { mockStatus, mockStart, mockStop, mockTrigger, mockAddToast } = vi.hoisted(() => ({
+  mockStatus: vi.fn(),
+  mockStart: vi.fn(),
+  mockStop: vi.fn(),
+  mockTrigger: vi.fn(),
+  mockAddToast: vi.fn(),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
     ),
-    StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
+    StatCard: ({ label, value }: any) => (
+      <div data-testid={`stat-${label}`}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    ),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -58,7 +75,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/lib/workflow-controller', () => ({
@@ -92,7 +109,17 @@ afterEach(cleanup)
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockStatus.mockResolvedValue({ running: false, last_run: null, total_runs: 0, config: { aggregate_interval_minutes: 5, prune_interval_minutes: 10, export_interval_hours: 24, health_check_interval_seconds: 60 } })
+  mockStatus.mockResolvedValue({
+    running: false,
+    last_run: null,
+    total_runs: 0,
+    config: {
+      aggregate_interval_minutes: 5,
+      prune_interval_minutes: 10,
+      export_interval_hours: 24,
+      health_check_interval_seconds: 60,
+    },
+  })
   mockStart.mockResolvedValue({})
   mockStop.mockResolvedValue({})
   mockTrigger.mockResolvedValue({ status: 'done' })
@@ -138,7 +165,16 @@ describe('WorkflowPage — stopped state flow', () => {
 
 describe('WorkflowPage — running state flow', () => {
   it('shows running status', async () => {
-    mockStatus.mockResolvedValue({ running: true, stats: { feedback_recorded: 10 }, config: { aggregate_interval_minutes: 5, prune_interval_minutes: 10, export_interval_hours: 24, health_check_interval_seconds: 60 } })
+    mockStatus.mockResolvedValue({
+      running: true,
+      stats: { feedback_recorded: 10 },
+      config: {
+        aggregate_interval_minutes: 5,
+        prune_interval_minutes: 10,
+        export_interval_hours: 24,
+        health_check_interval_seconds: 60,
+      },
+    })
     render(<WorkflowPage />)
     await waitFor(() => {
       expect(screen.getAllByText('Running').length).toBeGreaterThanOrEqual(1)
@@ -157,9 +193,13 @@ describe('WorkflowPage — running state flow', () => {
 describe('WorkflowPage — toggle flow', () => {
   it('start button calls start and refreshes status', async () => {
     render(<WorkflowPage />)
-    await waitFor(() => { expect(screen.getByText('Start')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Start')).toBeTruthy()
+    })
 
-    await act(async () => { fireEvent.click(screen.getByText('Start')) })
+    await act(async () => {
+      fireEvent.click(screen.getByText('Start'))
+    })
     await waitFor(() => {
       expect(mockStart).toHaveBeenCalled()
       expect(mockStatus).toHaveBeenCalledTimes(2) // mount + after toggle
@@ -169,9 +209,13 @@ describe('WorkflowPage — toggle flow', () => {
   it('stop button calls stop when running', async () => {
     mockStatus.mockResolvedValue({ running: true })
     render(<WorkflowPage />)
-    await waitFor(() => { expect(screen.getByText('Stop')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Stop')).toBeTruthy()
+    })
 
-    await act(async () => { fireEvent.click(screen.getByText('Stop')) })
+    await act(async () => {
+      fireEvent.click(screen.getByText('Stop'))
+    })
     await waitFor(() => {
       expect(mockStop).toHaveBeenCalled()
     })
@@ -181,17 +225,21 @@ describe('WorkflowPage — toggle flow', () => {
 describe('WorkflowPage — trigger flow', () => {
   it('trigger button calls trigger action', async () => {
     render(<WorkflowPage />)
-    await waitFor(() => { expect(screen.getByText('Workflow')).toBeTruthy() })
+    // The header ("Workflow") renders during data-state=loading too — wait for
+    // the load transition itself so the button query can't race the skeleton.
+    await waitFor(() => {
+      expect(screen.getByTestId('page-container')).toHaveAttribute('data-state', 'ready')
+    })
 
-    const triggerBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('trigger')
-    )
-    if (triggerBtn) {
-      await act(async () => { fireEvent.click(triggerBtn) })
-      await waitFor(() => {
-        expect(mockTrigger).toHaveBeenCalled()
-      })
-    }
+    // Manual Triggers card renders Aggregate/Prune/Export — click one and
+    // assert it actually dispatched the trigger action (the old textContent
+    // "trigger" scan matched no button, so this body never ran).
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Aggregate' }))
+    })
+    await waitFor(() => {
+      expect(mockTrigger).toHaveBeenCalledWith('aggregate')
+    })
   })
 })
 
@@ -217,14 +265,15 @@ describe('WorkflowPage — error handling', () => {
   it('handles toggle failure gracefully', async () => {
     mockStart.mockRejectedValue(new Error('failed'))
     render(<WorkflowPage />)
-    await waitFor(() => { expect(screen.getByText('Start')).toBeTruthy() })
-
-    await act(async () => { fireEvent.click(screen.getByText('Start')) })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith(
-        expect.stringContaining('toggle'),
-        'error'
-      )
+      expect(screen.getByText('Start')).toBeTruthy()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Start'))
+    })
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('toggle'), 'error')
     })
   })
 })
@@ -235,7 +284,12 @@ describe('WorkflowPage — stats display', () => {
       running: true,
       total_runs: 5,
       stats: { feedback_recorded: 100, auto_train_steps: 10 },
-      config: { aggregate_interval_minutes: 5, prune_interval_minutes: 10, export_interval_hours: 24, health_check_interval_seconds: 60 },
+      config: {
+        aggregate_interval_minutes: 5,
+        prune_interval_minutes: 10,
+        export_interval_hours: 24,
+        health_check_interval_seconds: 60,
+      },
     })
     render(<WorkflowPage />)
     await waitFor(() => {
