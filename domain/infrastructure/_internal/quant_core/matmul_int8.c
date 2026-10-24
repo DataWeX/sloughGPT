@@ -33,17 +33,20 @@
  * is compiled with AVX-512 flags when the toolchain allows, so the binary is
  * portable across CPU generations (AVX-512 path is runtime-gated by CPUID).
  *
- * Threading: for large GEMMs (B bytes ≥ threshold) the j-block loop is
- * spread across threads. B is split into contiguous j-block slices, each thread
- * streams its own slice (disjoint C columns), so the result is bit-identical to
- * the single-threaded path. Thread count: MAN_GEMM_THREADS env var when set,
- * else decode (M=1) uses 2 threads and batched GEMMs stay serial (thermal
- * bimodality measured at 4 threads on this host — see _gemm_threads_for).
- * Decode also lowers the size threshold (3MB vs 6MB) because a GEMV never
- * reuses B across rows: every byte is DRAM traffic, so the 4.4MB FFN
- * projections benefit from a second streamer. pthread_create failure degrades
- * to running inline. The M=1 row loop additionally prefetches rows ahead and
- * interleaves two rows (_block_j_gemv_avx2) to hide row-end hsum latency.
+ * Threading: ALWAYS every online core — uniform policy, no load probing,
+ * no decode/batched split (MAN_GEMM_THREADS=N pins per-call and stays the
+ * A/B hook). The j-block loop splits B into contiguous slices, each thread
+ * streams its own slice (disjoint C columns), so the result is
+ * bit-identical to the single-threaded path. The worker pool grows on
+ * demand and the caller joins the work; pthread_create failure degrades to
+ * running inline. nblk caps useful threads structurally (qkv/wo have 4
+ * j-blocks). Measured (scripts/benchmark_gemv_shapes.py): at load 26/8thr
+ * matmul ms/token t=1 168.6 → t=4 54.6; at load 1.6 t=6 15.5, t=8 14.6
+ * (knee = nproc), t=12/16 regress past nproc. Under contention a serial
+ * GEMV loses scheduler share, not just DRAM bandwidth; quiet, 8 threads
+ * reach ~26GB/s (DDR4 peak) vs ~7-10GB/s single-core. The M=1 row loop
+ * additionally prefetches rows ahead and interleaves two rows
+ * (_block_j_gemv_avx2) to hide row-end hsum latency.
  *
  * Build (AVX2 everywhere; AVX-512 VNNI kernels via per-function target
  * attributes, gated at runtime by CPUID — never -mavx512* on the command
@@ -69,73 +72,31 @@
 #define _JB_MIN 32
 #define _JB_MAX 4096
 
-/** Minimum B bytes (N×K) before the j-block loop is spread across threads.
- *  Below this the thread-spawn cost (~0.1-0.2ms on 8 threads) exceeds the
- *  bandwidth win (measured neutral at 4.2MB, 1.5x at 8.3MB). */
-#define _THREAD_MIN_BYTES 6291456L  /* 6MB */
-
-/** Decode (M=1) lowers the thread threshold: a GEMV re-streams the whole
- *  weight matrix from DRAM every call, so the 4.4MB FFN projections that are
- *  "cache-warm neutral" in an isolated microbenchmark are true DRAM traffic
- *  in the decode loop (the 12MB L3 never holds the full ~500MB working set).
- *  Two threads on those measured +30% on the 136MB lm_head GEMV. */
-#define _THREAD_MIN_BYTES_DECODE 3145728L  /* 3MB */
-
-/* Decode fan-out floor, env-overridable for A/B (MAN_THREAD_MIN_BYTES=N).
- * Read once — getenv() walks the whole environ and decode calls this ~100×/token. */
-static long _decode_thread_min(void) {
-    static long v = -1;
-    if (v < 0) {
-        const char *e = getenv("MAN_THREAD_MIN_BYTES");
-        if (e != NULL && *e != '\0') {
-            long t = strtol(e, NULL, 10);
-            if (t >= 0) v = t;
-        }
-        if (v < 0) v = _THREAD_MIN_BYTES_DECODE;
-    }
-    return v;
-}
-
-/** True when the box has CPU headroom for decode fan-out (refreshed at
- *  most every 200ms). Under contention the condvar wake stretches from µs
- *  to 100µs+ and a second streamer just competes with other sessions'
- *  work — measured w1 4.4MB: 0.80ms serial vs 0.94ms threaded at load 8.5/8.
- *  Explicit MAN_GEMM_THREADS always bypasses this. */
-static int _decode_load_ok(void) {
-    static struct timespec last;
-    static int ok = 1, init = 0;
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    long ms = (now.tv_sec - last.tv_sec) * 1000L +
-              (now.tv_nsec - last.tv_nsec) / 1000000L;
-    if (!init || ms > 200) {
-        double ld = 0.0;
-        long nc = sysconf(_SC_NPROCESSORS_ONLN);
-        ok = (getloadavg(&ld, 1) == 1) ? (ld <= (double)nc) : 1;
-        last = now;
-        init = 1;
-    }
-    return ok;
-}
+/* ── Thread count policy ──────────────────────────────────────────── */
 
 static int _gemm_threads_for(int M) {
-    /* Serial by default for batched/training GEMMs. j-block threading only
-     * paid off erratically there: on this 4C/8T i5-9300H sustained 4-thread
-     * AVX2 heats the chip into throttle (measured 59ms vs 124-130ms bimodal
-     * at 4 threads vs stable 54-67ms serial), and for M≥8 one stream already
-     * reuses A across the B block. Decode (M<=1) is different: pure weight
-     * streaming where a single core tops out ~10.6 GB/s, so two threads
-     * measured +30% on lm_head and +10% on end-to-end slope — but only when
-     * the machine has idle cores (see _decode_load_ok). Set
-     * MAN_GEMM_THREADS=N (1..256) to override per-call. */
+    /* Always every online core — uniform policy, no load probing, no
+     * decode/batched split. Measured (scripts/benchmark_gemv_shapes.py,
+     * Qwen2.5-0.5B shapes, matmul ms/token):
+     *   load 26/8thr:  t=1 168.6  t=2 88.4  t=4 54.6
+     *   load 1.6/8thr: t=6 15.5   t=8 14.6  t=12 15.2  t=16 15.8 (knee 8)
+     * Under contention a serial GEMV is time-sliced to a fraction of a core
+     * (scheduler share, not just DRAM bandwidth); quiet, 8 threads reach
+     * ~26GB/s vs ~7-10GB/s single-core. getenv stays per-call so A/B sweeps
+     * (MAN_GEMM_THREADS=N, N in 1..256) can vary it inside one process. */
+    (void)M;
     const char *e = getenv("MAN_GEMM_THREADS");
-    if (e != NULL) {
+    if (e != NULL && *e != '\0') {
         long t = strtol(e, NULL, 10);
-        if (t <= 0 || t > 256) return 1;
-        return (int)t;
+        if (t > 0 && t <= 256) return (int)t;
     }
-    if (M <= 1) return _decode_load_ok() ? 2 : 1;
-    return 1;
+    static long nc = 0;
+    if (nc == 0) {
+        nc = sysconf(_SC_NPROCESSORS_ONLN);
+        if (nc < 1) nc = 1;
+        if (nc > 256) nc = 256;
+    }
+    return (int)nc;
 }
 
 /* ── AVX2 implementation ────────────────────────────────────────── */
@@ -805,17 +766,8 @@ void matmul_int8_f32(const float *A, const int8_t *B, const float *B_scale,
     int32_t *B_rowsum = _make_rowsum(B, N, K);
 
 #if defined(__AVX2__)
-    long total_bytes = (long)N * K;
-    long thread_min = (M <= 1) ? _decode_thread_min() : _THREAD_MIN_BYTES;
-    if (total_bytes >= thread_min) {
-        int nblk = (int)(((long)N + jblock - 1) / jblock);
-        _gemm_run_threads(Aq, B, B_rowsum, Acc, M, N, K, nblk, (int)jblock);
-    } else {
-        for (int jb = 0; jb < N; jb += (int)jblock) {
-            int j_end = (int)((long)jb + jblock < N ? jb + jblock : N);
-            _block_j(Aq, B, B_rowsum, Acc, M, N, K, jb, j_end);
-        }
-    }
+    int nblk = (int)(((long)N + jblock - 1) / jblock);
+    _gemm_run_threads(Aq, B, B_rowsum, Acc, M, N, K, nblk, (int)jblock);
 #else
     for (int jb = 0; jb < N; jb += (int)jblock) {
         int j_end = (int)((long)jb + jblock < N ? jb + jblock : N);
@@ -854,17 +806,8 @@ void matmul_int8(const int8_t *A, const int8_t *B, int32_t *C,
     int32_t *B_rowsum = _make_rowsum(B, N, K);
 
 #if defined(__AVX2__)
-    long total_bytes = (long)N * K;
-    long thread_min = (M <= 1) ? _decode_thread_min() : _THREAD_MIN_BYTES;
-    if (total_bytes >= thread_min) {
-        int nblk = (int)(((long)N + jblock - 1) / jblock);
-        _gemm_run_threads(A, B, B_rowsum, C, M, N, K, nblk, (int)jblock);
-    } else {
-        for (int jb = 0; jb < N; jb += (int)jblock) {
-            int j_end = (int)((long)jb + jblock < N ? jb + jblock : N);
-            _block_j(A, B, B_rowsum, C, M, N, K, jb, j_end);
-        }
-    }
+    int nblk = (int)(((long)N + jblock - 1) / jblock);
+    _gemm_run_threads(A, B, B_rowsum, C, M, N, K, nblk, (int)jblock);
 #else
     for (int jb = 0; jb < N; jb += (int)jblock) {
         int j_end = (int)((long)jb + jblock < N ? jb + jblock : N);
