@@ -14,7 +14,7 @@ import {
 } from '@/lib/world-controller'
 
 export default function WorldPage() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [stats, setStats] = useState<WorldStats | null>(null)
   const [loading, setLoading] = useState(false)
   const [rendering, setRendering] = useState(false)
@@ -28,7 +28,10 @@ export default function WorldPage() {
     camera_distance: 30,
   })
 
-  const [renderResult, setRenderResult] = useState<{ shapes: Record<string, number[]>; tensorKeys: string[] } | null>(null)
+  const [renderResult, setRenderResult] = useState<{
+    shapes: Record<string, number[]>
+    tensorKeys: string[]
+  } | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [tickResult, setTickResult] = useState<TickResult | null>(null)
   const [neuralResult, setNeuralResult] = useState<NeuralResult | null>(null)
@@ -46,12 +49,18 @@ export default function WorldPage() {
 
   useRefreshShortcut(loadStats)
 
-  useEffect(() => { void loadStats() }, [loadStats])
+  useEffect(() => {
+    void loadStats()
+  }, [loadStats])
 
   const handleRender = async () => {
     setRendering(true)
     setRenderResult(null)
-    if (imageUrlRef.current) { URL.revokeObjectURL(imageUrlRef.current); imageUrlRef.current = null; setImageUrl(null) }
+    if (imageUrlRef.current) {
+      URL.revokeObjectURL(imageUrlRef.current)
+      imageUrlRef.current = null
+      setImageUrl(null)
+    }
     try {
       const result = await worldController.render(config)
       setRenderResult({ shapes: result.shapes, tensorKeys: result.tensor_keys })
@@ -74,7 +83,7 @@ export default function WorldPage() {
     try {
       const result = await worldController.tick(1, true, neural)
       setTickResult(result)
-      setTickCount(c => c + 1)
+      setTickCount((c) => c + 1)
       if (neural) {
         const n = await worldController.neuralProcess(config)
         setNeuralResult(n)
@@ -90,7 +99,10 @@ export default function WorldPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void loadStats() }
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        void loadStats()
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -101,13 +113,23 @@ export default function WorldPage() {
       title="World Render"
       subtitle="Programmable world simulation and rendering"
       headerRight={
-        <Button size="sm" variant="ghost" onClick={() => void loadStats()} className="h-6 text-[10px]">Refresh</Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void loadStats()}
+          className="h-6 text-[10px]"
+        >
+          Refresh
+        </Button>
       }
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          {stats?.components.map(c => (
-            <div key={c} className="rounded-lg border-border/40 bg-muted/30 p-2.5 text-center hover:bg-muted/20">
+          {stats?.components.map((c) => (
+            <div
+              key={c}
+              className="rounded-lg border-border/40 bg-muted/30 p-2.5 text-center hover:bg-muted/20"
+            >
               <div className="text-xs text-muted-foreground">Component</div>
               <div className="text-xs font-medium">{c}</div>
             </div>
@@ -126,33 +148,78 @@ export default function WorldPage() {
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
               <div className="space-y-1">
                 <Label className="text-xs">Width</Label>
-                <Input type="number" value={config.width ?? 160} onChange={e => setConfig(c => ({ ...c, width: Number(e.target.value) }))} className="h-7 text-[11px]" />
+                <Input
+                  type="number"
+                  value={config.width ?? 160}
+                  onChange={(e) => setConfig((c) => ({ ...c, width: Number(e.target.value) }))}
+                  className="h-7 text-[11px]"
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Height</Label>
-                <Input type="number" value={config.height ?? 120} onChange={e => setConfig(c => ({ ...c, height: Number(e.target.value) }))} className="h-7 text-[11px]" />
+                <Input
+                  type="number"
+                  value={config.height ?? 120}
+                  onChange={(e) => setConfig((c) => ({ ...c, height: Number(e.target.value) }))}
+                  className="h-7 text-[11px]"
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Samples</Label>
-                <Input type="number" value={config.samples ?? 16} onChange={e => setConfig(c => ({ ...c, samples: Number(e.target.value) }))} className="h-7 text-[11px]" />
+                <Input
+                  type="number"
+                  value={config.samples ?? 16}
+                  onChange={(e) => setConfig((c) => ({ ...c, samples: Number(e.target.value) }))}
+                  className="h-7 text-[11px]"
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Camera Height</Label>
-                <Input type="number" step="0.5" value={config.camera_height ?? 40} onChange={e => setConfig(c => ({ ...c, camera_height: Number(e.target.value) }))} className="h-7 text-[11px]" />
+                <Input
+                  type="number"
+                  step="0.5"
+                  value={config.camera_height ?? 40}
+                  onChange={(e) =>
+                    setConfig((c) => ({ ...c, camera_height: Number(e.target.value) }))
+                  }
+                  className="h-7 text-[11px]"
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Camera Distance</Label>
-                <Input type="number" step="0.5" value={config.camera_distance ?? 30} onChange={e => setConfig(c => ({ ...c, camera_distance: Number(e.target.value) }))} className="h-7 text-[11px]" />
+                <Input
+                  type="number"
+                  step="0.5"
+                  value={config.camera_distance ?? 30}
+                  onChange={(e) =>
+                    setConfig((c) => ({ ...c, camera_distance: Number(e.target.value) }))
+                  }
+                  className="h-7 text-[11px]"
+                />
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => void handleRender()} disabled={rendering} className="flex-1 h-7 text-[11px]">
+              <Button
+                onClick={() => void handleRender()}
+                disabled={rendering}
+                className="flex-1 h-7 text-[11px]"
+              >
                 {rendering ? 'Rendering...' : 'Render'}
               </Button>
-              <Button onClick={() => void handleTick(false)} disabled={ticking} variant="outline" className="flex-1 h-7 text-[11px]">
+              <Button
+                onClick={() => void handleTick(false)}
+                disabled={ticking}
+                variant="outline"
+                className="flex-1 h-7 text-[11px]"
+              >
                 {ticking ? 'Ticking...' : 'Run Tick'}
               </Button>
-              <Button onClick={() => void handleTick(true)} disabled={ticking} variant="outline" className="flex-1 h-7 text-[11px]">
+              <Button
+                onClick={() => void handleTick(true)}
+                disabled={ticking}
+                variant="outline"
+                className="flex-1 h-7 text-[11px]"
+              >
                 {ticking ? 'Processing...' : 'Tick + Neural'}
               </Button>
             </div>
@@ -165,7 +232,12 @@ export default function WorldPage() {
               <CardTitle className="text-[11px] font-medium">Render Output</CardTitle>
             </CardHeader>
             <CardContent className="px-2.5 pb-2.5">
-              <img src={imageUrl} alt="World render" loading="lazy" className="w-full rounded border border-border" />
+              <img
+                src={imageUrl}
+                alt="World render"
+                loading="lazy"
+                className="w-full rounded border border-border"
+              />
             </CardContent>
           </Card>
         )}
@@ -177,8 +249,11 @@ export default function WorldPage() {
             </CardHeader>
             <CardContent className="px-2.5 pb-2.5">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {renderResult.tensorKeys.map(k => (
-                  <div key={k} className="rounded-lg border-border/40 bg-muted/30 p-2.5 hover:bg-muted/20">
+                {renderResult.tensorKeys.map((k) => (
+                  <div
+                    key={k}
+                    className="rounded-lg border-border/40 bg-muted/30 p-2.5 hover:bg-muted/20"
+                  >
                     <div className="text-xs text-muted-foreground">{k}</div>
                     <div className="text-xs font-mono">{String(renderResult.shapes[k])}</div>
                   </div>
@@ -197,11 +272,15 @@ export default function WorldPage() {
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 <div className="rounded-lg border-border/40 bg-muted/30 p-2.5 text-center hover:bg-muted/20">
                   <div className="text-xs text-muted-foreground">Tick</div>
-                  <div className="text-[11px] font-mono font-medium tabular-nums">{tickResult.tick}</div>
+                  <div className="text-[11px] font-mono font-medium tabular-nums">
+                    {tickResult.tick}
+                  </div>
                 </div>
                 <div className="rounded-lg border-border/40 bg-muted/30 p-2.5 text-center hover:bg-muted/20">
                   <div className="text-xs text-muted-foreground">Babies</div>
-                  <div className="text-[11px] font-mono font-medium tabular-nums">{tickResult.babies}</div>
+                  <div className="text-[11px] font-mono font-medium tabular-nums">
+                    {tickResult.babies}
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -217,10 +296,14 @@ export default function WorldPage() {
               <div className="grid grid-cols-2 gap-1.5">
                 <div className="rounded-lg border-border/40 bg-muted/30 p-2.5 text-center hover:bg-muted/20">
                   <div className="text-xs text-muted-foreground">Embedding Shape</div>
-                  <div className="text-xs font-mono">{neuralResult.embedding_shape ? String(neuralResult.embedding_shape) : 'N/A'}</div>
+                  <div className="text-xs font-mono">
+                    {neuralResult.embedding_shape ? String(neuralResult.embedding_shape) : 'N/A'}
+                  </div>
                 </div>
               </div>
-              <pre className="max-h-[200px] overflow-y-auto rounded bg-muted/30 p-3 text-xs">{JSON.stringify(neuralResult.descriptor, null, 2)}</pre>
+              <pre className="max-h-[200px] overflow-y-auto rounded bg-muted/30 p-3 text-xs">
+                {JSON.stringify(neuralResult.descriptor, null, 2)}
+              </pre>
             </CardContent>
           </Card>
         )}
@@ -233,8 +316,25 @@ export default function WorldPage() {
             <CardContent className="px-2.5 pb-2.5">
               <div className="flex flex-wrap gap-2">
                 {Object.entries(stats.materials).map(([name, id]) => (
-                  <span key={name} className="inline-flex items-center gap-1.5 rounded-full text-[9px] border border-border bg-muted/30 px-2 py-1">
-                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40" style={{ backgroundColor: ['rgb(var(--muted-foreground))', 'rgb(var(--success))', 'rgb(var(--warning))', 'rgb(var(--destructive))', 'rgb(var(--primary))', 'rgb(139 92 246)', 'rgb(6 182 212)'][id] ?? undefined }} />
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1.5 rounded-full text-[9px] border border-border bg-muted/30 px-2 py-1"
+                  >
+                    <span
+                      className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40"
+                      style={{
+                        backgroundColor:
+                          [
+                            'rgb(var(--muted-foreground))',
+                            'rgb(var(--success))',
+                            'rgb(var(--warning))',
+                            'rgb(var(--destructive))',
+                            'rgb(var(--primary))',
+                            'rgb(var(--group-7))',
+                            'rgb(var(--group-8))',
+                          ][id] ?? undefined,
+                      }}
+                    />
                     {name} ({id})
                   </span>
                 ))}

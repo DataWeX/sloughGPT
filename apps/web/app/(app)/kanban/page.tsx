@@ -158,7 +158,7 @@ export default function KanbanPage() {
                     ? {
                         backgroundColor: 'rgb(var(--card))',
                         color: 'rgb(var(--foreground))',
-                        boxShadow: '0 1px 2px rgb(0 0 0 / 0.08)',
+                        boxShadow: '0 1px 2px rgb(var(--elevation-rgb) / 0.08)',
                       }
                     : { color: 'rgb(var(--muted-foreground))' }
                 }

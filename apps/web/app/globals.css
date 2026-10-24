@@ -87,6 +87,13 @@
   --group-8: 56 166 158;
   --group-9: 236 145 95;
   --group-10: 150 190 84;
+  /*
+   * Decoration ladder — theme-constant neutrals for elevation shadows,
+   * hairline borders and sheen highlights (dark canvases stay dark in both
+   * themes, so no html.dark override, same clause as the terminal ladder).
+   */
+  --elevation-rgb: 0 0 0;
+  --sheen-rgb: 255 255 255;
 }
 
 /*

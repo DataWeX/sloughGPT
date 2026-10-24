@@ -55,24 +55,15 @@ const HEX_BASELINE = [
 /**
  * Numeric rgb()/rgba() literals NOT routed through a token (`rgb(var(--…))`).
  * Same contract as HEX_BASELINE: each row is debt, may only shrink.
- * - magazine: the page IS the brand gallery (18 literals, design-owned)
- * - world: 2 extra hues beyond the 5 chart slots in an inline palette
- * - compare: recharts area fills (violet/cyan alpha ramps)
- * - kanban: neutral elevation shadow
- * - CardItem/BuffetEngine/CardEditor/Tray: dark-canvas decoration —
- *   elevation shadows, hairline borders, scrims (no hue identity; the two
- *   drag-state hairlines in Tray are pre-token tints pending a design pass)
+ * - magazine: the page IS the styleguide — Section 7 renders the DARK MODE
+ *   PREVIEW (pinned dark palette values are the content), and the swatch
+ *   samples are literal palette entries. ThemeProvider-class data exemption.
+ * Decoration (elevation `--elevation-rgb`, sheen `--sheen-rgb`) and drag-state
+ * semantic tints moved onto tokens 2026-10-24; world material hues onto the
+ * categorical `--group-N` slots; compare chart fills now match their own
+ * stroke tokens.
  */
-const RGB_BASELINE = [
-  'app/(app)/magazine/page.tsx',
-  'app/(app)/world/page.tsx',
-  'app/(app)/kanban/page.tsx',
-  'app/(app)/consciousness/compare/page.tsx',
-  'components/planner/BuffetEngine.tsx',
-  'components/planner/CardEditor.tsx',
-  'components/planner/CardItem.tsx',
-  'components/planner/Tray.tsx',
-]
+const RGB_BASELINE = ['app/(app)/magazine/page.tsx']
 
 /** Numeric rgb()/rgba() — `rgb(var(--…))` is tokenised and does not match. */
 const RGB_RE = /\brgba?\(\s*\d/

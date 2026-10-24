@@ -47,16 +47,16 @@ export function Tray({
       )}
       style={{
         background: dropAllowed
-          ? 'linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.08) 100%)'
-          : 'linear-gradient(180deg, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.18) 100%)',
+          ? 'linear-gradient(180deg, rgb(var(--elevation-rgb) / 0.18) 0%, rgb(var(--elevation-rgb) / 0.08) 100%)'
+          : 'linear-gradient(180deg, rgb(var(--elevation-rgb) / 0.28) 0%, rgb(var(--elevation-rgb) / 0.18) 100%)',
         boxShadow: dropAllowed
-          ? 'inset 0 1px 6px rgba(0,0,0,0.3), inset 0 -1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(255,255,255,0.04)'
-          : 'inset 0 1px 6px rgba(0,0,0,0.4)',
+          ? 'inset 0 1px 6px rgb(var(--elevation-rgb) / 0.3), inset 0 -1px 0 rgb(var(--sheen-rgb) / 0.03), 0 1px 0 rgb(var(--sheen-rgb) / 0.04)'
+          : 'inset 0 1px 6px rgb(var(--elevation-rgb) / 0.4)',
         border: showOverWip
-          ? '1px solid rgba(200,50,50,0.25)'
+          ? '1px solid rgb(var(--destructive) / 0.25)'
           : wipFull
-            ? '1px solid rgba(200,160,40,0.2)'
-            : '1px solid rgba(255,255,255,0.05)',
+            ? '1px solid rgb(var(--warning) / 0.2)'
+            : '1px solid rgb(var(--sheen-rgb) / 0.05)',
         opacity: dropAllowed ? 1 : 0.45,
         minHeight: 320,
       }}
@@ -69,8 +69,9 @@ export function Tray({
       <div
         className="flex items-center justify-between px-3 py-2.5 shrink-0"
         style={{
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.15) 100%)',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          background:
+            'linear-gradient(180deg, rgb(var(--elevation-rgb) / 0.25) 0%, rgb(var(--elevation-rgb) / 0.15) 100%)',
+          borderBottom: '1px solid rgb(var(--sheen-rgb) / 0.05)',
         }}
       >
         <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
@@ -98,7 +99,10 @@ export function Tray({
       {/* Scrollable cards area */}
       <div
         className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-1.5 min-h-0"
-        style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.08) transparent' }}
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgb(var(--sheen-rgb) / 0.08) transparent',
+        }}
       >
         {cards.length === 0 ? (
           <div

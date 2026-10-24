@@ -269,7 +269,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           {/* Actions */}
           <div
             className="flex justify-between pt-4"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+            style={{ borderTop: '1px solid rgb(var(--sheen-rgb) / 0.06)' }}
           >
             <button
               onClick={() => onDelete(card.id)}
@@ -294,7 +294,10 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           </div>
 
           {/* Notes — each mutation rehashes the chain */}
-          <div className="pt-4 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div
+            className="pt-4 space-y-2"
+            style={{ borderTop: '1px solid rgb(var(--sheen-rgb) / 0.06)' }}
+          >
             <div className="flex items-center justify-between">
               <span className={label}>Notes</span>
               <span className="text-[10px] font-mono text-zinc-600">{notes.length}</span>

@@ -51,11 +51,11 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
         // Card material — off-white paper
         background: 'rgb(var(--card))',
         borderRadius: '4px',
-        border: '1px solid rgba(0,0,0,0.07)',
+        border: '1px solid rgb(var(--elevation-rgb) / 0.07)',
         // Shadow: lifts on hover
         boxShadow: hovered
-          ? '0 4px 16px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.03)'
-          : '0 1px 3px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.04)',
+          ? '0 4px 16px rgb(var(--elevation-rgb) / 0.25), 0 1px 3px rgb(var(--elevation-rgb) / 0.15), 0 0 0 1px rgb(var(--elevation-rgb) / 0.03)'
+          : '0 1px 3px rgb(var(--elevation-rgb) / 0.1), 0 0 0 1px rgb(var(--elevation-rgb) / 0.04)',
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
       }}
     >
@@ -102,7 +102,7 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
         className="absolute bottom-0 left-0 right-0 h-px rounded-b-[4px]"
         style={{
           background:
-            'linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.5) 50%, transparent 90%)',
+            'linear-gradient(90deg, transparent 10%, rgb(var(--sheen-rgb) / 0.5) 50%, transparent 90%)',
         }}
         aria-hidden
       />
