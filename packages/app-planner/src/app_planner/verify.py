@@ -208,6 +208,69 @@ def verify_note(note_path: Path, board_file: Path, repo: Path | None = None) -> 
     return findings
 
 
+def verify_board_integrity(board_file: Path) -> list[Finding]:
+    """Read-only integrity guard for a board file (card 89c58cfb).
+
+    Detects duplicate card ``id`` lines — the corruption that made any
+    ``id``-joining consumer (sync, note<->card linking, tray/slot tooling,
+    the UI) double-count or match the wrong twin. The store gained
+    :meth:`dedupe_cards` to collapse them; this guard exists so a regression
+    is *surfaced* (a ``board-integrity`` finding the CLI renders) without ever
+    **raising** on the write path. A guard that raised would crash whichever
+    session next appended a card — exactly the failure the card's plan warns
+    against — so this is a pure reader and returns data, never an exception.
+
+    Repairs the duplicates via ``store.dedupe_cards()``; this function only
+    reports. Safe to call on any board file, including one being written
+    concurrently (reads a single snapshot, tolerates unparsable lines).
+    """
+    findings: list[Finding] = []
+    path = Path(board_file)
+    if not path.exists():
+        findings.append(Finding("board-integrity", True, "no board file (nothing to check)"))
+        return findings
+
+    counts: dict[str, int] = {}
+    total = 0
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("id"), str) and obj.get("title"):
+            total += 1
+            counts[obj["id"]] = counts.get(obj["id"], 0) + 1
+
+    dups = {cid: n for cid, n in counts.items() if n > 1}
+    if not dups:
+        findings.append(
+            Finding("board-integrity", True, f"{total} cards, all ids unique")
+        )
+        return findings
+
+    surplus = sum(n - 1 for n in dups.values())
+    for cid, n in sorted(dups.items(), key=lambda kv: (-kv[1], kv[0])):
+        findings.append(
+            Finding(
+                "board-integrity",
+                False,
+                f"id {cid} appears {n}x ({n - 1} surplus line(s))",
+            )
+        )
+    findings.append(
+        Finding(
+            "board-integrity",
+            False,
+            f"{len(dups)} duplicated id(s), {surplus} surplus line(s) "
+            f"across {total} card lines — run store.dedupe_cards() to collapse",
+        )
+    )
+    return findings
+
+
 def format_report(findings: list[Finding]) -> str:
     lines = [str(f) for f in findings]
     drift = sum(1 for f in findings if not f.ok)

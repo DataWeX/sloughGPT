@@ -640,6 +640,30 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `344168b4f`)
 
+- **2026-10-24 · `feat/kanban-dedupe-guard` — duplicate card-id collapse +
+  read-only integrity guard (offline repair, live board untouched).** Card
+  `89c58cfb`. `PlannerStore.dedupe_cards()` collapses the 6 dup-id / 10-surplus
+  lines to one survivor per id (latest `updated_at`; first occurrence wins a
+  strict tie) and reseals the hash chain via `compute_chains()`. Deletion is
+  raw + byte-preserving, keyed by **line position among card lines** (not id,
+  not an (id, updated_at) tuple — both wrong when twins collide on those keys).
+  **Bug caught in review + fixed:** the first draft called `save_board()` before
+  `compute_chains`, and `_write_board` emits only header + cards — it destroyed
+  the opaque `slot_history`/`tray_roots` trailer (idx 956) external tooling owns;
+  the raw position-keyed pass never rewrites non-card lines (verified
+  byte-identical trailer on a copy of the live board). `verify_board_integrity()`
+  (verify.py) flags any dup-id board as a `board-integrity` finding and
+  **never raises** — a raising guard would crash whichever session next appends a
+  card (the exact failure the plan warned against); it matches the true trailer by
+  `slot_history` present AND `id` is None so a card whose *title* mentions
+  "slot_history" isn't mistaken for one. Real-board proof (on a copy): 6 dup ids /
+  10 surplus → 0 dups, chain reseals clean, both headers + true trailer
+  byte-identical. **Not yet applied to the live board** (needs the quiet window +
+  coordination named in the card note §5). Gates: 270 app-planner tests green (15
+  new in test_dedupe_guard.py), ruff clean, benchmark_board_write green (688.8
+  adds/s, 8-process hammer integrity 200/8×25 ok — hot write path untouched; dedupe
+  is an offline repair path, the guard is read-only).
+
 - **2026-10-04 · `feat/wip-column-rename` lands — the kanban column is `wip`,
   never `in_progress` (hard cutover).** Card `ffaea823` → done; ff `3f8465164`
   (`.wt-wip` worktree). The column name is a **primary key** joining card data,

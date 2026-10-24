@@ -858,6 +858,83 @@ class PlannerStore:
         self._reorder_cards(ordered)
         return cycles
 
+    def dedupe_cards(self) -> dict[str, int]:
+        """Collapse duplicate-id card lines to one survivor per id (card 89c58cfb).
+
+        Historical line-level edits (snapshot restore/merge, targeted raw
+        appends) left some cards with two or three lines sharing one ``id``.
+        Any tool that joins on ``id`` (sync, note<->card linking, tray/slot
+        tooling, the UI) then double-counts or matches the wrong twin.
+
+        Survivor rule: the twin with the latest ``updated_at`` wins (first
+        occurrence wins a tie) — the stale ``todo``/``wip`` intermediate
+        states drop away while a live divergent twin (e.g. one that gained an
+        ``assignee`` later) is the one kept. Surplus lines are dropped from
+        the in-memory board; :meth:`compute_chains` then reorders the file
+        and reseals the hash chain over the survivors, so no ``chain_prev``
+        is left pointing at a dropped line.
+
+        The rewrite goes through :meth:`_reorder_cards`, which preserves every
+        non-card line — schema headers, unparsable lines, and the opaque
+        ``slot_history``/``tray_roots`` metadata trailer written by external
+        tooling — byte-for-byte in place. Only managed card lines move.
+
+        Idempotent (a clean board is a no-op, zero writes). Returns
+        ``{"duplicates": n_surplus_dropped, "unique": n_cards_after}``.
+        """
+        board = self.load_board()
+
+        # Pass 1 — pick the survivor per id, tracking its position among the
+        # card lines in file order. Latest updated_at wins; on a tie the FIRST
+        # occurrence survives (strict > replaces), so a survivor is never
+        # ambiguous even when two twins share id AND updated_at.
+        cards = board.cards
+        keep_idx: dict[str, int] = {}
+        for i, card in enumerate(cards):
+            j = keep_idx.get(card.id)
+            if j is None or (card.updated_at or "") > (cards[j].updated_at or ""):
+                keep_idx[card.id] = i
+
+        drop_positions = {i for i in range(len(cards)) if keep_idx[cards[i].id] != i}
+        if not drop_positions:
+            return {"duplicates": 0, "unique": len(cards)}
+
+        # Pass 2 — delete the surplus card lines raw, byte-preserving, keyed by
+        # position among card lines (not id, not field tuples) so the survivor
+        # is never dropped. The opaque slot_history/tray_roots trailer and the
+        # schema header carry no "id" and so are not counted as cards — they
+        # pass through untouched (a save_board() here would destroy them).
+        def _delete_surplus() -> None:
+            old = self._board_file.read_text(encoding="utf-8")
+            token = _token_of(old)
+            out: list[str] = []
+            card_seen = -1
+            for raw in old.splitlines():
+                stripped = raw.strip()
+                dropped = False
+                if stripped:
+                    try:
+                        obj = json.loads(stripped)
+                        if isinstance(obj, dict) and obj.get("id") and obj.get("title"):
+                            card_seen += 1
+                            if card_seen in drop_positions:
+                                dropped = True
+                    except json.JSONDecodeError:
+                        pass
+                    if dropped:
+                        continue
+                out.append(raw)
+            new = "\n".join(out) + "\n" if out else ""
+            if new != old:
+                self._atomic_write(new, expect=token)
+
+        self._occ(_delete_surplus)
+
+        # Pass 3 — recompute + reseal the hash chain over the survivors (also
+        # rewrites only managed card lines, via _reorder_cards).
+        self.compute_chains()
+        return {"duplicates": len(drop_positions), "unique": len(keep_idx)}
+
     def verify_chain(self) -> list[int]:
         """Chain indices failing verification; empty list means intact.
 
