@@ -1002,6 +1002,12 @@ git push -u origin feat/<name>   # push your own branch when done
   genuinely lossy: max rel err 0.39%). Two bugs found+fixed on the way:
   `_read_header` re-read the 8-byte length prefix into the JSON body, and
   a dead duplicate `_reserve_id` body was stranded after `put_quantized`.
+  HTTP seam closed after restart: `POST /pull {"quantize": true}` and
+  `POST /files?name=…&quantize=1` expose the opt-in int8 ingest through
+  the hub — `FileHub.quantize_file()` (single implementation: quantize +
+  `source_sha256` provenance + deterministic-bytes dedup via
+  `find_by_sha(..., exclude_id=…)`), ineligible artifacts map to 400,
+  never a silent rewrite. 52 tests green across the four files.
   **Land from the api-std worktree**, stacked on the two branches
   above.
 

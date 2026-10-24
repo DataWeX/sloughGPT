@@ -396,9 +396,16 @@ class FileStore:
         meta = self.get_meta(file_id)
         return self.root / meta["filename"], meta
 
-    def find_by_sha(self, sha256: str) -> dict | None:
-        """Metadata of an existing intact blob with this digest (dedup seam)."""
-        meta = self._col().find_one({"sha256": sha256})
+    def find_by_sha(self, sha256: str, exclude_id: str | None = None) -> dict | None:
+        """Metadata of an existing intact blob with this digest (dedup seam).
+
+        ``exclude_id`` skips one entry — used by post-store dedup, where the
+        just-inserted entry itself matches the digest.
+        """
+        query: dict[str, Any] = {"sha256": sha256}
+        if exclude_id is not None:
+            query["file_id"] = {"$ne": exclude_id}
+        meta = self._col().find_one(query)
         if meta and meta.get("file_id") and (self.root / meta["filename"]).is_file():
             return meta
         return None

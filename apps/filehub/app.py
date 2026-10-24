@@ -14,9 +14,14 @@ Routes:
                                    serves the stored frame untouched (text
                                    class); ``Range`` supported for raw blobs
                                    (model class — resumable client pulls)
-    POST /pull                   — JSON {"url": ..., "filename": ...}
-                                   downcraft pull-through into the store
-    POST /files?name=...         — raw-body upload, chunked to disk
+    POST /pull                   — JSON {"url": ..., "filename": ...,
+                                   "quantize": true}; downcraft pull-through
+                                   into the store; quantize (opt-in, lossy)
+                                   stores float safetensors as int8 ~4x
+    POST /files?name=...         — raw-body upload, chunked to disk;
+                                   &quantize=1 same opt-in int8 ingest
+                                   (400 on ineligible artifacts — never
+                                   a silent rewrite)
 
 Auth: ``X-FileHub-Token`` header or ``?token=`` query; open when no token
 is configured (loopback/dev).
@@ -28,7 +33,9 @@ import asyncio
 import json
 import logging
 import re
+import shutil
 import tempfile
+from pathlib import Path
 from urllib.parse import parse_qs
 
 from domain.files import FileHub
@@ -117,7 +124,8 @@ def make_app(hub: FileHub):
 
         if method == "POST" and path == "/files":
             name = (qs.get("name") or [""])[0]  # parse_qs already unquotes
-            await _upload(send, hub, receive, name)
+            quantize = (qs.get("quantize") or ["0"])[0].lower() in ("1", "true", "yes")
+            await _upload(send, hub, receive, name, quantize)
             return
 
         await _send_json(send, 404, {"error": "not found"})
@@ -239,26 +247,33 @@ async def _pull(send, hub: FileHub, receive) -> None:
         payload = json.loads(raw or b"{}")
         url = payload["url"]
         filename = payload.get("filename")
+        quantize = bool(payload.get("quantize", False))
     except (json.JSONDecodeError, KeyError, TypeError):
         await _send_json(send, 400, {"error": 'body must be JSON {"url": ..., "filename": ...}'})
         return
     try:
-        meta = await asyncio.to_thread(hub.pull, url, filename)
+        meta = await asyncio.to_thread(hub.pull, url, filename, quantize=quantize)
     except ValueError as e:
+        # UnsupportedForQuantization subclasses ValueError: ineligible for
+        # opt-in quantize (GGUF/NF4/GPTQ, non-float tensors) -> 400.
         await _send_json(send, 400, {"error": str(e)})
         return
     except Exception as e:  # downcraft raises typed errors; hub maps them all
         logger.warning("pull failed: %s", e)
         await _send_json(send, 502, {"error": f"pull failed: {e}"})
         return
-    await _send_json(send, 200, {**_brief(meta), "deduped": meta.get("deduped", False)})
+    body = {**_brief(meta), "deduped": meta.get("deduped", False)}
+    if "quantization" in meta:
+        body["quantization"] = meta["quantization"]
+    await _send_json(send, 200, body)
 
 
-async def _upload(send, hub: FileHub, receive, name: str) -> None:
+async def _upload(send, hub: FileHub, receive, name: str, quantize: bool = False) -> None:
     if not name or "." not in name.rsplit("/", 1)[-1]:
         await _send_json(send, 400, {"error": "pass ?name=<filename.ext>"})
         return
     spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    tmp: Path | None = None
     try:
         while True:
             msg = await receive()
@@ -271,13 +286,29 @@ async def _upload(send, hub: FileHub, receive, name: str) -> None:
                 break
         spool.seek(0)
         try:
-            meta = await asyncio.to_thread(hub.store.put_stream, spool, name)
+            if quantize:
+                # put_quantized reads from a real path — spool to a temp file
+                # (upload bodies can be multi-GB; never materialize in RAM).
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".safetensors", dir=hub.store.root
+                ) as tf:
+                    tmp = Path(tf.name)
+                    shutil.copyfileobj(spool, tf, 1024 * 1024)
+                meta = await asyncio.to_thread(hub.quantize_file, tmp, name)
+            else:
+                meta = await asyncio.to_thread(hub.store.put_stream, spool, name)
         except ValueError as e:
+            # incl. UnsupportedForQuantization -> 400 with the refusal reason
             await _send_json(send, 400, {"error": str(e)})
             return
-        await _send_json(send, 201, _brief(meta))
+        resp = _brief(meta)
+        if "quantization" in meta:
+            resp["quantization"] = meta["quantization"]
+        await _send_json(send, 201, resp)
     finally:
         spool.close()
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
 
 
 async def _read_body(receive) -> bytes:

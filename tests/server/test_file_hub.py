@@ -6,10 +6,13 @@ listing, zstd passthrough, Range on raw blobs, pull-through e2e.
 
 from __future__ import annotations
 
+import json
+import struct
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import httpx
+import numpy as np
 import pytest
 from wire import WireServer
 
@@ -18,6 +21,34 @@ from domain.files import FileHub, FileStore
 
 CODE = b"def hub_handler(event):\n    return {'ok': True}\n" * 300
 MODEL = bytes(range(256)) * 256  # incompressible-ish model blob
+
+
+def _fp32_safetensors(seed: int = 3) -> bytes:
+    """Small fp32 safetensors blob.
+
+    Mirrors the builder in packages/core-py/tests/test_file_hub.py — the two
+    test trees have separate conftest boundaries, so cross-importing a fixture
+    helper is more fragile than the ~15 duplicated lines.
+    """
+    rng = np.random.default_rng(seed)
+    tensors = {
+        "blocks.0.weight": rng.normal(0, 0.05, (64, 128)).astype(np.float32),
+        "blocks.0.bias": rng.normal(0, 0.05, (128,)).astype(np.float32),
+    }
+    header: dict = {}
+    blobs: list[bytes] = []
+    off = 0
+    for name in sorted(tensors):
+        data = tensors[name].astype("<f4").tobytes()
+        header[name] = {
+            "dtype": "F32",
+            "shape": list(tensors[name].shape),
+            "data_offsets": [off, off + len(data)],
+        }
+        blobs.append(data)
+        off += len(data)
+    hjson = json.dumps(header).encode()
+    return struct.pack("<Q", len(hjson)) + hjson + b"".join(blobs)
 
 
 @pytest.fixture
@@ -53,6 +84,27 @@ def upstream():
     server = HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{server.server_address[1]}/pullme.gguf"
+    server.shutdown()
+
+
+@pytest.fixture
+def float_upstream():
+    """Upstream serving a fp32 safetensors (quantize-on-ingest target)."""
+    payload = _fp32_safetensors()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 - http.server naming
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}/float.safetensors"
     server.shutdown()
 
 
@@ -184,3 +236,61 @@ class TestPullThrough:
             headers={"X-FileHub-Token": "tok123"},
         )
         assert resp.status_code == 400
+
+
+class TestQuantizeHTTP:
+    def test_pull_quantize_via_wire(self, base_url, float_upstream):
+        hdr = {"X-FileHub-Token": "tok123"}
+        first = httpx.post(
+            f"{base_url}/pull",
+            json={"url": float_upstream, "quantize": True},
+            headers=hdr,
+            timeout=60,
+        )
+        assert first.status_code == 200, first.text
+        body = first.json()
+        assert body["quantization"]["bits"] == 8
+        assert body["quantization"]["ratio"] >= 3.0
+        assert body["deduped"] is False
+        second = httpx.post(
+            f"{base_url}/pull",
+            json={"url": float_upstream, "quantize": True},
+            headers=hdr,
+            timeout=60,
+        )
+        assert second.status_code == 200
+        assert second.json()["deduped"] is True
+        assert second.json()["id"] == body["id"]
+
+    def test_upload_quantize_flag(self, base_url):
+        blob = _fp32_safetensors()
+        resp = httpx.post(
+            f"{base_url}/files?name=model.safetensors&quantize=1",
+            content=blob,
+            headers={"X-FileHub-Token": "tok123"},
+            timeout=60,
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["quantization"]["bits"] == 8
+        assert body["stored"] < len(blob)  # int8 blob smaller than fp32 source
+
+    def test_upload_quantize_requires_safetensors(self, base_url):
+        resp = httpx.post(
+            f"{base_url}/files?name=weights.bin&quantize=1",
+            content=b"\x00" * 64,
+            headers={"X-FileHub-Token": "tok123"},
+        )
+        assert resp.status_code == 400
+        assert "safetensors" in resp.json()["error"]
+
+    def test_quantize_refusal_is_400(self, base_url, upstream):
+        # .gguf upstream under opt-in quantize -> 400, never a silent rewrite
+        resp = httpx.post(
+            f"{base_url}/pull",
+            json={"url": upstream, "quantize": True},
+            headers={"X-FileHub-Token": "tok123"},
+            timeout=60,
+        )
+        assert resp.status_code == 400
+        assert "safetensors" in resp.json()["error"]

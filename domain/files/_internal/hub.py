@@ -49,11 +49,23 @@ class FileHub:
 
     # ── pull-through cache ─────────────────────────────────────────
 
-    def pull(self, url: str, filename: str | None = None, tags: list[str] | None = None) -> dict:
+    def pull(
+        self,
+        url: str,
+        filename: str | None = None,
+        tags: list[str] | None = None,
+        *,
+        quantize: bool = False,
+    ) -> dict:
         """Fetch *url* into the store (download once, serve forever).
 
         Returns the stored metadata with an extra ``deduped`` flag: True
         when an identical blob (same sha256) was already present.
+
+        ``quantize=True`` (opt-in, lossy) routes float safetensors through
+        :meth:`quantize_file` — int8 at store time, ~4x smaller. Artifacts
+        that are not eligible (GGUF/NF4/GPTQ, non-float tensors) raise
+        ``UnsupportedForQuantization``; the caller decides, never silently.
         """
         from downcraft.download.http import download_file
 
@@ -69,8 +81,32 @@ class FileHub:
             if existing is not None:
                 logger.info("pull dedup: %s == %s", url, existing["file_id"])
                 return {**existing, "deduped": True}
+            if quantize:
+                return self.quantize_file(dest, name, tags)
             with dest.open("rb") as f:
                 meta = self.store.put_stream(f, name, tags)
+        return {**meta, "deduped": False}
+
+    def quantize_file(self, src_path: Path, filename: str, tags: list[str] | None = None) -> dict:
+        """Opt-in quantize-on-ingest (card 019464d8) with quantized-bytes dedup.
+
+        Quantization is deterministic (same input bytes → same int8 bytes),
+        so dedup happens *after* the store: if an entry already holds these
+        quantized bytes, the fresh one is dropped and the existing returned.
+        ``source_sha256`` (the pre-quantization digest) rides in the
+        ``quantization`` provenance block — identity for humans, while the
+        blob identity stays the bytes actually stored.
+        """
+        sha = _sha256_file(src_path)
+        meta = self.store.put_quantized(src_path, filename, tags)
+        quant = {**meta.get("quantization", {}), "source_sha256": sha}
+        meta = {**meta, "quantization": quant}
+        self.store.update_meta(meta)  # persist source_sha256 provenance
+        dup = self.store.find_by_sha(meta["sha256"], exclude_id=meta["file_id"])
+        if dup is not None:
+            self.store.delete(meta["file_id"])
+            logger.info("quantize dedup: %s == %s", filename, dup["file_id"])
+            return {**dup, "deduped": True}
         return {**meta, "deduped": False}
 
 
