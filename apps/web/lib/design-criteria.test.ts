@@ -40,12 +40,19 @@ const HEX_BASELINE = [
 ]
 
 /**
- * Pages missing the page wrapper (measured 2026-10-24: 14 of 111).
- * Compliant = the file renders `sl-page` directly OR uses `PageContainer`
- * (which renders `.sl-page` as its outer element — the standard wrapper).
- * Adoption may only grow: the non-compliant count may never exceed this.
+ * Full-bleed surfaces (measured 2026-10-24: 2). These re-export workspace
+ * layouts where a centered max-w column is wrong — the wrapper belongs to
+ * their own layout, not PageContainer. Exemptions are debt too: this list
+ * may only shrink, and only by converting the surface.
  */
-const SL_PAGE_MISSING_CEILING = 14
+const FULL_BLEED = ['app/(app)/chat/page.tsx', 'app/(app)/planner/page.tsx']
+
+/** Redirect-only routes render no DOM — the wrapper rule cannot apply. */
+function isRedirectOnly(src: string): boolean {
+  return (
+    src.includes('redirect(') || (src.includes('router.replace(') && src.includes('return null'))
+  )
+}
 
 function collectFiles(dir: string, out: string[] = []): string[] {
   let entries
@@ -98,16 +105,26 @@ describe('Design criteria — Noir Violet ratchets', () => {
     ).toBeLessThanOrEqual(HEX_BASELINE.length)
   })
 
-  it('sl-page wrapper adoption may only grow', () => {
+  it('every rendered page uses the wrapper (redirects/full-bleed exempt)', () => {
     const missing = pages.filter((p) => {
+      if (FULL_BLEED.includes(p)) return false
       const src = readFileSync(join(WEB_ROOT, p), 'utf-8')
+      if (isRedirectOnly(src)) return false
       return !(src.includes('sl-page') || src.includes('PageContainer'))
     })
     expect(
-      missing.length,
-      `Pages missing the sl-page wrapper grew past the baseline ceiling. ` +
-        `New pages MUST use: <div className="sl-page mx-auto max-w-4xl"> (designer.md).`,
-    ).toBeLessThanOrEqual(SL_PAGE_MISSING_CEILING)
+      missing,
+      `New pages must use PageContainer (renders .sl-page) or the literal ` +
+        `sl-page wrapper — designer.md. Redirect routes and the documented ` +
+        `FULL_BLEED list are the only exemptions. Offenders: ${missing.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('full-bleed exemption list may only shrink (max 2 today)', () => {
+    expect(FULL_BLEED.length).toBeLessThanOrEqual(2)
+    for (const p of FULL_BLEED) {
+      expect(pages, `FULL_BLEED entry no longer exists: ${p}`).toContain(p)
+    }
   })
 
   it('sanity: the catalogue of pages exists (fixture guard)', () => {
