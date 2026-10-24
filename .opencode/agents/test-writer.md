@@ -52,6 +52,9 @@ in the shape **criterion → file glob → assertion** — never vague "looks ri
 Criteria reference lives in `.opencode/skills/design-system-enforcement/SKILL.md`
 (token tables) and `.opencode/skills/accessibility-audit/SKILL.md` (WCAG rules).
 
+Canonical source-scan spec: `apps/web/lib/design-criteria.test.ts`
+(hex-literal ratchet + sl-page adoption ratchet — extend it, don't fork).
+
 Standard criteria (write one spec file per rule, scanning the glob):
 
 | Criterion                  | Glob                                           | Assertion                                                            |
