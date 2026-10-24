@@ -65,6 +65,62 @@ const HEX_BASELINE = [
  */
 const RGB_BASELINE = ['app/(app)/magazine/page.tsx']
 
+/**
+ * Stock Tailwind palette utilities (the "AI-slop rainbow") — per-file
+ * counts may only shrink, and any file NOT listed here must have zero.
+ * Measured 2026-10-24: 37 files, 37 instances. Fix = semantic utility
+ * (`text-success`, `bg-destructive`, `text-primary`) or `var(--chart-N)`.
+ * See design-system-enforcement skill (§ Stock Tailwind Palette).
+ */
+const STOCK_PALETTE_RE =
+  /\b(?:bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(?:indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/g
+
+const STOCK_PALETTE_BASELINE: Record<string, number> = {
+  'app/(app)/consciousness/page.tsx': 1,
+  'app/(app)/developer/page.tsx': 1,
+  'app/(app)/knowledge/[id]/page.tsx': 5,
+  'app/(app)/personality/page.tsx': 2,
+  'app/(app)/workspace/data/page.tsx': 4,
+  'app/(app)/workspace/data/search/page.tsx': 4,
+  'components/DebugOverlay.tsx': 6,
+  'components/ErrorDiagnosticsPanel.tsx': 10,
+  'components/StatusBar.tsx': 1,
+  'components/consciousness/ConsciousnessSidebarWidget.tsx': 1,
+  'components/personality/PersonalityConflictWarnings.tsx': 1,
+  'components/phoneme/DailyGoal.tsx': 2,
+  'components/phoneme/PhonemeFrequency.tsx': 10,
+  'components/phoneme/PhonemeKeyboard.tsx': 21,
+  'components/phoneme/PhonemePatternQuiz.tsx': 1,
+  'components/phoneme/PhonemeTypingMode.tsx': 1,
+  'components/phoneme/PracticeCalendar.tsx': 4,
+  'components/phoneme/ProficiencyTracker.tsx': 3,
+  'components/phoneme/PronunciationComparison.tsx': 1,
+  'components/phoneme/PronunciationDictation.tsx': 1,
+  'components/phoneme/PronunciationGame.tsx': 1,
+  'components/phoneme/PronunciationHeatmap.tsx': 8,
+  'components/phoneme/PronunciationRecording.tsx': 1,
+  'components/phoneme/WordDifficultyRanker.tsx': 3,
+  'components/planner/BuffetEngine.tsx': 1,
+  'components/planner/CardEditor.tsx': 6,
+  'components/planner/HashChain.tsx': 4,
+  'components/planner/Tray.tsx': 8,
+  'components/security/ThreatLogCard.tsx': 4,
+  'components/shared-data/IncomingSharesCard.tsx': 4,
+  'components/shared-data/OutgoingSharesCard.tsx': 4,
+  'components/souls/PersonalitySummary.tsx': 3,
+  'components/voice/VoiceRecordingCard.tsx': 1,
+  'components/workspace-search/SearchCategoryBadge.tsx': 2,
+  'features/chat/components/input/ChatInput.tsx': 12,
+  'features/chat/components/input/VoiceTranscript.tsx': 2,
+  'lib/memory-card-utils.ts': 12,
+}
+
+/** Total instance ceiling — additions to the map cannot lift it. */
+const STOCK_PALETTE_TOTAL_CEILING = 156
+
+/** This rule also covers lib/ and contexts/ (class strings live there too). */
+const STOCK_SCAN_ROOTS = [...SCAN_ROOTS, 'lib', 'contexts'] as const
+
 /** Numeric rgb()/rgba() — `rgb(var(--…))` is tokenised and does not match. */
 const RGB_RE = /\brgba?\(\s*\d/
 
@@ -193,6 +249,48 @@ describe('Design criteria — Noir Violet ratchets', () => {
     expect(stripped).toContain('#123456')
     expect(HEX_RE.test(stripped)).toBe(true)
     expect(HEX_RE.test(stripComments('// only #abcdef in a comment'))).toBe(false)
+  })
+
+  it('no NEW file introduces stock Tailwind palette utilities', () => {
+    const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
+    const offenders = files.filter((rel) => {
+      const src = stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))
+      return src.match(STOCK_PALETTE_RE)?.length
+    })
+    const unexpected = offenders.filter((f) => !(f in STOCK_PALETTE_BASELINE))
+    expect(
+      unexpected,
+      `Stock Tailwind palette in NEW files — use text-success/bg-destructive/` +
+        `text-primary or var(--chart-N) (design-system-enforcement skill). ` +
+        `Offenders: ${unexpected.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('stock palette per-file counts may only shrink', () => {
+    for (const [rel, max] of Object.entries(STOCK_PALETTE_BASELINE)) {
+      const full = join(WEB_ROOT, rel)
+      const src = stripComments(readFileSync(full, 'utf-8'))
+      const now = src.match(STOCK_PALETTE_RE)?.length ?? 0
+      expect(
+        now,
+        `${rel}: stock-palette instances grew past baseline ${max} — fix the ` +
+          `file, then lower the row.`,
+      ).toBeLessThanOrEqual(max)
+    }
+  })
+
+  it('stock palette TOTAL may only shrink (map additions cannot lift it)', () => {
+    const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
+    let total = 0
+    for (const rel of files) {
+      const src = stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))
+      total += src.match(STOCK_PALETTE_RE)?.length ?? 0
+    }
+    expect(
+      total,
+      `Stock-palette debt grew past ${STOCK_PALETTE_TOTAL_CEILING} instances. ` +
+        `Fix files and lower the ceiling — never raise it.`,
+    ).toBeLessThanOrEqual(STOCK_PALETTE_TOTAL_CEILING)
   })
 
   it('sanity: the catalogue of pages exists (fixture guard)', () => {
