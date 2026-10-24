@@ -204,9 +204,44 @@ export default function KanbanPage() {
           className="mb-3 flex items-center justify-between rounded-lg px-3 py-2"
           style={{ backgroundColor: 'rgb(var(--card))' }}
         >
-          <span className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-            {selected?.title ?? selectedCard}
-          </span>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
+              {selected?.title ?? selectedCard}
+            </span>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              {selected?.priority && (
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10px] font-medium capitalize"
+                  style={{
+                    backgroundColor: 'rgb(var(--muted) / 0.15)',
+                    color: 'rgb(var(--muted-foreground))',
+                  }}
+                >
+                  {selected.priority}
+                </span>
+              )}
+              {(selected?.tags ?? []).slice(0, 4).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded px-1.5 py-0.5 text-[10px]"
+                  style={{
+                    backgroundColor: 'rgb(var(--primary) / 0.15)',
+                    color: 'rgb(var(--primary))',
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+            {selected?.description && (
+              <p
+                className="mt-0.5 truncate text-[11px]"
+                style={{ color: 'rgb(var(--muted-foreground))' }}
+              >
+                {selected.description}
+              </p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {legalTargets.map((target) => (
               <button

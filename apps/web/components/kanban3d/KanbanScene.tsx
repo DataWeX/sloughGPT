@@ -9,17 +9,14 @@ import { Canvas, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { Board, Card } from '@/components/planner/types'
+import { CARD_D, DZ, FIRST_ROW_Z, LANE_GAP, LANE_W, computeFit, computeFloor } from './framing'
 
 const MAX_INSTANCES = 2048
 const MAX_PER_LANE = 120
 const GRID_COLS = 6
 const CARD_W = 0.66
-const CARD_D = 0.44
 const CARD_H = 0.05
 const DX = 0.78
-const DZ = 0.58
-const LANE_W = 5.6
-const LANE_GAP = 1.4
 
 // Lane palette cycles by column order — works for any vocabulary.
 const LANE_TOKENS = ['--info', '--primary', '--warning', '--success', '--accent', '--chart-1']
@@ -83,12 +80,25 @@ function LaneLabels({
   )
 }
 
-function Floor({ lanes }: { lanes: { x: number; rgb: [number, number, number] }[] }) {
+function Floor({
+  lanes,
+  centerZ,
+  depth,
+}: {
+  lanes: { x: number; rgb: [number, number, number] }[]
+  centerZ: number
+  depth: number
+}) {
   return (
     <group>
       {lanes.map((l, i) => (
-        <mesh key={i} position={[l.x, -0.03, 4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[LANE_W, 15]} />
+        <mesh
+          key={i}
+          position={[l.x, -0.03, centerZ]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          receiveShadow
+        >
+          <planeGeometry args={[LANE_W, depth]} />
           <meshStandardMaterial
             color={
               new THREE.Color(
@@ -164,16 +174,22 @@ function Cards({
   )
 }
 
-function Controls() {
-  const { camera, gl } = useThree()
+function Controls({ laneCount, rows }: { laneCount: number; rows: number }) {
+  const { camera, gl, size } = useThree()
+  const fit = useMemo(
+    () => computeFit({ aspect: size.width / Math.max(1, size.height), laneCount, rows }),
+    [size.width, size.height, laneCount, rows],
+  )
   useEffect(() => {
     const controls = new OrbitControls(camera, gl.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
     controls.maxPolarAngle = Math.PI / 2.05
-    controls.target.set(0, 0, 3)
+    camera.position.set(fit.camera[0], fit.camera[1], fit.camera[2])
+    controls.target.set(fit.target[0], fit.target[1], fit.target[2])
+    controls.update()
     return () => controls.dispose()
-  }, [camera, gl])
+  }, [camera, gl, fit])
   return null
 }
 
@@ -204,6 +220,13 @@ export default function KanbanScene({ board, selectedCardId, onSelect }: KanbanS
     })
   }, [sorted, board.cards])
 
+  const maxRows = useMemo(
+    () => Math.max(1, ...laneMeta.map((l) => Math.ceil(l.visible.length / GRID_COLS))),
+    [laneMeta],
+  )
+
+  const floor = useMemo(() => computeFloor(maxRows), [maxRows])
+
   const placements = useMemo(() => {
     const out: Placement[] = []
     for (const lane of laneMeta) {
@@ -214,7 +237,7 @@ export default function KanbanScene({ board, selectedCardId, onSelect }: KanbanS
         out.push({
           x: lane.x + (colIdx - (GRID_COLS - 1) / 2) * DX,
           y: CARD_H / 2 + 0.01,
-          z: 0.4 + row * DZ,
+          z: FIRST_ROW_Z + row * DZ,
           cardId: card.id,
           color,
         })
@@ -234,8 +257,12 @@ export default function KanbanScene({ board, selectedCardId, onSelect }: KanbanS
         <ambientLight intensity={0.85} />
         <directionalLight position={[6, 14, 8]} intensity={0.7} />
         <directionalLight position={[-8, 6, -6]} intensity={0.25} />
-        <Controls />
-        <Floor lanes={laneMeta.map((l) => ({ x: l.x, rgb: l.rgb }))} />
+        <Controls laneCount={laneMeta.length} rows={maxRows} />
+        <Floor
+          lanes={laneMeta.map((l) => ({ x: l.x, rgb: l.rgb }))}
+          centerZ={floor.centerZ}
+          depth={floor.depth}
+        />
         <LaneLabels
           lanes={laneMeta.map((l) => ({
             name: l.col.name,
