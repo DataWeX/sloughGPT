@@ -1008,11 +1008,15 @@ git push -u origin feat/<name>   # push your own branch when done
   `COMMIT_COLORS` removed (`9217791ee`). Cards: `card-1792758674654-design`,
   `card-1792777482931-errfun`, `card-1792830567244-dcrit`,
   `card-1792831802223-watch`, `card-1792834103675-hex2`,
-  `card-1792834472015-rgb1`, `card-1792835773838-grp`. Gates: web tsc
-  clean, `test:lib` 1545/1545, design-criteria 8/8 (hex baseline now
-  ThemeProvider + migration-map keys; rgb baseline 8 decorative/data
-  files), planner 110/110, `.opencode` vitest 35/35. The ratchet runs in
-  CI via `npx vitest run` (ci_cd.yml).
+  `card-1792834472015-rgb1`, `card-1792835773838-grp`,
+  `card-1792836786754-rgb2`. Gates: web tsc
+  clean, `test:lib` 1545/1545, design-criteria 8/8, planner 110/110,
+  `.opencode` vitest 35/35. Burn-down terminal state: rgb baseline = 1
+  (magazine styleguide's pinned palette preview) after the decoration
+  ladder `--elevation-rgb`/`--sheen-rgb` cleared Tray/CardItem/
+  CardEditor/BuffetEngine/kanban (`68963a1b7`); hex baseline = 2
+  (ThemeProvider picker data + session-group migration keys). The
+  ratchet runs in CI via `npx vitest run` (ci_cd.yml).
   **Blocked:** local `main` is stale @ `f53190f7f` and checked out by the dirty
   worktree `/home/mana/Documents/sloughgpt-api-std` (658 uncommitted changes);
   `origin/main` = `68dd37ec8` (PR #189) has diverged and the branch also
