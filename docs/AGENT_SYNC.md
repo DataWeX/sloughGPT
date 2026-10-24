@@ -1499,3 +1499,17 @@ git push -u origin feat/<name>   # push your own branch when done
   dev-note `2026-10-24-frontend-brief-webchat-reflection.md` — any frontend
   session can pick it up and card it. No backend payload change needed
   (narrative already streams as `self_insight`). From `.wt-worldbrain`.
+
+- **2026-10-24 · live main bug found + fixed: episodic tie-sort TypeError
+  (card `5bfa16e5`, stack tail `feat/npu-caps`, commit `6f3238f00`, port of
+  `70b021b6a`).** Wip screening found the card's "all fixed" claim covered 3
+  fixes whose shas never reached main (`70b021b6a`/`3b605d205` sit on
+  unlanded branches): B (repo-root bootstrap) and C (uvicorn reload globs)
+  had landed on main by other means — verified by content — but **A was still
+  live: `context_core.py:274` `scored.sort(reverse=True)` on
+  (score, episode_dict) tuples compares dicts on any score tie → TypeError →
+  500 + zero streamed tokens on /chat/stream**. Ported the branch's one-liner
+  (sort by score key + why-comment) and its TDD test verbatim; RED with the
+  exact production TypeError, GREEN 113/113 (context_core), ruff clean. Card
+  wip→review; the fix rides the stack, so the bug stays on main until landing.
+  Evidence: `2026-10-24-tie-sort-port.md`. From `.wt-worldbrain`.
