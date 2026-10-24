@@ -1452,3 +1452,22 @@ git push -u origin feat/<name>   # push your own branch when done
   weights) also matches the tracked `domain/models/` code package; worth
   knowing for other sessions. Card 243016c3: wip → review. From
   `.wt-worldbrain`.
+
+- **2026-10-24 · training router delegation part 1 built (card `50675952`,
+  stack tail `feat/npu-caps`, commit `5be763e55`).** Build order #4 part 1:
+  all 17 part-1 `domain.training._internal` import sites in
+  `apps/api/server/training/router.py` (service×9 incl. async
+  `list_checkpoints`, `get_state`×2, `VALID_CKPT_NAME`, advisor×2, outcome,
+  monitor×5) rewired through **14 new raw-passthrough `TrainingEngine`
+  methods** (`domain/training/engine.py`) — raw values, exceptions bubble,
+  HTTP classification in the router unchanged. Names avoid the engine's
+  existing soul-checkpoint `list_checkpoints`/`load_checkpoint`
+  (TrainingResult style stays for legacy consumers). Only the 4 part-2 sites
+  remain (executor import, `CheckpointManager`, `SloughGPTTrainer`,
+  `executor.submit`). Card's `cache_tags` site doesn't exist in this tree
+  (drift — recorded in the evidence note). RED-proven boundary invariant test
+  (`test_training_router_delegation.py`: router source has no part-1
+  `_internal` refs + engine surface + semantics pins — caught a stale
+  comment too); 6→0 failures; router suite 70/70 (7 files); ruff clean.
+  Card `50675952`: wip → review; closes on landing. Evidence:
+  `2026-10-24-training-router-delegation-part1.md`. From `.wt-worldbrain`.
