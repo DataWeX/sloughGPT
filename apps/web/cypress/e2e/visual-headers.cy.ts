@@ -32,7 +32,8 @@ const PAGES = [
   { path: '/rate-limit', name: 'rate-limit' },
   { path: '/benchmark', name: 'benchmark' },
   { path: '/feedback', name: 'feedback' },
-  { path: '/images', name: 'images' },
+  // /images was absorbed into /files (card 7839a7c6) — it now 307s to /files,
+  // which has its own row below, so a separate screenshot would only duplicate it.
   { path: '/files', name: 'files' },
   { path: '/docstore', name: 'docstore' },
   { path: '/kb', name: 'kb' },

@@ -23,8 +23,13 @@ import baseline from './page-baseline.json'
 const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const APP_ROOT = join(WEB_ROOT, 'app')
 
-/** Measured on main 2026-10-17 (AGENTS.md Page Rule cites the same numbers). */
-const GRANDFATHERED_CEILING = 110
+/**
+ * Measured on main 2026-10-17 (AGENTS.md Page Rule cites the same numbers).
+ * 2026-10-21: 110 -> 109 — the `/images` page was absorbed into `/files`
+ * (route-map row `/files` <- `/files` + `/images`, card 7839a7c6), and the
+ * old path now 307s through `lib/redirects.ts`.
+ */
+const GRANDFATHERED_CEILING = 109
 
 interface PageBaseline {
   grandfathered: string[]
