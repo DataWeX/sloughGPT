@@ -40,11 +40,12 @@ const HEX_BASELINE = [
 ]
 
 /**
- * Pages still missing the `sl-page` wrapper (110 of 111 at baseline —
- * only magazine/page.tsx complies today). Adoption may only grow:
- * the count of non-compliant pages must never exceed this number.
+ * Pages missing the page wrapper (measured 2026-10-24: 14 of 111).
+ * Compliant = the file renders `sl-page` directly OR uses `PageContainer`
+ * (which renders `.sl-page` as its outer element — the standard wrapper).
+ * Adoption may only grow: the non-compliant count may never exceed this.
  */
-const SL_PAGE_MISSING_CEILING = 110
+const SL_PAGE_MISSING_CEILING = 14
 
 function collectFiles(dir: string, out: string[] = []): string[] {
   let entries
@@ -98,9 +99,10 @@ describe('Design criteria — Noir Violet ratchets', () => {
   })
 
   it('sl-page wrapper adoption may only grow', () => {
-    const missing = pages.filter(
-      (p) => !readFileSync(join(WEB_ROOT, p), 'utf-8').includes('sl-page'),
-    )
+    const missing = pages.filter((p) => {
+      const src = readFileSync(join(WEB_ROOT, p), 'utf-8')
+      return !(src.includes('sl-page') || src.includes('PageContainer'))
+    })
     expect(
       missing.length,
       `Pages missing the sl-page wrapper grew past the baseline ceiling. ` +
