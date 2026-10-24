@@ -40,7 +40,7 @@ from domain.infrastructure.request_coalescer import get_coalescer
 from domain.infrastructure.server_state import get_server_state
 from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
-from domain.models import get_provider
+from domain.models import ConsciousnessProcessor, apply_processors, get_provider
 
 logger = logging.getLogger("slo.inference")
 
@@ -264,6 +264,43 @@ from domain.inference.engine import (  # noqa: E402
 _chat_control_store: dict[str, dict] = {}
 _chat_control_lock = threading.Lock()
 _CHAT_CONTROL_TTL = 300  # 5 minutes
+
+
+async def _apply_consciousness_reflection(messages: list, corr_id: str) -> list:
+    """CONSCIOUSNESS_PROC — prepend the reflection narrative (build order #6).
+
+    Pulls ``engine.reflect(apply=False)`` (propose-only: never commits belief
+    deltas) and prepends its narrative as a system message via
+    ConsciousnessProcessor. Advisory by design: a disabled engine, an empty
+    narrative, or ANY failure skips injection and returns messages unchanged
+    (try/except skip — chat never errors on reflection).
+    """
+    try:
+        from domain.core import get_consciousness
+
+        ce = get_consciousness()
+        if not ce.config.is_enabled():
+            return messages
+        narrative = ce.reflect(apply=False).narrative
+        if not (narrative or "").strip():
+            return messages
+        return await apply_processors(messages, [ConsciousnessProcessor(narrative=narrative)])
+    except Exception as e:
+        logger.debug(
+            "CHAT_PIPELINE corr=%s step=CONSCIOUSNESS_PROC skip error=%s",
+            corr_id,
+            e,
+            extra={
+                "tag": "CHAT",
+                "context": {
+                    "corr": corr_id,
+                    "step": "CONSCIOUSNESS_PROC",
+                    "result": "SKIP",
+                    "error": str(e),
+                },
+            },
+        )
+        return messages
 
 
 def get_chat_control(session_id: str) -> dict | None:
