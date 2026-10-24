@@ -52,6 +52,21 @@ REGRESSION_THRESHOLDS = {
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
     },
+    "effects": {
+        # show_effects.py engine-level report (card 20261024_095912).
+        # Load-sensitive metrics (attention, prefill, decode) get generous
+        # thresholds — runs happen on a shared box at unknown loadavg,
+        # which is recorded alongside for interpretation.
+        # ms-scale metrics use abs deltas: rel% on a 15ms baseline is pure
+        # scheduler jitter (measured 15→38ms at loadavg 23, no real change).
+        "rag_context_chars": (30.0, "rel"),
+        "rag_query_ms": (100.0, "abs"),
+        "attn_single_ms": (1.0, "abs"),
+        "attn_multi_ms": (50.0, "rel"),
+        "first_token_short_s": (50.0, "rel"),
+        "first_token_rag_s": (50.0, "rel"),
+        "decode_tok_s": (30.0, "rel"),
+    },
 }
 
 
@@ -171,7 +186,7 @@ def load_result(path: Path) -> dict:
 
 
 # higher-is-better metric names (a drop means regression)
-HIGHER_IS_BETTER = {"overall", "response_rate"}
+HIGHER_IS_BETTER = {"overall", "response_rate", "decode_tok_s"}
 
 
 def _threshold(kind: str, metric: str) -> tuple:
@@ -271,6 +286,12 @@ def do_record(args) -> int:
                 file=sys.stderr,
             )
             return 1
+        elif kind == "effects":
+            print(
+                "[ERR] effects kind requires --json-file (from show_effects.py --json)",
+                file=sys.stderr,
+            )
+            return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
             return 1
@@ -331,7 +352,9 @@ def _metric_entries(record: dict) -> list[dict]:
 def do_history(args) -> int:
     """List stored runs (all kinds unless --kind narrows it)."""
     for kind in (
-        [args.kind] if args.kind else ["stability", "latency", "startup", "execution", "training"]
+        [args.kind]
+        if args.kind
+        else ["stability", "latency", "startup", "execution", "training", "effects"]
     ):
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
@@ -363,6 +386,13 @@ def do_history(args) -> int:
                     print(
                         f"  {stamp}  {model:<24} dispatch_us={str(c.get('dispatch_us', '?')):<9} "
                         f"threads={str(c.get('peak_threads', '?')):<7}  {p.name}"
+                    )
+                elif kind == "effects":
+                    print(
+                        f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"attn1={str(c.get('attn_single_ms', '?')):<7} "
+                        f"rag={str(c.get('rag_context_chars', '?')):<6} "
+                        f"load={str(c.get('loadavg', '?')):<5}  {p.name}"
                     )
                 else:  # latency and unknown kinds
                     print(
@@ -442,7 +472,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup"],
+        choices=["stability", "latency", "execution", "training", "startup", "effects"],
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -453,7 +483,9 @@ def main() -> int:
 
     p_h = sub.add_parser("history", help="list stored runs")
     p_h.add_argument(
-        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup"]
+        "--kind",
+        default=None,
+        choices=["stability", "latency", "execution", "training", "startup", "effects"],
     )
     p_h.set_defaults(fn=do_history)
 
@@ -461,7 +493,7 @@ def main() -> int:
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup"],
+        choices=["stability", "latency", "execution", "training", "startup", "effects"],
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)

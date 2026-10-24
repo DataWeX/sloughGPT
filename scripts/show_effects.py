@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -160,11 +161,7 @@ def _resolve_slnc(model: str) -> Path:
     if not slnc.exists():
         # Resolver points at HF_HOME; fall back to the repo-relative cache so
         # the harness runs standalone in a worktree with no HF_HOME set.
-        repo = (
-            Path("models/hf-cache/hub")
-            / f"models--{model.replace('/', '--')}"
-            / "model.slnc"
-        )
+        repo = Path("models/hf-cache/hub") / f"models--{model.replace('/', '--')}" / "model.slnc"
         if repo.exists():
             return repo
         raise SystemExit(f"no model.slnc at {slnc} — pass --slnc")
@@ -232,11 +229,79 @@ def section_model(slnc: Path, model_id: str) -> dict:
     return {"ms_short": ms_short, "ms_rag": ms_rag, "tok_s": tok_s, "n_rag": n_rag}
 
 
+def _collect_metrics(rag: dict, att: dict, model_stats: dict) -> dict:
+    """Flat metrics dict for the benchmark_results recorder (effects kind)."""
+    import os
+
+    m: dict = {"loadavg": round(os.getloadavg()[0], 2)}
+    if rag:
+        m["rag_context_chars"] = rag["block_chars"]
+        m["rag_raw_chars"] = rag["raw_chars"]
+        m["rag_query_ms"] = round(rag["query_ms"], 2)
+    if att:
+        m["attn_single_ms"] = round(att["single_ms"], 3)
+        m["attn_multi_ms"] = round(att["multi_ms"], 1)
+    if model_stats:
+        m["first_token_short_s"] = round(model_stats["ms_short"] / 1000, 3)
+        m["first_token_rag_s"] = round(model_stats["ms_rag"] / 1000, 2)
+        m["decode_tok_s"] = round(model_stats["tok_s"], 2)
+    return m
+
+
+def _vs_baseline(metrics: dict) -> bool:
+    """Compare current metrics against the newest recorded effects run."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import benchmark_results as br
+
+    runs = br.collect_records("effects")
+    if not runs:
+        print("\n[baseline] no prior effects record — this run becomes the baseline")
+        return True
+    old = br.load_result(runs[0])
+    old_m = old.get("metrics", {})
+    print(
+        f"\n── baseline: {old.get('timestamp', '?')[:19]} "
+        f"commit={old.get('commit', '?')} loadavg={old_m.get('loadavg', '?')} ──"
+    )
+    regressed = br.is_regression("effects", {"metrics": metrics}, old)
+    for metric in br.REGRESSION_THRESHOLDS["effects"]:
+        nv, ov = metrics.get(metric), old_m.get(metric)
+        if nv is None or ov is None:
+            continue
+        direction = "↑" if nv > ov else ("↓" if nv < ov else "=")
+        pct = (nv - ov) / abs(ov) * 100 if ov else 0.0
+        limit, _mode = br._threshold("effects", metric)
+        bad = (
+            (
+                (nv - ov) / abs(ov) > limit
+                if metric not in br.HIGHER_IS_BETTER
+                else (ov - nv) / abs(ov) > limit
+            )
+            if ov
+            else False
+        )
+        flag = " [FAIL]" if bad else ""
+        print(f"  {metric:<22} {ov:>10} → {nv:<10} {direction} {pct:+7.1f}%{flag}")
+    print(f"  → {'REGRESSION' if regressed else 'OK'} vs baseline")
+    return not regressed
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Engine-level effect report (no server)")
     ap.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
     ap.add_argument("--slnc", default=None)
     ap.add_argument("--skip-model", action="store_true", help="skip section 3 (no model load)")
+    ap.add_argument("--json", default=None, metavar="PATH", help="write metrics JSON to PATH")
+    ap.add_argument(
+        "--record",
+        action="store_true",
+        help="record metrics to data/benchmark_results/ (kind=effects)",
+    )
+    ap.add_argument(
+        "--vs-baseline",
+        action="store_true",
+        help="compare against the newest recorded effects run and gate on regressions",
+    )
     args = ap.parse_args()
 
     print("show_effects — engine-level, single process, no server stack")
@@ -246,6 +311,8 @@ def main() -> int:
     if not args.skip_model:
         slnc = Path(args.slnc) if args.slnc else _resolve_slnc(args.model)
         model_stats = section_model(slnc, args.model)
+
+    metrics = _collect_metrics(rag, att, model_stats)
 
     print("\n" + "=" * 66)
     print("SUMMARY (before → after)")
@@ -272,7 +339,42 @@ def main() -> int:
             f"@{model_stats['n_rag']}tok (RAG prompt)"
         )
         print(f"  decode        {BASE_DECODE_TOKS:.1f} tok/s → {model_stats['tok_s']:.1f} tok/s")
-    return 0
+    print(f"  loadavg       {metrics.get('loadavg')} (recorded with every run)")
+
+    rc = 0
+    if args.vs_baseline:
+        if not _vs_baseline(metrics):
+            rc = 1
+    if args.json:
+        Path(args.json).write_text(json.dumps(metrics, indent=2))
+        print(f"\nmetrics → {args.json}")
+    if args.record:
+        import tempfile
+        from types import SimpleNamespace
+
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import benchmark_results as br
+
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(metrics, f)
+            tmp = f.name
+        r = br.do_record(
+            SimpleNamespace(
+                kind="effects",
+                json_file=tmp,
+                model=args.model,
+                url=None,
+                runs=0,
+                vs="previous",  # do_record chains into do_compare (cf. benchmark_startup.py)
+            )
+        )
+        Path(tmp).unlink(missing_ok=True)
+        if r != 0:
+            print("[record] failed", file=sys.stderr)
+            rc = rc or r
+        else:
+            print("recorded → data/benchmark_results/effects/")
+    return rc
 
 
 if __name__ == "__main__":
