@@ -1019,8 +1019,12 @@ git push -u origin feat/<name>   # push your own branch when done
   `.opencode` vitest 35/35. Burn-down terminal state: rgb baseline = 1
   (magazine styleguide's pinned palette preview) after the decoration
   ladder `--elevation-rgb`/`--sheen-rgb` cleared Tray/CardItem/
-  CardEditor/BuffetEngine/kanban (`68963a1b7`); hex baseline = 2
-  (ThemeProvider picker data + session-group migration keys).
+  CardEditor/BuffetEngine/kanban (`68963a1b7`); hex baseline = **1**
+  (ThemeProvider picker swatch data only — permanent data exemption; the
+  useSessionGroups legacy migration retired `fb2e6918e`, stored hex
+  passes through because `--group-N` slots are theme-constant and equal
+  the old values). **PR #192** opened for the whole branch (126 commits,
+  shared lane) — pushed `0c6c09353` then `fb2e6918e`.
   **Stock-palette (AI-slop rainbow) debt zeroed** — the third ratchet
   (`STOCK_PALETTE_RE`, per-file `STOCK_PALETTE_BASELINE` +
   `STOCK_PALETTE_TOTAL_CEILING`, `STOCK_SCAN_ROOTS` = scan roots + lib +
