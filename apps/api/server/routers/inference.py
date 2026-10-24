@@ -156,9 +156,27 @@ def _build_rag_block(
     """
     if rag_result.get("num_results", 0) <= 0:
         return None
-    ctx = rag_result.get("context", "") or ""
-    if len(ctx) > max_chars:
-        ctx = ctx[:max_chars].rstrip() + "\n[...]"
+    results = rag_result.get("results") or []
+    if results:
+        # Budget is split evenly across passages: ragsvc chunks are ~3KB, so a
+        # single global slice would keep only the first passage and starve the
+        # rest. Splitting preserves retrieval diversity (all ranks visible).
+        per = max(120, max_chars // len(results))
+        parts: list[str] = []
+        for r in results:
+            c = (r.get("content") or "").strip()
+            if not c:
+                continue
+            if len(c) > per:
+                c = c[:per].rstrip() + " [...]"
+            parts.append(c)
+        ctx = "\n\n".join(parts)
+    else:
+        ctx = rag_result.get("context", "") or ""
+        if len(ctx) > max_chars:
+            ctx = ctx[:max_chars].rstrip() + "\n[...]"
+    if not ctx:
+        return None
     return f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{ctx}"
 
 
