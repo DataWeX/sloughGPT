@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 
 from .memory import EpisodicMemory, WorldMemory
-from .model_brain import ModelBrain
+from .model_brain import brain_from_dict, make_brain
 
 logger = logging.getLogger("slo.sim")
 
@@ -299,12 +299,22 @@ class WorldParams:
     move_cost: float = 0.2  # energy spent per grid step a baby takes
     move_threshold: float = 10.0  # babies below this energy stay still (like react)
     learning_enabled: bool = True  # in-life delta-rule weight updates (off = pure evolution)
-    # World–Model Bridge (Stage A) — brain class for the four behavior brains.
-    # "perceptron" (default) keeps the frozen-feature delta-rule brain; "model"
-    # births ModelBrain babies whose hidden projection is trained by backprop
-    # in-world. Same tensor inventory, same RNG draw order, same genome — the
-    # swap changes only who learns the features. Locked proofs run default.
+    # Brain registry choice (World–Model Bridge, card 7ff49d20). ``brain_kind``
+    # selects which registered brain the four behavior brains plus the
+    # optional message brain use; the default ``"perceptron"`` keeps every
+    # locked selection proof bit-identical. ``brain_n_embed`` / ``brain_n_layer``
+    # size the native SloNet stack and ``brain_optimizer`` picks its optimizer
+    # when ``brain_kind == "slonet"``; ``brain_decide_every`` is the
+    # action-reuse window (the tick-rate mitigation) and ``brain_learn_every``
+    # the number of rewards buffered into one batched ``backward()``. The three
+    # knobs are ignored by the perceptron/model factories, so one WorldParams
+    # configures every registered kind.
     brain_kind: str = "perceptron"
+    brain_n_embed: int = 0  # 0 = derive from brain_hidden_units, else 16
+    brain_n_layer: int = 1  # hidden SloLinear blocks in the native stack
+    brain_decide_every: int = 1  # reuse the last decision for N decide_* calls
+    brain_learn_every: int = 8  # rewards per batched backward() + optimizer step
+    brain_optimizer: str = "sgd"  # "sgd" (delta-rule semantics) or "adam"
 
 
 # ── Data Structures ──────────────────────────────────────────────────────────
@@ -1124,46 +1134,10 @@ class Perceptron:
         return p
 
 
-def make_brain(kind: str, input_dim: int, output_dim: int, hidden_units: int = 0):
-    """
-    Birth a decision brain of the requested kind (World–Model Bridge seam).
-
-    Both classes draw RNG in the same order (H, bh, W) with the same scales,
-    so a seeded world consumes an identical noise stream regardless of
-    ``brain_kind`` — the swap changes who learns the features, never luck.
-
-    Args:
-        kind: "perceptron" (default brain) or "model" (ModelBrain — trainable
-            hidden projection, genome-compatible).
-        input_dim: perception feature count.
-        output_dim: decision gate count.
-        hidden_units: hidden projection width (0 = single layer).
-
-    Returns:
-        A Perceptron or ModelBrain with the shared interface
-        (forward/update/W/b/H/bh/to_dict/from_dict).
-    """
-    if kind == "model":
-        return ModelBrain(input_dim, output_dim, hidden_units=hidden_units)
-    return Perceptron(input_dim, output_dim, hidden_units=hidden_units)
-
-
-def brain_from_dict(data: dict[str, Any]) -> Perceptron | ModelBrain:
-    """
-    Rebuild a brain from serialized baby state without touching RNG.
-
-    Dispatches on the ``kind`` marker ModelBrain writes; perceptron payloads
-    predate the marker and rebuild as Perceptron.
-
-    Args:
-        data: a ``to_dict()`` output from either brain class.
-
-    Returns:
-        A Perceptron or ModelBrain with the stored weights.
-    """
-    if data.get("kind") == "model":
-        return ModelBrain.from_dict(data)
-    return Perceptron.from_dict(data)
+# NOTE: ``make_brain`` / ``brain_from_dict`` — the brain registry — live in
+# ``model_brain.py`` next to the classes they dispatch to, and are re-exported
+# here (``from .model_brain import brain_from_dict, make_brain``) because that
+# is where every call site has always imported them from.
 
 
 # ── SimBaby ──────────────────────────────────────────────────────────────────
@@ -1206,22 +1180,38 @@ class SimBaby:
             entity_type=EntityType.AGENT,
         )
 
-        # Perceptrons — random weights, no knowledge. brain_kind="model"
-        # births ModelBrain babies (World–Model Bridge); default unchanged.
+        # Behavior brains — random weights, no knowledge. Routed through the
+        # brain registry (``make_brain``) so the brain kind is a WorldParams
+        # choice, not a code fork: only cells/move get the deeper brain, the
+        # registry's per-kind factories take the knobs they understand and drop
+        # the rest, and the default ``brain_kind="perceptron"`` constructs the
+        # exact same Perceptron objects in the exact same RNG order as the old
+        # inline constructors — every locked selection proof stays bit-identical.
+        # The zero-init genome gates below stay Perceptron: they are
+        # genome-shaped opt-in features, not decision brains.
         cells_input_dim = self.params.cells_input_dim
         body_input_dim = self.params.body_input_dim
         entity_input_dim = self.params.entity_input_dim
         hidden = self.params.brain_hidden_units
-        _kind = self.params.brain_kind
-        self.perceptron_cells = make_brain(_kind, cells_input_dim, 3, hidden)
-        self.perceptron_body = make_brain(_kind, body_input_dim, 2)
-        self.perceptron_entity = make_brain(_kind, entity_input_dim, 2)
-        self.perceptron_move = make_brain(_kind, cells_input_dim, 3, hidden)
-        self.perceptron_message: Perceptron | None = None
+        kind = self.params.brain_kind
+        brain_kw = {
+            "n_embed": self.params.brain_n_embed,
+            "n_layer": self.params.brain_n_layer,
+            "decide_every": self.params.brain_decide_every,
+            "learn_every": self.params.brain_learn_every,
+            "optimizer": self.params.brain_optimizer,
+        }
+        self.perceptron_cells = make_brain(kind, cells_input_dim, 3, hidden, **brain_kw)
+        self.perceptron_body = make_brain(kind, body_input_dim, 2, **brain_kw)
+        self.perceptron_entity = make_brain(kind, entity_input_dim, 2, **brain_kw)
+        self.perceptron_move = make_brain(kind, cells_input_dim, 3, hidden, **brain_kw)
+        self.perceptron_message: Any = None  # any registered brain, or None
         if self.params.message_enabled:
             # Directed-signal brain: reads a target neighbor's entity features
             # and emits a single gate whose value is the message amplitude.
-            self.perceptron_message = Perceptron(entity_input_dim, 1)
+            # Routed through the registry like every other decision brain (a
+            # hard-coded Perceptron here was the last construction fork left).
+            self.perceptron_message = make_brain(kind, entity_input_dim, 1, **brain_kw)
         self.perceptron_teach: Perceptron | None = None
         if self.params.teaching_enabled:
             # Cultural brain: reads a target's entity features and emits a
@@ -1914,6 +1904,10 @@ class SimBaby:
         gap. The teacher's highest-reward episodes are then copied into the
         student's episodic memory, so lived experience moves laterally between
         living agents (the memotype still only moves vertically at birth).
+        Weight blending needs a flat readout: a brain that carries none (the
+        native ``slonet`` stack, the ``random`` baseline) keeps its weights and
+        still receives the episode transfer below — lateral culture is memotype
+        for those kinds, never a weight blend.
 
         Args:
             other: the student agent (weights and memory modified in place).
@@ -1931,6 +1925,8 @@ class SimBaby:
         for name in ("cells", "body", "entity", "move"):
             t = getattr(self, f"perceptron_{name}")
             s = getattr(other, f"perceptron_{name}")
+            if not (hasattr(s, "W") and hasattr(t, "W")):
+                continue  # no flat readout to interpolate — see the docstring
             s.W[:] = (s.W + blend * (t.W - s.W)).astype(np.float32)
             s.b[:] = (s.b + blend * (t.b - s.b)).astype(np.float32)
             if t.H is not None and s.H is not None:
@@ -2205,6 +2201,14 @@ class SimBaby:
             dst = getattr(child, f"perceptron_{name}", None)
             if src is None or dst is None:
                 continue
+            if not hasattr(src, "W"):
+                # A brain with no flat readout to copy — the native SloNet
+                # stack or the random baseline — is inherited WHOLE through the
+                # registry deserializer: exact weights, exact config, no RNG
+                # draw, same contract ``Genome.from_baby`` would have carried
+                # if the genome format could represent it.
+                setattr(child, f"perceptron_{name}", brain_from_dict(src.to_dict()))
+                continue
             dst.W[:] = src.W.copy()
             dst.b[:] = src.b.copy()
             if src.H is not None:
@@ -2410,7 +2414,7 @@ class SimBaby:
         baby.perceptron_body = brain_from_dict(data["perceptron_body"])
         baby.perceptron_entity = brain_from_dict(data["perceptron_entity"])
         move_data = data.get("perceptron_move")
-        if move_data and move_data.get("W"):
+        if move_data and (move_data.get("W") or move_data.get("kind")):
             baby.perceptron_move = brain_from_dict(move_data)
         else:
             # Legacy payloads predate movement — mint a fresh move brain
@@ -2425,8 +2429,11 @@ class SimBaby:
         baby.group_id = int(data.get("group_id", 0))
         baby._last_learning = data.get("learning")
         message_data = data.get("perceptron_message")
-        if message_data and message_data.get("W"):
-            baby.perceptron_message = Perceptron.from_dict(message_data)
+        if message_data and (message_data.get("W") or message_data.get("kind")):
+            # Registry dispatch so a model/slonet/random message brain round-
+            # trips as itself; a payload with no ``kind`` tag is the legacy
+            # Perceptron shape and restores as one.
+            baby.perceptron_message = brain_from_dict(message_data)
         else:
             baby.perceptron_message = None
         teach_data = data.get("perceptron_teach")

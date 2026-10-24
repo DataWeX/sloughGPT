@@ -28,6 +28,10 @@ cd apps/web && npm install && npm run dev
 # Or both in one command
 ./scripts/dev-stack.sh
 
+# Or as a systemd --user unit — survives session/opencode restarts
+./scripts/systemd/install.sh           # install + enable + start slough-api
+journalctl --user -u slough-api -f     # logs
+
 # Or the PGQ-supervised Python launcher — one entry point, waits for both
 # ports, prints the one URL (this is what the notebook's Serve section uses)
 python3 scripts/serve_ui.py

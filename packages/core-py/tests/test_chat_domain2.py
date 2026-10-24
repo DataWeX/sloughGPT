@@ -39,7 +39,7 @@ class TestChatRequestConstruction:
         assert req.messages == []
         assert req.model == "gpt2"
         assert req.system_prompt == ""
-        assert req.temperature == 0.8
+        assert req.temperature == 0.7
         assert req.max_tokens == 256
         assert req.session_id is None
         assert req.user_id is None

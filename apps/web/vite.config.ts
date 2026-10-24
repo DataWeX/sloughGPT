@@ -63,6 +63,14 @@ export default defineConfig({
     ),
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
   },
+  worker: {
+    // The WebGPU worker is a module worker (lib/soulnet-webgpu/index.ts:62).
+    // vite <=7 defaults worker.format to 'iife', which code-splitting builds
+    // reject ("UMD and IIFE output formats are not supported"). Explicit 'es'
+    // keeps the build green on both the root-resolved vite 7 and the
+    // apps/web-pinned vite 8 (rolldown) toolchains.
+    format: 'es',
+  },
   build: {
     outDir: 'dist-vite',
     emptyOutDir: true,

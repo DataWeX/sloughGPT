@@ -47,7 +47,7 @@ class VideoTrainRequest(BaseModel):
 class VideoInferRequest(BaseModel):
     video_path: str
     max_len: int = Field(50, ge=10, le=200)
-    temperature: float = Field(0.8, ge=0.0, le=2.0)
+    temperature: float = Field(0.7, ge=0.0, le=2.0)
 
 
 class VisualDatasetRequest(BaseModel):
@@ -739,7 +739,7 @@ class MultimodalRouter:
             video_embedding = await asyncio.to_thread(processor.encode_video, frames, engine.vision)
             first_frame = frames[0].reshape(1, 224, 224, 3)
             caption = await asyncio.to_thread(
-                engine.generate, first_frame, max_len=20, temperature=0.8
+                engine.generate, first_frame, max_len=20, temperature=0.7
             )
             return success_response(
                 data={

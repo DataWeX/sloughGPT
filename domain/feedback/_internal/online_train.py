@@ -41,6 +41,13 @@ class OnlineLoRAUpdater:
     - Memory efficient (only stores LoRA matrices)
     - Can be applied on top of any base model
     - Supports rollback if feedback changes
+
+    Capability status (card b83a5788): weight updates require an attached
+    engine AND a shape-correct gradient path — neither exists in production
+    today (no attach path; logit-shaped gradients never match the LoRA
+    matrices). Until that feature lands, updates are counted as SKIPPED
+    (`total_skipped_updates`/`total_skipped_samples`) instead of phantom
+    applied ones, and no pseudo-random noise is ever written to live weights.
     """
 
     def __init__(
@@ -68,6 +75,8 @@ class OnlineLoRAUpdater:
         self._stats = {
             "total_updates": 0,
             "total_samples": 0,
+            "total_skipped_updates": 0,
+            "total_skipped_samples": 0,
             "last_update_time": None,
             "average_update_ms": 0,
         }
@@ -138,23 +147,37 @@ class OnlineLoRAUpdater:
             gradients = self._compute_gradients(feedback_batch)
 
             # Apply gradients to LoRA weights
-            self._apply_gradients(gradients)
+            applied = self._apply_gradients(gradients)
 
-            # Update stats
             elapsed = (time.time() - start_time) * 1000  # ms
-            self._stats["total_updates"] += 1
-            self._stats["total_samples"] += len(feedback_batch)
-            self._stats["last_update_time"] = time.time()
-            self._stats["average_update_ms"] = (
-                self._stats["average_update_ms"] * (self._stats["total_updates"] - 1) + elapsed
-            ) / self._stats["total_updates"]
+            if applied:
+                # Real update: weights actually changed.
+                self._stats["total_updates"] += 1
+                self._stats["total_samples"] += len(feedback_batch)
+                self._stats["last_update_time"] = time.time()
+                self._stats["average_update_ms"] = (
+                    self._stats["average_update_ms"] * (self._stats["total_updates"] - 1) + elapsed
+                ) / self._stats["total_updates"]
 
-            logger.info(
-                "Updated with %d samples in %.1fms",
-                len(feedback_batch),
-                elapsed,
-                extra={"tag": "INFRA"},
-            )
+                logger.info(
+                    "Updated with %d samples in %.1fms",
+                    len(feedback_batch),
+                    elapsed,
+                    extra={"tag": "INFRA"},
+                )
+            else:
+                # Honest skip (card b83a5788): nothing was applied — no
+                # engine, no gradients, or shape-mismatched. Do NOT increment
+                # total_updates/total_samples or stamp last_update_time as if
+                # learning happened.
+                self._stats["total_skipped_updates"] += 1
+                self._stats["total_skipped_samples"] += len(feedback_batch)
+                logger.info(
+                    "Update skipped: 0 gradients applied for %d samples (engine_attached=%s)",
+                    len(feedback_batch),
+                    self.engine is not None,
+                    extra={"tag": "INFRA"},
+                )
 
         except Exception as e:
             logger.error("Update failed: %s", e, extra={"tag": "INFRA"})
@@ -248,31 +271,44 @@ class OnlineLoRAUpdater:
                 )
 
         except Exception as e:
-            logger.debug(
-                "Real gradient computation failed, falling back to pseudo-gradients: %s", e
-            )
-            # Fallback to simple pseudo-gradients
-            positive_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_up")
-            negative_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_down")
-            total = len(feedback_batch)
-            reinforcement = (positive_count - negative_count) / max(total, 1)
-            scale = self.learning_rate * reinforcement
-            for key, weight in self._lora_weights.items():
-                grad = np.random.randn(*weight.shape).astype(np.float32) * scale
-                gradients[key] = grad
+            # Retired pseudo-gradient fallback (card b83a5788, defect 5): it
+            # applied RANDOM NOISE to live weights. A failed forward pass now
+            # yields no gradients — _perform_update counts an honest skip.
+            logger.debug("Gradient computation failed; update will skip: %s", e)
+            gradients = {}
 
         return gradients
 
-    def _apply_gradients(self, gradients: dict[str, np.ndarray]):
-        """Apply computed gradients to LoRA weights."""
-        for key, grad in gradients.items():
-            if key in self._lora_weights:
-                # Gradient descent step
-                self._lora_weights[key] -= grad
+    def _apply_gradients(self, gradients: dict[str, np.ndarray]) -> int:
+        """Apply computed gradients to LoRA weights. Returns applied key count.
 
-                # Optional: clip to prevent drift
-                max_val = 1.0
-                self._lora_weights[key] = np.clip(self._lora_weights[key], -max_val, max_val)
+        Shape-mismatched gradients are skipped, never applied-and-crashed:
+        the logit-shaped arrays this module can currently produce don't match
+        the (rank, dim) LoRA matrices and used to raise into the caller's
+        swallow, leaving nothing applied while telemetry claimed success.
+        """
+        applied = 0
+        for key, grad in gradients.items():
+            weight = self._lora_weights.get(key)
+            if weight is None:
+                continue
+            if grad.shape != weight.shape:
+                logger.debug(
+                    "Skipping %s gradient: shape %s != weight shape %s",
+                    key,
+                    grad.shape,
+                    weight.shape,
+                    extra={"tag": "INFRA"},
+                )
+                continue
+            # Gradient descent step
+            self._lora_weights[key] = weight - grad
+
+            # Optional: clip to prevent drift
+            max_val = 1.0
+            self._lora_weights[key] = np.clip(self._lora_weights[key], -max_val, max_val)
+            applied += 1
+        return applied
 
     def apply_to_logits(
         self, original_logits: np.ndarray, layer_name: str = "attention"
@@ -317,6 +353,7 @@ class OnlineLoRAUpdater:
             "buffer_size": len(self._feedback_buffer),
             "is_updating": self._is_updating,
             "is_initialized": self._is_initialized,
+            "engine_attached": self.engine is not None,
             "adaptation_strength": self.get_adaptation_strength(),
         }
 
@@ -328,6 +365,8 @@ class OnlineLoRAUpdater:
         self._stats = {
             "total_updates": 0,
             "total_samples": 0,
+            "total_skipped_updates": 0,
+            "total_skipped_samples": 0,
             "last_update_time": None,
             "average_update_ms": 0,
         }
@@ -338,7 +377,13 @@ _online_lora: OnlineLoRAUpdater | None = None
 
 
 def get_online_lora_updater() -> OnlineLoRAUpdater:
-    """Get or create the global online LoRA updater."""
+    """Get or create the global online LoRA updater.
+
+    Returns the updater in buffering mode: feedback is collected, but weight
+    updates skip honestly (no engine attach path exists yet — card b83a5788)
+    and are counted in ``total_skipped_updates`` rather than phantom
+    ``total_updates``.
+    """
     global _online_lora
     if _online_lora is None:
         _online_lora = OnlineLoRAUpdater()

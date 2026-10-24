@@ -22,10 +22,10 @@ from dataclasses import dataclass, field
 class GenerationConfig:
     """Production defaults for text generation. All overridable via env vars."""
 
-    temperature: float = 0.8
-    top_p: float = 0.9
-    top_k: int = 50
-    repetition_penalty: float = 1.2
+    temperature: float = 0.7
+    top_p: float = 0.85
+    top_k: int = 40
+    repetition_penalty: float = 1.15
     max_new_tokens: int = 200
     max_context_length: int = 1024
 
@@ -35,11 +35,11 @@ class GenerationConfig:
             return os.getenv(canonical, os.getenv(legacy, default))
 
         return cls(
-            temperature=float(_env("SLO_TEMPERATURE", "SLOUGHGT_TEMPERATURE", "0.8")),
-            top_p=float(_env("SLO_TOP_P", "SLOUGHGT_TOP_P", "0.9")),
-            top_k=int(_env("SLO_TOP_K", "SLOUGHGT_TOP_K", "50")),
+            temperature=float(_env("SLO_TEMPERATURE", "SLOUGHGT_TEMPERATURE", "0.7")),
+            top_p=float(_env("SLO_TOP_P", "SLOUGHGT_TOP_P", "0.85")),
+            top_k=int(_env("SLO_TOP_K", "SLOUGHGT_TOP_K", "40")),
             repetition_penalty=float(
-                _env("SLO_REPETITION_PENALTY", "SLOUGHGT_REPETITION_PENALTY", "1.2")
+                _env("SLO_REPETITION_PENALTY", "SLOUGHGT_REPETITION_PENALTY", "1.15")
             ),
             max_new_tokens=int(_env("SLO_MAX_NEW_TOKENS", "SLOUGHGT_MAX_NEW_TOKENS", "200")),
             max_context_length=int(

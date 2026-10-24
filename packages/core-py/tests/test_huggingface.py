@@ -546,8 +546,12 @@ class TestGetDtype:
 
 
 class TestLoad:
-    def test_raises_without_transformers(self):
-        assert local_loader.AutoTokenizer is None
+    def test_raises_without_transformers(self, monkeypatch):
+        # CI installs transformers, so simulate its absence deterministically
+        # instead of asserting on the environment (the loader reads the
+        # module-level names at load() time).
+        monkeypatch.setattr(local_loader, "AutoTokenizer", None)
+        monkeypatch.setattr(local_loader, "AutoModelForCausalLM", None)
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
         with pytest.raises(ImportError, match="transformers"):
             loader.load()

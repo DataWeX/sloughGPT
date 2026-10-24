@@ -367,9 +367,9 @@ export function souMetadata(): SoulMetadata | null {
 export async function generateFromSou(
   prompt: string,
   maxNewTokens = 64,
-  temperature = 0.8,
+  temperature = 0.7,
   topK = 40,
-  topP = 0.9,
+  topP = 0.85,
   eosToken = 0,
   onToken?: (token: string) => void,
   signal?: AbortSignal,

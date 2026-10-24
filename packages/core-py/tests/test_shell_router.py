@@ -106,7 +106,7 @@ class TestExecCommand:
     def test_multiline_output(self, mock_get):
         mock_get.return_value = _mock_repl("line1\nline2\nline3", 0)
         client = TestClient(_app())
-        resp = client.post("/shell/exec", json={"command": "cat file"})
+        resp = client.post("/shell/exec", json={"command": "echo line1; echo line2; echo line3"})
         assert resp.status_code == 200
         assert "line1\nline2\nline3" in resp.json()["output"]
 

@@ -11,6 +11,8 @@ Usage:
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 import os
 import sys
 
@@ -26,8 +28,12 @@ from domain.multimodal._internal.unified_phoneme_encoder import (
 def main():
     if len(sys.argv) < 2:
         print("Usage: python -m domain.multimodal._internal.phoneme_encoder_cli <text>")
-        print("       python -m domain.multimodal._internal.phoneme_encoder_cli --batch <text1> <text2> ...")
-        print("       python -m domain.multimodal._internal.phoneme_encoder_cli --lang <lang> <text>")
+        print(
+            "       python -m domain.multimodal._internal.phoneme_encoder_cli --batch <text1> <text2> ..."
+        )
+        print(
+            "       python -m domain.multimodal._internal.phoneme_encoder_cli --lang <lang> <text>"
+        )
         print("       python -m domain.multimodal._internal.phoneme_encoder_cli --detect <text>")
         print()
         print("Languages: en, de, fr, es, it, pt")

@@ -243,7 +243,7 @@ class TestAdaptiveConfigEngine:
 class TestAppSettings:
     def test_defaults(self):
         s = AppSettings()
-        assert s.generation.temperature == 0.8
+        assert s.generation.temperature == 0.7
         assert s.training.preferred_model == ""
         assert s.voice.noise_gate_db == -40.0
         assert s.version == 1
@@ -289,7 +289,7 @@ class TestPersistentSettings:
         ps = PersistentSettings(tmp_path / "settings.json")
         ps.update("generation", temperature=0.1)
         ps.reset()
-        assert ps.settings.generation.temperature == 0.8
+        assert ps.settings.generation.temperature == 0.7
 
     def test_get(self, tmp_path):
         ps = PersistentSettings(tmp_path / "settings.json")
@@ -308,7 +308,7 @@ class TestPersistentSettings:
         path.write_text("not json!!!")
         ps = PersistentSettings(path)
         s = ps.settings
-        assert s.generation.temperature == 0.8
+        assert s.generation.temperature == 0.7
 
     def test_unknown_section(self, tmp_path):
         ps = PersistentSettings(tmp_path / "settings.json")

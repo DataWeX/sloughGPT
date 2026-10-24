@@ -58,7 +58,7 @@ export const feedbackController = {
       },
       current_weights: (metaStats.current_weights as { temperature: number; repetition_penalty: number }) ?? {
         temperature: 0.7,
-        repetition_penalty: 1.1,
+        repetition_penalty: 1.15,
       },
       history_length: metaStats.history_length ?? 0,
       quality_trend: { thumbs_up_ratio: ratio },

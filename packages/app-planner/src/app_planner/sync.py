@@ -9,6 +9,35 @@ from __future__ import annotations
 from typing import Any
 
 
+def canonical_notes(notes: list[Any]) -> list[Any]:
+    """Collapse duplicate-title notes to one deterministic winner each.
+
+    Journal twins (same title, conflicting statuses) must produce ONE board
+    transition per sync run — otherwise every run re-applies both twins and
+    reports phantom moves forever while cards flip column (card 08baf13f).
+
+    Winner per title = most recently updated note; ties break on created_at,
+    then id (all descending), so the latest human intent decides the column
+    and repeated syncs are net-zero. Returned in resolved-title order for
+    deterministic processing.
+    """
+
+    def rank(note: Any) -> tuple[str, str, str]:
+        return (
+            getattr(note, "updated_at", "") or "",
+            getattr(note, "created_at", "") or "",
+            getattr(note, "id", "") or "",
+        )
+
+    winners: dict[str, Any] = {}
+    for note in notes:
+        key = note.title or "(untitled)"
+        current = winners.get(key)
+        if current is None or rank(note) > rank(current):
+            winners[key] = note
+    return sorted(winners.values(), key=lambda n: n.title or "(untitled)")
+
+
 def sync_notes_to_board(note_store: Any, kanban_store: Any) -> tuple[int, int, int]:
     """Sync notes to board.
 
@@ -24,7 +53,7 @@ def sync_notes_to_board(note_store: Any, kanban_store: Any) -> tuple[int, int, i
     # Legacy path: NoteStore + KanbanStore
     from . import config
 
-    notes = note_store.list_notes(limit=9999)
+    notes = canonical_notes(note_store.list_notes(limit=9999))
     board = kanban_store.load_board()
     existing = {c.title: c for c in board.cards}
     added = 0
@@ -36,7 +65,7 @@ def sync_notes_to_board(note_store: Any, kanban_store: Any) -> tuple[int, int, i
         card = existing.get(title)
 
         if card is None:
-            kanban_store.add_card(
+            card = kanban_store.add_card(
                 title=title,
                 column=col,
                 tags=list(note.tags or []),
@@ -44,6 +73,7 @@ def sync_notes_to_board(note_store: Any, kanban_store: Any) -> tuple[int, int, i
                 assignee=note.assignee or "",
                 sprint=note.sprint or "",
             )
+            existing[title] = card
             added += 1
             continue
 

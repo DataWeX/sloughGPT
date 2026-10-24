@@ -6,6 +6,8 @@ Public API:
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 from domain.context._internal.managers import (
     ConsciousnessManager,
     MemoryManager,

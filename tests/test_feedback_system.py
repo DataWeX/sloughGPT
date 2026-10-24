@@ -181,7 +181,7 @@ def test_export_training(client):
     assert response.status_code == 200
     data = response.json()
     assert "pairs_count" in data
-    assert "filepath" in data
+    assert "file" in data
 
 
 def test_export_training_invalid(client):

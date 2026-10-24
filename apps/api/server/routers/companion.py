@@ -226,6 +226,9 @@ class CompanionRouter:
         self, preset_id: str = Body(...), auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Apply a preset personality."""
+        # Defaults are guaranteed by seed-on-empty, same convention as
+        # list_presets — otherwise the first use on a fresh store 404s.
+        _seed_default_presets()
         db = _get_db()
         col = db.collection("presets")
         preset = col.find_one({"id": preset_id})

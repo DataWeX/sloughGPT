@@ -509,7 +509,7 @@ class MultimodalManager:
                 if cached is not None:
                     raw_text = cached
                 else:
-                    result = engine.generate(img_np, max_len=16, temperature=0.8)
+                    result = engine.generate(img_np, max_len=16, temperature=0.7)
                     raw_text = result.text.strip()
                     if not raw_text or len(raw_text.split()) < 2:
                         raw_text = self._pick_seed_caption(engine.vision.forward(img_np).data)
@@ -534,7 +534,7 @@ class MultimodalManager:
             # Supervised mode: use ground truth as target
             if ground_truth and ground_truth.strip():
                 raw_text = ground_truth.strip()
-                result = engine.generate(img_np, max_len=16, temperature=0.8)
+                result = engine.generate(img_np, max_len=16, temperature=0.7)
                 generated_text = result.text.strip()
                 from domain.feedback._internal.lora_eval import BLEUScorer
 
@@ -546,7 +546,7 @@ class MultimodalManager:
                 if self._learning_count < 10:
                     raw_text = self._pick_seed_caption(embed.data)
                 else:
-                    result = engine.generate(img_np, max_len=16, temperature=0.8)
+                    result = engine.generate(img_np, max_len=16, temperature=0.7)
                     raw_text = result.text.strip()
                     if not raw_text or len(raw_text.split()) < 2:
                         raw_text = self._pick_seed_caption(embed.data)
@@ -719,7 +719,7 @@ class MultimodalManager:
                 img_np,
                 question,
                 max_len=32,
-                temperature=0.8,
+                temperature=0.7,
             )
             answer = result.text.strip()
             if not answer:

@@ -1461,22 +1461,16 @@ def int4_quantized_linear(
 
 
 class QuantizedLinear:
-    """Drop-in replacement for nn.Linear that uses quantized int8/int4 weights.
+    """Quantized linear layer with pure-numpy forward — no torch dependency.
 
-    Stores the quantized weight data and dequantizes on the fly during forward().
-    Weight memory drops from float32 (4 bytes/elem) to int8 (1 byte/elem).
-
-    Uses the industry-standard forward monkey-patching pattern (same as
-    bitsandbytes, GPTQ, AWQ): the original ``nn.Linear.forward`` is replaced
-    with a closure that dequantizes and calls ``forward_numpy``.
+    Stores the quantized weight data and dequantizes on the fly during
+    forward(). Weight memory drops from float32 (4 bytes/elem) to int8
+    (1 byte/elem).
 
     Usage::
 
         ql = QuantizedLinear.from_linear(original_linear, tensor_info)
-        # Wire into model via forward monkey-patching:
-        module._orig_forward = module.forward
-        module._ql = ql
-        module.forward = ql.make_torch_forward()
+        out = ql(x)  # numpy in, numpy out (delegates to forward_numpy)
     """
 
     def __init__(

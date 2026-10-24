@@ -58,8 +58,9 @@ ROUTER_MODULES: list[str] = [
     "tools",
     "model_stack",
     "phoneme",
-    "doctor",
     "contracts",
-    "personality",
+    "mole",
+    "llm_v1",
+    "search",
 ]
 # fmt: on

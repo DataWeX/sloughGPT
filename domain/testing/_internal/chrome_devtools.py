@@ -8,7 +8,7 @@ Usage:
 
     browser = ChromeDevToolsBrowser()
     await browser.setup()
-    await browser.navigate("http://localhost:3000/training")
+    await browser.navigate("http://localhost:5173/training")
     await browser.wait_for_text("train")
     snapshot = await browser.take_snapshot()
 """
@@ -41,7 +41,7 @@ class ChromeDevToolsBrowser:
     chrome-devtools MCP tools through the opencode agent system.
     """
 
-    def __init__(self, base_url: str = "http://localhost:3000"):
+    def __init__(self, base_url: str = "http://localhost:5173"):
         self.base_url = base_url.rstrip("/")
         self.state = BrowserState()
         self.commands: list[dict[str, Any]] = []

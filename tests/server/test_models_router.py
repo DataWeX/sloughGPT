@@ -556,7 +556,7 @@ class TestPrecision:
     """POST /models/precision"""
 
     @patch("domain.infrastructure._internal.quantization.Quantine.suggest_format")
-    @patch("domain.slolib._internal.gpu.get_accelerator")
+    @patch("domain.slolib.get_accelerator")
     def test_cpu_path_uses_suggestion(self, mock_acc, mock_suggest, client):
         acc = MagicMock()
         acc.name = "cpu"

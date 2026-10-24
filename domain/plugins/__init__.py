@@ -5,6 +5,8 @@ Public API:
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 from domain.plugins._internal.plugins import (
     Plugin,
     PluginHook,

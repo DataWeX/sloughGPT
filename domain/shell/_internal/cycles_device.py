@@ -37,8 +37,8 @@ from .cycles import (
     create_plane,
     create_sphere,
 )
-from .tensor_arena import TensorArena, resolve
-from .vm import Device, DeviceFault
+from .device_ops import OpTable
+from .vm import Device
 
 
 class CyclesDevice(Device):
@@ -56,7 +56,7 @@ class CyclesDevice(Device):
         self._last_state: dict[str, np.ndarray] | None = None
         self._arena: TensorArena = arena if arena is not None else TensorArena()
 
-        self._ops = {
+        self._ops = OpTable("CyclesDevice", {
             "render": self._render,
             "encode_png": self._encode_png,
             "free_slot": self._free_slot,
@@ -72,13 +72,7 @@ class CyclesDevice(Device):
             "clear": self._clear,
             "set_samples": self._set_samples,
             "set_resolution": self._set_resolution,
-        }
-
-    def call(self, method, *args):
-        fn = self._ops.get(method)
-        if fn is None:
-            raise DeviceFault(f"CyclesDevice: unknown op: {method}")
-        return fn(*args)
+        })
 
     @property
     def arena(self) -> TensorArena:

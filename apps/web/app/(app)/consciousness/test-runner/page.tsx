@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { authFetch } from '@/lib/http-client'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@sloughgpt/strui'
@@ -44,7 +44,7 @@ async function apiCall(method: string, path: string, body?: string): Promise<{ s
       headers: { 'Content-Type': 'application/json' },
     }
     if (body) init.body = body
-    const res = await fetch(`${PUBLIC_API_URL}${path}`, init)
+    const res = await authFetch(path, init)
     const duration = Date.now() - start
     const text = await res.text()
     let data: any

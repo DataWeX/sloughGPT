@@ -5,6 +5,8 @@ Public API:
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 from domain.billing._internal.token_service import (
     MODEL_PRICING,
     TIER_LIMITS,

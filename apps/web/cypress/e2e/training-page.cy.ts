@@ -38,7 +38,10 @@ describe('Teach me page', () => {
     )
   })
 
-  it('shows the training history card', () => {
-    cy.contains('Training History').scrollIntoView().should('be.visible')
+  it('shows the training run history', () => {
+    // History moved off /training into the training runs page (the old
+    // 'Training History' card no longer exists on /training).
+    cy.visit('/training/runs')
+    cy.contains('Run history').scrollIntoView().should('be.visible')
   })
 })

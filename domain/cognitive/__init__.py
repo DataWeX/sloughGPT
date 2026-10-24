@@ -7,6 +7,8 @@ Public API:
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 from domain.cognitive._internal.base import (
     CognitiveDomain,
     CognitiveException,

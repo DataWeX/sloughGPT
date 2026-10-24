@@ -67,8 +67,6 @@ class ApiProvider:
         self.token_param_override = token_param_override
         self.last_usage: dict[str, int] | None = None
 
-        if not self.api_key:
-            raise ValueError("API key required")
         if not self.api_url:
             raise ValueError("API URL required")
 
@@ -156,14 +154,13 @@ class ApiProvider:
         messages: list[dict[str, str]],
         max_tokens: int = 512,
         temperature: float = 0.7,
-        top_p: float = 0.9,
+        top_p: float = 0.85,
         **kwargs,
     ) -> str:
         """Non-streaming chat completion."""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         payload = {
             "model": self.model_name,
@@ -212,15 +209,14 @@ class ApiProvider:
         messages: list[dict[str, str]],
         max_tokens: int = 512,
         temperature: float = 0.7,
-        top_p: float = 0.9,
+        top_p: float = 0.85,
         cancel_event=None,
         **kwargs,
     ) -> AsyncIterator[str]:
         """Streaming chat completion via SSE."""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         payload = {
             "model": self.model_name,
@@ -292,10 +288,9 @@ class ApiProvider:
 
     def test_connection(self) -> dict[str, Any]:
         """Test connection to the API endpoint."""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         try:
             with httpx.Client(timeout=10.0) as client:

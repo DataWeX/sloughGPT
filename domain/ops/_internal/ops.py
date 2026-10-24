@@ -144,7 +144,13 @@ class FusedAttentionBias:
         B, N, H, E = query.shape
         _, S, _, _ = key.shape
 
-        scores = np.einsum("bnhe,bshe->bhsn", query, key) * scale
+        # scores[b, h, n, s] — query n attends to key s. The layout must be
+        # [B, H, N, S] (query-major) to match the docstring, the (N, S) causal
+        # mask below, and the softmax over axis=-1 = the KEY axis. Emitting
+        # `bhsn` instead produced [B, H, S, N]: it transposed the mask (which
+        # then raised ValueError for N != S) and made the softmax normalize over
+        # the query axis, so the output was a non-normalized sum of values.
+        scores = np.einsum("bnhe,bshe->bhns", query, key) * scale
 
         if attn_bias is not None:
             scores = scores + attn_bias
@@ -155,7 +161,7 @@ class FusedAttentionBias:
 
         exp_scores = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
         attn_weights = exp_scores / np.sum(exp_scores, axis=-1, keepdims=True)
-        output = np.einsum("bhsn,bshe->bnhe", attn_weights, value)
+        output = np.einsum("bhns,bshe->bnhe", attn_weights, value)
 
         return output, attn_weights
 
@@ -176,8 +182,19 @@ class ChunkedOperation:
         # Layout: [B, S, H, E] — sequence dim=1, heads dim=2
         B, S, H, E = query.shape
 
-        all_outputs, all_weights = [], []
+        all_outputs = []
         scale = 1.0 / math.sqrt(E)
+        # Assemble the full [B, H, S, S] attention matrix. The canonical layout
+        # is weights[b, head, query, key] (confirmed by test_causal_masking,
+        # which indexes weights[0, 0, i, j] as query=i, key=j). Each chunk
+        # produces attn[b, h, q_len, k_len] covering query positions
+        # [i, i+q_len) against key positions [start, start+k_len), so it is
+        # scattered into its slice of the full matrix. Concatenating the ragged
+        # per-chunk attn arrays along the key axis (the old code did
+        # np.concatenate(all_weights, axis=3)) is wrong: k_len varies per chunk
+        # under the causal window, producing a malformed (B, H, q_len, Σk_len)
+        # tensor whose rows summed to the chunk count, not 1.0.
+        weights = None
 
         for i in range(0, S, chunk_size):
             q_chunk = query[:, i : i + chunk_size]
@@ -198,10 +215,11 @@ class ChunkedOperation:
             out = np.einsum("bhqs,bshe->bqhe", attn, v_chunk)
 
             all_outputs.append(out)
-            all_weights.append(attn)
+            if weights is None:
+                weights = np.zeros((B, H, S, S), dtype=attn.dtype)
+            weights[:, :, i : i + q_len, start : start + k_len] = attn
 
         output = np.concatenate(all_outputs, axis=1)
-        weights = np.concatenate(all_weights, axis=3)
         return output, weights
 
 

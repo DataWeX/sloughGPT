@@ -112,8 +112,8 @@ def format_chat(messages: list[dict[str, str]], model_type: str, system: str = "
 def sample_token(
     logits: np.ndarray,
     temperature: float = 1.0,
-    top_p: float = 0.9,
-    top_k: int = 50,
+    top_p: float = 0.85,
+    top_k: int = 40,
     rng: np.random.Generator | None = None,
 ) -> int:
     if temperature <= 0.01:
@@ -317,8 +317,8 @@ class NativeEngine:
         messages: list[dict[str, str]],
         max_tokens: int = 128,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
+        top_p: float = 0.85,
+        top_k: int = 40,
         system: str = "",
     ) -> str:
         if not self._loaded:
@@ -379,8 +379,8 @@ class NativeEngine:
         messages: list[dict[str, str]],
         max_tokens: int = 128,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
+        top_p: float = 0.85,
+        top_k: int = 40,
         system: str = "",
     ) -> Generator[str, None, None]:
         if not self._loaded:
@@ -548,9 +548,9 @@ class NativeTransformerProvider:
         self,
         messages,
         max_tokens=512,
-        temperature=0.8,
-        top_p=0.9,
-        top_k=50,
+        temperature=0.7,
+        top_p=0.85,
+        top_k=40,
         cancel_event=None,
         session_id=None,
         **kwargs,
@@ -577,7 +577,7 @@ class NativeTransformerProvider:
         except Exception as e:
             logger.warning("Native C generation error: %s", e, extra={"tag": "MODEL"})
 
-    async def chat(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+    async def chat(self, messages, max_tokens=512, temperature=0.7, **kwargs):
         import asyncio
 
         loop = asyncio.get_event_loop()

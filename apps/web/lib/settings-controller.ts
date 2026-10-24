@@ -145,28 +145,12 @@ export const settingsController = {
     return apiGet(`/settings/training/history/export?format=${format}&limit=${limit}`)
   },
 
-  async generateModelCard(name: string, params: Record<string, unknown> = {}): Promise<{ card: Record<string, unknown>; markdown: string }> {
-    return apiPost('/settings/model-card', { name, ...params })
-  },
-
   async compareTrainingRuns(runA: string, runB: string): Promise<{ run_a: Record<string, unknown>; run_b: Record<string, unknown>; differences: Record<string, { run_a: unknown; run_b: unknown }>; a_wins: number; b_wins: number }> {
     return apiGet(`/settings/training/compare?run_a=${runA}&run_b=${runB}`)
   },
 
-  async getBatchTrainingStatus(): Promise<{ jobs: Array<Record<string, unknown>>; summary: { total: number; running: number; queued: number; completed: number; failed: number } }> {
-    return apiGet('/settings/training/batch-status')
-  },
-
-  async listTrainingPresets(): Promise<{ presets: Array<Record<string, unknown>> }> {
-    return apiGet('/settings/training/presets')
-  },
-
   async getTrainingPreset(name: string): Promise<Record<string, unknown>> {
     return apiGet(`/settings/training/presets/${name}`)
-  },
-
-  async applyTrainingPreset(name: string): Promise<{ preset: string; applied: Record<string, unknown> }> {
-    return apiPost(`/settings/training/presets/${name}/apply`)
   },
 
   async getTrainingRun(runId: string): Promise<Record<string, unknown>> {
@@ -183,10 +167,6 @@ export const settingsController = {
       if (v !== '' && v !== undefined && v !== null) qs.set(k, String(v))
     }
     return apiGet(`/settings/training/runs?${qs.toString()}`)
-  },
-
-  async clearTrainingHistory(): Promise<{ cleared: boolean; removed_count: number }> {
-    return apiPost('/settings/training/history/clear')
   },
 
   async addRunTag(runId: string, tag: string): Promise<Record<string, unknown>> {
@@ -215,10 +195,6 @@ export const settingsController = {
 
   async toggleBookmark(runId: string): Promise<Record<string, unknown>> {
     return apiPost(`/settings/training/runs/${runId}/bookmark`)
-  },
-
-  async getBookmarkedRuns(): Promise<{ runs: Array<Record<string, unknown>>; count: number }> {
-    return apiGet('/settings/training/bookmarks')
   },
 
   async duplicateTrainingRun(runId: string, newRunId: string = ''): Promise<Record<string, unknown>> {

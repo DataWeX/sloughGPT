@@ -35,8 +35,8 @@ never stored twice.
 
 **2. Projections — adapters that emit the transport.** Real routes, generated
 rather than hand-written: a module declares its descriptor, a `create_router(spec, route, handler)`
-helper emits the fragment — `GET /tools/doctor/report` for reads,
-`POST /tools/doctor/check` for actions — with proper verbs, status codes,
+helper emits the fragment — `GET /tools/mole/report` for reads,
+`POST /tools/mole/check` for actions — with proper verbs, status codes,
 `success_response` envelopes and `classify_and_raise` errors, all from the one
 entry. FastAPI composes the fragments (`include_router` → `app.openapi()`
 merges), so **the contract itself is modular**. The same descriptor projects

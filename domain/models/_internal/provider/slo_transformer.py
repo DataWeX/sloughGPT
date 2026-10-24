@@ -77,7 +77,7 @@ class SloTransformerProvider:
         if text:
             yield text
 
-    async def chat(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+    async def chat(self, messages, max_tokens=512, temperature=0.7, **kwargs):
         chunks = []
         async for chunk in self.chat_stream(messages, max_tokens, temperature, **kwargs):
             chunks.append(chunk)

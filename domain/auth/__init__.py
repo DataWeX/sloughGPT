@@ -6,6 +6,8 @@ Public API:
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 from domain.auth._internal.models import (
     ROLE_PERMISSIONS,
     Permission,

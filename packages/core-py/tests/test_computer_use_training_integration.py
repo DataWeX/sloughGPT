@@ -17,6 +17,11 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip(
+    "playwright.sync_api",
+    reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
+)
+
 # vite :5173 (card e47e19ee retired the stale :3000 default); SLO_WEB_URL overrides.
 BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
 API = "http://localhost:8000"
@@ -43,10 +48,14 @@ def _wait_for_api(timeout: int = 60) -> bool:
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_servers_ready():
-    # Capability gate: skip cleanly when the API is absent instead of
-    # erroring every item (repo-wide convention; card 6e826226).
-    if not _wait_for_api(timeout=5):
-        pytest.skip("API server not running — start with FORCE_COLOR=1 ./sloughgpt serve --web")
+    # Live-stack journey tests: skip (don't error) when no server is up —
+    # CI runs core-py as a pure unit job with no ./sloughgpt serve process.
+    timeout = 5 if os.environ.get("CI") else 90
+    if not _wait_for_api(timeout=timeout):
+        pytest.skip(
+            f"API at {API} not ready — journey tests need a live stack "
+            "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
+        )
     time.sleep(3)
 
 

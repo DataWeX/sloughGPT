@@ -1,0 +1,53 @@
+# SloughGPT API — the shared :8000 server.
+#
+# THIS FILE IS THE SOURCE OF TRUTH. ~/.config/systemd/user/slough-api.service
+# is a deploy artifact written by scripts/systemd/install.sh; hand-editing the
+# live copy is how it drifted out of sync with the repo in the first place
+# (card 12855e99: the live unit ran without PYTHONNOUSERSITE=1 for weeks while
+# every other entry point had it). Tests gate this file, not the live one.
+#
+# Replaces the dev-stack.sh / agent-shell child, which dies whenever the
+# launching session's cgroup is torn down (observed 2026-09-30: opencode
+# restarts killed the shared server three times in one afternoon).
+#
+# Install: scripts/systemd/install.sh (see that script for flags).
+# Logs:    journalctl --user -u slough-api -f
+#
+# ExecStart runs the conda python (project directive: conda, not .venv);
+# verified bare from the repo root with no PYTHONPATH on 2026-09-30
+# (health 200). WorkingDirectory may contain spaces — systemd takes the
+# value literally, and all ExecStart args below are relative to it.
+
+[Unit]
+Description=SloughGPT API server (:8000)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mana/Documents/Default Project/sloughGPT
+# Hang diagnosis: dump every thread's stack to stderr on an interval so a
+# stalled server self-reports which line is blocking the event loop
+# (apps/api/server/main.py:_install_stack_dump_timer; lands in the journal).
+Environment=SLO_DUMP_STACKS=1
+Environment=SLO_DUMP_STACKS_INTERVAL=30
+# User-site must never shadow the pinned conda env (AGENTS.md mandates
+# PYTHONNOUSERSITE=1 for every test run for exactly this reason — a stray
+# `tests` package in ~/.local/lib once took pytest itself down). The
+# long-lived server was the one process exempt from that rule, so
+# ~/.local/lib/python3.12/site-packages (numpy 2.5.3, numba 0.67 observed)
+# silently won over the conda copies and the live API drifted from what the
+# suite runs against. Card 12855e99.
+Environment=PYTHONNOUSERSITE=1
+ExecStart=/home/mana/miniconda3/envs/sloughgpt/bin/python -u apps/api/server/main.py --port 8000
+Restart=on-failure
+RestartSec=5
+# The API exports training feedback into data/ and serves models from
+# models/ — both under the WorkingDirectory. No sandbox hardening here
+# on purpose (dev stack writes inside the checkout).
+NoNewPrivileges=true
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=default.target

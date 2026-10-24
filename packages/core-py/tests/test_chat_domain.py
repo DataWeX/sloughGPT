@@ -20,7 +20,7 @@ class TestChatRequest:
     def test_defaults(self):
         req = ChatRequest(messages=[{"role": "user", "content": "hi"}])
         assert req.model == "gpt2"
-        assert req.temperature == 0.8
+        assert req.temperature == 0.7
         assert req.max_tokens == 256
 
     def test_custom(self):

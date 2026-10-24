@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 from dataclasses import dataclass
@@ -69,13 +68,24 @@ class ModelHealthMonitor:
         self._load_history()
 
     def _init_mogdb(self):
-        """Initialize MogDB with JSON sync for model health."""
+        """Initialize MogDB with JSON sync for model health.
+
+        The store lives beside ``db_path`` (``<stem>_mogdb`` / ``<stem>_json``)
+        so the isolation a caller asks for is the isolation it gets. The old
+        derivation walked ``db_path.parent.parent.parent`` and hardcoded
+        ``data/model_health_*``, which assumed ``db_path`` is always exactly
+        three levels deep (``data/model_health.json``): for any other path —
+        e.g. a pytest ``tmp_path`` — every instance collapsed onto the same
+        shared directory, so monitors shared one store and history leaked
+        across tests. Deriving from ``db_path`` itself keeps the production
+        default byte-identical (``data/model_health_mogdb``) while isolating
+        each custom path.
+        """
         from mogdb import MogDB
 
-        repo_root = self.db_path.parent.parent.parent
-        db_path = os.path.join(repo_root, "data", "model_health_mogdb")
-        sync_path = os.path.join(repo_root, "data", "model_health_json")
-        return MogDB(db_path, sync_dir=sync_path)
+        db_path = self.db_path.parent / f"{self.db_path.stem}_mogdb"
+        sync_path = self.db_path.parent / f"{self.db_path.stem}_json"
+        return MogDB(str(db_path), sync_dir=str(sync_path))
 
     def set_model(self, model, tokenizer) -> None:
         """Set the model and tokenizer to benchmark."""

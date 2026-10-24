@@ -137,20 +137,22 @@ describe('ConversationSidebar', () => {
   })
 
   it('reserves a left gutter for the nav bookmark tab when expanded', () => {
-    // AppLayout's nav collapse tab protrudes 1.15rem past the nav edge at z-20.
-    // The expanded desktop panel must dock it in a gutter so it does not cover
-    // row titles or steal their clicks at vertical center.
+    // AppLayout's nav collapse tab floats over this panel as a sticker
+    // (z-40) and is --nav-tab-protrusion wide. The expanded desktop panel
+    // docks it in a gutter made of the SAME token, so the tab never covers
+    // row titles or steals their clicks at vertical center, and the two
+    // widths cannot drift apart.
     render(<ConversationSidebar {...defaultProps} />)
     const aside = document.querySelector('aside')
-    expect(aside!.className).toContain('pl-[1.15rem]')
-    expect(aside!.className).toContain('w-[calc(var(--conv-sidebar-width)+1.15rem)]')
+    expect(aside!.className).toContain('pl-[var(--nav-tab-protrusion)]')
+    expect(aside!.className).toContain('w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))]')
   })
 
   it('drops the gutter when collapsed (width must be 0, no padding)', () => {
     render(<ConversationSidebar {...defaultProps} collapsed />)
     const aside = document.querySelector('aside')
     expect(aside!.className).toContain('w-0')
-    expect(aside!.className).not.toContain('pl-[1.15rem]')
+    expect(aside!.className).not.toContain('pl-[var(--nav-tab-protrusion)]')
   })
 
   it('shows empty state message', () => {

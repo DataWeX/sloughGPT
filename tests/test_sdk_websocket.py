@@ -239,7 +239,7 @@ class TestWebSocketSend:
         payload = json.loads(ws.sent[-1])
         assert payload["prompt"] == "CN"
         assert payload["max_tokens"] == 100
-        assert payload["temperature"] == 0.8
+        assert payload["temperature"] == 0.7
         client.close()
 
     def test_send_generate_custom_params_and_model(self):

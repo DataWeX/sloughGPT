@@ -120,13 +120,14 @@ class TestRenderWorld:
 class TestRenderWorldImage:
     @patch("domain.shell._internal.simulation.WorldGrid")
     @patch("domain.shell._internal.world_render.RenderBridge")
-    def test_image_returns_ppm(self, MockBridge, MockWorld):
+    def test_image_returns_png(self, MockBridge, MockWorld):
         MockBridge.return_value = _mock_bridge()
         MockWorld.return_value = _mock_world()
         client = TestClient(_app())
         resp = client.post("/world/render/image", json={})
         assert resp.status_code == 200
-        assert "portable-pixmap" in resp.headers["content-type"]
+        # Prod renders PNG via PIL (media_type="image/png"), not PPM.
+        assert "image/png" in resp.headers["content-type"]
 
     @patch("domain.shell._internal.simulation.WorldGrid")
     @patch("domain.shell._internal.world_render.RenderBridge")

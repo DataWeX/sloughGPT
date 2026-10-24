@@ -13,7 +13,7 @@ from pathlib import Path
 from domain.logging import get_global
 
 log = get_global()
-from core.validator import Doctor
+from core.validator import Validator
 from utils.formatting import format_size
 
 
@@ -160,8 +160,8 @@ def cmd_config_check(args):
     """Check environment setup."""
     log.header("Environment Check")
 
-    doctor = Doctor()
-    result = doctor.run_all()
+    checker = Validator()
+    result = checker.run_all()
 
     log.blank()
     for check in result.checks:
@@ -177,28 +177,28 @@ def cmd_config_check(args):
                 log.info(f"  > {check.suggestion}")
 
 
-def cmd_doctor(args):
-    """Run environment checks, then the shared site-doctor core.
+def cmd_mole(args):
+    """Run environment checks, then the shared Mole core.
 
-    Two views, one core: section 2 consumes the same ``run_doctor`` as
-    ``python -m domain.core._internal.doctor``, the ``/doctor`` API and
-    the ``/doctor`` page — and the report it writes (``write=True``) is
+    Two views, one core: section 2 consumes the same ``run_mole`` as
+    ``python -m domain.core._internal.mole``, the ``/mole`` API and
+    the ``/mole`` page — and the report it writes (``write=True``) is
     the artifact those consumers read. The validator's checks stay in
     their own section (section 1).
     """
     cmd_config_check(args)
 
     log.blank()
-    log.header("Site Doctor")
+    log.header("Mole")
     try:
-        from domain.core._internal.doctor import run_doctor
-        from domain.core._internal.doctor.__main__ import _summary_lines
+        from domain.core._internal.mole import run_mole
+        from domain.core._internal.mole.__main__ import _summary_lines
 
-        report = run_doctor(write=True)
+        report = run_mole(write=True)
         for line in _summary_lines(report):
             log.info(line)
     except Exception as exc:  # a CLI diagnostic must print, never traceback
-        log.warning(f"site doctor failed: {exc}")
+        log.warning(f"mole failed: {exc}")
 
 
 def cmd_config_validate(args):

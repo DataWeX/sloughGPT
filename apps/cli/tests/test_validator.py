@@ -1,4 +1,4 @@
-"""Tests for apps/cli/src/core/validator.py (Doctor / ValidationResult)."""
+"""Tests for apps/cli/src/core/validator.py (Validator / ValidationResult)."""
 
 import os
 import sys
@@ -37,62 +37,62 @@ class TestValidationResult:
         assert r.passed is True
 
 
-class TestDoctorChecks:
+class TestValidatorChecks:
     def test_python_version_current(self, tmp_path):
-        from core.validator import Doctor
+        from core.validator import Validator
 
-        d = Doctor(root_dir=tmp_path)
+        d = Validator(root_dir=tmp_path)
         d._check_python_version()
         assert d.result.checks[0].passed is True
 
     def test_required_dirs_exist_pass(self, tmp_path):
-        from core.validator import Doctor
+        from core.validator import Validator
 
         for name in ["models", "data"]:
             (tmp_path / name).mkdir()
-        d = Doctor(root_dir=tmp_path)
+        d = Validator(root_dir=tmp_path)
         d._check_required_dirs()
         assert d.result.passed is True
         assert len(d.result.checks) == 2
 
     def test_required_dirs_missing_fail(self, tmp_path):
-        from core.validator import Doctor
+        from core.validator import Validator
 
-        d = Doctor(root_dir=tmp_path)
+        d = Validator(root_dir=tmp_path)
         d._check_required_dirs()
         assert d.result.passed is False
         assert d.result.failed_count == 2
 
     def test_env_file_missing_warns(self, tmp_path):
-        from core.validator import Doctor
+        from core.validator import Validator
 
-        d = Doctor(root_dir=tmp_path)
+        d = Validator(root_dir=tmp_path)
         d._check_env_file()
         assert d.result.checks[0].passed is True
         assert d.result.warning_count == 1
 
     def test_env_file_present_passes(self, tmp_path):
-        from core.validator import Doctor
+        from core.validator import Validator
 
         (tmp_path / ".env").write_text("KEY=value\n")
-        d = Doctor(root_dir=tmp_path)
+        d = Validator(root_dir=tmp_path)
         d._check_env_file()
         assert d.result.checks[0].message == "Found"
 
     def test_api_server_unreachable_warns(self, tmp_path, monkeypatch):
-        from core.validator import Doctor
+        from core.validator import Validator
 
         monkeypatch.setitem(sys.modules, "requests", None)
-        d = Doctor(root_dir=tmp_path)
+        d = Validator(root_dir=tmp_path)
         d._check_api_server()
         assert d.result.checks[0].passed is True
         assert d.result.warning_count == 1
 
     def test_run_all_includes_all_checks(self, tmp_path, monkeypatch):
-        from core.validator import Doctor
+        from core.validator import Validator
 
         monkeypatch.setitem(sys.modules, "requests", None)
-        d = Doctor(root_dir=tmp_path)
+        d = Validator(root_dir=tmp_path)
         result = d.run_all()
         names = {c.name for c in result.checks}
         assert {"Python", "models", "data", "API Server", ".env"} <= names

@@ -50,9 +50,9 @@ class GenerationContext:
     prompt: str
     prompt_tokens: np.ndarray
     system_prompt: str = ""
-    temperature: float = 0.8
+    temperature: float = 0.7
     top_k: int = 40
-    top_p: float = 0.9
+    top_p: float = 0.85
     max_tokens: int = 2048
     stop_tokens: list[str] = field(default_factory=list)
     reasoning_depth: str = "balanced"
@@ -60,7 +60,7 @@ class GenerationContext:
     emotional_context: dict[str, Any] = field(default_factory=dict)
     soul_overrides: dict[str, Any] = field(default_factory=dict)
     reasoning_chain: list[str] = field(default_factory=list)
-    repetition_penalty: float = 1.2
+    repetition_penalty: float = 1.15
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
 
@@ -545,7 +545,7 @@ class SloEngine:
             "max_tokens": context.max_tokens
             if "max_tokens" not in context.soul_overrides
             else context.soul_overrides.get("max_tokens", gen.max_tokens),
-            "repetition_penalty": getattr(context, "repetition_penalty", 1.0),
+            "repetition_penalty": getattr(context, "repetition_penalty", 1.15),
             "frequency_penalty": getattr(context, "frequency_penalty", 0.0),
             "presence_penalty": getattr(context, "presence_penalty", 0.0),
         }
@@ -587,7 +587,7 @@ class SloEngine:
         include_reasoning: bool = True,
         return_reasoning: bool = False,
         user_id: str | None = None,
-        repetition_penalty: float = 1.0,
+        repetition_penalty: float = 1.15,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
         **kwargs,
@@ -657,7 +657,7 @@ class SloEngine:
             prompt=prompt,
             prompt_tokens=np.array([[0]], dtype=np.int64),
             system_prompt=system_prompt or self._build_system_prompt(),
-            temperature=temperature if temperature is not None else 0.8,
+            temperature=temperature if temperature is not None else 0.7,
             top_k=top_k if top_k is not None else self._soul.generation.top_k,
             top_p=top_p if top_p is not None else self._soul.generation.top_p,
             max_tokens=max_new_tokens
@@ -724,7 +724,7 @@ class SloEngine:
                             temperature=gen_params.get("temperature", 0.8),
                             top_k=gen_params.get("top_k", 40),
                             top_p=gen_params.get("top_p", 0.9),
-                            repetition_penalty=gen_params.get("repetition_penalty", 1.0),
+                            repetition_penalty=gen_params.get("repetition_penalty", 1.15),
                             frequency_penalty=gen_params.get("frequency_penalty", 0.0),
                             presence_penalty=gen_params.get("presence_penalty", 0.0),
                             generated_ids=generated_arr,
@@ -1529,9 +1529,9 @@ class SloEngine:
         self,
         prompt: str,
         max_new_tokens: int = 50,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         top_k: int = 40,
-        top_p: float = 0.9,
+        top_p: float = 0.85,
         topn: int = 5,
         **kwargs,
     ) -> list[dict]:

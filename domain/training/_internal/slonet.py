@@ -7900,7 +7900,13 @@ class WarmupCosineScheduler(SloLRScheduler):
 
     def get_lr(self):
         if self.last_epoch < self.warmup_steps:
-            warmup_factor = float(self.last_epoch + 1) / float(max(1, self.warmup_steps))
+            # Warmup starts at 0.0 (SloLRScheduler.__init__ steps to
+            # last_epoch=0 before any lr is read) and reaches base_lr exactly
+            # at warmup_steps. The "+1" drift in 68c427af5 ("startup
+            # optimization suggestions" — a drive-by) started warmup at
+            # 0.1x base and hit base a step early; test_warmup_linear_then_
+            # cosine pins the original contract.
+            warmup_factor = float(self.last_epoch) / float(max(1, self.warmup_steps))
             return [base_lr * warmup_factor for base_lr in self.base_lrs]
         progress = float(self.last_epoch - self.warmup_steps) / float(
             max(1, self.total_steps - self.warmup_steps)

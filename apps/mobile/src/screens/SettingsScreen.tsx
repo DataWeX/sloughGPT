@@ -633,11 +633,11 @@ export function SettingsScreen() {
               <Text fontSize={15} fontWeight="600" color="$color">Chat Defaults</Text>
             </XStack>
             {[
-              {label: 'Temperature', value: settings.temperature.toFixed(1), key: 'temperature', options: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2]},
+              {label: 'Temperature', value: settings.temperature.toFixed(1), key: 'temperature', options: [0.2, 0.4, 0.6, 0.7, 0.8, 1.0, 1.2]},
               {label: 'Max Tokens', value: String(settings.maxTokens), key: 'maxTokens', options: [128, 256, 512, 1024], exact: true},
-              {label: 'Top-P', value: settings.topP.toFixed(1), key: 'topP', options: [0.7, 0.8, 0.9, 1.0]},
-              {label: 'Top-K', value: String(settings.topK), key: 'topK', options: [20, 50, 100, 200], exact: true},
-              {label: 'Repetition Penalty', value: settings.repetitionPenalty.toFixed(1), key: 'repetitionPenalty', options: [1.0, 1.1, 1.2, 1.5, 2.0]},
+              {label: 'Top-P', value: settings.topP.toFixed(2).replace(/0$/, ''), key: 'topP', options: [0.7, 0.8, 0.85, 0.9, 1.0]},
+              {label: 'Top-K', value: String(settings.topK), key: 'topK', options: [20, 40, 50, 100, 200], exact: true},
+              {label: 'Repetition Penalty', value: settings.repetitionPenalty.toFixed(2).replace(/0$/, ''), key: 'repetitionPenalty', options: [1.0, 1.1, 1.15, 1.2, 1.5, 2.0]},
             ].map(({label, value, key, options, exact}) => (
               <YStack key={key} gap={6}>
                 <XStack justifyContent="space-between" alignItems="center">
@@ -648,7 +648,7 @@ export function SettingsScreen() {
                   {options.map(v => {
                     const match = exact
                       ? (settings as any)[key] === v
-                      : Math.abs((settings as any)[key] - v) < 0.05;
+                      : Math.round((settings as any)[key] * 100) / 100 === v;
                     return (
                       <YStack
                         key={String(v)}
@@ -660,7 +660,7 @@ export function SettingsScreen() {
                         pressStyle={{opacity: 0.8, scale: 0.97}}
                         onPress={() => { triggerHaptic('selection'); settings.update({[key]: v}); }}>
                         <Text fontSize={11} fontWeight="600" color={match ? 'white' : '$color11'}>
-                          {exact ? String(v) : v.toFixed(1)}
+                          {exact ? String(v) : v.toFixed(2).replace(/0$/, '')}
                         </Text>
                       </YStack>
                     );

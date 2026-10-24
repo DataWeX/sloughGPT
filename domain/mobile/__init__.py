@@ -5,6 +5,8 @@ Public API:
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 from domain.mobile._internal.notifications import (
     DeviceToken,
     NotificationPayload,

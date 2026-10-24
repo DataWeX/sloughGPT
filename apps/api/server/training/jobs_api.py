@@ -339,21 +339,20 @@ async def export_feedback_pairs(request: ExportTextRequest):
 
     ctrl = get_feedback_controller()
     pairs = []
-    feedback_file = ctrl.feedback_dir / "feedback.jsonl"
-    if feedback_file.exists():
-        with open(feedback_file) as f:
-            for line in f:
-                try:
-                    fb = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if fb.get("user_message") and fb.get("assistant_response"):
-                    if fb.get("quality", 0) < request.min_quality:
-                        continue
-                    pairs.append(fb)
-                    if len(pairs) >= request.target_count:
-                        break
-    output_file = ctrl.feedback_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+    # Feedback records live in MogDB since the controller refactor (the
+    # filesystem ``feedback_dir`` no longer exists) — read them from the
+    # controller's collection, preserving the original filter semantics:
+    # conversational pairs only, min_quality threshold, cap at target_count.
+    for fb in ctrl.feedback_collection.find():
+        if fb.get("user_message") and fb.get("assistant_response"):
+            if fb.get("quality", 0) < request.min_quality:
+                continue
+            pairs.append(fb)
+            if len(pairs) >= request.target_count:
+                break
+    export_dir = Path(ctrl.repo_root) / "data" / "training_exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    output_file = export_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
     with open(output_file, "w") as f:
         json.dump(pairs, f, indent=2)
     return {"pairs_count": len(pairs), "file": str(output_file), "status": "exported"}

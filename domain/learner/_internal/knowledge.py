@@ -1,6 +1,8 @@
 """Backward-compatibility shim — imports from the new ``domain.knowledge`` package."""
 from __future__ import annotations
 
+from __future__ import annotations
+
 from domain.knowledge import (
     DataFilter,
     KnowledgeFact,

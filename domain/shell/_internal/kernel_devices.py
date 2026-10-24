@@ -78,6 +78,36 @@ class DeviceDriver:
         """Execute command on hardware. Subclass this."""
         raise NotImplementedError(f"{self._name}: ioctl '{command}' not implemented")
 
+    def call(self, method: str, *args: Any) -> Any:
+        """Name-based dispatch — the DeviceBus face of the ioctl contract.
+
+        A driver speaks ioctl; the VM's DeviceBus speaks call(). They are the
+        same operation with opposite conventions, so a driver gets both: this
+        unwraps ioctl() so the device is reachable from either seam instead of
+        only from the fd-based one.
+
+        The dialects differ in case — IoctlCommand and every kernel driver
+        match uppercase ("INFO", "LOAD"), the VM reaches devices by lowercase
+        name ("info") — so the name is translated here, once, rather than each
+        driver growing its own alias table.
+
+        Success returns the value; failure raises, because the caller of call()
+        is expected to act on it — handing back a SyscallResult nobody inspects
+        would turn a device fault into silence.
+        """
+        from .vm import DeviceFault  # deferred: vm.py imports this module
+
+        cmd = method.upper() if isinstance(method, str) else method
+        try:
+            result = self.ioctl(cmd, *args)
+        except DeviceFault:
+            raise
+        except Exception as exc:  # noqa: BLE001 - a leaking ioctl becomes a fault
+            raise DeviceFault(f"{self._name}: {method} raised: {exc}") from exc
+        if not result.success:
+            raise DeviceFault(f"{self._name}: {method} failed: {result.error}")
+        return result.value
+
     def info(self) -> dict:
         return {
             "name": self._name,
@@ -147,11 +177,40 @@ class DeviceTable:
             self._device_types[device.name] = device_type
             return True
 
-    def unregister(self, name: str) -> bool:
-        """Unregister device."""
+    def alias(self, name: str, target: str) -> bool:
+        """Point an extra name at an already-registered device.
+
+        One driver instance, several node names — both open as fds and both
+        answer ioctls, so an alias is indistinguishable from the original.
+        """
         with self._lock:
-            self._devices.pop(name, None)
+            dev = self._devices.get(target)
+            if dev is None:
+                return False
+            if name in self._devices and self._devices[name] is not dev:
+                return False
+            self._devices[name] = dev
+            self._device_types[name] = self._device_types.get(target, 0)
+            return True
+
+    def unregister(self, name: str) -> bool:
+        """Unregister device. Returns False if the name is not registered.
+
+        Open fds bound to the device are freed with it: a dangling fd must
+        never dispatch ioctls into a device the table no longer manages (the
+        pre-baseboard implementation closed the device here for the same
+        reason). Aliases share one driver instance, so fds stay open while
+        any surviving name still maps to it.
+        """
+        with self._lock:
+            dev = self._devices.pop(name, None)
+            if dev is None:
+                return False
             self._device_types.pop(name, None)
+            if not any(d is dev for d in self._devices.values()):
+                for fd in range(self._max_fds):
+                    if self._fd_device[fd] is dev:
+                        self._free_fd(fd)
             return True
 
     def get(self, name: str) -> DeviceDriver | None:
@@ -184,6 +243,17 @@ class DeviceTable:
             self._free_fd(fd)
             return True
 
+    def device_for_fd(self, fd: int) -> DeviceDriver | None:
+        """Resolve an open fd to its device, or None if it is not open.
+
+        The fd table's own lookup, exposed so a caller can dispatch by name on
+        an open fd without reaching into ``_fd_device`` and re-checking bounds
+        and the open bitmap itself.
+        """
+        if fd < 0 or fd >= self._max_fds or not self._fd_is_open(fd):
+            return None
+        return self._fd_device[fd]
+
     # ── ioctl dispatch ────────────────────────────────────────────────────
 
     def ioctl(self, fd: int, command: str, *args: Any) -> SyscallResult:
@@ -200,8 +270,15 @@ class DeviceTable:
     # ── Info ──────────────────────────────────────────────────────────────
 
     def list_devices(self) -> list[dict]:
-        """List all registered devices."""
-        return [d.info() for d in self._devices.values()]
+        """List registered devices — aliases collapse to one entry."""
+        seen: set[int] = set()
+        devices: list[dict] = []
+        for device in self._devices.values():
+            if id(device) in seen:
+                continue
+            seen.add(id(device))
+            devices.append(device.info())
+        return devices
 
     def stats(self) -> dict:
         """Get table stats."""
@@ -236,9 +313,34 @@ class DeviceManager:
         self._devices: dict[str, DeviceDriver] = {}
 
     def register(self, device: DeviceDriver, device_type: int = 0) -> bool:
-        """Register device — compatible with old interface."""
+        """Register device — compatible with old interface.
+
+        The table decides: mirror into ``_devices`` only on success, or a
+        rejected duplicate would clobber the entry ``get()`` reports while the
+        table keeps serving the original driver.
+        """
+        if not self.table.register(device, device_type):
+            return False
         self._devices[device.name] = device
-        return self.table.register(device, device_type)
+        return True
+
+    def alias(self, name: str, target: str) -> bool:
+        """Register an alternate node name for an existing device.
+
+        ``llm`` and ``embedding`` resolve to the same driver instance as
+        ``ai``: one registry entry, several names.
+        """
+        dev = self._devices.get(target)
+        if dev is None:
+            return False
+        if name in self._devices and self._devices[name] is not dev:
+            return False
+        self._devices[name] = dev
+        self.table.alias(name, target)
+        add_alias = getattr(dev, "add_alias", None)
+        if callable(add_alias):
+            add_alias(name)
+        return True
 
     def unregister(self, name: str) -> bool:
         """Unregister device."""
@@ -265,6 +367,26 @@ class DeviceManager:
     def ioctl(self, fd: int, command: str, *args) -> SyscallResult:
         """Issue ioctl on fd."""
         return self.table.ioctl(fd, command, *args)
+
+    def call(self, fd: int, method: str, *args) -> Any:
+        """Dispatch by name on an open fd — DeviceManager's DeviceBus face.
+
+        Mirrors DeviceBus.call(device, method, *args) in name and arity while
+        keeping this seam's handle (an fd, like ioctl(fd, ...)), so both seams
+        are driven the same way. Returns the value and raises DeviceFault on
+        failure, where ioctl() hands back a SyscallResult and never raises.
+        """
+        from .vm import DeviceFault  # deferred: vm.py imports this module
+
+        device = self.table.device_for_fd(fd)
+        if device is None:
+            raise DeviceFault(f"bad fd: {fd}")
+        return device.call(method, *args)
+
+    def info(self, fd: int) -> dict:
+        """Device info for an open fd — mirrors DeviceBus.info(handle)."""
+        device = self.table.device_for_fd(fd)
+        return device.info() if device is not None else {}
 
     def list_devices(self) -> list[dict]:
         """List all registered devices."""

@@ -16,9 +16,9 @@ class TestGenerationContext:
         ctx = GenerationContext(prompt="hello", prompt_tokens=np.array([[1]]))
         assert ctx.prompt == "hello"
         assert ctx.system_prompt == ""
-        assert ctx.temperature == 0.8
+        assert ctx.temperature == 0.7
         assert ctx.top_k == 40
-        assert ctx.top_p == 0.9
+        assert ctx.top_p == 0.85
         assert ctx.max_tokens == 2048
         assert ctx.stop_tokens == []
         assert ctx.reasoning_depth == "balanced"
@@ -26,7 +26,7 @@ class TestGenerationContext:
         assert ctx.emotional_context == {}
         assert ctx.soul_overrides == {}
         assert ctx.reasoning_chain == []
-        assert ctx.repetition_penalty == 1.2
+        assert ctx.repetition_penalty == 1.15
         assert ctx.frequency_penalty == 0.0
         assert ctx.presence_penalty == 0.0
 
@@ -226,15 +226,15 @@ class TestGetGenerationParams:
         engine = SloEngine()
         ctx = GenerationContext(prompt="t", prompt_tokens=np.array([[0]]))
         params = engine._get_generation_params(ctx)
-        assert params["temperature"] == 0.8
+        assert params["temperature"] == 0.7
         assert params["top_k"] == 40
-        assert params["top_p"] == 0.9
+        assert params["top_p"] == 0.85
 
     def test_deep_reasoning(self):
         engine = SloEngine()
         ctx = GenerationContext(prompt="t", prompt_tokens=np.array([[0]]), reasoning_depth="deep")
         params = engine._get_generation_params(ctx)
-        assert params["temperature"] < 0.8
+        assert params["temperature"] < 0.7
 
     def test_creative_reasoning(self):
         engine = SloEngine()
@@ -242,14 +242,14 @@ class TestGetGenerationParams:
             prompt="t", prompt_tokens=np.array([[0]]), reasoning_depth="creative"
         )
         params = engine._get_generation_params(ctx)
-        assert params["temperature"] > 0.8
+        assert params["temperature"] > 0.7
 
     def test_high_warmth(self):
         engine = SloEngine()
         engine._soul.personality.warmth = 0.8
         ctx = GenerationContext(prompt="t", prompt_tokens=np.array([[0]]))
         params = engine._get_generation_params(ctx)
-        assert params["temperature"] >= 0.8
+        assert params["temperature"] > 0.7
 
     def test_soul_overrides(self):
         engine = SloEngine()

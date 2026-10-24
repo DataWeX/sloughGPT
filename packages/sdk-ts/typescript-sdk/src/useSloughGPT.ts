@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  SloughGPTClient,
+import type {
   SloughGPTConfig,
   HealthStatus,
   GenerateRequest,
   ChatRequest,
   ChatMessage,
 } from './client';
+import { SloughGPTClient } from './client';
 
 export interface UseSloughGPTOptions extends SloughGPTConfig {
   autoConnect?: boolean;

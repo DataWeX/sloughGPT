@@ -425,7 +425,7 @@ class NumpyEngine:
         self,
         prompt: str,
         max_new_tokens: int = 50,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         top_k: int = 40,
         use_kv_cache: bool = True,
     ) -> str:
@@ -500,7 +500,7 @@ class NumpyEngine:
         self,
         prompt: str,
         max_new_tokens: int = 50,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         top_k: int = 40,
     ) -> AsyncGenerator[str, None]:
         """Generate text token-by-token (async generator).

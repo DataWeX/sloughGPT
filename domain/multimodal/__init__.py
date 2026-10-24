@@ -6,6 +6,8 @@ Public API:
 """
 from __future__ import annotations
 
+from __future__ import annotations
+
 from domain.multimodal._internal.config import MultiModalConfig
 from domain.multimodal._internal.diffusion import LatentDiffusionModel
 from domain.multimodal._internal.engine import ReplayBuffer

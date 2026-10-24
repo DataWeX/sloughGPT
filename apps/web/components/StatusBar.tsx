@@ -8,6 +8,7 @@ import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
 import { useErrorStream } from '@/hooks/useErrorStream'
+import { revalidateAll } from '@/lib/cache'
 import { cn, Button, Tooltip, TooltipTrigger, TooltipContent, IconX, Spinner } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
@@ -80,7 +81,9 @@ export function StatusBar() {
     setRetrying(true)
     try {
       await apiGet('/health', undefined, { signal: AbortSignal.timeout(5000), silent: true })
-      window.location.reload()
+      // Health is back: revalidate cached views instead of reloading the whole
+      // document (which threw away drafts, open panels and in-flight streams).
+      revalidateAll()
     } catch { /* will be picked up by existing monitor */ }
     finally { setTimeout(() => setRetrying(false), 1000) }
   }, [])

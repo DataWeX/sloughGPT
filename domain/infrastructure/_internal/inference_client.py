@@ -127,7 +127,7 @@ class InferenceClient:
         self,
         messages: list[dict[str, str]],
         max_tokens: int = 512,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         **kwargs,
     ) -> str:
         """Non-streaming chat — returns complete response string."""
@@ -141,7 +141,7 @@ class InferenceClient:
                 "temperature": temperature,
                 "top_k": kwargs.get("top_k"),
                 "top_p": kwargs.get("top_p"),
-                "repetition_penalty": kwargs.get("repetition_penalty", 1.0),
+                "repetition_penalty": kwargs.get("repetition_penalty", 1.15),
                 "session_id": kwargs.get("session_id"),
             },
         }
@@ -156,7 +156,7 @@ class InferenceClient:
         self,
         messages: list[dict[str, str]],
         max_tokens: int = 512,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         cancel_event=None,
         session_id: str | None = None,
         **kwargs,
@@ -173,7 +173,7 @@ class InferenceClient:
                 "temperature": temperature,
                 "top_k": kwargs.get("top_k"),
                 "top_p": kwargs.get("top_p"),
-                "repetition_penalty": kwargs.get("repetition_penalty", 1.0),
+                "repetition_penalty": kwargs.get("repetition_penalty", 1.15),
                 "session_id": session_id,
             },
         }

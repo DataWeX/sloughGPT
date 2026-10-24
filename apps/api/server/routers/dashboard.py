@@ -2,7 +2,7 @@
 Dashboard Router — SSE live stream and REST endpoint for the CLI monitor.
 
 Aggregates health data, active processes, and recent events into a single
-stream consumed by ``sloughgpt monitor``.
+stream consumed by ``sloughgpt logs --dashboard``.
 
 Endpoints:
     GET /dashboard/stream  — SSE: full snapshot every 2 seconds

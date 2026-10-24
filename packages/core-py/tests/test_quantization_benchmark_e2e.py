@@ -70,22 +70,26 @@ def _result(bench, name):
 class TestEndToEndInt8:
     """Full in-process quick int8 benchmark run."""
 
+    @pytest.mark.slow
     def test_all_tests_pass(self, int8_bench):
         assert [r.name for r in int8_bench.results] == EXPECTED_TEST_NAMES
         assert all(r.passed for r in int8_bench.results)
         assert len(int8_bench.results) == 7
 
+    @pytest.mark.slow
     def test_int8_weight_compression(self, int8_bench):
         metrics = _result(int8_bench, "memory_usage").metrics
         compression = metrics["weight_compression"]
         assert 3.5 <= compression <= 5.5, f"int8 compression {compression}x != ~4x"
         assert metrics["quantized_layers"] > 0
 
+    @pytest.mark.slow
     def test_int8_quality_floor(self, int8_bench):
         metrics = _result(int8_bench, "quality_degradation").metrics
         assert metrics["avg_logit_cosine"] >= 0.95
         assert metrics["avg_token_agreement"] >= 0.0
 
+    @pytest.mark.slow
     def test_throughput_results_carry_metrics(self, int8_bench):
         metrics = _result(int8_bench, "throughput_vs_length").metrics
         assert len(metrics) == 3  # quick mode lengths
@@ -94,6 +98,7 @@ class TestEndToEndInt8:
             assert point["non_quantized_tps"] > 0
             assert point["quantized_tps"] > 0
 
+    @pytest.mark.slow
     def test_json_report_shape(self, int8_bench):
         data = json.loads(int8_bench.to_json())
         assert data["tiny"] is True
@@ -105,6 +110,7 @@ class TestEndToEndInt8:
         assert all(r["passed"] for r in data["results"])
         assert all("metrics" in r and "details" in r for r in data["results"])
 
+    @pytest.mark.slow
     def test_json_header_contract(self, int8_bench):
         """JSON run includes device and timestamp fields per the output contract."""
         data = json.loads(int8_bench.to_json())
@@ -112,6 +118,7 @@ class TestEndToEndInt8:
         assert isinstance(data["timestamp"], str) and data["timestamp"]
         assert data["timestamp"].endswith("Z")
 
+    @pytest.mark.slow
     def test_markdown_report(self, int8_bench, tmp_path):
         path = int8_bench.write_report(tmp_path / "report.md")
         assert path.exists()
@@ -435,6 +442,10 @@ class TestBaselineCompare:
         assert result["regressions"] == []
 
 
+# Every test here shells out via _run (subprocess timeout=600); the global
+# pytest-timeout default of 120s (ca167dbd) kills legitimately running
+# benchmark CLIs under load — part of Run5's timeout cluster (card 56b49cf1).
+@pytest.mark.timeout(600)
 class TestModelsCli:
     """CLI-level --models multi-model comparison."""
 
@@ -492,6 +503,7 @@ class TestModelsCli:
 class TestCsvOutput:
     """--csv export: one row per run."""
 
+    @pytest.mark.slow
     def test_csv_rows_for_each_run(self):
         """Multi-precision run yields one CSV row per run with header."""
         bench8 = bq.QuantizationBenchmark(tiny=True, quick=True, bits=8)
@@ -585,6 +597,7 @@ class TestTinyModelInvariants:
         ok_low, _ = bench._speed_gate(0.05)
         assert ok_low is False
 
+    @pytest.mark.slow
     def test_quantized_linear_uses_quantized_weights(self, int8_bench):
         quantized = sum(
             1
@@ -628,6 +641,7 @@ class TestCachedModelDiscovery:
 class TestWeightCosines:
     """Test per-layer weight-fidelity cosine."""
 
+    @pytest.mark.slow
     def test_int8_weight_cosine_near_one(self, int8_bench):
         """int8 per-layer weight cosine should be >= 0.99."""
         nq_layers = walk_slo_linears(int8_bench.model)
@@ -648,12 +662,14 @@ class TestWeightCosines:
             cos = bench._weight_cosine(nq_layers[name], q_layers[name])
             assert cos >= 0.95, f"{name} cosine {cos:.4f}"
 
+    @pytest.mark.slow
     def test_identical_layers_cosine_is_one(self, int8_bench):
         """Comparing a layer with itself yields cosine 1.0."""
         layer_name = next(iter(walk_slo_linears(int8_bench.model)))
         m = walk_slo_linears(int8_bench.model)[layer_name]
         assert int8_bench._weight_cosine(m, m) == 1.0
 
+    @pytest.mark.slow
     def test_quantized_weights_dequantize_to_finite(self, int8_bench):
         """Dequantized weights are finite and shape-match the originals."""
         nq_layers = walk_slo_linears(int8_bench.model)
@@ -815,6 +831,7 @@ class TestRecommendations:
         }
         assert bq._run_nested_metric(run, "cold_vs_warm", "cold_s") == 9.9
 
+    @pytest.mark.slow
     def test_real_pair_yields_one_recommendation(self):
         """A real int8+int4 tiny pair produces one recommendation for tiny."""
         bench8 = bq.QuantizationBenchmark(tiny=True, quick=True, bits=8)
@@ -1001,6 +1018,11 @@ class TestBaseline:
         assert out["deltas"]["tiny:int8"]["cold_start_s"]["regressed"] is False
         assert out["deltas"]["tiny:int8"]["warm_median_s"]["delta"] == 1.5
 
+    # _run's subprocess allows 600s; the global 120s pytest-timeout was
+    # killing these mid-benchmark (Run5 "44 timeouts" cluster, card
+    # 56b49cf1). Timeout marks go on the CLI-spawning tests only so the
+    # pure-python compare tests keep the fast 120s hang ceiling.
+    @pytest.mark.timeout(600)
     def test_baseline_cli_creates_then_validates(self, tmp_path):
         """First run writes the baseline; second run passes with no regressions."""
         bl = tmp_path / "bl.json"
@@ -1012,6 +1034,7 @@ class TestBaseline:
         assert second.returncode == 0, second.stderr
         assert "No regressions vs baseline" in second.stdout
 
+    @pytest.mark.timeout(600)
     def test_baseline_cli_json_block(self, tmp_path):
         """--baseline --json emits a baseline block with exists flag."""
         bl = tmp_path / "bl2.json"
@@ -1023,6 +1046,7 @@ class TestBaseline:
         assert data["baseline"]["exists"] is True
         assert data["baseline"]["regressions"] == []
 
+    @pytest.mark.timeout(600)
     def test_baseline_cli_exit_1_on_regression(self, tmp_path):
         """A fabricated high-compression baseline forces exit code 1."""
         bl = tmp_path / "bl3.json"
@@ -1047,6 +1071,7 @@ class TestBaseline:
         assert result.returncode == 1
         assert "Regression" in result.stdout
 
+    @pytest.mark.timeout(600)
     def test_baseline_report_section(self, tmp_path):
         """--report writes the baseline section."""
         bl = tmp_path / "bl4.json"
@@ -1059,6 +1084,7 @@ class TestBaseline:
 class TestPerplexity:
     """Teacher-forced perplexity quality metric."""
 
+    @pytest.mark.slow
     def test_tiny_quality_carries_perplexity(self):
         """Real tiny run quality metrics include NQ/Q perplexity and ratio."""
         bench = bq.QuantizationBenchmark(tiny=True, quick=True, bits=8)
@@ -1071,6 +1097,7 @@ class TestPerplexity:
         assert "nq_perplexity" in m["per_prompt"]["0"]
         assert m["per_prompt"]["0"]["q_perplexity"] > 0
 
+    @pytest.mark.slow
     def test_perplexity_is_deterministic(self):
         """Same model + prompt yields identical perplexity across runs."""
         bench_a = bq.QuantizationBenchmark(tiny=True, quick=True, bits=8)

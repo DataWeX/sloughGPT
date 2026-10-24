@@ -56,8 +56,8 @@ class TestGenerateRequest(unittest.TestCase):
         req = GenerateRequest(prompt="Hello")
         self.assertEqual(req.prompt, "Hello")
         self.assertEqual(req.max_new_tokens, 100)
-        self.assertEqual(req.temperature, 0.8)
-        self.assertEqual(req.top_p, 0.9)
+        self.assertEqual(req.temperature, 0.7)
+        self.assertEqual(req.top_p, 0.85)
 
     def test_custom_values(self):
         """Test custom request values."""

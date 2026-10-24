@@ -15,10 +15,10 @@ class TestGenerationParams:
     def test_defaults(self):
         gp = GenerationParams()
         assert gp.temperature == 0.7
-        assert gp.top_p == 0.9
+        assert gp.top_p == 0.85
         assert gp.top_k == 40
         assert gp.max_tokens == 2048
-        assert gp.repeat_penalty == 1.1
+        assert gp.repeat_penalty == 1.15
 
     def test_to_dict(self):
         d = GenerationParams().to_dict()

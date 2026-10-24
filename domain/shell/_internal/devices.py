@@ -15,6 +15,7 @@ import random
 import re
 import string
 from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("slo.shell.devices")
 
@@ -23,7 +24,14 @@ logger = logging.getLogger("slo.shell.devices")
 
 
 class AIDevice:
-    """Base class for AI device nodes. Subclass and register via DeviceManager."""
+    """Base class for AI device nodes. Subclass and register via DeviceManager.
+
+    A path device (read/write) that also carries the same three-face contract
+    as every other device: ``info()`` for introspection, ``call()`` for
+    name-based dispatch, ``ioctl()`` for the kernel face. The read/write pair
+    is what makes it a device *node*; the other three are what make it a
+    device the rest of the system can reach the same way it reaches any other.
+    """
 
     name: str = ""
     description: str = ""
@@ -35,6 +43,47 @@ class AIDevice:
     def write(self, data: str) -> str:
         """Write to device. Returns response text (printed to stdout)."""
         raise NotImplementedError
+
+    # ── Common device contract: info / call / ioctl ───────────────────────
+
+    def info(self) -> dict:
+        """Device introspection — every seam renders this, none tolerated its absence."""
+        return {
+            "name": self.name,
+            "type": "ai",
+            "description": self.description,
+        }
+
+    def call(self, method: str, *args: Any) -> Any:
+        """Name-based dispatch: the operations a path device actually has.
+
+        ``call("write", data)`` does what ``write(path, data)`` does underneath,
+        so an AI device node is drivable by name like any other device instead
+        of being reachable only through the path-based read/write seam.
+        """
+        from .vm import DeviceFault  # deferred: vm.py is heavier than this module
+
+        if method == "info":
+            return self.info()
+        if method == "read":
+            return self.read(*(args or ("",)))
+        if method == "write":
+            if not args:
+                raise DeviceFault(f"/dev/{self.name}: write requires data")
+            return self.write(args[0])
+        raise DeviceFault(f"/dev/{self.name}: device does not support: {method}")
+
+    def ioctl(self, command: str, *args: Any):
+        """Kernel face of the same contract: SyscallResult, never raises."""
+        from .kernel_syscall import SyscallResult  # deferred: keep this module light
+        from .vm import DeviceFault
+
+        try:
+            return SyscallResult.ok(self.call(command, *args))
+        except DeviceFault as exc:
+            return SyscallResult.fail(str(exc))
+        except Exception as exc:  # noqa: BLE001 - ioctl reports, it does not raise
+            return SyscallResult.fail(f"{command} failed: {exc}")
 
 
 # ── Device Implementations ─────────────────────────────────────────────────
@@ -301,6 +350,26 @@ class DeviceManager:
             for n in self.names
         ]
         return "\n".join(lines)
+
+    def call(self, name: str, method: str, *args) -> Any:
+        """Dispatch by name on the path seam — the common device call.
+
+        Mirrors ``DeviceSystem.call(name, method, *args)`` in handle, name and
+        arity, so a caller does not have to know which seam a device was
+        registered on. Raises DeviceFault for an unknown node or an
+        unsupported operation, the same contract the other seams hold.
+        """
+        from .vm import DeviceFault  # deferred: vm.py is heavier than this module
+
+        device = self._devices.get(name)
+        if device is None:
+            raise DeviceFault(f"no such device: {name}")
+        return device.call(method, *args)
+
+    def info(self, name: str) -> dict:
+        """Device info by name — mirrors DeviceBus.info(handle) on this seam."""
+        device = self._devices.get(name)
+        return device.info() if device is not None else {}
 
     def read(self, path: str, args: str = "") -> str:
         """Read from a device by path (e.g. /dev/llm or /dev/proc/uptime)."""

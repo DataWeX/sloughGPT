@@ -414,6 +414,15 @@ class PlannerStore:
         self._atomic_write("\n".join(lines) + "\n" if lines else "", expect=expect)
 
     def load_board(self) -> Board:
+        """Load every card, coercing undeclared columns to the fallback.
+
+        The JSONL is hand-editable by design, so defense belongs on READ too
+        (card b538ecbd): a retired or misspelled spelling — ``in-progress``,
+        ``TODO`` — is downgraded to ``todo`` with a warning instead of
+        silently yielding a card that header-driven readers (board show)
+        never render while stats counts it. Write paths reject the same
+        spelling via :meth:`validate_column`.
+        """
         lines = self._read_board_lines()
         board = Board()
         valid: list[str] | None = None
@@ -423,30 +432,21 @@ class PlannerStore:
                 board.columns = obj["columns"]
                 valid = [c.get("name") for c in obj["columns"]]
             elif obj.get("id") and obj.get("title"):
-                card = Card.from_dict(obj)
-                if valid is None:
-                    # card lines before any header (or headerless file):
-                    # fall back to the board vocabulary reader once.
-                    valid = self.column_names()
-                if card.column not in valid:
-                    # The board file is hand-editable by design, so a
-                    # hand-typed column (e.g. the retired 'in-progress')
-                    # would otherwise make the card silently invisible:
-                    # renderers iterate the header columns only (card
-                    # b538ecbd). Re-home it under a declared column
-                    # instead of raising — one typo must not break the
-                    # whole board.
-                    target = "todo" if "todo" in valid else valid[0]
-                    logger.warning(
-                        "Card %r has undeclared column %r (valid: %s); "
-                        "showing it under %r",
-                        card.id,
-                        card.column,
-                        valid,
-                        target,
-                    )
-                    card.column = target
-                board.cards.append(card)
+                board.cards.append(Card.from_dict(obj))
+        declared = [c.get("name") for c in board.columns]
+        declared_set = set(declared)
+        fallback = "todo" if "todo" in declared_set else (declared[0] if declared else "todo")
+        for card in board.cards:
+            if card.column not in declared_set:
+                logger.warning(
+                    "Card %s has undeclared column %r — coercing to %r "
+                    "(declared: %s)",
+                    card.id,
+                    card.column,
+                    fallback,
+                    ", ".join(declared),
+                )
+                card.column = fallback
         return board
 
     def column_names(self) -> list[str]:
@@ -477,8 +477,10 @@ class PlannerStore:
         The single source of truth for the column vocabulary: every write
         path (CLI add/move, ``update_card``, sync) funnels through here, so a
         retired or misspelled spelling — ``in_progress``, ``in-progress``,
-        ``TODO`` — can never enter the board again. Reads are untouched:
-        listing a stale column still filters, it just cannot be written.
+        ``TODO`` — can never enter the board again. Reads meet the same
+        vocabulary at the boundary instead of raising: ``load_board()``
+        coerces an undeclared column to the fallback and warns (stale data
+        stays visible and consistently counted, never silently filtered).
         """
         valid = self.column_names()
         if column not in valid:
@@ -623,11 +625,19 @@ class PlannerStore:
         for card in board.cards:
             by_column[card.column] = by_column.get(card.column, 0) + 1
             by_priority[card.priority] = by_priority.get(card.priority, 0) + 1
+        ids = [c.id for c in board.cards]
+        titles = [c.title for c in board.cards]
         return {
             "total": len(board.cards),
             "byColumn": by_column,
             "byPriority": by_priority,
             "columns": len(board.columns),
+            # Integrity diagnostics: the hash chain is position-based and
+            # stays green while id/title duplication exists (card 08baf13f),
+            # so surface both as counts — 0/0 = healthy board.
+            "uniqueIds": len(set(ids)),
+            "dupIdLines": len(ids) - len(set(ids)),
+            "titleCollisions": len(titles) - len(set(titles)),
         }
 
     # ── Notes ───────────────────────────────────────────────────────────
@@ -885,7 +895,9 @@ class PlannerStore:
 
     def sync(self) -> tuple[int, int, int]:
         """Reconcile notes ↔ board. Returns (added, updated, total)."""
-        notes = self.list_notes(limit=9999)
+        from .sync import canonical_notes
+
+        notes = canonical_notes(self.list_notes(limit=9999))
         board = self.load_board()
         existing = {c.title: c for c in board.cards}
         added = 0
@@ -897,7 +909,7 @@ class PlannerStore:
             card = existing.get(title)
 
             if card is None:
-                self.add_card(
+                card = self.add_card(
                     title=title,
                     column=col,
                     tags=list(note.tags or []),
@@ -906,6 +918,7 @@ class PlannerStore:
                     sprint=note.sprint or "",
                     gh=note.gh or "",
                 )
+                existing[title] = card
                 added += 1
                 continue
 

@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, cn } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -17,11 +17,6 @@ type CollectionName = typeof COLLECTIONS[number]
 interface DocEntry {
   _id: string
   [key: string]: unknown
-}
-
-interface CollectionMeta {
-  name: string
-  count: number
 }
 
 export default function DocstorePage() {
@@ -130,9 +125,22 @@ export default function DocstorePage() {
     }
   }, [selected, addToast])
 
-  const filtered = searchQuery
-    ? docs.filter(d => JSON.stringify(d).toLowerCase().includes(searchQuery.toLowerCase()))
-    : docs
+  // Match string values only (incl. _id) — never JSON structural tokens,
+  // so searching "{" or "," doesn't match every document.
+  const filtered = useMemo(() => {
+    if (!searchQuery.trim()) return docs
+    const q = searchQuery.toLowerCase()
+    const collectStrings = (v: unknown, out: string[]): void => {
+      if (typeof v === 'string') out.push(v.toLowerCase())
+      else if (Array.isArray(v)) v.forEach(x => collectStrings(x, out))
+      else if (v && typeof v === 'object') Object.values(v).forEach(x => collectStrings(x, out))
+    }
+    return docs.filter(d => {
+      const haystack: string[] = []
+      collectStrings(d, haystack)
+      return haystack.some(s => s.includes(q))
+    })
+  }, [docs, searchQuery])
 
   const pageSize = 50
   const totalPages = Math.ceil(filtered.length / pageSize)

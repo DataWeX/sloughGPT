@@ -30,10 +30,10 @@ def get_device_name() -> str:
             import cupy as cp
 
             props = cp.cuda.runtime.getDeviceProperties(0)
-            raw = props["name"]
-            # cupy returns the model name as bytes; str(b'...') would render
-            # the repr "b'NVIDIA …'" — decode instead (correctness bug fix).
-            return raw.decode() if isinstance(raw, bytes) else str(raw)
+            name = props["name"]
+            # CuPy returns the device name as bytes; str(b'...') would render
+            # the repr "b'NVIDIA ...'" — decode first.
+            return name.decode() if isinstance(name, bytes) else str(name)
         except Exception:
             return "CUDA"
     if device == "mps":

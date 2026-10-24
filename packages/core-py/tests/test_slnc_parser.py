@@ -637,3 +637,72 @@ class TestParallelLoadBenchmark:
         result = parser.get_weights_dict_parallel()
         assert len(result) == 200
         parser.close()
+
+
+class TestSLNCParserCloseLifecycle:
+    """close()/__del__ must never raise and must never release the same fd twice.
+
+    Both defects were live on main and both were invisible until probed:
+
+    * ``__init__`` binds ``self._fd`` as its FIRST resource assignment, so a
+      missing file makes ``os.open`` raise before ``_fd`` exists. ``__del__``
+      then hit ``os.close(self._fd)`` guarded only by ``except OSError``, so an
+      ``AttributeError`` escaped — unraisable, and it poisoned pytest/caplog.
+    * ``close()`` never reset ``_fd``, so the ``__del__`` that interpreter
+      shutdown runs later re-closed a number the allocator had by then handed
+      to some unrelated file.
+
+    Ported from feat/remove-core-py @ 7948d2724, where the fix stranded inside
+    the domains-removal migration.
+    """
+
+    def test_init_failure_does_not_poison_del(self, monkeypatch):
+        import gc
+        import sys
+
+        unraisable: list[BaseException] = []
+        monkeypatch.setattr(sys, "unraisablehook", lambda u: unraisable.append(u.exc_value))
+        try:
+            SLNCParser("/nonexistent/path/model.slnc")  # os.open -> FileNotFoundError
+        except FileNotFoundError:
+            pass
+        else:  # pragma: no cover - would mean the fixture path resolved
+            pytest.fail("expected FileNotFoundError")
+        gc.collect()
+        assert unraisable == []
+
+    def test_close_is_idempotent(self, monkeypatch):
+        import os as _os
+
+        closed: list[int] = []
+        monkeypatch.setattr(_os, "close", closed.append)
+        p = SLNCParser.__new__(SLNCParser)  # bind only what close() consumes
+        p._mm = None
+        p._fd = 4242
+
+        p.close()
+        p.close()
+        assert closed == [4242], "second close() must not re-release the fd"
+
+    def test_del_after_close_does_not_reclose_fd(self, monkeypatch):
+        import os as _os
+
+        closed: list[int] = []
+        monkeypatch.setattr(_os, "close", closed.append)
+        p = SLNCParser.__new__(SLNCParser)
+        p._mm = None
+        p._fd = 4242
+
+        p.close()
+        p.__del__()  # what interpreter shutdown runs afterwards
+        assert closed == [4242], "__del__ re-closed a recycled fd number"
+
+    def test_close_claims_the_fd_before_releasing_it(self):
+        p = SLNCParser.__new__(SLNCParser)
+        p._mm = None
+        p._fd = 4242
+        p.close()
+        # The number is unclaimed BEFORE the syscall, so a re-entrant or later
+        # close sees -1 rather than a number the OS may already have recycled.
+        assert p._fd == -1
+        assert p._mm is None

@@ -250,6 +250,28 @@ sloughgpt chat
 sloughgpt shell
 ```
 
+### Port map (container truth, audited 2026-10-08 — card 257d310b)
+
+The web container listens on **:3000 inside the container** on both image
+paths — Next image (`apps/web/Dockerfile`: `ENV PORT=3000`, `EXPOSE 3000`)
+and Vite image (`apps/web/Dockerfile.vite`: nginx `listen 3000` +
+`/health`, `EXPOSE 3000`). Everything that targets `web:3000` or
+`localhost:3000` *inside* the compose network is therefore valid.
+
+| Context | Host ports | Notes |
+| ------- | ---------- | ----- |
+| Live systemd dev stack | web **:5173** (vite), api :8000, gateway :8080 | Independent of docker; never :3000 (`e47e19ee` retired those claims) |
+| `docker-compose.yml` (dev) | web `3000:3000`, api `8000:8000`, gateway `8080:8080` | Host `curl localhost:3000` valid **here only** |
+| `docker-compose.prod.yml` | nginx only: `${NGINX_HTTP_PORT:-80}:80`, `:443` | nginx routes `/ → web:3000`, `/v1\|chat\|training\|health → api:8000`, static → gateway. Nothing on host :8000/:3000 |
+| grafana / prometheus / postgres / redis (prod) | none | Internal only — grafana's `:3000/api/health` healthcheck is Grafana's own in-network default port, not a host publish |
+
+Consequences: `infra/scripts/deploy.sh` health checks read **container
+health** (`docker inspect`) instead of host curls that can never pass;
+`.env.example`'s `NEXTAUTH_URL=http://localhost:3000` applies to the
+dev-compose Next path (prod compose defaults to `http://localhost`);
+`apps/web/Dockerfile.vite` is built standalone and not wired into compose
+yet. Grafana has no nginx route — no host URL exists for it.
+
 ---
 
 ## What's Done, What's Next

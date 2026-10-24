@@ -726,10 +726,9 @@ class TestMetaWeights:
         assert mw1 != mw2
 
     def test_all_float_fields(self):
-        # Resolve the annotations instead of reading f.type: the module
-        # carries `from __future__ import annotations` (code-hygiene
-        # ratchet), so f.type is the literal string "float" — get_type_hints
-        # returns the real type object the assertion means to check.
+        # The dataclass modules carry `from __future__ import annotations`
+        # (code-hygiene ratchet), so dataclasses.fields().type records the
+        # STRING "float" — resolve the real types via get_type_hints.
         hints = typing.get_type_hints(MetaWeights)
         for f in dataclasses.fields(MetaWeights):
             if f.name == "top_k":
@@ -876,12 +875,13 @@ class TestHealthSnapshot:
         assert hs1 == hs2
 
     def test_dataclass_field_types(self):
-        # Resolved annotations, not f.type — see test_all_float_fields.
-        fields = typing.get_type_hints(HealthSnapshot)
-        assert fields["timestamp"] is float
-        assert fields["perplexity"] is float
-        assert fields["loss"] is float
-        assert fields["num_sentences"] is int
+        # PEP 563 strings from `from __future__ import annotations` — see
+        # TestMetaWeights.test_all_float_fields; get_type_hints resolves them.
+        hints = typing.get_type_hints(HealthSnapshot)
+        assert hints["timestamp"] is float
+        assert hints["perplexity"] is float
+        assert hints["loss"] is float
+        assert hints["num_sentences"] is int
 
 
 class TestDatabaseDataclasses:

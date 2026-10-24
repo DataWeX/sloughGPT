@@ -47,6 +47,7 @@
 - **NEVER delete user data files (notes, configs, data stores) without explicit user approval first.** Ask before removing any file that contains user-created content. Propose the change, explain consequences, and wait for confirmation.
 - When consolidating or migrating data, always preserve the original as a backup before modifying.
 - If a file is not git-tracked, treat it as irreplaceable — ask twice.
+- **NEVER bulk-delete `~/.cache` directories by name pattern (`wt-*`, `slog-*`, …).** Many are live git worktrees — `git worktree list` is the source of truth for liveness. A heuristic glob over `~/.cache` once deleted 75 dirs including ~60 session worktrees (incident 2026-10-21). Disk-pressure recovery = package caches (`conda clean`, npm, pip), never sibling worktrees. Prevention + prune/recreate runbook: `docs/WORKTREE_RECOVERY.md`.
 
 ## Architecture
 
@@ -112,3 +113,19 @@ This ensures consistent error handling, retries, caching, circuit breaking, and 
 3. **No god-endpoints either** — reject both N hand-written feature routers AND a single generic `POST /tools/{name}` switchyard; projected routes keep HTTP semantics, per-route auth scopes, and route-level observability. Modules self-register at boot (microkernel/plugin registration) — no central switchyard list of features in the app.
 4. **Two tool tiers over one contract** — (a) **internal/model-facing tooling**: cognition/agent function-calling, `tools=[...]` model calls, the `domain/tools` everyday-tools engine (it renders model prompts — it is agent tooling, not site tooling), and the inference UI's tool list — the model sees and offers these; (b) **external utility tooling**: general site helpers and system utilities (e.g. Site Doctor: system checks + site-error fixes for dev/site-manager workflows) — tooling of the app itself, registered as contracts in the execution layer and callable by CLI, health/event stream, and operator surfaces, **never** entering the chat/agent tool registry, the `domain/tools` engine, the inference UI, or any logic the model reasons over. One descriptor contract, two views; the tiers never cross.
 5. **Existing routers are grandfathered** — no retroactive purge; migrate only when a router is next touched.
+
+## Page Rule (UI surfaces are journey-projected)
+
+**A page is a projection of a user journey — not a trophy case of engines.**
+
+The endpoint rule governs the API half of surface area; this governs the UI half, for the same reason — surface area is recurring cost, and "the engine exists" is not a journey. The endpoint rule has a descriptor and a parity gate; this rule historically had neither, which is how **110 `page.tsx`** accumulated against a documented target of ~20 (measured on main 2026-10-17: 19 of 20 nav routes map to a page, **91 pages are nav-orphans**, **2 of 110 carry any role check** — `PRODUCT_ENGINEERING.md` itself records "current 109 pages" against "~20 pages / ~15 routers" target).
+
+1. **The 5-point test** — a new `page.tsx` earns existence only if ALL hold:
+   1. **Named journey** — it serves a flow cited in `docs/UX_FLOWS.md` (a persona task, end-to-end). Engine existence, a new contract, or "we have an endpoint for it" are not journeys.
+   2. **Not a view** — it cannot be a tab/panel/modal of a page already in that journey. Compose first; a route must justify its own journey.
+   3. **Operator surfaces are tagged, not mainstreamed** — infra/system surfaces carry `role: 'operator'`. They are legitimate (the infra-workbench persona demands them); they are never silently rendered indistinguishable from journey pages.
+   4. **Test asserts the journey, not the render** — a page whose only test is "it renders" is not yet justified; the journey-level assertion (or a cited existing one) is part of done.
+   5. **Route budget** — `docs/PRODUCT_ENGINEERING.md` targets ~20 pages. Adding one consumes budget; exceeding it requires merging one first. Ratchet, not aspiration.
+2. **Intake owns the call** — the ruling happens at card time (SOP steps 1, 4-5) by the product side, not at build time by whoever writes the file. A brief that says "build a page for X" without a journey citation goes back for the citation before code; Gene bounces it at decomposition.
+3. **Enforcement is mechanical, not vibes** — `journeyId` on every `NavRoute` (`apps/web/lib/navigation.ts`) and the page baseline ratchet (`apps/web/lib/page-baseline.json`: every `page.tsx` on disk must be catalogued; new entries must cite a `ux/` journey; grandfathered and unmapped counts may only shrink) are enforced by `apps/web/lib/page-journey-gate.test.ts`. Policy lives here; the gate keeps sessions honest at 2am. (Persona matrix precedent: documentation alone did not hold the line.)
+4. **Grandfathered, same clause as routers** — the existing 110 are cleanup cards' business (freeze, consolidation, role gating), never a retroactive purge by this rule.

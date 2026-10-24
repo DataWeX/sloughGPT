@@ -36,6 +36,10 @@ _avion_src = str(Path(__file__).resolve().parents[2] / "avion" / "src")
 if _avion_src not in sys.path:
     sys.path.insert(0, _avion_src)
 
+pytest.importorskip(
+    "playwright.sync_api",
+    reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
+)
 from avion import Arken, ElementLocator, PageControls, SyncRunner, waits
 
 # Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
@@ -108,14 +112,15 @@ def _api_has_model() -> bool:
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_servers_ready():
-    """Block until both API and web server are ready before any test runs.
-
-    Skips (not errors) when the API is absent — server-dependent tests use
-    the repo-wide capability-gate convention (card 6e826226); a quick probe
-    keeps serverless gate runs from burning the old 90s wait.
-    """
-    if not _wait_for_api(timeout=5):
-        pytest.skip("API server not running — start with FORCE_COLOR=1 ./sloughgpt serve --web")
+    """Block until both API and web server are ready before any test runs."""
+    # Live-stack journey tests: skip (don't error) when no server is up —
+    # CI runs core-py as a pure unit job with no ./sloughgpt serve process.
+    timeout = 5 if os.environ.get("CI") else 90
+    if not _wait_for_api(timeout=timeout):
+        pytest.skip(
+            f"API at {API} not ready — journey tests need a live stack "
+            "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
+        )
     # Give the web server a moment to compile after API is up
     time.sleep(3)
 

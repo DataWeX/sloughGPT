@@ -27,14 +27,23 @@ def _mock(mod_name, attrs):
     m = MagicMock()
     for k, v in attrs.items():
         setattr(m, k, v)
+    # Save the REAL module (if any) before swapping: _cleanup must restore
+    # it, not pop the entry — popping evicts the real module from the import
+    # cache, so every later `import` of it creates a fresh copy and objects
+    # bound earlier (collection-time imports, eagerly-bound facades) end up
+    # split-brained against the new one.
+    if mod_name not in original_imports:
+        original_imports[mod_name] = sys.modules.get(mod_name)
     sys.modules[mod_name] = m
-    original_imports[mod_name] = m
     return m
 
 
 def _cleanup():
-    for mod in list(original_imports):
-        sys.modules.pop(mod, None)
+    for mod, orig in original_imports.items():
+        if orig is None:
+            sys.modules.pop(mod, None)
+        else:
+            sys.modules[mod] = orig
     original_imports.clear()
 
 
@@ -63,7 +72,7 @@ class TestGetHealthSummary:
         ss.get_requests_per_minute.return_value = 25.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure._internal.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
 
         result = _get_health_summary()
         assert result["model_loaded"] is True
@@ -91,7 +100,7 @@ class TestGetHealthSummary:
         ss.get_requests_per_minute.return_value = 0.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure._internal.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
 
         result = _get_health_summary()
         assert result["model_loaded"] is False
@@ -158,7 +167,7 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 5.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure._internal.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
         _mock(
             "domain.training.outcome_tracker",
@@ -199,7 +208,7 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 0.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure._internal.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
         _mock(
             "domain.training.outcome_tracker",
@@ -239,7 +248,7 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 5.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domain.infrastructure._internal.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
         _mock(
             "domain.training.outcome_tracker",

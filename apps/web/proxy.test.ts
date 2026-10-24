@@ -48,6 +48,25 @@ describe('proxy', () => {
     expect(response.status).toBeLessThan(400)
   })
 
+  it('redirects every shared-table entry (no local fork of redirects.ts)', async () => {
+    const { proxy } = await import('./proxy')
+    const { REDIRECTS } = await import('./lib/redirects')
+    vi.stubGlobal(
+      'URL',
+      class URL {
+        constructor(public href: string) {}
+      } as never,
+    )
+
+    const paths = Object.keys(REDIRECTS)
+    expect(paths.length).toBeGreaterThanOrEqual(46) // count pin: keep in step (46 after card 7839a7c6 dropped the `/files` source that was shadowing the live route)
+    for (const from of paths) {
+      const response = proxy(makeRequest(from, 'GET'))
+      expect(response.status, `${from} must redirect`).toBeGreaterThanOrEqual(300)
+      expect(response.status, `${from} must redirect`).toBeLessThan(400)
+    }
+  })
+
   it('passes through unknown paths', async () => {
     const { proxy } = await import('./proxy')
     const response = proxy(makeRequest('/chat', 'POST'))

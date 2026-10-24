@@ -4,6 +4,9 @@ Tests for the planner store and CLI — board operations.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from app_planner.cli import main as cli_main
 from app_planner.store import PlannerStore
@@ -339,3 +342,79 @@ class TestColumnValidation:
         code, _ = _run(tmp_path, "board", "move", card.id, "in_progress")
         assert code == 1
         assert store.get_card(card.id).column == "todo"
+
+
+class TestReadPathColumnValidation:
+    """Defense on READ (card b538ecbd): board.jsonl is hand-editable by
+    design, so write-path rejection alone is not enough — load_board() must
+    coerce an undeclared column to a real one and warn, instead of producing
+    a card that board show never renders while stats counts it (the two
+    views then disagree on the total)."""
+
+    HEADER = json.dumps(
+        {
+            "schema": "planner/1",
+            "name": "Main",
+            "columns": [
+                {"name": "todo"},
+                {"name": "wip"},
+                {"name": "review"},
+                {"name": "done"},
+            ],
+        }
+    )
+
+    def _write_board(self, store, *cards):
+        lines = [self.HEADER, *(json.dumps(c) for c in cards)]
+        store._board_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_load_board_coerces_undeclared_column(self, store):
+        self._write_board(
+            store,
+            {"id": "good-1", "title": "Good", "column": "wip"},
+            {"id": "bad-1", "title": "Hand-edited", "column": "in-progress"},
+        )
+        cards = {c.id: c for c in store.load_board().cards}
+        # The phantom card stays visible (coerced, not dropped) and the
+        # healthy card is untouched.
+        assert set(cards) == {"good-1", "bad-1"}
+        assert cards["bad-1"].column == "todo"
+        assert cards["good-1"].column == "wip"
+
+    def test_load_board_warns_on_undeclared_column(self, store, caplog):
+        self._write_board(
+            store, {"id": "bad-1", "title": "Typo", "column": "in-progres"}
+        )
+        with caplog.at_level("WARNING", logger="app_planner.store"):
+            store.load_board()
+        assert any("in-progres" in r.message for r in caplog.records)
+
+    def test_stats_and_load_agree_when_phantom_present(self, store):
+        # DONE-WHEN 3: show (header columns) and stats (card counts) must
+        # report the same universe once read-path coercion applies.
+        self._write_board(
+            store,
+            {"id": "good-1", "title": "Good", "column": "done"},
+            {"id": "bad-1", "title": "Phantom", "column": "in-progress"},
+        )
+        stats = store.get_stats()
+        board = store.load_board()
+        assert stats["total"] == len(board.cards) == 2
+        assert "in-progress" not in stats["byColumn"]
+        assert stats["byColumn"]["todo"] == 1
+        declared = {c["name"] for c in board.columns}
+        assert set(stats["byColumn"]) <= declared
+
+    def test_repo_board_every_card_in_declared_set(self):
+        # Recurrence guard for the REAL artifact (DONE-WHEN 4): three cards
+        # sat in a phantom 'in-progress' column for days — invisible to
+        # board show, counted by stats, unrepairable by sync (their notes
+        # were gone).
+        repo_board = Path(__file__).resolve().parents[3] / ".kanban" / "board.jsonl"
+        if not repo_board.exists():
+            pytest.skip("repo board not present in this checkout")
+        store = PlannerStore(board_dir=repo_board.parent)
+        board = store.load_board()
+        declared = {c["name"] for c in board.columns}
+        offenders = [c.id for c in board.cards if c.column not in declared]
+        assert offenders == [], f"cards outside declared columns: {offenders}"

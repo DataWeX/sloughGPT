@@ -275,16 +275,34 @@ describe('YourComponent', () => {
 
 `scripts/test-doctor.py` diagnoses the **test suite** (why a pytest run
 failed). **Mole** is the one monitoring app: it watches the running stack
-(read-only probes, triage) and heals like a doctor — by diagnosing and
+(read-only probes, triage) and heals — by diagnosing and
 **proposing** fixes, suggest-only (it never applies anything on its own).
-There is nothing else to name: legacy module paths
-(`domain/core/_internal/doctor`, the `/doctor` URLs) are implementation
-detail under the grandfather rule until the unified `mole` CLI lands.
+There is nothing else to name: module, URLs, and CLI all say Mole
+(`domain/core/_internal/mole`, the `/mole` URLs). Grandfathered literals kept:
+`$SLO_DOCTOR_*` env vars, `~/.cache/slog-mole/`, `scripts/test-mole.py`.
 
-- **What it probes:** API health/errors (`/health*`, `/errors/*`),
+- **What it probes** (six — `system` first, then the local file probes
+  `gates` + `benchmarks`, then the network probes `http` + `sse` + `journey`):
+  **system** — host thermal/load/uptime read-only from `/sys` and `/proc`
+  (readers are hermetic in tests, never raise: missing sensors degrade to an
+  explicit finding, not a crash); API health/errors (`/health*`, `/errors/*`);
   `/health/stream` cadence + payload size (flags >256 KB frames and >8s
-  stalls), and the UX journey sweep report (`domain/journeys`).
-- **Placement:** wiring lives in `domain/core/_internal/doctor/` (the
+  stalls); the UX journey sweep report (`domain/journeys`); the newest
+  full-suite gate artifact vs the drift baseline (`~/.cache/slog-gates`;
+  env `SLO_GATES_DIR` / `SLO_GATES_DRIFT_MAX` / `SLO_GATES_FULL_PASSED`);
+  and stored benchmark records vs thresholds — the verdict comes from
+  `scripts/benchmark_results.py` itself (`data/benchmark_results`;
+  env `SLO_BENCH_RESULTS_DIR`).
+- **Sibling, standalone:** `scripts/site_doctor_probe.py` — the read-only
+  **route/stream triage** probe (Site Doctor). It walks the router manifest
+  (~246 routes, no write verbs) and judges each streaming route on its
+  **first read**, bounded in bytes and seconds, separating the outcomes that
+  need different owners: `ok` / `heartbeat-only` / `silent` / `dropped` /
+  `closed-empty`. It is a script, not a Mole probe — run it directly; exits
+  non-zero only under `--strict`, so it can gate CI once the baseline is
+  clean. Pinned against the routers by
+  `tests/contract/test_site_doctor_probe.py`.
+- **Placement:** wiring lives in `domain/core/_internal/mole/` (the
   "body of the system" — system-level ops); probes are seams onto the
   core components.
 - **Surface strategy:** ambient/float — no web section or widget; silently
@@ -294,12 +312,12 @@ detail under the grandfather rule until the unified `mole` CLI lands.
 
 ```bash
 # Full summary (~15s, no browser):                        exit 0/1/2
-.venv/bin/python -m domain.core._internal.doctor
+.venv/bin/python -m domain.core._internal.mole
 # Read existing journey report instead of sweeping:
-.venv/bin/python -m domain.core._internal.doctor --no-sweep
+.venv/bin/python -m domain.core._internal.mole --no-sweep
 # Machine-readable report on stdout; also written to the report path:
-.venv/bin/python -m domain.core._internal.doctor --json
-# --window N (SSE seconds), --skip sse,http,journey, --report PATH, --strict
+.venv/bin/python -m domain.core._internal.mole --json
+# --window N (SSE seconds), --skip gates,benchmarks,sse,http,journey,system, --report PATH, --strict
 ```
 
 **Exit codes:** `0` ok/info · `1` warn (with `--strict`: info too) ·
@@ -315,14 +333,14 @@ event only when the findings' *identity set* changes — identity = source +
 check + severity + component. Payload counters (p95, health score, frame
 sizes) jitter every sweep and are hashed away, so the same finding never
 alerts twice. No AI anywhere; suggest-only — Mole never applies anything.
-Placement: `domain/core/_internal/mole/` (thin layer over `run_doctor` /
-`DoctorReport` / `PROBES` — a newly registered probe is picked up on the
-next tick).
+Placement: `domain/core/_internal/mole/` — one package: probes, report,
+watch (a newly registered probe is picked up on the next tick).
 
 ```bash
+# Watch mode (default is the one-pass sweep above):
+.venv/bin/python -m domain.core._internal.mole --watch
 # Watch at 30s cadence, one event line per change, journal every tick:
-.venv/bin/python -m domain.core._internal.mole
-# --interval S · --max-ticks N · --skip http|sse|journey · --journal PATH
+# --interval S · --max-ticks N · --skip http|sse|journey|gates|benchmarks|system · --journal PATH
 # --strict (info → nonzero, same rule as the report run) · --quiet (journal only)
 # --json (change events as one JSON object each)
 ```
@@ -336,14 +354,14 @@ contained — the loop never dies mid-run.
 **Exit codes:** `0` ok/info · `1` warn · `2` critical; `2` also for a
 watch-error tick, `130` on Ctrl-C.
 
-### App surface (legacy `/doctor` paths)
+### App surface
 
 | Endpoint | Data | Notes |
 |----------|------|-------|
-| `GET /doctor/report` | `{report, path, age_s}` | reads `$SLO_DOCTOR_REPORT`; missing/corrupt file → `report: null` + `age_s: null` (empty state, **not** an error); `age_s` = seconds since `report.ts` |
-| `POST /doctor/run` | `{report}` | **light run**: `http` + `sse` (6s window) + journey findings from disk, written atomically, then returned; the browser sweep is **never** triggered here (`run_sweep=False`) |
+| `GET /mole/report` | `{report, path, age_s}` | reads `$SLO_DOCTOR_REPORT`; missing/corrupt file → `report: null` + `age_s: null` (empty state, **not** an error); `age_s` = seconds since `report.ts` |
+| `POST /mole/run` | `{report}` | **light run**: `system` + `gates` + `benchmarks` + `http` + `sse` (6s window) + journey findings from disk, written atomically, then returned; the browser sweep is **never** triggered here (`run_sweep=False`) |
 
-The `/doctor` page (`apps/web/app/(app)/doctor/page.tsx`) fetches the report
+The `/mole` page (`apps/web/app/(app)/mole/page.tsx`) fetches the report
 on mount and after every run, then shows the overall severity pill + severity
 counts + report age, a live component strip (inference / engines-system from
 `useLiveStatus`), and the findings grouped worst-first with each detail folded
@@ -351,8 +369,8 @@ behind a disclosure.
 
 ```bash
 # Router + probe/report + Mole monitoring tests
-.venv/bin/python -m pytest tests/server/test_doctor_router.py packages/core-py/tests/test_doctor.py packages/core-py/tests/test_mole.py -q
+.venv/bin/python -m pytest tests/server/test_mole_router.py packages/core-py/tests/test_mole_probes.py packages/core-py/tests/test_mole.py -q
 # Page + component tests (worktree: add --config /tmp/opencode/vitest-worktree.config.ts)
-node_modules/.bin/vitest run "app/(app)/doctor/page.test.tsx" components/doctor/
+node_modules/.bin/vitest run "app/(app)/mole/page.test.tsx" components/mole/
 ```
 

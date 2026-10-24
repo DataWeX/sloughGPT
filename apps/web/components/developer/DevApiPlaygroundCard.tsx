@@ -31,11 +31,11 @@ function saveHistory(entries: HistoryEntry[]) {
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 
 const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-[#28c840]/10 text-[#28c840] border-[#28c840]/20',
-  POST: 'bg-[#febc2e]/10 text-[#febc2e] border-[#febc2e]/20',
-  PUT: 'bg-[#5ac8fa]/10 text-[#5ac8fa] border-[#5ac8fa]/20',
-  PATCH: 'bg-[#bf5af2]/10 text-[#bf5af2] border-[#bf5af2]/20',
-  DELETE: 'bg-[#ff5f57]/10 text-[#ff5f57] border-[#ff5f57]/20',
+  GET: 'bg-term-zoom/10 text-term-zoom border-term-zoom/20',
+  POST: 'bg-term-minimize/10 text-term-minimize border-term-minimize/20',
+  PUT: 'bg-term-cyan/10 text-term-cyan border-term-cyan/20',
+  PATCH: 'bg-term-purple/10 text-term-purple border-term-purple/20',
+  DELETE: 'bg-term-close/10 text-term-close border-term-close/20',
 }
 
 export function DevApiPlaygroundCard() {
@@ -110,9 +110,9 @@ export function DevApiPlaygroundCard() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-        <div className="flex items-center h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-          <span className="text-[11px] font-medium text-[#8e8e93]">API Playground</span>
+      <div className="rounded-xl border border-white/[0.06] bg-term-surface overflow-hidden">
+        <div className="flex items-center h-11 px-4 bg-term-header border-b border-white/[0.06]">
+          <span className="text-[11px] font-medium text-term-text-muted">API Playground</span>
         </div>
         <div className="px-4 py-3 space-y-3">
           <div className="flex gap-2">
@@ -120,8 +120,8 @@ export function DevApiPlaygroundCard() {
               value={method}
               onChange={e => setMethod(e.target.value)}
               className={cn(
-                'h-8 rounded-lg border px-2.5 text-[11px] font-mono font-medium bg-[#111111] outline-none',
-                METHOD_COLORS[method] ?? 'border-white/[0.06] text-[#c7c7cc]',
+                'h-8 rounded-lg border px-2.5 text-[11px] font-mono font-medium bg-term-surface-raised outline-none',
+                METHOD_COLORS[method] ?? 'border-white/[0.06] text-term-text',
               )}
               aria-label="HTTP method"
             >
@@ -131,7 +131,7 @@ export function DevApiPlaygroundCard() {
               value={path}
               onChange={e => setPath(e.target.value)}
               placeholder="/endpoint"
-              className="flex-1 h-8 rounded-lg border border-white/[0.06] bg-[#111111] px-3 text-[12px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors"
+              className="flex-1 h-8 rounded-lg border border-white/[0.06] bg-term-surface-raised px-3 text-[12px] font-mono text-term-text placeholder:text-term-text-faint outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request path"
               onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
             />
@@ -142,8 +142,8 @@ export function DevApiPlaygroundCard() {
               className={cn(
                 'h-8 px-4 rounded-lg text-[11px] font-medium transition-all duration-200',
                 loading || !path.trim()
-                  ? 'bg-[#0a7aff]/20 text-[#0a7aff]/40 cursor-not-allowed'
-                  : 'bg-[#0a7aff]/10 text-[#0a7aff] hover:bg-[#0a7aff]/20',
+                  ? 'bg-term-blue/20 text-term-blue/40 cursor-not-allowed'
+                  : 'bg-term-blue/10 text-term-blue hover:bg-term-blue/20',
               )}
             >
               {loading ? 'Sending...' : 'Send'}
@@ -154,7 +154,7 @@ export function DevApiPlaygroundCard() {
             value={authHeader}
             onChange={e => setAuthHeader(e.target.value)}
             placeholder="Authorization: Bearer <token>"
-            className="w-full h-8 rounded-lg border border-white/[0.06] bg-[#111111] px-3 text-[11px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors"
+            className="w-full h-8 rounded-lg border border-white/[0.06] bg-term-surface-raised px-3 text-[11px] font-mono text-term-text placeholder:text-term-text-faint outline-none focus:border-white/[0.12] transition-colors"
             aria-label="Authorization header"
           />
 
@@ -163,7 +163,7 @@ export function DevApiPlaygroundCard() {
               value={body}
               onChange={e => setBody(e.target.value)}
               placeholder='{"key": "value"}'
-              className="w-full h-24 rounded-lg border border-white/[0.06] bg-[#111111] px-3 py-2 text-[11px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] resize-none outline-none focus:border-white/[0.12] transition-colors"
+              className="w-full h-24 rounded-lg border border-white/[0.06] bg-term-surface-raised px-3 py-2 text-[11px] font-mono text-term-text placeholder:text-term-text-faint resize-none outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request body"
             />
           )}
@@ -173,16 +173,16 @@ export function DevApiPlaygroundCard() {
               <div className="flex items-center gap-3 text-[11px]">
                 <span className={cn(
                   'font-mono font-medium',
-                  responseStatus && responseStatus >= 200 && responseStatus < 300 ? 'text-[#28c840]' :
-                  responseStatus && responseStatus >= 400 ? 'text-[#ff5f57]' : 'text-[#636366]',
+                  responseStatus && responseStatus >= 200 && responseStatus < 300 ? 'text-term-zoom' :
+                  responseStatus && responseStatus >= 400 ? 'text-term-close' : 'text-term-text-dim',
                 )}>
                   {responseStatus}
                 </span>
                 {responseTime != null && (
-                  <span className="text-[#636366] font-mono">{responseTime}ms</span>
+                  <span className="text-term-text-dim font-mono">{responseTime}ms</span>
                 )}
               </div>
-              <pre className="rounded-xl border border-white/[0.04] bg-[#111111] p-3.5 text-[11px] font-mono text-[#c7c7cc] overflow-auto max-h-96 whitespace-pre-wrap leading-relaxed">
+              <pre className="rounded-xl border border-white/[0.04] bg-term-surface-raised p-3.5 text-[11px] font-mono text-term-text overflow-auto max-h-96 whitespace-pre-wrap leading-relaxed">
                 {response}
               </pre>
             </div>
@@ -191,13 +191,13 @@ export function DevApiPlaygroundCard() {
       </div>
 
       {history.length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="flex items-center justify-between h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-            <span className="text-[11px] font-medium text-[#8e8e93]">Request History</span>
+        <div className="rounded-xl border border-white/[0.06] bg-term-surface overflow-hidden">
+          <div className="flex items-center justify-between h-11 px-4 bg-term-header border-b border-white/[0.06]">
+            <span className="text-[11px] font-medium text-term-text-muted">Request History</span>
             <button
               type="button"
               onClick={clearHistory}
-              className="text-[10px] text-[#ff5f57]/60 hover:text-[#ff5f57] transition-colors"
+              className="text-[10px] text-term-close/60 hover:text-term-close transition-colors"
             >
               Clear
             </button>
@@ -215,14 +215,14 @@ export function DevApiPlaygroundCard() {
               >
                 <span className={cn(
                   'font-mono font-medium w-10 shrink-0',
-                  entry.status >= 200 && entry.status < 300 ? 'text-[#28c840]' :
-                  entry.status >= 400 ? 'text-[#ff5f57]' : 'text-[#636366]',
+                  entry.status >= 200 && entry.status < 300 ? 'text-term-zoom' :
+                  entry.status >= 400 ? 'text-term-close' : 'text-term-text-dim',
                 )}>
                   {entry.status || 'ERR'}
                 </span>
-                <span className="font-mono text-[#48484a] w-12 shrink-0">{entry.method}</span>
-                <span className="font-mono text-[#c7c7cc] truncate flex-1">{entry.path}</span>
-                <span className="text-[#636366] shrink-0 font-mono">{entry.timeMs}ms</span>
+                <span className="font-mono text-term-text-faint w-12 shrink-0">{entry.method}</span>
+                <span className="font-mono text-term-text truncate flex-1">{entry.path}</span>
+                <span className="text-term-text-dim shrink-0 font-mono">{entry.timeMs}ms</span>
               </button>
             ))}
           </div>

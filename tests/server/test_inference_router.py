@@ -744,3 +744,104 @@ class TestCachedReplayChunking:
                 if tok:
                     tokens.append(tok)
         assert "".join(tokens) == cached
+
+
+class TestChatPostGenTasks:
+    """POST /chat must run the same post-generation task set as streaming.
+
+    Audit gap G2 (card db19c373): ``_run_post_gen_tasks`` was launched from
+    exactly one site — ``chat_stream`` — so a non-streaming turn recorded no
+    substrate episode at all. Consciousness, entity extraction, the continual
+    learner and response tracking all silently skipped half of all chat.
+    """
+
+    def _domain_mock(self):
+        mock_domain = MagicMock()
+        mock_domain.respond = AsyncMock(
+            return_value=MagicMock(text="Hello back", session_id="sess-1", done=True)
+        )
+        return mock_domain
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("domain.get_chat_domain")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_non_stream_chat_runs_post_gen_tasks(self, mock_post_gen, mock_get_domain, client):
+        """The gap itself: this call did not exist before G2."""
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+        mock_get_domain.return_value = self._domain_mock()
+
+        resp = client.post(
+            "/chat", json={"messages": [{"role": "user", "content": "Hello"}]}
+        )
+
+        assert resp.status_code == 200
+        mock_post_gen.assert_called_once()
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("domain.get_chat_domain")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_post_gen_receives_the_turn_it_belongs_to(
+        self, mock_post_gen, mock_get_domain, client
+    ):
+        """Post-gen work must be attributed to the response that produced it."""
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+        mock_get_domain.return_value = self._domain_mock()
+
+        client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+
+        args = mock_post_gen.call_args.args
+        assert args[0] == "Hello back", "full_response must be the generated text"
+        assert args[1] == "Hello", "user_msg must be the prompt"
+        assert args[2] == "sess-1", "session_id must follow the response"
+        assert args[3] is not None, "start_time drives the duration metric"
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("domain.get_chat_domain")
+    @patch("apps.api.server.routers.inference.capture")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_no_inline_capture_alongside_post_gen(
+        self, mock_post_gen, mock_capture, mock_get_domain, client
+    ):
+        """No double-run: post-gen already captures, so chat() must not too.
+
+        Post-gen is spied out here, so any capture reached directly by chat()
+        would still fire — asserting it does not is the anti-double-count
+        guarantee.
+        """
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+        mock_get_domain.return_value = self._domain_mock()
+
+        client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+
+        mock_capture.assert_not_called()
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("domain.get_chat_domain")
+    @patch(
+        "apps.api.server.routers.inference._run_post_gen_tasks",
+        side_effect=RuntimeError("post-gen exploded"),
+    )
+    def test_post_gen_failure_does_not_fail_the_turn(
+        self, mock_post_gen, mock_get_domain, client
+    ):
+        """These tasks are best-effort: the reply must still reach the user."""
+        mock_get_domain.return_value = self._domain_mock()
+
+        resp = client.post(
+            "/chat", json={"messages": [{"role": "user", "content": "Hello"}]}
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["message"] == "Hello back"
