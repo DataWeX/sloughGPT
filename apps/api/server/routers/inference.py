@@ -24,6 +24,15 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.chat_response_cache import (
+    clear_chat_response_cache as clear_chat_response_cache,
+)
+from infrastructure.chat_response_cache import (
+    get_chat_response_cache as get_chat_response_cache,
+)
+from infrastructure.chat_response_cache import (
+    set_chat_response_cache as set_chat_response_cache,
+)
 from infrastructure.sse_fallback import sse_error, sse_token
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
@@ -293,47 +302,9 @@ def set_chat_control(session_id: str, control: dict) -> None:
                 del _chat_control_store[k]
 
 
-# Cache for partial chat responses (for Last-Event-ID reconnection)
-_chat_response_cache: dict[str, dict] = {}
-_chat_cache_lock = threading.Lock()
-_CHAT_CACHE_MAX_SESSIONS = 100
-_CHAT_CACHE_MAX_AGE_S = 300  # 5 minutes
-
-
-def get_chat_response_cache(session_id: str) -> dict | None:
-    """Get cached response for a session."""
-    import time
-
-    with _chat_cache_lock:
-        entry = _chat_response_cache.get(session_id)
-        if entry and time.time() - entry.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S:
-            _chat_response_cache.pop(session_id, None)
-            return None
-        return entry
-
-
-def set_chat_response_cache(session_id: str, response: dict) -> None:
-    """Cache a partial response for a session."""
-    import time
-
-    with _chat_cache_lock:
-        # Purge old entries if cache is full
-        if len(_chat_response_cache) >= _CHAT_CACHE_MAX_SESSIONS:
-            now = time.time()
-            expired = [
-                k
-                for k, v in _chat_response_cache.items()
-                if now - v.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S
-            ]
-            for k in expired[:10]:  # Remove up to 10 expired entries
-                _chat_response_cache.pop(k, None)
-        _chat_response_cache[session_id] = {**response, "timestamp": time.time()}
-
-
-def clear_chat_response_cache(session_id: str) -> None:
-    """Clear cached response for a session."""
-    with _chat_cache_lock:
-        _chat_response_cache.pop(session_id, None)
+# Chat-response cache (Last-Event-ID reconnection) lives in infrastructure —
+# imported at the top of this module and re-exported from here for existing
+# importers of the old names (card 8125c86e).
 
 
 class ContextInspectorResponse(BaseModel):

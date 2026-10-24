@@ -28,6 +28,7 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.chat_response_cache import get_chat_response_cache, set_chat_response_cache
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
 from schemas.chat import ChatRequest
@@ -100,6 +101,12 @@ class ChatRouter:
         A caller wanting a complete reply folds the stream at its own edge (read
         until the `done: true` frame), which is why the mobile BFF folds
         in-process through ``handle_chat`` instead of asking for a second shape.
+
+        Reconnects are replayed from chat's own response cache (card 8125c86e):
+        every frame carries a monotonic envelope ``id``; a retry that arrives
+        with ``Last-Event-ID`` gets the cached turn's *unseen tail* — never a
+        regeneration and never a re-emit of tokens the client already folded
+        (the frontend appends across retries without resetting its buffer).
         """
         from domain.chat import get_chat_manager
 
@@ -110,6 +117,69 @@ class ChatRouter:
         async def generate():
             _start = time.time()
             _token_count = 0
+            _event_counter = 0
+            _cached_tokens: list[str] = []
+
+            def _frame(token: str, *, done: bool = False, meta: dict | None = None) -> str:
+                nonlocal _event_counter
+                _event_counter += 1
+                return self._sse_event(
+                    "chat",
+                    "STREAMING",
+                    "complete" if done else "working",
+                    {"token": token},
+                    meta or {},
+                    "",
+                    id=str(_event_counter),
+                )
+
+            # Reconnect replay: session-keyed cache, triggered only when the
+            # client proves retry-ness via Last-Event-ID, and only from a
+            # COMPLETE turn (a partial cache cannot resume generation, so a
+            # fresh turn is the honest answer — same as before this card).
+            try:
+                raw_last_id = http_request.headers.get("last-event-id")
+                last_event_id = int(raw_last_id) if raw_last_id and raw_last_id.isdigit() else 0
+            except (TypeError, ValueError):
+                last_event_id = 0
+            if last_event_id:
+                cached = get_chat_response_cache(session_id)
+                if (
+                    cached
+                    and cached.get("complete")
+                    and int(cached.get("event_counter") or 0) > last_event_id
+                ):
+                    tokens = cached.get("tokens", [])
+                    # The client already folded tokens[0:last_event_id]; emit
+                    # only the tail so the buffer stays duplicate-free.
+                    for token in tokens[last_event_id:]:
+                        _event_counter += 1
+                        yield self._sse_event(
+                            "chat",
+                            "STREAMING",
+                            "working",
+                            {"token": token},
+                            {},
+                            "",
+                            id=str(_event_counter),
+                        )
+                    _event_counter += 1
+                    yield self._sse_event(
+                        "chat",
+                        "STREAMING",
+                        "complete",
+                        {"token": ""},
+                        {},
+                        "",
+                        id=str(_event_counter),
+                    )
+                    safe_audit_log(
+                        "chat.stream_replay",
+                        resource=session_id,
+                        detail=f"from={last_event_id} tokens={len(tokens)}",
+                    )
+                    return
+
             try:
                 async for item in manager.generate_stream_tracked(
                     session_id,
@@ -118,18 +188,26 @@ class ChatRouter:
                     text_of=lambda resp: resp.text,
                 ):
                     if await http_request.is_disconnected():
+                        set_chat_response_cache(
+                            session_id,
+                            {
+                                "tokens": _cached_tokens,
+                                "complete": False,
+                                "event_counter": _event_counter,
+                            },
+                        )
                         return
                     if isinstance(item, str):
                         if item:
                             _token_count += 1
-                            yield self._sse_token("chat", item)
+                            _cached_tokens.append(item)
+                            yield _frame(item)
                     else:
                         # Final TurnResult: close the stream. The engine computes
                         # usage/timing/finish on it, so surface them here — that
                         # detail is the point of the port, and folding callers
                         # read it off this frame.
-                        yield self._sse_token(
-                            "chat",
+                        yield _frame(
                             "",
                             done=True,
                             meta={
@@ -139,11 +217,28 @@ class ChatRouter:
                                 "elapsed_ms": item.elapsed_ms,
                             },
                         )
+                        set_chat_response_cache(
+                            session_id,
+                            {
+                                "tokens": _cached_tokens,
+                                "complete": True,
+                                "event_counter": _event_counter,
+                            },
+                        )
                 _elapsed_ms = round((time.time() - _start) * 1000)
                 safe_audit_log(
                     "chat.stream",
                     resource=session_id,
                     detail=f"tokens={_token_count} elapsed={_elapsed_ms}ms",
+                )
+            except GeneratorExit:
+                set_chat_response_cache(
+                    session_id,
+                    {
+                        "tokens": _cached_tokens,
+                        "complete": False,
+                        "event_counter": _event_counter,
+                    },
                 )
             except Exception as e:
                 logger.error("Chat stream error: %s", e, exc_info=True)
