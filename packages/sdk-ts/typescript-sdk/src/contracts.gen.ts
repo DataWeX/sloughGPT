@@ -64,6 +64,123 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
+  "llm.chat.completions": {
+    "auth_scope": "authenticated",
+    "description": "Chat completion over the SloNet generation seam (stream + non-stream); wire: top-level choices/usage, data: chunk frames terminated by [DONE].",
+    "idempotent": false,
+    "method": "POST",
+    "module": "routers.llm_v1",
+    "name": "llm.chat.completions",
+    "operation_id": "llm.chat.completions.post",
+    "params": {
+      "properties": {
+        "max_tokens": {
+          "description": "Sampling cap",
+          "type": "integer"
+        },
+        "messages": {
+          "description": "Message objects [{role, content}, ...]",
+          "type": "array"
+        },
+        "model": {
+          "description": "Model id (routing ignored)",
+          "type": "string"
+        },
+        "stream": {
+          "description": "Streaming toggle",
+          "type": "boolean"
+        },
+        "temperature": {
+          "description": "Sampling temperature",
+          "type": "number"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "path": "/v1/chat/completions",
+    "result": {
+      "properties": {
+        "choices": {
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "object": {
+          "type": "string"
+        },
+        "usage": {
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
+  "llm.embeddings.create": {
+    "auth_scope": "authenticated",
+    "description": "Embeddings through InferRouter.infer_embed, wire list shape.",
+    "idempotent": false,
+    "method": "POST",
+    "module": "routers.llm_v1",
+    "name": "llm.embeddings.create",
+    "operation_id": "llm.embeddings.create.post",
+    "params": {
+      "properties": {
+        "input": {
+          "description": "Text or batch of texts",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model id (routing ignored)",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "path": "/v1/embeddings",
+    "result": {
+      "properties": {
+        "data": {
+          "type": "array"
+        },
+        "model": {
+          "type": "string"
+        },
+        "usage": {
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
+  "llm.models.list": {
+    "auth_scope": "authenticated",
+    "description": "Model listing (the loaded SloNet model), wire list shape.",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.llm_v1",
+    "name": "llm.models.list",
+    "operation_id": "llm.models.list.get",
+    "params": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "path": "/v1/models",
+    "result": {
+      "properties": {
+        "data": {
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
 } as const satisfies Record<string, ContractDescriptor>
 
 export type ContractName = keyof typeof CONTRACTS

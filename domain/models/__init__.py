@@ -16,6 +16,7 @@ from domain.models._internal.models import (
     rotate_half,
 )
 from domain.models._internal.provider import (
+    ConsciousnessProcessor,
     KnowledgeProcessor,
     apply_processors,
     list_providers,
@@ -53,6 +54,7 @@ __all__ = [
     "rotate_half",
     "apply_rotary_pos_emb",
     "KnowledgeProcessor",
+    "ConsciousnessProcessor",
     "apply_processors",
     "get_provider",
     "list_providers",
