@@ -31,7 +31,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, TextIO
 
-from avion.events.models import Event, EventType
+from avion.events.models import Event, EventType, _restore_screenshot
 
 _SEQ_RE = re.compile(r'"seq"\s*:\s*(\d+)')
 
@@ -45,10 +45,14 @@ def _event_from_dict(d: Any) -> Event | None:
         event_type = EventType(str(raw_type))
     except ValueError:
         event_type = EventType.CUSTOM
+    # Screenshot pixels travel as base64 gated by has_screenshot — restore
+    # them so a journal reload equals what was appended (same rule as
+    # Event.from_dict; the flag itself never becomes data).
+    data = dict(d.get("data") or {})
     return Event(
         type=event_type,
         name=str(d.get("name", "")),
-        data=dict(d.get("data") or {}),
+        data=_restore_screenshot(data, bool(d.get("has_screenshot"))),
         success=bool(d.get("success", True)),
         error=str(d.get("error", "")),
         duration_ms=float(d.get("duration_ms") or 0.0),

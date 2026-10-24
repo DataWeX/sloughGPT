@@ -12,6 +12,7 @@ a headless test with no UI dependency.
 
 from __future__ import annotations
 
+import base64
 import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -62,7 +63,13 @@ class FlowStep:
         if self.error:
             d["error"] = self.error
         if self.data:
-            d["data"] = self.data
+            # Screenshots land in data as raw bytes; the JSON interchange
+            # must stay real JSON — bytes become base64 strings here rather
+            # than falling through json's default=str mangling ("b'\\x89PN..").
+            d["data"] = {
+                k: base64.b64encode(v).decode("ascii") if isinstance(v, (bytes, bytearray)) else v
+                for k, v in self.data.items()
+            }
         return d
 
 
@@ -181,3 +188,18 @@ def load_flow(path: str) -> FlowGraph:
 # browser avion owns (import at the end — complete imports the session,
 # which must not be pulled in before the pure map above).
 from avion.flow.complete import FlowOutcome, complete_flow  # noqa: E402,F401
+
+# Imported last so viewer.py's TYPE_CHECKING-only import of FlowGraph (and the
+# names above) never races package initialisation.
+from avion.flow.viewer import render_html, save_html  # noqa: E402
+
+__all__ = [
+    "FlowGraph",
+    "FlowStep",
+    "FlowOutcome",
+    "build_flow",
+    "complete_flow",
+    "load_flow",
+    "render_html",
+    "save_html",
+]

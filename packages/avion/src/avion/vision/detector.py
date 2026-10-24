@@ -94,9 +94,7 @@ class Capabilities:
     @property
     def reason(self) -> str:
         """Why anything is unavailable ("" when everything works)."""
-        return "; ".join(
-            f"{c.name}: {c.reason}" for c in self.all if not c.available
-        )
+        return "; ".join(f"{c.name}: {c.reason}" for c in self.all if not c.available)
 
     def to_dict(self) -> dict[str, Any]:
         return {
