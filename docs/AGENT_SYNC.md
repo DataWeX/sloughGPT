@@ -1531,3 +1531,21 @@ git push -u origin feat/<name>   # push your own branch when done
   (empty shell — deletion user-gated), legacy docs-truth-up rows (no guard
   exists; editorial job, deferred). Evidence:
   `2026-10-24-wip-screening-pass2.md`. From `.wt-worldbrain`.
+
+- **2026-10-24 · LANDED ON MAIN (`f30d5a964`, 6 cards) — quickwin cherry-pick
+  series off the stack.** Merge dry-run (`git merge-tree`) showed the raw
+  stack-vs-main merge is a 60+ file conflict project (fork 10-04, stack +238,
+  main +153: shell-tree restore, doctor→mole rename, generated files,
+  protocol/* add/add) — carded as `37dccde4` (todo/high, full taxonomy +
+  resolution rules). But this session's six cards were isolated and applied
+  CLEANLY onto current main in a side worktree: **`8ee8f7f46`** af19fb40
+  config backfill, **`5b53a9285`** 243016c3 reflection→prompt wiring,
+  **`8316643bb`** + **`36dc5ea8d`** training-router delegation parts 1+2
+  (router now has ZERO `_internal` refs on MAIN), **`9d9c9f519`** the
+  tie-sort /chat/stream 500 fix (bug squashed at the source), **`f30d5a964`
+  8e9ee65d compaction-tight.ts. Gates on the merged result: 277 passed
+  (11 suites incl. router 75, context_core 113, runtime, consciousness,
+  provider processors), ruff clean; pushed `land/quickwins:main` FF-safe.
+  All six cards: review → done. Local `main` checked out at
+  `sloughgpt-api-std` (not force-updated — that session pulls when ready).
+  From `.wt-worldbrain`.
