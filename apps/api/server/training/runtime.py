@@ -105,7 +105,12 @@ class TrainingRuntime:
                 try:
                     store.update(job_id, config=dict(config))
                 except Exception as e:
-                    logger.warning("JobStore config backfill failed for %s: %s", job_id, e, extra={"tag": "TRAIN"})
+                    logger.warning(
+                        "JobStore config backfill failed for %s: %s",
+                        job_id,
+                        e,
+                        extra={"tag": "TRAIN"},
+                    )
             return
         cfg = config if config is not None else job.get("config")
         if not isinstance(cfg, dict):
