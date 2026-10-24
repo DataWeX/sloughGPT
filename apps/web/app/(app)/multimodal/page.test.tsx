@@ -67,6 +67,9 @@ vi.mock('@/components/multimodal/ImageGenerationCard', () => ({
 vi.mock('@/components/multimodal/AudioCard', () => ({
   default: () => <div data-testid="audio-card" />,
 }))
+vi.mock('@/components/multimodal/VqaSection', () => ({
+  default: () => <div data-testid="vqa-section" />,
+}))
 
 import MultimodalPage from './page'
 
@@ -144,6 +147,12 @@ describe('MultimodalPage — other cards', () => {
     render(<MultimodalPage />)
     await act(async () => {})
     expect(screen.getByTestId('audio-card')).toBeTruthy()
+  })
+
+  it('shows VQA section', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('vqa-section')).toBeTruthy()
   })
 })
 
