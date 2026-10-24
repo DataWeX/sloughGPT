@@ -9,6 +9,10 @@ Codec policy is *proven*, not guessed — benchmarked by
   ``Accept-Encoding: zstd`` gets the stored bytes with zero transcoding.
 * **model-weight class** → raw passthrough. GGUF/safetensors/float tensors
   are proven incompressible (~1.0x); compressing would burn CPU for nothing.
+  Exception: pickle-prone checkpoints (``.pt``/``.pth``/``.ckpt``/``.bin``)
+  get the probe — their content is mixed (tensor data *plus* pickled
+  metadata/config, or outright misnamed text), so the lossless
+  zstd-if-smaller probe decides instead of the extension (card df34242b).
 * **unknown class** → zstd-if-smaller probe (the downcraft auto-skip rule,
   inverted): stream both, keep whichever wins, capped at
   ``UNKNOWN_PROBE_MAX`` so a multi-GB unknown blob never pays double disk.
@@ -49,21 +53,37 @@ CHUNK = 1024 * 1024
 ZSTD_LEVEL = 3
 UNKNOWN_PROBE_MAX = 64 * 1024 * 1024
 
-#: Proven-incompressible artifacts — served/stored raw, never transcoded.
-MODEL_EXTENSIONS = frozenset(
+#: Proven-incompressible containers — force-raw, never probed (zstd on
+#: these is a measured ~1.0x: pure tensor/container bytes, no metadata that
+#: could pay for the probe).
+FORCE_RAW_EXTENSIONS = frozenset(
     {
         ".gguf",
         ".safetensors",
-        ".pt",
-        ".pth",
-        ".ckpt",
         ".onnx",
-        ".bin",
         ".npz",
         ".tflite",
         ".engine",
     }
 )
+
+#: Pickle-prone checkpoints — content is mixed (tensor data + pickled
+#: metadata/config, or misnamed text), so extension alone must not decide:
+#: these run the lossless zstd-if-smaller probe (card df34242b). Genuine
+#: fp32 weights still land raw — the probe only stores zstd when it is
+#: strictly smaller, so it can never inflate.
+PROBE_MODEL_EXTENSIONS = frozenset(
+    {
+        ".pt",
+        ".pth",
+        ".ckpt",
+        ".bin",
+    }
+)
+
+#: Every model artifact extension (what routers/tests treat as "a model
+#: file"): force-raw ∪ probe. Kept as one set for API compatibility.
+MODEL_EXTENSIONS = FORCE_RAW_EXTENSIONS | PROBE_MODEL_EXTENSIONS
 
 #: Code/text — zstd compress-at-rest (proven ~7x on real source corpora).
 TEXT_EXTENSIONS = frozenset(
@@ -137,10 +157,16 @@ class FileStore:
 
     @staticmethod
     def codec_for(filename: str) -> str:
-        """Return ``"raw"`` | ``"zstd"`` | ``"unknown"`` for *filename*."""
+        """Return ``"raw"`` | ``"zstd"`` | ``"unknown"`` for *filename*.
+
+        ``"unknown"`` = the zstd-if-smaller probe: streamed alongside raw,
+        stored only when strictly smaller (never inflates).
+        """
         ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
-        if ext in MODEL_EXTENSIONS:
+        if ext in FORCE_RAW_EXTENSIONS:
             return "raw"
+        if ext in PROBE_MODEL_EXTENSIONS:
+            return "unknown"  # mixed content — probe decides, raw-safe
         return "zstd" if ext in TEXT_EXTENSIONS else "unknown"
 
     # ── write path ─────────────────────────────────────────────────

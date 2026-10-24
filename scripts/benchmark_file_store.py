@@ -55,6 +55,25 @@ def make_model(size: int) -> bytes:
     return os.urandom(size)
 
 
+def make_ckpt(size: int, seed: int) -> bytes:
+    """Pickle-checkpoint-like payload: text metadata/headers + random weights.
+
+    Mirrors a real ``.pt``/``.bin``: a pickled state_dict has string keys and
+    config alongside raw float tensors, so it is only partially compressible.
+    ~1/4 of the payload is text, 3/4 is incompressible tensor bytes.
+    """
+    import os
+
+    head = bytearray()
+    j = 0
+    while len(head) < size // 4:
+        tok = f"{(seed * 1000003 + j) % 0xFFFFFFFF:08x}"
+        head.extend(f"state_dict.layer_{j}.weight : Tensor[{tok}] dtype=float32\n".encode())
+        j += 1
+    head = bytes(head[: size // 4])
+    return head + os.urandom(size - len(head))
+
+
 def bench_class(store: FileStore, name: str, blobs: list[tuple[str, bytes]]) -> dict:
     t0 = time.perf_counter()
     metas = [store.put(data, fname) for fname, data in blobs]
@@ -117,6 +136,16 @@ def main() -> int:
         rows = [
             bench_class(store, "code(text/zstd)", [(f"h{i}.py", make_code(size, i)) for i in range(args.files)]),
             bench_class(store, "model(raw)", [(f"w{i}.gguf", make_model(size)) for i in range(args.files)]),
+            # pickle-prone checkpoint class — probe decides; mixed content must
+            # compress, pure weights must stay raw (never inflate).
+            bench_class(
+                store,
+                "ckpt-mixed(probe)", [(f"c{i}.pt", make_ckpt(size, i)) for i in range(args.files)]
+            ),
+            bench_class(
+                store,
+                "ckpt-raw(probe)", [(f"p{i}.bin", make_model(size)) for i in range(args.files)]
+            ),
         ]
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -133,10 +162,16 @@ def main() -> int:
             f"{str(r['stream_mibs']):>12} {str(r['del_ops_s']):>8}"
         )
 
-    code_row, model_row = rows
-    ok = code_row["ratio"] < 0.5 and model_row["ratio"] >= 0.99
+    code_row, model_row, ckpt_mixed_row, ckpt_raw_row = rows
+    ok = (
+        code_row["ratio"] < 0.5
+        and model_row["ratio"] >= 0.99
+        and ckpt_mixed_row["ratio"] < 0.95
+        and ckpt_raw_row["ratio"] >= 0.99
+    )
     print(
-        "\ngate: code compresses (<0.5x) AND model stays raw (>=0.99x): "
+        "\ngate: code compresses (<0.5x) AND model raw (>=0.99x) "
+        "AND mixed-ckpt compresses (<0.95x) AND weight-ckpt stays raw (>=0.99x): "
         + ("PASS" if ok else "FAIL")
     )
 

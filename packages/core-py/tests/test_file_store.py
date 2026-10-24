@@ -34,13 +34,35 @@ class TestCodecPolicy:
         assert meta["codec"] == "raw"
         assert meta["stored_size"] == meta["size_bytes"]
 
-    def test_all_model_extensions_map_raw(self):
-        for ext in (".gguf", ".safetensors", ".pt", ".pth", ".ckpt", ".onnx", ".bin", ".npz"):
+    def test_proven_containers_force_raw(self):
+        for ext in (".gguf", ".safetensors", ".onnx", ".npz", ".tflite", ".engine"):
             assert FileStore.codec_for(f"m{ext}") == "raw"
+
+    def test_pickle_prone_checkpoints_probe(self):
+        for ext in (".pt", ".pth", ".ckpt", ".bin"):
+            assert FileStore.codec_for(f"m{ext}") == "unknown"
 
     def test_unknown_incompressible_prefers_raw(self, store):
         meta = store.put(MODEL_BYTES, "blob.unknownext")
         assert meta["codec"] == "raw"
+
+    def test_pickle_checkpoint_text_like_compresses(self, store):
+        meta = store.put(TEXT, "vocab.bin")
+        assert meta["codec"] == "zstd"
+        assert meta["stored_size"] < meta["size_bytes"] / 3
+        assert store.get(meta["file_id"])[0] == TEXT
+
+    def test_pickle_checkpoint_weights_stay_raw(self, store):
+        meta = store.put(MODEL_BYTES, "weights.pt")
+        assert meta["codec"] == "raw"  # probe ran, zstd lost, raw wins — no inflation
+        assert store.get(meta["file_id"])[0] == MODEL_BYTES
+
+    def test_pickle_checkpoint_mixed_content_compresses(self, store):
+        mixed = os.urandom(24 * 1024) + TEXT
+        meta = store.put(mixed, "model.bin")
+        assert meta["codec"] == "zstd"
+        assert meta["stored_size"] < meta["size_bytes"]
+        assert store.get(meta["file_id"])[0] == mixed
 
     def test_unknown_compressible_prefers_zstd(self, store):
         meta = store.put(TEXT, "notes.weird")
