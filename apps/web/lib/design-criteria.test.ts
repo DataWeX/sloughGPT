@@ -66,42 +66,23 @@ const HEX_BASELINE = [
 const RGB_BASELINE = ['app/(app)/magazine/page.tsx']
 
 /**
- * Stock Tailwind palette utilities (the "AI-slop rainbow") — per-file
- * counts may only shrink, and any file NOT listed here must have zero.
- * Measured 2026-10-24: 37 files, 37 instances. Fix = semantic utility
- * (`text-success`, `bg-destructive`, `text-primary`) or `var(--chart-N)`.
+ * Stock Tailwind palette utilities (the "AI-slop rainbow") — ZERO TOLERANCE
+ * since 2026-10-24 (burned down 37 files / 156 instances -> 0 across four
+ * rounds). Any hit in any scanned file fails: `STOCK_PALETTE_BASELINE` is
+ * empty and `STOCK_PALETTE_TOTAL_CEILING = 0`. Fix = semantic utility
+ * (`text-success`, `bg-destructive`, `text-primary`) or `var(--chart-N)` /
+ * `var(--group-N)` for categorical identity. Adding a grandfather row here
+ * is a regression, not an escape hatch — the total test pins the sum to 0.
  * See design-system-enforcement skill (§ Stock Tailwind Palette).
  */
 const STOCK_PALETTE_RE =
   /\b(?:bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(?:indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/g
 
-const STOCK_PALETTE_BASELINE: Record<string, number> = {
-  'app/(app)/consciousness/page.tsx': 1,
-  'app/(app)/developer/page.tsx': 1,
-  'app/(app)/knowledge/[id]/page.tsx': 5,
-  'app/(app)/personality/page.tsx': 2,
-  'app/(app)/workspace/data/page.tsx': 4,
-  'app/(app)/workspace/data/search/page.tsx': 4,
-  'components/DebugOverlay.tsx': 6,
-  'components/ErrorDiagnosticsPanel.tsx': 10,
-  'components/StatusBar.tsx': 1,
-  'components/consciousness/ConsciousnessSidebarWidget.tsx': 1,
-  'components/personality/PersonalityConflictWarnings.tsx': 1,
+/** Per-file grandfather list — empty: every stock-palette utility is now an offender. */
+const STOCK_PALETTE_BASELINE: Record<string, number> = {}
 
-  'components/planner/HashChain.tsx': 4,
-
-  'components/security/ThreatLogCard.tsx': 4,
-  'components/shared-data/IncomingSharesCard.tsx': 4,
-  'components/shared-data/OutgoingSharesCard.tsx': 4,
-  'components/souls/PersonalitySummary.tsx': 3,
-  'components/voice/VoiceRecordingCard.tsx': 1,
-  'components/workspace-search/SearchCategoryBadge.tsx': 2,
-
-  'features/chat/components/input/VoiceTranscript.tsx': 2,
-}
-
-/** Total instance ceiling — additions to the map cannot lift it. */
-const STOCK_PALETTE_TOTAL_CEILING = 60
+/** Total instance ceiling — additions to the map cannot lift it. Zero tolerance. */
+const STOCK_PALETTE_TOTAL_CEILING = 0
 
 /** This rule also covers lib/ and contexts/ (class strings live there too). */
 const STOCK_SCAN_ROOTS = [...SCAN_ROOTS, 'lib', 'contexts'] as const

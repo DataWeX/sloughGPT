@@ -51,7 +51,7 @@ const TYPE_CONFIG: Record<string, { color: string; label: string; icon: typeof U
     link: '/datasets',
   },
   knowledge: {
-    color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    color: 'bg-accent/15 text-accent dark:bg-accent/10 dark:text-accent',
     label: 'Knowledge',
     icon: BookOpen,
     link: '/knowledge',

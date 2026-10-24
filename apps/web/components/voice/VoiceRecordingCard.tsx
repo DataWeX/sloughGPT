@@ -168,7 +168,7 @@ export function VoiceRecordingCard() {
           <div
             className={`w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all ${
               recordState === 'recording'
-                ? 'bg-destructive hover:bg-red-600 scale-110'
+                ? 'bg-destructive hover:brightness-110 scale-110'
                 : 'bg-primary hover:bg-primary/90'
             }`}
             onClick={recordState === 'recording' ? stopRecording : startRecording}
