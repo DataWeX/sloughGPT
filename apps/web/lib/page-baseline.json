@@ -64,7 +64,6 @@
     "app/(app)/meta-weights/page.tsx",
     "app/(app)/model/[id]/page.tsx",
     "app/(app)/models/page.tsx",
-    "app/(app)/mole/page.tsx",
     "app/(app)/monitoring/page.tsx",
     "app/(app)/multimodal/page.tsx",
     "app/(app)/notifications/page.tsx",

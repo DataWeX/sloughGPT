@@ -71,6 +71,15 @@ describe('ComponentHealthStrip', () => {
     expect(screen.queryAllByTestId('component-cell')).toHaveLength(0)
   })
 
+  it('dense mode keeps the single-column grid (narrow dock panel)', () => {
+    const { container } = render(
+      <ComponentHealthStrip health={makeHealth()} connectionStatus="connected" dense />,
+    )
+    const grid = container.querySelector('.grid')
+    expect(grid?.className).toContain('grid-cols-1')
+    expect(grid?.className).not.toContain('sm:grid-cols-2')
+  })
+
   it('uses design tokens only — no raw colors', () => {
     const { container } = render(
       <ComponentHealthStrip health={makeHealth()} connectionStatus="connected" />,

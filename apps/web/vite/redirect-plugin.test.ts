@@ -34,8 +34,8 @@ describe('resolveRedirect / splitTarget', () => {
     expect(splitTarget('/datasets')).toEqual({ path: '/datasets', search: '' })
   })
 
-  it('has 47 entries matching proxy table', () => {
-    expect(Object.keys(REDIRECTS).length).toBe(47)
+  it('has 48 entries matching proxy table', () => {
+    expect(Object.keys(REDIRECTS).length).toBe(48)
   })
 
   it('maps workspace legacy paths to consolidated routes', () => {

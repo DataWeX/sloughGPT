@@ -22,6 +22,7 @@ export const REDIRECTS: Record<string, string> = {
   '/learn': '/training',
   '/auto-train': '/training',
   '/rate-limit': '/monitoring',
+  '/mole': '/monitoring',
   '/admin': '/settings',
   '/auth': '/settings',
   '/export': '/settings',

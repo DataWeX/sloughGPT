@@ -1,11 +1,17 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle, Skeleton, StatusDot } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, cn, Skeleton, StatusDot } from '@sloughgpt/strui'
 import type { ConnectionStatus, LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
 interface ComponentHealthStripProps {
   health: LiveHealthSnapshot | null
   connectionStatus?: ConnectionStatus
+  /**
+   * Force the single-column grid — for narrow containers like the floating
+   * dock panel, where the viewport-driven `sm:` breakpoint would still split
+   * the cells in half.
+   */
+  dense?: boolean
 }
 
 /**
@@ -32,7 +38,9 @@ export function quantSummary(q: unknown): string | null {
   return null
 }
 
-function connectionTone(status?: ConnectionStatus): 'success' | 'warning' | 'destructive' | 'muted' {
+function connectionTone(
+  status?: ConnectionStatus,
+): 'success' | 'warning' | 'destructive' | 'muted' {
   if (status === 'connected') return 'success'
   if (status === 'connecting' || status === 'reloading') return 'warning'
   if (status === 'offline' || status === 'error') return 'destructive'
@@ -79,8 +87,13 @@ function Cell({
   )
 }
 
-export function ComponentHealthStrip({ health, connectionStatus }: ComponentHealthStripProps) {
+export function ComponentHealthStrip({
+  health,
+  connectionStatus,
+  dense,
+}: ComponentHealthStripProps) {
   const connected = connectionStatus === 'connected'
+  const gridClass = cn('grid grid-cols-1 gap-3', dense ? '' : 'sm:grid-cols-2')
 
   if (!health) {
     return (
@@ -88,7 +101,7 @@ export function ComponentHealthStrip({ health, connectionStatus }: ComponentHeal
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Live components</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <CardContent className={gridClass}>
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
         </CardContent>
@@ -110,7 +123,7 @@ export function ComponentHealthStrip({ health, connectionStatus }: ComponentHeal
           className="text-[10px] text-muted-foreground"
         />
       </CardHeader>
-      <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <CardContent className={gridClass}>
         <Cell
           label="Inference"
           tone={health.model_loaded ? 'success' : 'warning'}
@@ -119,7 +132,7 @@ export function ComponentHealthStrip({ health, connectionStatus }: ComponentHeal
             {
               label: 'Model',
               value: health.model_loaded
-                ? (health.model_type || 'loaded')
+                ? health.model_type || 'loaded'
                 : health.model_loading
                   ? 'loading…'
                   : 'not loaded',
@@ -130,9 +143,7 @@ export function ComponentHealthStrip({ health, connectionStatus }: ComponentHeal
         />
         <Cell
           label="Engines / system"
-          tone={
-            score >= 80 ? 'success' : score >= 50 || score === 0 ? 'warning' : 'destructive'
-          }
+          tone={score >= 80 ? 'success' : score >= 50 || score === 0 ? 'warning' : 'destructive'}
           status={health.health_status || (score >= 80 ? 'healthy' : 'degraded')}
           rows={[
             { label: 'Health score', value: `${score}/100` },

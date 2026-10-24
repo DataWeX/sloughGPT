@@ -116,6 +116,14 @@ vi.mock('@/components/WhatsNewDialog', () => ({
   WhatsNewDialog: ({ open }: any) => (open ? <div data-testid="whatsnew-dialog" /> : null),
   getUnseenCount: () => 0,
 }))
+vi.mock('@/components/mole/MoleDock', () => ({
+  useMoleDockWidget: () => ({
+    id: 'mole',
+    label: 'nav.mole',
+    icon: <span data-testid="icon-mole" />,
+    render: () => <div data-testid="mole-dock-body" />,
+  }),
+}))
 
 const { mockToastStore, mockApiMonitor } = vi.hoisted(() => ({
   mockToastStore: { toasts: [], dismissToast: vi.fn(), clearToasts: vi.fn() },
@@ -204,6 +212,17 @@ describe('AppLayout', () => {
       </AppLayout>,
     )
     expect(screen.getByTestId('command-palette')).toBeDefined()
+  })
+
+  it('renders the floating overlay dock with the mole widget', () => {
+    render(
+      <AppLayout>
+        <div />
+      </AppLayout>,
+    )
+    expect(screen.getByTestId('overlay-dock')).toBeDefined()
+    const button = screen.getByTestId('overlay-widget-mole')
+    expect(button).toHaveAttribute('aria-label', 'nav.mole')
   })
 
   it('has skip-to-main-content link for accessibility', () => {
