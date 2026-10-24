@@ -1038,9 +1038,10 @@ git push -u origin feat/<name>   # push your own branch when done
 -f`; `git check-ignore` without `--no-index` lies — it hides rules for
   tracked files), and lint-staged's apply step FAILS on those paths (commit
   still lands; prettier reformatted whole touched files, e.g. StatusBar
-  247-line format-only diff). Anchor rule to `/data/` is a parked fix —
-  would unignore other untracked `data/` dirs (noise risk for concurrent
-  lanes). Also landed: **memory-card-utils duplicate consolidated** into the
+  247-line format-only diff). Fixed with a narrow `!apps/web/app/(app)/
+workspace/data/` negation after the bare `data/` rule — the rule stays
+  unanchored on purpose (anchoring to `/data/` would expose tracked-hostile
+  untracked user data at `packages/core-py/data`, `packages/data`). Also landed: **memory-card-utils duplicate consolidated** into the
   live `lib/` module (knowledge copy import-dead + test rewritten to live
   semantics, 38 cases; `85b9d0829`).
   **Blocked:** local `main` is stale @ `f53190f7f` and checked out by the dirty
