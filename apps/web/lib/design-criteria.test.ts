@@ -109,13 +109,12 @@ const STOCK_PALETTE_BASELINE: Record<string, number> = {
   'components/souls/PersonalitySummary.tsx': 3,
   'components/voice/VoiceRecordingCard.tsx': 1,
   'components/workspace-search/SearchCategoryBadge.tsx': 2,
-  'features/chat/components/input/ChatInput.tsx': 12,
+
   'features/chat/components/input/VoiceTranscript.tsx': 2,
-  'lib/memory-card-utils.ts': 12,
 }
 
 /** Total instance ceiling — additions to the map cannot lift it. */
-const STOCK_PALETTE_TOTAL_CEILING = 141
+const STOCK_PALETTE_TOTAL_CEILING = 117
 
 /** This rule also covers lib/ and contexts/ (class strings live there too). */
 const STOCK_SCAN_ROOTS = [...SCAN_ROOTS, 'lib', 'contexts'] as const
