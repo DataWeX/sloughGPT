@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck } from '@sloughgpt/strui'
 import { useState, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@sloughgpt/strui'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
@@ -88,7 +89,7 @@ export default function PronunciationTips() {
             <SelectContent>
               {PHONEME_LANGUAGES.map(lang => (
                 <SelectItem key={lang.value} value={lang.value}>
-                  {lang.label} {usedLangs.includes(lang.value as PhonemeLanguage) ? '✓' : ''}
+                  {lang.label} {usedLangs.includes(lang.value as PhonemeLanguage) && <IconCheck className="ml-1 inline h-3 w-3" />}
                 </SelectItem>
               ))}
             </SelectContent>

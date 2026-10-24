@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Tabs, TabsList, TabsTrigger, TabsContent, Kbd } from '@sloughgpt/strui'

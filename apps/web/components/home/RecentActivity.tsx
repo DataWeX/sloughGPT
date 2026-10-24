@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardContent, cn } from '@sloughgpt/strui'
+import { Card, CardContent, cn, IconStar, IconPin } from '@sloughgpt/strui'
 import { timeAgo } from '@/lib/time-ago'
 
 interface RecentActivityProps {
@@ -53,8 +53,8 @@ export function RecentActivity({ apiStatus, loading, modelStatus, recentSessions
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0 group-hover:bg-primary transition-colors" />
                 <span className="text-xs truncate flex-1 font-medium">{s.name}</span>
-                {s.starred && <span className="text-xs shrink-0 text-warning">★</span>}
-                {s.pinned && <span className="text-xs shrink-0 text-primary">📌</span>}
+                {s.starred && <span className="shrink-0 text-warning"><IconStar className="h-3 w-3" /></span>}
+                {s.pinned && <span className="shrink-0 text-primary"><IconPin className="h-3 w-3" /></span>}
                 <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums">
                   {s.message_count != null && <span>{s.message_count}m · </span>}
                   {timeAgo(s.updated_at)}

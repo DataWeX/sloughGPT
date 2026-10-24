@@ -35,6 +35,13 @@ import { TrainingHistoryView } from '@/components/training/TrainingHistoryView'
 import { TrainingAnalyticsCard } from '@/components/training/TrainingAnalyticsCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+import { GridSearchSection } from '@/components/training/GridSearchSection'
+import { ServerPresetSection } from '@/components/training/ServerPresetSection'
+import { RunsSection } from '@/components/training/RunsSection'
+import { InsightsSection } from '@/components/training/InsightsSection'
+import { CompareSection } from '@/components/training/CompareSection'
+import { ModelCardDialog } from '@/components/training/ModelCardDialog'
+import { FoldSection } from '@sloughgpt/strui'
 
 type ManualTab = 'train' | 'results' | 'settings'
 
@@ -42,6 +49,14 @@ const MANUAL_TABS: { id: ManualTab; label: string }[] = [
   { id: 'train', label: 'Train' },
   { id: 'results', label: 'Results' },
   { id: 'settings', label: 'Settings' },
+]
+
+type TrainMode = 'manual' | 'preset' | 'grid'
+
+const TRAIN_MODES: { id: TrainMode; label: string }[] = [
+  { id: 'manual', label: 'Manual' },
+  { id: 'preset', label: 'Preset' },
+  { id: 'grid', label: 'Grid Search' },
 ]
 
 export default function TrainingPage() {
@@ -52,9 +67,17 @@ export default function TrainingPage() {
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
-  const [manualTab, setManualTab] = useState<ManualTab>('train')
+  const modeParam = searchParams.get('mode')
+  const tabParam = searchParams.get('tab')
+  const [manualTab, setManualTab] = useState<ManualTab>(
+    tabParam === 'results' || tabParam === 'settings' ? tabParam : 'train',
+  )
+  const [trainMode, setTrainMode] = useState<TrainMode>(
+    modeParam === 'grid' || modeParam === 'preset' ? modeParam : 'manual',
+  )
   const [pipelineStep, setPipelineStep] = useState<'data' | 'configure' | 'train' | 'results'>('data')
   const [completedSteps, setCompletedSteps] = useState<Set<'data' | 'configure' | 'train' | 'results'>>(new Set())
+  const [modelCardOpen, setModelCardOpen] = useState(false)
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
   useRefreshShortcut(() => {
@@ -314,6 +337,37 @@ export default function TrainingPage() {
             {/* Train tab */}
             {manualTab === 'train' && (
               <div role="tabpanel" id="panel-train" aria-labelledby="tab-train">
+                <div className="mb-4 flex gap-1 rounded-lg bg-muted/50 p-1" role="tablist" aria-label="Run configuration mode">
+                  {TRAIN_MODES.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={trainMode === m.id}
+                      onClick={() => setTrainMode(m.id)}
+                      className={cn(
+                        'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                        trainMode === m.id
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                {trainMode === 'preset' ? (
+                  <ServerPresetSection />
+                ) : trainMode === 'grid' ? (
+                  <GridSearchSection
+                    onRefresh={() => {
+                      void datasets.fetchDatasets()
+                      void checkpoints.fetchCheckpoints()
+                      void checkpoints.fetchJobs()
+                    }}
+                  />
+                ) : (
+                <>
                 {/* Pipeline */}
                 <TrainingPipeline
                   form={form}
@@ -336,17 +390,36 @@ export default function TrainingPage() {
 
                 {/* Train from API conversation logs */}
                 <APILogsCard addToast={addToast} />
+                </>
+                )}
               </div>
             )}
 
             {/* Results tab */}
             {manualTab === 'results' && (
-              <div role="tabpanel" id="panel-results" aria-labelledby="tab-results">
+              <div role="tabpanel" id="panel-results" aria-labelledby="tab-results" className="space-y-4">
                 {/* Training analytics */}
                 <TrainingAnalyticsCard addToast={addToast} />
 
                 {/* Training history */}
                 <TrainingHistoryView addToast={addToast} />
+
+                {/* Outcome history: runs list, tags, notes, bookmarks */}
+                <RunsSection />
+
+                {/* Insights: trends + recommendations + analytics */}
+                <FoldSection heading="Insights & trends">
+                  <InsightsSection />
+                </FoldSection>
+
+                {/* Side-by-side run comparison */}
+                <FoldSection heading="Compare runs">
+                  <CompareSection />
+                </FoldSection>
+
+                <Button size="sm" variant="outline" onClick={() => setModelCardOpen(true)}>
+                  Generate model card
+                </Button>
 
                 {/* All builds */}
                 <TrainingBuildsCard addToast={addToast} />
@@ -370,6 +443,7 @@ export default function TrainingPage() {
               </div>
             )}
 
+      <ModelCardDialog open={modelCardOpen} onClose={() => setModelCardOpen(false)} />
       <TestModelDialog
         open={test.testDialogOpen}
         prompt={test.testPrompt}

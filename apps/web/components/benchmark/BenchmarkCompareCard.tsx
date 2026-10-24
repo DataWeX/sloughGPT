@@ -1,5 +1,6 @@
 'use client'
 
+import { IconStar } from '@sloughgpt/strui'
 import { useMemo } from 'react'
 import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 
@@ -98,7 +99,7 @@ export function BenchmarkCompareCard({ results }: BenchmarkCompareCardProps) {
                   return (
                     <div key={v.model} className="flex items-center gap-2">
                       <span className={cn('text-[9px] w-20 truncate', isBest ? 'text-success font-medium' : 'text-muted-foreground')}>
-                        {v.model}{isBest ? ' ★' : ''}
+                        {v.model}{isBest && <IconStar className="ml-0.5 inline h-2.5 w-2.5" />}
                       </span>
                       <div className="flex-1 h-4 bg-muted/30 rounded-sm overflow-hidden">
                         <div

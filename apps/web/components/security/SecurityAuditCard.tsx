@@ -40,7 +40,7 @@ const SEVERITY_STYLE: Record<Severity, string> = {
 
 const SEVERITY_ICON: Record<Severity, string> = {
   critical: '!',
-  warning: '⚠',
+  warning: '!',
   info: 'i',
 }
 

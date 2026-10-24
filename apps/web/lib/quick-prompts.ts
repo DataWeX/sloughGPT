@@ -13,18 +13,18 @@ interface PromptEntry {
 }
 
 const DEFAULT_PROMPTS: PromptEntry[] = [
-  { name: 'Explain simply', description: 'Explain like I am 5', icon: '💡', category: 'learning', prompt: 'Explain this in simple, easy-to-understand terms:\n\n{{text}}' },
-  { name: 'Summarize', description: 'Condense key points', icon: '📝', category: 'writing', prompt: 'Summarize the following concisely, capturing the key points:\n\n{{text}}' },
-  { name: 'Brainstorm', description: 'Creative idea generation', icon: '🧠', category: 'planning', prompt: 'Brainstorm creative ideas and approaches for:\n\n{{text}}' },
-  { name: 'TLDR', description: 'One-sentence summary', icon: '⚡', category: 'learning', prompt: 'Give me a one-sentence TLDR of the following:\n\n{{text}}' },
-  { name: 'Make a plan', description: 'Step-by-step plan', icon: '📋', category: 'planning', prompt: 'Create a detailed step-by-step plan for:\n\n{{text}}' },
-  { name: 'Code review', description: 'Review for issues', icon: '🔍', category: 'coding', prompt: 'Review this code for bugs, security issues, and style problems:\n\n{{text}}' },
-  { name: 'Write a poem', description: 'Creative verse', icon: '🎭', category: 'writing', prompt: 'Write a creative poem about:\n\n{{text}}' },
-  { name: 'Improve writing', description: 'Polish and refine', icon: '✏️', category: 'writing', prompt: 'Improve this writing for clarity, flow, and impact:\n\n{{text}}' },
-  { name: 'Debate both sides', description: 'Pros and cons', icon: '⚖️', category: 'learning', prompt: 'Present a balanced analysis of both sides of:\n\n{{text}}' },
-  { name: 'Refactor code', description: 'Clean up code', icon: '♻️', category: 'coding', prompt: 'Refactor this code to be cleaner, more maintainable, and follow best practices:\n\n{{text}}' },
-  { name: 'Write tests', description: 'Generate test cases', icon: '🧪', category: 'coding', prompt: 'Write comprehensive test cases for:\n\n{{text}}' },
-  { name: 'Study guide', description: 'Learn this topic', icon: '📚', category: 'learning', prompt: 'Create a structured study guide covering the key concepts of:\n\n{{text}}' },
+  { name: 'Explain simply', description: 'Explain like I am 5', icon: 'bulb', category: 'learning', prompt: 'Explain this in simple, easy-to-understand terms:\n\n{{text}}' },
+  { name: 'Summarize', description: 'Condense key points', icon: 'note', category: 'writing', prompt: 'Summarize the following concisely, capturing the key points:\n\n{{text}}' },
+  { name: 'Brainstorm', description: 'Creative idea generation', icon: 'brain', category: 'planning', prompt: 'Brainstorm creative ideas and approaches for:\n\n{{text}}' },
+  { name: 'TLDR', description: 'One-sentence summary', icon: 'zap', category: 'learning', prompt: 'Give me a one-sentence TLDR of the following:\n\n{{text}}' },
+  { name: 'Make a plan', description: 'Step-by-step plan', icon: 'plan', category: 'planning', prompt: 'Create a detailed step-by-step plan for:\n\n{{text}}' },
+  { name: 'Code review', description: 'Review for issues', icon: 'review', category: 'coding', prompt: 'Review this code for bugs, security issues, and style problems:\n\n{{text}}' },
+  { name: 'Write a poem', description: 'Creative verse', icon: 'stage', category: 'writing', prompt: 'Write a creative poem about:\n\n{{text}}' },
+  { name: 'Improve writing', description: 'Polish and refine', icon: 'pencil', category: 'writing', prompt: 'Improve this writing for clarity, flow, and impact:\n\n{{text}}' },
+  { name: 'Debate both sides', description: 'Pros and cons', icon: 'scale', category: 'learning', prompt: 'Present a balanced analysis of both sides of:\n\n{{text}}' },
+  { name: 'Refactor code', description: 'Clean up code', icon: 'recycle', category: 'coding', prompt: 'Refactor this code to be cleaner, more maintainable, and follow best practices:\n\n{{text}}' },
+  { name: 'Write tests', description: 'Generate test cases', icon: 'lab', category: 'coding', prompt: 'Write comprehensive test cases for:\n\n{{text}}' },
+  { name: 'Study guide', description: 'Learn this topic', icon: 'book', category: 'learning', prompt: 'Create a structured study guide covering the key concepts of:\n\n{{text}}' },
 ]
 
 function applyPrompt(template: string, text: string): string {

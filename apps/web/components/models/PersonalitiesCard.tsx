@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck } from '@sloughgpt/strui'
 import { useRouter } from 'next/navigation'
 import { cn, Badge, Chip, Spinner } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
@@ -88,7 +89,7 @@ export default function PersonalitiesCard({
                               <SelectItem key={cp.name} value={cp.name}>
                                 <span>{cp.name}</span>
                                 {meta && <span className="text-muted-foreground ml-1.5">{meta}</span>}
-                                {activeCheckpoint === cp.name && <span className="text-primary ml-1">✓</span>}
+                                {activeCheckpoint === cp.name && <IconCheck className="ml-1 h-3 w-3 text-primary" />}
                               </SelectItem>
                             )
                           })}

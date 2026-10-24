@@ -29,7 +29,7 @@ const EVENT_ICONS: Record<string, { icon: string; color: string }> = {
   logout: { icon: '←', color: 'text-muted-foreground' },
   register: { icon: '+', color: 'text-primary' },
   token_refresh: { icon: '↻', color: 'text-warning' },
-  failed_login: { icon: '✗', color: 'text-destructive' },
+  failed_login: { icon: '!', color: 'text-destructive' },
 }
 
 export function recordAuthEvent(type: AuthEvent['type'], details?: string) {

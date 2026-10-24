@@ -69,6 +69,24 @@ class BatchRequest(BaseModel):
     operations: list[BatchOperation] = Field(..., min_length=1, description="Ordered list of operations to execute")
 
 
+class _UnavailableTrainer:
+    """Fallback when domain.consciousness.training is absent."""
+
+    is_training = False
+    _pairs: list = []
+
+    def __init__(self) -> None:
+        from types import SimpleNamespace
+
+        self.config = SimpleNamespace(min_pairs_for_training=0, model_path="")
+
+    def get_status(self) -> dict:
+        return {"available": False, "is_training": False, "reason": "training module not installed"}
+
+    def should_train(self) -> bool:
+        return False
+
+
 class ConsciousnessRouter:
     """API endpoints for the consciousness system."""
 
@@ -88,7 +106,12 @@ class ConsciousnessRouter:
     def _get_trainer(self):
         """Lazy-load the consciousness trainer."""
         if self._trainer is None:
-            from domain.consciousness.training import ConsciousnessTrainer, TrainingConfig
+            try:
+                from domain.consciousness.training import ConsciousnessTrainer, TrainingConfig
+            except (ImportError, ModuleNotFoundError):
+                logger.warning("consciousness training module missing; using unavailable stub")
+                self._trainer = _UnavailableTrainer()
+                return self._trainer
             engine = self._get_engine()
             config = TrainingConfig(
                 model_path="",

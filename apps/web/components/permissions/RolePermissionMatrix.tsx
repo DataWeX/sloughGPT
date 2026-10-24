@@ -1,3 +1,4 @@
+import { IconCheck } from '@sloughgpt/strui'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 
 const ROLE_COLORS: Record<string, string> = {
@@ -61,7 +62,7 @@ export function RolePermissionMatrix({ roles, allPermissions }: RolePermissionMa
                       {roleKeys.map(role => (
                         <td key={role} className="text-center py-1.5 px-2">
                           {roles[role].permissions.includes(perm) ? (
-                            <span className="text-green-600">✓</span>
+                            <span className="text-green-600" aria-label="granted"><IconCheck className="h-3.5 w-3.5" /></span>
                           ) : (
                             <span className="text-muted-foreground/40">—</span>
                           )}

@@ -181,10 +181,10 @@ export default function ModelDetailPage() {
                 <Button variant="outline" size="sm" onClick={() => router.push('/training/queue')}>
                   Training Queue
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => router.push('/training/trends')}>
+                <Button variant="outline" size="sm" onClick={() => router.push('/training?tab=results')}>
                   Training Trends
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => router.push('/training/insights')}>
+                <Button variant="outline" size="sm" onClick={() => router.push('/training?tab=results')}>
                   Adaptive Insights
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => window.open(`https://huggingface.co/${model.model_id}`, '_blank')}>

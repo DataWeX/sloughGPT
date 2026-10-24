@@ -1,5 +1,6 @@
 'use client'
 
+import { IconX } from '@sloughgpt/strui'
 import { useState, useRef, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
@@ -131,7 +132,7 @@ export function ImageUploaderCard({ onUpload }: ImageUploaderCardProps) {
                     className="absolute top-0.5 right-0.5 bg-background/80 text-foreground text-[9px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => handleDelete(img.id)}
                   >
-                    ✕
+                    <IconX className="h-3 w-3" />
                   </button>
                   <div className="text-[9px] text-muted-foreground truncate mt-0.5">{img.name}</div>
                 </div>

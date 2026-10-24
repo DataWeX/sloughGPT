@@ -9,7 +9,7 @@ import { ThemeSwitcher } from './ThemeSwitcher'
 import { TrainingIndicator } from './TrainingIndicator'
 import { ConsciousnessSidebarWidget } from './consciousness/ConsciousnessSidebarWidget'
 import { useLocale } from '@/hooks/useLocale'
-import { NAV_SECTIONS, SIDEBAR_ICONS } from '@/lib/navigation'
+import { NAV_ICONS, SIDEBAR_SECTIONS } from '@/lib/navigation'
 
 const NAV_ICON = 'h-4 w-4 shrink-0'
 
@@ -93,7 +93,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
           aria-label="Primary"
         >
           <div className={cn('min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide', isCollapsed && 'w-fit')}>
-            {NAV_SECTIONS.map((section, si) => (
+            {SIDEBAR_SECTIONS.map((section, si) => (
               <div key={si}>
                 {si > 0 && (
                   <div className="my-2 border-t border-border/30 dark:border-border/40" />
@@ -106,7 +106,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
                 <ul className="space-y-0.5">
                   {section.routes.map((route) => {
                     const active = routeMatchesPath(pathname, route.path)
-                    const RouteIcon = SIDEBAR_ICONS[route.path]
+                    const RouteIcon = route.icon ? NAV_ICONS[route.icon] : undefined
                     return (
                       <li key={route.path}>
                         <Link

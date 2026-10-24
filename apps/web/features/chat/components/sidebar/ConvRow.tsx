@@ -179,8 +179,8 @@ export const ConvRow = memo(function ConvRow({
             <span className="text-xs text-muted-foreground/50">
               {formatDate(c.updated_at || c.updatedAt)}
             </span>
-            {c.pinned && <span className="text-xs text-primary">📌</span>}
-            {c.starred && <span className="text-xs">★</span>}
+            {c.pinned && <IconPin className="h-3 w-3 text-primary" />}
+            {c.starred && <IconStar className="h-3 w-3" />}
           </div>
         )}
       </div>

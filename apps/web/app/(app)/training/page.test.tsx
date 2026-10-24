@@ -106,6 +106,12 @@ vi.mock('@/components/training/TrainingSummaryCard', () => ({ TrainingSummaryCar
 vi.mock('@/components/training/TrainingHealthCard', () => ({ TrainingHealthCard: () => null }))
 vi.mock('@/components/OutputCard', () => ({ OutputCard: () => null }))
 vi.mock('@/components/training/TestModelDialog', () => ({ TestModelDialog: () => null }))
+vi.mock('@/components/training/GridSearchSection', () => ({ GridSearchSection: () => <div data-testid="grid-search-section" /> }))
+vi.mock('@/components/training/ServerPresetSection', () => ({ ServerPresetSection: () => <div data-testid="server-preset-section" /> }))
+vi.mock('@/components/training/RunsSection', () => ({ RunsSection: () => <div data-testid="runs-section" /> }))
+vi.mock('@/components/training/InsightsSection', () => ({ InsightsSection: () => <div data-testid="insights-section" /> }))
+vi.mock('@/components/training/CompareSection', () => ({ CompareSection: () => <div data-testid="compare-section" /> }))
+vi.mock('@/components/training/ModelCardDialog', () => ({ ModelCardDialog: () => null }))
 vi.mock('@/components/training/TrainingPipeline', () => ({
   TrainingPipeline: ({ form, datasets, session, checkpoints, onTest }: any) => (
     <div data-testid="training-pipeline">
@@ -239,5 +245,47 @@ describe('TrainingPage', () => {
       fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
     })
     expect(mockForm.startTraining).not.toHaveBeenCalled()
+  })
+})
+
+describe('TrainingPage train modes', () => {
+  it('shows the Manual / Preset / Grid Search mode selector on the Train tab', async () => {
+    render(<Page />)
+    await waitFor(() => { expect(screen.getByText('Manual')).toBeTruthy() })
+    expect(screen.getByText('Preset')).toBeTruthy()
+    expect(screen.getByText('Grid Search')).toBeTruthy()
+    expect(screen.getByTestId('training-pipeline')).toBeTruthy()
+  })
+
+  it('switches to the preset picker when Preset is selected', async () => {
+    render(<Page />)
+    await waitFor(() => { expect(screen.getByText('Preset')).toBeTruthy() })
+    await act(async () => { screen.getByText('Preset').click() })
+    expect(screen.getByTestId('server-preset-section')).toBeTruthy()
+  })
+
+  it('switches to grid search when Grid Search is selected', async () => {
+    render(<Page />)
+    await waitFor(() => { expect(screen.getByText('Grid Search')).toBeTruthy() })
+    await act(async () => { screen.getByText('Grid Search').click() })
+    expect(screen.getByTestId('grid-search-section')).toBeTruthy()
+  })
+})
+
+describe('TrainingPage results sections', () => {
+  it('shows runs, insights, and compare sections on the Results tab', async () => {
+    render(<Page />)
+    await waitFor(() => { expect(screen.getByText('Results')).toBeTruthy() })
+    await act(async () => { screen.getByText('Results').click() })
+    expect(screen.getByTestId('runs-section')).toBeTruthy()
+    expect(screen.getByTestId('insights-section')).toBeTruthy()
+    expect(screen.getByTestId('compare-section')).toBeTruthy()
+  })
+
+  it('opens the model card dialog from the Results tab', async () => {
+    render(<Page />)
+    await waitFor(() => { expect(screen.getByText('Results')).toBeTruthy() })
+    await act(async () => { screen.getByText('Results').click() })
+    expect(screen.getByText('Generate model card')).toBeTruthy()
   })
 })

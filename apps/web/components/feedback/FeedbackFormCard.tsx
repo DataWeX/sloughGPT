@@ -1,5 +1,6 @@
 'use client'
 
+import { IconThumbUp, IconThumbDown } from '@sloughgpt/strui'
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
 
@@ -40,7 +41,7 @@ export function FeedbackFormCard({ onSubmit, submitting = false }: FeedbackFormC
               }`}
               aria-label="Thumbs up"
             >
-              👍 Good
+              <span className="inline-flex items-center gap-1"><IconThumbUp className="h-3.5 w-3.5" /> Good</span>
             </button>
             <button
               type="button"
@@ -52,7 +53,7 @@ export function FeedbackFormCard({ onSubmit, submitting = false }: FeedbackFormC
               }`}
               aria-label="Thumbs down"
             >
-              👎 Bad
+              <span className="inline-flex items-center gap-1"><IconThumbDown className="h-3.5 w-3.5" /> Bad</span>
             </button>
           </div>
         </div>

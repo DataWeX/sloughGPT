@@ -7,9 +7,26 @@ import { cn, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
-import { Sparkles, Palette, GraduationCap, Cpu, MessageCircle, Mic, Zap, BarChart3, Brain, Settings, Trash2 } from 'lucide-react'
+import { Sparkles, Palette, GraduationCap, Cpu, MessageCircle, Mic, Zap, BarChart3, Brain, Settings, Trash2, TrendingUp, Trophy, HardDrive, Radio } from 'lucide-react'
 
-const EMOJI_TO_ICON: Record<string, ReactNode> = {
+const ICON_FOR: Record<string, ReactNode> = {
+  sparkle: <Sparkles className="h-4 w-4" />,
+  palette: <Palette className="h-4 w-4" />,
+  graduation: <GraduationCap className="h-4 w-4" />,
+  brain: <Brain className="h-4 w-4" />,
+  chat: <MessageCircle className="h-4 w-4" />,
+  mic: <Mic className="h-4 w-4" />,
+  zap: <Zap className="h-4 w-4" />,
+  chart: <BarChart3 className="h-4 w-4" />,
+  robot: <Cpu className="h-4 w-4" />,
+  settings: <Settings className="h-4 w-4" />,
+  trash: <Trash2 className="h-4 w-4" />,
+  trend: <TrendingUp className="h-4 w-4" />,
+  trophy: <Trophy className="h-4 w-4" />,
+  save: <HardDrive className="h-4 w-4" />,
+  signal: <Radio className="h-4 w-4" />,
+  search: <MessageCircle className="h-4 w-4" />,
+  // Legacy emoji keys (stored seen-ids predate rename only) — safe fallback.
   '✨': <Sparkles className="h-4 w-4" />,
   '🎨': <Palette className="h-4 w-4" />,
   '🎓': <GraduationCap className="h-4 w-4" />,
@@ -105,7 +122,7 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 )}
               >
                 <div className="flex items-start gap-2">
-                  <span className="text-sm leading-none mt-0.5 shrink-0 text-muted-foreground">{EMOJI_TO_ICON[item.icon] ?? <Sparkles className="h-3.5 w-3.5" />}</span>
+                  <span className="text-sm leading-none mt-0.5 shrink-0 text-muted-foreground">{ICON_FOR[item.icon] ?? <Sparkles className="h-3.5 w-3.5" />}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {item.href ? (

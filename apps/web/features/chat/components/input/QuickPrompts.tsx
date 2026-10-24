@@ -7,7 +7,21 @@ import type { QuickPrompt } from '@/lib/quick-prompts'
 import { listPromptsByCategory, createPrompt, updatePrompt, deletePrompt, resetToDefaults, applyPrompt } from '@/lib/quick-prompts'
 import { Lightbulb, FileText, Brain, Zap, ListTodo, Search, Palette, Pencil, Scale, Recycle, FlaskConical, BookOpen, MessageCircle } from 'lucide-react'
 
-const EMOJI_TO_ICON: Record<string, ReactNode> = {
+const ICON_FOR: Record<string, ReactNode> = {
+  bulb: <Lightbulb className="h-3.5 w-3.5" />,
+  note: <FileText className="h-3.5 w-3.5" />,
+  brain: <Brain className="h-3.5 w-3.5" />,
+  zap: <Zap className="h-3.5 w-3.5" />,
+  plan: <ListTodo className="h-3.5 w-3.5" />,
+  review: <Search className="h-3.5 w-3.5" />,
+  stage: <Palette className="h-3.5 w-3.5" />,
+  pencil: <Pencil className="h-3.5 w-3.5" />,
+  scale: <Scale className="h-3.5 w-3.5" />,
+  recycle: <Recycle className="h-3.5 w-3.5" />,
+  lab: <FlaskConical className="h-3.5 w-3.5" />,
+  book: <BookOpen className="h-3.5 w-3.5" />,
+  chat: <MessageCircle className="h-3.5 w-3.5" />,
+  // Legacy emoji keys (stored prompts from before rename) — remove after migration.
   '💡': <Lightbulb className="h-3.5 w-3.5" />,
   '📝': <FileText className="h-3.5 w-3.5" />,
   '🧠': <Brain className="h-3.5 w-3.5" />,
@@ -85,7 +99,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
       name: newName.trim(),
       description: newDesc.trim() || newName.trim(),
       prompt: newPrompt.trim(),
-      icon: '⚡',
+      icon: 'zap',
       category: 'custom',
     })
     setNewName('')
@@ -192,7 +206,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                         title="Use this prompt"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground">{EMOJI_TO_ICON[p.icon as string] ?? <MessageCircle className="h-3.5 w-3.5" />}</span>
+                          <span className="text-xs text-muted-foreground">{ICON_FOR[p.icon as string] ?? <MessageCircle className="h-3.5 w-3.5" />}</span>
                           <span className="text-xs font-medium">{p.name}</span>
                           {p.category === 'custom' && (
                             <span className="text-[9px] text-muted-foreground ml-auto">custom</span>

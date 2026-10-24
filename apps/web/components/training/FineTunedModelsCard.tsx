@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck } from '@sloughgpt/strui'
 import { useCallback, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn, ActionCard, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
@@ -194,7 +195,7 @@ export function FineTunedModelsCard({
                           aria-label={`View details for ${m.name}`}
                         >
                           <p className="truncate font-medium text-xs hover:text-primary transition-colors">{m.name}</p>
-                          {isActive && <span className="text-primary text-[10px]">✓</span>}
+                          {isActive && <IconCheck className="h-3 w-3 text-primary" />}
                         </button>
                         <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground/60 mt-0.5">
                           <span>{m.model}</span>

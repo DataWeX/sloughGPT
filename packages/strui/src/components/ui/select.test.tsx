@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
-import { Select, SelectTrigger, SelectContent, SelectItem } from './select'
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from './select'
 
 function stubLayout(rect: Partial<DOMRect>, height: number, width: number) {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -100,5 +100,30 @@ describe('Select', () => {
 
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(onValueChange).toHaveBeenCalledWith('b')
+  })
+
+  it('SelectValue shows the selected item label, not the raw value', () => {
+    render(
+      <Select defaultValue="b">
+        <SelectTrigger data-testid="trigger"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Alpha</SelectItem>
+          <SelectItem value="b">Beta</SelectItem>
+        </SelectContent>
+      </Select>,
+    )
+    expect(screen.getByTestId('trigger').textContent).toContain('Beta')
+  })
+
+  it('SelectValue shows placeholder when nothing is selected', () => {
+    render(
+      <Select>
+        <SelectTrigger data-testid="trigger"><SelectValue placeholder="Pick one..." /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Alpha</SelectItem>
+        </SelectContent>
+      </Select>,
+    )
+    expect(screen.getByTestId('trigger').textContent).toContain('Pick one...')
   })
 })

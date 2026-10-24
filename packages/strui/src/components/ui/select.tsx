@@ -9,8 +9,10 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+  isValidElement,
   type HTMLAttributes,
   type ReactNode,
 } from 'react'
@@ -29,6 +31,7 @@ interface SelectContextValue {
   contentId: string
   registerItem: (el: HTMLElement | null) => void
   unregisterItem: (el: HTMLElement | null) => void
+  labelFor: (value: string) => ReactNode
   focusFirst: () => void
   focusNext: (current: HTMLElement) => void
   focusPrev: (current: HTMLElement) => void
@@ -52,8 +55,7 @@ interface SelectRootProps {
   children: ReactNode
 }
 
-function Select({ value: controlledValue, defaultValue = '', onValueChange, children }: SelectRootProps) {
-  const [internalValue, setInternalValue] = useState(defaultValue)
+function Select({ value: controlledValue, defaultValue = '', onValueChange, children }: SelectRootProps) {  const [internalValue, setInternalValue] = useState(defaultValue)
   const isControlled = controlledValue !== undefined
   const value = isControlled ? controlledValue : internalValue
   const [open, setOpen] = useState(false)
@@ -78,6 +80,33 @@ function Select({ value: controlledValue, defaultValue = '', onValueChange, chil
   const unregisterItem = useCallback((el: HTMLElement | null) => {
     if (el) itemsRef.current.delete(el)
   }, [])
+
+  // Synchronous label lookup: walk the SelectContent/SelectItem element tree
+  // so SelectValue renders the right label on first paint (no effect round-trip).
+  const labelFor = useCallback(
+    (lookup: string) => {
+      let found: ReactNode
+      const walk = (node: ReactNode): void => {
+        if (found !== undefined) return
+        if (Array.isArray(node)) {
+          node.forEach(walk)
+          return
+        }
+        if (!isValidElement(node)) return
+        const props = node.props as { value?: string; children?: ReactNode }
+        if (typeof props?.value === 'string') {
+          if (props.value === lookup) found = props.children
+          return
+        }
+        const kids = props?.children
+        if (Array.isArray(kids)) kids.forEach(walk)
+        else if (kids) walk(kids)
+      }
+      walk(children)
+      return found
+    },
+    [children],
+  )
 
   const sortedItems = useCallback(() => {
     return Array.from(itemsRef.current.entries())
@@ -110,7 +139,7 @@ function Select({ value: controlledValue, defaultValue = '', onValueChange, chil
 
   return (
     <SelectContext.Provider
-      value={{ open, onOpenChange: setOpen, value, onValueChange: handleChange, triggerRef, contentId, registerItem, unregisterItem, focusFirst, focusNext, focusPrev }}
+      value={{ open, onOpenChange: setOpen, value, onValueChange: handleChange, triggerRef, contentId, registerItem, unregisterItem, labelFor, focusFirst, focusNext, focusPrev }}
     >
       {children}
     </SelectContext.Provider>
@@ -149,7 +178,7 @@ const SelectTrigger = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonEle
         {...props}
       >
         <span className={cn('truncate', !ctx.value && 'text-muted-foreground')}>
-          {ctx.value ? children : placeholder ?? 'Select...'}
+          {children ?? placeholder ?? 'Select...'}
         </span>
         <svg className={cn('h-4 w-4 text-muted-foreground transition-transform', ctx.open && 'rotate-180')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9l6 6 6-6" />
@@ -336,10 +365,11 @@ SelectItem.displayName = 'SelectItem'
 
 /* ── Value ──────────────────────────────────────────────────────── */
 
-function SelectValue({ placeholder }: { placeholder?: string }) {
+function SelectValue({ placeholder, children }: { placeholder?: string; children?: ReactNode }) {
   const ctx = useSelectContext()
   if (!ctx.value) return <span className="text-muted-foreground">{placeholder ?? 'Select...'}</span>
-  return null
+  const label = ctx.labelFor(ctx.value)
+  return <>{children ?? label ?? ctx.value}</>
 }
 
 /* ── Group / Separator ──────────────────────────────────────────── */

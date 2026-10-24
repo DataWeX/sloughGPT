@@ -830,6 +830,7 @@ class HealthRouter:
                 "rate_violations": detailed.get("rate_violations", []),
                 "path_latencies": detailed.get("path_latencies", []),
                 "recent_errors": detailed.get("recent_errors", []),
+                "startup_progress": detailed.get("startup_progress"),
             },
             "meta": {"ts": time.time()},
             "message": hs.get("summary", ""),

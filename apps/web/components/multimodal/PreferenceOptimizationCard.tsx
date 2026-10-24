@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck } from '@sloughgpt/strui'
 import { memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -39,7 +40,7 @@ export default memo(function PreferenceOptimizationCard({ dpoRunning, dpoStatus,
         )}
         {dpoResult && dpoResult.status === 'accepted' && (
           <div className="space-y-1 p-2 rounded bg-success/10 border border-success/20 text-xs">
-            <p className="text-success font-medium">✓ DPO accepted — model updated</p>
+            <p className="text-success font-medium flex items-center gap-1"><IconCheck className="h-3.5 w-3.5" /> DPO accepted — model updated</p>
             {typeof dpoResult.steps === 'number' && dpoResult.steps > 0 && <p className="text-muted-foreground">{dpoResult.steps} steps · avg loss {typeof dpoResult.avg_loss === 'number' ? dpoResult.avg_loss.toFixed(4) : '...'}</p>}
             {typeof dpoResult.ppl_before === 'number' && (
               <p className="text-muted-foreground">PPL: {dpoResult.ppl_before.toFixed(2)} → {typeof dpoResult.ppl_after === 'number' ? dpoResult.ppl_after.toFixed(2) : '...'} ({typeof dpoResult.ppl_delta_pct === 'number' && dpoResult.ppl_delta_pct > 0 ? '+' : ''}{typeof dpoResult.ppl_delta_pct === 'number' ? dpoResult.ppl_delta_pct.toFixed(1) : '...'}%)</p>

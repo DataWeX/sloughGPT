@@ -26,22 +26,6 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
-vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ title, subtitle, headerRight, children }: any) => (
-    <div data-testid="page-container">
-      <h1>{title}</h1>
-      {subtitle && <p>{subtitle}</p>}
-      <div data-testid="header-right">{headerRight}</div>
-      <div>{children}</div>
-    </div>
-  ),
-}))
-
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ children }: any) => <div>{children}</div>,
-  AppRouteHeaderLead: ({ children }: any) => <div>{children}</div>,
-}))
-
 vi.mock('lucide-react', () => ({
   Grid3X3: () => <span data-testid="icon-grid3x3" />,
   Zap: () => <span data-testid="icon-zap" />,
@@ -72,7 +56,7 @@ vi.mock('@/hooks/useRefreshShortcut', () => ({
   useRefreshShortcut: vi.fn(),
 }))
 
-import GridSearchPage from './page'
+import { GridSearchSection } from './GridSearchSection'
 
 async function loadDatasets() {
   await act(async () => {
@@ -90,24 +74,23 @@ beforeEach(() => {
   mockStartAutoTrain.mockResolvedValue({})
 })
 
-describe('GridSearchPage', () => {
+describe('GridSearchSection', () => {
   it('renders without crashing', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
-      expect(screen.getByText('Hyperparameter Grid Search')).toBeTruthy()
+      expect(screen.getByText('Search Space')).toBeTruthy()
     })
   })
 
-  it('renders the page title and subtitle', async () => {
-    render(<GridSearchPage />)
+  it('renders the combination count summary', async () => {
+    render(<GridSearchSection />)
     await waitFor(() => {
-      expect(screen.getByText('Hyperparameter Grid Search')).toBeTruthy()
+      expect(screen.getByText(/combinations from .* parameters/)).toBeTruthy()
     })
-    expect(screen.getByText(/combinations from .* parameters/)).toBeTruthy()
   })
 
   it('displays default parameter configuration', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('Search Space')).toBeTruthy()
     })
@@ -116,21 +99,21 @@ describe('GridSearchPage', () => {
   })
 
   it('shows 3 values badges for default params', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getAllByText('3 values').length).toBe(3)
     })
   })
 
   it('shows the run button with combination count', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('Run 27 Runs')).toBeTruthy()
     })
   })
 
   it('shows validation toast when starting without dataset', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('Run 27 Runs')).toBeTruthy()
     })
@@ -141,14 +124,14 @@ describe('GridSearchPage', () => {
   })
 
   it('loads datasets on refresh click', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await loadDatasets()
     expect(mockListDatasets).toHaveBeenCalled()
     expect(screen.getByText('Dataset 1')).toBeTruthy()
   })
 
   it('shows validation toast when parameter name is empty', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('Run 27 Runs')).toBeTruthy()
     })
@@ -167,7 +150,7 @@ describe('GridSearchPage', () => {
 
   it('starts grid search and shows results on success', async () => {
     mockStartAutoTrain.mockResolvedValue({ loss: 0.3 })
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('Run 27 Runs')).toBeTruthy()
     })
@@ -197,7 +180,7 @@ describe('GridSearchPage', () => {
 
   it('shows failed status when a run errors', async () => {
     mockStartAutoTrain.mockRejectedValue(new Error('boom'))
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('Run 27 Runs')).toBeTruthy()
     })
@@ -226,7 +209,7 @@ describe('GridSearchPage', () => {
   })
 
   it('adds a new parameter row', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('Add Parameter')).toBeTruthy()
     })
@@ -240,7 +223,7 @@ describe('GridSearchPage', () => {
   })
 
   it('removes a parameter row', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('Add Parameter')).toBeTruthy()
     })
@@ -255,7 +238,7 @@ describe('GridSearchPage', () => {
   })
 
   it('shows combination preview entries', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByText('#1')).toBeTruthy()
     })
@@ -264,7 +247,7 @@ describe('GridSearchPage', () => {
   })
 
   it('refresh button exists', async () => {
-    render(<GridSearchPage />)
+    render(<GridSearchSection />)
     await waitFor(() => {
       expect(screen.getByTestId('icon-refresh')).toBeTruthy()
     })

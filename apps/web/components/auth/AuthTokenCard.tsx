@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck, IconX } from '@sloughgpt/strui'
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, cn } from '@sloughgpt/strui'
 
@@ -117,7 +118,7 @@ export function AuthTokenCard({ token, onVerify }: AuthTokenCardProps) {
               'text-xs font-medium p-2 rounded',
               verifyResult.valid ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
             )}>
-              {verifyResult.valid ? '✓ Token is valid' : '✗ Token is invalid or expired'}
+              {verifyResult.valid ? <span className="inline-flex items-center gap-1"><IconCheck className="h-3.5 w-3.5" /> Token is valid</span> : <span className="inline-flex items-center gap-1"><IconX className="h-3.5 w-3.5" /> Token is invalid or expired</span>}
             </div>
           )}
         </div>

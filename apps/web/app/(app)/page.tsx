@@ -10,7 +10,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconChat, IconModels } from '@/components/icons/NavIcons'
-import { IconChevronRight, IconMessage, LossCurve, SectionHeader, StatusDot } from '@sloughgpt/strui'
+import { IconChevronRight, IconMessage, IconStar, IconPin, LossCurve, SectionHeader, StatusDot } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
 import { chatController } from '@/lib/chat-controller'
@@ -340,8 +340,8 @@ export default function HomePage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
-                  {recentSessions[0].starred && <span className="text-xs">★</span>}
-                  {recentSessions[0].pinned && <span className="text-xs text-primary">📌</span>}
+                  {recentSessions[0].starred && <IconStar className="h-3 w-3" />}
+                  {recentSessions[0].pinned && <IconPin className="h-3 w-3 text-primary" />}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {recentSessions[0].message_count != null && <span>{recentSessions[0].message_count} messages · </span>}

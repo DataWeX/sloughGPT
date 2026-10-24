@@ -1,5 +1,6 @@
 'use client'
 
+import { IconStar } from '@sloughgpt/strui'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -181,7 +182,7 @@ export default function ConsciousnessMasterDashboardPage() {
   }))
 
   const ratingDist = [1, 2, 3, 4, 5].map(r => ({
-    rating: `${r}★`,
+    rating: `${r} stars`,
     count: episodes.filter((e: any) => Math.round(e.rating ?? 0) === r).length,
   }))
 
@@ -301,7 +302,7 @@ export default function ConsciousnessMasterDashboardPage() {
                 {avgRating > 0 ? (
                   <span className="flex items-center gap-1">
                     {avgRating.toFixed(1)}
-                    <span className="text-yellow-400 text-sm">{'★'.repeat(Math.round(avgRating))}</span>
+                    <span className="text-yellow-400 text-sm inline-flex items-center gap-0.5" aria-label={`${Math.round(avgRating)} out of 5 stars`}>{Array.from({ length: Math.round(avgRating) }).map((_, i) => <IconStar key={i} className="h-3.5 w-3.5" />)}</span>
                   </span>
                 ) : '—'}
               </div>

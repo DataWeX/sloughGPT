@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck, IconX } from '@sloughgpt/strui'
 import { useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@sloughgpt/strui'
 import { Progress } from '@sloughgpt/strui'
@@ -180,7 +181,7 @@ export default function PhonemeComparison({
                     variant={pair.match ? 'default' : 'destructive'}
                     className="ml-auto"
                   >
-                    {pair.match ? '✓' : '✗'}
+                    {pair.match ? <IconCheck className="h-3 w-3" /> : <IconX className="h-3 w-3" />}
                   </Badge>
                 </div>
               ))}

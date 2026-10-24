@@ -32,6 +32,15 @@
 - **Board** (`.kanban/board.jsonl`) is the kanban view derived from notes via sync.
 - Sync is bidirectional: note status ↔ card column.
 
+## UI Navigation Rules
+
+- Keep top-level tabs minimal (e.g. `/training` stays at Train / Results / Settings — never add tabs to absorb subpages).
+- Fold single-purpose subpages into their parent page as modes/sections, not new tabs or routes:
+  - Train tab: Manual / Preset / Grid Search mode selector (mutually exclusive run-configuration modes swapping the config form below).
+  - Results tab: runs list owns compare (select 2 runs → compare drawer/section); analytics + trends + insights merge into one Insights section (all read the same `/training/trends` data); model-card is a per-run action/dialog, not a page.
+- Remove absorbed sub-routes from sidebar nav (`lib/navigation.ts`); keep redirects so bookmarks don't break.
+- Page header comes from `PageContainer` props only — never render a nested `AppRouteHeader` inside it.
+
 ## Core Infrastructure Sync Rule
 
 **http-client.ts is the single source of truth for all API communication.**

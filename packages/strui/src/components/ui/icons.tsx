@@ -412,9 +412,9 @@ export function IconActivity({ className }: IconProps) {
 export function IconCompare({ className }: IconProps) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <rect x="3" y="10" width="4" height="10" rx="1" strokeWidth={2} />
-      <rect x="10" y="6" width="4" height="14" rx="1" strokeWidth={2} />
-      <rect x="17" y="2" width="4" height="18" rx="1" strokeWidth={2} />
+      <rect x="2" y="4" width="8" height="16" rx="2" strokeWidth={2} />
+      <rect x="14" y="4" width="8" height="16" rx="2" strokeWidth={2} />
+      <path d="M5.5 9v6M8.5 9v6M16.5 9v6M19.5 9v6" strokeWidth={2} strokeLinecap="round" />
     </svg>
   )
 }
@@ -595,7 +595,7 @@ export function IconBeaker({ className }: IconProps) {
 export function IconBookmark({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" />
+      <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
     </svg>
   )
 }

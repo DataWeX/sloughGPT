@@ -1,5 +1,6 @@
 'use client'
 
+import { IconStar } from '@sloughgpt/strui'
 import { cn, Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Label } from '@sloughgpt/strui'
@@ -113,7 +114,7 @@ export function DatasetImportDialog({
                       <span className="text-muted-foreground ml-2 truncate">— {di.selectedRepo.description}</span>
                     )}
                   </div>
-                  <span className="text-muted-foreground shrink-0">{di.selectedRepo.stars} ★</span>
+                  <span className="text-muted-foreground shrink-0 inline-flex items-center gap-0.5">{di.selectedRepo.stars} <IconStar className="h-3 w-3" /></span>
                   <Button
                     type="button"
                     variant="ghost"
@@ -157,7 +158,7 @@ export function DatasetImportDialog({
                       {repo.language && (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">{repo.language}</Badge>
                       )}
-                      <span className="text-[10px] text-muted-foreground">{repo.stars} ★</span>
+                      <span className="text-[10px] text-muted-foreground inline-flex items-center gap-0.5">{repo.stars} <IconStar className="h-2.5 w-2.5" /></span>
                     </div>
                   </div>
                 </Button>

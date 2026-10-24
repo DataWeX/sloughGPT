@@ -27,23 +27,24 @@ vi.mock('@/lib/settings-controller', () => ({
   },
 }))
 
-import TrainingPresetsPage from './page'
+import { ServerPresetSection } from './ServerPresetSection'
 
-describe('TrainingPresetsPage', () => {
+describe('ServerPresetSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it('renders loading state initially', () => {
-    render(<TrainingPresetsPage />)
+    render(<ServerPresetSection />)
     const skeletons = document.querySelectorAll('[class*="animate-pulse"]')
     expect(skeletons.length).toBeGreaterThan(0)
   })
 
   it('renders presets after loading', async () => {
-    render(<TrainingPresetsPage />)
+    render(<ServerPresetSection />)
     await waitFor(() => {
-      expect(screen.getAllByText(/Presets/i).length).toBeGreaterThan(0)
+      expect(screen.getByText('quick')).toBeTruthy()
     }, { timeout: 5000 })
+    expect(screen.getByText('Apply Preset')).toBeTruthy()
   })
 })

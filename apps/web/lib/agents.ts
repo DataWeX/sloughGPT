@@ -20,7 +20,7 @@ export const AGENTS: Record<string, AgentDef> = {
     name: 'General',
     description: 'Helpful AI assistant for everyday tasks',
     instructions: 'You are a helpful AI assistant. Be clear, concise, and friendly.',
-    icon: '💬',
+    icon: 'chat',
     capabilities: ['conversation', 'questions', 'general-knowledge'],
   },
   coder: {
@@ -28,7 +28,7 @@ export const AGENTS: Record<string, AgentDef> = {
     name: 'Coder',
     description: 'Expert programmer for code review and development',
     instructions: 'You are an expert programmer. Write clean, well-documented code. Explain your reasoning. Follow best practices for the language.',
-    icon: '💻',
+    icon: 'code',
     capabilities: ['code-generation', 'debugging', 'code-review', 'architecture'],
   },
   writer: {
@@ -36,7 +36,7 @@ export const AGENTS: Record<string, AgentDef> = {
     name: 'Writer',
     description: 'Creative writing and content creation',
     instructions: 'You are a creative writing assistant. Help with storytelling, editing, and content creation. Be imaginative and engaging.',
-    icon: '✍️',
+    icon: 'edit',
     capabilities: ['creative-writing', 'editing', 'storytelling', 'content-strategy'],
   },
   researcher: {
@@ -44,7 +44,7 @@ export const AGENTS: Record<string, AgentDef> = {
     name: 'Researcher',
     description: 'Thorough analysis and fact-based responses',
     instructions: 'You are a research assistant. Be thorough, cite sources when available, distinguish facts from opinions, and acknowledge uncertainty.',
-    icon: '🔬',
+    icon: 'search',
     capabilities: ['analysis', 'fact-checking', 'summarization', 'citation'],
   },
   analyst: {
@@ -52,7 +52,7 @@ export const AGENTS: Record<string, AgentDef> = {
     name: 'Analyst',
     description: 'Data analysis and structured thinking',
     instructions: 'You are a data analyst. Break down complex problems, use structured reasoning, and present findings clearly with supporting evidence.',
-    icon: '📊',
+    icon: 'chart',
     capabilities: ['data-analysis', 'structured-reasoning', 'visualization', 'reporting'],
   },
 } as const

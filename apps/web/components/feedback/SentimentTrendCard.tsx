@@ -1,5 +1,6 @@
 'use client'
 
+import { IconThumbUp, IconThumbDown } from '@sloughgpt/strui'
 import { useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 
@@ -146,7 +147,7 @@ export function SentimentTrendCard({ history }: SentimentTrendCardProps) {
               <div key={i} className="flex items-center justify-between text-[10px] py-0.5 border-b border-border/20 last:border-0">
                 <div className="flex items-center gap-1.5">
                   <span className={entry.rating === 'thumbs_up' ? 'text-success' : 'text-destructive'}>
-                    {entry.rating === 'thumbs_up' ? '👍' : '👎'}
+                    {entry.rating === 'thumbs_up' ? <span aria-label="thumbs up"><IconThumbUp className="h-3.5 w-3.5" /></span> : <span aria-label="thumbs down"><IconThumbDown className="h-3.5 w-3.5" /></span>}
                   </span>
                   {entry.quality_score != null && (
                     <span className="text-muted-foreground">Score: {(entry.quality_score * 100).toFixed(0)}%</span>

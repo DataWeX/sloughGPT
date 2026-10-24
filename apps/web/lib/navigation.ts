@@ -1,31 +1,28 @@
 'use client'
 
 import {
-  IconChat,
-  IconModels,
-  IconSettings,
-  IconTraining,
-  IconBrain,
-  IconAgents,
-  IconSearch,
   IconActivity,
-  IconTokenizer,
-  IconDocument,
-  IconCode,
-  IconChart,
-  IconBookmark,
-  IconSparkle,
+  IconAgents,
   IconBeaker,
   IconBenchmark,
-  IconMapPin,
-  IconError,
-  IconMic,
-  IconThumbUp,
-  IconGrid,
-  IconLabs,
-  IconAlert,
-  IconUsers,
+  IconBolt,
+  IconBookmark,
+  IconBrain,
+  IconChart,
+  IconChat,
   IconClock,
+  IconCode,
+  IconCompare,
+  IconDocument,
+  IconFile,
+  IconGrid,
+  IconModels,
+  IconSearch,
+  IconSettings,
+  IconSparkle,
+  IconTokenizer,
+  IconTraining,
+  IconUsers,
 } from '@/components/icons/NavIcons'
 import type { ComponentType } from 'react'
 
@@ -34,17 +31,57 @@ import type { ComponentType } from 'react'
 /*  keyboard shortcuts, and command palette metadata.                  */
 /* ------------------------------------------------------------------ */
 
+export type NavIconName =
+  | 'activity' | 'agents' | 'agents-outline' | 'beaker' | 'benchmark' | 'bookmark'
+  | 'brain' | 'chart' | 'chat' | 'clock' | 'code' | 'compare' | 'document'
+  | 'file' | 'grid' | 'models' | 'search' | 'settings' | 'sparkle'
+  | 'tokenizer' | 'training' | 'users' | 'zap'
+
 export interface NavRoute {
   path: string
   labelKey: string
   shortcut?: string
-  icon?: string
+  /** Icon name — resolved via NAV_ICONS. Optional: routes without icons render no icon. */
+  icon?: NavIconName
   description?: string
+  /**
+   * Show in the sidebar. Routes hidden from the sidebar (e.g. pages folded
+   * into a parent tab) stay reachable via URL, command palette, and search.
+   * @default true
+   */
+  sidebar?: boolean
 }
 
 export interface NavSectionDef {
   labelKey: string
   routes: NavRoute[]
+}
+
+/** Icon components, keyed by NavIconName — the single icon registry. */
+export const NAV_ICONS: Record<NavIconName, ComponentType<{ className?: string }>> = {
+  chat: IconChat,
+  training: IconTraining,
+  chart: IconChart,
+  sparkle: IconSparkle,
+  grid: IconGrid,
+  document: IconDocument,
+  clock: IconClock,
+  beaker: IconBeaker,
+  zap: IconBolt,
+  file: IconFile,
+  compare: IconCompare,
+  search: IconSearch,
+  brain: IconBrain,
+  models: IconModels,
+  agents: IconAgents,
+  'agents-outline': IconAgents,
+  code: IconCode,
+  activity: IconActivity,
+  tokenizer: IconTokenizer,
+  bookmark: IconBookmark,
+  benchmark: IconBenchmark,
+  settings: IconSettings,
+  users: IconUsers,
 }
 
 /** Sidebar sections + command palette grouping + keyboard shortcut labels */
@@ -54,16 +91,16 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     routes: [
       { path: '/chat', labelKey: 'nav.chat', shortcut: '1', icon: 'chat', description: 'Open chat' },
       { path: '/training', labelKey: 'nav.training', shortcut: '2', icon: 'training', description: 'Train models' },
-      { path: '/training/trends', labelKey: 'nav.training_trends', icon: 'chart', description: 'Training quality trends' },
-      { path: '/training/insights', labelKey: 'nav.training_insights', icon: 'sparkle', description: 'Adaptive learning intelligence' },
-      { path: '/training/grid-search', labelKey: 'nav.training_grid_search', icon: 'grid', description: 'Hyperparameter optimization' },
-      { path: '/training/model-card', labelKey: 'nav.training_model_card', icon: 'file', description: 'Generate model cards' },
-      { path: '/training/compare', labelKey: 'nav.training_compare', icon: 'compare', description: 'Compare training runs' },
-      { path: '/training/presets', labelKey: 'nav.training_presets', icon: 'zap', description: 'Quick-start training templates' },
-      { path: '/training/runs', labelKey: 'nav.training_runs', icon: 'clock', description: 'View all training runs' },
-      { path: '/training/analytics', labelKey: 'nav.training_analytics', icon: 'chart', description: 'Training analytics dashboard' },
+      { path: '/training/trends', labelKey: 'nav.training_trends', icon: 'chart', description: 'Training quality trends', sidebar: false },
+      { path: '/training/insights', labelKey: 'nav.training_insights', icon: 'sparkle', description: 'Adaptive learning intelligence', sidebar: false },
+      { path: '/training/grid-search', labelKey: 'nav.training_grid_search', icon: 'grid', description: 'Hyperparameter optimization', sidebar: false },
+      { path: '/training/model-card', labelKey: 'nav.training_model_card', icon: 'file', description: 'Generate model cards', sidebar: false },
+      { path: '/training/compare', labelKey: 'nav.training_compare', icon: 'compare', description: 'Compare training runs', sidebar: false },
+      { path: '/training/presets', labelKey: 'nav.training_presets', icon: 'zap', description: 'Quick-start training templates', sidebar: false },
+      { path: '/training/runs', labelKey: 'nav.training_runs', icon: 'clock', description: 'View all training runs', sidebar: false },
+      { path: '/training/analytics', labelKey: 'nav.training_analytics', icon: 'benchmark', description: 'Training analytics dashboard', sidebar: false },
       { path: '/auto-train', labelKey: 'nav.auto_train', icon: 'zap', description: 'Auto-training from conversations' },
-      { path: '/datasets', labelKey: 'nav.datasets', shortcut: '3', icon: 'chart', description: 'Manage datasets' },
+      { path: '/datasets', labelKey: 'nav.datasets', shortcut: '3', icon: 'document', description: 'Manage datasets' },
       { path: '/knowledge', labelKey: 'nav.knowledge', shortcut: '8', icon: 'search', description: 'Knowledge & memory' },
     ],
   },
@@ -95,7 +132,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/consciousness/monitor', labelKey: 'nav.consciousness_monitor', icon: 'activity', description: 'Real-time consciousness monitoring' },
       { path: '/consciousness/insights', labelKey: 'nav.consciousness_insights', icon: 'sparkle', description: 'AI-powered consciousness insights' },
       { path: '/consciousness/help', labelKey: 'nav.consciousness_help', icon: 'bookmark', description: 'Consciousness help & FAQ' },
-      { path: '/consciousness/compare', labelKey: 'nav.consciousness_compare', icon: 'chart', description: 'Compare consciousness configurations' },
+      { path: '/consciousness/compare', labelKey: 'nav.consciousness_compare', icon: 'compare', description: 'Compare consciousness configurations' },
       { path: '/consciousness/alerts', labelKey: 'nav.consciousness_alerts', icon: 'activity', description: 'Consciousness alert rules' },
       { path: '/consciousness/export', labelKey: 'nav.consciousness_export', icon: 'code', description: 'Export consciousness data' },
       { path: '/consciousness/health', labelKey: 'nav.consciousness_health', icon: 'activity', description: 'Consciousness system health' },
@@ -119,7 +156,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/translate', labelKey: 'nav.translate', icon: 'chat', description: 'Translate text' },
       { path: '/rewrite', labelKey: 'nav.rewrite', icon: 'sparkle', description: 'Rewrite & polish text' },
       { path: '/brainstorm', labelKey: 'nav.brainstorm', icon: 'brain', description: 'Brainstorm ideas' },
-      { path: '/decide', labelKey: 'nav.decide', icon: 'chart', description: 'Help me decide' },
+      { path: '/decide', labelKey: 'nav.decide', icon: 'compare', description: 'Help me decide' },
       { path: '/explain', labelKey: 'nav.explain', icon: 'search', description: 'Explain things simply' },
       { path: '/wellness', labelKey: 'nav.wellness', icon: 'sparkle', description: 'Wellness & relaxation' },
       { path: '/feedback', labelKey: 'nav.feedback', icon: 'activity', description: 'Feedback analytics' },
@@ -133,7 +170,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     routes: [
       { path: '/workspace-dashboard', labelKey: 'nav.workspace_dashboard', icon: 'activity', description: 'Workspace overview' },
       { path: '/members', labelKey: 'nav.members', icon: 'agents', description: 'Manage members' },
-      { path: '/usage', labelKey: 'nav.usage', icon: 'chart', description: 'Usage metrics' },
+      { path: '/usage', labelKey: 'nav.usage', icon: 'activity', description: 'Usage metrics' },
       { path: '/audit-trail', labelKey: 'nav.audit_trail', icon: 'activity', description: 'Audit log' },
       { path: '/workspace-settings', labelKey: 'nav.workspace_settings', icon: 'settings', description: 'Workspace settings' },
       { path: '/api-keys', labelKey: 'nav.api_keys', icon: 'code', description: 'API key management' },
@@ -146,6 +183,16 @@ export const NAV_SECTIONS: NavSectionDef[] = [
   },
 ]
 
+/**
+ * Derived selectors — compute views from NAV_SECTIONS instead of maintaining
+ * parallel hand-written maps.
+ */
+
+/** Sections filtered to sidebar-visible routes (sidebar !== false). Sections left empty are dropped. */
+export const SIDEBAR_SECTIONS: NavSectionDef[] = NAV_SECTIONS
+  .map(s => ({ ...s, routes: s.routes.filter(r => r.sidebar !== false) }))
+  .filter(s => s.routes.length > 0)
+
 /** Flat route map for shortcut lookup: shortcut → path */
 export const SHORTCUT_TO_PATH: Record<string, string> = {}
 for (const section of NAV_SECTIONS) {
@@ -157,76 +204,10 @@ for (const section of NAV_SECTIONS) {
 /** Flat list for command palette (preserves section order) */
 export const ALL_ROUTES: NavRoute[] = NAV_SECTIONS.flatMap(s => s.routes)
 
-/** Sidebar icon map — keyed by path */
-export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>> = {
-  '/chat': IconChat,
-  '/training': IconTraining,
-  '/training/trends': IconChart,
-  '/training/insights': IconSparkle,
-  '/training/grid-search': IconGrid,
-  '/training/model-card': IconDocument,
-  '/training/compare': IconChart,
-  '/training/presets': IconBeaker,
-  '/training/runs': IconClock,
-  '/training/analytics': IconChart,
-  '/auto-train': IconSparkle,
-  '/datasets': IconChart,
-  '/knowledge': IconBookmark,
-  '/models': IconModels,
-  '/agents': IconAgents,
-  '/souls': IconSparkle,
-  '/personality': IconBrain,
-  '/consciousness': IconSparkle,
-  '/consciousness/quickstart': IconSparkle,
-  '/consciousness/dashboard': IconChart,
-  '/consciousness/master': IconGrid,
-  '/consciousness/training': IconTraining,
-  '/consciousness/playground': IconSparkle,
-  '/consciousness/analytics': IconChart,
-  '/consciousness/statistics': IconChart,
-  '/consciousness/history': IconClock,
-  '/consciousness/personality': IconBrain,
-  '/consciousness/settings': IconSettings,
-  '/consciousness/all-settings': IconSettings,
-  '/consciousness/testing': IconBeaker,
-  '/consciousness/test-runner': IconBeaker,
-  '/consciousness/benchmark': IconActivity,
-  '/consciousness/docs': IconCode,
-  '/consciousness/api-explorer': IconCode,
-  '/consciousness/debug': IconCode,
-  '/consciousness/monitor': IconActivity,
-  '/consciousness/insights': IconSparkle,
-  '/consciousness/help': IconBookmark,
-  '/consciousness/compare': IconChart,
-  '/consciousness/alerts': IconActivity,
-  '/consciousness/export': IconCode,
-  '/consciousness/health': IconActivity,
-  '/consciousness/versions': IconClock,
-  '/benchmark': IconBenchmark,
-  '/monitoring': IconActivity,
-  '/settings': IconSettings,
-  '/developer': IconCode,
-  '/feedback': IconThumbUp,
-  '/planner': IconGrid,
-  '/phoneme': IconTokenizer,
-  '/workspace-dashboard': IconActivity,
-  '/members': IconAgents,
-  '/usage': IconChart,
-  '/audit-trail': IconActivity,
-  '/workspace-settings': IconSettings,
-  '/api-keys': IconCode,
-  '/notifications': IconActivity,
-  '/workspace-search': IconSearch,
-  '/permissions': IconSettings,
-  '/shared-data': IconUsers,
-  '/plugins-cloud': IconSettings,
-  '/shortcuts': IconSettings,
-  '/writing': IconDocument,
-  '/tools': IconGrid,
-  '/translate': IconChat,
-  '/rewrite': IconSparkle,
-  '/brainstorm': IconBrain,
-  '/decide': IconChart,
-  '/explain': IconSearch,
-  '/wellness': IconSparkle,
-}
+/**
+ * Sidebar icon map — keyed by path, derived from NAV_ICONS.
+ * Prefer SIDEBAR_SECTIONS + NAV_ICONS directly; kept for existing consumers.
+ */
+export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>> = Object.fromEntries(
+  ALL_ROUTES.filter(r => r.icon).map(r => [r.path, NAV_ICONS[r.icon!]]),
+)

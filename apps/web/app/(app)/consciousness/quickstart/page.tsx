@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck } from '@sloughgpt/strui'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
@@ -217,7 +218,7 @@ export default function ConsciousnessQuickstartPage() {
                 className="flex items-start gap-3 rounded-md border p-3"
               >
                 <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? 'bg-success text-white' : 'bg-muted text-muted-foreground'}`}>
-                  {step.done ? '✓' : step.num}
+                  {step.done ? <IconCheck className="h-3.5 w-3.5" /> : step.num}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{t(step.titleKey)}</p>

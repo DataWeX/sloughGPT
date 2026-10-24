@@ -1,4 +1,5 @@
 'use client'
+import { IconCheck } from '@sloughgpt/strui'
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useState } from 'react'
@@ -614,7 +615,7 @@ export default function DatasetsPage() {
                         onClick={() => toggleCompare(ds.id)}
                         aria-label={`Select ${ds.name} for comparison`}
                       >
-                        {compareIds.has(ds.id) && <span className="text-xs font-bold">✓</span>}
+                        {compareIds.has(ds.id) && <IconCheck className="h-3 w-3" />}
                       </button>
                       <Button
                         variant="ghost"

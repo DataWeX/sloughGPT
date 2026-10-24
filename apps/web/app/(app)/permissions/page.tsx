@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck } from '@sloughgpt/strui'
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -115,7 +116,7 @@ export default function PermissionsPage() {
                         {Object.entries(roles).map(([role, { permissions }]) => (
                           <td key={role} className="text-center py-1.5 px-2">
                             {permissions.includes(perm) ? (
-                              <span className="text-green-600">✓</span>
+                              <span className="text-green-600" aria-label="granted"><IconCheck className="h-3.5 w-3.5" /></span>
                             ) : (
                               <span className="text-muted-foreground/40">—</span>
                             )}

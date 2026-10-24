@@ -1,5 +1,6 @@
 'use client'
 
+import { IconCheck } from '@sloughgpt/strui'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, cn } from '@sloughgpt/strui'
 
@@ -92,7 +93,7 @@ export function OnboardingChecklistCard({ onNavigate }: OnboardingChecklistCardP
                 'w-4 h-4 rounded border flex items-center justify-center text-[10px] shrink-0',
                 item.completed ? 'bg-success border-success text-white' : 'border-muted-foreground/30'
               )}>
-                {item.completed && '✓'}
+                {item.completed && <IconCheck className="h-3 w-3" />}
               </div>
               <div className="min-w-0 flex-1">
                 <div className={cn('text-xs font-medium', item.completed && 'line-through text-muted-foreground')}>
