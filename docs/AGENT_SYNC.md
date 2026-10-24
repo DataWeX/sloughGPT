@@ -1549,3 +1549,28 @@ git push -u origin feat/<name>   # push your own branch when done
   All six cards: review → done. Local `main` checked out at
   `sloughgpt-api-std` (not force-updated — that session pulls when ready).
   From `.wt-worldbrain`.
+
+- **2026-10-24 · LANDED ON MAIN (`cc5f8cffb`, card `2cec0811`) — search stack
+  via cherry-pick series.** The card's premises were stale (81-conflict
+  whole-line merge, Sep-25 fork) — the search-owned subset applied as 8
+  chronological picks onto fresh main in a side worktree: workspace search
+  server-side q, house-cleanup, core Searchable protocol + GET /search +
+  domain/search, Cmd+K palette, file-backed + API + sessions stores, live
+  journey fix. Conflicts (5 total, all resolved deliberately): workspaces.py
+  repo access = main's facade forms + branch's entries-filter structure;
+  routers/__init__ = main's generated manifest (re-generated, 55 modules
+  incl. search); CommandPalette imports = union (kept main's revalidateAll);
+  .gitignore = union; board/notes = main's (branch entries would corrupt the
+  hash chain). **Caught a riding regression**: pick `d2cc97d74` carried the
+  branch-line chat-ownership refactor (unregisters inference's POST /chat +
+  /chat/stream) — on main those registrations WIN the route match and tests
+  pin their guards (503/400); restored as `cc5f8cffb` while keeping the
+  search-owned SessionSearchIndex extraction. Parity: empty diff of
+  domain/search + search router + tests vs `feat/core-general-search`; no
+  workspace-search commits left unpicked. Gates post-rebase: 169 targeted
+  (search/workspaces/inference/facade-guard/contracts) + 1331 server +
+  44479 core-py/server — 5 failures all attributed pre-existing/external
+  (2 GPU env reproduce on clean main; 3 journey tests drive the live shared
+  stack :5173/:8000, files untouched by picks). Pushed FF `land/search:main`
+  after rebase onto fresh main (zero overlap). Card → done. From
+  `.wt-worldbrain`.
