@@ -10,6 +10,12 @@ Public API:
 from __future__ import annotations
 
 from domain.files._internal.hub import FileHub
+from domain.files._internal.quant_ingest import (
+    QuantResult,
+    UnsupportedForQuantization,
+    load_quantized,
+    quantize_safetensors,
+)
 from domain.files._internal.store import (
     DEFAULT_ROOT,
     MODEL_EXTENSIONS,
@@ -23,4 +29,8 @@ __all__ = [
     "DEFAULT_ROOT",
     "MODEL_EXTENSIONS",
     "TEXT_EXTENSIONS",
+    "QuantResult",
+    "UnsupportedForQuantization",
+    "load_quantized",
+    "quantize_safetensors",
 ]
