@@ -1490,3 +1490,12 @@ git push -u origin feat/<name>   # push your own branch when done
   75/75 (7 files); ruff check+format clean. Card `c48aaaad`: wip → review.
   Evidence: `2026-10-24-training-router-delegation-part2.md`. From
   `.wt-worldbrain`.
+
+- **2026-10-24 · frontend brief parked (subagent dispatch blocked — free-usage
+  limit).** User ask "make the frontend agent aware of the reflection feature
+  and have it on the webchat page" → full build brief (both CONSCIOUSNESS SSE
+  events' payload map, existing panel/badge/toggle/bus/hook components, the
+  `self_insight` consumption gap, Noir Violet + strui constraints) parked at
+  dev-note `2026-10-24-frontend-brief-webchat-reflection.md` — any frontend
+  session can pick it up and card it. No backend payload change needed
+  (narrative already streams as `self_insight`). From `.wt-worldbrain`.
