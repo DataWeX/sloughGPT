@@ -20,8 +20,18 @@ const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 const SCAN_ROOTS = ['app', 'components', 'features', 'hooks'] as const
 
-/** 6-digit hex literals in source (comments excluded by the tokeniser-less scan). */
+/** 6-digit hex literals in source. */
 const HEX_RE = /#[0-9a-fA-F]{6}\b/
+
+/**
+ * Strip comments so hex in prose (`// brand is #6366f1`) doesn't trip the
+ * gate. `(^|[^:])\/\/` keeps URL schemes (`https://…`) intact; block
+ * comments are removed first. Strings are not tokenised — acceptable: a hex
+ * inside a string literal IS a colour the runtime can use.
+ */
+export function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
 
 /**
  * Files allowed to contain hex today (measured 2026-10-24). Each row is debt:
@@ -83,7 +93,7 @@ const pages = scanned.filter((p) => /\/page\.tsx$/.test(p))
 describe('Design criteria — Noir Violet ratchets', () => {
   it('no NEW source file introduces hex colours', () => {
     const offenders = scanned.filter((rel) =>
-      HEX_RE.test(readFileSync(join(WEB_ROOT, rel), 'utf-8')),
+      HEX_RE.test(stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))),
     )
     const unexpected = offenders.filter((f) => !HEX_BASELINE.includes(f))
     expect(
@@ -95,7 +105,7 @@ describe('Design criteria — Noir Violet ratchets', () => {
 
   it('hex baseline may only shrink', () => {
     const offenders = scanned.filter((rel) =>
-      HEX_RE.test(readFileSync(join(WEB_ROOT, rel), 'utf-8')),
+      HEX_RE.test(stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))),
     )
     expect(
       offenders.length,
@@ -124,6 +134,22 @@ describe('Design criteria — Noir Violet ratchets', () => {
     for (const p of FULL_BLEED) {
       expect(pages, `FULL_BLEED entry no longer exists: ${p}`).toContain(p)
     }
+  })
+
+  it('stripComments: hex in comments is ignored, code and URLs survive', () => {
+    const commented = `
+      // brand: #aaaaaa
+      /* another: #bbbbbb */
+      const url = 'https://example.com/#abcdef'
+      const brand = '#123456'
+    `
+    const stripped = stripComments(commented)
+    expect(stripped).not.toContain('#aaaaaa')
+    expect(stripped).not.toContain('#bbbbbb')
+    expect(stripped).toContain('https://example.com/#abcdef')
+    expect(stripped).toContain('#123456')
+    expect(HEX_RE.test(stripped)).toBe(true)
+    expect(HEX_RE.test(stripComments('// only #abcdef in a comment'))).toBe(false)
   })
 
   it('sanity: the catalogue of pages exists (fixture guard)', () => {
