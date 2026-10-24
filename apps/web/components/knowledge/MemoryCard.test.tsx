@@ -54,6 +54,18 @@ vi.mock('@/lib/download-utils', () => ({
   importFile: mockImportFile,
 }))
 
+// MemoryCard -> format-bytes -> db.ts -> http-client is a real (unmocked)
+// import chain; a partial/stale http-client mock reaching db's named imports
+// raises "No apiGet export is defined" under CI worker reuse (3x 2026-10-23).
+vi.mock('@/lib/http-client', () => ({
+  apiGet: vi.fn().mockResolvedValue(null),
+  apiPost: vi.fn().mockResolvedValue(null),
+  apiPut: vi.fn().mockResolvedValue(null),
+  apiPatch: vi.fn().mockResolvedValue(null),
+  apiDelete: vi.fn().mockResolvedValue(null),
+  request: vi.fn().mockResolvedValue(null),
+}))
+
 const item: MemoryItem = {
   id: 'm1',
   content: 'User prefers espresso in the morning',
