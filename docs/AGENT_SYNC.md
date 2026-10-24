@@ -1038,7 +1038,9 @@ git push -u origin feat/<name>   # push your own branch when done
   still lands; prettier reformatted whole touched files, e.g. StatusBar
   247-line format-only diff). Anchor rule to `/data/` is a parked fix —
   would unignore other untracked `data/` dirs (noise risk for concurrent
-  lanes).
+  lanes). Also landed: **memory-card-utils duplicate consolidated** into the
+  live `lib/` module (knowledge copy import-dead + test rewritten to live
+  semantics, 38 cases; `85b9d0829`).
   **Blocked:** local `main` is stale @ `f53190f7f` and checked out by the dirty
   worktree `/home/mana/Documents/sloughgpt-api-std` (658 uncommitted changes);
   `origin/main` = `68dd37ec8` (PR #189) has diverged and the branch also
