@@ -20,6 +20,7 @@ import VisualDatasetCard from '@/components/multimodal/VisualDatasetCard'
 import PreferenceOptimizationCard from '@/components/multimodal/PreferenceOptimizationCard'
 import ImageGenerationCard from '@/components/multimodal/ImageGenerationCard'
 import AudioCard from '@/components/multimodal/AudioCard'
+import VqaSection from '@/components/multimodal/VqaSection'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
 import { ImageSection } from '@/components/multimodal/ImageSection'
 
@@ -40,6 +41,8 @@ export default function MultimodalPage() {
   const [transcript, setTranscript] = useState<string | null>(null)
   const [synthesizing, setSynthesizing] = useState(false)
   const [synthAudio, setSynthAudio] = useState<{ audio: string; duration_sec: number } | null>(null)
+  const [asking, setAsking] = useState(false)
+  const [vqaResult, setVqaResult] = useState<{ answer: string; question: string; elapsed_ms: number } | null>(null)
   const [creatingDataset, setCreatingDataset] = useState(false)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [dpoStatus, setDpoStatus] = useState<string>('idle')
@@ -200,6 +203,15 @@ export default function MultimodalPage() {
     } finally { setSynthesizing(false) }
   }
 
+  const handleAskQuestion = async (file: File, question: string) => {
+    setAsking(true); setVqaResult(null)
+    try {
+      const result = await multimodalController.askQuestion(file, question)
+      setVqaResult(result)
+    } catch (err: unknown) { addToast(extractErrorMessage(err, 'Could not ask question'), 'error')
+    } finally { setAsking(false) }
+  }
+
   const headerRight = (
     <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading}>
       <IconRefresh className="h-4 w-4 mr-1" /> Refresh
@@ -230,6 +242,7 @@ export default function MultimodalPage() {
       <PreferenceOptimizationCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
       <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
       <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
+      <VqaSection asking={asking} onAsk={handleAskQuestion} answer={vqaResult} />
       <VoiceSection />
       <ImageSection />
     </PageContainer>
