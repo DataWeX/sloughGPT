@@ -1,9 +1,8 @@
-"""OpenAI-compat shim — wire-shape and dogfood tests (card 5959477f).
+"""Tests for the /v1 LLM surface — wire contract + dogfood (card 5959477f).
 
-The /v1 surface is a FOREIGN protocol: responses are raw OpenAI shapes with
-``choices`` / ``data`` at the JSON top level — the project envelope
-(``{status, data}``) would break every OpenAI SDK, which is the card's DONE
-criterion. These tests pin exactly that, plus:
+/v1 serves the raw wire contract every serving stack converged on:
+``choices`` / ``data`` at the JSON top level (the project envelope belongs to
+our internal routes, not this surface). These tests pin exactly that, plus:
 
   * the reuse seams (``provider.chat`` / ``provider.chat_stream`` — the same
     generation seam ``/infer`` projects; ``InferRouter.infer_info`` /
@@ -13,10 +12,10 @@ criterion. These tests pin exactly that, plus:
     error frames for mid-stream failures);
   * engine guards at /infer parity (memory pressure → 503, model-not-ready →
     503);
-  * the ContractRegistry rows for the descriptors ``openai.chat.completions``,
-    ``openai.models.list``, ``openai.embeddings.create``;
-  * the card's dogfood round-trip: SloNet's own ``ApiProvider`` (the OpenAI
-    client SloNet ships) driving SloNet's own /v1 through the ASGI app.
+  * the ContractRegistry rows for the descriptors ``llm.chat.completions``,
+    ``llm.models.list``, ``llm.embeddings.create``;
+  * the card's dogfood round-trip: SloNet's own ``ApiProvider`` (the
+    standard-wire LLM client SloNet ships) driving SloNet's own /v1 through the ASGI app.
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import routers.infer as infer_mod
-import routers.openai_compat as shim
+import routers.llm_v1 as shim
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
@@ -125,14 +124,14 @@ def _post_chat(app: FastAPI, **overrides):
 
 
 class TestChatCompletionsWireShape:
-    def test_nonstream_is_raw_openai_shape_no_envelope(self):
+    def test_nonstream_is_raw_wire_shape_no_envelope(self):
         provider = _fake_provider()
         app = _build_app()
         with _engine(provider=provider):
             resp = _post_chat(app)
         assert resp.status_code == 200
         body = resp.json()
-        # Foreign protocol: NO project envelope at the top level.
+        # Wire contract: NO project envelope at the top level.
         assert "status" not in body
         assert "data" not in body
         assert body["object"] == "chat.completion"
@@ -181,7 +180,7 @@ class TestChatCompletionsWireShape:
         assert frames[-1] == "[DONE]"
         parsed = [json.loads(f) for f in frames if f.strip() != "[DONE]"]
         assert all(c["object"] == "chat.completion.chunk" for c in parsed)
-        # first frame announces the role (OpenAI convention)
+        # first frame announces the role (wire convention)
         assert parsed[0]["choices"][0]["delta"] == {"role": "assistant", "content": ""}
         content = "".join(
             c["choices"][0]["delta"].get("content", "") for c in parsed if c.get("choices")
@@ -213,7 +212,7 @@ class TestChatCompletionsWireShape:
             resp = _post_chat(app, stream=True)
         frames = [line[6:] for line in resp.text.splitlines() if line.startswith("data: ")]
         error_frames = [f for f in frames if '"error"' in f]
-        assert error_frames, "mid-stream failure must emit an in-band OpenAI error frame"
+        assert error_frames, "mid-stream failure must emit an in-band error frame"
         err = json.loads(error_frames[0])["error"]
         assert err["type"]  # classified error code
         assert err["message"]
@@ -222,14 +221,14 @@ class TestChatCompletionsWireShape:
         app = _build_app()
         with _engine(provider=_fake_provider()):
             resp = TestClient(app).post("/v1/chat/completions", json={"model": "default"})
-        assert resp.status_code == 422  # pydantic rejects — the OpenAI schema is the validator
+        assert resp.status_code == 422  # pydantic rejects — the wire schema is the validator
 
 
 # ── /v1/models ──────────────────────────────────────────────────────────────
 
 
 class TestModelsList:
-    def test_models_is_raw_openai_list_shape(self):
+    def test_models_is_raw_wire_list_shape(self):
         app = _build_app()
         with _engine(infer_info=SimpleNamespace(model_id="slonet-test")):
             resp = TestClient(app).get("/v1/models")
@@ -304,14 +303,14 @@ class TestRegistryProjection:
     def test_descriptors_registered_with_honest_rows(self):
         routes = {(r["method"], r["path"]): r for r in REGISTRY.routes(prefix="/v1")}
         for name, method, path in (
-            ("openai.chat.completions", "POST", "/v1/chat/completions"),
-            ("openai.models.list", "GET", "/v1/models"),
-            ("openai.embeddings.create", "POST", "/v1/embeddings"),
+            ("llm.chat.completions", "POST", "/v1/chat/completions"),
+            ("llm.models.list", "GET", "/v1/models"),
+            ("llm.embeddings.create", "POST", "/v1/embeddings"),
         ):
             entry = routes[(method, path)]
             assert entry["name"] == name
             assert entry["auth_scope"] == "authenticated"
-            assert entry["module"] == "routers.openai_compat"
+            assert entry["module"] == "routers.llm_v1"
 
 
 # ── Dogfood: SloNet's own ApiProvider drives SloNet's own /v1 ───────────────
@@ -373,7 +372,7 @@ class TestApiProviderDogfood:
                 "total_tokens": 3,
             }
 
-            # embeddings: raw OpenAI-shaped call (ApiProvider.embed is a stub
-            # by design — the wire shape is what the dogfood pins here)
+            # embeddings: raw wire call (ApiProvider.embed is a stub by
+            # design — the wire shape is what the dogfood pins here)
             emb = TestClient(app).post("/v1/embeddings", json={"input": "hi"})
             assert emb.json()["data"][0]["embedding"] == _EMBEDDING

@@ -64,14 +64,14 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
-  "openai.chat.completions": {
+  "llm.chat.completions": {
     "auth_scope": "authenticated",
-    "description": "OpenAI-compatible chat completion over the SloNet generation seam (stream + non-stream). Foreign wire shape: top-level choices/usage, SSE chat.completion.chunk frames terminated by [DONE].",
+    "description": "Chat completion over the SloNet generation seam (stream + non-stream); wire: top-level choices/usage, data: chunk frames terminated by [DONE].",
     "idempotent": false,
     "method": "POST",
-    "module": "routers.openai_compat",
-    "name": "openai.chat.completions",
-    "operation_id": "openai.chat.completions.post",
+    "module": "routers.llm_v1",
+    "name": "llm.chat.completions",
+    "operation_id": "llm.chat.completions.post",
     "params": {
       "properties": {
         "max_tokens": {
@@ -79,7 +79,7 @@ export const CONTRACTS = {
           "type": "integer"
         },
         "messages": {
-          "description": "OpenAI message objects [{role, content}, ...]",
+          "description": "Message objects [{role, content}, ...]",
           "type": "array"
         },
         "model": {
@@ -87,7 +87,7 @@ export const CONTRACTS = {
           "type": "string"
         },
         "stream": {
-          "description": "SSE streaming toggle",
+          "description": "Streaming toggle",
           "type": "boolean"
         },
         "temperature": {
@@ -118,14 +118,14 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
-  "openai.embeddings.create": {
+  "llm.embeddings.create": {
     "auth_scope": "authenticated",
-    "description": "OpenAI-compatible embeddings through InferRouter.infer_embed.",
+    "description": "Embeddings through InferRouter.infer_embed, wire list shape.",
     "idempotent": false,
     "method": "POST",
-    "module": "routers.openai_compat",
-    "name": "openai.embeddings.create",
-    "operation_id": "openai.embeddings.create.post",
+    "module": "routers.llm_v1",
+    "name": "llm.embeddings.create",
+    "operation_id": "llm.embeddings.create.post",
     "params": {
       "properties": {
         "input": {
@@ -157,14 +157,14 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
-  "openai.models.list": {
+  "llm.models.list": {
     "auth_scope": "authenticated",
-    "description": "OpenAI-compatible model listing (the loaded SloNet model).",
+    "description": "Model listing (the loaded SloNet model), wire list shape.",
     "idempotent": true,
     "method": "GET",
-    "module": "routers.openai_compat",
-    "name": "openai.models.list",
-    "operation_id": "openai.models.list.get",
+    "module": "routers.llm_v1",
+    "name": "llm.models.list",
+    "operation_id": "llm.models.list.get",
     "params": {
       "properties": {},
       "required": [],

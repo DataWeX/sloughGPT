@@ -60,6 +60,6 @@ ROUTER_MODULES: list[str] = [
     "phoneme",
     "contracts",
     "mole",
-    "openai_compat",
+    "llm_v1",
 ]
 # fmt: on
