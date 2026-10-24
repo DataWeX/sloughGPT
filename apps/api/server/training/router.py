@@ -19,7 +19,6 @@ from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
 
 from .control import router as control_router
 from .controller import get_training_controller
@@ -260,44 +259,23 @@ async def recover_job(job_id: str):
     job_name = job.get("name", "recovered_job")
 
     # Resolve the checkpoint to resume from. A job's recorded path is loaded
-    # exactly once, here in the request handler. The job explicitly points at
-    # it, so a recorded path that is missing, unsupported, or unreadable fails
-    # the recovery request loudly (422) — resuming from a different checkpoint
-    # would silently change what is being resumed. Only when the job recorded
-    # NO checkpoint path do we fall back to the newest file that actually loads
-    # (skipping partial/corrupt checkpoints — a crash mid-write can leave the
-    # newest file unreadable). The loaded bundle is handed to train() so no
-    # second load happens in the worker thread.
-    from domain.training._internal.train_pipeline import CheckpointManager
+    # exactly once, here in the request handler (via the engine, card c48aaaad).
+    # The job explicitly points at it, so a recorded path that is missing,
+    # unsupported, or unreadable fails the recovery request loudly (422) —
+    # resuming from a different checkpoint would silently change what is being
+    # resumed. Only when the job recorded NO checkpoint path do we fall back to
+    # the newest file that actually loads (skipping partial/corrupt checkpoints
+    # — a crash mid-write can leave the newest file unreadable). The loaded
+    # bundle is handed to train() so no second load happens in the worker
+    # thread.
+    from domain.training.engine import get_training_engine
 
-    manager = CheckpointManager(checkpoint_dir)
-    resume_bundle = None
-    if checkpoint_path:
-        if not CheckpointManager.is_resumable(checkpoint_path):
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
-                "unsupported (use a .soul or .npz file)",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-        try:
-            resume_bundle = CheckpointManager.load_from_path(checkpoint_path)
-        except Exception as exc:
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-        if resume_bundle is None:
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
-                "unsupported (use a .soul or .npz file)",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-    else:
-        checkpoint_path, resume_bundle = manager.load_latest_with_path()
-        checkpoint_path = checkpoint_path or ""
+    try:
+        checkpoint_path, resume_bundle = get_training_engine().resolve_resume_checkpoint(
+            checkpoint_path, checkpoint_dir
+        )
+    except ValueError as exc:
+        raise_error(str(exc), "E_VAL_REQUEST", status_code=422)
 
     # Create recovery job in training_jobs. config is spread first so the
     # explicit control fields (id, status, checkpoint_*) always win over any
@@ -353,7 +331,7 @@ async def recover_job(job_id: str):
 
     def run_recovery(job_id_: str = jid):
         try:
-            from domain.training._internal.train_pipeline import SloughGPTTrainer
+            from domain.training.engine import get_training_engine
 
             # Reuse the SAME trainer configuration builder as /training/start so
             # the recovered run continues with the original job's hyperparameters
@@ -399,16 +377,14 @@ async def recover_job(job_id: str):
                     job_id, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
                 )
 
-            trainer = SloughGPTTrainer(**trainer_config)
-
             # Resume from checkpoint if available (bundle pre-loaded once in the
-            # request handler — no disk load happens in this thread)
-            trainer.train(
+            # request handler — no disk load happens in this thread; the engine
+            # builds the trainer, trains, and hands it back — card c48aaaad)
+            trainer = get_training_engine().run_recovery_training(
+                config=trainer_config,
                 on_progress=on_progress,
-                resume=True,
-                resume_checkpoint=resume_bundle,
-                cancel_event=cancel_event,
-                pause_event=pause_event,
+                resume=resume_bundle,
+                events={"cancel_event": cancel_event, "pause_event": pause_event},
             )
 
             # Mark as completed. The recovery job lives in-memory only; the
@@ -458,8 +434,7 @@ async def recover_job(job_id: str):
             store.mark_failed(job_id, str(e))
             controller.fail()
 
-    executor = get_training_executor()
-    executor.submit(run_recovery, jid)
+    get_training_engine().executor_submit(run_recovery, jid)
 
     return {
         "status": "recovered",

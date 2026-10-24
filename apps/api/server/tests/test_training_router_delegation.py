@@ -1,32 +1,23 @@
 """Boundary tests: training router delegates to TrainingEngine, not domain._internal.
 
-Card 50675952 (build order #4, part 1): the router keeps HTTP concerns only;
-every `domain.training._internal.service|state|training_advisor|outcome_tracker|monitor`
-import moves behind raw-passthrough TrainingEngine methods. Exceptions bubble
-(HTTP error classification in the router is unchanged).
-
-The executor/train_pipeline imports (get_training_executor, CheckpointManager,
-SloughGPTTrainer) are part 2 (card c48aaaad) and are still allowed here.
+Cards 50675952 (part 1) + c48aaaad (part 2, build order #4): the router keeps
+HTTP concerns only; every `domain.training._internal` import — service/state/
+training_advisor/outcome_tracker/monitor (part 1) and executor/train_pipeline
+recovery internals (part 2) — moves behind raw-passthrough TrainingEngine
+methods. Exceptions bubble (HTTP error classification in the router is
+unchanged); the single sanctioned mapping is resolve_resume_checkpoint's
+ValueError -> 422.
 """
 
 from pathlib import Path
 
 from domain.training.engine import get_training_engine
 
-ROUTER_SRC = (
-    Path(__file__).resolve().parents[2] / "server" / "training" / "router.py"
-).read_text(encoding="utf-8")
-
-# _internal modules that part 1 must fully retire from the router source.
-PART1_INTERNAL_MODULES = (
-    "domain.training._internal.service",
-    "domain.training._internal.state",
-    "domain.training._internal.training_advisor",
-    "domain.training._internal.outcome_tracker",
-    "domain.training._internal.monitor",
+ROUTER_SRC = (Path(__file__).resolve().parents[2] / "server" / "training" / "router.py").read_text(
+    encoding="utf-8"
 )
 
-# Raw-passthrough surface the router consumes (part 1).
+# Raw-passthrough surface the router consumes (part 1 + part 2).
 DELEGATION_SURFACE = (
     "get_log",
     "list_stored_checkpoints",
@@ -42,15 +33,22 @@ DELEGATION_SURFACE = (
     "load_outcomes",
     "get_training_monitor",
     "alert_severity",
+    # part 2 (card c48aaaad): recovery internals
+    "resolve_resume_checkpoint",
+    "run_recovery_training",
+    "executor_submit",
 )
 
 
-def test_router_has_no_part1_internal_imports() -> None:
-    """The router must not import part-1 _internal modules directly (delegated)."""
-    offenders = [m for m in PART1_INTERNAL_MODULES if m in ROUTER_SRC]
-    assert offenders == [], (
-        f"router.py still imports {offenders} — route these through "
-        "TrainingEngine raw-passthrough methods (card 50675952)"
+def test_router_has_no_internal_imports() -> None:
+    """Router source must contain no domain.training._internal references at all.
+
+    Part 1 retired service/state/advisor/outcome/monitor; part 2 (c48aaaad)
+    retired executor/train_pipeline (CheckpointManager, SloughGPTTrainer).
+    """
+    assert "domain.training._internal" not in ROUTER_SRC, (
+        "router.py still references domain.training._internal — route it "
+        "through TrainingEngine raw-passthrough methods (cards 50675952 + c48aaaad)"
     )
 
 
@@ -96,3 +94,98 @@ def test_get_training_state_exposes_config() -> None:
     """get_state passthrough returns the state object (.config) the router reads."""
     engine = get_training_engine()
     assert hasattr(engine.get_state(), "config")
+
+
+# ── part 2: recovery internals (card c48aaaad) ──────────────────────────────
+
+
+def test_resolve_resume_checkpoint_not_resumable_raises(tmp_path, monkeypatch) -> None:
+    """Recorded path that is not resumable raises ValueError (router maps to 422)."""
+    from domain.training._internal.train_pipeline import CheckpointManager
+
+    engine = get_training_engine()
+    monkeypatch.setattr(CheckpointManager, "is_resumable", lambda p: False)
+    try:
+        engine.resolve_resume_checkpoint("x.soul", str(tmp_path))
+    except ValueError as exc:
+        assert "missing or unsupported" in str(exc)
+    else:  # pragma: no cover - failure path
+        raise AssertionError("must raise ValueError for non-resumable checkpoint")
+
+
+def test_resolve_resume_checkpoint_unreadable_raises(tmp_path, monkeypatch) -> None:
+    """Unreadable bundle raises ValueError carrying the loader error."""
+    from domain.training._internal.train_pipeline import CheckpointManager
+
+    engine = get_training_engine()
+    monkeypatch.setattr(CheckpointManager, "is_resumable", lambda p: True)
+    monkeypatch.setattr(
+        CheckpointManager, "load_from_path", lambda p: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+    try:
+        engine.resolve_resume_checkpoint("x.soul", str(tmp_path))
+    except ValueError as exc:
+        assert "unreadable" in str(exc) and "boom" in str(exc)
+    else:  # pragma: no cover - failure path
+        raise AssertionError("must raise ValueError for unreadable checkpoint")
+
+
+def test_resolve_resume_checkpoint_recorded_path_ok(tmp_path, monkeypatch) -> None:
+    """A good recorded path returns (path, bundle) unchanged."""
+    from domain.training._internal.train_pipeline import CheckpointManager
+
+    engine = get_training_engine()
+    bundle = {"weights": object()}
+    monkeypatch.setattr(CheckpointManager, "is_resumable", lambda p: True)
+    monkeypatch.setattr(CheckpointManager, "load_from_path", lambda p: bundle)
+    assert engine.resolve_resume_checkpoint("x.soul", str(tmp_path)) == ("x.soul", bundle)
+
+
+def test_run_recovery_training_builds_and_trains(monkeypatch) -> None:
+    """Builds the trainer from config, trains once with resume+events, returns it."""
+    from unittest.mock import MagicMock
+
+    from domain.training._internal import train_pipeline
+
+    trainer_cls = MagicMock()
+    trainer_inst = trainer_cls.return_value
+    monkeypatch.setattr(train_pipeline, "SloughGPTTrainer", trainer_cls)
+
+    engine = get_training_engine()
+    on_progress = lambda info: None  # noqa: E731
+    cancel, pause = object(), object()
+    got = engine.run_recovery_training(
+        config={"data_path": "/tmp/corpus.txt"},
+        on_progress=on_progress,
+        resume={"w": 1},
+        events={"cancel_event": cancel, "pause_event": pause},
+    )
+    assert got is trainer_inst
+    trainer_cls.assert_called_once_with(data_path="/tmp/corpus.txt")
+    trainer_inst.train.assert_called_once_with(
+        on_progress=on_progress,
+        resume=True,
+        resume_checkpoint={"w": 1},
+        cancel_event=cancel,
+        pause_event=pause,
+    )
+
+
+def test_executor_submit_passthrough(monkeypatch) -> None:
+    """executor_submit forwards fn+args to the training executor's submit."""
+    from domain.training._internal import executor as executor_mod
+
+    class _Exec:
+        def __init__(self) -> None:
+            self.submitted = []
+
+        def submit(self, fn, *args):
+            self.submitted.append((fn, args))
+
+    exec_ = _Exec()
+    monkeypatch.setattr(executor_mod, "get_training_executor", lambda: exec_)
+
+    engine = get_training_engine()
+    fn = lambda: None  # noqa: E731
+    engine.executor_submit(fn, 42)
+    assert exec_.submitted == [(fn, (42,))]
