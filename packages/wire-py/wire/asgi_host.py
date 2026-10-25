@@ -149,6 +149,17 @@ def _chunk(data: bytes) -> bytes:
     return f"{len(data):X}\r\n".encode() + data + b"\r\n"
 
 
+def _declared_content_length(headers: list[tuple[str, str]]) -> int | None:
+    """Parse the app's declared Content-Length, or None if absent/unparseable."""
+    for key, value in headers:
+        if key.lower() == "content-length":
+            try:
+                return int(value)
+            except ValueError:
+                return None
+    return None
+
+
 def run_http(
     app: Callable,
     request: Request,
@@ -181,7 +192,7 @@ def run_http(
     if body is not None and body_exec is None:
         raise ValueError("streaming body requires a reader executor")
     scope = _build_scope(request, client, server, forwarded_allow_ips)
-    state: dict = {"head_written": False, "keep": False, "framing": None}
+    state: dict = {"head_written": False, "keep": False, "framing": None, "cl_pending": None}
 
     def _log_access(status: int) -> None:
         if access_log:
@@ -280,7 +291,7 @@ def run_http(
             more = bool(message.get("more_body", False))
             status = state["status"]
 
-            if not state["head_written"]:
+            if not state["head_written"] and state.get("cl_pending") is None:
                 app_lower = state["app_lower"]
                 if status in _BODYLESS or status < 200:
                     if body or more:
@@ -291,7 +302,22 @@ def run_http(
                     return
                 if "content-length" in app_lower:
                     if more:
-                        raise RuntimeError("streaming body with app Content-Length")
+                        # Streaming with a declared Content-Length (e.g.
+                        # Starlette's GZip middleware, which computes the
+                        # full length up-front then emits it in chunks).
+                        # uvicorn honours this; we must not 500. Buffer the
+                        # streamed frames and decide at the terminal frame:
+                        # if the total matches the declared length, emit a
+                        # clean single Content-Length frame (fast path —
+                        # identical to the non-streaming case); if it
+                        # doesn't match (a lying app), fall back to wire-owned
+                        # chunking with the app's Content-Length stripped —
+                        # never desyncs, never 500s.
+                        state["cl_pending"] = {
+                            "declared": _declared_content_length(state["headers"]),
+                            "chunks": [body],
+                        }
+                        return
                     on_bytes(
                         serialize_head(status, state["headers"], keep_alive=state["keep"]) + body
                     )
@@ -332,7 +358,54 @@ def run_http(
                 state["framing"] = "cl"
                 return
 
-            # head already written
+            # head already written — OR a declared-Content-Length stream is
+            # being buffered (cl_pending set, head not yet written): both
+            # cases accumulate frames here until the terminal frame.
+            pending = state.get("cl_pending")
+            if pending is not None:
+                # Still buffering a declared-Content-Length stream.
+                pending["chunks"].append(body)
+                if more:
+                    return
+                # Terminal frame: decide cl vs chunked.
+                total = sum(len(c) for c in pending["chunks"])
+                declared = pending["declared"]
+                if declared is not None and total == declared:
+                    # Total matches the declared length: emit as a single
+                    # Content-Length frame (identical to the fast path).
+                    on_bytes(
+                        serialize_head(status, state["headers"], keep_alive=state["keep"])
+                        + b"".join(pending["chunks"])
+                    )
+                    state["head_written"] = True
+                    state["framing"] = "cl"
+                    state["cl_pending"] = None
+                    return
+                # Mismatch (or undeclared): fall back to wire-owned chunking,
+                # stripping the app's Content-Length so the client sees a
+                # truthful Transfer-Encoding: chunked. TE is filtered too —
+                # a duplicate Transfer-Encoding would be a smuggling vector.
+                filtered = [
+                    (k, v)
+                    for k, v in state["headers"]
+                    if k.lower() not in ("content-length", "transfer-encoding")
+                ]
+                on_bytes(
+                    serialize_head(
+                        status,
+                        [*filtered, ("Transfer-Encoding", "chunked")],
+                        keep_alive=state["keep"],
+                    )
+                )
+                for chunk in pending["chunks"]:
+                    if chunk:
+                        on_bytes(_chunk(chunk))
+                on_bytes(b"0\r\n\r\n")
+                state["head_written"] = True
+                state["framing"] = "closed"
+                state["cl_pending"] = None
+                return
+
             if state["framing"] == "chunked":
                 on_bytes(_chunk(body))
                 if not more:

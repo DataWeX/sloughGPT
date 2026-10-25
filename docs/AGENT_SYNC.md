@@ -996,6 +996,37 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-25 · `feat/wire-streaming-content-length` — wire host serves
+  gzip/middleware responses (card `ecea49c8`).** The main FastAPI app under
+  `WireServer` 500'd every compressed route:
+  `RuntimeError: streaming body with app Content-Length` — `SelectiveGZip`
+  (like Starlette's) declares `content-length` on `http.response.start`
+  then streams frames with `more_body=True` (captured: start[CL+CE] /
+  body 6136 more=True / empty body more=False); uvicorn honours it, our
+  adapter hard-raised, so `/health` `/docs` `/openapi.json` all failed the
+  flip gate. Fix in `wire/asgi_host.py`: a declared-CL stream is now
+  BUFFERED in `state["cl_pending"]` and decided at the terminal frame —
+  total == declared → one clean Content-Length frame (fast-path shape,
+  keep-alive intact); total != declared (a lying app) → strip the app's
+  `content-length` **and** `transfer-encoding` (a duplicate TE would be a
+  smuggling vector) and emit wire-owned chunked — never 500, never
+  desync. Buffering also means an app crash mid-stream writes nothing, so
+  the cycle still turns into a clean 500 (uvicorn may have already
+  streamed a partial 200). Two flow bugs caught in review before landing:
+  the terminal frame must bypass the pre-head branch (else head-with-CL +
+  empty body = desync), and the hot single-frame path is untouched (one
+  `dict.get` guard, only while head unwritten). 5 regression tests in
+  `tests/test_response_streaming.py` — 4 of them fail on the old code
+  (verified by stash); full suite **88 green**; main-app smoke `/health`
+  `/docs` `/openapi.json` 200 + keep-alive pair on one conn. New
+  `scripts/benchmark_wire_host.py` (the flip-gate benchmark): synthetic
+  app + real `SelectiveGZipMiddleware` on BOTH transports — byte-identical
+  bodies, gzip engaged, wire p95 vs own baseline within limit (PASS);
+  uvicorn ratio reported not gated: wire is ~2.2-3x behind on p50/p95 and
+  ~0.4x throughput even on the untouched no-gzip path — pre-existing
+  architecture (`asyncio.run(cycle())` = a fresh event loop per request),
+  the known open item for the transport flip, not this fix.
+
 - **2026-10-23 · `feat/filehub` — standalone download hub, own IP (card
   `260d9478`, stacked on `feat/file-store-compressed`).** `FileHub` sync
   core (`domain/files/_internal/hub.py`): downcraft-backed pull-through
