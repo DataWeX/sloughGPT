@@ -5,7 +5,7 @@
  */
 import './app/globals.css'
 
-import { Suspense, StrictMode } from 'react'
+import { Suspense, StrictMode, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 
@@ -20,6 +20,13 @@ import { RouteDigestBoundary, ViteNavigatorBinder } from '@/vite/next-compat/dig
 import { AppReadySentinel } from '@/vite/AppReadySentinel'
 import { discoveredRoutes } from '@/vite/routes'
 import { REDIRECTS, splitTarget } from '@/lib/redirects'
+
+// Dev-only design lab (Three.js dock concept showcase). Never cited as a
+// journey — AGENTS.md Page Rule keeps product pages honest, and a design
+// exploration is not one: mounted only in the dev shell (import.meta.env.DEV),
+// lazy so three.js never loads in a production bundle, and absent from the
+// Next app's page tree so the page-baseline ratchet is untouched.
+const DesignLab3D = lazy(() => import('@/components/designlab/DesignLab3D'))
 
 function PageFallback() {
   return (
@@ -112,6 +119,20 @@ function App() {
                     }
                   />
                 ))}
+                {/* Dev-only design lab — Three.js dock concept showcase.
+                    Gated on DEV: the route disappears from production builds,
+                    and lazy so three.js is never even fetched. */}
+                {import.meta.env.DEV ? (
+                  <Route
+                    path="/design-lab"
+                    element={
+                      <Suspense fallback={<PageFallback />}>
+                        <DesignLab3D />
+                        <AppReadySentinel />
+                      </Suspense>
+                    }
+                  />
+                ) : null}
                 {!hasHome ? <Route path="/" element={<Navigate to="/datasets" replace />} /> : null}
                 {/* 404s render a real (static) route — the sentinel still has to
                     ride beside the content so readiness is declared for THIS
