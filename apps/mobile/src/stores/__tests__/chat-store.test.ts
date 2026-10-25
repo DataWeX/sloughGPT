@@ -244,6 +244,28 @@ describe('cloneSession', () => {
   });
 });
 
+// ── injectContext ────────────────────────────────────────────────────────
+
+describe('injectContext', () => {
+  it('posts context control for the active session', async () => {
+    mockApi.post.mockResolvedValue(undefined);
+    useChatStore.setState({activeSessionId: 's1'});
+    await useChatStore.getState().injectContext('extra rules');
+    expect(mockApi.post).toHaveBeenCalledWith('/chat/control', {
+      session_id: 's1',
+      action: 'context',
+      context: 'extra rules',
+    });
+  });
+
+  it('toasts on failure', async () => {
+    mockApi.post.mockRejectedValue(new Error('down'));
+    useChatStore.setState({activeSessionId: 's1'});
+    await useChatStore.getState().injectContext('x');
+    expect(mockToast.error).toHaveBeenCalled();
+  });
+});
+
 // ── cancelStream ─────────────────────────────────────────────────────────
 
 describe('cancelStream', () => {

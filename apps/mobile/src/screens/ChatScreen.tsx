@@ -18,6 +18,8 @@ import {useSidebar} from '../contexts/SidebarContext';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
 import {ChatModeBar, type ChatMode} from '../components/ChatModeBar';
+import {ContextInjectionBar} from '../components/ContextInjectionBar';
+import {useChatStore} from '../stores/chat-store';
 import {ReasoningPanel} from '../components/ReasoningPanel';
 import {Icon} from '../components/Icon';
 
@@ -85,6 +87,7 @@ export function ChatScreen() {
   const colors = useColors();
   const flatListRef = useRef<FlatList>(null);
   const a = useChatActions(flatListRef);
+  const injectContext = useChatStore(s => s.injectContext);
   const {open: openSidebar} = useSidebar();
 
   // Mode state
@@ -504,6 +507,8 @@ export function ChatScreen() {
             </YStack>
           </XStack>
         )}
+
+        <ContextInjectionBar onInject={injectContext} disabled={a.streaming} />
 
         <ChatInput
           onSend={handleModeSend}

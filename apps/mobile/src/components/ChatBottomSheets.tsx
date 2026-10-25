@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import {Modal, FlatList, TextInput as RNTextInput, Platform} from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
 import {TamaguiProvider} from '../theme/TamaguiProvider';
@@ -12,6 +12,8 @@ import * as labelsService from '../services/labels';
 import {Icon} from './Icon';
 import {SearchSessionsModal} from './SearchSessionsModal';
 import {StatusBadge} from './StatusBadge';
+import {ContextWindowViewer} from './ContextWindowViewer';
+import {contextItemsFromInspector, type ContextInspector} from '../services/context-items';
 import type {Message, Session} from '../types';
 
 const BG_PRESETS = [
@@ -103,6 +105,28 @@ export function ChatBottomSheets({
   setShowSearch,
 }: ChatBottomSheetsProps) {
   const colors = useColors();
+  const [contextItems, setContextItems] = useState<
+    ReturnType<typeof contextItemsFromInspector>
+  >([]);
+  const [contextLoading, setContextLoading] = useState(false);
+
+  const loadContext = React.useCallback(async () => {
+    setContextLoading(true);
+    try {
+      const inspector = await api.inspectContext();
+      setContextItems(contextItemsFromInspector(inspector as ContextInspector));
+    } catch {
+      setContextItems([]);
+    } finally {
+      setContextLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showInfo) {
+      loadContext();
+    }
+  }, [showInfo, loadContext]);
 
   return (
     <TamaguiProvider>
@@ -179,6 +203,15 @@ export function ChatBottomSheets({
                   </Text>
                 </XStack>
               </XStack>
+            </YStack>
+
+            <YStack paddingHorizontal={20} paddingTop={12} paddingBottom={4}>
+              <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color={colors.textSecondary} marginBottom={12}>CONTEXT WINDOW</Text>
+              {contextLoading ? (
+                <Text fontSize={12} color={colors.textMuted}>Loading context…</Text>
+              ) : (
+                <ContextWindowViewer items={contextItems} onRefresh={loadContext} />
+              )}
             </YStack>
 
             <YStack paddingHorizontal={20} paddingTop={12} paddingBottom={8}>
