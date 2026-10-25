@@ -15,7 +15,6 @@ import { ModelProvider } from '@/contexts/ModelContext'
 import { LocaleProvider } from '@/hooks/useLocale'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import { StartupOverlay } from '@/components/startup/StartupOverlay'
-import { ConsciousnessQuickActionsWrapper } from '@/components/consciousness/ConsciousnessQuickActionsWrapper'
 import { RouteDigestBoundary, ViteNavigatorBinder } from '@/vite/next-compat/digest-boundary'
 import { AppReadySentinel } from '@/vite/AppReadySentinel'
 import { discoveredRoutes } from '@/vite/routes'
@@ -45,7 +44,6 @@ function Shell() {
           <Outlet />
         </Suspense>
       </AppLayout>
-      <ConsciousnessQuickActionsWrapper />
     </RouteDigestBoundary>
   )
 }

@@ -1,178 +1,182 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
 import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { requestOverlayDockOpen, type OverlayWidget } from '@/components/overlay/OverlayDock'
 
-export function ConsciousnessQuickActions() {
+/**
+ * Consciousness quick actions as a dock tenant.
+ *
+ * v2: the standalone bottom-right FAB is gone — the M key lives in the
+ * overlay rail (the decluttered corner), this panel opens beside the rail,
+ * and Ctrl+Shift+Q asks the host to open it (`requestOverlayDockOpen`).
+ * The host owns open state, outside-click and Esc; the panel itself is
+ * tokenized (the old zinc/violet hardcodes are gone).
+ */
+export function useConsciousnessDockWidget(): OverlayWidget {
   const router = useRouter()
   const { t } = useLocale()
-  const addToast = useToastStore(s => s.addToast)
-  const [open, setOpen] = useState(false)
+  const addToast = useToastStore((s) => s.addToast)
   const [loading, setLoading] = useState<string | null>(null)
-  const [result, setResult] = useState<{ action: string; data: any } | null>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [result, setResult] = useState<{ action: string; data: unknown } | null>(null)
 
-  const handleToggle = useCallback(() => {
-    setOpen(prev => !prev)
-    setResult(null)
-  }, [])
-
+  // Ctrl+Shift+Q — the dock opens this widget by id.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
         e.preventDefault()
-        handleToggle()
+        requestOverlayDockOpen('consciousness')
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [handleToggle])
+  }, [])
 
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(e.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false)
+  const runAction = useCallback(
+    async (action: string, fn: () => Promise<unknown>) => {
+      setLoading(action)
+      try {
+        const data = await fn()
+        setResult({ action, data })
+        addToast(t(`consciousness_quick_actions.toast_${action}`), 'success')
+      } catch (e) {
+        addToast(extractErrorMessage(e), 'error')
+      } finally {
+        setLoading(null)
       }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  const runAction = useCallback(async (action: string, fn: () => Promise<any>) => {
-    setLoading(action)
-    try {
-      const data = await fn()
-      setResult({ action, data })
-      addToast(t(`consciousness_quick_actions.toast_${action}`), 'success')
-    } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
-    } finally {
-      setLoading(null)
-    }
-  }, [addToast, t])
+    },
+    [addToast, t],
+  )
 
   const handleReflect = useCallback(() => {
-    runAction('reflect', () => apiPost('/consciousness/reflect'))
+    void runAction('reflect', () => apiPost('/consciousness/reflect'))
   }, [runAction])
 
   const handleSeed = useCallback(() => {
-    runAction('seed', () => apiPost('/consciousness/seed?count=5'))
+    void runAction('seed', () => apiPost('/consciousness/seed?count=5'))
   }, [runAction])
 
   const handleStatus = useCallback(() => {
-    runAction('status', () => apiGet('/consciousness/status'))
+    void runAction('status', () => apiGet('/consciousness/status'))
   }, [runAction])
 
   const handleHealth = useCallback(() => {
-    runAction('health', () => apiGet('/consciousness/health'))
+    void runAction('health', () => apiGet('/consciousness/health'))
   }, [runAction])
 
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        onClick={handleToggle}
-        className="fixed bottom-6 right-6 z-[9999] h-12 w-12 rounded-full bg-violet-600 text-white shadow-lg transition-all hover:bg-violet-700 hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
-        aria-label={t('consciousness_quick_actions.toggle')}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+  return useMemo(() => {
+    const renderPanel = (close: () => void): ReactNode => (
+      <div className="space-y-2" data-testid="consciousness-panel">
+        <div className="flex items-center justify-between border-b border-border px-1 pb-2">
+          <span className="text-sm font-semibold text-foreground">
+            {t('consciousness_quick_actions.title')}
+          </span>
+          <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            Ctrl+Shift+Q
+          </span>
+        </div>
+
+        <div className="space-y-1">
+          <QuickAction
+            label={t('consciousness_quick_actions.reflect')}
+            loading={loading === 'reflect'}
+            onClick={handleReflect}
+          />
+          <QuickAction
+            label={t('consciousness_quick_actions.seed')}
+            loading={loading === 'seed'}
+            onClick={handleSeed}
+          />
+          <QuickAction
+            label={t('consciousness_quick_actions.status')}
+            loading={loading === 'status'}
+            onClick={handleStatus}
+          />
+          <QuickAction
+            label={t('consciousness_quick_actions.health')}
+            loading={loading === 'health'}
+            onClick={handleHealth}
+          />
+
+          <div className="my-1 border-t border-border" />
+
+          <button
+            type="button"
+            onClick={() => {
+              router.push('/consciousness/dashboard')
+              close()
+            }}
+            className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {t('consciousness_quick_actions.open_dashboard')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              router.push('/chat')
+              close()
+            }}
+            className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {t('consciousness_quick_actions.open_chat')}
+          </button>
+        </div>
+
+        {result ? (
+          <div className="max-h-48 overflow-auto border-t border-border px-1 pt-2">
+            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              {t(`consciousness_quick_actions.label_${result.action}`)}
+            </div>
+            <pre className="whitespace-pre-wrap break-all font-mono text-xs text-muted-foreground">
+              {JSON.stringify(result.data, null, 2)}
+            </pre>
+          </div>
+        ) : null}
+      </div>
+    )
+
+    return {
+      id: 'consciousness',
+      label: t('consciousness_quick_actions.toggle'),
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className="h-5 w-5"
+          aria-hidden
+        >
           <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 3v2h2V7h-2zm0 4v6h2v-6h-2z" />
         </svg>
-      </button>
-
-      {open && (
-        <div
-          ref={panelRef}
-          className="fixed bottom-20 right-6 z-[9999] w-72 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden transition-all"
-          style={{ animation: 'consciousness-quick-fadein 0.15s ease-out' }}
-        >
-          <div className="px-4 py-3 border-b border-zinc-700 flex items-center justify-between">
-            <span className="text-sm font-semibold text-zinc-100">{t('consciousness_quick_actions.title')}</span>
-            <span className="text-[10px] text-zinc-500">Ctrl+Shift+Q</span>
-          </div>
-
-          <div className="p-2 space-y-1">
-            <QuickAction
-              label={t('consciousness_quick_actions.reflect')}
-              loading={loading === 'reflect'}
-              onClick={handleReflect}
-            />
-            <QuickAction
-              label={t('consciousness_quick_actions.seed')}
-              loading={loading === 'seed'}
-              onClick={handleSeed}
-            />
-            <QuickAction
-              label={t('consciousness_quick_actions.status')}
-              loading={loading === 'status'}
-              onClick={handleStatus}
-            />
-            <QuickAction
-              label={t('consciousness_quick_actions.health')}
-              loading={loading === 'health'}
-              onClick={handleHealth}
-            />
-
-            <div className="border-t border-zinc-700 my-1" />
-
-            <button
-              onClick={() => { router.push('/consciousness/dashboard'); setOpen(false) }}
-              className="w-full px-3 py-2 text-left text-sm text-zinc-300 rounded-lg hover:bg-zinc-800 transition-colors"
-            >
-              {t('consciousness_quick_actions.open_dashboard')}
-            </button>
-            <button
-              onClick={() => { router.push('/chat'); setOpen(false) }}
-              className="w-full px-3 py-2 text-left text-sm text-zinc-300 rounded-lg hover:bg-zinc-800 transition-colors"
-            >
-              {t('consciousness_quick_actions.open_chat')}
-            </button>
-          </div>
-
-          {result && (
-            <div className="px-4 py-3 border-t border-zinc-700 max-h-48 overflow-auto">
-              <div className="text-[10px] font-medium text-zinc-500 mb-1 uppercase tracking-wider">
-                {t(`consciousness_quick_actions.label_${result.action}`)}
-              </div>
-              <pre className="text-xs text-zinc-400 whitespace-pre-wrap break-all font-mono">
-                {JSON.stringify(result.data, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-      )}
-
-      <style>{`
-        @keyframes consciousness-quick-fadein {
-          from { opacity: 0; transform: translateY(8px) scale(0.95); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}</style>
-    </>
-  )
+      ),
+      tone: 'primary',
+      render: renderPanel,
+    }
+  }, [t, loading, router, handleReflect, handleSeed, handleStatus, handleHealth])
 }
 
-function QuickAction({ label, loading, onClick }: { label: string; loading: boolean; onClick: () => void }) {
+function QuickAction({
+  label,
+  loading,
+  onClick,
+}: {
+  label: string
+  loading: boolean
+  onClick: () => void
+}) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={loading}
-      className="w-full px-3 py-2 text-left text-sm text-zinc-300 rounded-lg hover:bg-zinc-800 disabled:opacity-50 transition-colors flex items-center gap-2"
+      className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
     >
       {loading ? (
-        <span className="h-3 w-3 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+        <span className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       ) : null}
       <span>{label}</span>
     </button>

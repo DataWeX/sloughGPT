@@ -241,13 +241,12 @@ The consciousness system provides AI self-awareness monitoring and management wi
 
 ### Consciousness Components
 
-| Component                 | Status  | Description          |
-| ------------------------- | ------- | -------------------- |
-| ConsciousnessQuickActions | ✅ Done | Quick action buttons |
-| QuickActionsWrapper       | ✅ Done | Wrapper component    |
-| SidebarWidget             | ✅ Done | Sidebar integration  |
-| NotificationsPanel        | ✅ Done | Notification display |
-| MessageBadge              | ✅ Done | Message count badge  |
+| Component                 | Status  | Description                                                |
+| ------------------------- | ------- | ---------------------------------------------------------- |
+| ConsciousnessQuickActions | ✅ Done | Dock-rail tenant (M key + panel; was the bottom-right FAB) |
+| SidebarWidget             | ✅ Done | Sidebar integration                                        |
+| NotificationsPanel        | ✅ Done | Notification display                                       |
+| MessageBadge              | ✅ Done | Message count badge                                        |
 
 ### Consciousness Hooks
 
@@ -310,13 +309,13 @@ page, and nav entry retired 2026-10-24 — it is a tool, not a journey
 (AGENTS.md Page Rule, "not a view" clause). It now lives as the floating
 site-doctor dock widget; `/mole` URLs redirect to `/monitoring`.
 
-| Piece      | Where                                         | Notes                                                                                         |
-| ---------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Router     | `apps/api/server/routers/mole.py`             | `GET /mole/report`, `POST /mole/run` — registered additively in `routers/__init__.py`         |
-| Dock host  | `apps/web/components/overlay/OverlayDock.tsx` | one owner of the bottom-right corner, mounted by `AppLayout` (both shells)                    |
-| Widget     | `apps/web/components/mole/MoleDock.tsx`       | header + `RunMoleButton`, live component strip, summary, findings — `role: 'operator'` tagged |
-| Components | `apps/web/components/mole/`                   | `MoleSummary`, `FindingsList` (detail folded), `RunMoleButton`, `ComponentHealthStrip`        |
-| Redirect   | `apps/web/lib/redirects.ts`                   | `/mole` → `/monitoring` (no nav entry)                                                        |
+| Piece      | Where                                         | Notes                                                                                                                                    |
+| ---------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Router     | `apps/api/server/routers/mole.py`             | `GET /mole/report`, `POST /mole/run` — registered additively in `routers/__init__.py`                                                    |
+| Dock host  | `apps/web/components/overlay/OverlayDock.tsx` | one owner of the right edge — glass rail + status LED, tenants (site doctor, consciousness) mount here; corner holds only the status bar |
+| Widget     | `apps/web/components/mole/MoleDock.tsx`       | header + `RunMoleButton`, live component strip, summary, findings — `role: 'operator'` tagged                                            |
+| Components | `apps/web/components/mole/`                   | `MoleSummary`, `FindingsList` (detail folded), `RunMoleButton`, `ComponentHealthStrip`                                                   |
+| Redirect   | `apps/web/lib/redirects.ts`                   | `/mole` → `/monitoring` (no nav entry)                                                                                                   |
 
 - **Contract:** `GET /mole/report` → `{report, path, age_s}` (missing or
   corrupt report file → `report: null`, an empty state rather than an error);

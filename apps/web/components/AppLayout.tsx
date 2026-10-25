@@ -24,6 +24,7 @@ import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { OverlayDock } from '@/components/overlay/OverlayDock'
 import { useMoleDockWidget } from '@/components/mole/MoleDock'
+import { useConsciousnessDockWidget } from '@/components/consciousness/ConsciousnessQuickActions'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
 import { ConvSidebarProvider, useConvSidebar } from '@/features/chat/contexts/ConvSidebarContext'
@@ -50,8 +51,10 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const toasts = useToastStore((s) => s.toasts)
   const dismissToast = useToastStore((s) => s.dismissToast)
   const clearToasts = useToastStore((s) => s.clearToasts)
-  // Site doctor as a floating dock tenant — the /mole route's replacement.
+  // Site doctor + consciousness quick actions as floating dock tenants —
+  // the old bottom-right pill and FAB are one rail now.
   const moleWidget = useMoleDockWidget()
+  const consciousnessWidget = useConsciousnessDockWidget()
   const apiStatus = useApiMonitor((s) => s.status)
   const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed, toggleConv } = useConvSidebar()
   useGlobalShortcuts()
@@ -264,10 +267,10 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       <CommandPalette />
       <WhatsNewDialog open={showWhatsNew} onOpenChange={setShowWhatsNew} />
       <OutputPanel open={showOutput} onClose={() => setShowOutput(false)} />
-      {/* Floating overlay dock — the one owner of the bottom-right corner.
-          Tenants register per widget (Mole first; consciousness quick-actions
-          and the debug/output panels migrate when next touched). */}
-      <OverlayDock widgets={[moleWidget]} />
+      {/* Floating overlay rail — the one owner of the right edge, and the
+          de-cluttered corner (the pill and the consciousness FAB are keys;
+          the status bar is all that remains below). */}
+      <OverlayDock widgets={[moleWidget, consciousnessWidget]} />
     </div>
   )
 }

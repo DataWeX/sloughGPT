@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
 const mockPathname = '/chat'
@@ -124,6 +124,15 @@ vi.mock('@/components/mole/MoleDock', () => ({
     render: () => <div data-testid="mole-dock-body" />,
   }),
 }))
+vi.mock('@/components/consciousness/ConsciousnessQuickActions', () => ({
+  useConsciousnessDockWidget: () => ({
+    id: 'consciousness',
+    label: 'consciousness_quick_actions.toggle',
+    icon: <span data-testid="icon-consciousness" />,
+    tone: 'primary',
+    render: () => <div data-testid="consciousness-dock-body" />,
+  }),
+}))
 
 const { mockToastStore, mockApiMonitor } = vi.hoisted(() => ({
   mockToastStore: { toasts: [], dismissToast: vi.fn(), clearToasts: vi.fn() },
@@ -214,15 +223,21 @@ describe('AppLayout', () => {
     expect(screen.getByTestId('command-palette')).toBeDefined()
   })
 
-  it('renders the floating overlay dock with the mole widget', () => {
+  it('renders the floating overlay rail with both tenants', () => {
     render(
       <AppLayout>
         <div />
       </AppLayout>,
     )
     expect(screen.getByTestId('overlay-dock')).toBeDefined()
-    const button = screen.getByTestId('overlay-widget-mole')
-    expect(button).toHaveAttribute('aria-label', 'nav.mole')
+    expect(screen.getByTestId('overlay-rail')).toBeDefined()
+    expect(screen.getByTestId('overlay-led')).toBeDefined()
+    const mole = screen.getByTestId('overlay-widget-mole')
+    expect(mole).toHaveAttribute('aria-label', 'nav.mole')
+    const consciousness = screen.getByTestId('overlay-widget-consciousness')
+    expect(consciousness).toHaveAttribute('aria-label', 'consciousness_quick_actions.toggle')
+    // The old bottom-right FAB is gone — only the rail owns the edge.
+    expect(screen.queryByLabelText('consciousness_quick_actions.toggle')).not.toBeNull()
   })
 
   it('has skip-to-main-content link for accessibility', () => {

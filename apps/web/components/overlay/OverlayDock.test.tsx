@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
-import { OverlayDock, type OverlayWidget } from './OverlayDock'
+import { OverlayDock, requestOverlayDockOpen, type OverlayWidget } from './OverlayDock'
 
 function widget(over: Partial<OverlayWidget> = {}): OverlayWidget {
   return {
@@ -110,5 +110,34 @@ describe('OverlayDock', () => {
 
     fireEvent.click(screen.getByTestId('overlay-widget-alpha'))
     expect(screen.getByTestId('overlay-dock-panel')).toHaveAttribute('data-role', 'operator')
+  })
+
+  it('renders the rail shell with a status LED (worst tone wins)', () => {
+    render(
+      <OverlayDock
+        widgets={[
+          widget({ tone: 'success' }),
+          widget({ id: 'beta', label: 'Beta', tone: 'destructive' }),
+        ]}
+      />,
+    )
+    expect(screen.getByTestId('overlay-rail')).toBeDefined()
+    const led = screen.getByTestId('overlay-led')
+    // destructive tenant dominates the lamp (pulsing)
+    expect(led.className).toContain('bg-destructive')
+    expect(led.className).toContain('animate-pulse')
+  })
+
+  it('opens a widget by id via the overlay-dock:open event bridge', () => {
+    render(<OverlayDock widgets={[widget()]} />)
+    expect(screen.queryByTestId('overlay-dock-panel')).toBeNull()
+
+    act(() => requestOverlayDockOpen('alpha'))
+    const panel = screen.getByTestId('overlay-dock-panel')
+    expect(panel).toHaveAttribute('aria-label', 'Alpha widget')
+
+    // unknown ids are ignored
+    act(() => requestOverlayDockOpen('nope'))
+    expect(screen.getByTestId('overlay-dock-panel')).toHaveAttribute('aria-label', 'Alpha widget')
   })
 })

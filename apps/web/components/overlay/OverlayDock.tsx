@@ -6,15 +6,13 @@ import { cn } from '@sloughgpt/strui'
 export type OverlayTone = 'default' | 'primary' | 'success' | 'warning' | 'destructive'
 
 /**
- * One tenant of the floating dock.
+ * One tenant of the overlay rail (Android system-UI model: the rail owns
+ * the right edge — position, stacking, LED status lamp, open-at-a-time —
+ * tenants bring their own key glyph, badge and panel).
  *
- * The dock owns the corner — position, stacking, and open-at-a-time — the
- * way a window manager owns its overlay layer (Android heads-up model).
- * Tenants register an icon, an optional count badge, a severity ring and a
- * panel; they never position themselves. Consciousness quick-actions,
- * DebugOverlay and OutputPanel are grandfathered at their current spots and
- * migrate as tenants when next touched (AGENTS.md Page Rule: no retroactive
- * purge).
+ * Panels open beside the rail, never over the corner: the bottom-right
+ * status bar is the only thing left down there (the old pill + the
+ * consciousness FAB both migrated in — consciousness as of v2).
  */
 export interface OverlayWidget {
   /** Stable key, also the data-testid suffix. */
@@ -24,7 +22,7 @@ export interface OverlayWidget {
   icon: ReactNode
   /** Count chip shown when truthy (worst severity count, findings, …). */
   badge?: string | null
-  /** Severity ring around the button — status-LED color, tokens only. */
+  /** Severity ring around the key — status-LED color, tokens only. */
   tone?: OverlayTone
   /**
    * Operator surfaces are tagged, never mainstreamed (AGENTS.md Page Rule
@@ -33,6 +31,19 @@ export interface OverlayWidget {
   role?: string
   /** Panel body. `close` dismisses the panel (in-panel actions call it). */
   render: (close: () => void) => ReactNode
+}
+
+/**
+ * Ask the dock to open a widget by id — how keyboard shortcuts (e.g.
+ * Ctrl+Shift+Q for consciousness) reach the panel now that the host owns
+ * open state. Same event-bridge pattern AppLayout uses for
+ * 'toggle-output-panel' / 'toggle-whatsnew'.
+ */
+export const OVERLAY_DOCK_OPEN_EVENT = 'overlay-dock:open'
+
+export function requestOverlayDockOpen(id: string): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(OVERLAY_DOCK_OPEN_EVENT, { detail: { id } }))
 }
 
 /** Ring recipe per tone — semantic tokens only, no raw hex. */
@@ -56,6 +67,31 @@ const TONE_BADGE: Record<OverlayTone, string> = {
   destructive: 'border-destructive/30 bg-destructive/10 text-destructive',
 }
 
+/** LED lamp per tone — pulsing while actionable, steady when healthy. */
+const TONE_LED: Record<OverlayTone, string> = {
+  default: 'bg-muted',
+  primary: 'bg-primary',
+  success: 'bg-success',
+  warning: 'bg-warning animate-pulse',
+  destructive: 'bg-destructive animate-pulse',
+}
+
+/** Worst tone wins — the lamp reports the rail's overall state. */
+const TONE_RANK: Record<OverlayTone, number> = {
+  default: 0,
+  primary: 1,
+  success: 2,
+  warning: 3,
+  destructive: 4,
+}
+
+function worstTone(widgets: OverlayWidget[]): OverlayTone {
+  return widgets.reduce<OverlayTone>(
+    (acc, w) => (TONE_RANK[w.tone ?? 'default'] > TONE_RANK[acc] ? (w.tone ?? 'default') : acc),
+    'default',
+  )
+}
+
 interface OverlayDockProps {
   /** Registered tenants, top-to-bottom. One panel open at a time. */
   widgets: OverlayWidget[]
@@ -64,11 +100,13 @@ interface OverlayDockProps {
 }
 
 /**
- * Floating overlay dock — the single owner of the bottom-right corner.
+ * The overlay rail — the single owner of the right edge.
  *
- * Mounted once by AppLayout (both the Next and Vite shells render it), so
- * every route shares one host instead of stacking independent
- * `fixed bottom-right z-[9999]` elements.
+ * Slim vertical glass column at mid-right (game-HUD style): status LED on
+ * top, extruded tenant keys below, badges as chips. The former
+ * bottom-right pill and the consciousness FAB are tenants now, so the
+ * corner holds only the status bar. Mounted once by AppLayout (both the
+ * Next and Vite shells render it).
  */
 export function OverlayDock({ widgets, ariaLabel = 'System overlays' }: OverlayDockProps) {
   const [openId, setOpenId] = useState<string | null>(null)
@@ -85,7 +123,7 @@ export function OverlayDock({ widgets, ariaLabel = 'System overlays' }: OverlayD
     return () => document.removeEventListener('keydown', onKey)
   }, [openId, close])
 
-  // Outside click closes — button and panel are one dock region.
+  // Outside click closes — rail and its panel are one dock region.
   useEffect(() => {
     if (!openId) return
     const onDown = (e: MouseEvent) => {
@@ -95,15 +133,26 @@ export function OverlayDock({ widgets, ariaLabel = 'System overlays' }: OverlayD
     return () => document.removeEventListener('mousedown', onDown)
   }, [openId, close])
 
+  // Keyboard shortcuts (Ctrl+Shift+Q, …) open their widget by id.
+  useEffect(() => {
+    const onRequest = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id
+      if (id && widgets.some((w) => w.id === id)) setOpenId(id)
+    }
+    window.addEventListener(OVERLAY_DOCK_OPEN_EVENT, onRequest)
+    return () => window.removeEventListener(OVERLAY_DOCK_OPEN_EVENT, onRequest)
+  }, [widgets])
+
   if (widgets.length === 0) return null
   const open = widgets.find((w) => w.id === openId) ?? null
+  const led = worstTone(widgets)
 
   return (
     <div
       ref={dockRef}
       data-testid="overlay-dock"
       aria-label={ariaLabel}
-      className="fixed bottom-20 right-6 z-[9999] flex flex-col items-end gap-2"
+      className="fixed right-3 top-1/2 z-[9999] -translate-y-1/2"
     >
       {open ? (
         <div
@@ -111,13 +160,22 @@ export function OverlayDock({ widgets, ariaLabel = 'System overlays' }: OverlayD
           aria-label={open.label}
           data-testid="overlay-dock-panel"
           data-role={open.role}
-          className="max-h-[70vh] w-[22rem] max-w-[calc(100vw-3rem)] overflow-y-auto rounded-xl border border-border/70 bg-card p-3 text-foreground shadow-2xl"
+          className="absolute right-full top-1/2 mr-3 max-h-[80vh] w-[22rem] max-w-[calc(100vw-6rem)] -translate-y-1/2 overflow-y-auto rounded-2xl border border-border/70 bg-card/90 p-3 text-foreground shadow-2xl backdrop-blur-xl"
         >
           {open.render(close)}
         </div>
       ) : null}
 
-      <div className="flex flex-col items-end gap-2">
+      <div
+        data-testid="overlay-rail"
+        className="flex flex-col items-center gap-1.5 rounded-full border border-border/70 bg-card/70 p-1.5 shadow-2xl backdrop-blur-md"
+      >
+        <span
+          data-testid="overlay-led"
+          aria-hidden
+          title="Rail status"
+          className={cn('mb-0.5 h-2.5 w-2.5 rounded-full', TONE_LED[led])}
+        />
         {widgets.map((w) => {
           const isOpen = w.id === openId
           const tone = w.tone ?? 'default'
@@ -132,8 +190,9 @@ export function OverlayDock({ widgets, ariaLabel = 'System overlays' }: OverlayD
                 title={w.label}
                 onClick={() => setOpenId(isOpen ? null : w.id)}
                 className={cn(
-                  'relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border bg-card text-foreground shadow-lg transition-all',
-                  'hover:scale-105 active:scale-95',
+                  'relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border bg-card text-foreground transition-all',
+                  'shadow-[0_2px_0_0_rgb(var(--border))] hover:scale-105',
+                  'active:translate-y-0.5 active:shadow-[0_1px_0_0_rgb(var(--border))]',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   TONE_RING[tone],
                 )}
