@@ -7,6 +7,7 @@ import { Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { multimodalController } from '@/lib/controllers'
 import type { MultimodalCapabilities, TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
+import type { DetectedObject } from '@/components/multimodal/ObjectDetectionSection'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { apiPost } from '@/lib/http-client'
@@ -21,6 +22,7 @@ import PreferenceOptimizationCard from '@/components/multimodal/PreferenceOptimi
 import ImageGenerationCard from '@/components/multimodal/ImageGenerationCard'
 import AudioCard from '@/components/multimodal/AudioCard'
 import VqaSection from '@/components/multimodal/VqaSection'
+import ObjectDetectionSection from '@/components/multimodal/ObjectDetectionSection'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
 import { ImageSection } from '@/components/multimodal/ImageSection'
 
@@ -43,6 +45,8 @@ export default function MultimodalPage() {
   const [synthAudio, setSynthAudio] = useState<{ audio: string; duration_sec: number } | null>(null)
   const [asking, setAsking] = useState(false)
   const [vqaResult, setVqaResult] = useState<{ answer: string; question: string; elapsed_ms: number } | null>(null)
+  const [detecting, setDetecting] = useState(false)
+  const [detectedObjects, setDetectedObjects] = useState<DetectedObject[] | null>(null)
   const [creatingDataset, setCreatingDataset] = useState(false)
   const [dpoRunning, setDpoRunning] = useState(false)
   const [dpoStatus, setDpoStatus] = useState<string>('idle')
@@ -212,6 +216,15 @@ export default function MultimodalPage() {
     } finally { setAsking(false) }
   }
 
+  const handleDetectObjects = async (file: File) => {
+    setDetecting(true); setDetectedObjects(null)
+    try {
+      const result = await multimodalController.detectObjects(file)
+      setDetectedObjects(result.objects)
+    } catch (err: unknown) { addToast(extractErrorMessage(err, 'Could not detect objects'), 'error')
+    } finally { setDetecting(false) }
+  }
+
   const headerRight = (
     <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading}>
       <IconRefresh className="h-4 w-4 mr-1" /> Refresh
@@ -243,6 +256,7 @@ export default function MultimodalPage() {
       <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
       <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
       <VqaSection asking={asking} onAsk={handleAskQuestion} answer={vqaResult} />
+      <ObjectDetectionSection detecting={detecting} onDetect={handleDetectObjects} objects={detectedObjects} />
       <VoiceSection />
       <ImageSection />
     </PageContainer>

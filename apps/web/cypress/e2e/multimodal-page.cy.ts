@@ -58,7 +58,7 @@ describe('Object detection flow', () => {
     cy.visit('/multimodal')
   })
 
-  it.skip('shows object detection section — never built; core-feature backlog', () => {
+  it('shows object detection section', () => {
     cy.contains('Object Detection').scrollIntoView().should('be.visible')
   })
 })
