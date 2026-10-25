@@ -470,3 +470,45 @@ a flow loses its anchor. Run them with
 | Loss            | "Learning progress" (visual chart, not numbers) |
 | Epoch           | "Training round"                                |
 | Hyperparameters | "Advanced options" (hidden by default)          |
+
+---
+
+## Mobile Journeys
+
+Same golden rule as the web: plain language, no jargon, no technical terms.
+These journeys are the in-code test paths for the mobile app — each one is
+mapped to its implementation files and its tests in
+`domain/journeys/flows.py`, and `scripts/journey_report.py` shows per-journey
+results.
+
+### Mobile: Organize My Conversations
+
+**What the user sees:**
+
+- Open the conversation drawer → recent chats, just like the web sidebar
+- A "+ new folder" action creates a folder (e.g. "Work", "Trips") with a typed name
+- Long-press a conversation → a familiar action sheet: Rename, Move to Folder, Clone, Delete
+- Moving a chat into a folder shows a small colored badge next to the title
+- Tapping a folder chip in the drawer filters the list to just that folder; tap again to see everything
+- "Clone" makes an exact copy of a chat (same messages, new title "... (Copy)") so experimenting doesn't destroy the original
+- Starred conversations are marked with a star and stay easy to find
+
+**What they should NOT see:**
+
+- Session IDs, storage keys, or cache messages
+- "Duplicate session" or "deep copy" — it's just "Clone"
+- Anything that loses their original chat when cloning
+
+### Mobile: See What the AI Sees
+
+**What the user sees:**
+
+- A quiet "+ Context" nudge above the keyboard → tap, type a note (e.g. "I'm writing a wedding speech"), Send — from now on the AI knows it in this chat
+- Details → "Context Window" shows what the AI is actually holding right now: system prompt, knowledge, the back-and-forth — grouped in plain-language sections
+- Each section says roughly how big it is in plain words; a refresh button re-reads the live state
+- If there's nothing yet, it says so plainly — never a blank screen or an error code
+
+**What they should NOT see:**
+
+- Token counts as raw jargon without context, model names, or prompt IDs
+- API errors or stack traces when inspection fails — a friendly "Couldn't read it, try again"

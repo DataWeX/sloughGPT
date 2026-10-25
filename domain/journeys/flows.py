@@ -3,6 +3,13 @@
 Every flow links to its spec heading in docs/UX_FLOWS.md (Flow.spec) — the
 registry-integrity tests in tests/test_ux_flows_library.py fail the build if a
 spec heading is renamed or a flow loses its link.
+
+Traceability: each Flow additionally records *where it lives* — `impl` paths,
+asserting `tests`, `features` (UX_FLOWS headings it exercises) and `owner` —
+so a journey can be mapped down to code and evidence. Web flows keep the live
+browser sweep (`FLOWS`, `build()` steps); `MOBILE_FLOWS` are in-code journeys
+(no device): their `tests` are jest suites driven against mocked transports.
+`scripts/journey_report.py` prints the per-journey link + test status.
 """
 
 from __future__ import annotations
@@ -28,6 +35,11 @@ class Flow:
     url: str
     spec: str
     build: Callable[[], list]
+    surface: str = "web"  # "web" | "mobile"
+    features: tuple[str, ...] = ()  # UX_FLOWS headings exercised
+    impl: tuple[str, ...] = ()  # repo-relative implementation paths
+    tests: tuple[str, ...] = ()  # repo-relative asserting test files
+    owner: str = ""
 
 
 def _chat_flow(
@@ -121,15 +133,31 @@ def flow_training() -> Flow:
     )
 
 
-FLOWS: list[Flow] = [
-    flow_home(),
-    _chat_flow(
+def flow_chat() -> Flow:
+    def build():
+        steps = [s_goto("/chat", verify="Chat")]
+        steps.append(s_send("What was that recipe we talked about yesterday?"))
+        return steps
+
+    return Flow(
         "1-chat",
         "Chat That Remembers Me",
         "/chat",
-        "What was that recipe we talked about yesterday?",
         "### 1. Chat That Remembers Me",
-    ),
+        build,
+        features=("### 1. Chat That Remembers Me",),
+        impl=(
+            "apps/web/features/chat/ChatPage.tsx",
+            "apps/web/features/chat/hooks/useChatPageController.ts",
+        ),
+        tests=("apps/web/app/(app)/chat/page.test.tsx",),
+        owner="web lane",
+    )
+
+
+FLOWS: list[Flow] = [
+    flow_home(),
+    flow_chat(),
     _chat_flow(
         "2-write",
         "Writing Assistant",
@@ -210,9 +238,82 @@ FLOWS: list[Flow] = [
 _BY_ID = {f.id: f for f in FLOWS}
 
 
+def _mobile_flow(
+    flow_id: str,
+    label: str,
+    spec: str,
+    features: tuple[str, ...],
+    impl: tuple[str, ...],
+    tests: tuple[str, ...],
+    owner: str = "mobile lane",
+) -> Flow:
+    """In-code mobile journey — no live URL; asserted by its jest suite."""
+
+    def build():
+        return []
+
+    return Flow(
+        flow_id,
+        label,
+        "",
+        spec,
+        build,
+        surface="mobile",
+        features=features,
+        impl=impl,
+        tests=tests,
+        owner=owner,
+    )
+
+
+MOBILE_FLOWS: list[Flow] = [
+    _mobile_flow(
+        "m1-organize",
+        "Mobile: Organize My Conversations",
+        "### Mobile: Organize My Conversations",
+        ("### Mobile: Organize My Conversations",),
+        (
+            "apps/mobile/src/components/ChatDrawer.tsx",
+            "apps/mobile/src/services/folders.ts",
+            "apps/mobile/src/stores/chat-store.ts",
+        ),
+        (
+            "apps/mobile/src/components/__tests__/journeys/session-organization.test.tsx",
+            "apps/mobile/src/services/__tests__/folders.test.ts",
+        ),
+    ),
+    _mobile_flow(
+        "m2-context",
+        "Mobile: See What the AI Sees",
+        "### Mobile: See What the AI Sees",
+        ("### Mobile: See What the AI Sees",),
+        (
+            "apps/mobile/src/components/ContextInjectionBar.tsx",
+            "apps/mobile/src/components/ContextWindowViewer.tsx",
+            "apps/mobile/src/services/context-items.ts",
+        ),
+        (
+            "apps/mobile/src/components/__tests__/journeys/context-window.test.tsx",
+            "apps/mobile/src/components/__tests__/ContextWindowViewer.test.tsx",
+        ),
+    ),
+]
+
+ALL_FLOWS: list[Flow] = [*FLOWS, *MOBILE_FLOWS]
+_ALL_BY_ID = {f.id: f for f in ALL_FLOWS}
+
+
 def get_flow(flow_id: str) -> Flow:
     return _BY_ID[flow_id]
 
 
+def get_any_flow(flow_id: str) -> Flow:
+    return _ALL_BY_ID[flow_id]
+
+
 def list_flows() -> list[Flow]:
     return list(FLOWS)
+
+
+def list_all_flows() -> list[Flow]:
+    return list(ALL_FLOWS)
