@@ -621,10 +621,10 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `215a6eb6b`)
+## Landed on main (origin/main = `7d07b8631`)
 
-- **2026-10-24 · full `origin/main` integration of `feat/aml-cruncher` — FOUR
-  merge rounds (69 branch commits + origin's 46 across PR#175–#191), all
+- **2026-10-24 · full `origin/main` integration of `feat/aml-cruncher` — FIVE
+  merge rounds (69 branch commits + origin's 72 across PR#175–#196), all
   green, pushed.** Card `63116e83` cruncher chain + stream-first chat + web
   quality-bar + hygiene AST. **Round 1** (`9483282e0`, 14 conflicts) resolved
   origin-canonical with per-hunk semantic re-application (notes journal union
@@ -652,15 +652,28 @@ git push -u origin feat/<name>   # push your own branch when done
   Origin's new raw-egress chokepoint gate then caught OUR kanban lane's raw
   `fetch('/api/planner/transition')` (13 files vs pin of 12) — fixed by
   routing `transitionCard` through `apiPost` (envelope passthrough verified,
-  consumer try/catches). **Round 4** (PR#191 VQA, web-only) auto-merged.
-  **Final gates:** canonical `testpaths` suite in resumable chunks — `tests/`
-  3425, `apps/` 1758 (incl. cli + api 1283), core-py 42,764 passed / **25
+   consumer try/catches). **Round 4** (PR#191 VQA, web-only) auto-merged.
+  **Round 5** (PR#193–196: system-search subsystem + Cmd+K, route-content
+  pins, 36-page prune 109→73, state-refresh lane, bootstrap fan-out perf —
+  26 commits/206 files): 3 conflicts — inference.py's re-added
+  `/chat/stream` registration dropped AGAIN (the handler doesn't exist in
+  our tree and the route is gate-forbidden; `chat.py` enforces the 400/503
+  guards its note worried about), CommandPalette took origin's dataActions
+  search integration + test file unioned both mock sets (origin's search
+  tests needed `waitFor` back in the import — auto-merge had kept our
+  narrower one). Two origin teardown leaks turned the full vitest run red
+  with unhandled errors (quiz `setTimeout(300)` firing post-teardown;
+  consciousness/debug `fetchState` ×4 committing setState after jsdom
+  teardown) — both fixed with unmount guards, zero mounted-behavior change
+  (`08be26c54`). **Final gates:** canonical `testpaths` suite in resumable chunks — `tests/`
+  3432, `apps/` 1758 (incl. cli + api now 1332), core-py 42,764 passed / **25
   failed = the known env/flake class only** (quantization e2e ×12, slonet
   kernels/kv/wave ×8, gpu fp16, ml cuda + 3 isolation/live-socket flakes, each
   green standalone or skip-guarded, all zero-diff vs origin); outside-testpath
   extras also green (planner 45, aml/cruncher, memory 65, agent-loop 23,
-  contracts 37, check_contract exit 0); web `tsc` 0, full vitest **845 files /
-  8109 tests** + targeted 149 post-round-4, eslint 0 errors, ruff+format
+  contracts 37, check_contract exit 0); web `tsc` 0, full vitest **815 files /
+  7736 tests / 0 unhandled errors** (post-round-5; page-pruning reduced the
+  file count from 845), eslint 0 errors, ruff+format
   clean, cargo check clean; mypy advisory only (72 pre-existing `inference.py`
   errors, 0 in touched regions). **Ops notes:** suite runs must use canonical
   `testpaths` (a bare `pytest packages` sweeps app-planner/bawl/infra-lib —
