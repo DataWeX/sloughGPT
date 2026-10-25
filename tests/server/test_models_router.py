@@ -273,6 +273,59 @@ class TestListHFModels:
         assert resp.status_code == 200
         ctrl.list_hf_models.assert_called_with("gpt2")
 
+    @patch("apps.api.server.routers.models.get_models_controller")
+    @patch("apps.api.server.routers.models.compute_model_size_gb")
+    @patch("apps.api.server.routers.models.is_model_cached")
+    @patch("apps.api.server.routers.models._hf_cache_dir")
+    @patch("domain.infrastructure._internal.resource_manager.get_resource_manager")
+    def test_list_hf_models_shallow_resolves_sizes_offline(
+        self, mock_rm, mock_hf_dir, mock_is_cached, mock_compute, mock_get_ctrl, client
+    ):
+        """shallow=true (first-paint /bootstrap fan-out) never hits the Hub API.
+
+        Regression for the 19.5s cold /bootstrap: the size fan-out used to
+        fall through to one Hub round-trip per uncached model.
+        """
+        mock_rm.return_value = MagicMock(inference_pool_size=2)
+        mock_is_cached.return_value = False
+        mock_compute.return_value = None
+        mock_hf_dir.exists.return_value = False
+
+        ctrl = MagicMock()
+        ctrl.list_hf_models.return_value = [{"model_id": "gpt2", "parameters": 124000000}]
+        mock_get_ctrl.return_value = ctrl
+
+        resp = client.get("/models/hf?shallow=true")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["meta"]["shallow"] is True
+        mock_compute.assert_called_once_with("gpt2", offline=True)
+        assert body["data"][0]["size_gb"] is None
+        assert body["data"][0]["cached"] is False
+
+    @patch("apps.api.server.routers.models.get_models_controller")
+    @patch("apps.api.server.routers.models.compute_model_size_gb")
+    @patch("apps.api.server.routers.models.is_model_cached")
+    @patch("apps.api.server.routers.models._hf_cache_dir")
+    @patch("domain.infrastructure._internal.resource_manager.get_resource_manager")
+    def test_list_hf_models_default_stays_online(
+        self, mock_rm, mock_hf_dir, mock_is_cached, mock_compute, mock_get_ctrl, client
+    ):
+        """Without shallow, sizes keep the full online behavior (offline=False)."""
+        mock_rm.return_value = MagicMock(inference_pool_size=2)
+        mock_is_cached.return_value = False
+        mock_compute.return_value = 0.5
+        mock_hf_dir.exists.return_value = False
+
+        ctrl = MagicMock()
+        ctrl.list_hf_models.return_value = [{"model_id": "gpt2", "parameters": 124000000}]
+        mock_get_ctrl.return_value = ctrl
+
+        resp = client.get("/models/hf")
+        assert resp.status_code == 200
+        assert resp.json()["meta"]["shallow"] is False
+        mock_compute.assert_called_once_with("gpt2", offline=False)
+
 
 class TestCurrentModel:
     """GET /models/current"""
