@@ -128,7 +128,12 @@ describe('TokenTreeMatrixCard', () => {
     mocks.mockGetMatrixSummary.mockResolvedValue(SUMMARY)
     render(<TokenTreeMatrixCard />)
     await waitFor(() => expect(mocks.mockGetMatrixSummary).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: /Refresh matrix overview/ }))
+    // The button is disabled while the initial fetch is in flight; the call
+    // registers synchronously, so a click can land before loading clears and
+    // be swallowed (CI: "expected spy called 2 times, but got 1").
+    const refreshBtn = await screen.findByRole('button', { name: /Refresh matrix overview/ })
+    await waitFor(() => expect(refreshBtn).toBeEnabled())
+    fireEvent.click(refreshBtn)
     await waitFor(() => expect(mocks.mockGetMatrixSummary).toHaveBeenCalledTimes(2))
   })
 
