@@ -613,29 +613,51 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `215a6eb6b`)
 
-- **2026-10-23 · full `origin/main` (`9483282e0`) integration of `feat/aml-cruncher`
-  (69 commits; card `63116e83` cruncher chain + stream-first chat + web
-  quality-bar + hygiene AST).** 14 conflicts resolved origin-canonical with
-  per-hunk semantic re-application (notes journal union newest-`updated_at`-wins,
-  board resealed via `PlannerStore.compute_chains()`, `test_code_hygiene`,
-  AGENT_SYNC). **Stream-first reconciliation:** origin's G2 non-stream
-  `POST /chat` tests re-pinned to `stream_turn` — the single generation path
-  (`TestChatPostGenTasks` ×3 on the SSE path, substrate G2 guard now regexes
-  `stream_turn`); `TestChatWiring` memory contracts updated for SSE framing
-  living in `chat.py` (`data=item.memory`, payload built in `stream_turn`).
-  **The memory contracts caught a dropped origin feature:** `stream_turn` had
-  lost ContextCore `_build_context_frame` + its `total_facts` gate and the
-  `knowledge_retrieved + frame_context + (req.knowledge or [])` concat —
-  re-attached (frame memory/rag layers feed the prompt; enrichment only when
-  the frame carried none). Web: origin's no-`max-w-4xl` policy vs our centered
-  row wrappers reconciled (rows keep `mx-auto`, lose the cap; `ChatScreen.test`
-  string aligned), first `page-baseline.json` `journeys` row
-  (`app/(app)/kanban/page.tsx` → `ux/manage-my-work`) + new `UX_FLOWS.md` §13
-  flow, `PersonalityTrendChart` TS2869 pre-fix. **Gates:** full pytest ≈46k
-  (live-stack journeys excluded — see gotchas), `apps/api/server/tests` 1240,
-  planner 45, web `tsc` 0, targeted vitest 87+18, eslint 0 errors, ruff clean;
-  mypy advisory only (CI runs `|| true`): 72 pre-existing `inference.py`
-  errors, 0 in touched regions.
+- **2026-10-24 · full `origin/main` integration of `feat/aml-cruncher` — FOUR
+  merge rounds (69 branch commits + origin's 46 across PR#175–#191), all
+  green, pushed.** Card `63116e83` cruncher chain + stream-first chat + web
+  quality-bar + hygiene AST. **Round 1** (`9483282e0`, 14 conflicts) resolved
+  origin-canonical with per-hunk semantic re-application (notes journal union
+  newest-`updated_at`-wins, board resealed via `PlannerStore.compute_chains()`,
+  `test_code_hygiene`, AGENT_SYNC). **Stream-first reconciliation:** origin's
+  G2 non-stream `POST /chat` tests re-pinned to `stream_turn` — the single
+  generation path (`TestChatPostGenTasks` ×3 on the SSE path, substrate G2
+  guard now regexes `stream_turn`); `TestChatWiring` memory contracts updated
+  for SSE framing living in `chat.py` (`data=item.memory`, payload built in
+  `stream_turn`). **The memory contracts caught a dropped origin feature:**
+  `stream_turn` had lost ContextCore `_build_context_frame` + its `total_facts`
+  gate and the `knowledge_retrieved + frame_context + (req.knowledge or [])`
+  concat — re-attached. Web: origin's no-`max-w-4xl` policy vs our centered row
+  wrappers reconciled (rows keep `mx-auto`, lose the cap), first
+  `page-baseline.json` `journeys` row (`app/(app)/kanban/page.tsx` →
+  `ux/manage-my-work`) + `UX_FLOWS.md` §13, `PersonalityTrendChart` TS2869
+  fix. **Rounds 2–3** (19 + 23 commits: agent-loop, live-feed, transport
+  chokepoint, /v1 surface, reflection wiring): 4 doc conflicts unioned;
+  **inference.py delete/modify resolved OUR side — origin's re-modified
+  `chat_stream` (939 lines) dropped because
+  `tests/contract/test_chat_stream_only.py` mechanically forbids the
+  `/chat/stream` literal in any router and pins exactly one SSE chat endpoint;
+  the episodic fix 9d9c9f519 lives in shared `context_core.py` (kept); import
+  trimmed to actually-used `ConsciousnessProcessor` + `apply_processors`.**
+  Origin's new raw-egress chokepoint gate then caught OUR kanban lane's raw
+  `fetch('/api/planner/transition')` (13 files vs pin of 12) — fixed by
+  routing `transitionCard` through `apiPost` (envelope passthrough verified,
+  consumer try/catches). **Round 4** (PR#191 VQA, web-only) auto-merged.
+  **Final gates:** canonical `testpaths` suite in resumable chunks — `tests/`
+  3425, `apps/` 1758 (incl. cli + api 1283), core-py 42,764 passed / **25
+  failed = the known env/flake class only** (quantization e2e ×12, slonet
+  kernels/kv/wave ×8, gpu fp16, ml cuda + 3 isolation/live-socket flakes, each
+  green standalone or skip-guarded, all zero-diff vs origin); outside-testpath
+  extras also green (planner 45, aml/cruncher, memory 65, agent-loop 23,
+  contracts 37, check_contract exit 0); web `tsc` 0, full vitest **845 files /
+  8109 tests** + targeted 149 post-round-4, eslint 0 errors, ruff+format
+  clean, cargo check clean; mypy advisory only (72 pre-existing `inference.py`
+  errors, 0 in touched regions). **Ops notes:** suite runs must use canonical
+  `testpaths` (a bare `pytest packages` sweeps app-planner/bawl/infra-lib —
+  not on PYTHONPATH, collection dies, not a regression); detached suite runs
+  were repeatedly killed by session aborts — chunked foreground runs are the
+  reliable pattern; worktree gate commands need root `node_modules/.bin`
+  (vitest/eslint are hoisted, only tsc lives in `apps/web/.bin`).
 
 - **2026-10-09 · logs unification — monitor folded into logs** (card `8182563a`, fix
   `6bb3a97ea`, gates 439 CLI passed + 17 new): `commands/monitor.py` deleted — its
