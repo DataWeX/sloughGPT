@@ -81,7 +81,7 @@ def _get_hub_file_size_gb(model_id: str) -> float | None:
     return None
 
 
-def compute_model_size_gb(model_id: str) -> float | None:
+def compute_model_size_gb(model_id: str, *, offline: bool = False) -> float | None:
     """Get actual model size in GB from real file sizes only.
 
     Priority:
@@ -90,6 +90,12 @@ def compute_model_size_gb(model_id: str) -> float | None:
     3. Returns ``None`` when size cannot be determined
 
     Results are cached for 5 minutes to avoid repeated API calls.
+
+    ``offline=True`` stops after the local pass: never calls the Hub API.
+    Offline misses are NOT written to the shared cache, so a later online
+    call still fills in the real size (freshness is never poisoned by a
+    first-paint request). First-paint readers (bootstrap fan-out) pass this
+    so a cold cache costs zero network round-trips instead of one per model.
     """
     now = time.monotonic()
     with _size_cache_lock:
@@ -108,6 +114,8 @@ def compute_model_size_gb(model_id: str) -> float | None:
             return cache_size
 
     # 2. HuggingFace Hub API — real file sizes from repo sibling listing
+    if offline:
+        return None
     result = _get_hub_file_size_gb(model_id)
     with _size_cache_lock:
         _size_cache[model_id] = (now, result)
