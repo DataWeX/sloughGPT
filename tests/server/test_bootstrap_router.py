@@ -178,3 +178,51 @@ class TestBootstrapDegradation:
         assert resp.status_code == 200
         errors = resp.json()["data"]["errors"]
         assert "required parameter 'weird'" in errors["souls"]
+
+
+def _models_router() -> APIRouter:
+    """Stub /models/hf echoing the shallow flag it was called with."""
+    r = APIRouter()
+
+    @r.get("/models/hf")
+    async def models_hf(shallow: bool = Query(False)) -> dict:
+        return {"status": "success", "data": {"shallow": shallow}}
+
+    return r
+
+
+class TestBootstrapFixedKwargs:
+    def test_models_member_is_forced_into_shallow_first_paint_mode(self):
+        members = _client(_models_router()).get("/bootstrap").json()["data"]["members"]
+        # The fan-out deliberately diverges from the endpoint default
+        # (shallow=False): no Hub round-trips during landing bootstrap.
+        assert members["models"] == {"shallow": True}
+
+    def test_members_without_fixed_kwargs_keep_signature_defaults(self):
+        members = (
+            _client(_envelope_router(), _models_router())
+            .get("/bootstrap")
+            .json()["data"]["members"]
+        )
+        assert members["datasets"] == {"q": None, "type": None}
+        assert members["health"] == {"model_loaded": True, "device": "cpu"}
+
+    def test_stale_fixed_kwarg_degrades_loudly_not_silently(self, monkeypatch):
+        from apps.api.server.routers import bootstrap as bootstrap_mod
+
+        r = APIRouter()
+
+        @r.get("/souls")
+        async def souls() -> dict:
+            return {"ok": True}
+
+        monkeypatch.setitem(
+            bootstrap_mod._BOOTSTRAP_MEMBERS, "souls", ("/souls", "GET", {"nope": 1})
+        )
+        resp = _client(r).get("/bootstrap")
+        assert resp.status_code == 200
+        errors = resp.json()["data"]["errors"]
+        assert errors["souls"].startswith("TypeError")
+        assert "not in handler signature" in errors["souls"]
+        # the failing member stays isolated — nope never reaches the handler
+        assert resp.json()["data"]["members"]["souls"] is None
