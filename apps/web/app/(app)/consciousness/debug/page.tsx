@@ -118,8 +118,7 @@ export default function ConsciousnessDebugPage() {
       setLastError(extractErrorMessage(e))
       setStateData(prev => ({ ...prev, [key]: { error: extractErrorMessage(e) } }))
     } finally {
-      if (!aliveRef.current) return
-      setStateLoading(prev => ({ ...prev, [key]: false }))
+      if (aliveRef.current) setStateLoading(prev => ({ ...prev, [key]: false }))
     }
   }, [])
 
@@ -142,8 +141,7 @@ export default function ConsciousnessDebugPage() {
       setLastError(extractErrorMessage(e))
       setHealthData({ error: extractErrorMessage(e) })
     } finally {
-      if (!aliveRef.current) return
-      setHealthLoading(false)
+      if (aliveRef.current) setHealthLoading(false)
     }
   }, [])
 
@@ -160,8 +158,7 @@ export default function ConsciousnessDebugPage() {
       setLastError(extractErrorMessage(e))
       setEvalData({ error: extractErrorMessage(e) })
     } finally {
-      if (!aliveRef.current) return
-      setEvalLoading(false)
+      if (aliveRef.current) setEvalLoading(false)
     }
   }, [])
 
