@@ -46,10 +46,10 @@ describe('route contract — content pins', () => {
     // miss it (that page is not in nav), so the live set is every page on
     // disk, derived from the filesystem rather than from either list.
     //
-    // `knownShadowed` records pages ALREADY in this state (36 of 109,
-    // pre-existing debt this test discovered). It may only shrink: if you
-    // delete a dead page, drop its entry in the same commit; if this test
-    // fails you have just created an unreachable page.
+    // `knownShadowed` records pages ALREADY in this state (empty since
+    // 2026-10-24 — all 36 were deleted, page.tsx 109 -> 73). It may only
+    // shrink: if you delete a dead page, drop its entry in the same commit;
+    // if this test fails you have just created an unreachable page.
     const live = new Set(routePathList)
     const shadowed = Object.keys(REDIRECTS)
       .filter((source) => live.has(source))

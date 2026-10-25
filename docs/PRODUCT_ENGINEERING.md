@@ -291,7 +291,7 @@ the tests actually patch.
 
 ## Route Map (what exists vs what should exist)
 
-### Current: 110 frontend pages, 58 routers
+### Current: 73 frontend pages, 58 routers
 
 ### Target: ~20 frontend pages, ~15 routers
 
