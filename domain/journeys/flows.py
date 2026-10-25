@@ -8,7 +8,9 @@ Traceability: each Flow additionally records *where it lives* — `impl` paths,
 asserting `tests`, `features` (UX_FLOWS headings it exercises) and `owner` —
 so a journey can be mapped down to code and evidence. Web flows keep the live
 browser sweep (`FLOWS`, `build()` steps); `MOBILE_FLOWS` are in-code journeys
-(no device): their `tests` are jest suites driven against mocked transports.
+(no device) with two evidence layers: jest suites against mocked transports
+and, for the API legs, in-process vertical tests in
+`tests/test_journeys_vertical.py` (FastAPI TestClient → real handlers).
 `scripts/journey_report.py` prints the per-journey link + test status.
 """
 
@@ -280,6 +282,7 @@ MOBILE_FLOWS: list[Flow] = [
         (
             "apps/mobile/src/components/__tests__/journeys/session-organization.test.tsx",
             "apps/mobile/src/services/__tests__/folders.test.ts",
+            "tests/test_journeys_vertical.py",
         ),
     ),
     _mobile_flow(
@@ -295,6 +298,7 @@ MOBILE_FLOWS: list[Flow] = [
         (
             "apps/mobile/src/components/__tests__/journeys/context-window.test.tsx",
             "apps/mobile/src/components/__tests__/ContextWindowViewer.test.tsx",
+            "tests/test_journeys_vertical.py",
         ),
     ),
 ]

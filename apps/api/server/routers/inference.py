@@ -583,7 +583,7 @@ class SessionSearchIndex:
             try:
                 data = json.loads(fpath.read_text())
                 self._entries[sid] = {
-                    "id": data.get("id") or data.get("session_id") or sid,
+                    "id": data.get("session_id") or sid,
                     "name": data.get("name", "") or "",
                     "created_at": data.get("created_at", ""),
                     "updated_at": data.get("updated_at", ""),
@@ -1031,7 +1031,10 @@ class InferenceRouter:
                         continue
                     # Try to parse the partial JSON for header fields
                     data = json.loads(raw)
-                    sid = data.get("id") or data.get("session_id") or f.stem
+                    # session_id first: _SessionDictSerializer injects a random
+                    # "id" when absent, which would diverge from the filename
+                    # (the canonical repo key _build_session_cache exposes).
+                    sid = data.get("session_id") or f.stem
                     name = data.get("name", "") or ""
                     messages = data.get("messages", [])
                     # If messages array is truncated, count from file size heuristic
