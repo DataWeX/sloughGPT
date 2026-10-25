@@ -3,30 +3,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { chatController } from '@/lib/chat-controller'
 import { voiceController } from '@/lib/voice-controller'
+import { createSpeechEngine, type SpeechEngine } from '../voice/speech-engine'
 
 // ── Types ──────────────────────────────────────────────────────────────
-
-/** Web Speech API SpeechRecognitionEvent (no built-in TS types). */
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number
-  results: SpeechRecognitionResultList
-}
-
-interface SpeechRecognitionResultList {
-  length: number
-  [index: number]: SpeechRecognitionResult
-}
-
-interface SpeechRecognitionResult {
-  isFinal: boolean
-  length: number
-  [index: number]: SpeechRecognitionAlternative
-}
-
-interface SpeechRecognitionAlternative {
-  transcript: string
-  confidence: number
-}
 
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
 
@@ -42,20 +21,9 @@ export interface VoiceChatCallbacks {
   onExchange?: (exchange: VoiceExchange) => void
 }
 
-// ── Speech Recognition Types (browser API) �────────────────────────────
-
-interface SRInstance {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start(): void
-  stop(): void
-  abort(): void
-  onstart: (() => void) | null
-  onend: (() => void) | null
-  onerror: ((e: Event) => void) | null
-  onresult: ((e: SpeechRecognitionEvent) => void) | null
-}
+// ── Speech Recognition Types ───────────────────────────────────────────
+// Browser-SR types moved to ../voice/speech-engine.ts (owner of the STT
+// pipeline; useVoiceChat now drives a SpeechEngine, not a raw SR instance).
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -180,7 +148,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   }, [])
 
   // Refs for imperative access inside callbacks
-  const recognitionRef = useRef<SRInstance | null>(null)
+  const engineRef = useRef<SpeechEngine | null>(null)
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const finalTextRef = useRef('')
   const stateRef = useRef<VoiceState>('idle')
@@ -289,13 +257,6 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   // ── Start Listening ────────────────────────────────────────────────
 
   const startListening = useCallback(async () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) {
-      setErrorMessage('Speech recognition not supported — try Chrome or Safari')
-      setState('error')
-      return
-    }
-
     setFinalText('')
     finalTextRef.current = ''
     setInterimText('')
@@ -304,68 +265,43 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
 
     await startMic()
 
-    const recognition: SRInstance = new SR()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
-
-    recognition.onstart = () => {
-      setState('listening')
-    }
-
-    recognition.onend = () => {
-      if (stateRef.current === 'listening') {
-        setState('idle')
-      }
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    }
-
-    recognition.onerror = (e: Event) => {
-      const errType = (e as { error?: string })?.error || 'unknown'
-      if (errType === 'not-allowed') {
-        setErrorMessage('Microphone access denied')
-      } else if (errType !== 'aborted') {
-        setErrorMessage(`Speech error: ${errType}`)
-      }
-      if (errType !== 'aborted') {
-        setState('error')
-      }
-    }
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = ''
-      let final = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) {
-          final += result[0].transcript
-        } else {
-          interim += result[0].transcript
-        }
-      }
-      if (final) {
-        const newFinal = finalTextRef.current + final
+    // SpeechEngine picks the recognizer: Web Speech API when available,
+    // server transcription (mic → PCM → /multimodal/transcribe) otherwise —
+    // so voice chat works in Electron panes (OpenCode desktop) and Android
+    // WebView instead of dead-ending at "not supported".
+    const engine = createSpeechEngine({
+      onStart: () => setState('listening'),
+      onFinal: (text) => {
+        const newFinal = finalTextRef.current + text
         finalTextRef.current = newFinal
         setFinalText(newFinal)
         setInterimText('')
         resetSilenceTimer(newFinal)
-      }
-      if (interim) {
-        setInterimText(interim)
-        resetSilenceTimer(finalTextRef.current + interim)
-      }
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
+      },
+      onInterim: (text) => {
+        setInterimText(text)
+        resetSilenceTimer(finalTextRef.current + text)
+      },
+      onError: (message, fatal) => {
+        setErrorMessage(message)
+        if (fatal) setState('error')
+      },
+      onEnd: () => {
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+        if (stateRef.current === 'listening') setState('idle')
+      },
+    })
+    engineRef.current = engine
+    // Reuse the monitor's stream so server mode never opens a second mic.
+    engine.start(micStreamRef.current)
   }, [resetSilenceTimer, startMic])
 
   // ── Stop Listening ─────────────────────────────────────────────────
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
-      recognitionRef.current = null
+    if (engineRef.current) {
+      engineRef.current.stop()
+      engineRef.current = null
     }
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
     stopMic()
