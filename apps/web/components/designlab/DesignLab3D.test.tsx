@@ -32,6 +32,20 @@ describe('DesignLab3D (dev-only 3D dock showcase)', () => {
     expect(screen.getByText(/Dark metal bevel/)).toBeInTheDocument()
   })
 
+  it('starts on the mock backdrop and swaps to the live app frame', () => {
+    render(<DesignLab3D />)
+    expect(screen.getByTestId('backdrop-mock')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByTestId('designlab-live-backdrop')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('backdrop-live'))
+    const frame = screen.getByTestId('designlab-live-backdrop')
+    expect(frame).toHaveAttribute('title', 'Live app backdrop')
+    expect(screen.getByTestId('backdrop-live')).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(screen.getByTestId('backdrop-mock'))
+    expect(screen.queryByTestId('designlab-live-backdrop')).toBeNull()
+  })
+
   it('degrades to a notice when jsdom has no WebGL (no crash)', async () => {
     render(<DesignLab3D />)
     // jsdom cannot create a WebGL context — the component must catch it.

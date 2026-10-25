@@ -203,6 +203,7 @@ function MockPageBackdrop() {
 
 export default function DesignLab3D() {
   const [kind, setKind] = useState<MaterialKind>('frosted')
+  const [backdrop, setBackdrop] = useState<'mock' | 'live'>('mock')
   const [webglFailed, setWebglFailed] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<DesignLabApi | null>(null)
@@ -478,7 +479,20 @@ export default function DesignLab3D() {
           ref={wrapRef}
           className="relative h-[540px] overflow-hidden rounded-xl border border-border bg-background shadow-inner"
         >
-          <MockPageBackdrop />
+          {backdrop === 'live' ? (
+            // Real app rendered behind the rail — pointer-events off so the
+            // lab keeps hover control; visual-only context layer.
+            <iframe
+              data-testid="designlab-live-backdrop"
+              src="/"
+              title="Live app backdrop"
+              loading="lazy"
+              style={{ pointerEvents: 'none' }}
+              className="absolute inset-0 h-full w-full border-0"
+            />
+          ) : (
+            <MockPageBackdrop />
+          )}
           {webglFailed ? (
             <div
               data-testid="designlab-webgl-fallback"
@@ -490,6 +504,45 @@ export default function DesignLab3D() {
         </div>
 
         <aside className="space-y-3">
+          <div>
+            <h2 className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Backdrop
+            </h2>
+            <div className="flex gap-1.5" role="radiogroup" aria-label="Backdrop">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={backdrop === 'mock'}
+                data-testid="backdrop-mock"
+                onClick={() => setBackdrop('mock')}
+                className={
+                  backdrop === 'mock'
+                    ? 'flex-1 cursor-pointer rounded-lg border border-primary bg-primary/10 px-2 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                    : 'flex-1 cursor-pointer rounded-lg border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                }
+              >
+                Mock page
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={backdrop === 'live'}
+                data-testid="backdrop-live"
+                onClick={() => setBackdrop('live')}
+                className={
+                  backdrop === 'live'
+                    ? 'flex-1 cursor-pointer rounded-lg border border-primary bg-primary/10 px-2 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                    : 'flex-1 cursor-pointer rounded-lg border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                }
+              >
+                Live app
+              </button>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground/80">
+              “Live app” mounts the real UI behind the glass — judge the rail over actual content.
+            </p>
+          </div>
+
           <div>
             <h2 className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
               Material
