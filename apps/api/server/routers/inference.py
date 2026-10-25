@@ -894,6 +894,13 @@ class InferenceRouter:
         self._session_cache_ts: float = 0
         self._session_cache_ttl = 5.0
 
+        # The metadata index is a full rescan of every session JSON header
+        # (~1900 files = 0.13-0.21s measured), so it gets its own longer
+        # TTL: fresh-enough for the sessions list, cheap enough not to show
+        # up in the /bootstrap fan-out every 5s. Writes still invalidate it
+        # (see the `_session_metadata_cache = None` call sites), so freshness
+        # after create/delete/rename stays event-driven, not timer-driven.
+        self._session_metadata_ttl = 60.0
         self._session_metadata_cache: list | None = None
         self._session_metadata_cache_ts: float = 0
 
@@ -1061,7 +1068,7 @@ class InferenceRouter:
         now = time.time()
         if (
             self._session_metadata_cache is not None
-            and now - self._session_metadata_cache_ts < self._session_cache_ttl
+            and now - self._session_metadata_cache_ts < self._session_metadata_ttl
         ):
             return self._session_metadata_cache
 
