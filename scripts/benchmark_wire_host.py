@@ -21,10 +21,19 @@ Run:
 
 Exit non-zero when byte-parity breaks, the burst errors, or wire's own
 p95 drifts more than ``--max-regression`` (default 0.20) above the stored
-baseline. The wire/uvicorn ratio is REPORTED, not gated: the absolute gap
-is pre-existing architecture (fresh event loop per request) and belongs to
-the flip-gate decision on card ecea49c8, not to per-change regression —
+baseline. The baseline JSON stores a machine-state fingerprint (loadavg +
+uptime): a reboot or a materially different load at compare time prints a
+``[state]`` warning — the drift may be machine load, not code — while the
+verdict logic stays unchanged. The wire/uvicorn ratio is REPORTED, not
+gated: the residual gap (idle-machine ~x0.8 burst, widening with
+concurrency) is thread-per-connection contention and belongs to the
+flip-gate decision on card ecea49c8, not to per-change regression —
 track it with ``--update-baseline`` over time.
+
+NOTE: absolute p95s are machine-state-specific. Pre-reboot runs under
+background load measured wire p95 5.4-7.3ms / burst x0.63-0.66; the same
+code on an idle machine measures ~2.3ms / x0.81. Re-record the baseline
+whenever the machine state materially changes.
 """
 
 from __future__ import annotations
@@ -33,6 +42,7 @@ import argparse
 import gzip
 import http.client
 import json
+import os
 import statistics
 import sys
 import threading
@@ -50,6 +60,35 @@ from fastapi import FastAPI  # noqa: E402
 from infrastructure.compression import SelectiveGZipMiddleware  # noqa: E402
 
 BASELINE_FILE = REPO_ROOT / "data" / "benchmark_wire_host_baseline.json"
+
+
+def machine_state() -> dict:
+    """Load fingerprint — absolute p95s only mean something in the same state."""
+    load1, load5, load15 = os.getloadavg()
+    uptime_s = int(float(Path("/proc/uptime").read_text().split()[0]))
+    return {
+        "loadavg": [round(load1, 2), round(load5, 2), round(load15, 2)],
+        "uptime_s": uptime_s,
+    }
+
+
+def state_warnings(recorded: dict, current: dict) -> list[str]:
+    """Why the drift number may lie: a reboot or a different load than recorded."""
+    warnings: list[str] = []
+    if current["uptime_s"] < recorded.get("uptime_s", 0):
+        warnings.append(
+            f"machine rebooted since baseline (recorded uptime {recorded['uptime_s']}s, "
+            f"now {current['uptime_s']}s)"
+        )
+    rec_load = recorded.get("loadavg", [0.0])[0]
+    cur_load = current["loadavg"][0]
+    if abs(cur_load - rec_load) > 1.0:
+        direction = "busier" if cur_load > rec_load else "quieter"
+        warnings.append(
+            f"system {direction} than at baseline recording "
+            f"(loadavg {rec_load:.2f} -> {cur_load:.2f})"
+        )
+    return warnings
 
 
 def make_app() -> FastAPI:
@@ -261,6 +300,10 @@ def main() -> int:
             f"(baseline {baseline['wire']['p95_ms']:.3f}ms, limit +{args.max_regression:.0%}) "
             f"[{verdict}]"
         )
+        recorded_state = baseline.get("machine")
+        if recorded_state:
+            for warning in state_warnings(recorded_state, machine_state()):
+                print(f"  [state] {warning} — drift may be machine load, not code")
     else:
         verdict = "PASS"
         print("no baseline yet — correctness gate only [PASS]; run --update-baseline")
@@ -268,6 +311,7 @@ def main() -> int:
     result = {
         "runs": args.runs,
         "concurrency": args.concurrency,
+        "machine": machine_state(),
         "uvicorn": uv,
         "wire": wire,
         "p95_ratio": round(p95_ratio, 3),
