@@ -13,6 +13,7 @@ export function useChatLabels(
   refreshSessions: () => Promise<void>,
 ) {
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const [folderFilter, setFolderFilter] = useState<string | null>(null);
   const [sessionLabels, setSessionLabels] = useState<Record<string, string[]>>({});
   const [allLabels, setAllLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
@@ -58,6 +59,8 @@ export function useChatLabels(
   return {
     labelFilter,
     setLabelFilter,
+    folderFilter,
+    setFolderFilter,
     sessionLabels,
     setSessionLabels,
     allLabels,

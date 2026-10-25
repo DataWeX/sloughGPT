@@ -255,6 +255,8 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     setShowArchived: labels.setShowArchived,
     labelFilter: labels.labelFilter,
     setLabelFilter: labels.setLabelFilter,
+    folderFilter: labels.folderFilter,
+    setFolderFilter: labels.setFolderFilter,
     sessionLabels: labels.sessionLabels,
     setSessionLabels: labels.setSessionLabels,
     allLabels: labels.allLabels,
