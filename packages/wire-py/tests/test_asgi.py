@@ -1,8 +1,9 @@
 """ASGI host adapter — drive an ASGI app from the wire (card ecea49c8, phase 2).
 
 The adapter is the ONLY place asyncio is allowed to live in this package:
-`WireServer` stays sync and hands one parsed request over; the app runs in
-an event loop created and torn down inside the adapter, and response bytes
+`WireServer` stays sync and hands one parsed request over; the app runs on
+the connection's session loop (one `asyncio.run` wraps the whole keep-alive
+connection, the adapter's cycles are awaited on it), and response bytes
 stream straight back through the sync socket write. That is the
 sync-core/async-seam split the card mandates.
 
@@ -14,7 +15,9 @@ app pins the protocol contract itself.
 
 from __future__ import annotations
 
+import asyncio
 import socket
+import threading
 
 import pytest
 from wire.server import WireServer
@@ -230,6 +233,61 @@ def test_keep_alive_persists_across_asgi_requests(echo_server: WireServer):
         assert second == b"GET /b "
     finally:
         sock.close()
+
+
+class ToThreadApp:
+    """Touches the loop's default executor on every request (the gzip seam)."""
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return
+        await asyncio.to_thread(lambda: None)
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"content-length", b"2"), (b"content-type", b"text/plain")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"ok"})
+
+
+def test_session_spawns_zero_threads_on_warm_keep_alive():
+    """Session-per-connection pin: warm keep-alive requests spawn NO threads.
+
+    A fresh loop per request recreated the default executor (to_thread's
+    thread) plus its shutdown thread every cycle — that per-request churn
+    is the measured gap against uvicorn (0 spawns). One ``asyncio.run`` per
+    connection makes the executor connection-scoped: created at warm-up,
+    reused for the life of the socket.
+    """
+    server = _serve(ToThreadApp())
+    sock = _connect(server)
+    try:
+        # warm-up: the first request creates the session's executor thread
+        for _ in range(2):
+            sock.sendall(b"GET / HTTP/1.1\r\nHost: t\r\n\r\n")
+            assert _recv_response(sock)[0] == 200
+
+        starts = 0
+        orig_start = threading.Thread.start
+
+        def counting_start(self):
+            nonlocal starts
+            starts += 1
+            orig_start(self)
+
+        threading.Thread.start = counting_start
+        try:
+            for _ in range(10):
+                sock.sendall(b"GET / HTTP/1.1\r\nHost: t\r\n\r\n")
+                assert _recv_response(sock)[0] == 200
+        finally:
+            threading.Thread.start = orig_start
+        assert starts == 0, f"{starts} thread spawns across 10 warm keep-alive requests"
+    finally:
+        sock.close()
+        server.stop()
 
 
 def test_streaming_response_without_length_is_chunked_and_intact():

@@ -1,6 +1,6 @@
 """ASGI lifespan protocol — startup/shutdown handshakes (card ecea49c8, phase 3).
 
-The http cycles run on short-lived per-request loops; the lifespan protocol
+The http cycles run on per-connection session loops; the lifespan protocol
 must run exactly ONCE across the server's life: startup completes before the
 first request can be served, shutdown completes after the last. These tests
 pin the ordering, the failure modes (strict ``lifespan="on"`` vs uvicorn-style

@@ -11,10 +11,19 @@ loop — ``lifespan="on"`` (strict: startup failure fails start),
 lifespan-unaware apps keep working), ``"off"`` (skip). Handler mode never
 constructs a driver.
 
+ASGI mode runs ONE session coroutine per connection: ``asyncio.run`` wraps
+the whole keep-alive loop, so the event loop, its default executor (gzip
+``to_thread``) and anyio's threadpool workers are connection-scoped instead
+of respawning per request — the uvicorn-parity spawn count. The read inside
+the coroutine is still the blocking socket read, and it parks only this
+connection's own loop (nothing is scheduled while idle; the parked workers
+are userspace threads that need no loop time). Handler mode never touches
+asyncio.
+
 WebSocket (phase 3): an ``Upgrade: websocket`` request in ASGI mode is
-handed to ``run_websocket`` (see :mod:`wire.asgi_host`) instead of the
-HTTP loop — the session consumes the connection (handshake, frames, close),
-so no keep-alive follows it.
+handed to ``run_websocket`` (see :mod:`wire.asgi_host`) from inside the
+session instead of the HTTP loop — the session consumes the connection
+(handshake, frames, close), so no keep-alive follows it.
 
 Connection lifecycle:
 - clean EOF between requests ends the connection (no error);
@@ -26,6 +35,7 @@ Connection lifecycle:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import socket
 import threading
@@ -246,6 +256,114 @@ class WireServer:
                 status,
             )
 
+    def _read_next(
+        self,
+        conn: socket.socket,
+        reader,  # buffered binary reader for the connection (makefile)
+        on_expect: Callable[[], None],
+    ) -> Request | None:
+        """One keep-alive read: arm the idle timer, answer framing errors.
+
+        Returns ``None`` when the connection must end — clean EOF, or a
+        ``WireError`` whose status was already written on the way out (a
+        desynced connection is never reused).
+        """
+        if self._keep_alive_timeout is not None:
+            # uvicorn timeout_keep_alive parity: the READ phase owns
+            # the idle timer (first byte included — a slowloris peer
+            # holds a thread for at most this long); buffered bytes
+            # cost no syscall, so pipelined requests never false-trip
+            conn.settimeout(self._keep_alive_timeout)
+        try:
+            return read_request(
+                reader,
+                max_body=self._max_body,
+                on_expect=on_expect,
+                body_buffer_threshold=self._body_buffer_threshold,
+            )
+        except WireError as exc:
+            # desync: answer the status, then close — never reuse
+            conn.sendall(
+                build_response(
+                    exc.status,
+                    {},
+                    f"{exc.message}\n".encode(),
+                    keep_alive=False,
+                )
+            )
+            return None
+        finally:
+            # clear the timer before any response write — SSE
+            # streams and slow readers run unbounded, like uvicorn
+            if self._keep_alive_timeout is not None:
+                conn.settimeout(None)
+
+    async def _asgi_session(
+        self,
+        conn: socket.socket,
+        reader,  # buffered binary reader for the connection (makefile)
+        peer: tuple[str, int],
+        on_expect: Callable[[], None],
+    ) -> None:
+        """Keep-alive loop for one ASGI connection (run under ``asyncio.run``).
+
+        The session spanning the WHOLE connection is load-bearing: anyio
+        parks its threadpool workers against the ``run_until_complete`` root
+        task — a per-request task stops them every cycle — and the loop's
+        default executor (gzip ``to_thread``) survives across requests only
+        while the loop does. The read below is still the blocking socket
+        read; it parks this connection's own loop only, which serves nothing
+        else while idle (the parked workers are userspace threads).
+        """
+        while True:
+            request = self._read_next(conn, reader, on_expect)
+            if request is None:  # clean EOF or an answered framing error
+                return
+            if is_ws_upgrade(request):
+                # HTTP→WS upgrade: the session consumes the
+                # connection (handshake, frames, close) — no
+                # keep-alive loop after it
+                await run_websocket(
+                    self._asgi_app,
+                    request,
+                    reader,
+                    conn.sendall,
+                    client=peer,
+                    server=self._bound,
+                    forwarded_allow_ips=self._forwarded_allow,
+                    access_log=self._access_log,
+                    ws_max_size=self._ws_max_size,
+                )
+                return
+            # ASGI mode: the adapter owns response bytes and the
+            # keep-alive decision (app Connection header wins).
+            # A streaming body gets a dedicated single-worker
+            # reader executor (the ws seam) — torn down with the
+            # cycle, never waited on: an in-flight read wakes with
+            # EOF when the connection closes
+            body_exec = (
+                ThreadPoolExecutor(max_workers=1, thread_name_prefix="wire-body")
+                if request.body_reader is not None
+                else None
+            )
+            try:
+                keep = await run_http(
+                    self._asgi_app,
+                    request,
+                    conn.sendall,
+                    client=peer,
+                    server=self._bound,
+                    forwarded_allow_ips=self._forwarded_allow,
+                    access_log=self._access_log,
+                    body=request.body_reader,
+                    body_exec=body_exec,
+                )
+            finally:
+                if body_exec is not None:
+                    body_exec.shutdown(wait=False, cancel_futures=True)
+            if not keep:
+                return
+
     def _serve_conn(self, conn: socket.socket) -> None:
         try:
             reader = conn.makefile("rb")
@@ -259,84 +377,15 @@ class WireServer:
             conn.sendall(b"HTTP/1.1 100 Continue\r\n\r\n")
 
         try:
+            if self._asgi_app is not None:
+                # ONE event loop per connection — run_http / run_websocket
+                # are awaited inside the session, never asyncio.run themselves
+                asyncio.run(self._asgi_session(conn, reader, peer, _expect_continue))
+                return
             while True:
-                if self._keep_alive_timeout is not None:
-                    # uvicorn timeout_keep_alive parity: the READ phase owns
-                    # the idle timer (first byte included — a slowloris peer
-                    # holds a thread for at most this long); buffered bytes
-                    # cost no syscall, so pipelined requests never false-trip
-                    conn.settimeout(self._keep_alive_timeout)
-                try:
-                    request = read_request(
-                        reader,
-                        max_body=self._max_body,
-                        on_expect=_expect_continue,
-                        body_buffer_threshold=self._body_buffer_threshold,
-                    )
-                except WireError as exc:
-                    # desync: answer the status, then close — never reuse
-                    conn.sendall(
-                        build_response(
-                            exc.status,
-                            {},
-                            f"{exc.message}\n".encode(),
-                            keep_alive=False,
-                        )
-                    )
+                request = self._read_next(conn, reader, _expect_continue)
+                if request is None:  # clean EOF or an answered framing error
                     return
-                finally:
-                    # clear the timer before any response write — SSE
-                    # streams and slow readers run unbounded, like uvicorn
-                    if self._keep_alive_timeout is not None:
-                        conn.settimeout(None)
-                if request is None:  # clean EOF between requests
-                    return
-                if self._asgi_app is not None:
-                    if is_ws_upgrade(request):
-                        # HTTP→WS upgrade: the session consumes the
-                        # connection (handshake, frames, close) — no
-                        # keep-alive loop after it
-                        run_websocket(
-                            self._asgi_app,
-                            request,
-                            reader,
-                            conn.sendall,
-                            client=peer,
-                            server=self._bound,
-                            forwarded_allow_ips=self._forwarded_allow,
-                            access_log=self._access_log,
-                            ws_max_size=self._ws_max_size,
-                        )
-                        return
-                    # ASGI mode: the adapter owns response bytes and the
-                    # keep-alive decision (app Connection header wins).
-                    # A streaming body gets a dedicated single-worker
-                    # reader executor (the ws seam) — torn down with the
-                    # cycle, never waited on: an in-flight read wakes with
-                    # EOF when the connection closes
-                    body_exec = (
-                        ThreadPoolExecutor(max_workers=1, thread_name_prefix="wire-body")
-                        if request.body_reader is not None
-                        else None
-                    )
-                    try:
-                        keep = run_http(
-                            self._asgi_app,
-                            request,
-                            conn.sendall,
-                            client=peer,
-                            server=self._bound,
-                            forwarded_allow_ips=self._forwarded_allow,
-                            access_log=self._access_log,
-                            body=request.body_reader,
-                            body_exec=body_exec,
-                        )
-                    finally:
-                        if body_exec is not None:
-                            body_exec.shutdown(wait=False, cancel_futures=True)
-                    if not keep:
-                        return
-                    continue
                 if request.body_reader is not None:
                     # handler contract is Request -> Response: drain the
                     # streamed remainder instead of handing the reader over

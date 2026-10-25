@@ -4,8 +4,10 @@
 Card ecea49c8 (flip gate). Serves ONE synthetic FastAPI app wrapped in the
 real ``SelectiveGZipMiddleware`` under both servers and measures:
 
-1. **Correctness parity** — byte-identical bodies and identical
-   content-encoding on both transports, every route 200. The gzip route is
+1. **Correctness parity** — identical decoded bodies and identical
+   content-encoding on both transports, every route 200 (raw compressed
+   bytes are not comparable: gzip embeds mtime in its header). The gzip
+   route is
    the exact path that used to 500 under the wire host (middleware declares
    Content-Length, then streams frames with ``more_body=True`` — fixed by
    the declared-CL buffering in ``wire.asgi_host``).
@@ -28,6 +30,7 @@ track it with ``--update-baseline`` over time.
 from __future__ import annotations
 
 import argparse
+import gzip
 import http.client
 import json
 import statistics
@@ -120,18 +123,22 @@ def measure(port: int, runs: int, concurrency: int) -> dict:
     """Sequential keep-alive latencies + a concurrent burst through one conn."""
     paths = ["/payload", "/small"]
     sequential: list[float] = []
-    for i in range(runs):
-        path = paths[i % 2]
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
-        try:
+    # ONE keep-alive connection for the whole phase: real clients pool
+    # connections, and a fresh TCP conn per request would charge wire's
+    # thread-per-connection setup against every sample (structurally
+    # unfair to the sync accept model, and invisible to uvicorn).
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
+    try:
+        for i in range(runs):
+            path = paths[i % 2]
             start = time.perf_counter()
             conn.request("GET", path, headers={"Accept-Encoding": "gzip"})
             resp = conn.getresponse()
             resp.read()
             sequential.append((time.perf_counter() - start) * 1000)
             assert resp.status == 200, f"{path} -> {resp.status}"
-        finally:
-            conn.close()
+    finally:
+        conn.close()
 
     # concurrent burst: `concurrency` workers x (runs//concurrency) requests,
     # each worker on its own keep-alive connection
@@ -170,7 +177,7 @@ def measure(port: int, runs: int, concurrency: int) -> dict:
 
 
 def correctness(app: FastAPI, wire_port: int, uvicorn_port: int) -> list[str]:
-    """Both transports must agree byte-for-byte; wire must not 500 gzip."""
+    """Both transports must serve the same decoded body; wire must not 500 gzip."""
     problems: list[str] = []
     for path in ("/payload", "/small"):
         try:
@@ -185,6 +192,11 @@ def correctness(app: FastAPI, wire_port: int, uvicorn_port: int) -> list[str]:
             problems.append(f"{path}: status uvicorn={u_status} wire={w_status}")
         if u_enc != w_enc:
             problems.append(f"{path}: content-encoding uvicorn={u_enc!r} wire={w_enc!r}")
+        # decode before comparing: gzip.compress embeds mtime in the
+        # header, so raw compressed bytes legitimately differ across
+        # processes/seconds — the invariant is the same DECODED body
+        if u_enc == "gzip":
+            u_body, w_body = gzip.decompress(u_body), gzip.decompress(w_body)
         if u_body != w_body:
             problems.append(f"{path}: body differs (uvicorn {len(u_body)}B vs wire {len(w_body)}B)")
     # the gzip route must actually be compressed — otherwise parity is vacuous
@@ -214,7 +226,7 @@ def main() -> int:
             for problem in problems:
                 print(f"  - {problem}")
             return 1
-        print("correctness: PASS (byte-identical, gzip engaged on both)")
+        print("correctness: PASS (identical decoded bodies, gzip engaged on both)")
 
         uv = measure(uvicorn_port, args.runs, args.concurrency)
         wire = measure(wire_port, args.runs, args.concurrency)

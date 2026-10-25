@@ -996,6 +996,40 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-25 · `feat/wire-session-loop` — one session per connection:
+  the per-request event loop is gone (card `ecea49c8`, stacked on
+  `feat/wire-streaming-content-length`).** The open flip-gate item from
+  the last entry — `asyncio.run(cycle())` = a fresh event loop per request —
+  is fixed: ASGI mode runs ONE session coroutine per connection,
+  `asyncio.run` wraps the whole keep-alive connection, and `run_http` /
+  `run_websocket` are `async def` cycles AWAITED on the session loop (the
+  package's only remaining `asyncio.run` is the per-connection call in
+  `_serve_conn`). Mechanism: anyio parks threadpool workers against the root
+  task and stops them when it completes, so a per-request root respawned the
+  default executor (`to_thread`) thread + its shutdown thread every cycle —
+  measured **19 thread spawns across 10 warm keep-alive requests → 0** once
+  the loop is connection-scoped (executor and anyio workers live for the
+  socket's life). Pinned by
+  `test_session_spawns_zero_threads_on_warm_keep_alive`: green on new code,
+  `assert 19 == 0` red on old code (verified by stashing only `wire/`).
+  Full suite **89 green**, ruff clean; main-app smoke `/health` `/docs`
+  `/openapi.json` 200 (gzip engaged) + keep-alive pair on one conn, lifespan
+  auto-boot. Benchmark harness corrected twice: the sequential phase now runs
+  on ONE true keep-alive connection (a fresh conn per request charged wire's
+  thread-per-connection setup against every sample — structurally unfair to
+  the sync accept model), and gzip correctness compares DECODED bodies
+  (`gzip.compress` embeds mtime in the header, so raw compressed bytes differ
+  across seconds — an intermittent false FAIL). Results: wire p95
+  **13.96 → 6.67ms** (new baseline, -52%), p95 ratio **x0.89–x1.60** across
+  runs (machine noise — uvicorn p95 swings 4.1–8.1ms; p50 ~x1.1) ⇒ latency
+  essentially at parity. Still open for the transport flip: burst throughput
+  steady at **x0.63–x0.66** — the benchmark app's endpoints are sync
+  (`def payload_route`), so each wire connection parks its own anyio worker:
+  8 conn threads + 8 workers + 8 gzip threads contend on the GIL against
+  uvicorn's single loop. Thread-per-connection's honest cost under 8-way
+  concurrency — a flip-gate decision datum, reported not gated (ratio stays
+  ungated).
+
 - **2026-10-25 · `feat/wire-streaming-content-length` — wire host serves
   gzip/middleware responses (card `ecea49c8`).** The main FastAPI app under
   `WireServer` 500'd every compressed route:

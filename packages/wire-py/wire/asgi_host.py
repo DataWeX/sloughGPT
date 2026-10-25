@@ -1,11 +1,14 @@
 """ASGI host adapter — the one place asyncio lives in this package.
 
 Sync core, async seam (AGENTS execution philosophy): ``WireServer`` stays
-synchronous and hands one parsed request over; the ASGI app runs in an
-event loop created and destroyed inside :func:`run_http`, and every
-response byte streams straight back through the sync socket write as the
-app produces it — which is exactly why SSE works without buffering the
-whole body.
+synchronous and hands one parsed request over; the ASGI app runs on an
+event loop owned by the connection session — one ``asyncio.run`` per
+connection wraps the keep-alive loop, and :func:`run_http` /
+:func:`run_websocket` are coroutines awaited on it (never creating a loop
+themselves), so the loop, its default executor and anyio's parked workers
+outlive a single request — and every response byte streams straight back
+through the sync socket write as the app produces it, which is exactly why
+SSE works without buffering the whole body.
 
 Framing decision on the FIRST response body frame:
 - app set ``Content-Length``  -> pass through (single frame only);
@@ -27,7 +30,7 @@ sync socket from the loop thread, same as :func:`run_http`.
 Lifespan (phase 3): :class:`Lifespan` drives the ASGI lifespan protocol on a
 dedicated long-lived loop thread — the spec requires ONE startup handshake
 before the first request may be served and ONE shutdown handshake after the
-last, while each http cycle keeps its own short-lived loop. Loop-affinity
+last, while http cycles run on the connection's session loop. Loop-affinity
 constraint (documented, not silent): lifespan handlers must create
 loop-AGNOSTIC resources — sync clients, engine handles, threads — because
 request cycles run on other loops; an async client bound to the driver loop
@@ -160,7 +163,7 @@ def _declared_content_length(headers: list[tuple[str, str]]) -> int | None:
     return None
 
 
-def run_http(
+async def run_http(
     app: Callable,
     request: Request,
     on_bytes: SendBytes,
@@ -173,6 +176,11 @@ def run_http(
     body_exec: ThreadPoolExecutor | None = None,
 ) -> bool:
     """Run one ASGI http cycle; return whether the connection stays alive.
+
+    Awaits on the caller's loop — the connection session
+    (``wire.server.WireServer._asgi_session``) awaits it once per
+    keep-alive request under a single ``asyncio.run`` per connection, so
+    the loop and its default executor persist across cycles.
 
     Never raises for application defects: a crash before any bytes hit the
     wire becomes a 500 + close, a crash after (the response is already
@@ -452,7 +460,7 @@ def run_http(
         return bool(state["keep"])
 
     try:
-        return asyncio.run(cycle())
+        return await cycle()
     except OSError:
         # transport died (peer reset during send)
         return False
@@ -488,7 +496,7 @@ def _build_ws_scope(
     }
 
 
-def run_websocket(
+async def run_websocket(
     app: Callable,
     request: Request,
     reader,  # buffered binary reader for the connection (makefile)
@@ -500,40 +508,40 @@ def run_websocket(
     access_log: bool = False,
     ws_max_size: int = 16 * 1024 * 1024,
 ) -> None:
-    """Serve one WebSocket upgrade; blocks until the session ends.
+    """Serve one WebSocket upgrade; awaits until the session ends.
 
     Handshake problems answer as HTTP (400 / 426 + version header) before
     the app is called; the app rejecting pre-accept answers 403. The session
-    then runs on ONE event loop for the connection's lifetime — frame reads
-    off-loop in a dedicated single-worker reader executor (a cancelled
-    ``receive`` shares the in-flight read, never strands a second reader),
-    writes direct to the sync socket from the loop thread, exactly like
-    ``run_http``. ``ws_max_size`` bounds every message (frames and
-    assembled fragments) — over-cap closes with 1009.
+    then runs on the connection's session loop — one ``asyncio.run`` wraps
+    the whole connection and this coroutine is awaited on it, exactly like
+    ``run_http`` — frame reads off-loop in a dedicated single-worker reader
+    executor (a cancelled ``receive`` shares the in-flight read, never
+    strands a second reader), writes direct to the sync socket from the
+    loop thread. ``ws_max_size`` bounds every message (frames and assembled
+    fragments) — over-cap closes with 1009.
     """
     problem = handshake_problem(request)
     if problem is not None:
         on_bytes(_ws_reject_response(problem))
         return
     # single-worker reader executor owned by this session: the default
-    # executor is joined by asyncio.run at teardown, so a cancelled receive
-    # leaving its read in flight would deadlock session end (the connection
-    # close that would wake the reader only happens after we return).
+    # executor is joined at connection teardown, so a cancelled receive
+    # leaving its read in flight would deadlock that teardown (the
+    # connection close that would wake the reader only happens after
+    # asyncio.run returns).
     read_exec = ThreadPoolExecutor(max_workers=1, thread_name_prefix="wire-ws-read")
     try:
-        asyncio.run(
-            _ws_session(
-                app,
-                request,
-                reader,
-                on_bytes,
-                client=client,
-                server=server,
-                read_exec=read_exec,
-                forwarded_allow_ips=forwarded_allow_ips,
-                access_log=access_log,
-                max_payload=ws_max_size,
-            )
+        await _ws_session(
+            app,
+            request,
+            reader,
+            on_bytes,
+            client=client,
+            server=server,
+            read_exec=read_exec,
+            forwarded_allow_ips=forwarded_allow_ips,
+            access_log=access_log,
+            max_payload=ws_max_size,
         )
     except OSError:
         return  # peer vanished mid-frame/write; teardown is the caller's
