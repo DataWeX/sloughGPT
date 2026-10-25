@@ -257,6 +257,9 @@ export const api = {
       `/chat/sessions/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`,
     ),
 
+  /** Inspect the live context window (ContextCore inspector). */
+  inspectContext: () => api.get<Record<string, unknown>>('/context/inspect'),
+
   /** Send a voice message (audio upload) to a session. */
   sendVoiceMessage: (sessionId: string, audioUri: string, durationMs: number) => {
     const formData = new FormData();

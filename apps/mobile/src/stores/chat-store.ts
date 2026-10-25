@@ -35,6 +35,7 @@ interface ChatState {
   archiveSession: (id: string, archived: boolean) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
   cloneSession: (sourceId: string, newTitle: string) => Promise<string>;
+  injectContext: (context: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
   sendMessage: (content: string, images?: string[]) => Promise<void>;
   forwardMessage: (content: string, targetSessionId: string) => Promise<void>;
@@ -171,6 +172,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
       toast.error('Failed to clone session');
       set({error: err.message});
       return '';
+    }
+  },
+
+  injectContext: async (context: string): Promise<void> => {
+    const sessionId = get().activeSessionId;
+    if (!sessionId) {
+      toast.error('No active session');
+      return;
+    }
+    try {
+      await api.post('/chat/control', {
+        session_id: sessionId,
+        action: 'context',
+        context,
+      });
+      toast.success('Context injected');
+    } catch (err: any) {
+      toast.error('Failed to inject context');
+      set({error: err.message});
     }
   },
 
