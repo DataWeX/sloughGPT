@@ -8,7 +8,7 @@ FAILURES=0
 
 echo "=== Python core-py tests ==="
 cd "$REPO_ROOT"
-python3 -m pytest packages/core-py/tests/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
+python3 -m pytest tests/core-py/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
 
 echo ""
 echo "=== Root-level Python tests ==="
