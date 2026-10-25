@@ -52,3 +52,55 @@ def test_offline_miss_does_not_block_later_online_fill(monkeypatch):
     assert model_size.compute_model_size_gb("acme/remote", offline=True) is None
     # online call after the offline miss still resolves through the Hub
     assert model_size.compute_model_size_gb("acme/remote") == 1.5
+
+
+class TestHubSizeEstimateMatchesDownloadTruth:
+    """_get_hub_file_size_gb mirrors list_model_files (card f74361ea).
+
+    Dual-format repos ship the same weights as safetensors AND .bin; the
+    downloader fetches only safetensors when present, so the listing must
+    count only bytes that would actually be downloaded.
+    """
+
+    GIB = 1024**3
+
+    @staticmethod
+    def _estimate(monkeypatch, siblings):
+        from domain.infrastructure._internal import hf_hub
+
+        monkeypatch.setattr(hf_hub, "fetch_model_info", lambda mid: {"siblings": siblings})
+        return model_size._get_hub_file_size_gb("org/model")
+
+    def test_dual_format_counts_only_safetensors(self, monkeypatch):
+        assert (
+            self._estimate(
+                monkeypatch,
+                [
+                    {"rfilename": "model.safetensors", "size": 5 * self.GIB},
+                    {"rfilename": "pytorch_model.bin", "size": 3 * self.GIB},
+                    {"rfilename": "config.json", "size": 10},
+                ],
+            )
+            == 5.0
+        )
+
+    def test_bin_only_repo_still_counts_bin(self, monkeypatch):
+        assert (
+            self._estimate(
+                monkeypatch,
+                [
+                    {"rfilename": "config.json", "size": 10},
+                    {"rfilename": "pytorch_model.bin", "size": 3 * self.GIB},
+                ],
+            )
+            == 3.0
+        )
+
+    def test_repo_without_weights_returns_none(self, monkeypatch):
+        assert (
+            self._estimate(
+                monkeypatch,
+                [{"rfilename": "config.json", "size": 10}],
+            )
+            is None
+        )
