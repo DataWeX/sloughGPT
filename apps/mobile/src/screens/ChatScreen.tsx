@@ -556,6 +556,8 @@ export function ChatScreen() {
         allLabels={a.allLabels}
         labelFilter={a.labelFilter}
         setLabelFilter={a.setLabelFilter}
+        folderFilter={a.folderFilter}
+        setFolderFilter={a.setFolderFilter}
         showArchived={a.showArchived}
         setShowArchived={a.setShowArchived}
         labelInput={a.labelInput}

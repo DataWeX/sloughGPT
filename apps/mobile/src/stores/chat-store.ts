@@ -34,6 +34,7 @@ interface ChatState {
   deleteSession: (id: string) => Promise<void>;
   archiveSession: (id: string, archived: boolean) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
+  cloneSession: (sourceId: string, newTitle: string) => Promise<string>;
   deleteMessage: (messageId: string) => void;
   sendMessage: (content: string, images?: string[]) => Promise<void>;
   forwardMessage: (content: string, targetSessionId: string) => Promise<void>;
@@ -144,6 +145,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await get().refreshSessions();
     } catch (err: any) {
       set({error: err.message});
+    }
+  },
+
+  cloneSession: async (sourceId: string, newTitle: string): Promise<string> => {
+    try {
+      const created = await api.post<{session_id: string}>('/chat/sessions', {});
+      const newId = created.session_id;
+      const source = await api.get<{messages: Message[]}>(
+        `/session/${sourceId}/messages`,
+      );
+      const messages = (source.messages || []).map(m => ({
+        ...m,
+        id: `${newId}-${m.id}`,
+      }));
+      await api.put(`/chat/sessions/${newId}`, {
+        name: newTitle,
+        messages,
+      });
+      await get().refreshSessions();
+      triggerHaptic('light');
+      toast.success('Session cloned');
+      return newId;
+    } catch (err: any) {
+      toast.error('Failed to clone session');
+      set({error: err.message});
+      return '';
     }
   },
 
