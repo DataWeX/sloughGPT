@@ -113,13 +113,19 @@ class TestModelHealthMonitor:
     def test_persistence_truncates_to_200(self, tmp_path):
         path = str(tmp_path / "health.json")
         monitor = ModelHealthMonitor(db_path=path)
-        monitor._history = [
-            {"timestamp": i, "perplexity": float(i), "loss": 2.0, "num_sentences": 15}
-            for i in range(250)
-        ]
-        monitor._save_history()
+        # Seed via the real incremental save seam — one entry per benchmark,
+        # exactly as run_benchmark() does. _save_history persists only the
+        # latest entry (older ones are already in MogDB); the 200-entry cap
+        # is enforced on LOAD (_load_history reads limit=200, newest first),
+        # so a reload after 250 benchmarks yields the newest 200.
+        for i in range(250):
+            monitor._history = [
+                {"timestamp": i, "perplexity": float(i), "loss": 2.0, "num_sentences": 15}
+            ]
+            monitor._save_history()
         monitor2 = ModelHealthMonitor(db_path=path)
         assert len(monitor2._history) == 200
+        assert monitor2._history[-1]["timestamp"] == 249  # newest kept
 
     def test_corrupted_history_file(self, tmp_path):
         path = str(tmp_path / "health.json")

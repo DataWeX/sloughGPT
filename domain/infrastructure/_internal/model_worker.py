@@ -34,6 +34,8 @@ from __future__ import annotations
     └──────────────┘
 """
 
+from __future__ import annotations
+
 import gc
 import itertools
 import logging
@@ -1310,7 +1312,7 @@ class ModelWorkerProcess:
 
     # ── Context manager ────────────────────────────────────────────────
 
-    def __enter__(self) -> "ModelWorkerProcess":
+    def __enter__(self) -> ModelWorkerProcess:
         self.start()
         return self
 

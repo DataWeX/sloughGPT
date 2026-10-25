@@ -13,14 +13,14 @@ import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { authFetch } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
-import { useFileList } from '@/lib/cache'
+import { useFileList, useQuery, revalidateAll } from '@/lib/cache'
 import { useModels } from '@/lib/cache/api-hooks'
 import ModelCatalogCard from '@/components/models/ModelCatalogCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
 import DownloadsCard from '@/components/models/DownloadsCard'
 import EngineStatusCard from '@/components/models/EngineStatusCard'
 import { StartupTimeline } from '@/components/startup/StartupTimeline'
-import { StartupHistoryChart } from '@/components/startup/StartupHistoryChart'
+import { StartupHistoryChart, useStartupHistory } from '@/components/startup/StartupHistoryChart'
 
 const QUICK_ACTIONS = [
   {
@@ -58,9 +58,12 @@ const QUICK_ACTIONS = [
 
 export default function DeveloperPage() {
   const [tab, setTab] = useState<string>('shell')
-  useRefreshShortcut(() => {
-    window.location.reload()
-  })
+  // `r` refresh revalidates the shared query cache and nothing else. Every tab
+  // that fetches reads through that cache (files/models via their own hooks,
+  // voice/startup via the queries below), so cached data is re-read *in place*:
+  // no remounts, no `key` bumps — terminal scrollback, typed input and scroll
+  // positions all survive. Shell/api/quick fetch nothing at all.
+  useRefreshShortcut(() => revalidateAll())
   const { startupStage, startupElapsed } = useLiveStatus()
 
   return (
@@ -261,22 +264,19 @@ function FilesTab() {
 }
 
 function VoiceTab() {
-  const [status, setStatus] = useState<VoiceStatus | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Genuine GET, now cache-backed: `r` re-reads /voice/status in place. The
+  // interaction state below (typed text, in-flight TTS, last result) is local
+  // component state and is deliberately untouched by a refresh.
+  const { data, isLoading: loading } = useQuery<VoiceStatus>('developer-voice', () =>
+    voiceController.getStatus(),
+  )
+  const status = data ?? null
   const [ttsText, setTtsText] = useState('')
   const [generating, setGenerating] = useState(false)
   const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string } | null>(
     null,
   )
   const [ttsError, setTtsError] = useState<string | null>(null)
-
-  useEffect(() => {
-    voiceController
-      .getStatus()
-      .then((d) => setStatus(d))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
 
   const handleGenerate = async () => {
     if (!ttsText.trim()) return
@@ -798,6 +798,12 @@ function QuickActionsTab() {
   )
 }
 
+async function fetchStartupProgress(): Promise<Record<string, unknown>> {
+  const res = await authFetch('/health/startup-progress')
+  const json = await res.json()
+  return (json.data ?? {}) as Record<string, unknown>
+}
+
 function StartupTab() {
   const {
     health,
@@ -806,31 +812,28 @@ function StartupTab() {
     startupModelProgress,
     startupModelProgressMessage,
   } = useLiveStatus()
-  const [startupData, setStartupData] = useState<Record<string, unknown> | null>(null)
-  const [historyData, setHistoryData] = useState<Record<string, unknown> | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Both GETs are cache-backed now, so `r` (revalidateAll) re-reads this tab in
+  // place. The history read shares its key with <StartupHistoryChart/>, which
+  // renders the same endpoint — one fetch, one revalidation, two views. Keys are
+  // plain strings so they are referentially stable: `refetch` is
+  // `useCallback([key])`, and stable `refetch` identities keep the poll below
+  // from being re-created on every render.
+  const { data: startupData, refetch: refetchStartupProgress } = useQuery<
+    Record<string, unknown>
+  >('developer-startup-progress', fetchStartupProgress)
+  const { data: historyData, refetch: refetchStartupHistory } = useStartupHistory()
 
+  // The 2s poll stays a plain effect: it is a timer, i.e. a side effect, not a
+  // data read. The reads above are cached, so a refresh reaches this tab without
+  // the component ever remounting.
   useEffect(() => {
-    const fetchStartup = async () => {
-      try {
-        const [progressRes, historyRes] = await Promise.all([
-          fetch('/health/startup-progress'),
-          fetch('/health/startup-history'),
-        ])
-        const progressJson = await progressRes.json()
-        const historyJson = await historyRes.json()
-        setStartupData(progressJson.data)
-        setHistoryData(historyJson.data)
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false)
-      }
+    const poll = () => {
+      void refetchStartupProgress()
+      void refetchStartupHistory()
     }
-    fetchStartup()
-    const interval = setInterval(fetchStartup, 2000)
+    const interval = setInterval(poll, 2000)
     return () => clearInterval(interval)
-  }, [])
+  }, [refetchStartupProgress, refetchStartupHistory])
 
   const STAGE_COLORS: Record<string, string> = {
     init: 'text-muted-foreground/60',

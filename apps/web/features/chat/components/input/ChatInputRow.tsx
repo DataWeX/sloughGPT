@@ -176,7 +176,7 @@ export const ChatInputRow = memo(function ChatInputRow({
         {loading && onCancel && (
           <button
             type="button"
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-10 w-10 shrink-0 flex items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset h-11 w-11 shrink-0 flex items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
             onClick={onCancel}
             aria-label="Cancel generation"
           >

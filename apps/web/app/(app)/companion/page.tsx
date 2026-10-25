@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, cn, Slider } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -20,7 +19,6 @@ const TRAIT_LABELS: Record<string, { label: string; color: string }> = {
 }
 
 export default function CompanionPage() {
-  const router = useRouter()
   const [traits, setTraits] = useState<CompanionTraits | null>(null)
   const [presets, setPresets] = useState<CompanionPreset[]>([])
   const [systemPrompt, setSystemPrompt] = useState('')
@@ -32,24 +30,36 @@ export default function CompanionPage() {
   const [error, setError] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const addToast = useToastStore(s => s.addToast)
-  useRefreshShortcut(() => router.refresh())
 
-  useEffect(() => {
-    let ignore = false
+  // Shared by the initial mount, the 'r' refresh shortcut and PageContainer's
+  // retry — all three re-run this page's own loader instead of reloading the
+  // whole document. `ignoreRef` keeps the original unmount race guard: a
+  // response that lands after unmount must not setState.
+  const ignoreRef = useRef(false)
+  const loadCompanion = useCallback(() => {
+    setLoading(true)
+    setError(null)
     Promise.all([
       companionController.getInfo(),
       companionController.listPresets(),
       companionController.getPrompt(),
     ]).then(([info, presetRes, promptRes]) => {
-      if (ignore) return
+      if (ignoreRef.current) return
       setTraits(info.traits)
       setPresets(presetRes.presets)
       setSystemPrompt(promptRes.system_prompt)
     }).catch((err) => {
-      if (!ignore) setError(extractErrorMessage(err, 'Could not load companion data'))
-    }).finally(() => { if (!ignore) setLoading(false) })
-    return () => { ignore = true }
+      if (!ignoreRef.current) setError(extractErrorMessage(err, 'Could not load companion data'))
+    }).finally(() => { if (!ignoreRef.current) setLoading(false) })
   }, [])
+
+  useRefreshShortcut(loadCompanion)
+
+  useEffect(() => {
+    ignoreRef.current = false
+    loadCompanion()
+    return () => { ignoreRef.current = true }
+  }, [loadCompanion])
 
   const handleTraitChange = (key: string, value: number) => {
     if (!traits) return
@@ -129,7 +139,7 @@ export default function CompanionPage() {
 
   if (error) {
     return (
-      <PageContainer title="Companion" subtitle="AI personality management" error={error} onRetry={() => window.location.reload()}>
+      <PageContainer title="Companion" subtitle="AI personality management" error={error} onRetry={loadCompanion}>
         <></>
       </PageContainer>
     )

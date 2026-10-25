@@ -96,7 +96,7 @@ function ConfettiBurst({ active }: { active: boolean }) {
             animationDelay: `${p.delay}ms`,
             animationDuration: '400ms',
             opacity: 0.7,
-            color: `hsl(${i * 45}, 70%, 55%)`,
+            color: `var(--chart-${(i % 5) + 1})`,
           }}
         >
           {p.char}

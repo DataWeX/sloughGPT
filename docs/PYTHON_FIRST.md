@@ -147,6 +147,17 @@ async def status_endpoint():
     return status()
 ```
 
+### 5. Every `domain/` file carries the PEP 563 import
+
+```python
+from __future__ import annotations
+```
+
+Mandatory first import in every file under `domain/`: annotations stay lazy,
+forward references cost nothing, and the tree keeps one style. Enforced by
+`tests/test_code_hygiene.py::test_domain_files_carry_future_annotations` —
+a new domain file without it fails the gate.
+
 ---
 
 ## What Changes

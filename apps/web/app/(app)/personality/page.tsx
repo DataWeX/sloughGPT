@@ -18,16 +18,7 @@ import {
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts'
+import { PersonalityTrendChart } from './PersonalityTrendChart'
 
 interface SavedPersona {
   id: string
@@ -703,130 +694,21 @@ export default function PersonalityPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2">
-                    Voice Over Time
-                  </div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart
-                      data={personalityHistory.map((p) => ({
-                        time: new Date(p.timestamp * 1000).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }),
-                        ...p.voice,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
-                      <XAxis
-                        dataKey="time"
-                        tick={{ fontSize: 9 }}
-                        stroke="rgb(var(--muted-foreground))"
-                      />
-                      <YAxis
-                        domain={[0, 1]}
-                        tick={{ fontSize: 9 }}
-                        stroke="rgb(var(--muted-foreground))"
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'rgb(var(--card))',
-                          border: '1px solid rgb(var(--border))',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '10px' }} />
-                      <Line
-                        type="monotone"
-                        dataKey="warmth"
-                        stroke="rgb(var(--chart-5))"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="confidence"
-                        stroke="rgb(var(--chart-1))"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="humor"
-                        stroke="rgb(var(--chart-3))"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="empathy"
-                        stroke="rgb(var(--chart-2))"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2">
-                    Traits Over Time
-                  </div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart
-                      data={personalityHistory.map((p) => ({
-                        time: new Date(p.timestamp * 1000).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }),
-                        ...p.traits,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
-                      <XAxis
-                        dataKey="time"
-                        tick={{ fontSize: 9 }}
-                        stroke="rgb(var(--muted-foreground))"
-                      />
-                      <YAxis
-                        domain={[0, 1]}
-                        tick={{ fontSize: 9 }}
-                        stroke="rgb(var(--muted-foreground))"
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'rgb(var(--card))',
-                          border: '1px solid rgb(var(--border))',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '10px' }} />
-                      <Line
-                        type="monotone"
-                        dataKey="openness"
-                        stroke="rgb(var(--chart-1))"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="agreeableness"
-                        stroke="rgb(var(--chart-2))"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="conscientiousness"
-                        stroke="rgb(var(--chart-4))"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <PersonalityTrendChart
+                  title="Voice Over Time"
+                  history={personalityHistory}
+                  field="voice"
+                  keys={['warmth', 'confidence', 'humor', 'empathy']}
+                  labels={VOICE_LABELS}
+                />
+                <PersonalityTrendChart
+                  title="Traits Over Time"
+                  history={personalityHistory}
+                  field="traits"
+                  keys={['openness', 'agreeableness', 'conscientiousness']}
+                  labels={TRAIT_LABELS}
+                />
               </div>
             </CardContent>
           </Card>

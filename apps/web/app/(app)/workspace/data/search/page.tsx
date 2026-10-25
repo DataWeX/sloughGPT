@@ -1,99 +1,60 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from '@/vite/next-compat/navigation'
-import { Card, CardHeader, CardTitle, CardContent, Input, Skeleton } from '@sloughgpt/strui'
-import { IconSearch } from '@/components/icons/NavIcons'
+import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
+import { Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
 import { dataTabs } from '@/components/workspace/workspace-tabs'
+import { SearchInputCard } from '@/components/workspace-search/SearchInputCard'
+import { SearchResultsCard } from '@/components/workspace-search/SearchResultsCard'
+import { SearchEmptyState } from '@/components/workspace-search/SearchEmptyState'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
-import { Users, Brain, Database, BookOpen, ExternalLink } from 'lucide-react'
+import { SEARCH_STORES } from '@/lib/search-stores'
 
-interface SearchResult {
+interface SearchHit {
   id: string
-  type: string
+  store: string
   title: string
   detail: string
+  score: number
+  locator: string
 }
 
+// apiGet unwraps the {status,data} envelope — the type is the payload.
 interface SearchResponse {
-  data: {
-    results: {
-      members: SearchResult[]
-      training_jobs: SearchResult[]
-      datasets: SearchResult[]
-      knowledge: SearchResult[]
-    }
-    total: number
-  }
-}
-
-const TYPE_CONFIG: Record<string, { color: string; label: string; icon: typeof Users; link: string }> = {
-  member: {
-    color: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
-    label: 'Members',
-    icon: Users,
-    link: '/workspace/members',
-  },
-  training: {
-    color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
-    label: 'Training Jobs',
-    icon: Brain,
-    link: '/training/queue',
-  },
-  dataset: {
-    color: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
-    label: 'Datasets',
-    icon: Database,
-    link: '/datasets',
-  },
-  knowledge: {
-    color: 'bg-accent/15 text-accent dark:bg-accent/10 dark:text-accent',
-    label: 'Knowledge',
-    icon: BookOpen,
-    link: '/knowledge',
-  },
+  hits: SearchHit[]
+  partial: string[]
+  skipped: string[]
+  query: string
 }
 
 export default function WorkspaceSearchPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { currentWorkspace } = useAuthStore()
   const addToast = useToastStore(s => s.addToast)
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResponse['data']['results'] | null>(null)
-  const [total, setTotal] = useState(0)
+  // Deep link: /workspace/data/search?q=... seeds the query (palette jumps).
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
+  const [hits, setHits] = useState<SearchHit[] | null>(null)
+  const [partial, setPartial] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 
   const search = useCallback(async (q: string) => {
     if (!currentWorkspace?.id || !q.trim()) {
-      setResults(null)
-      setTotal(0)
+      setHits(null)
+      setPartial([])
       return
     }
     setLoading(true)
     try {
-      const res = await apiGet<SearchResponse>(`/workspaces/${currentWorkspace.id}/search`)
-      if (res?.data) {
-        const allResults = res.data.results
-        const filtered: typeof allResults = { members: [], training_jobs: [], datasets: [], knowledge: [] }
-        const lowerQ = q.toLowerCase()
-
-        for (const [type, items] of Object.entries(allResults)) {
-          for (const item of items) {
-            if (
-              item.title.toLowerCase().includes(lowerQ) ||
-              item.detail.toLowerCase().includes(lowerQ)
-            ) {
-              filtered[type as keyof typeof filtered].push(item)
-            }
-          }
-        }
-
-        setResults(filtered)
-        setTotal(Object.values(filtered).reduce((a, b) => a + b.length, 0))
+      const params = new URLSearchParams({ q: q.trim(), workspace_id: currentWorkspace.id })
+      const res = await apiGet<SearchResponse>(`/search?${params.toString()}`)
+      if (res?.hits) {
+        setHits(res.hits)
+        setPartial(res.partial ?? [])
       }
     } catch {
       addToast('Search failed', 'error')
@@ -105,85 +66,61 @@ export default function WorkspaceSearchPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.trim()) search(query)
-      else { setResults(null); setTotal(0) }
+      else { setHits(null); setPartial([]) }
     }, 300)
     return () => clearTimeout(timer)
   }, [query, search])
 
+  // Grouping by store is presentation — the core returns one ranked list.
+  type GroupItem = { id: string; type: string; title: string; detail: string }
+  type Group = { type: string; label: string; color: string; link: string; items: GroupItem[] }
+  const groups: Group[] = []
+  if (hits) {
+    const byStore = new Map<string, SearchHit[]>()
+    for (const hit of hits) {
+      const bucket = byStore.get(hit.store)
+      if (bucket) bucket.push(hit)
+      else byStore.set(hit.store, [hit])
+    }
+    for (const [store, items] of byStore) {
+      const meta = SEARCH_STORES[store]
+      if (meta) {
+        groups.push({
+          type: store,
+          label: meta.label,
+          color: meta.color,
+          link: meta.link,
+          items: items.map(h => ({ id: h.id, type: store, title: h.title, detail: h.detail })),
+        })
+      }
+    }
+  }
+
   return (
-    <PageContainer title="Workspace Search"
+    <PageContainer
+      title="Workspace Search"
       toolbar={<WorkspaceSectionTabs tabs={dataTabs} ariaLabel="Workspace data" />}
     >
-      <Card className="mb-6">
-        <CardContent className="py-3">
-          <div className="relative">
-            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search members, training jobs, datasets, knowledge..."
-              className="pl-9"
-              autoFocus
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <SearchInputCard query={query} onQueryChange={setQuery} />
 
-      {loading && (
-        <Skeleton className="h-32 w-full" />
-      )}
+      {loading && <Skeleton className="h-32 w-full" />}
 
-      {!loading && results && (
+      {!loading && !hits && <SearchEmptyState />}
+
+      {!loading && hits && (
         <>
-          <p className="text-sm text-muted-foreground mb-4">{total} result(s) found</p>
-
-          {Object.entries(results).map(([type, items]) => {
-            const config = TYPE_CONFIG[type]
-            if (!config || items.length === 0) return null
-            const Icon = config.icon
-
-            return (
-              <Card key={type} className="mb-4">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${config.color}`}>
-                      <Icon className="h-3 w-3 inline mr-1" />
-                      {config.label}
-                    </span>
-                    <span className="text-muted-foreground">({items.length})</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                  {items.map(item => (
-                    <button
-                      key={item.id}
-                      onClick={() => router.push(config.link)}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40 transition-colors text-left group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium group-hover:text-primary transition-colors">{item.title}</div>
-                        {item.detail && <div className="text-muted-foreground truncate">{item.detail}</div>}
-                      </div>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                    </button>
-                  ))}
-                </CardContent>
-              </Card>
-            )
-          })}
-
-          {total === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No results for &ldquo;{query}&rdquo;
+          {partial.length > 0 && (
+            <p className="text-xs text-warning mb-2" role="status">
+              Partial results — some sources are unavailable: {partial.join(', ')}
             </p>
           )}
+          <SearchResultsCard
+            groups={groups}
+            total={hits.length}
+            query={query}
+            onNavigate={link => router.push(link)}
+          />
         </>
-      )}
-
-      {!loading && !results && (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          Type to search across all workspace data
-        </p>
       )}
     </PageContainer>
   )

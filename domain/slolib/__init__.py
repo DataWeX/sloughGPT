@@ -5,6 +5,8 @@ Public API:
     to_gpu, from_gpu, gelu, silu, softmax, benchmark_accelerators
 """
 
+from __future__ import annotations
+
 from domain.slolib._internal.gpu import (
     benchmark_accelerators,
     from_gpu,

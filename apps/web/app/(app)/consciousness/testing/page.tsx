@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { authFetch } from '@/lib/http-client'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
@@ -84,7 +84,7 @@ export default function ConsciousnessTestingPage() {
       if (body && ep.method !== 'GET') {
         init.body = body
       }
-      const res = await fetch(`${PUBLIC_API_URL}${ep.path}`, init)
+      const res = await authFetch(ep.path, init)
       const elapsed = Date.now() - start
       const text = await res.text()
       let formatted = text

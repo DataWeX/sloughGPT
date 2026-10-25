@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {Pressable, ScrollView, Modal, View} from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
+import {S, R, T} from '../theme/scales';
 import {Icon} from './Icon';
 import {triggerHaptic} from '../services/haptics';
 
@@ -61,18 +62,18 @@ function SubOptionPill({active, label, onPress}: {active: boolean; label: string
       onPress={onPress}
       hitSlop={8}
       style={({pressed}) => ({
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingHorizontal: S.md,
+        paddingVertical: S.xs,
+        borderRadius: R.md,
         backgroundColor: active
           ? colors.primaryAlpha(0.15)
           : pressed
             ? colors.primaryAlpha(0.05)
             : 'transparent',
-        marginRight: 6,
+        marginRight: S.sm,
       })}>
       <Text
-        fontSize={11}
+        {...T.badge}
         fontWeight={active ? '600' : '400'}
         color={active ? colors.primary : colors.textMuted}>
         {label}
@@ -100,13 +101,13 @@ export function ChatModeBar({
     switch (mode) {
       case 'write':
         return (
-          <XStack gap={2} paddingVertical={6}>
-            <Text fontSize={10} color={colors.textMuted} marginRight={4}>Tone</Text>
+          <XStack gap={2} paddingVertical={S.sm}>
+            <Text {...T.label} color={colors.textMuted} marginRight={S.xs}>Tone</Text>
             {TONES.map(t => (
               <SubOptionPill key={t} active={tone === t} label={t} onPress={() => { onToneChange(t); triggerHaptic('light'); }} />
             ))}
-            <View style={{width: 1, height: 14, backgroundColor: colors.border, marginHorizontal: 6, alignSelf: 'center'}} />
-            <Text fontSize={10} color={colors.textMuted} marginRight={4}>Type</Text>
+            <View style={{width: 1, height: 14, backgroundColor: colors.border, marginHorizontal: S.sm, alignSelf: 'center'}} />
+            <Text {...T.label} color={colors.textMuted} marginRight={S.xs}>Type</Text>
             {TYPES.map(t => (
               <SubOptionPill key={t} active={type === t} label={t} onPress={() => { onTypeChange(t); triggerHaptic('light'); }} />
             ))}
@@ -114,7 +115,7 @@ export function ChatModeBar({
         );
       case 'rewrite':
         return (
-          <XStack gap={2} paddingVertical={6} flexWrap="wrap">
+          <XStack gap={2} paddingVertical={S.sm} flexWrap="wrap">
             {REWRITE_OPTIONS.map(o => (
               <SubOptionPill key={o} active={rewriteStyle === o} label={o} onPress={() => { onRewriteStyleChange(o); triggerHaptic('light'); }} />
             ))}
@@ -122,8 +123,8 @@ export function ChatModeBar({
         );
       case 'decide':
         return (
-          <XStack gap={2} paddingVertical={6}>
-            <Text fontSize={10} color={colors.textMuted} marginRight={4}>Output</Text>
+          <XStack gap={2} paddingVertical={S.sm}>
+            <Text {...T.label} color={colors.textMuted} marginRight={S.xs}>Output</Text>
             {DECIDE_STRUCTURES.map(s => (
               <SubOptionPill key={s} active={decideStructure === s} label={s} onPress={() => { onDecideStructureChange(s); triggerHaptic('light'); }} />
             ))}
@@ -131,8 +132,8 @@ export function ChatModeBar({
         );
       case 'explain':
         return (
-          <XStack gap={2} paddingVertical={6}>
-            <Text fontSize={10} color={colors.textMuted} marginRight={4}>Level</Text>
+          <XStack gap={2} paddingVertical={S.sm}>
+            <Text {...T.label} color={colors.textMuted} marginRight={S.xs}>Level</Text>
             {DIFFICULTIES.map(d => (
               <SubOptionPill key={d} active={difficulty === d} label={d} onPress={() => { onDifficultyChange(d); triggerHaptic('light'); }} />
             ))}
@@ -140,8 +141,8 @@ export function ChatModeBar({
         );
       case 'translate':
         return (
-          <XStack gap={2} paddingVertical={6}>
-            <Text fontSize={10} color={colors.textMuted} marginRight={4}>To</Text>
+          <XStack gap={2} paddingVertical={S.sm}>
+            <Text {...T.label} color={colors.textMuted} marginRight={S.xs}>To</Text>
             {LANG_PAIRS.map(p => (
               <SubOptionPill key={p} active={langPair === p} label={p} onPress={() => { onLangPairChange(p); triggerHaptic('light'); }} />
             ))}
@@ -149,8 +150,8 @@ export function ChatModeBar({
         );
       case 'brainstorm':
         return (
-          <XStack gap={2} paddingVertical={6}>
-            <Text fontSize={10} color={colors.textMuted} marginRight={4}>Topic</Text>
+          <XStack gap={2} paddingVertical={S.sm}>
+            <Text {...T.label} color={colors.textMuted} marginRight={S.xs}>Topic</Text>
             {BRAINSTORM_TOPICS.map(t => (
               <SubOptionPill key={t} active={brainstormTopic === t} label={t} onPress={() => { onBrainstormTopicChange(t); triggerHaptic('light'); }} />
             ))}
@@ -158,8 +159,8 @@ export function ChatModeBar({
         );
       case 'wellness':
         return (
-          <XStack gap={2} paddingVertical={6}>
-            <Text fontSize={10} color={colors.textMuted} marginRight={4}>Type</Text>
+          <XStack gap={2} paddingVertical={S.sm}>
+            <Text {...T.label} color={colors.textMuted} marginRight={S.xs}>Type</Text>
             {WELLNESS_TYPES.map(t => (
               <SubOptionPill key={t} active={wellnessType === t} label={t} onPress={() => { onWellnessTypeChange(t); triggerHaptic('light'); }} />
             ))}
@@ -175,7 +176,7 @@ export function ChatModeBar({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{paddingHorizontal: 16, paddingVertical: 8, gap: 8}}>
+        contentContainerStyle={{paddingHorizontal: S.lg, paddingVertical: S.sm, gap: S.sm}}>
         {MODES.map(m => (
           <Pressable
             key={m.value}
@@ -184,10 +185,10 @@ export function ChatModeBar({
             style={({pressed}) => ({
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 6,
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              borderRadius: 20,
+              gap: S.sm,
+              paddingHorizontal: S.lg,
+              paddingVertical: S.sm,
+              borderRadius: R.xl,
               backgroundColor: mode === m.value
                 ? colors.primary
                 : pressed
@@ -202,7 +203,7 @@ export function ChatModeBar({
               color={mode === m.value ? '#FFFFFF' : colors.textMuted}
             />
             <Text
-              fontSize={13}
+              {...T.label}
               fontWeight={mode === m.value ? '600' : '500'}
               color={mode === m.value ? '#FFFFFF' : colors.textMuted}>
               {m.label}

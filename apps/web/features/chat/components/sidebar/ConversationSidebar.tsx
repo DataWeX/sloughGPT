@@ -277,7 +277,7 @@ function SidebarContent({
           {!isDrawer && onToggleCollapse && (
             <button
               onClick={onToggleCollapse}
-              className="active:bg-muted h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted h-6 w-6 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label="Collapse sidebar"
               title="Collapse"
             >
@@ -307,7 +307,7 @@ function SidebarContent({
             <button
               onClick={() => setSortOpen(!sortOpen)}
               className={cn(
-                'h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                'h-6 w-6 flex items-center justify-center rounded hover:bg-muted/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                 sortMode !== 'updated' ? 'text-primary' : 'text-muted-foreground/60',
                 'active:bg-muted',
               )}
@@ -397,7 +397,7 @@ function SidebarContent({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations…"
-            className="w-full h-8 rounded-md bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
+            className="w-full h-8 rounded bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
             aria-label="Search conversations"
           />
         </div>
@@ -406,7 +406,7 @@ function SidebarContent({
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-6 px-3 gap-2">
             <IconChat className="h-5 w-5 text-muted-foreground/30" />
-            <p className="text-[11px] text-muted-foreground/60 text-center leading-relaxed">
+            <p className="text-xs text-muted-foreground/60 text-center leading-relaxed">
               No conversations yet
             </p>
             <Button
@@ -654,10 +654,17 @@ export function ConversationSidebar({
   return (
     <>
       {/* Desktop: collapsible aside */}
+      {/* The nav's bookmark tab (AppLayout) floats OVER this panel like a
+          sticker: it protrudes --nav-tab-protrusion past the nav edge at z-40,
+          so the panel docks it in a matching left gutter (same token) — content
+          keeps the full 16rem and never sits under the tab (it used to cover
+          row titles and steal their clicks at vertical center). Token is the
+          single source of truth for tab width + gutter width (they cannot
+          drift). Ported from 8aec74365 (card 88e4d9fb). */}
       <aside
         className={cn(
           'hidden lg:flex shrink-0 flex-col border-r border-border/40 bg-background/80 transition-all duration-200 ease-in-out overflow-hidden',
-          collapsed ? 'w-0 border-r-0' : 'w-[var(--conv-sidebar-width)]',
+          collapsed ? 'w-0 border-r-0' : 'w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))] pl-[var(--nav-tab-protrusion)]',
         )}
       >
         <div

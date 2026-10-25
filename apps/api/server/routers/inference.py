@@ -31,7 +31,7 @@ from schemas.common import classify_and_raise, raise_error, safe_audit_log, succ
 from config import ServerConfig
 from config import gen_config as _gen_config
 from domain.agents import get_agent_system, get_tool_registry
-from domain.core import get_rag_service
+from domain.cognition import get_rag_service
 from domain.feedback import get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
@@ -39,7 +39,7 @@ from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
 from domain.infrastructure.server_state import get_server_state
 from domain.learner import extract_and_store, get_learner
-from domain.models import get_provider
+from domain.models import ConsciousnessProcessor, apply_processors, get_provider
 
 logger = logging.getLogger("slo.inference")
 
@@ -263,6 +263,43 @@ from domain.inference.engine import (  # noqa: E402
 _chat_control_store: dict[str, dict] = {}
 _chat_control_lock = threading.Lock()
 _CHAT_CONTROL_TTL = 300  # 5 minutes
+
+
+async def _apply_consciousness_reflection(messages: list, corr_id: str) -> list:
+    """CONSCIOUSNESS_PROC — prepend the reflection narrative (build order #6).
+
+    Pulls ``engine.reflect(apply=False)`` (propose-only: never commits belief
+    deltas) and prepends its narrative as a system message via
+    ConsciousnessProcessor. Advisory by design: a disabled engine, an empty
+    narrative, or ANY failure skips injection and returns messages unchanged
+    (try/except skip — chat never errors on reflection).
+    """
+    try:
+        from domain.core import get_consciousness
+
+        ce = get_consciousness()
+        if not ce.config.is_enabled():
+            return messages
+        narrative = ce.reflect(apply=False).narrative
+        if not (narrative or "").strip():
+            return messages
+        return await apply_processors(messages, [ConsciousnessProcessor(narrative=narrative)])
+    except Exception as e:
+        logger.debug(
+            "CHAT_PIPELINE corr=%s step=CONSCIOUSNESS_PROC skip error=%s",
+            corr_id,
+            e,
+            extra={
+                "tag": "CHAT",
+                "context": {
+                    "corr": corr_id,
+                    "step": "CONSCIOUSNESS_PROC",
+                    "result": "SKIP",
+                    "error": str(e),
+                },
+            },
+        )
+        return messages
 
 
 def get_chat_control(session_id: str) -> dict | None:
@@ -514,134 +551,13 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
 # ── In-memory session search index ──────────────────────────────────────────
 
 
-class SessionSearchIndex:
-    """Caches session file contents in memory for fast search.
+# SessionSearchIndex was extracted to domain/search/session_index.py so
+# the system-wide search SessionsAdapter shares this same index — one
+# cache over the session corpus, not two. Legacy contract unchanged:
+# _search_sessions_sync below still backs GET /chat/sessions/search.
+from domain.search.session_index import get_session_index  # noqa: E402
 
-    Only re-reads files whose mtime has changed since last index build.
-    Thread-safe for concurrent reads; rebuilds are serialized.
-    """
-
-    def __init__(self, max_age_seconds: float = 5.0) -> None:
-        self._max_age = max_age_seconds
-        self._lock = threading.Lock()
-        self._last_build: float = 0.0
-        # sid → {name, messages, created_at, updated_at, file_path}
-        self._entries: dict[str, dict[str, Any]] = {}
-
-    def search(self, q: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Search cached sessions. Rebuilds index if stale."""
-        now = time.monotonic()
-        if now - self._last_build > self._max_age:
-            self._rebuild()
-        return self._query(q.lower().strip(), limit)
-
-    def _rebuild(self) -> None:
-        with self._lock:
-            # Double-check after acquiring lock
-            if time.monotonic() - self._last_build <= self._max_age:
-                return
-            self._scan_files()
-            self._last_build = time.monotonic()
-
-    def _scan_files(self) -> None:
-        base = Path(__file__).parent.parent.parent.parent / "data"
-        search_dirs = [base / "chat_sessions", base / "conversations"]
-
-        # Collect all current file mtimes
-        current_files: dict[str, Path] = {}
-        for sdir in search_dirs:
-            if not sdir.is_dir():
-                continue
-            for f in sdir.glob("*.json"):
-                sid = f.stem
-                if sid not in current_files:
-                    current_files[sid] = f
-
-        # Remove entries for deleted files
-        stale = set(self._entries.keys()) - set(current_files.keys())
-        for sid in stale:
-            del self._entries[sid]
-
-        # Add or update entries
-        for sid, fpath in current_files.items():
-            try:
-                mtime = fpath.stat().st_mtime
-            except OSError:
-                continue
-            existing = self._entries.get(sid)
-            if existing and existing.get("_mtime") == mtime:
-                continue  # unchanged
-            try:
-                data = json.loads(fpath.read_text())
-                self._entries[sid] = {
-                    "id": data.get("id") or data.get("session_id") or sid,
-                    "name": data.get("name", "") or "",
-                    "created_at": data.get("created_at", ""),
-                    "updated_at": data.get("updated_at", ""),
-                    "messages": data.get("messages", []),
-                    "_mtime": mtime,
-                }
-            except (json.JSONDecodeError, OSError):
-                continue
-
-    def _query(self, q_lower: str, limit: int) -> list[dict[str, Any]]:
-        if not q_lower:
-            return []
-        results: list[dict[str, Any]] = []
-        max_matches_per_session = 3
-
-        # Sort by updated_at descending for most-recent-first
-        sorted_entries = sorted(
-            self._entries.values(),
-            key=lambda e: e.get("updated_at", ""),
-            reverse=True,
-        )
-
-        for entry in sorted_entries:
-            if len(results) >= limit:
-                break
-            name = entry["name"]
-            messages = entry["messages"]
-            matches: list[dict[str, str]] = []
-
-            if q_lower in name.lower():
-                matches.append(
-                    {
-                        "role": "session",
-                        "content": name,
-                        "timestamp": entry.get("updated_at", ""),
-                    }
-                )
-
-            for msg in messages:
-                if len(matches) >= max_matches_per_session:
-                    break
-                content = msg.get("content", "")
-                if q_lower in content.lower():
-                    matches.append(
-                        {
-                            "role": msg.get("role", "unknown"),
-                            "content": content,
-                            "timestamp": msg.get("timestamp", ""),
-                        }
-                    )
-
-            if matches:
-                results.append(
-                    {
-                        "id": entry["id"],
-                        "name": name or entry["id"],
-                        "created_at": entry.get("created_at", ""),
-                        "updated_at": entry.get("updated_at", ""),
-                        "match_count": len(matches),
-                        "matches": matches[:3],
-                    }
-                )
-
-        return results
-
-
-_session_search_index = SessionSearchIndex()
+_session_search_index = get_session_index()
 
 
 def _search_sessions_sync(q: str, limit: int) -> list:
@@ -718,7 +634,7 @@ def _run_post_gen_tasks(
     """
     import state as _pgs_state
 
-    from domain.core import get_rag_service as _pgs_rag
+    from domain.cognition import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
     tokens = len(full_response.split())
@@ -943,6 +859,9 @@ class InferenceRouter:
 
     def _save_session(self, session_id: str, data: dict) -> None:
         self._session_cache = None
+        # New/updated sessions must show up in /chat/sessions immediately;
+        # the metadata index reads files, so invalidate it with the cache.
+        self._session_metadata_cache = None
         data["updated_at"] = datetime.datetime.now().isoformat()
         self._session_cache_put(session_id, data)
         self._session_dirty.add(session_id)
@@ -996,6 +915,21 @@ class InferenceRouter:
         except RuntimeError as e:
             logger.warning("Failed to start background session flush: %s", e, extra={"tag": "REQ"})
 
+    @staticmethod
+    def _derive_session_name(messages: list, fallback: str) -> str:
+        """Derive a session title from the first message line.
+
+        One deliberate rule for every listing surface: the FIRST message's
+        first line (the user-authored topic), truncated to 60 chars — not the
+        conversation tail. The frontend sanitizes whatever arrives; direct
+        API consumers (mobile) read this shape as-is.
+        """
+        if messages:
+            first = str(messages[0].get("content") or "").split("\n")[0][:60].strip()
+            if first:
+                return first
+        return fallback
+
     def _build_session_metadata_index(self) -> list:
         """Build a lightweight metadata index without loading full message content.
 
@@ -1020,17 +954,22 @@ class InferenceRouter:
                         raw = fh.read(4096)
                     if not raw.strip():
                         continue
-                    # Try to parse the partial JSON for header fields
-                    data = json.loads(raw)
+                    # Partial-header fast path; >4KB sessions truncate the
+                    # prefix, so fall back to a full read (the docstring's
+                    # promised fallback) instead of silently dropping the
+                    # session from the listing.
+                    try:
+                        data = json.loads(raw)
+                    except json.JSONDecodeError:
+                        with open(f) as fh:
+                            raw = fh.read()
+                        if not raw.strip():
+                            continue
+                        data = json.loads(raw)
                     sid = data.get("id") or data.get("session_id") or f.stem
-                    name = data.get("name", "") or ""
                     messages = data.get("messages", [])
-                    # If messages array is truncated, count from file size heuristic
+                    name = data.get("name") or self._derive_session_name(messages, sid)
                     msg_count = len(messages)
-                    if not name and messages:
-                        name = messages[0].get("content", "").split("\n")[0][:60]
-                    if not name:
-                        name = sid
                     metadata.append(
                         {
                             "id": sid,
@@ -1063,12 +1002,7 @@ class InferenceRouter:
             data["id"] = sid
             data.pop("session_id", None)
             if not data.get("name"):
-                msgs = data.get("messages", [])
-                if msgs:
-                    first = msgs[0].get("content", "").split("\n")[0]
-                    data["name"] = first[:60]
-                else:
-                    data["name"] = sid
+                data["name"] = self._derive_session_name(data.get("messages", []), sid)
             if not data.get("updated_at"):
                 data["updated_at"] = data.get("created_at") or datetime.datetime.now().isoformat()
             sessions.append(data)
@@ -1859,6 +1793,7 @@ class InferenceRouter:
             finish_reason, and the full token list).
         """
         _chat_t0 = time.monotonic()
+        _chat_start_dt = datetime.datetime.now()
         import state as _chat_state
 
         # GATES — reject fast before any provider call.
@@ -1968,6 +1903,10 @@ class InferenceRouter:
             except Exception as e:
                 logger.debug("RAG query skipped: %s", e)
 
+        # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
+        # main's chat-pipeline wiring onto the stream_turn restructure).
+        messages = await _apply_consciousness_reflection(messages, "-")
+
         gen_params = _apply_meta_weights(
             temperature=req.temperature,
             top_p=req.top_p,
@@ -2013,23 +1952,36 @@ class InferenceRouter:
 
         text = "".join(collected)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
-        tokens = 0
         try:
             tokens = _count_tokens(text, _chat_state)
-            get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed, model=model)
         except Exception as e:
-            logger.warning("Failed to record inference metrics: %s", e)
+            logger.warning("Failed to count tokens: %s", e)
+            tokens = 0
+        # G2 (card db19c373): ONE task set, ONE call site. _run_post_gen_tasks
+        # performs the capture, the metrics record, response tracking, learner
+        # ingest and consciousness — the inline copies that used to sit here
+        # would double-count every streaming turn.
         try:
-            capture(
-                user_msg or "",
+            _post_gen = _run_post_gen_tasks(
                 text,
-                model=model,
-                tokens_generated=_count_tokens(text, _chat_state),
-                temperature=gen_params["temperature"],
-                meta={"session_id": session_id},
+                user_msg or "",
+                session_id,
+                _chat_start_dt,
+                req,
+                self._get_context_core(),
+                self._bg_tasks_lock,
+                self._BG_TASKS,
+                self._bg_tasks_lock_discard,
+                corr_id="turn",
             )
+            if _post_gen.get("narrative"):
+                logger.info(
+                    "Turn reflection recorded (level=%s)",
+                    _post_gen["level"],
+                    extra={"tag": "INF"},
+                )
         except Exception as e:
-            logger.warning("Failed to capture conversation: %s", e)
+            logger.warning("Post-gen tasks failed: %s", e)
 
         yield TurnResult(
             text=text,
@@ -2252,6 +2204,8 @@ class InferenceRouter:
                     raise_error("Session not found", "E_NOT_FOUND", status_code=404)
             if self._session_repo.delete(session_id):
                 self._session_memory_cache.pop(session_id, None)
+                self._session_cache = None
+                self._session_metadata_cache = None
                 self._session_dirty.discard(session_id)
                 self._session_deleted.add(session_id)
                 if len(self._session_deleted) > 1000:
@@ -2310,16 +2264,49 @@ class InferenceRouter:
                 if provider is not None:
                     try:
                         caps = provider.capabilities
-                        result[name] = {
-                            "model_id": provider.model_id,
-                            "capabilities": {
-                                "chat": caps.chat,
-                                "streaming": caps.streaming,
-                                "embedding": caps.embedding,
-                                "vision": caps.vision,
-                            },
-                            "metadata": provider.metadata,
-                        }
+                        # A provider is a plugin, and this handler already
+                        # isolates one that misbehaves: the guard below
+                        # degrades it to {"error": ...} rather than failing
+                        # the whole listing. That isolation never reached this
+                        # value. A metadata field holding a datetime, an engine
+                        # handle, or any other non-JSON type is perfectly
+                        # well-formed here, and only fails later, in the
+                        # response encoder, outside the guard — which is why
+                        # `GET /providers` answered 500 E_SERIALIZATION while
+                        # this method raised nothing, and why the default log
+                        # level recorded no cause at all. Coercing with
+                        # `default=str` is what the SSE routers already do.
+                        #
+                        # `metadata` is declared a @property on the Provider
+                        # protocol, but ct_provider / slonet_provider /
+                        # slonet_server implement it as a plain METHOD while
+                        # api_provider / router / slo_transformer use @property.
+                        # Reading it property-style on a plain-method provider
+                        # puts a bound method in the payload; `default=str` then
+                        # coerces it to the useless
+                        # "<bound method ... at 0x...>" repr. Normalise the read
+                        # first so the real dict is what gets serialised, then
+                        # let `default=str` catch genuinely non-JSON values
+                        # inside it. Callers are split the same way, so accept
+                        # both forms here rather than churning every call site.
+                        meta = provider.metadata
+                        if callable(meta):
+                            meta = meta()
+                        result[name] = json.loads(
+                            json.dumps(
+                                {
+                                    "model_id": provider.model_id,
+                                    "capabilities": {
+                                        "chat": caps.chat,
+                                        "streaming": caps.streaming,
+                                        "embedding": caps.embedding,
+                                        "vision": caps.vision,
+                                    },
+                                    "metadata": meta,
+                                },
+                                default=str,
+                            )
+                        )
                     except Exception as exc:
                         logger.warning(
                             "Provider '%s' capability query failed: %s",
