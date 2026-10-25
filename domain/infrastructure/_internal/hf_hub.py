@@ -151,7 +151,10 @@ def list_model_files(model_id: str) -> list[HFFile]:
     """List all downloadable files for a HuggingFace model.
 
     Returns files needed for core inference (config, tokenizer, weights).
-    Excludes alternative format variants (ONNX, TFLite, TF, etc.).
+    Excludes alternative format variants (ONNX, TFLite, TF, etc.), and in
+    dual-format repos skips the ``.bin`` pickle copies when ``.safetensors``
+    weights exist — the loader resolves safetensors only, so the pickle
+    copy is pure bandwidth waste (often a 2x download).
 
     Each file includes its size, SHA-256 checksum (from LFS pointer),
     and HuggingFace CDN download URL.
@@ -162,13 +165,14 @@ def list_model_files(model_id: str) -> list[HFFile]:
     if not info:
         return files
 
-    for sibling in info.get("siblings") or []:
-        if not isinstance(sibling, dict):
-            continue
+    siblings = [s for s in (info.get("siblings") or []) if isinstance(s, dict)]
+    has_safetensors = any(str(s.get("rfilename", "")).endswith(".safetensors") for s in siblings)
+
+    for sibling in siblings:
         rfilename = sibling.get("rfilename", "")
         if rfilename.startswith("."):
             continue
-        ignored = _matches_ignore(rfilename)
+        ignored = _matches_ignore(rfilename) or (has_safetensors and rfilename.endswith(".bin"))
 
         lfs = sibling.get("lfs") or {}
         f = HFFile(
