@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconBolt } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
@@ -86,12 +86,14 @@ export default function MultipleChoiceQuiz() {
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
   const addToast = useToastStore(s => s.addToast)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const startNewQuestion = useCallback(() => {
     setLoading(true)
     setSelectedAnswer(null)
     setIsCorrect(null)
-    setTimeout(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
       const q = generateQuizQuestion(quizType, language)
       setQuestion(q)
       setLoading(false)
@@ -100,6 +102,9 @@ export default function MultipleChoiceQuiz() {
 
   useEffect(() => {
     startNewQuestion()
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
   }, [startNewQuestion])
 
   const handleAnswer = useCallback((answer: string) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
 const { mockPush, bootstrapState, mockSessionList, mockModelList, mockApiGet } = vi.hoisted(
@@ -11,7 +11,6 @@ const { mockPush, bootstrapState, mockSessionList, mockModelList, mockApiGet } =
     mockApiGet: vi.fn(),
   }),
 )
-}))
 
 vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
