@@ -164,6 +164,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         name: newTitle,
         messages,
       });
+      // History readable by loadSession lives in the context store
+      // (GET /session/{id}/messages), not the drawer file the PUT wrote —
+      // seed it too or the clone opens empty.
+      await saveSessionContext(newId, messages);
       await get().refreshSessions();
       triggerHaptic('light');
       toast.success('Session cloned');
