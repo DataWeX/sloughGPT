@@ -1021,6 +1021,13 @@ git push -u origin feat/<name>   # push your own branch when done
   session-boot timeouts. **Merge note: base `123b0e76c` is the
   `feat/wire-session-loop` tip, 237 commits ahead of origin/main — merge
   only `aa8a8bed5` (cherry-pick) onto main, never the branch as a whole.**
+  **Port status: PR #203 (`feat/options-screen-main`, card `80f76a17`)
+  carries the main-side bridge — `options_screen.py` verbatim + driver
+  hand-inlined into main's monolithic `InteractivePrompt` (no
+  `interactive_options.py` there), adapted tests via the
+  `read_key`/`fd=/dev/null` seam; open, awaiting merge. When the
+  family-split lands, `aa8a8bed5` re-lands and supersedes the ported
+  inline driver.**
   Usage: `InteractivePrompt(io).options_screen(rows)`, row spec = dicts
   (`label`/`flag`/`type` in choice|text|bool|action/`options`/`value`/
   `omit`/`invert`/`action`).
