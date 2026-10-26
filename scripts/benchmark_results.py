@@ -52,6 +52,14 @@ REGRESSION_THRESHOLDS = {
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
     },
+    "web_ui": {
+        # dist-vite bundle baseline (scripts/benchmark_web_ui.py): lower is
+        # better everywhere — entry/first-load gzip and total asset bytes
+        # blowing past these limits = a fat import crept into the shell graph.
+        "entry_gzip": (10.0, "rel"),
+        "first_load_gzip": (10.0, "rel"),
+        "asset_bytes": (15.0, "rel"),
+    },
     "bootstrap": {
         # GET /bootstrap → landing first paint; frontend overlay watchdog = 8s
         # rel limits are PERCENT (100.0 = 100%): load-tolerant but still
@@ -348,7 +356,7 @@ def do_history(args) -> int:
     for kind in (
         [args.kind]
         if args.kind
-        else ["stability", "latency", "startup", "execution", "training", "bootstrap"]
+        else ["stability", "latency", "startup", "execution", "training", "bootstrap", "web_ui"]
     ):
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
@@ -465,7 +473,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
+        choices=["stability", "latency", "execution", "training", "startup", "bootstrap", "web_ui"],
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -478,7 +486,7 @@ def main() -> int:
     p_h.add_argument(
         "--kind",
         default=None,
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
+        choices=["stability", "latency", "execution", "training", "startup", "bootstrap", "web_ui"],
     )
     p_h.set_defaults(fn=do_history)
 
@@ -486,7 +494,7 @@ def main() -> int:
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
+        choices=["stability", "latency", "execution", "training", "startup", "bootstrap", "web_ui"],
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
