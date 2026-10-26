@@ -1025,7 +1025,8 @@ git push -u origin feat/<name>   # push your own branch when done
   carries the main-side bridge — `options_screen.py` verbatim + driver
   hand-inlined into main's monolithic `InteractivePrompt` (no
   `interactive_options.py` there), adapted tests via the
-  `read_key`/`fd=/dev/null` seam; open, awaiting merge. When the
+  `read_key`/`fd=/dev/null` seam; **MERGED 2026-10-26, main tip
+   `dda86bbaa`**. When the
   family-split lands, `aa8a8bed5` re-lands and supersedes the ported
   inline driver.**
   Usage: `InteractivePrompt(io).options_screen(rows)`, row spec = dicts
