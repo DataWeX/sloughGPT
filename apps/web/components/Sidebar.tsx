@@ -171,7 +171,8 @@ export function Sidebar({
             )}
           >
             {!isCollapsed && <TrainingIndicator />}
-            <ThemeSwitcher />
+            {/* Collapsed: compact mode toggle; expanded: full composition. */}
+            <ThemeSwitcher collapsed={isCollapsed} />
           </div>
         )}
         {isDrawer && (

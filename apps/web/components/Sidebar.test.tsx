@@ -89,6 +89,11 @@ describe('Sidebar', () => {
     expect(aside?.getAttribute('data-collapsed')).toBe('true')
   })
 
+  it('keeps a switcher in the collapsed icon rail (compact variant)', () => {
+    render(<Sidebar collapsed />)
+    expect(screen.getByTestId('theme-switcher')).toBeDefined()
+  })
+
   it('ignores collapsed when variant is drawer', () => {
     render(<Sidebar variant="drawer" collapsed />)
     expect(screen.getByText('nav.chat')).toBeDefined()
