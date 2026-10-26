@@ -996,6 +996,34 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-26 · `feat/options-screen` — RetroBIOS-style options-screen
+  prompt (card `cafc20d2`, stacked on the wire-session-loop tip
+  `123b0e76c`).** New interactive family `_OptionsPrompts`
+  (`domain/shell/_internal/interactive_options.py`) + pure model
+  (`options_screen.py`, zero terminal imports): rows are command-line
+  options named by their flag on the right of the screen; Left/Right
+  cycles choice/bool values, Enter opens an inline picker (choice) or
+  edit field (text) or runs a callback (action rows), `?` toggles help,
+  Esc unwinds exactly one level (picker → input → form → submit).
+  Command-line assembly supports `omit` (suppress a default value like
+  `--from none`) and `invert` (bool flag emitted when false);
+  `show_command_line_action` is the built-in "Show the command line"
+  row. Wired into `InteractivePrompt` MRO (docstring count 126 → 127)
+  and `Console.options_screen` delegation. Tests:
+  `packages/core-py/tests/test_options_screen.py` (53: model purity,
+  command-line assembly, modal unwinding, render layout, scripted-driver
+  loops) — `test_interactive + test_options_screen` **553 green**, ruff
+  clean; PTY probe `/tmp/opencode/opt_screen_pty.py` **9/9** on a real
+  raw-mode terminal (title, right-aligned flags, cursor, picker, footer,
+  input editing, result dict). Pre-existing on clean tree, unrelated:
+  8 shell test files fail collection (missing `addons.*`/`cmds.*` on this
+  base), 12 `test_shell_router` failures, 2 `test_shell_tui_live`
+  session-boot timeouts. **Merge note: base `123b0e76c` is the
+  `feat/wire-session-loop` tip, 237 commits ahead of origin/main — merge
+  only `aa8a8bed5` (cherry-pick) onto main, never the branch as a whole.**
+  Usage: `InteractivePrompt(io).options_screen(rows)`, row spec = dicts
+  (`label`/`flag`/`type` in choice|text|bool|action/`options`/`value`/
+  `omit`/`invert`/`action`).
 - **2026-10-25 · `feat/wire-session-loop` — one session per connection:
   the per-request event loop is gone (card `ecea49c8`, stacked on
   `feat/wire-streaming-content-length`).** The open flip-gate item from
