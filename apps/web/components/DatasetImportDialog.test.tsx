@@ -267,4 +267,60 @@ describe('DatasetImportDialog', () => {
     fireEvent.click(screen.getByText('GitHub'))
     expect(screen.getByLabelText('Search for a repository')).toBeDefined()
   })
+
+  it('clears success banner and all fields when switching source after import', async () => {
+    // Regression: ISBN import state (search text, dataset name, success
+    // banner) used to survive into the GitHub/Kaggle forms.
+    mocks.mockImportFromISBN.mockResolvedValue({
+      dataset_id: 'book-ds',
+      message: 'Imported book: 1 files (143 chars)',
+    })
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('ISBN / Book'))
+    fireEvent.change(screen.getByLabelText('Search by title or ISBN'), {
+      target: { value: '9780871294272' },
+    })
+    fireEvent.click(screen.getByText('Import'))
+    await screen.findByText('Imported book: 1 files (143 chars)')
+
+    fireEvent.click(screen.getByText('Kaggle'))
+
+    expect(screen.queryByText('Imported book: 1 files (143 chars)')).not.toBeInTheDocument()
+    expect((screen.getByLabelText('Dataset Name') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Kaggle Dataset ID') as HTMLInputElement).value).toBe('')
+  })
+
+  it('shows a background-continues notice when import is cancelled', async () => {
+    mocks.mockImportFromISBN.mockImplementation(
+      (_req: unknown, opts: { signal?: AbortSignal } | undefined) =>
+        new Promise((_resolve, reject) => {
+          opts?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          )
+        }),
+    )
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.click(screen.getByText('ISBN / Book'))
+    fireEvent.change(screen.getByLabelText('Search by title or ISBN'), {
+      target: { value: '9780871294272' },
+    })
+    fireEvent.click(screen.getByText('Import'))
+    await screen.findByText('Cancel Import')
+    fireEvent.click(screen.getByText('Cancel Import'))
+    await screen.findByText(/Import cancelled/)
+  })
+
+  it('replaces footer with Done after success and closes on click', async () => {
+    const onClose = vi.fn()
+    mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'ds', message: 'ok' })
+    render(<DatasetImportDialog open={true} onOpenChange={onClose} onImportComplete={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Search for a repository'), {
+      target: { value: 'https://github.com/u/r' },
+    })
+    fireEvent.click(screen.getByText('Import'))
+    await screen.findByText('Done')
+    expect(screen.queryByText('Import')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Done'))
+    expect(onClose).toHaveBeenCalledWith(false)
+  })
 })
