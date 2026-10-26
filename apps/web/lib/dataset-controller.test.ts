@@ -15,7 +15,7 @@ import { PUBLIC_API_URL } from './config'
 import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
-import { datasetController, humanizeDatasetName, isTrainingCorpus } from './dataset-controller'
+import { datasetController, humanizeDatasetName, isTrainingCorpus, toGitHubCloneUrl } from './dataset-controller'
 
 describe('isTrainingCorpus', () => {
   it('keeps dataset and untagged entries', () => {
@@ -201,5 +201,61 @@ describe('datasetController versioning', () => {
 
     expect(apiClient.apiPost).toHaveBeenCalledWith('/datasets/ds1/versions/20260801120000')
     expect(res.success).toBe(true)
+  })
+})
+
+describe('toGitHubCloneUrl', () => {
+  it('expands a bare owner/repo slug into an https clone URL', () => {
+    expect(toGitHubCloneUrl('qt/qt')).toBe('https://github.com/qt/qt')
+  })
+
+  it('strips a trailing .git before expanding', () => {
+    expect(toGitHubCloneUrl('torvalds/linux.git')).toBe('https://github.com/torvalds/linux')
+  })
+
+  it('passes an existing https URL through unchanged', () => {
+    expect(toGitHubCloneUrl('https://github.com/qt/qt')).toBe('https://github.com/qt/qt')
+  })
+
+  it('passes an ssh-style git@ URL through unchanged', () => {
+    expect(toGitHubCloneUrl('git@github.com:qt/qt.git')).toBe('git@github.com:qt/qt.git')
+  })
+
+  it('trims surrounding whitespace', () => {
+    expect(toGitHubCloneUrl('  qt/qt  ')).toBe('https://github.com/qt/qt')
+  })
+
+  it('leaves non-slug input untouched for the backend to validate', () => {
+    expect(toGitHubCloneUrl('not-a-repo')).toBe('not-a-repo')
+  })
+})
+
+describe('datasetController.importFromGitHub', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('normalizes a bare owner/repo slug before POSTing', async () => {
+    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'qt', message: 'ok', output_path: '' })
+
+    await datasetController.importFromGitHub({ url: 'qt/qt', name: 'qt' })
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/datasets/import/github',
+      expect.objectContaining({ url: 'https://github.com/qt/qt', name: 'qt' }),
+      expect.anything(),
+    )
+  })
+
+  it('keeps an explicit https URL as-is', async () => {
+    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'qt', message: 'ok', output_path: '' })
+
+    await datasetController.importFromGitHub({ url: 'https://github.com/qt/qt', name: 'qt' })
+
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/datasets/import/github',
+      expect.objectContaining({ url: 'https://github.com/qt/qt' }),
+      expect.anything(),
+    )
   })
 })
