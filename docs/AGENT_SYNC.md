@@ -1046,6 +1046,22 @@ git push -u origin feat/<name>   # push your own branch when done
   missing since the NPU card (`8050828ae`); `engine.py:27` format drift also
   at HEAD. Follow-up cards filed done: `210adbf7` (WS digest), `995e2c1e`
   (engine signals).
+  **Second push, same branch (2026-10-26, cleanup pass):** hygiene ratchet
+  re-greened — `domain/files/_internal/__init__.py` (files-store commit
+  `6efe2dc18`) shipped without `from __future__ import annotations`;
+  1-line fix, `tests/test_code_hygiene.py` 5/5 again. The flip card's
+  never-filed side-finding on dev site 1 is now fixed and filed
+  (`8f1f407d`): the `slo dev` reloader watched the whole repo root, so any
+  session's `*.py` edit restarted the dev API child (probed: root `.py` →
+  reload in 2s; non-`.py` → no reload, which retires the original
+  "data/ writes loop" framing — uvicorn 0.53's `FileFilter` default include
+  is `*.py` only; the defect was scope). Site 1 now passes
+  `--reload-dir apps/api/server --reload-dir domain`, mirroring main.py's
+  own `reload_includes`; probe after: root `.py` → no reload,
+  `domain/*.py` → reload t+2s; `journey_api` ALL PASS. The other side-finding
+  is filed as todo (`1f173fd1`): `scripts/deploy/start.sh:81` still runs
+  `uvicorn ... --workers 4` directly — pre-flip argv class, bypasses the
+  decision point; wire is single-process so it needs a worker story first.
 
 - **2026-10-25 · `feat/wire-session-loop` — one session per connection:
   the per-request event loop is gone (card `ecea49c8`, stacked on

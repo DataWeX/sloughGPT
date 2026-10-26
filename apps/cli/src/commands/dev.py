@@ -489,6 +489,16 @@ def cmd_dev(args):
             "--port",
             str(api_port),
             "--reload",
+            # Scope the watcher to the API's own sources, mirroring main.py's
+            # --reload path (reload_includes = apps/api/server + domain).
+            # Unscoped, cwd=root watches the WHOLE repo: on this shared box
+            # any session's *.py edit restarted this child (probe: root .py
+            # -> reload in 2s; non-.py writes do not trigger, so the old
+            # "data/ writes loop" framing was wrong, the scope was not).
+            "--reload-dir",
+            "apps/api/server",
+            "--reload-dir",
+            "domain",
         ],
         cwd=str(root),
         env=env,
