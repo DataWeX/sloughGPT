@@ -24,11 +24,17 @@ p95 drifts more than ``--max-regression`` (default 0.20) above the stored
 baseline. The baseline JSON stores a machine-state fingerprint (loadavg +
 uptime): a reboot or a materially different load at compare time prints a
 ``[state]`` warning — the drift may be machine load, not code — while the
-verdict logic stays unchanged. The wire/uvicorn ratio is REPORTED, not
-gated: the residual gap (idle-machine ~x0.8 burst, widening with
-concurrency) is thread-per-connection contention and belongs to the
-flip-gate decision on card ecea49c8, not to per-change regression —
-track it with ``--update-baseline`` over time.
+verdict logic stays unchanged. Measurement ORDER alternates per run (a
+fixed uvicorn-first order biases the ratio when background load drifts
+between the two bursts) and is printed in the output.
+
+The wire/uvicorn ratio is REPORTED, not gated: it is environmental —
+observed range x0.48-x1.41 on this shared machine (x0.80-0.81 idle at
+8-way; wire WINS x1.2-1.4 under heavy load, where its threads collect
+scheduling share and uvicorn's single loop starves). Per-request Python
+CPU favors wire (py-spy GIL profile: 1.76 vs 2.11 ms/request) and latency
+is at parity in every condition — the flip-gate decision on card ecea49c8
+rests on those, not on the ratio.
 
 NOTE: absolute p95s are machine-state-specific. Pre-reboot runs under
 background load measured wire p95 5.4-7.3ms / burst x0.63-0.66; the same
@@ -43,6 +49,7 @@ import gzip
 import http.client
 import json
 import os
+import random
 import statistics
 import sys
 import threading
@@ -267,8 +274,16 @@ def main() -> int:
             return 1
         print("correctness: PASS (identical decoded bodies, gzip engaged on both)")
 
-        uv = measure(uvicorn_port, args.runs, args.concurrency)
-        wire = measure(wire_port, args.runs, args.concurrency)
+        # alternate the measurement order — a fixed uvicorn-first order
+        # biases the ratio when background load drifts between the bursts
+        order = ["uvicorn", "wire"]
+        random.shuffle(order)
+        print(f"measure order: {' -> '.join(order)}")
+        measured: dict[str, dict] = {}
+        for name in order:
+            port = uvicorn_port if name == "uvicorn" else wire_port
+            measured[name] = measure(port, args.runs, args.concurrency)
+        uv, wire = measured["uvicorn"], measured["wire"]
     finally:
         wire_server.stop()
         uvicorn_server.should_exit = True

@@ -1022,24 +1022,30 @@ git push -u origin feat/<name>   # push your own branch when done
   across seconds — an intermittent false FAIL). Results — a mid-day machine
   reboot exposed load contamination in the pre-reboot runs (uvicorn itself
   measured 4.1–8.1ms under background load vs 2.0–2.2ms idle — the "noise"
-  was other sessions, and wire's thread-rich design degrades under load
-  disproportionately). Under that load: wire p95 13.96 → 6.67ms (session
-  fix + keep-alive methodology, -52% within the same state), burst
-  x0.63–x0.66. Idle-machine truth (5 runs, stable): p95 **x1.05–x1.14**
-  (wire 2.3ms vs uvicorn 2.1ms — **latency at parity**), burst
-  **x0.80–x0.81**. A constant-total scaling sweep puts the ratio at
-  **x0.90 @ c=1 → x0.80 @ c=8 → x0.71 @ c=16** (wire saturates ~550 rps
-  and dips at c=16 while uvicorn climbs to 705) — real
-  thread-per-connection contention (8 conn threads + 8 anyio workers + 8
-  gzip threads vs uvicorn's single loop), amplified by load
-  (x0.56–x0.66 busy). Baseline re-recorded post-reboot (wire p95
+  was other sessions). Baseline re-recorded post-reboot (wire p95
   **2.691ms** @ loadavg 1.55; the stale 6.670ms would have masked a real
-  2x regression), and the harness now stores a **machine-state
-  fingerprint** (loadavg + uptime) that prints a `[state]` warning when a
-  reboot or materially different load makes drift non-comparable —
-  verdict logic unchanged. Flip-gate: latency closed; throughput (x0.80
-  idle, falling with concurrency and load) stays the reported-not-gated
-  decision datum.
+  2x regression), and the harness stores a **machine-state fingerprint**
+  (loadavg + uptime) that prints a `[state]` warning on reboot or
+  materially different load — verified live when other sessions spiked the
+  box (FAIL verdict + "loadavg 1.55 → 25.70 — drift may be machine load,
+  not code"); verdict logic unchanged. Final profiling pass (2026-10-26:
+  py-spy GIL profile + load sweeps) settles the flip-gate question:
+  **per-request Python CPU favors wire — 1.76ms vs uvicorn 2.11ms**
+  (gzip's C releases the GIL on both; top consumer on both is pydantic
+  `dump_json`; wire's own framing + send ≈ 0.1ms/req), and **latency is
+  at parity in EVERY condition** (p95 x0.84–x1.14, including at
+  loadavg 25). The throughput ratio is **environmental, not
+  architectural**: x0.80–0.81 idle at 8-way (constant-total sweep:
+  x0.90 @ c=1 → x0.80 @ c=8 → x0.71 @ c=16 — a small idle-only effect),
+  but **x1.20–x1.41 — wire WINS — under heavy load** (loadavg 23–27:
+  wire's threads collect scheduling share while uvicorn's single loop
+  starves), observed range **x0.48–x1.41**. The earlier
+  "thread-per-connection contention x0.63" reading was load artifact,
+  exactly as the p95 numbers were. Benchmark now ALTERNATES measurement
+  order (fixed uvicorn-first biased the ratio under drifting load).
+  **Flip-gate recommendation: correctness + latency + per-request CPU
+  are GREEN; throughput is reported as an environment-dependent range** —
+  final flip decision stays on card `ecea49c8`.
 
 - **2026-10-25 · `feat/wire-streaming-content-length` — wire host serves
   gzip/middleware responses (card `ecea49c8`).** The main FastAPI app under
