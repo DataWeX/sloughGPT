@@ -996,6 +996,24 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-26 · card `fd8fdad3` evidence complete (analysis only — product
+  decision pending user).** Alternating-order A/B of `main.py --transport
+  uvicorn --workers {1,4}` (8 keep-alive conns, RSS over the process tree):
+  memory **exact ×4** (446 → 1775 MB — model-free floor; spawn workers share
+  nothing, a model would ×4 too), `/health` ~1.6× RPS + ~2.2× better p50,
+  `/openapi.json` ~1.1–1.4× RPS + 1.8–3.5× better p50 (both orders agree, 0
+  errors; GIL-bound client understates RPS ratios). Control-plane split
+  proven at code level — training loop waits on a **process-local**
+  `threading.Event` (`training/execution.py:413`), no cross-process bridge,
+  JobStore = durability only; auto-trainer ×4 only if `SLO_AUTO_TRAIN=1`
+  (default 0). Recommendation on the card: **default `--workers 1`** (model
+  RAM is scarce, training control is single-worker-correct, inference
+  GIL-releases in-process); `4` only for model-free throughput-bound
+  deployments; cross-worker job routing is the prerequisite for any
+  workers>1 + training. Also: `ecea49c8` deferred-list truth-up — "body
+  streaming (needs a card)" is **stale** (`asgi_host` `BodyReader` streaming
+  landed) — do not re-file.
+
 - **2026-10-26 · card `ccad389e` closed (verify-only, no code) + cross-session
   git archaeology.** `resource_tracker /psm_*` acceptance re-run GREEN in this
   tree: `TestResourceTrackerHygiene` fork+forkserver PASS (zero warnings,
