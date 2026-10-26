@@ -112,6 +112,36 @@ describe('streamChatResponse', () => {
     expect(mockParams.onComplete).toHaveBeenCalled()
   })
 
+  it('dispatches onMeta with token count and elapsed time before onComplete', async () => {
+    const onMeta = vi.fn()
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"a"},"message":""}',
+      'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"b"},"message":""}',
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}',
+    ])
+    const order: string[] = []
+    await streamChatResponse({
+      ...mockParams,
+      onMeta: (meta) => {
+        order.push('meta')
+        onMeta(meta)
+      },
+      onComplete: () => {
+        order.push('complete')
+      },
+    })
+    expect(onMeta).toHaveBeenCalledWith({ tokens: 2, elapsedMs: expect.any(Number) })
+    expect(onMeta.mock.calls[0][0].elapsedMs).toBeGreaterThanOrEqual(0)
+    expect(order).toEqual(['meta', 'complete'])
+  })
+
+  it('does not call onMeta when it is not provided', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}',
+    ])
+    await expect(streamChatResponse({ ...mockParams, onMeta: undefined })).resolves.toBeUndefined()
+  })
+
   it('dispatches memory event after complete', async () => {
     mockSSE([
       'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":""},"message":""}',

@@ -35,6 +35,8 @@ interface StreamChatParams {
   knowledge?: string[]
   onToken: (token: string) => void
   onComplete: () => void
+  /** Per-turn stream metrics (fires just before onComplete). */
+  onMeta?: (meta: { tokens: number; elapsedMs: number }) => void
   onError: (
     status: number,
     text?: string,
@@ -257,6 +259,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         if (event.status === 'complete') {
           _log.debug('Stream complete', { tokens: tokenCount, elapsed: Date.now() - startTime })
           if (!hasContent) params.onToken('')
+          params.onMeta?.({ tokens: tokenCount, elapsedMs: Date.now() - startTime })
           params.onComplete()
           completed = true
           continue

@@ -311,7 +311,7 @@ export default function ConsciousnessPage() {
                         return `${Math.cos(angle) * r * 100},${Math.sin(angle) * r * 100}`
                       }).join(' ')}
                       fill="none"
-                      stroke="hsl(var(--border))"
+                      stroke="rgb(var(--border))"
                       strokeWidth="0.5"
                     />
                   ))}
@@ -324,7 +324,7 @@ export default function ConsciousnessPage() {
                         y1="0"
                         x2={Math.cos(angle) * 100}
                         y2={Math.sin(angle) * 100}
-                        stroke="hsl(var(--border))"
+                        stroke="rgb(var(--border))"
                         strokeWidth="0.5"
                       />
                     )
@@ -335,8 +335,8 @@ export default function ConsciousnessPage() {
                       const clamped = Math.max(0, Math.min(1, value as number))
                       return `${Math.cos(angle) * clamped * 100},${Math.sin(angle) * clamped * 100}`
                     }).join(' ')}
-                    fill="hsl(var(--primary) / 0.2)"
-                    stroke="hsl(var(--primary))"
+                    fill="rgb(var(--primary) / 0.2)"
+                    stroke="rgb(var(--primary))"
                     strokeWidth="1.5"
                   />
                   {Object.entries(qualia).map(([key, value], k) => {
@@ -349,7 +349,7 @@ export default function ConsciousnessPage() {
                           cx={Math.cos(angle) * clamped * 100}
                           cy={Math.sin(angle) * clamped * 100}
                           r="3"
-                          fill="hsl(var(--primary))"
+                          fill="rgb(var(--primary))"
                         />
                         <text
                           x={Math.cos(angle) * labelR}

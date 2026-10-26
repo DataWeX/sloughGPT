@@ -61,7 +61,7 @@ export function InferEmbedCard({
                   className="flex-1 rounded-t"
                   style={{
                     height: `${Math.abs(v) / maxVal * 100}%`,
-                    backgroundColor: v >= 0 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))',
+                    backgroundColor: v >= 0 ? 'rgb(var(--primary))' : 'rgb(var(--destructive))',
                     opacity: 0.7,
                   }}
                 />

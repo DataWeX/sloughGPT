@@ -289,12 +289,13 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
       })
     }
 
-    // Load existing session
-    setTimeout(() => {
-      chatDB.getKV<string>(CURRENT_SESSION_KEY).then((currentId) => {
-        if (currentId) get().loadSession(currentId)
-      })
-    }, 0)
+    // NOTE: Do not load the session here. The controller (useChatMessages) is the
+    // single source of truth for messages and loads the session on mount; the
+    // one-way bridge (useChatStoreBridge) mirrors controller → store. An
+    // independent store-side loadSession raced the bridge, resolving later with a
+    // stale/persisted read and clobbering live messages — blanking the pane while
+    // the toolbar (controller) still showed the real count. Session hydration is
+    // the controller's job, not the store's.
   },
 
   // ── Set Input ──
@@ -624,10 +625,17 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
         })
 
         if (streamComplete) {
+          // Persist LIVE state, not the pre-stream `messagesWithNew` capture:
+          // token flushes replace message objects in state during streaming,
+          // so the capture still holds the empty assistant placeholder here.
+          // complete → cancelFlush() writes the final content synchronously
+          // before the stream promise resolves, so getState() at this point
+          // reads the finished transcript.
+          const finalMessages = useChatStore.getState().messages
           chatController
             .saveSessionContext(
               state.sessionId,
-              messagesWithNew.map((m) => ({ role: m.role, content: m.content })),
+              finalMessages.map((m) => ({ role: m.role, content: m.content })),
             )
             .catch(() => {})
           knowledgeController

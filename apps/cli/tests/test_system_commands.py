@@ -107,6 +107,62 @@ class TestCmdConfigCheck:
         mock_log.header.assert_called()
 
 
+class TestCmdMole:
+    def test_runs_env_and_mole_sections(self, mock_log, monkeypatch):
+        """`system mole` = env validator section + the shared Mole core."""
+        from commands.system import cmd_mole
+
+        from domain.core._internal.mole.probes import system as system_probe
+        from domain.core._internal.mole.report import merge
+
+        captured = {}
+        real_report = merge(
+            [system_probe.run_probe()],
+            targets={"web": "http://localhost:5173", "api": "http://localhost:8000"},
+        )
+
+        def fake_run_mole(**kwargs):
+            captured.update(kwargs)
+            return real_report
+
+        monkeypatch.setattr("domain.core._internal.mole.run_mole", fake_run_mole)
+        args = MagicMock()
+        args.json_output = False
+        cmd_mole(args)
+        headers = [c[0][0] for c in mock_log.header.call_args_list]
+        assert "Environment Check" in headers
+        assert "Mole" in headers
+        # The shared artifact must be written so API/UI consumers see it.
+        assert captured.get("write") is True
+        assert mock_log.info.called  # summary lines rendered
+
+    def test_mole_failure_is_reported_not_raised(self, mock_log, monkeypatch):
+        from commands.system import cmd_mole
+
+        def boom(**_kwargs):
+            raise RuntimeError("core exploded")
+
+        monkeypatch.setattr("domain.core._internal.mole.run_mole", boom)
+        args = MagicMock()
+        args.json_output = False
+        cmd_mole(args)  # must not raise
+        mock_log.warning.assert_called()
+
+    def test_click_routes_to_cmd_mole(self, monkeypatch):
+        import commands.system as csys
+
+        fake = MagicMock()
+        monkeypatch.setattr(csys, "cmd_mole", fake)
+        import groups.system as groups_system
+
+        # The CLI owns its framework (core.framework) — dispatch through it,
+        # not real click's CliRunner.
+        root = groups_system.click.group()(lambda: None)
+        groups_system.register(root)
+        groups_system.click.run(root, ["system", "mole"])
+        assert fake.called
+
+
 class TestCmdConfigValidate:
     def test_missing_env_file(self, mock_log):
         from commands.system import cmd_config_validate

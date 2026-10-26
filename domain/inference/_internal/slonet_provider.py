@@ -22,6 +22,8 @@ Features:
 - Per-request metadata (timing, token count, model info)
 """
 
+from __future__ import annotations
+
 import threading
 import time
 from collections.abc import AsyncIterator
@@ -47,9 +49,9 @@ _SloLayerNorm = None
 def _get_slo_layernorm():
     global _SloLayerNorm
     if _SloLayerNorm is None:
-        from domain.training._internal.slonet import LayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
-        _SloLayerNorm = LayerNorm
+        _SloLayerNorm = SloLayerNorm
     return _SloLayerNorm
 
 
@@ -527,7 +529,7 @@ class SloNetChatProvider:
         free_quantized_originals: bool = False,
         release_mmap_pages: bool = True,
         trim_allocator_after_load: bool = True,
-    ) -> "SloNetChatProvider":
+    ) -> SloNetChatProvider:
         """Create provider from .slnc file (mmap, zero-copy).
 
         Args:
@@ -679,6 +681,11 @@ class SloNetChatProvider:
                     if info is not None and info.is_quantized:
                         module.set_quantized_weight(info)
                         quantized_count += 1
+                        # interleaved free: release this layer's fp32 now that
+                        # its quantized array exists, so the full-fp32 model and
+                        # the full quantized copy never co-reside (bounds peak).
+                        if free_quantized_originals:
+                            module.free_quantized_originals()
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded pre-quantized weights (%d tensors) from %s",
                     quantized_count,
@@ -718,6 +725,9 @@ class SloNetChatProvider:
                             linear_map[mod_name].set_quantized_weight(info)
                             tensor_infos[mod_name] = info
                             quantized_count += 1
+                            # interleaved free: bounds peak (see Priority 1).
+                            if free_quantized_originals:
+                                linear_map[mod_name].free_quantized_originals()
 
                 # Save pre-quantized arrays for future fast loads
                 if tensor_infos:
@@ -737,6 +747,9 @@ class SloNetChatProvider:
                         linear_map[mod_name].set_quantized_weight(info)
                         tensor_infos[mod_name] = info
                         quantized_count += 1
+                        # interleaved free: bounds peak (see Priority 1).
+                        if free_quantized_originals:
+                            linear_map[mod_name].free_quantized_originals()
 
                 engine.save_metadata(str(quant_meta_path))
                 if tensor_infos:
@@ -863,7 +876,7 @@ class SloNetChatProvider:
         free_quantized_originals: bool = False,
         release_mmap_pages: bool = True,
         trim_allocator_after_load: bool = True,
-    ) -> "SloNetChatProvider":
+    ) -> SloNetChatProvider:
         """Create a provider whose model weights load lazily on first use.
 
         Reads only the .slnc header (config + tensor table) to build full
@@ -962,7 +975,7 @@ class SloNetChatProvider:
         soul_path: str,
         model_id: str = "sloughgpt",
         kv_max_sessions: int = 64,
-    ) -> "SloNetChatProvider":
+    ) -> SloNetChatProvider:
         """Create provider from a .soul checkpoint trained natively by SloNet.
 
         Unlike from_slnc() which converts HuggingFace weights, this loads
@@ -1326,7 +1339,11 @@ class SloNetChatProvider:
     def _tokenizer_from_embedded(emb: dict):
         """Rebuild a char/token-tree tokenizer from SLNC-embedded metadata."""
         tok = emb.get("tokenizer")
-        if isinstance(tok, dict) and tok.get("type") == "token_tree" and isinstance(tok.get("tree"), dict):
+        if (
+            isinstance(tok, dict)
+            and tok.get("type") == "token_tree"
+            and isinstance(tok.get("tree"), dict)
+        ):
             from domain.training._internal.token_tree import TokenTree
 
             return _TreeTokenizer(TokenTree.from_dict(tok["tree"]))
@@ -1575,8 +1592,17 @@ class SloNetChatProvider:
         """Resolve KV state for a session, creating if needed, with TTL eviction."""
         if session_id is None:
             return None
+        # Materialize the model FIRST: lazy loading REBINDS self._kv_manager
+        # (it adopts the eager provider's manager at the from_slnc/from_soul
+        # materialization sites), and the old expression bound the manager
+        # before evaluating its own argument, self._get_model(). The very
+        # first session therefore landed in the orphaned pre-load instance:
+        # session_stats counted 0, and turn 2 created a FRESH state —
+        # silently forfeiting cross-turn KV reuse on the lazy path (the
+        # production path).
+        factory = self._get_model().new_kv_state
         self._evict_stale_sessions()
-        return self._kv_manager.get_or_create(session_id, self._get_model().new_kv_state)
+        return self._kv_manager.get_or_create(session_id, factory)
 
     def _generate_sync(
         self,
@@ -1676,6 +1702,14 @@ class SloNetChatProvider:
         top_p = kwargs.get("top_p")
         repetition_penalty = kwargs.get("repetition_penalty", 1.0)
         cancel_event = kwargs.get("cancel_event")
+        # Card f1816d61: internal abort signal — set by the finally around the
+        # consume loop on EVERY exit (return, error, or GeneratorExit when the
+        # caller abandons the stream / client disconnect) so the producer stops
+        # feeding an unbounded queue forever. Deliberately SEPARATE from the
+        # caller's cancel_event: that one is a REQUEST made by the caller and
+        # must never be set as a side effect of a completed stream
+        # (test_cancel_event_not_set_when_fast); the producer honors both.
+        abort = threading.Event()
         kwargs.get("priority", 1)  # default MEDIUM
         session_id = kwargs.get("session_id")
 
@@ -1718,6 +1752,12 @@ class SloNetChatProvider:
         def _producer():
             try:
                 for token in _stream_generate():
+                    if abort.is_set() or (cancel_event is not None and cancel_event.is_set()):
+                        # Consumer gone (timeout, error, or disconnect) or the
+                        # caller requested cancellation — stop pulling from the
+                        # model; the finally below still puts the sentinel so
+                        # no queue reader is left waiting.
+                        break
                     q.put(token)
             except Exception as e:
                 logger.error("[chat_stream] Producer error: %s", e, exc_info=True)
@@ -1729,54 +1769,65 @@ class SloNetChatProvider:
         producer_thread.start()
 
         gen_start = time.monotonic()
-        while True:
-            # Check total generation timeout
-            elapsed = time.monotonic() - gen_start
-            if elapsed > _STREAM_TOTAL_TIMEOUT_S:
-                cancel_event.set() if cancel_event else None
-                logger.warning(
-                    "Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"}
-                )
-                yield f"\n\n[Generation timed out after {elapsed:.0f}s]"
-                return
+        try:
+            while True:
+                # Check total generation timeout
+                elapsed = time.monotonic() - gen_start
+                if elapsed > _STREAM_TOTAL_TIMEOUT_S:
+                    cancel_event.set() if cancel_event else None
+                    abort.set()
+                    logger.warning(
+                        "Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"}
+                    )
+                    yield f"\n\n[Generation timed out after {elapsed:.0f}s]"
+                    return
 
-            try:
-                # Use to_thread with timeout to prevent indefinite blocking
-                token = await asyncio.wait_for(
-                    asyncio.to_thread(q.get),
-                    timeout=_STREAM_GET_TIMEOUT_S,
-                )
-            except TimeoutError:
-                # Check if producer thread is still alive
-                if not producer_thread.is_alive():
-                    # Thread died — drain remaining tokens
-                    while not q.empty():
-                        t = q.get_nowait()
-                        if t is sentinel:
-                            break
-                        yield t
+                try:
+                    # Use to_thread with timeout to prevent indefinite blocking
+                    token = await asyncio.wait_for(
+                        asyncio.to_thread(q.get),
+                        timeout=_STREAM_GET_TIMEOUT_S,
+                    )
+                except TimeoutError:
+                    # Check if producer thread is still alive
+                    if not producer_thread.is_alive():
+                        # Thread died — drain remaining tokens
+                        while not q.empty():
+                            t = q.get_nowait()
+                            if t is sentinel:
+                                break
+                            yield t
+                        break
+                    # Thread still alive but no token for 30s — check for errors
+                    if not err_q.empty():
+                        exc = err_q.get_nowait()
+                        yield f"\n\n[Generation error: {exc}]"
+                        return
+                    # Still generating — continue waiting
+                    continue
+
+                if token is sentinel:
+                    if not err_q.empty():
+                        exc = err_q.get_nowait()
+                        yield f"\n\n[Generation error: {exc}]"
                     break
-                # Thread still alive but no token for 30s — check for errors
+
+                # Check for producer errors (may have been raised between queue reads)
                 if not err_q.empty():
                     exc = err_q.get_nowait()
                     yield f"\n\n[Generation error: {exc}]"
                     return
-                # Still generating — continue waiting
-                continue
 
-            if token is sentinel:
-                if not err_q.empty():
-                    exc = err_q.get_nowait()
-                    yield f"\n\n[Generation error: {exc}]"
-                break
-
-            # Check for producer errors (may have been raised between queue reads)
-            if not err_q.empty():
-                exc = err_q.get_nowait()
-                yield f"\n\n[Generation error: {exc}]"
-                return
-
-            yield token
+                yield token
+        finally:
+            # Runs on EVERY exit — return, error, or GeneratorExit when the
+            # caller abandons the stream (client disconnect / aclose). Signals
+            # the producer to stop; without this every abandoned stream leaked
+            # a daemon _producer thread that fed an unbounded queue forever,
+            # accumulating across a pytest session until the core-py gate
+            # wedged (card f1816d61). Safe on timeout too: aborting a stream
+            # nobody is reading is always correct.
+            abort.set()
 
     # =========================================================================
     # NEW FEATURES

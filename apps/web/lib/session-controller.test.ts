@@ -13,7 +13,7 @@ vi.mock('./config', () => ({
 import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
-import { sessionController } from './session-controller'
+import { sessionController, deriveConversationTitle } from './session-controller'
 
 describe('sessionController.list', () => {
   beforeEach(() => { vi.clearAllMocks() })
@@ -128,5 +128,75 @@ describe('sessionController.fetchMessages', () => {
       undefined,
       { signal: controller.signal, silent: true },
     )
+  })
+})
+
+describe('deriveConversationTitle', () => {
+  it('trims and collapses internal whitespace', () => {
+    expect(deriveConversationTitle('  Hello   world  ')).toBe('Hello world')
+  })
+
+  it('strips control characters', () => {
+    expect(deriveConversationTitle('Bad\u0000\u0007Title')).toBe('BadTitle')
+  })
+
+  it('caps titles at 60 characters', () => {
+    const derived = deriveConversationTitle('x'.repeat(100))
+    expect(derived).toHaveLength(60)
+  })
+
+  it('falls back to Untitled for empty, whitespace-only, or missing names', () => {
+    expect(deriveConversationTitle('')).toBe('Untitled')
+    expect(deriveConversationTitle('   \t ')).toBe('Untitled')
+    expect(deriveConversationTitle(undefined)).toBe('Untitled')
+    expect(deriveConversationTitle(null)).toBe('Untitled')
+  })
+
+  it('keeps short all-caps titles like POING (user-authored, not suppressed)', () => {
+    expect(deriveConversationTitle('POING')).toBe('POING')
+  })
+
+  it('leaves clean titles untouched and is idempotent', () => {
+    expect(deriveConversationTitle('debug5: bubble autopsy')).toBe('debug5: bubble autopsy')
+    expect(deriveConversationTitle(deriveConversationTitle('  a  b  '))).toBe('a b')
+  })
+})
+
+describe('sessionController.list title derivation', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('sanitizes messy names from the API', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      sessions: [{ id: 's1', name: '  spaced \u0001 name ', created_at: '', updated_at: '', pinned: false, starred: false, message_count: 0 }],
+    })
+
+    const result = await sessionController.list()
+    expect(result[0].name).toBe('spaced name')
+  })
+
+  it('renders empty names as Untitled instead of a blank sidebar row', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      sessions: [{ id: 's1', name: '', created_at: '', updated_at: '', pinned: false, starred: false, message_count: 0 }],
+    })
+
+    const result = await sessionController.list()
+    expect(result[0].name).toBe('Untitled')
+  })
+})
+
+describe('sessionController.search title derivation', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('sanitizes result names and falls back to Untitled', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      results: [
+        { id: 'a', name: '  Hello  there ', created_at: '', updated_at: '', match_count: 1, matches: [] },
+        { id: 'b', name: '', created_at: '', updated_at: '', match_count: 1, matches: [] },
+      ],
+    })
+
+    const result = await sessionController.search('hello')
+    expect(result[0].name).toBe('Hello there')
+    expect(result[1].name).toBe('Untitled')
   })
 })

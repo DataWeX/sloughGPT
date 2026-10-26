@@ -23,7 +23,7 @@ class DatasetsController:
 
     def _entry_roots(self) -> list[Path]:
         """Roots to scan: cache-first, legacy data/ read-only."""
-        from domain.training._internal.cache_tags import get_cache_root
+        from domain.training import get_cache_root
 
         roots = []
         try:
@@ -43,7 +43,7 @@ class DatasetsController:
 
     def _locate(self, dataset_id: str) -> Path | None:
         """Locate an entry dir: cache-first, legacy fallback (read-only)."""
-        from domain.training._internal.cache_tags import get_cache_root
+        from domain.training import get_cache_root
 
         try:
             cached = get_cache_root() / dataset_id
@@ -63,7 +63,7 @@ class DatasetsController:
         self, q: str | None = None, dataset_type: str | None = None, workspace_id: str = ""
     ) -> list[dict[str, Any]]:
         """List available datasets, optionally filtered by workspace."""
-        from domain.training._internal.cache_tags import (
+        from domain.training import (
             classify_kind,
             entry_tags,
             find_corpus_file,
@@ -121,7 +121,7 @@ class DatasetsController:
                 size = input_file.stat().st_size
             else:
                 # Fall back to any discovered corpus file (e.g. input.jsonl).
-                from domain.training._internal.cache_tags import find_corpus_file as _find
+                from domain.training import find_corpus_file as _find
 
                 _primary = _find(d)
                 size = _primary.stat().st_size if _primary is not None else 0
@@ -197,7 +197,7 @@ class DatasetsController:
 
     def get_dataset(self, dataset_id: str) -> dict[str, Any] | None:
         """Get dataset details"""
-        from domain.training._internal.cache_tags import classify_kind, entry_tags
+        from domain.training import classify_kind, entry_tags
 
         path = self._locate(dataset_id)
         if path is None:
@@ -378,7 +378,7 @@ class DatasetsController:
         self, name: str, description: str | None = None, workspace_id: str = ""
     ) -> dict[str, Any]:
         """Create a new dataset in the just-cache, optionally workspace-scoped."""
-        from domain.training._internal.cache_tags import get_cache_root, write_entry_meta
+        from domain.training import get_cache_root, write_entry_meta
 
         path = get_cache_root() / name
         path.mkdir(parents=True, exist_ok=True)
@@ -471,7 +471,7 @@ class DatasetsController:
                 count += 1
         if count:
             try:
-                from domain.infrastructure._internal.artifact_registry import try_register
+                from domain.infrastructure import try_register
 
                 try_register("dataset", corpus_file, name=dataset_id)
             except Exception:
@@ -484,7 +484,7 @@ class DatasetsController:
         base = self._locate(dataset_id)
         if base is None:
             # Should not happen in cache-only mode — caller already 404'd
-            from domain.training._internal.cache_tags import get_cache_root
+            from domain.training import get_cache_root
 
             base = get_cache_root() / dataset_id
         versions_dir = base / "versions"

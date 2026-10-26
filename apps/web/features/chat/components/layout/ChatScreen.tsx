@@ -172,7 +172,7 @@ export const ChatScreen = memo(function ChatScreen({
       )}
 
       {sessionLoading && (
-        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 py-4 space-y-2" role="status" aria-busy="true" aria-label="Loading messages">
+        <div className="w-full px-4 sm:px-6 py-4 space-y-2" role="status" aria-busy="true" aria-label="Loading messages">
           <span className="sr-only">Loading conversation...</span>
           {[1, 2, 3].map(i => (
             <div key={i} className="animate-pulse space-y-1" aria-hidden="true">
@@ -190,13 +190,13 @@ export const ChatScreen = memo(function ChatScreen({
       )}
 
       {toolEvents && toolEvents.length > 0 && (
-        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 pb-1">
+        <div className="w-full px-4 sm:px-6 pb-1">
           <ToolCallPanel events={toolEvents} />
         </div>
       )}
 
       {ragVerification && (
-        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 pb-1">
+        <div className="w-full px-4 sm:px-6 pb-1">
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground rounded-md border border-border/40 bg-muted/30 px-3 py-1.5">
             <span className={cn(
               "inline-block h-1.5 w-1.5 rounded-full",
@@ -254,7 +254,7 @@ export const ChatScreen = memo(function ChatScreen({
     const showDateDivider = !prevMsg || isDifferentDay(prevMsg.timestamp, message.timestamp)
 
     return (
-      <div className="px-4 sm:px-6">
+      <div className="px-4 sm:px-6 py-1.5">
         {showDateDivider && (
           <div className="relative flex items-center py-2" role="separator" aria-label={formatDateLabel(new Date(message.timestamp))}>
             <div className="flex-1 border-t border-border/40" />
@@ -272,6 +272,8 @@ export const ChatScreen = memo(function ChatScreen({
           showTimestamp={true}
           model={model}
           images={message.images}
+          turnNumber={index + 1}
+          metrics={message.metrics}
           onCopy={onCopy}
           onThumbsUp={onThumbsUp}
           onThumbsDown={onThumbsDown}

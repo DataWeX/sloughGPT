@@ -20,11 +20,11 @@ interface BenchmarkChartCardProps {
 type MetricKey = 'throughput' | 'latency' | 'memory' | 'tokens' | 'quality'
 
 const METRICS: { key: MetricKey; label: string; color: string; unit: string }[] = [
-  { key: 'throughput', label: 'Throughput', color: 'hsl(var(--primary))', unit: 'tok/s' },
-  { key: 'latency', label: 'Latency', color: 'hsl(var(--destructive))', unit: 'ms' },
-  { key: 'memory', label: 'Memory', color: 'hsl(var(--success))', unit: 'MB' },
-  { key: 'tokens', label: 'Tokens', color: 'hsl(var(--info))', unit: '' },
-  { key: 'quality', label: 'Quality', color: 'hsl(var(--warning))', unit: '%' },
+  { key: 'throughput', label: 'Throughput', color: 'rgb(var(--primary))', unit: 'tok/s' },
+  { key: 'latency', label: 'Latency', color: 'rgb(var(--destructive))', unit: 'ms' },
+  { key: 'memory', label: 'Memory', color: 'rgb(var(--success))', unit: 'MB' },
+  { key: 'tokens', label: 'Tokens', color: 'rgb(var(--info))', unit: '' },
+  { key: 'quality', label: 'Quality', color: 'rgb(var(--warning))', unit: '%' },
 ]
 
 function SimpleLineChart({ data, dataKey, color, height = 60 }: { data: BenchmarkHistoryEntry[]; dataKey: string; color: string; height?: number }) {

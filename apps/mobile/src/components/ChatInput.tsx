@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
+import {S, R, T} from '../theme/scales';
 import {triggerHaptic} from '../services/haptics';
 import {QuickPromptPicker} from './QuickPromptPicker';
 import {SlashCommandPicker} from './SlashCommandPicker';
@@ -166,21 +167,20 @@ export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, d
   const iconBtnStyle = {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: R.md,
     backgroundColor: colors.primaryAlpha(0.06),
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   };
 
   const inputStyle = {
+    ...T.body,
     flex: 1,
-    fontSize: 15,
-    fontWeight: '400' as const,
     color: textColor,
     backgroundColor: 'transparent',
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
+    borderRadius: R.xl,
+    paddingHorizontal: S.sm,
+    paddingVertical: S.md,
     maxHeight: 120,
     minHeight: 42,
   };
@@ -188,7 +188,7 @@ export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, d
   const circleBtn = (size: number, color: string) => ({
     width: size,
     height: size,
-    borderRadius: 9999,
+    borderRadius: R.full,
     backgroundColor: color,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
@@ -200,14 +200,14 @@ export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, d
   });
 
   return (
-    <YStack paddingHorizontal={16} paddingVertical={12} backgroundColor="transparent">
+    <YStack paddingHorizontal={S.lg} paddingVertical={S.md} backgroundColor="transparent">
       <XStack
         alignItems="flex-end"
-        gap={10}
+        gap={S.md}
         backgroundColor={colors.background}
-        borderRadius={24}
-        paddingHorizontal={8}
-        paddingVertical={6}
+        borderRadius={R.xl}
+        paddingHorizontal={S.sm}
+        paddingVertical={S.sm}
         borderWidth={1}
         borderColor={colors.primaryAlpha(0.12)}
         shadowColor={colors.primary}
@@ -243,7 +243,7 @@ export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, d
             style={{
               width: 36,
               height: 36,
-              borderRadius: 9999,
+              borderRadius: R.full,
               backgroundColor: colors.primaryAlpha(0.06),
               alignItems: 'center',
               justifyContent: 'center',
@@ -270,7 +270,7 @@ export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, d
               {
                 width: 40,
                 height: 40,
-                borderRadius: 9999,
+                borderRadius: R.full,
                 backgroundColor: colors.primaryAlpha(0.06),
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -288,13 +288,13 @@ export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, d
       </XStack>
 
       {isRecording && (
-        <XStack alignItems="center" justifyContent="center" gap={4} marginTop={4}>
-          <YStack width={8} height={8} borderRadius={4} backgroundColor={colors.error} />
+        <XStack alignItems="center" justifyContent="center" gap={S.xs} marginTop={S.xs}>
+          <YStack width={8} height={8} borderRadius={R.full} backgroundColor={colors.error} />
           <TextInput
             value="Recording..."
             editable={false}
             style={{
-              fontSize: 11,
+              ...T.badge,
               fontWeight: '600',
               letterSpacing: 0.2,
               color: colors.error,

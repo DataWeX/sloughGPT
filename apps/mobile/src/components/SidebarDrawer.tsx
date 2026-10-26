@@ -3,6 +3,7 @@ import {Animated, PanResponder, Pressable, Dimensions, BackHandler} from 'react-
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
+import {S, R, T} from '../theme/scales';
 import {useSidebar} from '../contexts/SidebarContext';
 import {useChatStore} from '../stores/chat-store';
 import {useModelStore} from '../stores/model-store';
@@ -120,20 +121,20 @@ export function SidebarDrawer() {
             <SafeAreaView style={{flex: 1}} edges={['top', 'bottom']}>
           {/* Header */}
           <XStack
-            paddingHorizontal={20} paddingVertical={16}
+            paddingHorizontal={S.xl} paddingVertical={S.lg}
             borderBottomWidth={0.5} borderBottomColor={colors.border}
             alignItems="center" justifyContent="space-between">
             <YStack gap={2}>
-              <Text fontSize={20} fontWeight="700" letterSpacing={-0.5} color={colors.primary}>
+              <Text {...T.page} fontWeight="700" letterSpacing={-0.5} color={colors.primary}>
                 SloughGPT
               </Text>
-              <Text fontSize={11} color={colors.textMuted}>Mobile</Text>
+              <Text {...T.caption} color={colors.textMuted}>Mobile</Text>
             </YStack>
             <Pressable
               onPress={close}
               hitSlop={12}
               style={({pressed}) => ({
-                width: 40, height: 40, borderRadius: 10,
+                width: 40, height: 40, borderRadius: R.md,
                 alignItems: 'center', justifyContent: 'center',
                 opacity: pressed ? 0.5 : 1,
               })}>
@@ -143,19 +144,19 @@ export function SidebarDrawer() {
 
           {/* Status */}
           <XStack
-            paddingHorizontal={20} paddingVertical={10}
-            alignItems="center" gap={8}>
+            paddingHorizontal={S.xl} paddingVertical={S.md}
+            alignItems="center" gap={S.sm}>
             <YStack
-              width={7} height={7} borderRadius={4}
+              width={7} height={7} borderRadius={R.full}
               backgroundColor={health?.model_loaded ? colors.success : colors.textMuted}
             />
-            <Text fontSize={11} color={colors.textMuted}>
+            <Text {...T.caption} color={colors.textMuted}>
               {health?.model_loaded ? `Connected — ${health.model_name || 'Model loaded'}` : 'No model loaded'}
             </Text>
           </XStack>
 
           {/* Navigation */}
-          <YStack paddingHorizontal={8} paddingTop={4}>
+          <YStack paddingHorizontal={S.sm} paddingTop={S.xs}>
             {NAV_ITEMS.map(item => {
               const isActive = activeScreen === item.screen || activeScreen.startsWith(item.screen + '/');
               return (
@@ -163,9 +164,9 @@ export function SidebarDrawer() {
                   key={item.screen}
                   onPress={() => handleNav(item.screen)}
                   style={({pressed}) => ({
-                    flexDirection: 'row', alignItems: 'center', gap: 12,
-                    paddingHorizontal: 14, paddingVertical: 11,
-                    marginHorizontal: 6, borderRadius: 10,
+                    flexDirection: 'row', alignItems: 'center', gap: S.md,
+                    paddingHorizontal: S.lg, paddingVertical: S.md,
+                    marginHorizontal: S.sm, borderRadius: R.md,
                     backgroundColor: isActive
                       ? colors.primaryAlpha(0.1)
                       : pressed
@@ -174,7 +175,7 @@ export function SidebarDrawer() {
                   })}>
                   <Icon name={item.icon as any} size={18} color={isActive ? colors.primary : colors.textSecondary} />
                   <Text
-                    fontSize={14} fontWeight={isActive ? '600' : '400'}
+                    {...T.body} fontWeight={isActive ? '600' : '400'}
                     color={isActive ? colors.primary : colors.text}>
                     {item.label}
                   </Text>
@@ -184,29 +185,29 @@ export function SidebarDrawer() {
           </YStack>
 
           {/* Divider */}
-          <YStack height={0.5} backgroundColor={colors.border} marginHorizontal={20} marginVertical={8} />
+          <YStack height={0.5} backgroundColor={colors.border} marginHorizontal={S.xl} marginVertical={S.sm} />
 
           {/* Recent Sessions */}
           <YStack flex={1}>
-            <XStack paddingHorizontal={20} paddingVertical={6} alignItems="center" justifyContent="space-between">
-              <Text fontSize={11} fontWeight="600" color={colors.textMuted} letterSpacing={0.5} textTransform="uppercase">
+            <XStack paddingHorizontal={S.xl} paddingVertical={S.sm} alignItems="center" justifyContent="space-between">
+              <Text {...T.label} fontWeight="600" color={colors.textMuted} textTransform="uppercase">
                 Recent
               </Text>
               <Pressable
                 onPress={() => navigate('Chat')}
                 style={({pressed}) => ({
-                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+                  paddingHorizontal: S.sm, paddingVertical: S.xs, borderRadius: R.sm,
                   backgroundColor: colors.primaryAlpha(0.08),
                   opacity: pressed ? 0.6 : 1,
                 })}>
-                <Text fontSize={10} fontWeight="600" color={colors.primary}>New</Text>
+                <Text {...T.badge} fontWeight="600" color={colors.primary}>New</Text>
               </Pressable>
             </XStack>
 
             {recentSessions.length === 0 ? (
-              <YStack padding={20} alignItems="center" gap={6}>
+              <YStack padding={S.xl} alignItems="center" gap={S.sm}>
                 <Icon name="message-circle" size={20} color={colors.textMuted} />
-                <Text fontSize={12} color={colors.textMuted}>No conversations yet</Text>
+                <Text {...T.caption} color={colors.textMuted}>No conversations yet</Text>
               </YStack>
             ) : (
               recentSessions.map(session => {
@@ -216,23 +217,23 @@ export function SidebarDrawer() {
                     key={session.id}
                     onPress={() => { loadSession(session.id); navigate('Chat'); }}
                     style={({pressed}) => ({
-                      flexDirection: 'row', alignItems: 'center', gap: 10,
-                      paddingHorizontal: 20, paddingVertical: 10,
-                      marginHorizontal: 6, marginVertical: 1, borderRadius: 8,
+                      flexDirection: 'row', alignItems: 'center', gap: S.md,
+                      paddingHorizontal: S.xl, paddingVertical: S.md,
+                      marginHorizontal: S.sm, marginVertical: 1, borderRadius: R.md,
                       backgroundColor: isActive
                         ? colors.primaryAlpha(0.08)
                         : pressed
                           ? colors.primaryAlpha(0.04)
                           : 'transparent',
                     })}>
-                    <YStack width={28} height={28} borderRadius={8} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
+                    <YStack width={28} height={28} borderRadius={R.md} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
                       <Icon name="message-circle" size={12} color={colors.primary} />
                     </YStack>
                     <YStack flex={1} gap={1}>
-                      <Text fontSize={13} fontWeight={isActive ? '600' : '400'} color={colors.text} numberOfLines={1}>
+                      <Text {...T.caption} fontWeight={isActive ? '600' : '400'} color={colors.text} numberOfLines={1}>
                         {session.name || 'New conversation'}
                       </Text>
-                      <Text fontSize={10} color={colors.textMuted}>
+                      <Text {...T.badge} color={colors.textMuted}>
                         {session.message_count ?? 0} messages
                       </Text>
                     </YStack>
@@ -246,13 +247,13 @@ export function SidebarDrawer() {
           <Pressable
             onPress={() => handleNav('Settings')}
             style={({pressed}) => ({
-              flexDirection: 'row', alignItems: 'center', gap: 10,
-              paddingHorizontal: 20, paddingVertical: 12,
+              flexDirection: 'row', alignItems: 'center', gap: S.md,
+              paddingHorizontal: S.xl, paddingVertical: S.md,
               borderTopWidth: 0.5, borderTopColor: colors.border,
               backgroundColor: pressed ? colors.primaryAlpha(0.04) : 'transparent',
             })}>
             <Icon name="settings" size={16} color={colors.textSecondary} />
-            <Text fontSize={13} color={colors.textSecondary}>Settings</Text>
+            <Text {...T.caption} color={colors.textSecondary}>Settings</Text>
           </Pressable>
         </SafeAreaView>
           </Animated.View>

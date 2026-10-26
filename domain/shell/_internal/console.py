@@ -894,6 +894,11 @@ class Console:
         self._emit("form", {"message": message})
         return self._interactive.form(fields, message)
 
+    def options_screen(self, rows: list[dict], message: str = "Options") -> dict[str, str]:
+        """Options screen: rows are command-line options named by their flag."""
+        self._emit("options_screen", {"message": message})
+        return self._interactive.options_screen(rows, message)
+
     def playlist_manager(self, items: list[str], message: str = "Playlist:") -> list[str]:
         """Manage ordered list with move up/down and delete."""
         self._emit("playlist_manager", {"message": message})

@@ -20,13 +20,13 @@ interface PhonemeEdge {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Vowels: '#eab308',
-  Stops: '#3b82f6',
-  Fricatives: '#a855f7',
-  Affricates: '#ec4899',
-  Nasals: '#22c55e',
-  Liquids: '#f97316',
-  Glides: '#06b6d4',
+  Vowels: 'rgb(var(--chart-1))',
+  Stops: 'rgb(var(--chart-2))',
+  Fricatives: 'rgb(var(--chart-3))',
+  Affricates: 'rgb(var(--chart-4))',
+  Nasals: 'rgb(var(--chart-5))',
+  Liquids: 'rgb(var(--chart-1))',
+  Glides: 'rgb(var(--chart-2))',
 }
 
 function getPhonemeCategory(phoneme: string): string {
@@ -159,7 +159,7 @@ export default function PhonemeNetwork() {
             <div
               key={node.phoneme}
               className="p-2 rounded-lg border text-center"
-              style={{ borderColor: CATEGORY_COLORS[node.category] || '#888' }}
+              style={{ borderColor: CATEGORY_COLORS[node.category] || 'rgb(var(--muted-foreground))' }}
             >
               <p className="font-mono text-sm font-bold">{node.phoneme}</p>
               <p className="text-xs text-muted-foreground">{node.ipa}</p>
@@ -168,7 +168,7 @@ export default function PhonemeNetwork() {
                   className="h-full rounded-full"
                   style={{
                     width: `${node.accuracy * 100}%`,
-                    backgroundColor: CATEGORY_COLORS[node.category] || '#888',
+                    backgroundColor: CATEGORY_COLORS[node.category] || 'rgb(var(--muted-foreground))',
                   }}
                 />
               </div>

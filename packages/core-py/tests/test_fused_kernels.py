@@ -538,7 +538,13 @@ class TestFusedKernelsAvailability:
                 causal[0, 0, i, j] = -1e9
 
         out_masked, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(), mask=causal)
-        out_unmasked, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy())
+        # A zero-valued mask keeps the comparison on the same generic path
+        # (mask is not None) with no masking applied. The no-mask call takes
+        # fused_attention_multi when _KERNELS_AVAILABLE, and that kernel
+        # applies causal masking built in — the two outputs were bitwise
+        # identical (diff 0.0) and the test failed for the wrong reason.
+        zero_mask = np.zeros((1, 1, N, N), dtype=np.float32)
+        out_unmasked, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(), mask=zero_mask)
 
         diff = np.abs(out_masked - out_unmasked).max()
         assert diff > 0, "Causal mask should change output"

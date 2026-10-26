@@ -64,7 +64,7 @@ function QualitySparkline({ values }: { values: number[] }) {
         <polyline
           points={points}
           fill="none"
-          stroke={trend ? 'hsl(142,76%,36%)' : 'hsl(0,84%,60%)'}
+          stroke={trend ? 'rgb(var(--success))' : 'rgb(var(--destructive))'}
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"

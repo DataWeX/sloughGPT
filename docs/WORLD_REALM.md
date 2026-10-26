@@ -285,6 +285,26 @@ no external data. Stage 6 adds multiple babies in one world so social
 dynamics (competition, cooperation, communication) emerge on top of evolved
 individual cognition.
 
+**World–Model Bridge, Stage A (ModelBrain) — the seam to the model stack.**
+Babies are born with a swappable brain class: `WorldParams.brain_kind`
+selects `"perceptron"` (the default — frozen random feature projection +
+delta-rule readout, exactly as above) or `"model"` (a `ModelBrain` whose
+hidden projection is **trained by real backprop** of the same in-world
+reward signal — a genuine two-layer net learning from energy, not text).
+The seam is one duck-typed contract (`forward`/`update`/`W`/`b`/`H`/`bh`/
+`to_dict`/`from_dict`): both classes draw RNG in the same order (H, bh, W)
+with the same scales, carry the same genome tensor inventory, and serialize
+compatibly, so evolution, serialization, and every `decide_*` path run
+unchanged — the swap changes who learns the features, never luck. CLI:
+`--brain model` (with `--hidden-units`). This is the weight-space tier of
+"models are interchangeable brains, worlds are interchangeable bodies"; the
+token-space tier (a transformer deciding from serialized episodes) is the
+Stage B follow-up. Acceptance measured by
+`python3 scripts/benchmark_world_brain.py`: throughput (model vs perceptron
+ticks/sec, gate <20% regression), the emergence proof re-run with model
+brains (evolved beats frozen-random), and the capability check (model H
+drifts under in-life learning while the perceptron's H stays frozen).
+
 ## Core Idea
 
 ```

@@ -40,7 +40,6 @@ import json
 import logging
 import threading
 import webbrowser
-from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -50,13 +49,13 @@ import app_planner.core as core_module
 
 from . import config
 from .kanban import Board, KanbanStore
+from .notes_controller import NotesController, NoteStoreError, NoteValidationError
 from .sync import sync_notes_to_board
 
 logger = logging.getLogger("app_planner.gui")
 
 STATUS_TO_COLUMN = config.STATUS_TO_COLUMN
 COLUMN_TO_STATUS = config.COLUMN_TO_STATUS
-STATUSES = config.STATUSES
 
 
 def _note_to_dict(note: Any) -> dict:
@@ -105,6 +104,10 @@ class GuiServer(ThreadingHTTPServer):
         self.note_store = note_store
         self.kanban_store = kanban_store
         self.lock = threading.Lock()
+        # One note contract over the store: validation, read-model filtering
+        # and the delete post-condition live here, not in each HTTP handler.
+        # Mutations still serialise through self.lock (passed as the guard).
+        self.note_ctl = NotesController(note_store, lock=self.lock)
 
 
 class GuiHandler(BaseHTTPRequestHandler):
@@ -183,22 +186,11 @@ class GuiHandler(BaseHTTPRequestHandler):
         tag = query.get("tag", [None])[0]
         status = query.get("status", [None])[0]
         q = query.get("query", [None])[0]
-        notes = self.stores.note_store.list_notes(limit=9999)
-        if tag:
-            notes = [n for n in notes if tag in n.tags]
-        if status:
-            notes = [n for n in notes if n.status == status]
-        if q:
-            ql = q.lower()
-            notes = [
-                n
-                for n in notes
-                if ql in n.title.lower() or ql in " ".join(n.tags).lower() or ql in n.body.lower()
-            ]
-        self._send(200, {"notes": [_note_to_dict(n) for n in notes[:limit]]})
+        notes = self.stores.note_ctl.list_notes(tag=tag, status=status, query=q, limit=limit)
+        self._send(200, {"notes": [_note_to_dict(n) for n in notes]})
 
     def _handle_get_note(self, note_id: str) -> None:
-        note = self.stores.note_store.get(note_id)
+        note = self.stores.note_ctl.get(note_id)
         if note is None:
             return self._error(404, f"note not found: {note_id}")
         self._send(200, {"note": _note_to_dict(note)})
@@ -213,30 +205,12 @@ class GuiHandler(BaseHTTPRequestHandler):
         self._send(200, {"board": {"name": board.name, "columns": columns, "cards": cards}})
 
     def _handle_tags(self) -> None:
-        counts: dict[str, int] = {}
-        for note in self.stores.note_store.list_notes(limit=9999):
-            for tag in note.tags:
-                counts[tag] = counts.get(tag, 0) + 1
+        counts = self.stores.note_ctl.tags()
         tags = [{"name": name, "count": count} for name, count in sorted(counts.items())]
         self._send(200, {"tags": tags})
 
     def _handle_stats(self) -> None:
-        notes = self.stores.note_store.list_notes(limit=9999)
-        by_status: dict[str, int] = {}
-        today_str = date.today().isoformat()
-        today = 0
-        for n in notes:
-            by_status[n.status or "open"] = by_status.get(n.status or "open", 0) + 1
-            if n.date_str == today_str:
-                today += 1
-        self._send(
-            200,
-            {
-                "total": len(notes),
-                "today": today,
-                "by_status": by_status,
-            },
-        )
+        self._send(200, self.stores.note_ctl.stats())
 
     # ------------------------------------------------------------------
     # POST / PUT / DELETE
@@ -283,68 +257,50 @@ class GuiHandler(BaseHTTPRequestHandler):
             return self._error(404, f"not found: {path}")
         note_id = _unquote_path(path[len("/api/notes/") :])
         try:
-            with self.stores.lock:
-                ok = self.stores.note_store.delete(note_id)
-            if not ok:
-                return self._error(404, f"note not found: {note_id}")
-            return self._send(200, {"ok": True})
+            gone = self.stores.note_ctl.delete(note_id)
+        except NoteStoreError as e:
+            logger.exception("DELETE %s violated the store contract", path)
+            return self._error(500, str(e))
         except Exception as exc:  # noqa: BLE001
             logger.exception("DELETE %s failed", path)
-            self._error(500, str(exc))
+            return self._error(500, str(exc))
+        if not gone:
+            return self._error(404, f"note not found: {note_id}")
+        return self._send(200, {"ok": True})
 
     # ------------------------------------------------------------------
     # Handlers
     # ------------------------------------------------------------------
 
     def _handle_create_note(self, body: dict) -> None:
-        title = (body.get("title") or "").strip()
-        if not title:
-            return self._error(400, "title is required")
-        tags = _coerce_tags(body.get("tags"))
-        status = body.get("status") or "open"
-        if status not in STATUSES:
-            return self._error(400, f"invalid status: {status}")
-        with self.stores.lock:
-            note = self.stores.note_store.create(
-                title=title,
-                tags=tags,
-                status=status,
+        try:
+            note = self.stores.note_ctl.create(
+                title=body.get("title") or "",
+                tags=_coerce_tags(body.get("tags")),
+                status=body.get("status") or "open",
                 sprint=body.get("sprint") or "",
                 gh=body.get("gh") or "",
                 author=body.get("author") or "",
                 assignee=body.get("assignee") or "",
                 body=body.get("body") or "",
             )
+        except NoteValidationError as e:
+            return self._error(400, str(e))
         self._send(200, {"note": _note_to_dict(note)})
 
     def _handle_update_note(self, note_id: str, body: dict) -> None:
         kwargs: dict[str, Any] = {}
         if "title" in body:
-            title = (body.get("title") or "").strip()
-            if not title:
-                return self._error(400, "title cannot be empty")
-            kwargs["title"] = title
+            kwargs["title"] = body.get("title") or ""
         if "tags" in body:
             kwargs["tags"] = _coerce_tags(body.get("tags"))
-        if "status" in body:
-            status = body.get("status")
-            if status not in STATUSES:
-                return self._error(400, f"invalid status: {status}")
-            kwargs["status"] = status
-        if "sprint" in body:
-            kwargs["sprint"] = body.get("sprint") or ""
-        if "gh" in body:
-            kwargs["gh"] = body.get("gh") or ""
-        if "author" in body:
-            kwargs["author"] = body.get("author") or ""
-        if "assignee" in body:
-            kwargs["assignee"] = body.get("assignee") or ""
-        if "body" in body:
-            kwargs["body"] = body.get("body") or ""
-        if not kwargs:
-            return self._error(400, "no fields to update")
-        with self.stores.lock:
-            note = self.stores.note_store.update(note_id, **kwargs)
+        for key in ("status", "sprint", "gh", "author", "assignee", "body"):
+            if key in body:
+                kwargs[key] = body.get(key)
+        try:
+            note = self.stores.note_ctl.update(note_id, **kwargs)
+        except NoteValidationError as e:
+            return self._error(400, str(e))
         if note is None:
             return self._error(404, f"note not found: {note_id}")
         self._send(200, {"note": _note_to_dict(note)})

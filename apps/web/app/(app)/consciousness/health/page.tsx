@@ -242,7 +242,7 @@ export default function ConsciousnessHealthPage() {
         <Card>
           <CardContent className="p-4 sm:p-6 flex flex-col items-center">
             <svg viewBox="0 0 120 120" className="w-40 h-40 sm:w-56 sm:h-56">
-              <circle cx="60" cy="60" r="54" fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
+              <circle cx="60" cy="60" r="54" fill="none" stroke="rgb(var(--border))" strokeWidth="8" />
               <circle
                 cx="60" cy="60" r="54"
                 fill="none"
@@ -427,13 +427,13 @@ export default function ConsciousnessHealthPage() {
             </CardHeader>
             <CardContent>
               <svg viewBox="0 0 400 150" className="w-full h-auto">
-                <line x1="40" y1="10" x2="40" y2="130" stroke="hsl(var(--border))" strokeWidth="0.5" />
-                <line x1="40" y1="130" x2="390" y2="130" stroke="hsl(var(--border))" strokeWidth="0.5" />
+                <line x1="40" y1="10" x2="40" y2="130" stroke="rgb(var(--border))" strokeWidth="0.5" />
+                <line x1="40" y1="130" x2="390" y2="130" stroke="rgb(var(--border))" strokeWidth="0.5" />
                 {[0, 25, 50, 75, 100].map((v) => {
                   const y = 130 - (v / 100) * 120
                   return (
                     <g key={v}>
-                      <line x1="40" y1={y} x2="390" y2={y} stroke="hsl(var(--border))" strokeWidth="0.5" strokeDasharray="3 3" />
+                      <line x1="40" y1={y} x2="390" y2={y} stroke="rgb(var(--border))" strokeWidth="0.5" strokeDasharray="3 3" />
                       <text x="35" y={y + 3} textAnchor="end" fontSize="8" className="fill-muted-foreground">{v}</text>
                     </g>
                   )
@@ -447,7 +447,7 @@ export default function ConsciousnessHealthPage() {
                   return (
                     <polygon
                       points={`${40},${130} ${points} ${40 + ((timelineData[timelineData.length - 1]?.x ?? 0) / 100) * 350},130`}
-                      fill="hsl(var(--primary))"
+                      fill="rgb(var(--primary))"
                       fillOpacity="0.08"
                     />
                   )
@@ -459,14 +459,14 @@ export default function ConsciousnessHealthPage() {
                     return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
                   })
                   return (
-                    <path d={pathParts.join(' ')} fill="none" stroke="hsl(var(--primary))" strokeWidth="2" />
+                    <path d={pathParts.join(' ')} fill="none" stroke="rgb(var(--primary))" strokeWidth="2" />
                   )
                 })()}
                 {timelineData.map((d, i) => {
                   const x = 40 + (d.x / 100) * 350
                   const y = 130 - (d.y / 100) * 120
                   return (
-                    <circle key={i} cx={x} cy={y} r="3" fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth="1" />
+                    <circle key={i} cx={x} cy={y} r="3" fill="rgb(var(--primary))" stroke="rgb(var(--background))" strokeWidth="1" />
                   )
                 })}
               </svg>

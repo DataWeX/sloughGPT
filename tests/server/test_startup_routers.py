@@ -171,6 +171,63 @@ def test_phase6_routers_skips_already_registered_prefixes():
 # ── Phase 2: model load ──────────────────────────────────────────────────────
 
 
+def test_phase6_warms_the_snapshot_builders_before_first_subscriber():
+    """Boot must warm every snapshot builder before anyone subscribes.
+
+    Both closures are cold and both land in-request otherwise, and they are
+    *disjoint* — warming one does not warm the other:
+
+    - ``controllers.health`` pulls 284 modules and, through
+      ``domain.slolib.get_accelerator() -> _detect_best_backend() ->
+      is_available()``, reaches the GPU stack (cupy: 279ms self, 758ms
+      cumulative): measured **804-1281ms cold vs ~0ms warm**.
+    - ``routers.dashboard._build_snapshot`` reaches its own closure
+      (``domain.infrastructure``, ``training.jobs``, the event buffer): measured
+      **1419ms cold vs 6.6ms warm** across 654 modules, with neither
+      ``controllers.health`` nor ``cupy`` in ``sys.modules`` afterwards.
+
+    So without this, the first ``/health/stream`` and first
+    ``/dashboard/stream`` subscriber each pay a cold import.
+
+    The warmup functions themselves are not run here (only branched onto the
+    tree), so this asserts the wiring rather than paying the imports in a test.
+    """
+    get_all = MagicMock(return_value=[])
+    orch = _make_orchestrator()
+    branched: list[str] = []
+
+    def _spy(processes, *args, **kwargs):
+        branched.extend(p.name for p in processes)
+        return MagicMock()  # a Stem; `_phase6_routers` ignores the return here
+
+    with (
+        patch.dict(
+            sys.modules,
+            {"routers": _stub_routers(get_all), "training.router": _stub_training_router()},
+        ),
+        patch.object(orch._bg_tree, "branch", side_effect=_spy),
+        patch("faulthandler.dump_traceback"),
+        patch("traceback.print_exc"),
+    ):
+        asyncio.run(orch._phase6_routers())
+
+    for warmup, rationale in (
+        (
+            "health-warmup",
+            "its ~1.3s cold import still lands in-request on the first /health/stream subscriber",
+        ),
+        (
+            "dashboard-warmup",
+            "its ~1.4s cold import still lands in-request on the first "
+            "/dashboard/stream subscriber, and it is a separate closure the "
+            "health warmup does not reach",
+        ),
+    ):
+        assert warmup in branched, f"boot never runs {warmup}: {rationale}; branched: {branched}"
+    # The pre-existing checkpoint warmup must survive alongside them.
+    assert "ckpt-warmup" in branched
+
+
 class TestPhase2ModelLoad:
     """_phase2_model_load — autoload disabled / lazy-guard routing."""
 

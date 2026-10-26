@@ -220,7 +220,7 @@ export function VoiceComparisonCard() {
                 <option key={r.id} value={r.id}>{r.label} ({formatDuration(r.duration)})</option>
               ))}
             </select>
-            {leftWave && <WaveformBars data={leftWave} color="hsl(var(--primary))" />}
+            {leftWave && <WaveformBars data={leftWave} color="rgb(var(--primary))" />}
             {left && <Button size="sm" variant="ghost" onClick={() => playSide('left')} className="h-6 text-[10px]">Play A</Button>}
           </div>
           <div className="space-y-1.5">
@@ -236,7 +236,7 @@ export function VoiceComparisonCard() {
                 <option key={r.id} value={r.id}>{r.label} ({formatDuration(r.duration)})</option>
               ))}
             </select>
-            {rightWave && <WaveformBars data={rightWave} color="hsl(var(--success))" />}
+            {rightWave && <WaveformBars data={rightWave} color="rgb(var(--success))" />}
             {right && <Button size="sm" variant="ghost" onClick={() => playSide('right')} className="h-6 text-[10px]">Play B</Button>}
           </div>
         </div>
@@ -268,7 +268,7 @@ export function VoiceComparisonCard() {
                 className="h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${result.similarity * 100}%`,
-                  backgroundColor: result.similarity > 0.7 ? 'hsl(var(--success))' : result.similarity > 0.4 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))',
+                  backgroundColor: result.similarity > 0.7 ? 'rgb(var(--success))' : result.similarity > 0.4 ? 'rgb(var(--warning))' : 'rgb(var(--destructive))',
                 }}
               />
             </div>

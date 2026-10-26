@@ -147,29 +147,17 @@ class TestSloughGPTModel:
 
 
 class TestAliases:
-    def test_rmsnorm_alias(self):
-        from domain.models import RMSNorm
-        from domain.training._internal.slonet import SloRMSNorm
+    """Symbols still re-exported from domain.models.
 
-        assert RMSNorm is SloRMSNorm
-
-    def test_attention_alias(self):
-        from domain.models import SloughGPTAttention
-        from domain.training._internal.slonet import SloMultiHeadAttention
-
-        assert SloughGPTAttention is SloMultiHeadAttention
-
-    def test_block_alias(self):
-        from domain.models import SloughGPTBlock
-        from domain.training._internal.slonet import SloTransformerBlock
-
-        assert SloughGPTBlock is SloTransformerBlock
-
-    def test_swiglu_alias(self):
-        from domain.models import SwiGLU
-        from domain.training._internal.slonet import SloFeedForward
-
-        assert SwiGLU is SloFeedForward
+    The pre-rename compatibility aliases (RMSNorm, SloughGPTAttention,
+    SloughGPTBlock, SwiGLU -> their Slo* canonicals) were removed from
+    domain/models/__init__.py. The canonical classes live on in
+    domain/training/_internal/slonet.py (SloRMSNorm:2612,
+    SloTransformerBlock:2660, SloMultiHeadAttention:3078, SloFeedForward:3516)
+    and nothing outside this file imported the aliases, so their identity
+    assertions were dropped rather than re-pointed -- `assert X is X` on two
+    names for the same class would assert nothing.
+    """
 
     def test_rotate_half_callable(self):
         from domain.models import rotate_half

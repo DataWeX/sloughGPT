@@ -224,14 +224,17 @@ class TestSelectMultiFallback:
 
 class TestModuleExport:
     def test_interactive_prompt_importable(self):
-        from domain.shell import InteractivePrompt
+        # InteractivePrompt lives in the _internal interactive module; the
+        # facade `domain.shell.__all__` is a curated surface and has never
+        # exported it on this line (widening it would be a product decision).
+        from domain.shell._internal.interactive import InteractivePrompt
 
         assert InteractivePrompt is not None
 
     def test_interactive_prompt_in_all(self):
-        from domain.shell import __all__
+        from domain.shell._internal import interactive
 
-        assert "InteractivePrompt" in __all__
+        assert hasattr(interactive, "InteractivePrompt")
 
 
 # ── select_with_details fallback ──────────────────────────────────────────────

@@ -21,18 +21,18 @@ interface MonitorEvent {
 }
 
 const QUALIA_COLORS: Record<string, string> = {
-  valence: 'var(--chart-1)',
-  arousal: 'var(--chart-2)',
-  novelty: 'var(--chart-3)',
-  coherence: 'var(--chart-4)',
+  valence: 'rgb(var(--chart-1))',
+  arousal: 'rgb(var(--chart-2))',
+  novelty: 'rgb(var(--chart-3))',
+  coherence: 'rgb(var(--chart-4))',
 }
 
 const BELIEF_COLORS: Record<string, string> = {
-  competence: 'var(--chart-1)',
-  helpfulness: 'var(--chart-4)',
-  creativity: 'var(--chart-3)',
-  accuracy: 'var(--chart-5)',
-  empathy: 'var(--chart-2)',
+  competence: 'rgb(var(--chart-1))',
+  helpfulness: 'rgb(var(--chart-4))',
+  creativity: 'rgb(var(--chart-3))',
+  accuracy: 'rgb(var(--chart-5))',
+  empathy: 'rgb(var(--chart-2))',
 }
 
 const QUALIA_DIMS = ['valence', 'arousal', 'novelty', 'coherence']
@@ -205,7 +205,7 @@ export default function ConsciousnessMonitorPage() {
 
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-40">
-        <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} stroke="hsl(var(--border))" strokeDasharray="4" strokeWidth={0.5} />
+        <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} stroke="rgb(var(--border))" strokeDasharray="4" strokeWidth={0.5} />
         {paths.map(p => (
           <path key={p.dim} d={p.d} fill="none" stroke={p.color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
         ))}
@@ -234,9 +234,9 @@ export default function ConsciousnessMonitorPage() {
 
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-32">
-        <polygon points={areaCoords.join(' ')} fill="#6366f1" fillOpacity={0.1} />
-        <polyline points={coords.join(' ')} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={pad + ((points - 1) / (points - 1)) * (w - 2 * pad)} cy={h - pad - Math.max(0, Math.min(1, (growthStream[points - 1] ?? 0) + 0.5)) * (h - 2 * pad)} r={3} fill="#6366f1" />
+        <polygon points={areaCoords.join(' ')} fill="rgb(var(--chart-1))" fillOpacity={0.1} />
+        <polyline points={coords.join(' ')} fill="none" stroke="rgb(var(--chart-1))" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={pad + ((points - 1) / (points - 1)) * (w - 2 * pad)} cy={h - pad - Math.max(0, Math.min(1, (growthStream[points - 1] ?? 0) + 0.5)) * (h - 2 * pad)} r={3} fill="rgb(var(--chart-1))" />
       </svg>
     )
   }, [growthStream])
@@ -256,12 +256,14 @@ export default function ConsciousnessMonitorPage() {
           const x = pad + i * (barW + 4)
           const barH = (v / 5) * (h - 2 * pad)
           const y = h - pad - barH
-          const hue = (v / 5) * 120
+          // Rating heatmap: low = destructive, high = success, interpolated via
+          // color-mix so the scale follows theme tokens (no pinned hue in markup).
+          const t = Math.round((v / 5) * 100)
           return (
-            <rect key={i} x={x} y={y} width={barW} height={barH} rx={2} fill={`hsl(${hue}, 70%, 50%)`} fillOpacity={0.8} />
+            <rect key={i} x={x} y={y} width={barW} height={barH} rx={2} fill={`color-mix(in srgb, rgb(var(--destructive)) ${100 - t}%, rgb(var(--success)) ${t}%)`} fillOpacity={0.8} />
           )
         })}
-        <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="hsl(var(--border))" strokeWidth={0.5} />
+        <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="rgb(var(--border))" strokeWidth={0.5} />
       </svg>
     )
   }, [ratingStream])

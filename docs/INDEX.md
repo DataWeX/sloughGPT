@@ -18,7 +18,7 @@ Single source of truth for navigation. Read this first.
 
 | Doc | Purpose |
 |-----|---------|
-| **STRUCTURE.md** | Repo layout |
+| **STRUCTURE.md** | Repo layout, domain/ map, branch lanes |
 | **RAG_ARCHITECTURE.md** | RAG system design |
 | **RAG_PATTERNS.md** | RAG implementation patterns |
 | **TRAINING_REFACTOR_PLAN.md** | Consolidating training loops |
@@ -26,6 +26,7 @@ Single source of truth for navigation. Read this first.
 | **PRODUCER_CONSUMER_QUEUE.md** | Queue pattern |
 | **PUGQEEP.md** | PGQ: points, pools, Pipe |
 | **TRANSPORT_PROJECTIONS.md** | Capability → contract → route |
+| **DOMAIN_CONSOLIDATION.md** | Record of `packages/core-py/domains/` → `domain/` consolidation |
 
 ## Features
 
@@ -38,6 +39,19 @@ Single source of truth for navigation. Read this first.
 | **VM_CONSOLE.md** | VM console |
 | **vm-devices-spec.md** | VM device spec |
 | **WORLD_REALM.md** | World rendering |
+| **CACHING.md** | LLM response cache: keys + invalidation |
+
+## Design
+
+| Doc | Purpose |
+|-----|---------|
+| **design/DESIGN_SYSTEM.md** | Noir Violet design system (LOCKED) — tokens, palettes, auras |
+
+Color values have one source of truth: `packages/strui/tokens/palette.json`.
+Edit it and run `node packages/strui/scripts/gen-tokens.mjs` (verify: `--check`);
+both `globals.css` token regions, the web swatch map, the mobile color
+projection, the tamagui theme overrides, and the magazine showcase data are
+generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 
 ## Setup & Deploy
 
@@ -47,6 +61,8 @@ Single source of truth for navigation. Read this first.
 | **ENVIRONMENT.md** | Environment setup |
 | **DEPLOYMENT.md** | Deployment guide |
 | **DEPLOYMENT_CHECKLIST.md** | Pre-deploy checks |
+| **WORKTREE_RECOVERY.md** | Worktree wipe prevention + prune/recreate recovery runbook |
+| **scripts/systemd/** | systemd --user unit for the shared API (:8000) + install.sh |
 
 ## Integration
 

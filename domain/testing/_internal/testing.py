@@ -10,7 +10,7 @@ Usage:
     # Define your site
     config = SiteConfig(
         name="My App",
-        base_url="http://localhost:3000",
+        base_url="http://localhost:5173",
         pages={
             "home": Page(name="Home", path="/", checks=["welcome"]),
             "about": Page(name="About", path="/about", checks=["about us"]),
@@ -382,7 +382,7 @@ def create_site_config(
     Example:
         config = create_site_config(
             name="My App",
-            base_url="http://localhost:3000",
+            base_url="http://localhost:5173",
             pages={
                 "home": ("/", ["welcome"]),
                 "about": ("/about", ["about us"]),

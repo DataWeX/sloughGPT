@@ -67,7 +67,10 @@ function TimeDomainCanvas({ data, width = 400, height = 80 }: { data: Float32Arr
     if (!ctx) return
 
     ctx.clearRect(0, 0, width, height)
-    ctx.strokeStyle = `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()})`
+    // Canvas 2D can't resolve CSS var() — read the token (an RGB triple) and
+    // wrap in rgb(). The old code wrapped it in hsl(), producing an invalid
+    // color function with three space-separated numbers, and rendered wrong.
+    ctx.strokeStyle = `rgb(${getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()})`
     ctx.lineWidth = 1.5
     ctx.beginPath()
 
@@ -100,11 +103,27 @@ function FrequencyCanvas({ data, width = 400, height = 80 }: { data: Float32Arra
     const maxDb = Math.max(...Array.from(data))
     const range = maxDb - minDb || 1
 
+    // Token-driven spectrum: canvas can't resolve var(), so read the chart
+    // tokens (RGB triples) and interpolate across the frequency bins. Keeps the
+    // spectrum theme-aware instead of pinning hues in markup.
+    const css = getComputedStyle(document.documentElement)
+    const stops = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'].map((v) =>
+      css.getPropertyValue(v).trim().split(/\s+/).map(Number),
+    )
+
     for (let i = 0; i < data.length; i++) {
       const normalized = (data[i] - minDb) / range
       const barHeight = normalized * height
-      const hue = (i / data.length) * 270
-      ctx.fillStyle = `hsl(${hue}, 70%, 60%)`
+      const t = data.length > 1 ? i / (data.length - 1) : 0
+      const seg = t * (stops.length - 1)
+      const idx = Math.min(Math.floor(seg), stops.length - 2)
+      const f = seg - idx
+      const a = stops[idx]
+      const b = stops[idx + 1]
+      const r = Math.round(a[0] + (b[0] - a[0]) * f)
+      const g = Math.round(a[1] + (b[1] - a[1]) * f)
+      const bl = Math.round(a[2] + (b[2] - a[2]) * f)
+      ctx.fillStyle = `rgb(${r}, ${g}, ${bl})`
       ctx.fillRect(i * barWidth, height - barHeight, barWidth - 0.5, barHeight)
     }
   }, [data, width, height])

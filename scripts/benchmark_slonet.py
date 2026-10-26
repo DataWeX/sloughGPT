@@ -311,11 +311,20 @@ class SloNetBenchmark:
             W = np.random.randn(k).astype(np.float32)
             Bv = np.random.randn(k).astype(np.float32)
 
+            # Upload once, then time device-resident ops. Passing raw numpy
+            # arrays into a GPU backend's ops only works while numpy ndarrays
+            # lack a ``device`` attribute; numpy>=2.0 added one, so the
+            # backends' ``hasattr(x, "device")`` duck-typing skipped their
+            # numpy->device conversion and cupy crashed on the type mismatch.
+            # to_device is the identity on CPU backends (card 21135daa gate fix).
+            A_d, B_d = acc.to_device(A), acc.to_device(B)
+            X_d, W_d, Bv_d = acc.to_device(X), acc.to_device(W), acc.to_device(Bv)
+
             # Accelerator
             t0 = time.perf_counter()
             for _ in range(20):
-                c = acc.matmul(A, B)
-                c = acc.layer_norm(X, W, Bv)
+                c = acc.matmul(A_d, B_d)
+                c = acc.layer_norm(X_d, W_d, Bv_d)
                 c = acc.gelu(c)
             if hasattr(acc, "sync"):
                 acc.sync()

@@ -1,9 +1,20 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: 'class',
+  // Every top-level source dir of apps/web must be listed here. Tailwind only
+  // emits utilities it finds while scanning these globs, so an omitted dir
+  // silently drops its classes from the compiled CSS (no error, no warning).
+  // apps/web/lib/tailwind-content.test.ts enforces the invariant.
   content: [
     './app/**/*.{js,ts,jsx,tsx}',
     './components/**/*.{js,ts,jsx,tsx}',
+    './features/**/*.{js,ts,jsx,tsx}',
+    './contexts/**/*.{js,ts,jsx,tsx}',
+    './hooks/**/*.{js,ts,jsx,tsx}',
+    './lib/**/*.{js,ts,jsx,tsx}',
+    './scripts/**/*.{js,ts,jsx,tsx}',
+    './types/**/*.{js,ts,jsx,tsx}',
+    './vite/**/*.{js,ts,jsx,tsx}',
     '../../packages/strui/src/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
@@ -59,6 +70,26 @@ module.exports = {
           3: 'rgb(var(--chart-3) / <alpha-value>)',
           4: 'rgb(var(--chart-4) / <alpha-value>)',
           5: 'rgb(var(--chart-5) / <alpha-value>)',
+        },
+        // Terminal chrome (dait shell + Dev/startup panels). Deliberately FIXED
+        // dark ladder — does NOT follow the light/dark theme switch. See the
+        // `--term-*` block in globals.css.
+        term: {
+          surface: 'rgb(var(--term-surface) / <alpha-value>)',
+          'surface-raised': 'rgb(var(--term-surface-raised) / <alpha-value>)',
+          header: 'rgb(var(--term-header) / <alpha-value>)',
+          chip: 'rgb(var(--term-chip) / <alpha-value>)',
+          'text-strong': 'rgb(var(--term-text-strong) / <alpha-value>)',
+          text: 'rgb(var(--term-text) / <alpha-value>)',
+          'text-muted': 'rgb(var(--term-text-muted) / <alpha-value>)',
+          'text-dim': 'rgb(var(--term-text-dim) / <alpha-value>)',
+          'text-faint': 'rgb(var(--term-text-faint) / <alpha-value>)',
+          close: 'rgb(var(--term-close) / <alpha-value>)',
+          minimize: 'rgb(var(--term-minimize) / <alpha-value>)',
+          zoom: 'rgb(var(--term-zoom) / <alpha-value>)',
+          blue: 'rgb(var(--term-blue) / <alpha-value>)',
+          purple: 'rgb(var(--term-purple) / <alpha-value>)',
+          cyan: 'rgb(var(--term-cyan) / <alpha-value>)',
         },
       },
       borderRadius: {

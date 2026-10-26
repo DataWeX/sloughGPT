@@ -150,7 +150,7 @@ SLOUGHPGPT_API_ENDPOINTS = {
 
 SLOUGHPGPT_SITE = create_site_config(
     name="sloughGPT",
-    base_url="http://localhost:3000",
+    base_url="http://localhost:5173",
     api_url="http://localhost:8000",
     pages=SLOUGHPGPT_PAGES,
 )
@@ -163,7 +163,7 @@ class SloughGPTJourney:
     """Pre-configured journey for sloughGPT."""
 
     def __init__(
-        self, base_url: str = "http://localhost:3000", api_url: str = "http://localhost:8000"
+        self, base_url: str = "http://localhost:5173", api_url: str = "http://localhost:8000"
     ):
         from . import Journey
 

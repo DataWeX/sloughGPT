@@ -125,8 +125,8 @@ def run_mole(
         run_sweep: run the browser journey sweep (default: read the
             existing journey report file only).
         window_s: SSE observation window in seconds.
-        skip: probe names to skip (``gates``, ``benchmarks``, ``http``,
-            ``sse``, ``journey``).
+        skip: probe names to skip (``system``, ``gates``, ``benchmarks``,
+            ``http``, ``sse``, ``journey``).
         report_path: report destination (default ``$SLO_DOCTOR_REPORT`` or
             ``~/.cache/slog-doctor/findings-report.json``).
         write: persist the report as JSON.

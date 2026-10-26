@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { cn, IconX, IconCheckCircle, IconError, IconInfo } from '@sloughgpt/strui'
 
 export type ToastType = 'success' | 'error' | 'info'
@@ -202,32 +203,54 @@ const TYPE_BORDER: Record<ToastType, string> = {
 }
 
 export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastContainerProps) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  // The store's toasts must escape `.sl-app-shell` (height:100dvh;
+  // overflow:hidden). `toastVariants` are `relative`, and `ToastProvider`
+  // emits no wrapper element, so rendering them inline would drop them into
+  // the shell's flex column where `overflow:hidden` clips them — the toast
+  // row never reaches the viewport. Portal to `document.body` in a fixed
+  // container (mirrors strui's `ToastViewport`) so they float above content
+  // instead of being cut off at the shell edge.
+  if (!mounted) return null
   return (
     <ToastProvider>
-      {toasts.length > 2 && onClearAll && (
-        <button
-          type="button"
-          onClick={onClearAll}
-          className="fixed bottom-20 right-4 z-[301] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
-          aria-label="Dismiss all notifications"
-        >
-          Clear all
-        </button>
-      )}
-      {toasts.map((t) => (
-        <Toast key={t.id} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>
-          <div className="flex items-start gap-3 w-full">
-            <span className="mt-0.5 text-sm shrink-0">
-              {t.type === 'success' ? <IconCheckCircle className="h-4 w-4 text-success" /> : t.type === 'error' ? <IconError className="h-4 w-4 text-destructive" /> : <IconInfo className="h-4 w-4 text-primary" />}
-            </span>
-            <div className="flex-1 min-w-0">
-              <ToastTitle className="text-sm">{t.message}</ToastTitle>
-              {t.verbose && <ToastDescription className="mt-1">{t.verbose}</ToastDescription>}
-            </div>
-            <ToastClose onClick={() => onDismiss(t.id)} />
+      {createPortal(
+        <>
+          {toasts.length > 2 && onClearAll && (
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="fixed bottom-20 right-4 z-[301] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+              aria-label="Dismiss all notifications"
+            >
+              Clear all
+            </button>
+          )}
+          <div
+            role="region"
+            aria-label="Notifications"
+            className="fixed bottom-0 right-0 z-[300] flex flex-col-reverse gap-2 p-4 max-h-screen w-full sm:w-[400px] pointer-events-none"
+          >
+            {toasts.map((t) => (
+              <Toast key={t.id} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>
+                <div className="flex items-start gap-3 w-full">
+                  <span className="mt-0.5 text-sm shrink-0">
+                    {t.type === 'success' ? <IconCheckCircle className="h-4 w-4 text-success" /> : t.type === 'error' ? <IconError className="h-4 w-4 text-destructive" /> : <IconInfo className="h-4 w-4 text-primary" />}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <ToastTitle className="text-sm">{t.message}</ToastTitle>
+                    {t.verbose && <ToastDescription className="mt-1">{t.verbose}</ToastDescription>}
+                  </div>
+                  <ToastClose onClick={() => onDismiss(t.id)} />
+                </div>
+              </Toast>
+            ))}
           </div>
-        </Toast>
-      ))}
+        </>,
+        document.body,
+      )}
       <ToastViewport />
     </ToastProvider>
   )

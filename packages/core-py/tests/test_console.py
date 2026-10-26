@@ -9,11 +9,8 @@ No mocks — uses MemoryIO for all output capture.
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
-
-os.environ["NO_COLOR"] = "1"
 
 from domain.shell._internal.console import (
     SPINNER_FRAMES,

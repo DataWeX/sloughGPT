@@ -47,21 +47,21 @@ interface Episode {
 }
 
 const QUALIA_DIMENSIONS = [
-  { key: 'valence', color: 'var(--chart-1)', label: 'Valence' },
-  { key: 'arousal', color: 'var(--chart-2)', label: 'Arousal' },
-  { key: 'novelty', color: 'var(--chart-3)', label: 'Novelty' },
-  { key: 'coherence', color: 'var(--chart-4)', label: 'Coherence' },
-  { key: 'salience', color: 'var(--chart-5)', label: 'Salience' },
-  { key: 'certainty', color: 'var(--chart-1)', color2: 'var(--chart-1)', label: 'Certainty' },
-  { key: 'complexity', color: 'var(--chart-2)', label: 'Complexity' },
+  { key: 'valence', color: 'rgb(var(--chart-1))', label: 'Valence' },
+  { key: 'arousal', color: 'rgb(var(--chart-2))', label: 'Arousal' },
+  { key: 'novelty', color: 'rgb(var(--chart-3))', label: 'Novelty' },
+  { key: 'coherence', color: 'rgb(var(--chart-4))', label: 'Coherence' },
+  { key: 'salience', color: 'rgb(var(--chart-5))', label: 'Salience' },
+  { key: 'certainty', color: 'rgb(var(--chart-1))', color2: 'rgb(var(--chart-1))', label: 'Certainty' },
+  { key: 'complexity', color: 'rgb(var(--chart-2))', label: 'Complexity' },
 ]
 
 const BELIEF_DIMENSIONS = [
-  { key: 'competence', color: 'var(--chart-1)', label: 'Competence' },
-  { key: 'helpfulness', color: 'var(--chart-4)', label: 'Helpfulness' },
-  { key: 'creativity', color: 'var(--chart-3)', label: 'Creativity' },
-  { key: 'accuracy', color: 'var(--chart-5)', label: 'Accuracy' },
-  { key: 'empathy', color: 'var(--chart-2)', label: 'Empathy' },
+  { key: 'competence', color: 'rgb(var(--chart-1))', label: 'Competence' },
+  { key: 'helpfulness', color: 'rgb(var(--chart-4))', label: 'Helpfulness' },
+  { key: 'creativity', color: 'rgb(var(--chart-3))', label: 'Creativity' },
+  { key: 'accuracy', color: 'rgb(var(--chart-5))', label: 'Accuracy' },
+  { key: 'empathy', color: 'rgb(var(--chart-2))', label: 'Empathy' },
 ]
 
 const PRESETS: Record<string, string> = {

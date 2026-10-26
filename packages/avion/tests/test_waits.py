@@ -2,7 +2,14 @@
 
 import asyncio
 
-from avion.waits import SmartWaiter, WaitCondition, WaitConfig
+from avion.waits import (
+    APP_READY_EXPRESSION,
+    SmartWaiter,
+    WaitCondition,
+    WaitConfig,
+    wait_app_ready,
+    wait_for,
+)
 
 
 def run(coro):
@@ -73,3 +80,62 @@ class TestSettled:
         r = run(SmartWaiter(Broken()).wait(WaitConfig(timeout=0.05, poll_ms=5)))
         assert r.success is False
         assert "dead" in r.error
+
+
+class TestPredicateWaits:
+    """wait_for / wait_app_ready — one predicate, one clear timeout error."""
+
+    def test_true_on_first_evaluation(self):
+        backend = ScriptedBackend([1])
+        r = run(wait_for(backend, "window.READY === true"))
+        assert r.success is True
+        assert r.error == ""
+        assert backend.polls == 1  # observed on the first evaluation, no sleep
+
+    def test_polls_until_predicate_turns_truthy(self):
+        backend = ScriptedBackend([0, 0, 1])
+        r = run(wait_for(backend, "window.READY === true", poll_ms=1.0))
+        assert r.success is True
+        assert backend.polls == 3
+
+    def test_timeout_error_names_description_and_expression(self):
+        backend = ScriptedBackend([], default=0)
+        r = run(
+            wait_for(
+                backend,
+                "document.body.dataset.booted",
+                timeout=0.05,
+                poll_ms=5.0,
+                description="app declared boot",
+            )
+        )
+        assert r.success is False
+        assert "timeout after" in r.error
+        assert "app declared boot" in r.error
+        assert "document.body.dataset.booted" in r.error
+
+    def test_timeout_reports_last_backend_error(self):
+        class Broken:
+            async def evaluate(self, e):
+                raise RuntimeError("context destroyed")
+
+            async def wait_for_timeout(self, ms):
+                pass
+
+        r = run(wait_for(Broken(), "true", timeout=0.05, poll_ms=5.0))
+        assert r.success is False
+        assert "context destroyed" in r.error
+
+    def test_wait_app_ready_uses_the_canonical_expression(self):
+        backend = ScriptedBackend([0, 1])
+        r = run(wait_app_ready(backend, timeout=1.0, poll_ms=1.0))
+        assert r.success is True
+        # The app sets data-app-ready on #root; every caller waits on exactly
+        # this expression, so a suite can never drift from the app's contract.
+        assert "data-app-ready" in APP_READY_EXPRESSION
+
+    def test_wait_app_ready_times_out_without_the_signal(self):
+        backend = ScriptedBackend([], default=0)
+        r = run(wait_app_ready(backend, timeout=0.05, poll_ms=5.0))
+        assert r.success is False
+        assert "data-app-ready" in r.error

@@ -26,6 +26,7 @@ from typing import Any
 
 import numpy as np
 
+from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.shared import repair_iso, utc_now_iso
 
 logger = logging.getLogger("slo.inference.slo_format")
@@ -613,91 +614,64 @@ def save_soul(
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-    # Atomic write: write to temp file, then rename
-    import tempfile
-
-    # Write .meta.json first (small, fast — serves as sidecar for list endpoint).
-    # Atomic via temp + rename so a crash never leaves a partial sidecar that
-    # could be misread as matching the soul.
+    # WAL order: the WEIGHTS land first, then the sidecar that describes them.
+    # The previous order renamed .meta.json into place before the weights, so a
+    # crash in between left a ghost sidecar claiming an artifact that never
+    # survived — a claim about data that does not exist. The artifact earns the
+    # durable flush: it is multi-MB, so the flush is a rounding error against
+    # the write, and it is the only thing a resume actually needs. The sidecar
+    # is re-derivable from the weights, so it rides on rename atomicity alone.
     meta_path = output_path + ".meta.json"
-    meta_fd, meta_tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(output_path) or ".",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(meta_fd, "w", encoding="utf-8") as f:
-            json.dump(
-                soul_dict,
-                f,
-                indent=2,
-                default=str,
-                allow_nan=False,
-            )
-        os.rename(meta_tmp_path, meta_path)
-    except Exception:
-        try:
-            os.unlink(meta_tmp_path)
-        except OSError:
-            pass
-        raise
 
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(output_path) or ".",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(tmp_fd, "wb") as f:
-            params: list[tuple[str, np.ndarray]] = []
-            if not weights_only:
-                state = model.state_dict() if hasattr(model, "state_dict") else {}
-                for k, v in state.items():
-                    try:
-                        # SloNet Tensor: has .data attribute that is a numpy ndarray
-                        if hasattr(v, "data") and isinstance(v.data, np.ndarray):
-                            arr = v.data.astype(np.float32)
-                        elif hasattr(v, "numpy"):
-                            # PyTorch tensor
-                            arr = v.cpu().numpy().astype(np.float32)
-                        elif hasattr(v, "detach"):
-                            # PyTorch tensor without .numpy()
-                            arr = v.detach().cpu().numpy().astype(np.float32)
-                        elif isinstance(v, np.ndarray):
-                            arr = v.astype(np.float32)
-                        elif isinstance(v, (list, tuple)):
-                            arr = np.asarray(v, dtype=np.float32)
-                        elif isinstance(v, dict):
-                            logger.debug("Skipping non-tensor state_dict key: %s (dict value)", k)
-                            continue
-                        else:
-                            arr = np.asarray(v, dtype=np.float32)
-                        params.append((k, arr))
-                    except (TypeError, ValueError) as e:
-                        logger.warning("Skipping state_dict key %s: %s", k, e, extra={"tag": "INF"})
+    with atomic_writer(output_path, binary=True, durable=True) as f:
+        params: list[tuple[str, np.ndarray]] = []
+        if not weights_only:
+            state = model.state_dict() if hasattr(model, "state_dict") else {}
+            for k, v in state.items():
+                try:
+                    # SloNet Tensor: has .data attribute that is a numpy ndarray
+                    if hasattr(v, "data") and isinstance(v.data, np.ndarray):
+                        arr = v.data.astype(np.float32)
+                    elif hasattr(v, "numpy"):
+                        # PyTorch tensor
+                        arr = v.cpu().numpy().astype(np.float32)
+                    elif hasattr(v, "detach"):
+                        # PyTorch tensor without .numpy()
+                        arr = v.detach().numpy().astype(np.float32)
+                    elif isinstance(v, np.ndarray):
+                        arr = v.astype(np.float32)
+                    elif isinstance(v, (list, tuple)):
+                        arr = np.asarray(v, dtype=np.float32)
+                    elif isinstance(v, dict):
+                        logger.debug("Skipping non-tensor state_dict key: %s (dict value)", k)
                         continue
-                if len(params) == 0 and len(state) > 0:
-                    logger.error(
-                        "save_soul: wrote 0 params out of %d state_dict keys — "
-                        "checkpoint will be unusable. Model type: %s",
-                        len(state),
-                        type(model).__name__,
-                        extra={"tag": "INF"},
-                    )
+                    else:
+                        arr = np.asarray(v, dtype=np.float32)
+                    params.append((k, arr))
+                except (TypeError, ValueError) as e:
+                    logger.warning("Skipping state_dict key %s: %s", k, e, extra={"tag": "INF"})
+                    continue
+            if len(params) == 0 and len(state) > 0:
+                logger.error(
+                    "save_soul: wrote 0 params out of %d state_dict keys — "
+                    "checkpoint will be unusable. Model type: %s",
+                    len(state),
+                    type(model).__name__,
+                    extra={"tag": "INF"},
+                )
 
-            _write_soul_v3(
-                f,
-                config_json.encode("utf-8"),
-                params,
-                include_weights=not weights_only,
-            )
+        _write_soul_v3(
+            f,
+            config_json.encode("utf-8"),
+            params,
+            include_weights=not weights_only,
+        )
 
-        os.rename(tmp_path, output_path)
-    except Exception:
-        # Clean up temp file on failure
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    # Sidecar second and cheap — one durable flush per artifact, not per file.
+    atomic_write(
+        meta_path,
+        json.dumps(soul_dict, indent=2, default=str, allow_nan=False),
+    )
 
     return output_path
 

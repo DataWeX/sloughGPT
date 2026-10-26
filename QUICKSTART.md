@@ -449,7 +449,7 @@ SloughGPT/
 
 ## Next Steps
 
-1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop or **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → _Google Colab_; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
+1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop or **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). The **Serve** section runs `scripts/serve_ui.py` — one PGQ-supervised entry point that waits for both ports and prints the URL: `http://localhost:5173` (web UI) / `http://localhost:8000` (API; Colab degrades to the API URL without Node). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → _Google Colab_; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
 2. **Try different datasets**: Shakespeare, **`tiny`** (small on-disk slice), or a path to your own `.txt`
 3. **Explore model architecture**: Section 5 in the notebook
 4. **Deploy with Docker**: See Docker section above

@@ -54,12 +54,15 @@ os.environ.setdefault("OMP_NUM_THREADS", os.environ.get("SLO_OMP_NUM_THREADS", "
 
 import numpy as np
 
-from domain.shared import utc_now_iso
-
-# Add core-py + repo root to path (root holds the top-level ``domain`` package)
+# Add core-py + repo root to path (root holds the top-level ``domain`` package).
+# This MUST precede the domain import below: subprocess spawns (the e2e tests'
+# CompletedProcess calls) inherit the caller's PYTHONPATH, which carries the
+# package dirs but not the repo root — the script has to be self-contained.
 _root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_root / "packages" / "core-py"))
 sys.path.insert(0, str(_root))
+
+from domain.shared import utc_now_iso
 
 # Force single-thread BLAS for best single-core performance
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")

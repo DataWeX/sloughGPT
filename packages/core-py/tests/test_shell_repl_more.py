@@ -24939,7 +24939,14 @@ class TestCmdLoadDeeperV3:
 
 
 class TestCmdWhoamiShellDeeper:
-    def test_whoami_via_execute(self, repl):
+    # whoami routes to api.current_soul() — a live HTTP request; CI has no
+    # API server, so the unmocked call yields an error dict and whoami
+    # exits 1 instead of 0.
+    @patch(
+        "domain.shell._internal.commands.ShellCommands.current_soul",
+        return_value={"name": "test-soul"},
+    )
+    def test_whoami_via_execute(self, mock_soul, repl):
         with _CaptureOutput(repl):
             repl._execute_single("whoami")
         assert repl._last_exit_code == 0
@@ -26203,7 +26210,12 @@ class TestCmdLoadDeeperV4:
 
 
 class TestCmdWhoamiShellDeeperV2:
-    def test_whoami_via_execute(self, repl):
+    # Same live-API dependency as TestCmdWhoamiShellDeeper.
+    @patch(
+        "domain.shell._internal.commands.ShellCommands.current_soul",
+        return_value={"name": "test-soul"},
+    )
+    def test_whoami_via_execute(self, mock_soul, repl):
         with _CaptureOutput(repl):
             repl._execute_single("whoami")
         assert repl._last_exit_code == 0

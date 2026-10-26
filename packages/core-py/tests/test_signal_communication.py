@@ -924,8 +924,27 @@ class TestEpisodicMemory:
     def test_recall_negative_k(self):
         em = EpisodicMemory(capacity=10)
         em.record(np.zeros(3), (0.5,), 1.0)
+        # Contract: k < 0 fails closed (returns []); k == 0 is the sole "return
+        # all" sentinel. test_shell_memory.py::test_recall_k_negative_returns_empty
+        # pins exactly this for both classes and both by_reward branches — its
+        # comment records that negative k returning the whole buffer was a
+        # silent-unbounded footgun. This test still asserted that pre-migration
+        # behaviour and its comment mis-cited test_shell_memory.py, which pins
+        # empty rather than all; its own by_reward sibling below already agrees.
         result = em.recall(-1)
         assert result == []
+
+    def test_recall_negative_k_by_reward(self):
+        em = EpisodicMemory(capacity=10)
+        em.record(np.zeros(3), (0.5,), 1.0)
+        assert em.recall(-1, by_reward=True) == []
+
+    def test_recall_zero_returns_all_sentinel(self):
+        em = EpisodicMemory(capacity=10)
+        em.record(np.zeros(3), (0.5,), 1.0)
+        em.record(np.zeros(3), (0.5,), 2.0)
+        assert len(em.recall(0)) == 2
+        assert len(em.recall(0, by_reward=True)) == 2
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1069,6 +1088,19 @@ class TestWorldMemory:
         wm = WorldMemory()
         wm.record(np.zeros(3), (0.5,), 1.0)
         assert wm.recall(-1) == []
+
+    def test_recall_zero_is_empty_on_both_branches(self):
+        # regression: episodes[-0:] returned the whole reservoir (by_reward=False)
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0)
+        wm.record(np.zeros(3), (0.5,), 2.0)
+        assert wm.recall(0, by_reward=True) == []
+        assert wm.recall(0, by_reward=False) == []
+
+    def test_recall_negative_by_reward_false(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0)
+        assert wm.recall(-1, by_reward=False) == []
 
     def test_consolidate(self):
         wm = WorldMemory()

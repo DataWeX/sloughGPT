@@ -135,8 +135,8 @@ export default function ProgressSummary() {
                 <AreaChart data={stats.recentTrend}>
                   <defs>
                     <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      <stop offset="5%" stopColor="rgb(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="rgb(var(--primary))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="index" hide />
@@ -156,7 +156,7 @@ export default function ProgressSummary() {
                   <Area
                     type="monotone"
                     dataKey="score"
-                    stroke="hsl(var(--primary))"
+                    stroke="rgb(var(--primary))"
                     fill="url(#scoreGradient)"
                   />
                 </AreaChart>

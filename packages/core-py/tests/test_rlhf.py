@@ -18,12 +18,27 @@ from domain.training._internal.slonet import SloLinear, Tensor
 
 
 class FakeBaseModel:
-    """A fake model that returns fixed-shape tensors for testing."""
+    """A fake model that returns fixed-shape tensors for testing.
+
+    Output batch dim is aligned to the input batch so mini-batch slicing
+    in PPOTrainer.update() sees matching shapes (B_mb, T, V).
+    """
 
     def __init__(self, output):
         self.output = output
 
     def __call__(self, input_ids):
+        if isinstance(self.output, tuple):
+            return self.output
+        arr = _as_array(input_ids)
+        B = arr.shape[0] if arr.ndim > 0 else 1
+        out = _as_array(self.output)
+        if out.shape[0] != B:
+            if out.shape[0] > B:
+                out = out[:B]
+            else:
+                out = np.broadcast_to(out[:1], (B,) + out.shape[1:]).copy()
+            return Tensor(out, requires_grad=False)
         return self.output
 
 
