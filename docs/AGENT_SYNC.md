@@ -996,6 +996,22 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-26 · card `ccad389e` closed (verify-only, no code) + cross-session
+  git archaeology.** `resource_tracker /psm_*` acceptance re-run GREEN in this
+  tree: `TestResourceTrackerHygiene` fork+forkserver PASS (zero warnings,
+  `/dev/shm` before==after), `benchmark_vector_backend_pool.py --iters 10`
+  exit 0 with **0** tracker lines (card cited 826) / 0 `/psm_` / 0 leaked
+  segments, both arms green. Fix `f5ccd713a` confirmed **now on origin/main**
+  (the card's open condition — the 2026-10-21 "unlanDED" reconciliation is
+  stale); the wire/npu-caps stack instead carries pre-fork `getfd()` arming +
+  the RED-proven acceptance test `e97c8fb85` (lands on stack merge) — port
+  deliberately skipped (green here without it, `vector_backend` diverged).
+  Stale-card triage: `89de1db1` divergence resolved — local main **0 ahead /
+  223 behind**, all five formerly-unpushed docs commits are on origin/main;
+  the remaining fast-forward is a user-owned ref move (live worktrees), state
+  note appended, card left open. Board: `ccad389e` → done with evidence,
+  chains verified.
+
 - **2026-10-26 · `feat/deploy-transport-seam` — production now enters through
   the transport decision point (card `1f173fd1`, stacked on
   `feat/flip-default-transport`; branch pushed, merge deferred with the
