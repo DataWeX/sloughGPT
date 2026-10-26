@@ -84,6 +84,103 @@ export function DatasetImportDialog({
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto overflow-x-hidden py-4 flex-1 min-h-0">
+          <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-3">
+            <Label htmlFor="discovery-search">Search all sources</Label>
+            <p className="text-xs text-muted-foreground">
+              One search across GitHub, HuggingFace, Kaggle and Open Library — no need to know where
+              a dataset lives.
+            </p>
+            <div className="flex gap-2 mt-1">
+              <Input
+                id="discovery-search"
+                placeholder="e.g. shakespeare dataset, the hobbit, titanic"
+                value={di.discoveryQuery}
+                onChange={(e) => {
+                  di.setDiscoveryQuery(e.target.value)
+                  if (di.selectedDiscovery) di.setSelectedDiscovery(null)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') di.handleDiscoverySearch()
+                }}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={di.handleDiscoverySearch}
+                disabled={di.discoverySearching || !di.discoveryQuery.trim()}
+                aria-busy={di.discoverySearching}
+              >
+                {di.discoverySearching ? <Spinner className="w-4 h-4" /> : 'Search all sources'}
+              </Button>
+            </div>
+            {di.discoveryProviders && di.discoveryProviders.some((p) => !p.ok) && (
+              <p className="text-xs text-muted-foreground" role="status">
+                Partial results —{' '}
+                {di.discoveryProviders
+                  .filter((p) => !p.ok)
+                  .map((p) => p.source)
+                  .join(', ')}{' '}
+                unavailable.
+              </p>
+            )}
+            {di.selectedDiscovery && (
+              <div className="flex items-center gap-2 rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm">
+                <IconCheck className="w-4 h-4 text-primary shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium truncate">{di.selectedDiscovery.title}</span>
+                  {di.selectedDiscovery.description && (
+                    <span className="text-muted-foreground ml-2 truncate">
+                      — {di.selectedDiscovery.description}
+                    </span>
+                  )}
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  {di.selectedDiscovery.source}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 h-6 px-2 text-xs"
+                  onClick={di.clearDiscovery}
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
+            {di.discoveryResults.length > 0 && (
+              <div
+                className="max-h-56 overflow-y-auto rounded-md border"
+                role="listbox"
+                aria-label="Discovery search results"
+              >
+                {di.discoveryResults.map((r) => (
+                  <Button
+                    key={`${r.source}:${r.id}`}
+                    variant="ghost"
+                    onClick={() => di.selectDiscoveryResult(r)}
+                    className="flex w-full items-start justify-between border-b px-3 py-2.5 text-left last:border-b-0"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{r.title}</div>
+                      {r.description && (
+                        <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {r.description}
+                        </div>
+                      )}
+                      <div className="text-[10px] text-muted-foreground mt-1 truncate">{r.id}</div>
+                    </div>
+                    <Badge variant="outline" className="shrink-0 ml-2">
+                      {r.source}
+                    </Badge>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <fieldset>
             <legend className="sr-only">Import source</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

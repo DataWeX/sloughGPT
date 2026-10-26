@@ -4,7 +4,8 @@ import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => (open ? <div>{children}</div> : null),
+  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+    open ? <div>{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -13,11 +14,17 @@ vi.mock('@sloughgpt/strui', () => ({
   Spinner: () => <div data-testid="spinner" />,
   IconCheck: () => <div data-testid="icon-check" />,
   Button: ({ children, onClick, variant, size, ...rest }: any) => (
-    <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
+    <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>
+      {children}
+    </button>
   ),
   Input: (props: any) => <input data-testid="input" {...props} />,
   Label: ({ children, ...props }: any) => <label {...props}>{children}</label>,
-  Badge: ({ children, variant }: any) => <span data-testid="badge" data-variant={variant}>{children}</span>,
+  Badge: ({ children, variant }: any) => (
+    <span data-testid="badge" data-variant={variant}>
+      {children}
+    </span>
+  ),
   Tooltip: ({ children }: any) => <>{children}</>,
   TooltipTrigger: ({ children, asChild }: any) => <>{children}</>,
   TooltipContent: ({ children }: any) => <div>{children}</div>,
@@ -33,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   mockImportFromCSV: vi.fn(),
   mockSearchGitHubRepos: vi.fn(),
   mockSearchBooks: vi.fn(),
+  mockSearchFederated: vi.fn(),
   mockReportError: vi.fn(),
 }))
 
@@ -51,13 +59,16 @@ vi.mock('@/lib/dataset-controller', () => ({
     importFromCSV: mocks.mockImportFromCSV,
     searchGitHubRepos: mocks.mockSearchGitHubRepos,
     searchBooks: mocks.mockSearchBooks,
+    searchFederated: mocks.mockSearchFederated,
   },
 }))
 
 import { DatasetImportDialog } from './DatasetImportDialog'
 
 describe('DatasetImportDialog', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
   afterEach(cleanup)
 
   it('renders dialog when open', () => {
@@ -123,7 +134,9 @@ describe('DatasetImportDialog', () => {
   })
 
   it('shows error for empty GitHub URL on Import', async () => {
-    const { rerender } = render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    const { rerender } = render(
+      <DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />,
+    )
     fireEvent.click(screen.getByText('Import'))
     await waitFor(() => {
       expect(screen.getByText('GitHub URL is required')).toBeDefined()
@@ -167,7 +180,9 @@ describe('DatasetImportDialog', () => {
     expect(mocks.mockReportError).toHaveBeenCalledWith(
       'Enter a search term or ISBN',
       'dataset-import',
-      expect.objectContaining({ metadata: expect.objectContaining({ source: 'isbn', action: 'import' }) }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ source: 'isbn', action: 'import' }),
+      }),
     )
   })
 
@@ -183,7 +198,10 @@ describe('DatasetImportDialog', () => {
   })
 
   it('shows success message after import', async () => {
-    mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'my-dataset', message: 'Imported 5 files (12,345 chars)' })
+    mocks.mockImportFromGitHub.mockResolvedValue({
+      dataset_id: 'my-dataset',
+      message: 'Imported 5 files (12,345 chars)',
+    })
     render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
     const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
@@ -195,7 +213,9 @@ describe('DatasetImportDialog', () => {
     const onComplete = vi.fn()
     mocks.mockImportFromGitHub.mockResolvedValue({ dataset_id: 'my-dataset', message: 'done' })
     vi.useFakeTimers()
-    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={onComplete} />)
+    render(
+      <DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={onComplete} />,
+    )
     const urlInput = screen.getByLabelText('Search for a repository')
     fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo' } })
     fireEvent.click(screen.getByText('Import'))
@@ -217,7 +237,15 @@ describe('DatasetImportDialog', () => {
   it('searches for GitHub repos', async () => {
     mocks.mockSearchGitHubRepos.mockResolvedValue({
       repos: [
-        { id: 1, name: 'test-repo', full_name: 'user/test-repo', url: 'https://github.com/user/test-repo', stars: 42, language: 'Python', description: 'A test repo' },
+        {
+          id: 1,
+          name: 'test-repo',
+          full_name: 'user/test-repo',
+          url: 'https://github.com/user/test-repo',
+          stars: 42,
+          language: 'Python',
+          description: 'A test repo',
+        },
       ],
     })
     render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
@@ -232,7 +260,15 @@ describe('DatasetImportDialog', () => {
   it('selects a GitHub repo from search results', async () => {
     mocks.mockSearchGitHubRepos.mockResolvedValue({
       repos: [
-        { id: 1, name: 'test-repo', full_name: 'user/test-repo', url: 'https://github.com/user/test-repo', stars: 42, language: 'Python', description: 'A test repo' },
+        {
+          id: 1,
+          name: 'test-repo',
+          full_name: 'user/test-repo',
+          url: 'https://github.com/user/test-repo',
+          stars: 42,
+          language: 'Python',
+          description: 'A test repo',
+        },
       ],
     })
     render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
@@ -244,7 +280,9 @@ describe('DatasetImportDialog', () => {
     })
     fireEvent.click(screen.getByText('user/test-repo'))
     await waitFor(() => {
-      expect(screen.queryByRole('listbox', { name: 'Repository search results' })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('listbox', { name: 'Repository search results' }),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -266,5 +304,129 @@ describe('DatasetImportDialog', () => {
     rerender(<DatasetImportDialog open={true} onOpenChange={onClose} onImportComplete={() => {}} />)
     fireEvent.click(screen.getByText('GitHub'))
     expect(screen.getByLabelText('Search for a repository')).toBeDefined()
+  })
+
+  // ── federated discovery journey: query → mixed results → select → form filled ──
+
+  it('shows the federated search box alongside manual sources', () => {
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    expect(screen.getByLabelText('Search all sources')).toBeDefined()
+    // manual paths remain
+    expect(screen.getByText('GitHub')).toBeDefined()
+    expect(screen.getByText('Folder Path')).toBeDefined()
+  })
+
+  it('searches all sources and renders mixed results with source badges', async () => {
+    mocks.mockSearchFederated.mockResolvedValue({
+      results: [
+        {
+          source: 'github',
+          id: 'karpathy/tinyshakespeare',
+          title: 'karpathy/tinyshakespeare',
+          description: 'Shakespeare dataset',
+          stats: { stars: 100 },
+        },
+        {
+          source: 'huggingface',
+          id: 'HuggingFaceH4/tinyshakespeare',
+          title: 'HuggingFaceH4/tinyshakespeare',
+          description: null,
+          stats: { downloads: 500 },
+        },
+        {
+          source: 'openlibrary',
+          id: '9780141439518',
+          title: 'Wuthering Heights',
+          description: 'Emily Brontë',
+          stats: { year: 1847 },
+        },
+      ],
+      providers: [
+        { source: 'github', ok: true, count: 1, error: null, elapsed_ms: 120 },
+        { source: 'huggingface', ok: true, count: 1, error: null, elapsed_ms: 80 },
+        { source: 'kaggle', ok: false, count: 0, error: 'Kaggle CLI not installed', elapsed_ms: 5 },
+        { source: 'openlibrary', ok: true, count: 1, error: null, elapsed_ms: 200 },
+      ],
+    })
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Search all sources'), {
+      target: { value: 'shakespeare' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Search all sources' }))
+    await waitFor(() => {
+      expect(screen.getAllByText('karpathy/tinyshakespeare').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('HuggingFaceH4/tinyshakespeare').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Wuthering Heights').length).toBeGreaterThan(0)
+    })
+    // partial-failure notice — kaggle down, rest still usable
+    expect(screen.getByText(/Partial results/)).toBeDefined()
+    expect(mocks.mockSearchFederated).toHaveBeenCalledWith('shakespeare')
+  })
+
+  it('selecting a HuggingFace result fills the HF import form', async () => {
+    mocks.mockSearchFederated.mockResolvedValue({
+      results: [
+        {
+          source: 'huggingface',
+          id: 'HuggingFaceH4/tinyshakespeare',
+          title: 'HuggingFaceH4/tinyshakespeare',
+          description: null,
+          stats: {},
+        },
+      ],
+      providers: [],
+    })
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Search all sources'), {
+      target: { value: 'tinyshakespeare' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Search all sources' }))
+    await waitFor(() => {
+      expect(screen.getAllByText('HuggingFaceH4/tinyshakespeare').length).toBeGreaterThan(0)
+    })
+    fireEvent.click(
+      screen.getByRole('listbox', { name: 'Discovery search results' }).querySelector('button')!,
+    )
+    // source + id resolved automatically — user never picked a card
+    expect(screen.getByLabelText('HuggingFace Dataset ID')).toBeDefined()
+    expect(screen.getByDisplayValue('HuggingFaceH4/tinyshakespeare')).toBeDefined()
+  })
+
+  it('selecting a GitHub result switches to GitHub source and pre-fills the repo', async () => {
+    mocks.mockSearchFederated.mockResolvedValue({
+      results: [
+        {
+          source: 'github',
+          id: 'user/shakespeare-corpus',
+          title: 'user/shakespeare-corpus',
+          description: 'corpus',
+          stats: {},
+        },
+      ],
+      providers: [],
+    })
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Search all sources'), {
+      target: { value: 'shakespeare corpus' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Search all sources' }))
+    await waitFor(() => {
+      expect(screen.getAllByText('user/shakespeare-corpus').length).toBeGreaterThan(0)
+    })
+    fireEvent.click(
+      screen.getByRole('listbox', { name: 'Discovery search results' }).querySelector('button')!,
+    )
+    expect(screen.getByLabelText('Search for a repository')).toBeDefined()
+    expect(screen.getByDisplayValue('user/shakespeare-corpus')).toBeDefined()
+  })
+
+  it('shows search error when federated search fails entirely', async () => {
+    mocks.mockSearchFederated.mockRejectedValue(new Error('network down'))
+    render(<DatasetImportDialog open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Search all sources'), { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search all sources' }))
+    await waitFor(() => {
+      expect(screen.getByText('network down')).toBeDefined()
+    })
   })
 })

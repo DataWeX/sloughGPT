@@ -1,7 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { datasetController, type ImportSource, type GitHubRepo, type BookResult } from '@/lib/dataset-controller'
+import {
+  datasetController,
+  type ImportSource,
+  type GitHubRepo,
+  type BookResult,
+  type DiscoveryResult,
+  type ProviderStatus,
+} from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { reportError } from '@/lib/error-reporter'
 import { trackEvent } from '@/lib/dev-log'
@@ -28,6 +35,17 @@ interface UseDatasetImportReturn {
   searchResults: GitHubRepo[]
   bookResults: BookResult[]
   searching: boolean
+  /** Federated discovery: one query across GitHub/HF/Kaggle/OpenLibrary. */
+  discoveryQuery: string
+  setDiscoveryQuery: (v: string) => void
+  discoveryResults: DiscoveryResult[]
+  discoveryProviders: ProviderStatus[] | null
+  discoverySearching: boolean
+  selectedDiscovery: DiscoveryResult | null
+  setSelectedDiscovery: (r: DiscoveryResult | null) => void
+  handleDiscoverySearch: () => Promise<void>
+  selectDiscoveryResult: (r: DiscoveryResult) => void
+  clearDiscovery: () => void
   selectedBook: BookResult | null
   selectedRepo: GitHubRepo | null
   setSelectedRepo: (r: GitHubRepo | null) => void
@@ -45,7 +63,7 @@ const DEFAULT_EXTENSIONS = ['.py', '.js', '.ts', '.md', '.txt', '.json', '.yaml'
 
 export function useDatasetImport(
   onImportComplete: (datasetId: string) => void,
-  onOpenChange: (open: boolean) => void
+  onOpenChange: (open: boolean) => void,
 ): UseDatasetImportReturn {
   const [source, setSource] = useState<ImportSource>('github')
   const [url, setUrl] = useState('')
@@ -62,6 +80,11 @@ export function useDatasetImport(
   const [searching, setSearching] = useState(false)
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null)
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
+  const [discoveryQuery, setDiscoveryQuery] = useState('')
+  const [discoveryResults, setDiscoveryResults] = useState<DiscoveryResult[]>([])
+  const [discoveryProviders, setDiscoveryProviders] = useState<ProviderStatus[] | null>(null)
+  const [discoverySearching, setDiscoverySearching] = useState(false)
+  const [selectedDiscovery, setSelectedDiscovery] = useState<DiscoveryResult | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -79,6 +102,10 @@ export function useDatasetImport(
     setBookResults([])
     setSelectedBook(null)
     setSelectedRepo(null)
+    setDiscoveryQuery('')
+    setDiscoveryResults([])
+    setDiscoveryProviders(null)
+    setSelectedDiscovery(null)
   }
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -90,9 +117,7 @@ export function useDatasetImport(
   }
 
   const toggleExtension = (ext: string) => {
-    setExtensions(prev =>
-      prev.includes(ext) ? prev.filter(e => e !== ext) : [...prev, ext]
-    )
+    setExtensions((prev) => (prev.includes(ext) ? prev.filter((e) => e !== ext) : [...prev, ext]))
   }
 
   const selectRepo = (repo: GitHubRepo) => {
@@ -122,6 +147,62 @@ export function useDatasetImport(
     }
   }
 
+  const clearDiscovery = () => {
+    setDiscoveryResults([])
+    setDiscoveryProviders(null)
+    setSelectedDiscovery(null)
+  }
+
+  const handleDiscoverySearch = async () => {
+    if (!discoveryQuery.trim()) return
+    setDiscoverySearching(true)
+    setError(null)
+    try {
+      const result = await datasetController.searchFederated(discoveryQuery.trim())
+      setDiscoveryResults(result.results ?? [])
+      setDiscoveryProviders(result.providers ?? [])
+      setSelectedDiscovery(null)
+    } catch (err) {
+      const message = extractErrorMessage(err, 'Could not search')
+      setError(message)
+    } finally {
+      setDiscoverySearching(false)
+    }
+  }
+
+  /**
+   * Resolve a federated result into the existing per-source import state —
+   * the discovery layer chooses the source so the user never has to.
+   */
+  const selectDiscoveryResult = (r: DiscoveryResult) => {
+    setSelectedDiscovery(r)
+    setDiscoveryResults([])
+    const idPart = r.id.includes('/') ? r.id.split('/').pop()! : r.id
+    switch (r.source) {
+      case 'github':
+        setSource('github')
+        setUrl(r.id)
+        setName(idPart)
+        setSelectedRepo(null)
+        break
+      case 'huggingface':
+        setSource('huggingface')
+        setDatasetId(r.id)
+        setName(idPart)
+        break
+      case 'kaggle':
+        setSource('kaggle')
+        setKaggleDataset(r.id)
+        setName(idPart)
+        break
+      case 'openlibrary':
+        setSource('isbn')
+        setUrl(r.id)
+        setName(r.title || idPart)
+        break
+    }
+  }
+
   const handleImport = async () => {
     const ac = new AbortController()
     abortRef.current = ac
@@ -142,11 +223,14 @@ export function useDatasetImport(
             return
           }
           const repoName = name.trim() || url.split('/').pop()?.replace('.git', '') || 'dataset'
-          result = await datasetController.importFromGitHub({
-            url: url.trim(),
-            name: repoName,
-            extensions,
-          }, { signal })
+          result = await datasetController.importFromGitHub(
+            {
+              url: url.trim(),
+              name: repoName,
+              extensions,
+            },
+            { signal },
+          )
           break
         }
         case 'huggingface': {
@@ -155,10 +239,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromHuggingFace({
-            dataset_id: datasetId.trim(),
-            name: name.trim() || datasetId.trim().split('/').pop() || 'dataset',
-          }, { signal })
+          result = await datasetController.importFromHuggingFace(
+            {
+              dataset_id: datasetId.trim(),
+              name: name.trim() || datasetId.trim().split('/').pop() || 'dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'isbn': {
@@ -170,10 +257,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromISBN({
-            isbn: isbnValue,
-            name: name.trim() || selectedBook?.title || 'book-dataset',
-          }, { signal })
+          result = await datasetController.importFromISBN(
+            {
+              isbn: isbnValue,
+              name: name.trim() || selectedBook?.title || 'book-dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'kaggle': {
@@ -182,10 +272,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromKaggle({
-            dataset: kaggleDataset.trim(),
-            name: name.trim() || kaggleDataset.trim().split('/').pop() || 'dataset',
-          }, { signal })
+          result = await datasetController.importFromKaggle(
+            {
+              dataset: kaggleDataset.trim(),
+              name: name.trim() || kaggleDataset.trim().split('/').pop() || 'dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'csv': {
@@ -194,10 +287,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromCSV({
-            url: url.trim(),
-            name: name.trim() || 'csv-dataset',
-          }, { signal })
+          result = await datasetController.importFromCSV(
+            {
+              url: url.trim(),
+              name: name.trim() || 'csv-dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'url': {
@@ -206,10 +302,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromURL({
-            url: url.trim(),
-            name: name.trim() || 'downloaded-dataset',
-          }, { signal })
+          result = await datasetController.importFromURL(
+            {
+              url: url.trim(),
+              name: name.trim() || 'downloaded-dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'local': {
@@ -218,11 +317,14 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromLocal({
-            path: path.trim(),
-            name: name.trim() || path.trim().split('/').pop() || 'local-dataset',
-            extensions,
-          }, { signal })
+          result = await datasetController.importFromLocal(
+            {
+              path: path.trim(),
+              name: name.trim() || path.trim().split('/').pop() || 'local-dataset',
+              extensions,
+            },
+            { signal },
+          )
           break
         }
         default:
@@ -242,21 +344,47 @@ export function useDatasetImport(
   }
 
   return {
-    source, setSource,
-    url, setUrl,
-    name, setName,
-    datasetId, setDatasetId,
-    kaggleDataset, setKaggleDataset,
-    path, setPath,
-    extensions, toggleExtension,
-    loading, error, success, clearError: () => setError(null),
-    searchResults, bookResults,
+    source,
+    setSource,
+    url,
+    setUrl,
+    name,
+    setName,
+    datasetId,
+    setDatasetId,
+    kaggleDataset,
+    setKaggleDataset,
+    path,
+    setPath,
+    extensions,
+    toggleExtension,
+    loading,
+    error,
+    success,
+    clearError: () => setError(null),
+    searchResults,
+    bookResults,
     searching,
-    selectedBook, selectedRepo,
-    setSelectedRepo, setSelectedBook,
-    setSearchResults, setBookResults,
+    selectedBook,
+    selectedRepo,
+    setSelectedRepo,
+    setSelectedBook,
+    setSearchResults,
+    setBookResults,
+    discoveryQuery,
+    setDiscoveryQuery,
+    discoveryResults,
+    discoveryProviders,
+    discoverySearching,
+    selectedDiscovery,
+    setSelectedDiscovery,
+    handleDiscoverySearch,
+    selectDiscoveryResult,
+    clearDiscovery,
     abortRef,
-    handleSearch, handleImport,
-    handleOpenChange, resetForm,
+    handleSearch,
+    handleImport,
+    handleOpenChange,
+    resetForm,
   }
 }

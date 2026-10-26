@@ -13,10 +13,12 @@ from domain.training._internal.data_import import (
     DEFAULT_IGNORES,
     BooksSearch,
     DataImporter,
+    FederatedSearch,
     GitHubSearch,
     HuggingFaceImporter,
     ImportResult,
     ISBNImporter,
+    KaggleSearch,
     RepoImporter,
     URLImporter,
     import_data,
@@ -1949,3 +1951,220 @@ class TestDefaultIgnores:
 
     def test_is_set_type(self):
         assert isinstance(DEFAULT_IGNORES, set)
+
+
+# ---------------------------------------------------------------------------
+# KaggleSearch
+# ---------------------------------------------------------------------------
+
+
+class TestKaggleSearch:
+    def test_missing_cli_raises_clear_error(self, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda _name: None)
+        with pytest.raises(RuntimeError, match="Kaggle CLI not installed"):
+            KaggleSearch().search_datasets("anything")
+
+    def test_parses_csv_rows(self, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/kaggle")
+        csv_out = (
+            "ref,title,subtitle,downloadCount,voteCount\n"
+            "owner/shakespeare,Shakespeare Corpus,Plays,42,7\n"
+            ",no-ref-should-be-skipped,,1,1\n"
+            "owner/tiny,Tiny Set,,,not-a-number\n"
+        )
+
+        class _Proc:
+            returncode = 0
+            stdout = csv_out
+            stderr = ""
+
+        monkeypatch.setattr("subprocess.run", lambda *a, **k: _Proc(), raising=False)
+        results = KaggleSearch().search_datasets("shakespeare")
+        assert [r["ref"] for r in results] == ["owner/shakespeare", "owner/tiny"]
+        assert results[0]["title"] == "Shakespeare Corpus"
+        assert results[0]["downloads"] == 42
+        assert results[0]["votes"] == 7
+        # unparseable int degrades to 0 instead of raising
+        assert results[1]["downloads"] == 0
+
+    def test_cli_failure_raises(self, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/kaggle")
+
+        class _Proc:
+            returncode = 1
+            stdout = ""
+            stderr = "401 - Unauthorized"
+
+        monkeypatch.setattr("subprocess.run", lambda *a, **k: _Proc(), raising=False)
+        with pytest.raises(RuntimeError, match="kaggle datasets list failed"):
+            KaggleSearch().search_datasets("q")
+
+    def test_respects_limit(self, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/kaggle")
+        rows = "ref,title,subtitle,downloadCount,voteCount\n" + "\n".join(
+            f"o/s{i},Title{i},,0,0" for i in range(20)
+        )
+
+        class _Proc:
+            returncode = 0
+            stdout = rows
+            stderr = ""
+
+        monkeypatch.setattr("subprocess.run", lambda *a, **k: _Proc(), raising=False)
+        assert len(KaggleSearch().search_datasets("q", limit=3)) == 3
+
+
+# ---------------------------------------------------------------------------
+# FederatedSearch — normalization, partial failure, timeout
+# ---------------------------------------------------------------------------
+
+
+def _federated_with(monstkey_sources: dict, timeout: float = 8.0) -> FederatedSearch:
+    """FederatedSearch whose provider map is exactly the given fakes."""
+    fs = FederatedSearch(timeout=timeout)
+    fs._providers = lambda: monstkey_sources  # type: ignore[method-assign]
+    return fs
+
+
+class TestFederatedSearchNormalization:
+    def test_github_row_normalizes(self):
+        fs = _federated_with({})
+        row = fs._normalize(
+            "github",
+            {
+                "full_name": "o/r",
+                "description": "desc",
+                "stargazers_count": 5,
+                "language": "Python",
+                "html_url": "https://x",
+            },
+        )
+        assert row == {
+            "source": "github",
+            "id": "o/r",
+            "title": "o/r",
+            "description": "desc",
+            "stats": {"stars": 5, "language": "Python", "url": "https://x"},
+        }
+
+    def test_huggingface_row_normalizes(self):
+        fs = _federated_with({})
+        row = fs._normalize("huggingface", {"id": "org/ds", "downloads": 9})
+        assert row["id"] == "org/ds"
+        assert row["stats"]["downloads"] == 9
+
+    def test_kaggle_row_normalizes(self):
+        fs = _federated_with({})
+        row = fs._normalize(
+            "kaggle", {"ref": "o/s", "title": "T", "description": "d", "downloads": 1, "votes": 2}
+        )
+        assert row["source"] == "kaggle"
+        assert row["id"] == "o/s"
+        assert row["stats"] == {"downloads": 1, "votes": 2}
+
+    def test_openlibrary_row_uses_isbn_or_key(self):
+        fs = _federated_with({})
+        by_isbn = fs._normalize(
+            "openlibrary",
+            {"isbn": "1234567890", "key": "/works/OL1W", "title": "B", "author": "A", "year": 1900},
+        )
+        assert by_isbn["id"] == "1234567890"
+        by_key = fs._normalize("openlibrary", {"isbn": "", "key": "/works/OL1W", "title": "B"})
+        assert by_key["id"] == "/works/OL1W"
+
+    def test_rows_without_identity_are_dropped(self):
+        fs = _federated_with({})
+        assert fs._normalize("github", {"full_name": ""}) is None
+        assert fs._normalize("huggingface", {}) is None
+        assert fs._normalize("kaggle", {"ref": ""}) is None
+        assert fs._normalize("openlibrary", {}) is None
+        assert fs._normalize("unknown-source", {"id": "x"}) is None
+
+
+class TestFederatedSearchAggregation:
+    def test_merges_in_provider_order(self):
+        def github(_q, _limit):
+            return [{"full_name": "g/1"}, {"full_name": "g/2"}]
+
+        def hf(_q, _limit):
+            return [{"id": "h/1"}]
+
+        fs = _federated_with({"github": github, "huggingface": hf})
+        out = fs.search("q")
+        assert [r["source"] for r in out["results"]] == [
+            "github",
+            "github",
+            "huggingface",
+        ]
+        assert [p["source"] for p in out["providers"]] == ["github", "huggingface"]
+        assert all(p["ok"] for p in out["providers"])
+
+    def test_one_provider_exception_is_partial_not_fatal(self):
+        def github(_q, _limit):
+            raise RuntimeError("GitHub 500")
+
+        def hf(_q, _limit):
+            return [{"id": "h/1"}]
+
+        fs = _federated_with({"github": github, "huggingface": hf})
+        out = fs.search("q")
+        assert [r["id"] for r in out["results"]] == ["h/1"]
+        by_src = {p["source"]: p for p in out["providers"]}
+        assert by_src["github"]["ok"] is False
+        assert "GitHub 500" in by_src["github"]["error"]
+        assert by_src["huggingface"]["ok"] is True
+
+    def test_slow_provider_times_out_as_ok_false(self):
+        import time as _time
+
+        def slow(_q, _limit):
+            _time.sleep(1.5)
+            return [{"full_name": "late/r"}]
+
+        def hf(_q, _limit):
+            return [{"id": "h/1"}]
+
+        fs = _federated_with({"github": slow, "huggingface": hf}, timeout=0.2)
+        out = fs.search("q")
+        by_src = {p["source"]: p for p in out["providers"]}
+        assert by_src["github"]["ok"] is False
+        assert "timed out" in by_src["github"]["error"]
+        # the healthy provider still answers
+        assert [r["id"] for r in out["results"]] == ["h/1"]
+
+    def test_sources_subset_restricts_providers(self):
+        calls = []
+
+        def track(name):
+            def fn(_q, _limit):
+                calls.append(name)
+                return []
+
+            return fn
+
+        fs = _federated_with(
+            {
+                "github": track("github"),
+                "huggingface": track("hf"),
+                "kaggle": track("kaggle"),
+                "openlibrary": track("ol"),
+            }
+        )
+        out = fs.search("q", sources=["github", "kaggle"])
+        assert sorted(calls) == ["github", "kaggle"]
+        assert {p["source"] for p in out["providers"]} == {"github", "kaggle"}
+
+    def test_unknown_source_is_filtered_out(self):
+        fs = _federated_with({})
+        out = fs.search("q", sources=["not-a-source"])
+        assert out == {"results": [], "providers": []}
+
+    def test_all_providers_failing_still_returns_200_shape(self):
+        def boom(_q, _limit):
+            raise OSError("no network")
+
+        fs = _federated_with({"github": boom, "kaggle": boom})
+        out = fs.search("q")
+        assert out["results"] == []
+        assert len(out["providers"]) == 2
+        assert all(not p["ok"] for p in out["providers"])

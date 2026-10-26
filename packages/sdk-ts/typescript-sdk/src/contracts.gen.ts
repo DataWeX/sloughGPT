@@ -64,6 +64,94 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
+  "datasets.search_federated": {
+    "auth_scope": "public",
+    "description": "Federated dataset discovery: one query across GitHub, HuggingFace, Kaggle and Open Library; normalized results with per-provider status, partial on provider failure.",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.datasets_search",
+    "name": "datasets.search_federated",
+    "operation_id": "datasets.search_federated.get",
+    "params": {
+      "properties": {
+        "limit": {
+          "description": "Per-provider result cap (1-50)",
+          "type": "integer"
+        },
+        "q": {
+          "description": "Natural-language search query",
+          "type": "string"
+        },
+        "sources": {
+          "description": "Comma-separated provider subset (github,huggingface,kaggle,openlibrary)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "q"
+      ],
+      "type": "object"
+    },
+    "path": "/datasets/search/all",
+    "result": {
+      "properties": {
+        "providers": {
+          "items": {
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "elapsed_ms": {
+                "type": "integer"
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "results": {
+          "items": {
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "stats": {
+                "type": "object"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
   "llm.chat.completions": {
     "auth_scope": "authenticated",
     "description": "Chat completion over the SloNet generation seam (stream + non-stream); wire: top-level choices/usage, data: chunk frames terminated by [DONE].",

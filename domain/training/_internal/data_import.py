@@ -1052,6 +1052,235 @@ class GitHubSearch:
             return []
 
 
+class KaggleSearch:
+    """Search Kaggle datasets via the Kaggle CLI (CSV output).
+
+    Requires the Kaggle CLI installed and authenticated on the server —
+    like the Kaggle importer, it raises a clear error when the CLI is
+    missing so callers (e.g. FederatedSearch) can report it as a
+    per-provider failure instead of a whole-search failure.
+    """
+
+    def __init__(self, timeout: float = 15.0):
+        self.timeout = timeout
+
+    def search_datasets(self, query: str, limit: int = 10) -> list[dict]:
+        """Search Kaggle datasets. Returns rows like the Hub search:
+        ``{"ref": "owner/slug", "title": ..., "downloads": ..., "votes": ...}``.
+        """
+        import csv
+        import shutil
+
+        if shutil.which("kaggle") is None:
+            raise RuntimeError("Kaggle CLI not installed (pip install kaggle)")
+
+        proc = subprocess.run(
+            ["kaggle", "datasets", "list", "-s", query, "--csv"],
+            capture_output=True,
+            text=True,
+            timeout=self.timeout,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"kaggle datasets list failed: {proc.stderr.strip()[:200] or 'unknown error'}"
+            )
+
+        results: list[dict] = []
+        reader = csv.DictReader(proc.stdout.splitlines())
+        for row in reader:
+            ref = (row.get("ref") or "").strip()
+            if not ref:
+                continue
+            results.append(
+                {
+                    "ref": ref,
+                    "title": (row.get("title") or ref).strip(),
+                    "description": (row.get("subtitle") or "").strip(),
+                    "downloads": _safe_int(row.get("downloadCount")),
+                    "votes": _safe_int(row.get("voteCount")),
+                }
+            )
+            if len(results) >= limit:
+                break
+        return results
+
+
+def _safe_int(value: str | None) -> int:
+    """Parse an int from CLI/CSV output, defaulting to 0."""
+    try:
+        return int(str(value or "0").strip() or 0)
+    except ValueError:
+        return 0
+
+
+class FederatedSearch:
+    """One query, many registries — normalized results, partial failure tolerated.
+
+    Fans a single query out to GitHub, HuggingFace, Kaggle and Open Library,
+    normalizes every provider's rows into one shape (``{source, id, title,
+    description, stats}``), and reports per-provider status. A provider that
+    errors or exceeds its timeout contributes an entry in ``providers`` with
+    ``ok=False`` and never fails the whole search — discovery must degrade,
+    not break.
+
+    Sync by design (domain layer): the router crosses the async seam with
+    ``asyncio.to_thread``; parallelism across providers comes from a
+    ``ThreadPoolExecutor``.
+    """
+
+    #: Provider order is also the merged-result order.
+    SOURCES: tuple[str, ...] = ("github", "huggingface", "kaggle", "openlibrary")
+
+    def __init__(self, timeout: float = 8.0):
+        self.timeout = timeout
+
+    def _providers(self) -> dict[str, object]:
+        """Source name -> searcher exposing the provider's search method.
+
+        Built per call: searchers are cheap and hold no shared state, so this
+        keeps tests free to monkeypatch the domain classes.
+        """
+        return {
+            "github": GitHubSearch().search_repos,
+            "huggingface": HuggingFaceImporter().search_datasets,
+            "kaggle": KaggleSearch().search_datasets,
+            "openlibrary": BooksSearch().search,
+        }
+
+    def _normalize(self, source: str, item: dict) -> dict | None:
+        """Map one provider row to the shared discovery shape.
+
+        Returns None for rows missing an identity (id) — a result the user
+        cannot import is noise, not a discovery.
+        """
+        if source == "github":
+            full_name = item.get("full_name") or ""
+            if not full_name:
+                return None
+            return {
+                "source": "github",
+                "id": full_name,
+                "title": full_name,
+                "description": item.get("description") or None,
+                "stats": {
+                    "stars": item.get("stargazers_count", 0),
+                    "language": item.get("language"),
+                    "url": item.get("html_url", ""),
+                },
+            }
+        if source == "huggingface":
+            ds_id = item.get("id") or ""
+            if not ds_id:
+                return None
+            return {
+                "source": "huggingface",
+                "id": ds_id,
+                "title": ds_id,
+                "description": None,
+                "stats": {"downloads": item.get("downloads", 0)},
+            }
+        if source == "kaggle":
+            ref = item.get("ref") or ""
+            if not ref:
+                return None
+            return {
+                "source": "kaggle",
+                "id": ref,
+                "title": item.get("title") or ref,
+                "description": item.get("description") or None,
+                "stats": {"downloads": item.get("downloads", 0), "votes": item.get("votes", 0)},
+            }
+        if source == "openlibrary":
+            ident = item.get("isbn") or item.get("key") or ""
+            if not ident:
+                return None
+            return {
+                "source": "openlibrary",
+                "id": ident,
+                "title": item.get("title") or ident,
+                "description": item.get("author") or None,
+                "stats": {"year": item.get("year"), "cover": item.get("cover")},
+            }
+        return None
+
+    def search(self, query: str, limit: int = 10, sources: list[str] | None = None) -> dict:
+        """Run one query across every provider in parallel.
+
+        Args:
+            query: Natural-language search string.
+            limit: Per-provider result cap.
+            sources: Subset of :attr:`SOURCES` to query (default: all).
+
+        Returns:
+            ``{"results": [normalized...], "providers": [{source, ok, count,
+            error}...]}`` — results ordered by provider, partial on failure.
+        """
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        providers_fns = self._providers()
+        chosen = [s for s in (sources or list(self.SOURCES)) if s in providers_fns]
+        results_by_source: dict[str, list[dict]] = {}
+        providers: list[dict] = []
+
+        pool = ThreadPoolExecutor(max_workers=max(len(chosen), 1))
+        try:
+            futures = {s: pool.submit(providers_fns[s], query, limit) for s in chosen}
+            for source in chosen:
+                fut = futures[source]
+                _t0 = time.monotonic()
+                try:
+                    items = fut.result(timeout=self.timeout)
+                    normalized = [n for n in (self._normalize(source, i) for i in items) if n]
+                except TimeoutError:
+                    providers.append(
+                        {
+                            "source": source,
+                            "ok": False,
+                            "count": 0,
+                            "error": f"timed out after {self.timeout:.0f}s",
+                            "elapsed_ms": round((time.monotonic() - _t0) * 1000),
+                        }
+                    )
+                    continue
+                except Exception as e:
+                    logger.warning(
+                        "Federated search provider %s failed: %s",
+                        source,
+                        e,
+                        extra={"tag": "TRAIN"},
+                    )
+                    providers.append(
+                        {
+                            "source": source,
+                            "ok": False,
+                            "count": 0,
+                            "error": str(e),
+                            "elapsed_ms": round((time.monotonic() - _t0) * 1000),
+                        }
+                    )
+                    continue
+                results_by_source[source] = normalized
+                providers.append(
+                    {
+                        "source": source,
+                        "ok": True,
+                        "count": len(normalized),
+                        "error": None,
+                        "elapsed_ms": round((time.monotonic() - _t0) * 1000),
+                    }
+                )
+        finally:
+            # Never block the response on a slow provider past its timeout —
+            # the thread finishes in the background, the answer ships now.
+            pool.shutdown(wait=False, cancel_futures=True)
+
+        merged: list[dict] = []
+        for source in chosen:
+            merged.extend(results_by_source.get(source, []))
+        return {"results": merged, "providers": providers}
+
+
 class ISBNImporter:
     """Import books by ISBN. Fetches full text from Project Gutenberg if available."""
 
@@ -1438,6 +1667,8 @@ __all__ = [
     "HuggingFaceImporter",
     "URLImporter",
     "GitHubSearch",
+    "KaggleSearch",
+    "FederatedSearch",
     "BooksSearch",
     "ISBNImporter",
     "ImportResult",

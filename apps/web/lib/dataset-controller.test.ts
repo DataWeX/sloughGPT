@@ -130,6 +130,41 @@ describe('datasetController.search', () => {
   })
 })
 
+describe('datasetController.searchFederated', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('GETs /datasets/search/all with q and limit', async () => {
+    const payload = {
+      results: [{ source: 'github', id: 'u/r', title: 'u/r', description: null, stats: {} }],
+      providers: [{ source: 'github', ok: true, count: 1, error: null, elapsed_ms: 10 }],
+    }
+    apiClient.apiGet.mockResolvedValue(payload)
+
+    const res = await datasetController.searchFederated('shakespeare')
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/search/all', {
+      q: 'shakespeare',
+      limit: '10',
+    })
+    expect(res.results).toHaveLength(1)
+    expect(res.providers[0].source).toBe('github')
+  })
+
+  it('passes a sources subset when given', async () => {
+    apiClient.apiGet.mockResolvedValue({ results: [], providers: [] })
+
+    await datasetController.searchFederated('titanic', 5, ['github', 'huggingface'])
+
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/datasets/search/all', {
+      q: 'titanic',
+      limit: '5',
+      sources: 'github,huggingface',
+    })
+  })
+})
+
 describe('datasetController.export', () => {
   beforeEach(() => {
     vi.clearAllMocks()

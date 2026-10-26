@@ -63,6 +63,7 @@ SECTION_ALIASES = {
     "Knowledge Base": "kb",
     "Memory": "memory",
     "Datasets": "datasets",
+    "Datasets Search": "datasets_search",
     "Training": "training/router",
     "Self-Train": "self_train",
     "Learner": "learner",
@@ -99,16 +100,14 @@ SECTION_ALIASES = {
 #   2. module-style: router = APIRouter(prefix="/x"); @router.get("/y")
 #   3. app-level:    @app.get("/y") in main.py
 ROUTE_RE = re.compile(
-    r'@(?P<chain>(?:\w+\.)+\w+)\.(?P<method>get|post|put|delete|patch|head|options)'
+    r"@(?P<chain>(?:\w+\.)+\w+)\.(?P<method>get|post|put|delete|patch|head|options)"
     r'\(\s*(?P<q>["\'])(?P<path>[^"\']*)(?P=q)',
     re.MULTILINE,
 )
 ADD_ROUTE_RE = re.compile(r"(?P<recv>\w+)\.add_api_route\(")
 # path may be positional or path="<x>" (keyword form) — anchored to the call's
 # own "(" so a non-literal first arg can't match some later quoted string.
-ADD_ROUTE_PATH_RE = re.compile(
-    r"^.*?\(\s*(?:path\s*=\s*)?(?P<q>[\"'])(?P<path>[^\"']*)(?P=q)"
-)
+ADD_ROUTE_PATH_RE = re.compile(r"^.*?\(\s*(?:path\s*=\s*)?(?P<q>[\"'])(?P<path>[^\"']*)(?P=q)")
 ADD_ROUTE_METHODS_RE = re.compile(r"methods\s*=\s*\[(?P<ms>[^\]]*)\]")
 APICONFIG_RE = re.compile(
     r"(?P<var>\w+)\s*=\s*APIRouter\((?P<args>.*?)\)\s*(?:\n|$)",
@@ -197,7 +196,7 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
     positions = list(ADD_ROUTE_RE.finditer(text))
     for i, m in enumerate(positions):
         end = positions[i + 1].start() if i + 1 < len(positions) else len(text)
-        chunk = text[m.start():end]
+        chunk = text[m.start() : end]
         pm = ADD_ROUTE_PATH_RE.search(chunk)
         if not pm:
             out.append(Route(router_stem, "?", "<dynamic>", dynamic=True))
@@ -214,13 +213,15 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
         if key not in prefixes and key not in {"app", "router"} and not key.endswith("router"):
             continue  # decorator on an unrelated object
         out.append(
-            Route(router_stem, m.group("method").upper(), _join(prefixes.get(key, ""), m.group("path")))
+            Route(
+                router_stem,
+                m.group("method").upper(),
+                _join(prefixes.get(key, ""), m.group("path")),
+            )
         )
 
     # dynamic decorator paths — counted, not diffed
-    for m in re.finditer(
-        r"@(?:\w+\.)+(?P<method>get|post|put|delete|patch)\(\s*(?![\"'])", text
-    ):
+    for m in re.finditer(r"@(?:\w+\.)+(?P<method>get|post|put|delete|patch)\(\s*(?![\"'])", text):
         out.append(Route(router_stem, m.group("method").upper(), "<dynamic>", dynamic=True))
 
     # style 4: descriptor projection — create_router(spec, RouteSpec(...), ...)
@@ -284,8 +285,7 @@ def collect_docs(findings: Findings) -> None:
     text = ROUTERS_MD.read_text(encoding="utf-8", errors="replace")
     findings.doc_sections = [m.group("title").strip() for m in DOC_SECTION_RE.finditer(text)]
     findings.doc_claims = [
-        (m.group("method"), m.group("path").strip())
-        for m in DOC_ROW_RE.finditer(text)
+        (m.group("method"), m.group("path").strip()) for m in DOC_ROW_RE.finditer(text)
     ]
     api = API_MD.read_text(encoding="utf-8", errors="replace")
     m = API_COUNT_RE.search(api)
@@ -303,9 +303,7 @@ def collect_tests(findings: Findings) -> None:
 
 def diff(findings: Findings) -> None:
     code_keys = {(r.method, r.path) for r in findings.routes if not r.dynamic}
-    findings.doc_not_in_code = [
-        (m, p) for m, p in findings.doc_claims if (m, p) not in code_keys
-    ]
+    findings.doc_not_in_code = [(m, p) for m, p in findings.doc_claims if (m, p) not in code_keys]
 
     # which routers have any doc section at all
     section_stems = set()
@@ -314,7 +312,8 @@ def diff(findings: Findings) -> None:
         if stem:
             section_stems.add(stem)
     findings.code_not_documented = [
-        s for s in findings.routers_on_disk
+        s
+        for s in findings.routers_on_disk
         if s not in section_stems
         # main.py-registered routers are documented in Health/Status sections
         and s not in {"health", "status"}
@@ -555,24 +554,31 @@ def main() -> int:
         print(_render_markdown(findings, actual_routes, actual_routers))
         return 1 if gaps else 0
 
-    print(f"code:      {actual_routers} router files, {actual_routes} literal routes "
-          f"({len(findings.dynamic_routes)} dynamic)")
+    print(
+        f"code:      {actual_routers} router files, {actual_routes} literal routes "
+        f"({len(findings.dynamic_routes)} dynamic)"
+    )
     if findings.api_md_counts:
         r, k = findings.api_md_counts
-        print(f"docs/API.md claims:      {r} routes across {k} routers "
-              f"-> {'STALE' if (r, k) != (actual_routes, actual_routers) else 'ok'}")
-    print(f"docs/routers.md:         {len(findings.doc_sections)} sections, "
-          f"{len(findings.doc_claims)} endpoint rows")
-    print(f"routers w/o doc section: {len(findings.code_not_documented)} "
-          f"{findings.code_not_documented}")
+        print(
+            f"docs/API.md claims:      {r} routes across {k} routers "
+            f"-> {'STALE' if (r, k) != (actual_routes, actual_routers) else 'ok'}"
+        )
+    print(
+        f"docs/routers.md:         {len(findings.doc_sections)} sections, "
+        f"{len(findings.doc_claims)} endpoint rows"
+    )
+    print(
+        f"routers w/o doc section: {len(findings.code_not_documented)} "
+        f"{findings.code_not_documented}"
+    )
     print(f"doc rows not in code:    {len(findings.doc_not_in_code)}")
     for m, p in findings.doc_not_in_code[:10]:
         print(f"   {m:6} {p}")
     if len(findings.doc_not_in_code) > 10:
         print(f"   ... +{len(findings.doc_not_in_code) - 10} more")
     total_undoc = sum(findings.undocumented.values())
-    print(f"code routes w/o doc row: {total_undoc} across "
-          f"{len(findings.undocumented)} routers")
+    print(f"code routes w/o doc row: {total_undoc} across {len(findings.undocumented)} routers")
     for name, n in sorted(findings.undocumented.items(), key=lambda kv: -kv[1])[:8]:
         print(f"   {name}: {n}")
     print(f"routers w/o tests:       {len(findings.untested)} {findings.untested}")

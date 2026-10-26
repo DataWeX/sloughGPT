@@ -110,6 +110,31 @@ export interface BookResult {
   cover: number | null
 }
 
+export type DiscoverySource = 'github' | 'huggingface' | 'kaggle' | 'openlibrary'
+
+/** One federated discovery result, normalized across registries. */
+export interface DiscoveryResult {
+  source: DiscoverySource
+  id: string
+  title: string
+  description: string | null
+  stats: Record<string, string | number | null>
+}
+
+/** Per-provider outcome of a federated search — partial failure is reported, not fatal. */
+export interface ProviderStatus {
+  source: DiscoverySource
+  ok: boolean
+  count: number
+  error: string | null
+  elapsed_ms: number
+}
+
+export interface FederatedSearchResponse {
+  results: DiscoveryResult[]
+  providers: ProviderStatus[]
+}
+
 export const datasetController = {
   async list(): Promise<Dataset[]> {
     const data = await apiGet<{ datasets: Dataset[] }>('/datasets')
@@ -175,6 +200,21 @@ export const datasetController = {
       q: query,
       limit: String(limit),
     })
+  },
+
+  /**
+   * Federated discovery: one query across GitHub, HuggingFace, Kaggle and
+   * Open Library. Partial results by design — check `providers` for
+   * per-source failures instead of expecting a thrown error.
+   */
+  async searchFederated(
+    query: string,
+    limit = 10,
+    sources?: DiscoverySource[],
+  ): Promise<FederatedSearchResponse> {
+    const params: Record<string, string> = { q: query, limit: String(limit) }
+    if (sources && sources.length > 0) params.sources = sources.join(',')
+    return apiGet<FederatedSearchResponse>('/datasets/search/all', params)
   },
 
   async importFromGitHub(

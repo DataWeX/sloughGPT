@@ -263,6 +263,17 @@ Fail-closed when `SLO_MEMORY_ENABLED=false`.
 | `POST`   | `/datasets/from-chat`                         | Create dataset from chat messages. |
 | `POST`   | `/datasets/convert-to-messages`               | Convert dataset to message format. |
 
+## Datasets Search Router (`/datasets/search`)
+
+Descriptor-projected (`ToolSpec` + `create_router`) federated discovery. One
+query fans out to GitHub, HuggingFace, Kaggle and Open Library; normalized
+results with per-provider status — a provider failure or timeout degrades to
+`ok: false` and never fails the whole search.
+
+| Method | Path                   | Description                                                                                            |
+| ------ | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET`  | `/datasets/search/all` | Federated dataset search across GitHub, HuggingFace, Kaggle, Open Library (partial results by design). |
+
 ## Training Router (`/training`)
 
 Unified training control plane. All training operations go through `/training/*`.
