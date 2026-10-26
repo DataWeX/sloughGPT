@@ -996,6 +996,24 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-26 · card `56b49cf1` triage COMPLETE (run6) + new defect card
+  `be44969f` — board-only, no code.** run5's baseline is **stale** (main moved
+  223 commits): all 7 named cluster files re-measured on a probe worktree at
+  origin/main `6897474fa` → **4351 passed / 0 failed** (shell_repl_more,
+  dashboard_filter, gpu_linalg, gpu_accelerator, native_engine_real,
+  shell_tui_live, quantization_benchmark); static checks confirm impl==test
+  (repl `ai` usage string, `_WATCHED_OPS` 11 keys, `solve_triangular lower=`).
+  Router cluster (54 files): 694/11 — all 11 bisected to ONE root cause:
+  **`test_dashboard_router.py` leaks its
+  `domain.settings._internal.persistent` `get_settings` mock
+  (`{"settings": True}`, lines 181/222/262) into `test_settings_router.py`**
+  (42/42 alone) → `dict.update("training", …)` on a plain dict → ValueError at
+  `settings.py:664` + 10 cascading GET failures. Test-isolation defect → card
+  `be44969f`. `56b49cf1` → done with per-cluster decisions (8 stale / 1 real).
+  Full-suite re-run died with the server restart (/tmp wipe) at 76% — named
+  clusters fully covered; refile if a whole-suite baseline is wanted. Probe
+  worktree `/tmp/opencode/wt-triage` removed; no stray test servers.
+
 - **2026-10-26 · card `0da0a6f4` executed + `70f57a4f` filed + main
   fast-forward attempt — `feat/deploy-transport-seam` (pushed).** Decision
   "drop the pretense": `deploy/start.sh` no longer exports `SLO_ENV=production`
