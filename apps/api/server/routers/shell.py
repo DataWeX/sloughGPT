@@ -56,6 +56,14 @@ class ShellExecRequest(BaseModel):
         ..., min_length=1, max_length=10000, description="Shell command to execute"
     )
     timeout_ms: int = Field(30000, ge=100, le=120000, description="Execution timeout in ms")
+    raw: bool = Field(
+        False,
+        description=(
+            "Pass output through un-sanitized: ANSI/OSC escape sequences and "
+            "control bytes are preserved for consumers that interpret them "
+            "(the terminal engine). Default false = terminal-hygienic wire."
+        ),
+    )
 
 
 class ShellExecResponse(BaseModel):
@@ -121,14 +129,17 @@ def _execute_locked(repl, command: str) -> tuple[str, int]:
         return repl.execute(command)
 
 
-def _stream_events(repl, command: str, t0: float):
+def _stream_events(repl, command: str, t0: float, raw: bool = False):
     """Yield SSE frames for *command* while it runs (POST /exec/stream).
 
     A worker thread executes against a queue-fed MemoryIO; this generator
     reassembles complete lines from the raw chunks, sanitizes each, and
     yields — so slow commands stream their output instead of dumping it
     post-hoc.  Serialized on ``_exec_lock`` like the sync endpoint.
+    ``raw=True`` skips the per-line sanitize pass (escape sequences reach
+    the terminal engine intact); line reassembly itself is unchanged.
     """
+    clean = (lambda s: s) if raw else _sanitize_line
     q: queue.Queue = queue.Queue()
     result: dict = {}
 
@@ -157,9 +168,7 @@ def _stream_events(repl, command: str, t0: float):
         buf += item
         while "\n" in buf:
             line, buf = buf.split("\n", 1)
-            yield _sse_line(
-                "shell", "STREAMING", "working", {"line": _sanitize_line(line), "index": index}
-            )
+            yield _sse_line("shell", "STREAMING", "working", {"line": clean(line), "index": index})
             index += 1
 
     if received == 0 and result.get("output"):
@@ -169,11 +178,11 @@ def _stream_events(repl, command: str, t0: float):
         for i, line in enumerate(lines):
             if line or i < len(lines) - 1:  # skip trailing empty
                 yield _sse_line(
-                    "shell", "STREAMING", "working", {"line": _sanitize_line(line), "index": index}
+                    "shell", "STREAMING", "working", {"line": clean(line), "index": index}
                 )
                 index += 1
     else:
-        tail = _sanitize_line(buf)
+        tail = clean(buf)
         if tail:  # final line without trailing newline
             yield _sse_line("shell", "STREAMING", "working", {"line": tail, "index": index})
             index += 1
@@ -239,7 +248,8 @@ async def exec_command(req: ShellExecRequest, auth_user: dict = Depends(require_
 
     try:
         output, exit_code = await asyncio.to_thread(_execute_locked, repl, req.command)
-        output = _sanitize_output(output)
+        if not req.raw:
+            output = _sanitize_output(output)
     except Exception as e:
         logger.warning("Shell exec error: %s", e, extra={"tag": "SHELL"})
         classify_and_raise(e, source="shell.exec")
@@ -277,6 +287,6 @@ async def exec_command_stream(
 
     def generate():
         """Emit line events WHILE the command runs (see _stream_events)."""
-        yield from _stream_events(repl, req.command, t0)
+        yield from _stream_events(repl, req.command, t0, raw=req.raw)
 
     return StreamingResponse(generate(), media_type="text/event-stream")

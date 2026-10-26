@@ -195,6 +195,47 @@ class TestStreamSanitized:
         assert not any("\x1b" in (x or "") for x in working)
 
 
+class TestRawFlag:
+    """raw=true passes escape sequences through for the terminal engine.
+
+    Default stays sanitized (TestStreamSanitized pins that); raw is the
+    explicit opt-out consumed by useShell once the engine interprets SGR,
+    cursor and clear-screen sequences client-side.
+    """
+
+    @staticmethod
+    def _working_lines(text: str) -> list:
+        out = []
+        for line in text.split("\n"):
+            if line.startswith("data:"):
+                ev = json.loads(line[5:])
+                if ev.get("status") == "working":
+                    out.append(ev["data"].get("line"))
+        return out
+
+    def test_stream_raw_preserves_escapes(self, fake_repl):
+        fake_repl.chunks = ["\x1b[2J\x1b[1;32mready\x1b[0m\n"]
+        resp = client.post("/shell/exec/stream", json={"command": "x", "raw": True})
+        assert resp.status_code == 200
+        working = self._working_lines(resp.text)
+        assert any("\x1b[2J" in (x or "") for x in working), (
+            "raw=true stripped the clear-screen sequence"
+        )
+
+    def test_stream_raw_false_stays_sanitized(self, fake_repl):
+        fake_repl.chunks = ["\x1b[31mred\x1b[0m\n"]
+        resp = client.post("/shell/exec/stream", json={"command": "x", "raw": False})
+        assert resp.status_code == 200
+        working = self._working_lines(resp.text)
+        assert working and not any("\x1b" in (x or "") for x in working)
+
+    def test_exec_raw_preserves_escapes(self, fake_repl):
+        fake_repl.output = "\x1b[2Jdone\x1b[0m\n"
+        resp = client.post("/shell/exec", json={"command": "x", "raw": True})
+        assert resp.status_code == 200
+        assert "\x1b[2J" in resp.json()["output"]
+
+
 # ── B4: genuinely incremental streaming ─────────────────────────────────────
 
 

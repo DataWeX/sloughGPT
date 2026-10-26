@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
 import { cn } from '@sloughgpt/strui'
-import { useShell, type ShellLine } from '@/hooks/useShell'
+import { useShell } from '@/hooks/useShell'
 
 export interface TerminalPanelProps {
   className?: string
@@ -36,7 +36,7 @@ export function TerminalPanel({
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
     }
-  }, [state.lines])
+  }, [state.rows])
 
   // Focus input on mount
   useEffect(() => {
@@ -71,7 +71,7 @@ export function TerminalPanel({
     const cmd = input.trim()
     if (!cmd) return
 
-    setHistory(prev => [...prev, cmd])
+    setHistory((prev) => [...prev, cmd])
     setHistoryIndex(-1)
     setInput('')
     execute(cmd)
@@ -116,15 +116,17 @@ export function TerminalPanel({
     }
   }
 
-  const visibleLines = state.lines.slice(-maxVisibleLines)
+  const visibleRows = state.rows.slice(-maxVisibleLines)
 
   return (
-    <div className={cn(
-      'flex flex-col rounded-xl overflow-hidden',
-      'border border-white/[0.08] shadow-2xl shadow-black/40',
-      'bg-term-surface',
-      className,
-    )}>
+    <div
+      className={cn(
+        'flex flex-col rounded-xl overflow-hidden',
+        'border border-white/[0.08] shadow-2xl shadow-black/40',
+        'bg-term-surface',
+        className,
+      )}
+    >
       {/* macOS title bar */}
       <div className="flex items-center h-11 px-4 bg-term-header border-b border-white/[0.06]">
         <div className="flex items-center gap-2">
@@ -135,12 +137,16 @@ export function TerminalPanel({
         <div className="flex-1 flex items-center justify-center">
           <span className="text-[11px] font-medium text-term-text-muted select-none">dait</span>
         </div>
-        <span className={cn(
-          'w-1.5 h-1.5 rounded-full',
-          state.isRunning ? 'bg-term-minimize animate-pulse' :
-          state.exitCode !== null && state.exitCode !== 0 ? 'bg-term-close' :
-          'bg-term-zoom',
-        )} />
+        <span
+          className={cn(
+            'w-1.5 h-1.5 rounded-full',
+            state.isRunning
+              ? 'bg-term-minimize animate-pulse'
+              : state.exitCode !== null && state.exitCode !== 0
+                ? 'bg-term-close'
+                : 'bg-term-zoom',
+          )}
+        />
       </div>
 
       {/* Output area */}
@@ -152,22 +158,24 @@ export function TerminalPanel({
         aria-live="polite"
         aria-label="Shell output"
       >
-        {visibleLines.length === 0 && !state.isRunning && placeholder && (
-          <div className="text-term-text-dim italic">
-            {placeholder}
-          </div>
+        {visibleRows.length === 0 && !state.isRunning && placeholder && (
+          <div className="text-term-text-dim italic">{placeholder}</div>
         )}
-        {visibleLines.map((line: ShellLine) => (
+        {visibleRows.map((row) => (
           <div
-            key={line.index}
+            key={row.key}
             className={cn(
               'whitespace-pre-wrap break-all',
-              line.text.startsWith('Error') || line.text.startsWith('error')
+              row.text.startsWith('Error') || row.text.startsWith('error')
                 ? 'text-term-close'
                 : 'text-term-text',
             )}
           >
-            {line.text}
+            {row.spans.map((span, spanIdx) => (
+              <span key={spanIdx} className={span.className}>
+                {span.text}
+              </span>
+            ))}
           </div>
         ))}
         {state.isRunning && (
@@ -177,7 +185,10 @@ export function TerminalPanel({
           </div>
         )}
         {state.error && (
-          <div className="mt-2 flex items-start gap-2 text-term-close bg-term-close/[0.08] rounded-md px-3 py-2" data-testid="shell-error">
+          <div
+            className="mt-2 flex items-start gap-2 text-term-close bg-term-close/[0.08] rounded-md px-3 py-2"
+            data-testid="shell-error"
+          >
             <span className="shrink-0 text-[10px] font-bold">!</span>
             <span>{state.error}</span>
           </div>
@@ -186,7 +197,9 @@ export function TerminalPanel({
 
       {/* Input area */}
       <div className="flex items-center gap-2 px-5 py-3 border-t border-white/[0.04] bg-term-surface-raised">
-        <span className="text-[13px] font-mono text-term-zoom select-none" aria-hidden="true">$</span>
+        <span className="text-[13px] font-mono text-term-zoom select-none" aria-hidden="true">
+          $
+        </span>
         <input
           ref={inputRef}
           type="text"

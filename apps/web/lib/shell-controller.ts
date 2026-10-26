@@ -30,6 +30,16 @@ export interface ShellStreamCallbacks {
   onError?: (error: string) => void
 }
 
+export interface ShellStreamOptions {
+  /** Request timeout in ms (default 30000). */
+  timeoutMs?: number
+  /**
+   * Ask the server for verbatim output (control sequences preserved) —
+   * the terminal-engine tier. Default stays the sanitized plain-text tier.
+   */
+  raw?: boolean
+}
+
 /** Execute a shell command synchronously. */
 export async function shellExec(
   command: string,
@@ -44,11 +54,16 @@ export async function shellExecStream(
   command: string,
   callbacks: ShellStreamCallbacks,
   signal?: AbortSignal,
-  timeoutMs = 30000,
+  opts: ShellStreamOptions = {},
 ): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? 30000
   const gen = streamSSE('/shell/exec/stream', {
     method: 'POST',
-    body: { command, timeout_ms: timeoutMs },
+    body: {
+      command,
+      timeout_ms: timeoutMs,
+      ...(opts.raw ? { raw: true } : {}),
+    },
     signal,
   })
 
