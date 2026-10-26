@@ -78,7 +78,9 @@ case $MODE in
     production|prod)
         log_info "Starting PRODUCTION mode on port $PORT..."
         export SLO_ENV=production
-        uvicorn main:app --app-dir "$ROOT/apps/api/server" --host 0.0.0.0 --port "$PORT" --workers 4
+        # Through main.py's transport decision point (card 1f173fd1):
+        # --transport uvicorn until wire has a multi-worker story.
+        exec python3 "$ROOT/apps/api/server/main.py" --host 0.0.0.0 --port "$PORT" --transport uvicorn --workers 4
         ;;
     docker)
         log_info "Starting with Docker..."

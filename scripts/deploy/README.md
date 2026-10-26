@@ -16,7 +16,7 @@ Examples:
 
 ```bash
 ./scripts/deploy/docker-manage.sh start
-./scripts/deploy/start.sh api 8000
+./scripts/deploy/start.sh production 8000
 ```
 
 Install and verification entrypoints remain at the repo root: **`install.sh`**, **`verify.sh`**, **`run.sh`**.

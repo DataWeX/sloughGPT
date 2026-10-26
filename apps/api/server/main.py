@@ -589,10 +589,19 @@ if __name__ == "__main__":
         "'auto' = wire except when --reload (uvicorn's reloader) "
         "[env: SLO_TRANSPORT]",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Worker processes: uvicorn transport only — wire serves a "
+        "single process with in-process threads [default: 1]",
+    )
     args = parser.parse_args()
     if args.transport not in ("auto", "wire", "uvicorn"):
         # argparse does not validate string defaults against choices
         parser.error(f"SLO_TRANSPORT must be auto|wire|uvicorn, got {args.transport!r}")
+    if args.workers < 1:
+        parser.error(f"--workers must be >= 1, got {args.workers}")
 
     # Daemonize if requested — use subprocess to avoid fork() issues
     if args.daemon:
@@ -604,6 +613,7 @@ if __name__ == "__main__":
         if args.force:
             cmd += ["--force"]
         cmd += ["--host", args.host, "--transport", args.transport]
+        cmd += ["--workers", str(args.workers)]
         proc = sp.Popen(
             cmd,
             stdin=sp.DEVNULL,
@@ -722,6 +732,19 @@ if __name__ == "__main__":
         # so --reload always routes to uvicorn (auto = wire otherwise).
         transport = "uvicorn" if args.reload else "wire"
 
+    if args.workers > 1:
+        # Transport-scoped guard: wire has no multi-worker story yet, and
+        # uvicorn forbids combining reload with workers. Fail loud here
+        # rather than silently serving a single process (wire) or dying
+        # deep inside uvicorn's config validation (reload).
+        if transport == "wire":
+            parser.error(
+                "wire serves a single process; use --workers 1 with "
+                "--transport wire, or --transport uvicorn --workers N"
+            )
+        if args.reload:
+            parser.error("--reload cannot be combined with --workers (uvicorn constraint)")
+
     if transport == "wire":
         # The flip (card ecea49c8): the SAME FastAPI app object served by
         # our own wire layer. Serve-loop pattern = apps/filehub's proven
@@ -756,6 +779,16 @@ if __name__ == "__main__":
         "port": bind_port,
         "log_level": cfg.log_level.lower(),
     }
+    if args.workers > 1:
+        # uvicorn refuses an app INSTANCE with workers>1 ("You must pass the
+        # application as an import string to enable 'reload' or 'workers'").
+        # Each worker imports `main:app` fresh: the module body runs twice
+        # per child (spawn re-exec as __mp_main__ + the `main` import) and
+        # was audited idempotent (guarded path inserts, setup_logging clears
+        # handlers before re-adding). The lifespan — model, PGQ engine,
+        # watchdog — runs only in the served instance, once per worker.
+        uvicorn_kw["app"] = "main:app"
+        uvicorn_kw["workers"] = args.workers
     if args.reload:
         uvicorn_kw["reload"] = True
         uvicorn_kw["app"] = "main:app"

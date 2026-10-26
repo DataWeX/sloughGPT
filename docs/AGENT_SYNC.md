@@ -996,6 +996,28 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-26 · `feat/deploy-transport-seam` — production now enters through
+  the transport decision point (card `1f173fd1`, stacked on
+  `feat/flip-default-transport`; branch pushed, merge deferred with the
+  flip).** `main.py` gains `--workers N` (default 1): the uvicorn path
+  switches to the import string `"main:app"` when N>1 (uvicorn refuses app
+  instances with workers), `wire+N>1` and `reload+N>1` fail loud (argparse
+  exit 2), and `--daemon` forwards the flag. `deploy/start.sh` production is
+  now `exec python3 …/main.py --host 0.0.0.0 --port $PORT --transport uvicorn
+  --workers 4` — same 4-worker behavior, but routed through `main.py`; `exec`
+  puts TERM straight on the uvicorn supervisor. README's nonexistent
+  `start.sh api 8000` example corrected to `production 8000`. Worker-child
+  module double-exec (`__mp_main__` re-exec + `main` import) audited
+  idempotent; lifespan (model/PGQ/watchdog) runs once per worker in the
+  served instance only. Gates: start.sh production probe health 200 @7s / 4
+  spawn workers / PGQ ×4 / graceful TERM no orphans; guard probes exit 2
+  (wire+workers, reload+workers, workers=0); wire default + daemon probes
+  clean; ruff check+format; hygiene 5/5; journeys `api`/`serve_api`/`reuse`
+  ALL PASS. Follow-ups filed: `0da0a6f4` (production.yaml missing →
+  `SLO_ENV=production` is a silent no-op; cwd-bound `_config_dir`),
+  `fd8fdad3` (is `--workers 4` even right — 4× model/PGQ/auto-trainer +
+  split in-memory job control plane), `fabe77b4` (wire multi-worker story).
+
 - **2026-10-26 · `feat/flip-default-transport` — THE DEFAULT IS FLIPPED:
   `auto` serves on WireServer (card `ecea49c8`, stacked on
   `feat/wire-session-loop`; branch pushed, merge deferred — `main` is held by
