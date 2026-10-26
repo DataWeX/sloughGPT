@@ -561,6 +561,7 @@ class TestMisc:
 class TestSpinnerLive:
     def test_spinner_enter_exit(self):
         io, c = _mk()
+        io._is_tty = True  # animation is a TTY capability
         with c.spinner("working", rate=0.01):
             pass
         assert "working" in io.get_output()

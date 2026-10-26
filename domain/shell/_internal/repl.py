@@ -498,11 +498,15 @@ class ShellREPL(LinuxCommandsMixin):
 
     # ── Programmatic API (TUI / tests) ─────────────────────────────
 
-    def execute(self, line: str) -> tuple[str, int]:
+    def execute(self, line: str, *, on_write=None) -> tuple[str, int]:
         """Execute a command line, return (output, exit_code).
 
         Does NOT touch readline or the terminal — safe for TUI usage.
         Still audit-logs every execution.
+
+        ``on_write`` (optional) is forwarded to the per-run MemoryIO and
+        receives every output chunk as it is produced — the streaming
+        seam used by ``POST /shell/exec/stream``.
         """
         import time as _time
 
@@ -511,7 +515,7 @@ class ShellREPL(LinuxCommandsMixin):
         if not line.strip():
             return "", 0
 
-        mem = MemoryIO()
+        mem = MemoryIO(on_write=on_write)
         old_io = self.io
         old_console_io = self.console._io
         self.io = mem

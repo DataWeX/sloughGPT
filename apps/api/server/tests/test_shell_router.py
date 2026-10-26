@@ -7,6 +7,9 @@ Tests the /shell/exec endpoint.
 import json
 import os
 import sys
+import time
+
+import pytest
 
 # Ensure the server directory is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -99,3 +102,136 @@ class TestShellStreamEndpoint:
             assert "phase" in payload
             assert "status" in payload
             assert "data" in payload
+
+
+# ── B3: wire hygiene at the seam ────────────────────────────────────────────
+
+
+class _FakeRepl:
+    """Scriptable repl for endpoint-level tests (sanitization + streaming)."""
+
+    def __init__(self, output="", exit_code=0, chunks=(), delay=0.0):
+        self.output = output
+        self.exit_code = exit_code
+        self.chunks = list(chunks)
+        self.delay = delay
+        self.executed = False
+
+    def execute(self, line, *, on_write=None):
+        self.executed = True
+        for i, chunk in enumerate(self.chunks):
+            if i and self.delay:
+                time.sleep(self.delay)
+            if on_write:
+                on_write(chunk)
+        return self.output, self.exit_code
+
+
+@pytest.fixture
+def fake_repl():
+    import routers.shell as m
+
+    old = m._repl
+    repl = _FakeRepl()
+    m._repl = repl
+    yield repl
+    m._repl = old
+
+
+class TestSanitizeLine:
+    def test_exists(self):
+        from routers import shell as m
+
+        assert getattr(m, "_sanitize_line", None) is not None, (
+            "routers.shell._sanitize_line missing"
+        )
+
+    def test_strips_csi_sequences(self):
+        from routers import shell as m
+
+        assert m._sanitize_line("\x1b[32mgreen\x1b[0m text") == "green text"
+
+    def test_carriage_return_keeps_last_segment(self):
+        from routers import shell as m
+
+        line = "\r  ⠋ Fetching models\x1b[K\r\x1b[K  Model  Type  Status"
+        assert m._sanitize_line(line) == "  Model  Type  Status"
+
+    def test_drops_other_control_chars_keeps_tab(self):
+        from routers import shell as m
+
+        assert m._sanitize_line("a\x07b\tc\x00d") == "ab\tcd"
+
+    def test_plain_text_untouched(self):
+        from routers import shell as m
+
+        assert m._sanitize_line("  plain line  ") == "  plain line  "
+
+
+class TestExecSanitized:
+    def test_exec_output_sanitized(self, fake_repl):
+        fake_repl.output = "\r\x1b[31mred\x1b[0m\nok\n"
+        resp = client.post("/shell/exec", json={"command": "x"})
+        assert resp.status_code == 200
+        assert resp.json()["output"] == "red\nok\n"
+
+
+class TestStreamSanitized:
+    def test_stream_lines_sanitized(self, fake_repl):
+        fake_repl.chunks = [
+            "\r  ⠋ Fetching models\x1b[K\r\x1b[K  Model  Type  Status\n",
+            "\x1b[32mQwen  cpu  loaded\x1b[0m\n",
+        ]
+        resp = client.post("/shell/exec/stream", json={"command": "models"})
+        assert resp.status_code == 200
+        working = []
+        for line in resp.text.split("\n"):
+            if line.startswith("data:"):
+                ev = json.loads(line[5:])
+                if ev.get("status") == "working":
+                    working.append(ev["data"].get("line"))
+        assert "  Model  Type  Status" in working
+        assert "Qwen  cpu  loaded" in working
+        assert not any("\x1b" in (x or "") for x in working)
+
+
+# ── B4: genuinely incremental streaming ─────────────────────────────────────
+
+
+class TestStreamIncremental:
+    def test_lines_arrive_during_execution(self, fake_repl):
+        """Unit-drive the generator: the HTTP TestClient buffers whole
+        bodies, so incremental delivery must be proven at the source."""
+        from routers.shell import _stream_events
+
+        fake_repl.chunks = ["early line\n", "late line\n"]
+        fake_repl.delay = 0.8
+        t0 = time.monotonic()
+        t_early = None
+        seen_complete = False
+        for payload in _stream_events(fake_repl, "slow", t0):
+            ev = json.loads(payload[5:])
+            if ev.get("status") == "working" and ev["data"].get("line") == "early line":
+                t_early = time.monotonic() - t0
+            if ev.get("status") == "complete":
+                seen_complete = True
+        assert t_early is not None, "early line never streamed"
+        assert t_early < 0.6, (
+            f"line arrived after execute finished ({t_early:.2f}s) — batch, not streaming"
+        )
+        assert seen_complete
+
+    def test_endpoint_event_order(self, fake_repl):
+        """The endpoint wires the generator through: lines before complete."""
+        fake_repl.chunks = ["one\n", "two\n"]
+        resp = client.post("/shell/exec/stream", json={"command": "x"})
+        assert resp.status_code == 200
+        working, last = [], None
+        for line in resp.text.split("\n"):
+            if line.startswith("data:"):
+                ev = json.loads(line[5:])
+                if ev.get("status") == "working":
+                    working.append(ev["data"].get("line"))
+                last = ev.get("status")
+        assert working == ["one", "two"]
+        assert last == "complete"
