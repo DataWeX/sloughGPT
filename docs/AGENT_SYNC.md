@@ -996,6 +996,32 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-26 · card `0da0a6f4` executed + `70f57a4f` filed + main
+  fast-forward attempt — `feat/deploy-transport-seam` (pushed).** Decision
+  "drop the pretense": `deploy/start.sh` no longer exports `SLO_ENV=production`
+  (config/production.yaml never existed → silent no-op; loader reads
+  `config/{profile}.yaml` at `config.py:346`, missing file = skip). Card
+  `0da0a6f4` → done with evidence; cwd-bound `_config_dir` noted
+  accepted-for-now. New card `70f57a4f`: **Live-stream terminal-set drift** —
+  `training/live_stream.py:35` `_INACTIVE_STATUSES` misses
+  `interrupted`/`cancelled`, so the Training page counted every restart-parked
+  row as running (screenshot: "14 jobs running", all `feed.journey
+  interrupted 0%`); fix = one canonical `TERMINAL_STATUSES` + display semantics
+  + `dataset` normalization, branch off origin/main when the lane opens.
+  Triage `56b49cf1`: run5 baseline looks **stale** — 7/7 named cluster files
+  GREEN on origin/main `6897474fa` (targeted run: 4351 passed / 0 failed /
+  96 skipped); full-suite baseline running in probe worktree
+  `/tmp/opencode/wt-triage` (remove when triage ends; my stack tree can't
+  measure it — forked 10-04, `cmds`/`addons` restored on main 10-07, and
+  leftover `__pycache__`-only dirs import as namespace packages past repl.py's
+  lazy guard → 24 collection errors). Local-main fast-forward (`89de1db1`)
+  ATTEMPTED per user approval — **git aborted safely**: the other session's
+  worktree has staged/dirty files (CI, gitignore, `domain/infrastructure/*`);
+  ref untouched, left for that session to land its work first. Probe gotcha:
+  run `start.sh` with conda `sloughgpt` FIRST on PATH — its dep bootstrap uses
+  bare `python3`, and conda-base 3.14 has no fastapi → PEP 668 pip failure
+  before dispatch.
+
 - **2026-10-26 · card `fd8fdad3` evidence complete (analysis only — product
   decision pending user).** Alternating-order A/B of `main.py --transport
   uvicorn --workers {1,4}` (8 keep-alive conns, RSS over the process tree):

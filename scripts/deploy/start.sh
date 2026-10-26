@@ -77,7 +77,9 @@ case $MODE in
         ;;
     production|prod)
         log_info "Starting PRODUCTION mode on port $PORT..."
-        export SLO_ENV=production
+        # No SLO_ENV=production here: config/production.yaml does not exist, so
+        # the export was a silent no-op (card 0da0a6f4). Re-add it together
+        # with a real profile file, not before.
         # Through main.py's transport decision point (card 1f173fd1):
         # --transport uvicorn until wire has a multi-worker story.
         exec python3 "$ROOT/apps/api/server/main.py" --host 0.0.0.0 --port "$PORT" --transport uvicorn --workers 4
