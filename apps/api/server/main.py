@@ -22,6 +22,7 @@ from __future__ import annotations
 import faulthandler
 import logging
 import os
+import signal
 import sys
 import time
 import warnings
@@ -31,12 +32,25 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from domain.shared import find_repo_root
+# Script mode (`python main.py` — the dev/serve spawns and the --daemon
+# re-exec) puts THIS file's directory on sys.path[0], not the cwd, so
+# `domain` is invisible until we locate the repo root ourselves; `-m`
+# mode only worked because it puts the cwd there. Same marker walk as
+# find_repo_root (apps/ + packages/), which takes over below.
+for _p in Path(__file__).resolve().parents:
+    if (_p / "apps").is_dir() and (_p / "packages").is_dir():
+        _root_s = str(_p)
+        if _root_s not in sys.path:
+            sys.path.insert(0, _root_s)
+        break
+
+from domain.shared import find_repo_root  # noqa: E402
 
 # ── Path bootstrapping (must happen before any domain imports) ────────
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _SERVER_ROOT = Path(__file__).resolve().parent
 _CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
+_WIRE_PY_ROOT = _REPO_ROOT / "packages" / "wire-py"
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
 _CHARGECTL_ROOT = _REPO_ROOT / "packages" / "chargectl" / "src"
 
@@ -44,7 +58,7 @@ _HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
 _HF_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("HF_HOME", str(_HF_CACHE))
 
-for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _REPO_ROOT):
+for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _WIRE_PY_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _REPO_ROOT):
     _s = str(_p)
     if _s not in sys.path:
         sys.path.insert(0, _s)
@@ -561,7 +575,24 @@ if __name__ == "__main__":
         default=False,
         help="Kill existing process on port and start fresh (default: connect to existing)",
     )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default=cfg.host,
+        help="Bind address (default: from config)",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=("auto", "wire", "uvicorn"),
+        default=os.environ.get("SLO_TRANSPORT", "auto"),
+        help="Serving transport: 'wire' (our wire layer), 'uvicorn', or "
+        "'auto' = wire except when --reload (uvicorn's reloader) "
+        "[env: SLO_TRANSPORT]",
+    )
     args = parser.parse_args()
+    if args.transport not in ("auto", "wire", "uvicorn"):
+        # argparse does not validate string defaults against choices
+        parser.error(f"SLO_TRANSPORT must be auto|wire|uvicorn, got {args.transport!r}")
 
     # Daemonize if requested — use subprocess to avoid fork() issues
     if args.daemon:
@@ -572,6 +603,7 @@ if __name__ == "__main__":
             cmd += ["--port", str(args.port)]
         if args.force:
             cmd += ["--force"]
+        cmd += ["--host", args.host, "--transport", args.transport]
         proc = sp.Popen(
             cmd,
             stdin=sp.DEVNULL,
@@ -684,9 +716,43 @@ if __name__ == "__main__":
             extra={"context": {"port": bind_port}, "tag": "START"},
         )
 
+    transport = args.transport
+    if transport == "auto":
+        # A reloader is process supervision, not transport: wire has none,
+        # so --reload always routes to uvicorn (auto = wire otherwise).
+        transport = "uvicorn" if args.reload else "wire"
+
+    if transport == "wire":
+        # The flip (card ecea49c8): the SAME FastAPI app object served by
+        # our own wire layer. Serve-loop pattern = apps/filehub's proven
+        # one (start -> serve_forever -> stop); lifespan="auto" matches
+        # uvicorn's default semantics.
+        from wire import WireServer
+
+        logger.info(
+            "Serving on WireServer (our wire layer)",
+            extra={
+                "context": {"host": args.host, "port": bind_port, "transport": transport},
+                "tag": "START",
+            },
+        )
+        server = WireServer(asgi_app=app, host=args.host, port=bind_port, lifespan="auto")
+        signal.signal(signal.SIGTERM, lambda *_: server.stop())
+        try:
+            server.start()  # binds + spawns the accept thread
+            server.serve_forever()
+        except KeyboardInterrupt:
+            logger.info("Interrupted by user", extra={"tag": "START"})
+        except Exception as e:
+            logger.critical("Server crashed: %s", e, exc_info=True)
+            sys.exit(1)
+        finally:
+            server.stop()  # idempotent: listener/clients + lifespan shutdown
+        sys.exit(0)  # done — do not fall through to the uvicorn path below
+
     uvicorn_kw: dict = {
         "app": app,
-        "host": cfg.host,
+        "host": args.host,
         "port": bind_port,
         "log_level": cfg.log_level.lower(),
     }

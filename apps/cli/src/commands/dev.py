@@ -826,9 +826,7 @@ def _cmd_api_only(args):
         api_proc = subprocess.Popen(
             [
                 str(python),
-                "-m",
-                "uvicorn",
-                "apps.api.server.main:app",
+                str(root / "apps" / "api" / "server" / "main.py"),
                 "--host",
                 args.host,
                 "--port",
@@ -1015,9 +1013,7 @@ def _cmd_api_and_mobile(args):
         api_proc = subprocess.Popen(
             [
                 str(python),
-                "-m",
-                "uvicorn",
-                "apps.api.server.main:app",
+                str(root / "apps" / "api" / "server" / "main.py"),
                 "--host",
                 args.host,
                 "--port",
@@ -1261,9 +1257,7 @@ def _cmd_api_and_web(args):
         api_proc = subprocess.Popen(
             [
                 str(python),
-                "-m",
-                "uvicorn",
-                "apps.api.server.main:app",
+                str(root / "apps" / "api" / "server" / "main.py"),
                 "--host",
                 args.host,
                 "--port",

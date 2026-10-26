@@ -70,7 +70,7 @@ else
   # the exact window where a missing early handler orphans the child.
   UVREADY=""
   for i in $(seq 1 20); do
-    if pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" >/dev/null 2>&1; then
+    if pgrep -f "apps/api/server/main.py .*--port $API_P" >/dev/null 2>&1; then
       UVREADY=$i; break
     fi
     sleep 1
@@ -100,7 +100,7 @@ else
 fi
 kill -TERM "$SPA" 2>/dev/null
 sleep 1
-LEFT=$(pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" || true)
+LEFT=$(pgrep -f "apps/api/server/main.py .*--port $API_P" || true)
 if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "phaseA orphan uvicorn: $LEFT"
 else ok "phaseA: no orphan uvicorn after startup SIGINT"; fi
 if [ "$(port_state "$API_P")" = "CLOSED" ]; then ok "phaseA: port $API_P freed"
@@ -141,7 +141,7 @@ else bad "phaseB: no 'Stopped' in shutdown output"; fi
 
 L=""
 for i in $(seq 1 10); do
-  L=$(pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" || true)
+  L=$(pgrep -f "apps/api/server/main.py .*--port $API_P" || true)
   [ -z "$L" ] && break
   sleep 1
 done
@@ -196,7 +196,7 @@ if [ -z "$CPID" ]; then bad "phaseC: cli never started"
 else ok "phaseC: cli alive on reused api (pid $CPID)"; fi
 
 # reuse proof: the CLI must not have spawned its own uvicorn
-OWN=$(pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" || true)
+OWN=$(pgrep -f "apps/api/server/main.py .*--port $API_P" || true)
 if [ -z "$OWN" ]; then ok "phaseC: no cli-owned uvicorn (api reused)"
 else bad "phaseC: cli spawned uvicorn despite healthy api: $OWN"; fi
 
@@ -240,7 +240,7 @@ done
 # ── Reap: our processes first, foreign last ──
 kill -TERM "$SPA" "$SPB" "$SPC" 2>/dev/null
 sleep 1
-for PAT in "cli.py serve --port $API_P" "uvicorn apps.api.server.main:app.*--port $API_P"; do
+for PAT in "cli.py serve --port $API_P" "apps/api/server/main.py .*--port $API_P"; do
   L=$(pgrep -f "$PAT" || true)
   if [ -n "$L" ]; then kill -9 $L 2>/dev/null; bad "leftover after reap: $PAT"; fi
 done

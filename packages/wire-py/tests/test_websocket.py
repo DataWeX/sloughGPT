@@ -175,7 +175,9 @@ def test_handshake_returns_101_with_spec_accept_value():
             assert status == 101
             assert headers[b"upgrade"] == b"websocket"
             assert b"upgrade" in headers[b"connection"].lower()
-            expected = base64.b64encode(hashlib.sha1(_KEY_RAW + _WS_GUID).digest())
+            # RFC 6455 §4.2.2: digest the key header VALUE (_KEY_B64), not
+            # its decode — mirrors what a standards-compliant client checks.
+            expected = base64.b64encode(hashlib.sha1(_KEY_B64.encode() + _WS_GUID).digest())
             assert headers[b"sec-websocket-accept"] == expected
     finally:
         server.stop()
@@ -464,5 +466,41 @@ def test_fastapi_websocket_route_interop():
             assert opcode == OP_CLOSE
             sock.settimeout(3.0)
             assert sock.recv(1) == b""  # TCP closes after the close frame
+    finally:
+        server.stop()
+
+
+def test_accept_value_matches_rfc6455_example_vector():
+    # RFC 6455 §1.3 canonical vector: the digest covers the key header
+    # VALUE as received. Hashing the base64 decode instead produces a
+    # different (wrong) accept — the exact bug this pins.
+    from wire.websocket import accept_value
+
+    assert accept_value("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+
+
+def test_real_websockets_client_validates_accept():
+    # interop with a standards-compliant client: `websockets` recomputes
+    # Sec-WebSocket-Accept from the key and rejects a mismatch, exactly
+    # like browsers do — the raw-socket _handshake helper above cannot
+    # catch a digest bug, and one previously slipped through.
+    ws_client = pytest.importorskip("websockets.sync.client")
+    if FastAPI is None:
+        pytest.skip("fastapi not installed")
+
+    app = FastAPI()
+
+    @app.websocket("/ws/echo")
+    async def ws_echo(websocket: WebSocket) -> None:
+        await websocket.accept()
+        raw = await websocket.receive_text()
+        await websocket.send_text(raw)
+        await websocket.close()
+
+    server = _serve(app)
+    try:
+        with ws_client.connect(f"ws://127.0.0.1:{server.port}/ws/echo", open_timeout=5) as ws:
+            ws.send("ping")
+            assert ws.recv(timeout=5) == "ping"
     finally:
         server.stop()

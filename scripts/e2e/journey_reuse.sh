@@ -81,7 +81,7 @@ else
   # A fixed t+2 races import time under load and can land pre-registration.
   UVREADY=""
   for i in $(seq 1 20); do
-    if pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" >/dev/null 2>&1; then
+    if pgrep -f "apps/api/server/main.py .*--port $API_P" >/dev/null 2>&1; then
       UVREADY=$i; break
     fi
     sleep 1
@@ -111,7 +111,7 @@ else
 fi
 kill -TERM "$P1" 2>/dev/null
 sleep 1
-for PAT in "cli.py .*--web-port $WEB_P" "uvicorn apps.api.server.main:app.*--port $API_P" "node server.js"; do
+for PAT in "cli.py .*--web-port $WEB_P" "apps/api/server/main.py .*--port $API_P" "node server.js"; do
   LEFT=$(pgrep -f "$PAT" || true)
   if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "phase1 leftover: $PAT"; fi
 done
@@ -170,7 +170,7 @@ if [ -n "$WEB_T" ]; then ok "web answered on :$WEB_P at t+${WEB_T}s"
 else bad "web never answered on :$WEB_P (45s)"; fi
 
 # 2) reuse proof: CLI did NOT spawn its own uvicorn for the api port
-SLAIN=$(pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" || true)
+SLAIN=$(pgrep -f "apps/api/server/main.py .*--port $API_P" || true)
 if [ -z "$SLAIN" ]; then ok "no cli-owned uvicorn for :$API_P (reused)"
 else bad "cli spawned uvicorn despite healthy api: $SLAIN"; fi
 

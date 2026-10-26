@@ -1853,7 +1853,21 @@ class Engine:
 
     def install_signal_handlers(self) -> None:
         import signal
+        import threading
 
+        if threading.current_thread() is not threading.main_thread():
+            # Signal disposition is process-global and only the main thread
+            # may set it. Hosts that run the ASGI lifespan off-thread (wire)
+            # would otherwise crash Engine construction ("signal only works in
+            # main thread of the main interpreter"); uvicorn's own
+            # capture_signals makes this same check. Nothing is claimed here,
+            # so restore_signal_handlers stays a harmless no-op.
+            return
+        if self._signal_handlers_installed:
+            # Idempotent: a second install must not re-save the CURRENT
+            # handler as "previous" — after our own first install that
+            # would store our own handler and poison the forward chain.
+            return
         self._old_signal_handlers = {
             signal.SIGTERM: signal.getsignal(signal.SIGTERM),
             signal.SIGINT: signal.getsignal(signal.SIGINT),
@@ -1873,6 +1887,16 @@ class Engine:
     def _handle_signal(self, signum, frame) -> None:
         self._running = False
         self.stop()
+        # Forward to the handler we replaced (uvicorn's handle_exit, the
+        # wire branch's stop hook). Not forwarding swallowed the signal —
+        # the host never learned it was time to exit, so SIGTERM was a
+        # no-op and only SIGKILL stopped a running server.
+        previous = self._old_signal_handlers.get(signum)
+        # Equality, not identity: bound methods are re-created on every
+        # attribute access, so `is` can never match self here (it let the
+        # chain recurse into itself when a previous handler was ours).
+        if callable(previous) and previous != self._handle_signal:
+            previous(signum, frame)
 
     def _deps_met(self, proc: Process) -> bool:
         if not proc.depends_on:

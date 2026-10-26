@@ -40,7 +40,7 @@ except Exception: print(0)
 }
 
 CLI_PAT="cli.py serve --mobile --port $API_P"
-UV_PAT="uvicorn apps.api.server.main:app.*--port $API_P"
+UV_PAT="apps/api/server/main.py .*--port $API_P"
 # The fake npx execs straight into `python3 -m http.server $PORT` (signal-
 # clean: SIGTERM lands on the server directly), which replaces its cmdline —
 # match the post-exec identity, scoped to metro's fixed port 8081.

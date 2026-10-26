@@ -92,7 +92,10 @@ def _key_digest(key: str) -> bytes | None:
         return None
     if len(raw) != 16:
         return None
-    return hashlib.sha1(raw + WS_GUID).digest()
+    # RFC 6455 §4.2.2: the digest covers the header VALUE as received, not
+    # its base64 decode — standards-compliant clients (browsers, the
+    # `websockets` lib) compute it that way and reject any mismatch.
+    return hashlib.sha1(key.encode() + WS_GUID).digest()
 
 
 def accept_value(key: str) -> str:

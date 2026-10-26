@@ -79,7 +79,7 @@ if [ "$MODE" = "buildfail" ]; then
   done
   if [ "$C" = "CLOSED" ]; then ok "api port not leaked (closed for 15s after exit)"
   else bad "LEAK: api port $API_P open after build failure"; fi
-  LEFT=$(pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" || true)
+  LEFT=$(pgrep -f "apps/api/server/main.py .*--port $API_P" || true)
   if [ -z "$LEFT" ]; then ok "no orphan uvicorn"
   else kill -9 $LEFT 2>/dev/null; bad "orphan uvicorn: $LEFT"; fi
 
@@ -182,7 +182,7 @@ done
 
 kill -TERM "$SPID" 2>/dev/null
 sleep 1
-for PAT in "cli.py .*--web-port $WEB_P" "uvicorn apps.api.server.main:app.*--port $API_P" "node server.js"; do
+for PAT in "cli.py .*--web-port $WEB_P" "apps/api/server/main.py .*--port $API_P" "node server.js"; do
   LEFT=$(pgrep -f "$PAT" || true)
   if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "leftover killed: $PAT"; fi
 done

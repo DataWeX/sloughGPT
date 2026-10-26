@@ -1696,3 +1696,63 @@ class TestProcessTimeout:
         assert p.status == ProcessStatus.COMPLETED
         assert p.result == "ok"
         tree.shutdown()
+
+
+# ════════════════════════════════════════════════════════════════
+# Engine: signal handlers (main-thread claim + forwarding)
+# ════════════════════════════════════════════════════════════════
+
+
+class TestEngineSignalHandlers:
+    def test_construction_off_main_thread_does_not_raise_or_claim(self):
+        # Hosts that run the ASGI lifespan off a worker thread (wire)
+        # construct the Engine there; bare signal.signal would raise
+        # "signal only works in main thread of the main interpreter" and
+        # abort Engine creation entirely.
+        import signal
+
+        before = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT)}
+        captured: dict = {}
+
+        def _build():
+            try:
+                captured["engine"] = Engine("off-main")
+            except Exception as exc:  # pragma: no cover - surfaced by assert
+                captured["error"] = exc
+
+        worker = threading.Thread(target=_build)
+        worker.start()
+        worker.join(timeout=30)
+        assert "error" not in captured, captured.get("error")
+        engine = captured["engine"]
+        try:
+            assert engine._signal_handlers_installed is False
+            assert engine._old_signal_handlers == {}
+            after = {sig: signal.getsignal(sig) for sig in before}
+            assert after == before  # main thread's disposition untouched
+        finally:
+            engine.stop()
+
+    def test_handle_signal_forwards_to_replaced_handler(self):
+        # The engine stops its own work, then the host's handler runs.
+        # Not forwarding swallowed SIGTERM for the whole server process:
+        # uvicorn never learned it was asked to exit.
+        import signal
+
+        seen: list = []
+        original = signal.getsignal(signal.SIGTERM)
+
+        def _host_handler(signum, frame):
+            seen.append(signum)
+
+        signal.signal(signal.SIGTERM, _host_handler)
+        engine = Engine("chain")
+        try:
+            assert engine._signal_handlers_installed is True
+            assert engine._old_signal_handlers[signal.SIGTERM] is _host_handler
+            engine._handle_signal(signal.SIGTERM, None)
+            assert seen == [signal.SIGTERM]
+            assert engine._running is False
+        finally:
+            engine.stop()
+            signal.signal(signal.SIGTERM, original)

@@ -996,6 +996,57 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-26 · `feat/flip-default-transport` — THE DEFAULT IS FLIPPED:
+  `auto` serves on WireServer (card `ecea49c8`, stacked on
+  `feat/wire-session-loop`; branch pushed, merge deferred — `main` is held by
+  another session's worktree).** `main.py` owns the single decision point:
+  `--transport {auto,wire,uvicorn}` (env-validated), default `auto` = wire
+  except `--reload` → uvicorn; `--transport uvicorn` is the rollback hatch,
+  and the wire/uvicorn branches are otherwise byte-identical to before (the
+  wire branch ends in `sys.exit(0)` — module-level `return` is invalid).
+  `dev.py` spawn sites 2–4 (`serve`, `--mobile`, `--web`) now spawn
+  `python main.py --host … --port …`; site 1 (`cmd_dev`'s `--reload` block)
+  stays `python -m uvicorn` by design (reloader = process supervision), as
+  does `deploy/start.sh --workers 4` (separate card). Three blockers were
+  found and fixed in the same branch: **(A) wire's WS handshake was
+  non-RFC** — `_key_digest` digested the decoded header buffer instead of the
+  header VALUE (RFC 6455 §4.2.2), so real `websockets` clients computed a
+  different accept and were refused 400 (our own tests mirrored the wrong
+  expectation); fixed, mirrored pin corrected, RFC-vector + real-client
+  interop tests added. **(B) PGQ `Engine` claimed signal handlers in
+  `__init__`** — under wire's off-main-thread lifespan `signal.signal` raises
+  and Engine construction died; install is now main-thread-only (uvicorn's
+  `capture_signals` pattern) and idempotent (a second install used to save
+  our own handler as "previous"), and `_handle_signal` now FORWARDS to the
+  replaced handler — **equality not identity**: bound methods are re-created
+  on every attribute access, so `is` can never match self and the chain
+  recursed (RecursionError, caught by an existing test). **(C) script-mode
+  spawns lost the cwd** — the old `-m uvicorn` spawn put the repo root on
+  `sys.path[0]`; `python main.py` puts the script's directory there instead,
+  so the journey's spawned API died `ModuleNotFoundError: domain` unless
+  PYTHONPATH was ambient (`./scripts/python` injects it and masked this in
+  every direct smoke). `main.py` now walks up for the `apps/`+`packages/`
+  markers BEFORE the `domain.shared` import — the entry boots bare from any
+  cwd/env (proved: cwd=/tmp, PYTHONPATH unset → health 200 in 2s), which also
+  de-fangs the `--daemon` re-exec's latent dependency. Journeys: the four
+  serve-variant scripts follow the new spawn argv (11 pgrep sites;
+  `journey_api`/`journey_eaddrinuse` untouched — they drive the unchanged
+  reload site). Evidence: wire **91/91**; pugqeep **1752 passed / 0 failed**
+  (documented baseline 21); ruff + format clean on touched files; smoke
+  stages A/B/C green — wire: `PGQ core engine created` → `PGQ engine
+  stopped`, SIGTERM → exit **0**; uvicorn hatch: full graceful shutdown then
+  exit **143** = uvicorn's canonical `capture_signals` → `raise_signal`
+  re-raise (accepted design, not a defect); `--reload` → WatchFiles reloader
+  → exit 0; `cli.py serve` spawn live on wire; `journey_api`,
+  `journey_serve_api` (phaseB healthy t+4s — the blocker-C failure) and
+  `journey_reuse` **ALL PASS**; `benchmark_wire_host.py` **PASS** (p95 x1.00
+  parity, throughput x0.95, +11.4% vs baseline under the +20% limit,
+  `[state]` fingerprint warning fired). Pre-existing red, not ours:
+  `test_router_domain_facade` — `domain.shell`'s lazy import, `CmdModule`
+  missing since the NPU card (`8050828ae`); `engine.py:27` format drift also
+  at HEAD. Follow-up cards filed done: `210adbf7` (WS digest), `995e2c1e`
+  (engine signals).
+
 - **2026-10-25 · `feat/wire-session-loop` — one session per connection:
   the per-request event loop is gone (card `ecea49c8`, stacked on
   `feat/wire-streaming-content-length`).** The open flip-gate item from
