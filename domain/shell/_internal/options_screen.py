@@ -267,7 +267,9 @@ class OptionsScreen:
             if selected and self.mode == MODE_PICKER and row.options:
                 for j, opt in enumerate(row.options):
                     mark = ">" if j == self.picker_index else " "
-                    lines.append((f"    {mark} {opt}", "picksel" if j == self.picker_index else "pick"))
+                    lines.append(
+                        (f"    {mark} {opt}", "picksel" if j == self.picker_index else "pick")
+                    )
             if selected and self.mode == MODE_INPUT:
                 buf, caret = self.input_buf, self.input_caret
                 lines.append((f"    {buf[:caret]}{_CARET}{buf[caret:]}", "input"))

@@ -44,21 +44,50 @@ from domain.shell._internal.options_screen import (
 
 def _specs() -> list[dict]:
     return [
-        {"label": "Preferred regions", "flag": "--region", "type": "choice",
-         "options": ["any", "us", "eu"], "value": "any"},
-        {"label": "Game data", "flag": "--no-game-data", "type": "bool",
-         "value": False, "on_label": "removed", "off_label": "kept"},
-        {"label": "Cores", "flag": "--core", "type": "choice",
-         "options": ["all", "snes", "nes"], "value": "all"},
-        {"label": "Parallel downloads", "flag": "--jobs", "type": "choice",
-         "options": ["1", "4", "8"], "value": "8"},
+        {
+            "label": "Preferred regions",
+            "flag": "--region",
+            "type": "choice",
+            "options": ["any", "us", "eu"],
+            "value": "any",
+        },
+        {
+            "label": "Game data",
+            "flag": "--no-game-data",
+            "type": "bool",
+            "value": False,
+            "on_label": "removed",
+            "off_label": "kept",
+        },
+        {
+            "label": "Cores",
+            "flag": "--core",
+            "type": "choice",
+            "options": ["all", "snes", "nes"],
+            "value": "all",
+        },
+        {
+            "label": "Parallel downloads",
+            "flag": "--jobs",
+            "type": "choice",
+            "options": ["1", "4", "8"],
+            "value": "8",
+        },
         {"label": "BIOS folder", "flag": "--dest", "type": "text", "value": "~/retrodeck"},
-        {"label": "Copy from", "flag": "--from", "type": "choice",
-         "options": ["none", "local"], "value": "none", "omit": ["none"]},
-        {"label": "Preview the file list", "type": "action",
-         "action": lambda s: setattr(s, "status", "preview: 3 files")},
-        {"label": "Show the command line", "type": "action",
-         "action": show_command_line_action},
+        {
+            "label": "Copy from",
+            "flag": "--from",
+            "type": "choice",
+            "options": ["none", "local"],
+            "value": "none",
+            "omit": ["none"],
+        },
+        {
+            "label": "Preview the file list",
+            "type": "action",
+            "action": lambda s: setattr(s, "status", "preview: 3 files"),
+        },
+        {"label": "Show the command line", "type": "action", "action": show_command_line_action},
     ]
 
 
@@ -83,8 +112,15 @@ class TestRowSpec:
         assert row.omit == ("none",)
 
     def test_bool_display_uses_labels(self):
-        row = OptionRow.from_spec({"label": "G", "value": True, "on_label": "removed",
-                                   "off_label": "kept", "type": "bool"})
+        row = OptionRow.from_spec(
+            {
+                "label": "G",
+                "value": True,
+                "on_label": "removed",
+                "off_label": "kept",
+                "type": "bool",
+            }
+        )
         assert row.display_value() == "removed"
         row.value = False
         assert row.display_value() == "kept"
@@ -95,8 +131,17 @@ class TestRowSpec:
 
 class TestCommandLine:
     def test_choice_emits_flag_and_value(self):
-        s = OptionsScreen([{"label": "J", "flag": "--jobs", "type": "choice",
-                            "options": ["1", "8"], "value": "8"}])
+        s = OptionsScreen(
+            [
+                {
+                    "label": "J",
+                    "flag": "--jobs",
+                    "type": "choice",
+                    "options": ["1", "8"],
+                    "value": "8",
+                }
+            ]
+        )
         assert s.command_line() == ["--jobs", "8"]
 
     def test_omit_value_suppresses_flag(self):
@@ -104,15 +149,17 @@ class TestCommandLine:
         assert "--from" not in s.command_line()
 
     def test_bool_emits_only_when_active(self):
-        s = OptionsScreen([{"label": "G", "flag": "--no-game-data", "type": "bool",
-                            "value": False}])
+        s = OptionsScreen(
+            [{"label": "G", "flag": "--no-game-data", "type": "bool", "value": False}]
+        )
         assert s.command_line() == []
         s.rows[0].value = True
         assert s.command_line() == ["--no-game-data"]
 
     def test_bool_invert_flips_emission(self):
-        s = OptionsScreen([{"label": "G", "flag": "--color", "type": "bool",
-                            "value": True, "invert": True}])
+        s = OptionsScreen(
+            [{"label": "G", "flag": "--color", "type": "bool", "value": True, "invert": True}]
+        )
         assert s.command_line() == []
         s.rows[0].value = False
         assert s.command_line() == ["--color"]
@@ -123,8 +170,16 @@ class TestCommandLine:
 
     def test_full_reference_screen_command_line(self):
         s = OptionsScreen(_specs())
-        assert s.command_line() == ["--region", "any", "--core", "all",
-                                    "--jobs", "8", "--dest", "~/retrodeck"]
+        assert s.command_line() == [
+            "--region",
+            "any",
+            "--core",
+            "all",
+            "--jobs",
+            "8",
+            "--dest",
+            "~/retrodeck",
+        ]
 
     def test_show_command_line_action_sets_status(self):
         s = OptionsScreen(_specs())
@@ -186,8 +241,17 @@ class TestFormNavigation:
         assert s.rows[4].value == before
 
     def test_cycle_out_of_options_value_starts_at_zero(self):
-        s = OptionsScreen([{"label": "J", "flag": "--jobs", "type": "choice",
-                             "options": ["1", "4", "8"], "value": "999"}])
+        s = OptionsScreen(
+            [
+                {
+                    "label": "J",
+                    "flag": "--jobs",
+                    "type": "choice",
+                    "options": ["1", "4", "8"],
+                    "value": "999",
+                }
+            ]
+        )
         s.cycle(1)
         assert s.rows[0].value == "4"
 
@@ -395,9 +459,7 @@ def _drive(rows: list[dict], keys: list, message: str = "Options") -> tuple[dict
     buf = _io_mod.StringIO()
     try:
         with _contextlib.redirect_stdout(buf):
-            values = p._options_screen_raw(
-                OptionsScreen(rows, message), read_key=read_key, fd=fd
-            )
+            values = p._options_screen_raw(OptionsScreen(rows, message), read_key=read_key, fd=fd)
     finally:
         _os.close(fd)
     return values, buf.getvalue()
