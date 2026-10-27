@@ -276,8 +276,12 @@ class TestPlanConsolidation:
             {"id": "a", "content": "", "topic": "t"},
             {"id": "b", "content": "", "topic": "t"},
         ]
+        # Empty-content facts are INVALID — filtered before planning ("facts
+        # without required fields") — so the plan proposes nothing: empties
+        # are never merged, measured, or counted. (The opposite expectation
+        # came from the bbd7214df WIP.)
         result = plan_consolidation(facts, threshold=0.5)
-        assert result["removed_count"] == 1
+        assert result["removed_count"] == 0
 
     def test_unicode_content(self):
         facts = [

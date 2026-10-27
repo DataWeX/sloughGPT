@@ -41,17 +41,14 @@ describe('VQA flow', () => {
     cy.visit('/multimodal')
   })
 
-  it.skip('shows VQA section — never built; core-feature backlog (features-to-core list)', () => {
+  it('shows VQA section', () => {
     cy.contains('Visual Question Answering').scrollIntoView().should('be.visible')
   })
 
-  it.skip(
-    'accepts a question input — never built; core-feature backlog (features-to-core list)',
-    () => {
-      cy.get('input[aria-label="Question"]').scrollIntoView().type('What is in this image?')
-      cy.get('input[aria-label="Question"]').should('have.value', 'What is in this image?')
-    },
-  )
+  it('accepts a question input', () => {
+    cy.get('input[aria-label="Question"]').scrollIntoView().type('What is in this image?')
+    cy.get('input[aria-label="Question"]').should('have.value', 'What is in this image?')
+  })
 })
 
 describe('Object detection flow', () => {
@@ -61,7 +58,7 @@ describe('Object detection flow', () => {
     cy.visit('/multimodal')
   })
 
-  it.skip('shows object detection section — never built; core-feature backlog', () => {
+  it('shows object detection section', () => {
     cy.contains('Object Detection').scrollIntoView().should('be.visible')
   })
 })

@@ -26,6 +26,7 @@ if _CORE_DIR not in sys.path:
 from domain.shell._internal.vm import (  # noqa: E402
     X86SyscallHandler,
 )
+from domain.shell._internal.vm_programs import CAVE_GAME_ASM  # noqa: E402
 
 
 def _syscall_num(name: str) -> int:
@@ -43,6 +44,12 @@ _NR_WRITE = _syscall_num("SYS_WRITE")
 _NR_TRAIN_START = _syscall_num("SYS_TRAIN_START")
 _NR_TRAIN_STATUS = _syscall_num("SYS_TRAIN_STATUS")
 _NR_TRAIN_GET_RESULT = _syscall_num("SYS_TRAIN_GET_RESULT")
+_NR_OPEN = _syscall_num("SYS_OPEN")
+_NR_CLOSE = _syscall_num("SYS_CLOSE")
+_NR_READDIR = _syscall_num("SYS_READDIR")
+_NR_UNAME = _syscall_num("SYS_UNAME")
+_NR_GETPID = _syscall_num("SYS_GETPID")
+_NR_GETROLE = _syscall_num("SYS_GETROLE")
 
 
 # ── Shared subroutines (spliced into each program) ───────────────────────────
@@ -475,6 +482,1341 @@ start:
 """
 
 
+def _shell() -> str:
+    return f"""; shell — interactive console REPL for the browser VM session.
+; Line-buffered stdin read loop: prompts, echoes typing, handles
+; backspace, then dispatches one of: help, ls, cat <file>, cp <src> <dst>,
+ ; grep <pattern> <file>, uname, pid, echo <text>, write <file> <text>,
+ ; train, train-status, train-result, about, clear, halt.  Spins on empty
+ ; keyboard buffer (SYS_READ returns 0) until the session pump feeds keys
+ ; via transfer_key().
+[BITS 32]
+[ORG 0x100000]
+    jmp start
+prompt: db 10, "sloughvm> ", 0
+msg_nl: db 10, 0
+msg_sp: db " ", 0
+msg_help: db "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, wc <file>, head <file> [n], tail <file> [n], uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
+msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
+msg_unknown: db "unknown command - type help", 10, 0
+msg_clear: db 27, "[2J", 27, "[H", 0
+msg_bs: db 8, 32, 8, 0
+msg_ls_empty: db "(no files)", 10, 0
+msg_cat_usage: db "usage: cat <file>", 10, 0
+msg_no_file: db "cat: no such file", 10, 0
+msg_wrote: db "wrote ", 0
+msg_write_usage: db "usage: write <file> <text>", 10, 0
+msg_open_fail: db "write: cannot create file", 10, 0
+msg_copied: db "copied ", 0
+msg_arrow: db " -> ", 0
+msg_cp_usage: db "usage: cp <src> <dst>", 10, 0
+msg_cp_no_src: db "cp: no such file", 10, 0
+msg_cp_fail: db "cp: cannot create file", 10, 0
+msg_grep_usage: db "usage: grep <pattern> <file>", 10, 0
+msg_echo_usage: db "usage: echo <text> > <file>", 10, 0
+msg_grep_no_file: db "grep: no such file", 10, 0
+msg_wc_usage: db "usage: wc <file>", 10, 0
+msg_wc_no_file: db "wc: no such file", 10, 0
+msg_head_usage: db "usage: head <file> [n]", 10, 0
+msg_head_no_file: db "head: no such file", 10, 0
+msg_tail_usage: db "usage: tail <file> [n]", 10, 0
+msg_tail_no_file: db "tail: no such file", 10, 0
+msg_wcl: db " lines, ", 0
+msg_wcw: db " words, ", 0
+msg_wcb: db " bytes", 10, 0
+msg_train_started: db "started job ", 0
+msg_train_fail: db "train: could not start job", 10, 0
+msg_denied: db "permission denied (ADMIN role required)", 10, 0
+msg_no_job: db "no training job yet - run train first", 10, 0
+msg_status_running: db "status: running", 10, 0
+msg_status_completed: db "status: completed", 10, 0
+msg_status_failed: db "status: failed", 10, 0
+msg_status_notfound: db "status: job not found", 10, 0
+msg_no_result: db "no result yet", 10, 0
+cmd_help: db "help", 0
+cmd_echo: db "echo", 0
+cmd_about: db "about", 0
+cmd_clear: db "clear", 0
+cmd_halt: db "halt", 0
+cmd_ls: db "ls", 0
+cmd_uname: db "uname", 0
+cmd_pid: db "pid", 0
+cmd_cat: db "cat", 0
+cmd_cp: db "cp", 0
+cmd_grep: db "grep", 0
+cmd_write: db "write", 0
+cmd_train: db "train", 0
+cmd_train_status: db "train-status", 0
+cmd_train_result: db "train-result", 0
+cmd_wc: db "wc", 0
+cmd_head: db "head", 0
+cmd_tail: db "tail", 0
+chbuf: times 4 db 0
+llen: times 1 db 0
+line: times 80 db 0
+dirents: times 320 db 0
+catbuf: times 201 db 0
+ntmp: times 4 db 0
+unamebuf: times 325 db 0
+catfd: times 4 db 0
+grep_ptr: times 4 db 0
+lastjob: times 4 db 0
+resultbuf: times 201 db 0
+cfg: db '{{"dataset":"shakespeare","epochs":3}}', 0
+{_SCRATCH}
+start:
+repl:
+    xor eax, eax
+    mov [llen], al
+    mov esi, prompt
+    call print_str
+read_loop:
+    mov eax, {_NR_READ}
+    mov ebx, 0
+    mov ecx, chbuf
+    mov edx, 1
+    int 0x80
+    test eax, eax
+    jle read_loop
+    mov al, [chbuf]
+    cmp al, 10
+    je line_done
+    cmp al, 13
+    je line_done
+    cmp al, 8
+    je do_bs
+    cmp al, 127
+    je do_bs
+    xor ecx, ecx
+    mov cl, [llen]
+    cmp cl, 78
+    jae read_loop
+    mov edi, line
+    add edi, ecx
+    mov [edi], al
+    inc ecx
+    mov [llen], cl
+    mov eax, {_NR_WRITE}
+    mov ebx, 1
+    mov ecx, chbuf
+    mov edx, 1
+    int 0x80
+    jmp read_loop
+do_bs:
+    xor ecx, ecx
+    mov cl, [llen]
+    test cl, cl
+    jz read_loop
+    dec ecx
+    mov [llen], cl
+    mov edi, line
+    add edi, ecx
+    xor eax, eax
+    mov [edi], al
+    mov esi, msg_bs
+    call print_str
+    jmp read_loop
+line_done:
+    xor ecx, ecx
+    mov cl, [llen]
+    xor eax, eax
+    mov edi, line
+    add edi, ecx
+    mov [edi], al
+    mov esi, msg_nl
+    call print_str
+    test cl, cl
+    jz repl
+    mov esi, line
+    mov edi, cmd_help
+    call strcmp
+    jz do_help
+    mov esi, line
+    mov edi, cmd_about
+    call strcmp
+    jz do_about
+    mov esi, line
+    mov edi, cmd_clear
+    call strcmp
+    jz do_clear
+    mov esi, line
+    mov edi, cmd_halt
+    call strcmp
+    jz do_halt
+    mov esi, line
+    mov edi, cmd_ls
+    call strcmp
+    jz do_ls
+    mov esi, line
+    mov edi, cmd_uname
+    call strcmp
+    jz do_uname
+    mov esi, line
+    mov edi, cmd_pid
+    call strcmp
+    jz do_pid
+    mov esi, line
+    mov edi, cmd_train
+    call strcmp
+    jz do_train
+    mov esi, line
+    mov edi, cmd_train_status
+    call strcmp
+    jz do_train_status
+    mov esi, line
+    mov edi, cmd_train_result
+    call strcmp
+    jz do_train_result
+    mov esi, line
+    mov edi, cmd_cat
+    call prefix_match
+    test eax, eax
+    jnz do_cat
+    mov esi, line
+    mov edi, cmd_cp
+    call prefix_match
+    test eax, eax
+    jnz do_cp
+    mov esi, line
+    mov edi, cmd_grep
+    call prefix_match
+    test eax, eax
+    jnz do_grep
+    mov esi, line
+    mov edi, cmd_write
+    call prefix_match
+    test eax, eax
+    jnz do_write
+    mov esi, line
+    mov edi, cmd_echo
+    call prefix_match
+    test eax, eax
+    jnz do_echo
+    mov esi, line
+    mov edi, cmd_wc
+    call prefix_match
+    test eax, eax
+    jnz do_wc
+    mov esi, line
+    mov edi, cmd_head
+    call prefix_match
+    test eax, eax
+    jnz do_head
+    mov esi, line
+    mov edi, cmd_tail
+    call prefix_match
+    test eax, eax
+    jnz do_tail
+    mov esi, msg_unknown
+    call print_str
+    jmp repl
+do_help:
+    mov esi, msg_help
+    call print_str
+    jmp repl
+do_about:
+    mov esi, msg_about
+    call print_str
+    jmp repl
+do_clear:
+    mov esi, msg_clear
+    call print_str
+    jmp repl
+do_halt:
+{_EXIT}
+do_ls:
+    mov eax, {_NR_READDIR}
+    mov ebx, dirents
+    mov ecx, 10
+    int 0x80
+    test eax, eax
+    jz ls_empty
+    mov esi, dirents
+    mov ecx, eax
+ls_loop:
+    test ecx, ecx
+    jz ls_done
+    push esi
+    call print_str
+    pop esi
+    push esi
+    mov esi, msg_nl
+    call print_str
+    pop esi
+    add esi, 32
+    dec ecx
+    jmp ls_loop
+ls_done:
+    jmp repl
+ls_empty:
+    mov esi, msg_ls_empty
+    call print_str
+    jmp repl
+do_uname:
+    mov eax, {_NR_UNAME}
+    mov ebx, unamebuf
+    int 0x80
+    mov esi, unamebuf
+    call print_str
+    call print_sp
+    mov esi, unamebuf
+    add esi, 65
+    call print_str
+    call print_sp
+    mov esi, unamebuf
+    add esi, 130
+    call print_str
+    call print_sp
+    mov esi, unamebuf
+    add esi, 195
+    call print_str
+    call print_sp
+    mov esi, unamebuf
+    add esi, 260
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+do_pid:
+    mov eax, {_NR_GETPID}
+    int 0x80
+    call print_num
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+do_train:
+    mov eax, {_NR_TRAIN_START}
+    mov ebx, cfg
+    int 0x80            ; EAX = job_id (>=1), -1 = error, -2 = denied
+    test eax, eax
+    js train_err
+    mov [lastjob], al
+    mov esi, msg_train_started
+    call print_str
+    call print_num
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+train_err:
+    cmp eax, -2
+    je denied_out
+    mov esi, msg_train_fail
+    call print_str
+    jmp repl
+do_train_status:
+    mov eax, {_NR_GETROLE}
+    int 0x80
+    test eax, eax
+    jz denied_out        ; role 0 (USER) -> ADMIN required
+    xor ebx, ebx
+    mov bl, [lastjob]
+    test ebx, ebx
+    jz no_job_out
+    mov eax, {_NR_TRAIN_STATUS}
+    int 0x80            ; EAX: 0 running 1 completed 2 failed -1 not found -2 denied
+    test eax, eax
+    js st_err
+    cmp eax, 0
+    je st_running
+    cmp eax, 1
+    je st_completed
+    mov esi, msg_status_failed
+    call print_str
+    jmp repl
+st_running:
+    mov esi, msg_status_running
+    call print_str
+    jmp repl
+st_completed:
+    mov esi, msg_status_completed
+    call print_str
+    jmp repl
+st_err:
+    cmp eax, -2
+    je denied_out
+    mov esi, msg_status_notfound
+    call print_str
+    jmp repl
+do_train_result:
+    mov eax, {_NR_GETROLE}
+    int 0x80
+    test eax, eax
+    jz denied_out        ; role 0 (USER) -> ADMIN required
+    xor ebx, ebx
+    mov bl, [lastjob]
+    test ebx, ebx
+    jz no_job_out
+    mov eax, {_NR_TRAIN_GET_RESULT}
+    mov ecx, resultbuf
+    mov edx, 200
+    int 0x80            ; EAX = bytes written, 0 = not ready, -2 = denied
+    test eax, eax
+    jz res_none
+    js res_err
+    mov esi, resultbuf
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+res_err:
+    cmp eax, -2
+    je denied_out
+res_none:
+    mov esi, msg_no_result
+    call print_str
+    jmp repl
+no_job_out:
+    mov esi, msg_no_job
+    call print_str
+    jmp repl
+denied_out:
+    mov esi, msg_denied
+    call print_str
+    jmp repl
+do_cat:
+    ; prefix matched: line must be exactly "cat" or "cat <args>"
+    mov esi, line
+    add esi, 3
+    mov al, [esi]
+    test al, al
+    jz cat_usage
+    cmp al, ' '
+    jne do_unknown
+cat_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je cat_skip
+    test al, al
+    jz cat_usage
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    mov ecx, 0
+    int 0x80
+    cmp eax, 0
+    jl cat_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl cat_read_err
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov esi, catbuf
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+cat_usage:
+    mov esi, msg_cat_usage
+    call print_str
+    jmp repl
+cat_missing:
+    mov esi, msg_no_file
+    call print_str
+    jmp repl
+cat_read_err:
+    mov esi, msg_no_file
+    call print_str
+    jmp repl
+; parse_n — optional [n] argument after a tokenized filename.
+; EDI = rest-of-line pointer (already past the filename's NUL).
+; Returns EAX=1 with ECX=n (default 10), or EAX=0 → caller prints usage.
+parse_n:
+    mov ecx, 10
+pn_lsp:
+    mov al, [edi]
+    cmp al, ' '
+    jne pn_pre
+    inc edi
+    jmp pn_lsp
+pn_pre:
+    test al, al
+    jz pn_ok
+    cmp al, '0'
+    jb pn_fail
+    cmp al, '9'
+    ja pn_fail
+    xor ecx, ecx
+    mov edx, 10
+pn_loop:
+    mov al, [edi]
+    cmp al, '0'
+    jb pn_end
+    cmp al, '9'
+    ja pn_fail
+    sub al, '0'
+    xor ebx, ebx
+    mov bl, al
+    mov eax, ecx
+    imul eax, edx
+    mov ecx, eax
+    add ecx, ebx
+    inc edi
+    jmp pn_loop
+pn_end:
+pn_esp:
+    mov al, [edi]
+    cmp al, ' '
+    jne pn_echk
+    inc edi
+    jmp pn_esp
+pn_echk:
+    test al, al
+    jz pn_ok
+pn_fail:
+    xor eax, eax
+    ret
+pn_ok:
+    mov eax, 1
+    ret
+do_wc:
+    mov esi, line
+    add esi, 2
+    mov al, [esi]
+    test al, al
+    jz wc_usage
+    cmp al, ' '
+    jne do_unknown
+wc_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je wc_skip
+    test al, al
+    jz wc_usage
+    mov edi, esi
+wc_tok:
+    mov al, [edi]
+    test al, al
+    jz wc_rest
+    cmp al, ' '
+    je wc_tok_sp
+    inc edi
+    jmp wc_tok
+wc_tok_sp:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+wc_rest:
+    mov al, [edi]
+    test al, al
+    jz wc_open
+    cmp al, ' '
+    jne wc_usage
+wc_rsp:
+    inc edi
+    mov al, [edi]
+    test al, al
+    jz wc_open
+    cmp al, ' '
+    je wc_rsp
+    jmp wc_usage
+wc_open:
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl wc_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl wc_readerr
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al           ; NUL at hard end (buffer is 201)
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov esi, edi            ; ESI = hard end (survives int 0x80)
+    mov edi, catbuf
+wc_fend:
+    cmp edi, esi
+    jge wc_fend_ok
+    mov al, [edi]
+    test al, al
+    jz wc_fend_ok
+    inc edi
+    jmp wc_fend
+wc_fend_ok:
+    mov esi, edi            ; ESI = logical end (first NUL, sector padding excluded)
+    mov edi, catbuf
+    xor ebx, ebx            ; lines
+    xor ecx, ecx            ; words
+    xor edx, edx            ; bytes
+    mov ebp, 1              ; previous byte was whitespace (start of file counts)
+wc_loop:
+    cmp edi, esi
+    jge wc_out
+    mov al, [edi]
+    inc edx
+    cmp al, 10
+    je wc_nl
+    cmp al, ' '
+    je wc_sp
+    test ebp, ebp
+    jz wc_nxt
+    inc ecx
+    xor ebp, ebp
+    jmp wc_nxt
+wc_sp:
+    mov ebp, 1
+    jmp wc_nxt
+wc_nl:
+    inc ebx
+    mov ebp, 1
+wc_nxt:
+    inc edi
+    jmp wc_loop
+wc_out:
+    mov eax, ebx
+    call print_num
+    mov esi, msg_wcl
+    call print_str
+    mov eax, ecx
+    call print_num
+    mov esi, msg_wcw
+    call print_str
+    mov eax, edx
+    call print_num
+    mov esi, msg_wcb
+    call print_str
+    jmp repl
+wc_readerr:
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+wc_missing:
+    mov esi, msg_wc_no_file
+    call print_str
+    jmp repl
+wc_usage:
+    mov esi, msg_wc_usage
+    call print_str
+    jmp repl
+do_head:
+    mov esi, line
+    add esi, 4
+    mov al, [esi]
+    test al, al
+    jz head_usage
+    cmp al, ' '
+    jne do_unknown
+head_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je head_skip
+    test al, al
+    jz head_usage
+    mov edi, esi
+head_tok:
+    mov al, [edi]
+    test al, al
+    jz head_rest
+    cmp al, ' '
+    je head_tok_sp
+    inc edi
+    jmp head_tok
+head_tok_sp:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+head_rest:
+    call parse_n
+    test eax, eax
+    jz head_usage
+    mov [ntmp], ecx
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl head_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl head_readerr
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov ecx, [ntmp]
+    test ecx, ecx
+    jz head_noop            ; head <file> 0 prints nothing
+    mov esi, catbuf
+head_scan:
+    cmp esi, edi
+    jge head_hard
+    mov al, [esi]
+    test al, al
+    jz head_hard
+    cmp al, 10
+    jne head_snx
+    dec ecx
+    jz head_found
+head_snx:
+    inc esi
+    jmp head_scan
+head_found:
+    inc esi                 ; stop after the nth newline
+head_hard:
+    xor eax, eax
+    mov [esi], al
+    mov esi, catbuf
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+head_noop:
+    jmp repl
+head_readerr:
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+head_missing:
+    mov esi, msg_head_no_file
+    call print_str
+    jmp repl
+head_usage:
+    mov esi, msg_head_usage
+    call print_str
+    jmp repl
+do_tail:
+    mov esi, line
+    add esi, 4
+    mov al, [esi]
+    test al, al
+    jz tail_usage
+    cmp al, ' '
+    jne do_unknown
+tail_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je tail_skip
+    test al, al
+    jz tail_usage
+    mov edi, esi
+tail_tok:
+    mov al, [edi]
+    test al, al
+    jz tail_rest
+    cmp al, ' '
+    je tail_tok_sp
+    inc edi
+    jmp tail_tok
+tail_tok_sp:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+tail_rest:
+    call parse_n
+    test eax, eax
+    jz tail_usage
+    mov [ntmp], ecx
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl tail_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl tail_readerr
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov ebx, catbuf         ; scan bound (EBX free after close)
+    mov esi, catbuf
+tail_fend:
+    cmp esi, edi
+    jge tail_fe
+    mov al, [esi]
+    test al, al
+    jz tail_fe
+    inc esi
+    jmp tail_fend
+tail_fe:
+    mov ecx, [ntmp]
+    test ecx, ecx
+    jz tail_noop            ; tail <file> 0 prints nothing
+    cmp esi, ebx
+    jle tail_noop           ; empty file
+    mov edi, esi
+    dec edi
+    mov al, [edi]
+    cmp al, 10
+    je tail_bset            ; exclude the file's trailing newline
+    inc edi
+tail_bset:
+tail_lp:
+    cmp edi, ebx
+    jle tail_from0
+    dec edi
+    mov al, [edi]
+    cmp al, 10
+    jne tail_lp
+    dec ecx
+    jnz tail_lp
+    inc edi
+    jmp tail_pr
+tail_from0:
+    mov edi, catbuf         ; fewer newlines than n — whole file
+tail_pr:
+    xor eax, eax
+    mov [esi], al           ; NUL at logical end (ESI = L, kept through the scan)
+    mov esi, edi
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+tail_noop:
+    jmp repl
+tail_readerr:
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+tail_missing:
+    mov esi, msg_tail_no_file
+    call print_str
+    jmp repl
+tail_usage:
+    mov esi, msg_tail_usage
+    call print_str
+    jmp repl
+do_unknown:
+    mov esi, msg_unknown
+    call print_str
+    jmp repl
+do_echo:
+    mov esi, line
+    add esi, 4
+echo_skip:
+    mov al, [esi]
+    cmp al, ' '
+    jne echo_gt
+    inc esi
+    jmp echo_skip
+echo_gt:
+    mov ebx, esi            ; EBX = text start (leading spaces skipped)
+echo_gt_scan:
+    mov al, [esi]
+    test al, al
+    jz echo_plain
+    cmp al, '>'
+    je echo_gt_found
+    inc esi
+    jmp echo_gt_scan
+echo_gt_found:
+    ; back-trim spaces before '>' so "echo hi > f" stores "hi", not "hi "
+    mov edi, esi            ; ESI stays on '>' (filename comes after it)
+echo_gt_bt:
+    cmp edi, ebx
+    jbe echo_gt_btempty
+    dec edi
+    mov al, [edi]
+    cmp al, ' '
+    je echo_gt_bt
+    inc edi
+    jmp echo_gt_nul
+echo_gt_btempty:
+    mov edi, ebx            ; text is empty/all spaces
+echo_gt_nul:
+    xor eax, eax
+    mov [edi], al           ; terminate the text part
+    inc esi                 ; ESI = filename start (after '>')
+echo_gt_sp:
+    mov al, [esi]
+    cmp al, ' '
+    jne echo_gt_tok
+    inc esi
+    jmp echo_gt_sp
+echo_gt_tok:
+    test al, al
+    jz echo_gt_usage
+    mov edi, esi            ; EDI = filename start
+echo_gt_scan2:
+    mov al, [edi]
+    test al, al
+    jz echo_gt_prep
+    cmp al, ' '
+    je echo_gt_endtok
+    inc edi
+    jmp echo_gt_scan2
+echo_gt_endtok:
+    xor eax, eax
+    mov [edi], al           ; terminate filename at the first trailing space
+    inc edi
+echo_gt_rest:
+    mov al, [edi]
+    test al, al
+    jz echo_gt_prep
+    cmp al, ' '
+    jne echo_gt_usage       ; extra args after the filename -> usage
+    inc edi
+    jmp echo_gt_rest
+echo_gt_prep:
+    push esi                ; filename (NUL-terminated)
+    push ebx                ; text start
+    mov esi, ebx
+    xor edx, edx
+echo_gt_clen:
+    mov al, [esi]
+    test al, al
+    jz echo_gt_clen_done
+    inc edx
+    inc esi
+    jmp echo_gt_clen
+echo_gt_clen_done:
+    pop ecx                 ; ECX = text start (WRITE buffer)
+    pop esi                 ; ESI = filename
+    push ecx                ; text start must survive OPEN
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    mov ecx, 2              ; create+truncate
+    int 0x80
+    cmp eax, 0
+    jl echo_gt_open_fail
+    mov ebx, eax            ; fd
+    pop ecx                 ; ECX = text start
+    test edx, edx
+    jz echo_gt_nl
+    mov eax, {_NR_WRITE}
+    int 0x80                ; EBX=fd, ECX=text, EDX=len
+echo_gt_nl:
+    mov eax, {_NR_WRITE}
+    mov ecx, msg_nl
+    mov edx, 1
+    int 0x80                ; trailing newline, sh-style
+    mov eax, {_NR_CLOSE}
+    int 0x80
+    jmp repl
+echo_gt_open_fail:
+    pop ecx                 ; discard text start
+    mov esi, msg_open_fail
+    call print_str
+    jmp repl
+echo_gt_usage:
+    mov esi, msg_echo_usage
+    call print_str
+    jmp repl
+echo_plain:
+    mov esi, ebx            ; no '>' — print from text start
+echo_pr:
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+do_write:
+    ; prefix "write" matched — line must be "write <file> [text]"
+    mov esi, line
+    add esi, 5
+    mov al, [esi]
+    test al, al
+    jz wr_usage
+    cmp al, ' '
+    jne do_unknown
+wr_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je wr_skip
+    test al, al
+    jz wr_usage
+    ; ESI = filename start — scan to separator, terminate it
+    mov edi, esi
+wr_scan:
+    mov al, [edi]
+    test al, al
+    jz wr_no_content
+    cmp al, ' '
+    je wr_has_content
+    inc edi
+    jmp wr_scan
+wr_has_content:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+wr_no_content:
+    ; EDI = content start, ESI = filename — strlen(content) -> EDX
+    xor edx, edx
+    push edi
+wr_strlen:
+    mov al, [edi]
+    test al, al
+    jz wr_strlen_done
+    inc edx
+    inc edi
+    jmp wr_strlen
+wr_strlen_done:
+    pop edi
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    mov ecx, 2            ; create+truncate
+    int 0x80
+    cmp eax, 0
+    jl wr_open_fail
+    mov ebx, eax          ; fd — kept for SYS_CLOSE
+    test edx, edx
+    jz wr_zero
+    mov eax, {_NR_WRITE}
+    mov ecx, edi
+    int 0x80              ; EAX = bytes written
+    jmp wr_done
+wr_zero:
+    xor eax, eax
+wr_done:
+    mov edi, esi          ; filename for the confirmation line
+    push eax              ; count
+    mov esi, msg_wrote
+    call print_str
+    mov esi, edi
+    call print_str
+    mov esi, msg_sp
+    call print_str
+    pop eax
+    call print_num
+    mov esi, msg_nl
+    call print_str
+    mov eax, {_NR_CLOSE}
+    int 0x80
+    jmp repl
+wr_usage:
+    mov esi, msg_write_usage
+    call print_str
+    jmp repl
+wr_open_fail:
+    mov esi, msg_open_fail
+    call print_str
+    jmp repl
+do_cp:
+    ; prefix "cp" matched — guard: must be followed by space or NUL
+    mov esi, line
+    add esi, 2
+    mov al, [esi]
+    test al, al
+    jz cp_usage
+    cmp al, ' '
+    jne do_unknown
+cp_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je cp_skip
+    test al, al
+    jz cp_usage
+    ; ESI = src start — scan to space, NUL-terminate
+    mov edi, esi
+cp_src_scan:
+    mov al, [edi]
+    test al, al
+    jz cp_no_dst
+    cmp al, ' '
+    je cp_src_end
+    inc edi
+    jmp cp_src_scan
+cp_src_end:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+cp_dst_skip:
+    mov al, [edi]
+    cmp al, ' '
+    je cp_dst_skip
+    test al, al
+    jz cp_no_dst
+    ; EDI = dst start — NUL-terminate at any trailing token
+    mov ebx, edi
+cp_dst_scan:
+    mov al, [ebx]
+    test al, al
+    jz cp_go
+    cmp al, ' '
+    je cp_dst_end
+    inc ebx
+    jmp cp_dst_scan
+cp_dst_end:
+    xor eax, eax
+    mov [ebx], al
+    jmp cp_go
+cp_no_dst:
+    jmp cp_usage
+cp_go:
+    ; ESI = src, EDI = dst
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl cp_src_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl cp_src_missing
+    mov edx, eax          ; bytes to write into dst
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov eax, {_NR_OPEN}
+    mov ebx, edi
+    mov ecx, 2            ; create+truncate
+    int 0x80
+    cmp eax, 0
+    jl cp_dst_fail
+    mov [catfd], al
+    mov ebx, eax
+    test edx, edx
+    jz cp_done
+    mov eax, {_NR_WRITE}
+    mov ecx, catbuf
+    int 0x80
+cp_done:
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov ebx, esi          ; keep src across prints
+    mov esi, msg_copied
+    call print_str
+    mov esi, ebx
+    call print_str
+    mov esi, msg_arrow
+    call print_str
+    mov esi, edi
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+cp_usage:
+    mov esi, msg_cp_usage
+    call print_str
+    jmp repl
+cp_src_missing:
+    mov esi, msg_cp_no_src
+    call print_str
+    jmp repl
+cp_dst_fail:
+    mov esi, msg_cp_fail
+    call print_str
+    jmp repl
+do_grep:
+    ; prefix "grep" matched — guard: must be followed by space or NUL
+    mov esi, line
+    add esi, 4
+    mov al, [esi]
+    test al, al
+    jz grep_usage
+    cmp al, ' '
+    jne do_unknown
+grep_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je grep_skip
+    test al, al
+    jz grep_usage
+    ; ESI = pattern start — stash ptr, scan to space, NUL-terminate
+    mov [grep_ptr], esi
+    mov edi, esi
+grep_pat_scan:
+    mov al, [edi]
+    test al, al
+    jz grep_no_dst
+    cmp al, ' '
+    je grep_pat_end
+    inc edi
+    jmp grep_pat_scan
+grep_pat_end:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+grep_file_skip:
+    mov al, [edi]
+    cmp al, ' '
+    je grep_file_skip
+    test al, al
+    jz grep_no_dst
+    ; EDI = filename start — NUL-terminate at any trailing token
+    mov ebx, edi
+grep_file_scan:
+    mov al, [ebx]
+    test al, al
+    jz grep_go
+    cmp al, ' '
+    je grep_file_end
+    inc ebx
+    jmp grep_file_scan
+grep_file_end:
+    xor eax, eax
+    mov [ebx], al
+    jmp grep_go
+grep_no_dst:
+    jmp grep_usage
+grep_go:
+    ; pattern at [grep_ptr], EDI = filename
+    mov eax, {_NR_OPEN}
+    mov ebx, edi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl grep_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl grep_missing
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al          ; NUL-terminate file content
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov ebx, catbuf        ; EBX = current line start
+grep_line:
+    mov al, [ebx]
+    test al, al
+    jz repl                ; EOF — silent (grep prints only matches)
+    mov edx, ebx           ; EDX walks to line end (10 or NUL)
+grep_find_end:
+    mov al, [edx]
+    test al, al
+    jz grep_try
+    cmp al, 10
+    je grep_try
+    inc edx
+    jmp grep_find_end
+grep_try:
+    mov esi, ebx           ; ESI = p, candidate start within line
+grep_try_pos:
+    mov edi, [grep_ptr]    ; reset pattern walker each candidate
+    cmp esi, edx
+    jae grep_next_line_pos ; no match on this line
+    mov ecx, esi           ; ECX = q, walker against file bytes
+grep_cmp:
+    mov al, [edi]
+    test al, al
+    jz grep_matched        ; pattern exhausted — match at p
+    cmp al, [ecx]
+    jne grep_advance
+    inc edi
+    inc ecx
+    jmp grep_cmp
+grep_advance:
+    inc esi
+    jmp grep_try_pos
+grep_matched:
+    mov al, [edx]
+    mov ah, al             ; keep line-end char across print_str
+    mov byte [edx], 0
+    mov esi, ebx
+    call print_str
+    mov [edx], ah          ; restore newline/NUL
+    mov esi, msg_nl
+    call print_str
+    cmp ah, 10
+    jne repl               ; last line had no newline — done after match
+grep_next_line_pos:
+    lea ebx, [edx+1]
+    jmp grep_line
+grep_usage:
+    mov esi, msg_grep_usage
+    call print_str
+    jmp repl
+grep_missing:
+    mov esi, msg_grep_no_file
+    call print_str
+    jmp repl
+strcmp:
+    mov al, [esi]
+    mov bl, [edi]
+    cmp al, bl
+    jne sc_ne
+    test al, al
+    jz sc_eq
+    inc esi
+    inc edi
+    jmp strcmp
+sc_ne:
+    mov eax, 1
+    ret
+sc_eq:
+    xor eax, eax
+    ret
+prefix_match:
+    mov al, [edi]
+    test al, al
+    jz pm_yes
+    mov bl, [esi]
+    cmp al, bl
+    jne pm_no
+    inc esi
+    inc edi
+    jmp prefix_match
+pm_yes:
+    mov eax, 1
+    ret
+pm_no:
+    xor eax, eax
+    ret
+print_sp:
+    push esi
+    mov esi, msg_sp
+    call print_str
+    pop esi
+    ret
+{_PRINT_NUM}
+{_PRINT_STR}
+"""
+
+
 # Each name maps to a builder that splices in the real syscall numbers.
 BUILTIN_PROGRAMS: dict[str, dict[str, str]] = {
     "hello": {"description": "Print 'Hello, VM!' to stdout", "program": _hello},
@@ -494,6 +1836,14 @@ BUILTIN_PROGRAMS: dict[str, dict[str, str]] = {
     "train-status": {
         "description": "Poll a training job via SYS_TRAIN_STATUS (requires ADMIN role)",
         "program": _train_status,
+    },
+    "shell": {
+        "description": "Interactive console REPL (line-buffered commands over stdin)",
+        "program": _shell,
+    },
+    "cave_game": {
+        "description": "Minecraft iteration-1 voxel runner: first-person terrain, mine/place (VGA text)",
+        "program": lambda: CAVE_GAME_ASM,
     },
 }
 

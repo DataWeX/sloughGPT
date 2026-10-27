@@ -140,11 +140,18 @@ class TestEpisodicMemory:
         episodes = em.recall(k=0, by_reward=False)
         assert len(episodes) == 1
 
-    def test_recall_k_negative_returns_all(self):
+    def test_recall_k_negative_returns_empty(self):
+        # Contract: k < 0 is invalid input and fails closed (returns []),
+        # for BOTH classes and BOTH by_reward branches. Negative k
+        # returning the whole buffer was a silent-unbounded footgun and
+        # contradicted test_signal_communication's negative-k pins and
+        # this file's own WorldMemory negative-k test (line ~414).
+        # k == 0 keeps the documented no-limit sentinel (see
+        # test_recall_k_zero_returns_all above).
         em = EpisodicMemory(capacity=5)
         em.record(np.array([1.0]), action=(0.5,), reward=1.0, tick=0)
         episodes = em.recall(k=-5, by_reward=False)
-        assert len(episodes) == 1
+        assert episodes == []
 
     def test_mean_reward_empty(self):
         em = EpisodicMemory(capacity=5)

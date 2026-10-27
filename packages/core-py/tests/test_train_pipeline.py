@@ -1412,7 +1412,7 @@ class TestSaveCheckpoint:
         assert (tmp_path / "ck" / "model.soul.meta.json").is_file()
         assert not [p for p in (tmp_path / "ck").iterdir() if p.suffix == ".tmp"]
 
-    def test_save_soul_meta_failure_leaves_no_partial_artifact(
+    def test_save_soul_meta_failure_raises_and_leaves_no_sidecar(
         self, data_path, tmp_path, monkeypatch
     ):
         import domain.inference._internal.slo_format as slo_format
@@ -1420,11 +1420,18 @@ class TestSaveCheckpoint:
         def boom(*args, **kwargs):
             raise RuntimeError("meta write failed")
 
-        monkeypatch.setattr(slo_format.json, "dump", boom)
+        # WAL contract (save_soul): weights land first via atomic_writer,
+        # then the sidecar via atomic_write — "the sidecar rides on rename
+        # atomicity alone". json.dump is no longer on the path (the sidecar
+        # uses json.dumps + atomic_write), so patch the sidecar write
+        # itself. The failure must propagate; the .soul STAYS (it is the
+        # primary artifact and the sidecar is re-derivable from it); no
+        # sidecar and no .tmp litter.
+        monkeypatch.setattr(slo_format, "atomic_write", boom)
         t = make_trainer(data_path, tiny_config(tmp_path))
         with pytest.raises(RuntimeError, match="meta write failed"):
             t.save(str(tmp_path / "ck" / "model"))
-        assert not (tmp_path / "ck" / "model.soul").exists()
+        assert (tmp_path / "ck" / "model.soul").is_file()
         assert not (tmp_path / "ck" / "model.soul.meta.json").exists()
         assert not [p for p in (tmp_path / "ck").iterdir() if p.suffix == ".tmp"]
 

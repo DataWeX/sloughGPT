@@ -303,7 +303,7 @@ class CodeChunker:
 
 
 def simple_embed(text: str, dim: int = 384) -> list[float]:
-    """Embed text using sentence-transformers (cached singleton) with hash fallback."""
+    """Embed text via the canonical vector_store embedder (checkpoint -> TF-IDF, local-only); maps dim -> dimension."""
     from domain.inference._internal.vector_store import simple_embed as vs_embed
 
     return vs_embed(text, dimension=dim)

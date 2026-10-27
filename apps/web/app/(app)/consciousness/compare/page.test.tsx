@@ -220,6 +220,9 @@ describe('ConsciousnessComparePage', () => {
       expect(screen.getAllByText('consciousness_compare.page_title').length).toBeGreaterThan(0)
     })
 
+    // The dimensions mount a tick after the title (async data via the proxy);
+    // asserting them outside waitFor flaked under parallel load (CI 2026-10-25,
+    // same residual pattern as 73d5f2544 fixed for the title).
     await waitFor(() => {
       expect(screen.getAllByText(/valence/i).length).toBeGreaterThan(0)
       expect(screen.getAllByText(/arousal/i).length).toBeGreaterThan(0)

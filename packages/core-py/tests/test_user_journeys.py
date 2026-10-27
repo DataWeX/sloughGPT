@@ -30,7 +30,7 @@ pytest.importorskip(
     "playwright.sync_api",
     reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
 )
-from avion import Arken, ElementLocator, PageControls, SyncRunner
+from avion import Arken, ElementLocator, PageControls, SyncRunner, waits
 
 # Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
 # stale :3000 default). Override with SLO_WEB_URL for non-standard setups.
@@ -161,6 +161,16 @@ def goto(s: Arken, path: str, *, wait_until: str = "load", timeout: float = 20.0
     # probe before passing them (CLI/API backends have no such knobs).
     assert isinstance(backend, PageControls), "backend lacks page controls"
     RUNNER.run(backend.navigate(f"{BASE}{path}", wait_until=wait_until, timeout=timeout))
+    # Then wait for the app's OWN readiness declaration instead of guessing.
+    # count() -> find_all() is a single query with no retry, so the query has
+    # to be issued after the page is interactive: `load` fires before React
+    # hydrates (count=0), `networkidle` never settles (persistent SSE by
+    # design), root child counts churn, and overlay absence does not imply the
+    # route content rendered. The app sets data-app-ready on #root only after
+    # the route chunk committed AND startup reached ready/background, so this
+    # wait replaces all five heuristics with one producer-owned predicate.
+    result = RUNNER.run(waits.wait_app_ready(backend, timeout=timeout))
+    assert result.success, f"{path}: {result.error}"
 
 
 def wait_fn(s: Arken, expression: str, timeout: float = 10.0) -> bool:
