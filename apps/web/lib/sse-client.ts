@@ -13,61 +13,14 @@
  *   stream.stop()  // later
  */
 
-import { PUBLIC_API_URL } from './config'
-import { useAuthStore } from './auth'
+import { fetchSSE } from './http-client'
 
-// ── Shared SSE wire-frame parser ────────────────────────────────────────────
-// Single implementation of the chunk → line → data: → JSON.parse state machine
-// used by both createSSEStream (callback + reconnect) and streamSSE in
-// http-client (async-generator + retry). Keeps the two stream control flows
-// distinct while unifying the actual wire decoding.
-
-export interface SSEParseResult {
-  /** Parsed payloads extracted from this chunk (already JSON-decoded). */
-  events: unknown[]
-  /** Bytes that didn't yet form a complete line; carry into next chunk. */
-  buffer: string
-}
-
-export function consumeSSEChunk(
-  buffer: string,
-  decoder: TextDecoder,
-  chunk: Uint8Array,
-  onMalformed?: (payload: string) => void,
-): SSEParseResult {
-  let nextBuffer = buffer + decoder.decode(chunk, { stream: true })
-  const lines = nextBuffer.split('\n')
-  nextBuffer = lines.pop() || ''
-  const events: unknown[] = []
-  for (const line of lines) {
-    const trimmed = line.trimEnd()
-    if (!trimmed.startsWith('data:')) continue
-    const payload = trimmed.slice(5).trim()
-    if (!payload || payload === '[DONE]') continue
-    try {
-      events.push(JSON.parse(payload))
-    } catch (e) {
-      onMalformed?.(payload.slice(0, 80))
-    }
-  }
-  return { events, buffer: nextBuffer }
-}
-
-export function consumeSSEDrain(
-  buffer: string,
-  onMalformed?: (payload: string) => void,
-): unknown[] {
-  const trimmed = buffer.trimEnd()
-  if (!trimmed.startsWith('data:')) return []
-  const payload = trimmed.slice(5).trim()
-  if (!payload || payload === '[DONE]') return []
-  try {
-    return [JSON.parse(payload)]
-  } catch (e) {
-    onMalformed?.(payload.slice(0, 80))
-    return []
-  }
-}
+// The wire-frame parser moved down into the transport (it is pure decode with
+// no app dependency). Imported locally for connect()'s decode loop, and
+// re-exported so app-layer callers keep their import path.
+import { consumeSSEChunk, consumeSSEDrain } from '../../lib/sse-parse'
+export type { SSEParseResult } from '../../lib/sse-parse'
+export { consumeSSEChunk, consumeSSEDrain }
 
 export interface SSEEnvelope {
   stream: string
@@ -140,18 +93,17 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
     if (_stopped) return
 
     controller = new AbortController()
-    const apiUrl = `${PUBLIC_API_URL}${url}`
 
     const headers: Record<string, string> = {
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
       ...extraHeaders,
     }
-    const token = useAuthStore.getState().token
-    if (token) headers['Authorization'] = `Bearer ${token}`
 
     try {
-      const res = await fetch(apiUrl, {
+      // Base URL resolution and the bearer token now come from the transport
+      // (fetchSSE) instead of a second hand-rolled fetch in this file.
+      const res = await fetchSSE(url, {
         headers,
         signal: controller.signal,
       })

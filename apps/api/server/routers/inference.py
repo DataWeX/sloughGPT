@@ -98,7 +98,7 @@ def _get_model_status() -> dict:
     if _model_ready():
         return {"ready": True}
 
-    from startup_progress import STARTUP_PHASE
+    from startup_progress import MODEL_LOAD_STATE, STARTUP_PHASE
 
     from config import ServerConfig
 
@@ -113,6 +113,16 @@ def _get_model_status() -> dict:
             "ready": False,
             "reason": f"No model loaded. Autoload is disabled. Set SLO_AUTOLOAD_MODEL={model_name} to enable.",
             "code": "E_NO_MODEL",
+            "status": 503,
+        }
+
+    # Terminal: the load already ended in failure. Report the real cause —
+    # "still loading" would be a lie for a load that stopped long ago.
+    if MODEL_LOAD_STATE.get("status") == "failed":
+        return {
+            "ready": False,
+            "reason": MODEL_LOAD_STATE.get("error") or "Model load failed — no model is available.",
+            "code": "E_MODEL_LOAD_FAILED",
             "status": 503,
         }
 
@@ -588,134 +598,13 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
 # ── In-memory session search index ──────────────────────────────────────────
 
 
-class SessionSearchIndex:
-    """Caches session file contents in memory for fast search.
+# SessionSearchIndex was extracted to domain/search/session_index.py so
+# the system-wide search SessionsAdapter shares this same index — one
+# cache over the session corpus, not two. Legacy contract unchanged:
+# _search_sessions_sync below still backs GET /chat/sessions/search.
+from domain.search.session_index import get_session_index  # noqa: E402
 
-    Only re-reads files whose mtime has changed since last index build.
-    Thread-safe for concurrent reads; rebuilds are serialized.
-    """
-
-    def __init__(self, max_age_seconds: float = 5.0) -> None:
-        self._max_age = max_age_seconds
-        self._lock = threading.Lock()
-        self._last_build: float = 0.0
-        # sid → {name, messages, created_at, updated_at, file_path}
-        self._entries: dict[str, dict[str, Any]] = {}
-
-    def search(self, q: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Search cached sessions. Rebuilds index if stale."""
-        now = time.monotonic()
-        if now - self._last_build > self._max_age:
-            self._rebuild()
-        return self._query(q.lower().strip(), limit)
-
-    def _rebuild(self) -> None:
-        with self._lock:
-            # Double-check after acquiring lock
-            if time.monotonic() - self._last_build <= self._max_age:
-                return
-            self._scan_files()
-            self._last_build = time.monotonic()
-
-    def _scan_files(self) -> None:
-        base = Path(__file__).parent.parent.parent.parent / "data"
-        search_dirs = [base / "chat_sessions", base / "conversations"]
-
-        # Collect all current file mtimes
-        current_files: dict[str, Path] = {}
-        for sdir in search_dirs:
-            if not sdir.is_dir():
-                continue
-            for f in sdir.glob("*.json"):
-                sid = f.stem
-                if sid not in current_files:
-                    current_files[sid] = f
-
-        # Remove entries for deleted files
-        stale = set(self._entries.keys()) - set(current_files.keys())
-        for sid in stale:
-            del self._entries[sid]
-
-        # Add or update entries
-        for sid, fpath in current_files.items():
-            try:
-                mtime = fpath.stat().st_mtime
-            except OSError:
-                continue
-            existing = self._entries.get(sid)
-            if existing and existing.get("_mtime") == mtime:
-                continue  # unchanged
-            try:
-                data = json.loads(fpath.read_text())
-                self._entries[sid] = {
-                    "id": data.get("id") or data.get("session_id") or sid,
-                    "name": data.get("name", "") or "",
-                    "created_at": data.get("created_at", ""),
-                    "updated_at": data.get("updated_at", ""),
-                    "messages": data.get("messages", []),
-                    "_mtime": mtime,
-                }
-            except (json.JSONDecodeError, OSError):
-                continue
-
-    def _query(self, q_lower: str, limit: int) -> list[dict[str, Any]]:
-        if not q_lower:
-            return []
-        results: list[dict[str, Any]] = []
-        max_matches_per_session = 3
-
-        # Sort by updated_at descending for most-recent-first
-        sorted_entries = sorted(
-            self._entries.values(),
-            key=lambda e: e.get("updated_at", ""),
-            reverse=True,
-        )
-
-        for entry in sorted_entries:
-            if len(results) >= limit:
-                break
-            name = entry["name"]
-            messages = entry["messages"]
-            matches: list[dict[str, str]] = []
-
-            if q_lower in name.lower():
-                matches.append(
-                    {
-                        "role": "session",
-                        "content": name,
-                        "timestamp": entry.get("updated_at", ""),
-                    }
-                )
-
-            for msg in messages:
-                if len(matches) >= max_matches_per_session:
-                    break
-                content = msg.get("content", "")
-                if q_lower in content.lower():
-                    matches.append(
-                        {
-                            "role": msg.get("role", "unknown"),
-                            "content": content,
-                            "timestamp": msg.get("timestamp", ""),
-                        }
-                    )
-
-            if matches:
-                results.append(
-                    {
-                        "id": entry["id"],
-                        "name": name or entry["id"],
-                        "created_at": entry.get("created_at", ""),
-                        "updated_at": entry.get("updated_at", ""),
-                        "match_count": len(matches),
-                        "matches": matches[:3],
-                    }
-                )
-
-        return results
-
-
-_session_search_index = SessionSearchIndex()
+_session_search_index = get_session_index()
 
 
 def _search_sessions_sync(q: str, limit: int) -> list:
@@ -1015,6 +904,13 @@ class InferenceRouter:
         self._session_cache_ts: float = 0
         self._session_cache_ttl = 5.0
 
+        # The metadata index is a full rescan of every session JSON header
+        # (~1900 files = 0.13-0.21s measured), so it gets its own longer
+        # TTL: fresh-enough for the sessions list, cheap enough not to show
+        # up in the /bootstrap fan-out every 5s. Writes still invalidate it
+        # (see the `_session_metadata_cache = None` call sites), so freshness
+        # after create/delete/rename stays event-driven, not timer-driven.
+        self._session_metadata_ttl = 60.0
         self._session_metadata_cache: list | None = None
         self._session_metadata_cache_ts: float = 0
 
@@ -1182,7 +1078,7 @@ class InferenceRouter:
         now = time.time()
         if (
             self._session_metadata_cache is not None
-            and now - self._session_metadata_cache_ts < self._session_cache_ttl
+            and now - self._session_metadata_cache_ts < self._session_metadata_ttl
         ):
             return self._session_metadata_cache
 
@@ -3615,6 +3511,11 @@ class InferenceRouter:
         r.add_api_route("/info/soul", self.get_info_soul, methods=["GET"])
         r.add_api_route("/", self.root, methods=["GET"])
         r.add_api_route("/chat/tools", self.list_chat_tools, methods=["GET"])
+        # NOTE: routers/chat.py also registers POST /chat and /chat/stream —
+        # these inference registrations come first and WINS the route match;
+        # main's test suite pins THIS handler's guards (503 no-model, 400
+        # empty messages). Removing them hands traffic to ChatRouter.respond
+        # (domain.chat manager), which does not enforce them.
         r.add_api_route("/chat/stream", self.chat_stream, methods=["POST"])
         r.add_api_route("/chat/control", self.chat_control, methods=["POST"])
         r.add_api_route("/context/inspect", self.inspect_context, methods=["GET"])

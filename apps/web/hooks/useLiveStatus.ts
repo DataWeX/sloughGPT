@@ -23,6 +23,7 @@ import { systemController, type DetailedHealth } from '@/lib/system-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { trackEvent } from '@/lib/dev-log'
 import { logStateEvent } from '@/lib/state-events'
+import { revalidateAll } from '@/lib/cache/client'
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline' | 'reloading' | 'error'
 
@@ -102,7 +103,9 @@ export interface LiveHealthSnapshot {
 }
 
 export interface LiveStatusState {
-  /** Connection status: connected (SSE active), connecting (trying), offline (failed), reloading (about to reload) */
+  /** Connection status: connected (SSE active), connecting (trying), offline (failed),
+    error (recoverable failure), reloading (legacy member — still rendered by consumers,
+    no longer produced by this hook: health failures now revalidate in place) */
   connectionStatus: ConnectionStatus
   /** Latest health snapshot from SSE or fallback poll */
   health: LiveHealthSnapshot | null
@@ -128,10 +131,7 @@ export interface LiveStatusState {
 }
 
 const FALLBACK_POLL_MS = 8000
-const MAX_FAILURES_BEFORE_RELOAD = 6
-const RELOAD_DELAY_MS = 2000
-const MAX_RELOADS = 3
-const RELOAD_WINDOW_MS = 120_000 // 2 minutes
+const MAX_FAILURES_BEFORE_REVALIDATE = 6
 
 /**
  * Map the full /health/detailed response onto the live snapshot shape.
@@ -304,7 +304,7 @@ export function initLiveStatus(): () => void {
               message: 'health_fallback_empty offline',
             })
           }
-          checkReload()
+          checkRevalidate()
         }
       } catch {
         const first = liveStatusStore.getState().failureCount === 0
@@ -316,7 +316,7 @@ export function initLiveStatus(): () => void {
             message: 'health_fallback_error offline',
           })
         }
-        checkReload()
+        checkRevalidate()
       }
     }
     poll()
@@ -334,38 +334,21 @@ export function initLiveStatus(): () => void {
     }
   }
 
-  function checkReload() {
+  function checkRevalidate() {
     const { failureCount } = liveStatusStore.getState()
-    if (failureCount >= MAX_FAILURES_BEFORE_RELOAD) {
-      // Reload-loop protection: track reloads in sessionStorage.
-      // If we've reloaded MAX_RELOADS times within RELOAD_WINDOW_MS,
-      // stop reloading and show an error instead of creating an infinite loop.
-      const now = Date.now()
-      const storageKey = 'slo-reload-count'
-      const storageTimeKey = 'slo-reload-window-start'
-      let reloadCount = parseInt(sessionStorage.getItem(storageKey) || '0', 10)
-      let windowStart = parseInt(sessionStorage.getItem(storageTimeKey) || '0', 10)
-
-      if (!windowStart || now - windowStart > RELOAD_WINDOW_MS) {
-        // New window — reset counter
-        reloadCount = 0
-        windowStart = now
-      }
-
-      if (reloadCount >= MAX_RELOADS) {
-        // Too many reloads — show error state, don't reload again
-        liveStatusStore.getState().setConnectionStatus('error')
-        return
-      }
-
-      reloadCount++
-      sessionStorage.setItem(storageKey, String(reloadCount))
-      sessionStorage.setItem(storageTimeKey, String(windowStart))
-
-      liveStatusStore.getState().setConnectionStatus('reloading')
-      setTimeout(() => {
-        if (!_stopped) window.location.reload()
-      }, RELOAD_DELAY_MS)
+    if (failureCount >= MAX_FAILURES_BEFORE_REVALIDATE) {
+      // Health has failed N times in a row. Revalidate the client cache in
+      // place rather than reloading the document: the SSE stream reconnects
+      // with infinite backoff and the fallback poll keeps running, so the
+      // old reload bought nothing but lost client state. Resetting the
+      // counter makes this re-fire every N failures instead of every poll.
+      logStateEvent('health_revalidate_threshold', {
+        kind: 'health',
+        message: `health_revalidate_threshold revalidated after ${MAX_FAILURES_BEFORE_REVALIDATE} consecutive failures`,
+      })
+      revalidateAll()
+      liveStatusStore.getState().setConnectionStatus('connecting')
+      liveStatusStore.getState().setFailureCount(0)
     }
   }
 
@@ -489,7 +472,7 @@ export function initLiveStatus(): () => void {
       message: `sse_error ${_err?.message ?? 'stream failed'}`,
       data: { message: _err?.message ?? 'stream failed' },
     })
-    checkReload()
+    checkRevalidate()
   }
 
   function onOpen() {

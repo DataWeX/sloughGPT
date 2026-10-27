@@ -9,7 +9,13 @@ vi.mock('./ImageUpload', () => ({
     </div>
   ),
   ImageUpload: ({ onImage, disabled }: any) => (
-    <button data-testid="image-upload" onClick={() => onImage?.('data:image/png,test')} disabled={disabled}>Upload image</button>
+    <button
+      data-testid="image-upload"
+      onClick={() => onImage?.('data:image/png,test')}
+      disabled={disabled}
+    >
+      Upload image
+    </button>
   ),
 }))
 
@@ -36,7 +42,10 @@ vi.mock('@/hooks/useConsciousnessStatus', () => ({
 }))
 
 vi.mock('@/lib/consciousness-controller', () => ({
-  consciousnessController: { listPersonas: async () => ({ personas: [] }), activatePersona: async () => {} },
+  consciousnessController: {
+    listPersonas: async () => ({ personas: [] }),
+    activatePersona: async () => {},
+  },
 }))
 
 import { ChatInput } from './ChatInput'
@@ -59,9 +68,16 @@ describe('ChatInput', () => {
     expect(container.querySelector('section')).toBeInTheDocument()
   })
 
-  it('shows loading indicator when loading', () => {
-    const { container } = render(<ChatInput {...base} loading />)
+  it('shows tool_call band when loading with tool_call status', () => {
+    const { container } = render(
+      <ChatInput {...base} loading streamingStatus="tool_call" streamingToolName="search" />,
+    )
     expect(container.querySelector('[role="status"]')).toBeInTheDocument()
+  })
+
+  it('does NOT duplicate the generating indicator (inline turn dots own it)', () => {
+    const { container } = render(<ChatInput {...base} loading streamingStatus="generating" />)
+    expect(container.querySelector('[role="status"]')).not.toBeInTheDocument()
   })
 
   it('does not show loading indicator when not loading', () => {
@@ -70,12 +86,21 @@ describe('ChatInput', () => {
   })
 
   it('shows image previews when images present', () => {
-    const { container } = render(<ChatInput {...base} images={[{ id: 'img1', dataUrl: 'data:image/png,test', name: 'test.png' }]} />)
-    expect(container.querySelectorAll('[data-testid="image-preview"]').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(
+      <ChatInput
+        {...base}
+        images={[{ id: 'img1', dataUrl: 'data:image/png,test', name: 'test.png' }]}
+      />,
+    )
+    expect(
+      container.querySelectorAll('[data-testid="image-preview"]').length,
+    ).toBeGreaterThanOrEqual(1)
   })
 
   it('shows API offline placeholder when health is offline', () => {
-    const { container } = render(<ChatInput {...base} health={'offline' as unknown as ApiHealthSnapshot} />)
+    const { container } = render(
+      <ChatInput {...base} health={'offline' as unknown as ApiHealthSnapshot} />,
+    )
     const row = container.querySelector('[data-testid="chat-input-row"]')
     expect(row?.textContent).toContain('placeholder: Service offline...')
   })
