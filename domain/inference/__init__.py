@@ -8,11 +8,22 @@ Public API:
     save_soul, load_soul, write_v3_sou, generate_sample_dialogue
     train_embedder, SloTextEmbedder
     create_vector_store, get_slo_manager, PDFVLMProcessor, _ngram_embed
+    ContextPart, BudgetedContext, budget_parts, render_context_block, estimate_tokens
+    DEFAULT_KNOWLEDGE_BUDGET, LAYER_PRIORITY
     generation: LanguageClient, hosted, soul, engine, extract_json
 """
 
 from __future__ import annotations
 
+from domain.inference._internal.context_contract import (
+    DEFAULT_KNOWLEDGE_BUDGET,
+    LAYER_PRIORITY,
+    BudgetedContext,
+    ContextPart,
+    budget_parts,
+    estimate_tokens,
+    render_context_block,
+)
 from domain.inference._internal.slo_format import (
     BehavioralTraits,
     CognitiveSignature,
@@ -68,6 +79,13 @@ __all__ = [
     "SloNetChatProvider",
     "get_engine",
     "configure_api_provider",
+    "ContextPart",
+    "BudgetedContext",
+    "budget_parts",
+    "render_context_block",
+    "estimate_tokens",
+    "DEFAULT_KNOWLEDGE_BUDGET",
+    "LAYER_PRIORITY",
 ]
 
 

@@ -33,6 +33,10 @@ class ContextLayer:
     source: str
     timestamp: str
     priority: float = 1.0
+    # Structured provenance (ContextPart list) when the layer's source
+    # provides it — consumers at the chat seam budget and render from
+    # these instead of the flattened content string. None = legacy layer.
+    parts: list | None = None
 
 
 @dataclass
@@ -318,9 +322,21 @@ Be concise, accurate, and helpful."""
         threading.Thread(target=_do, daemon=True).start()
 
     async def get_rag_context(self, query: str) -> str:
-        """Get RAG context from vector store."""
+        """Get RAG context from vector store (legacy string projection)."""
+        content, _parts = await self._get_rag_context_parts(query)
+        return content
+
+    async def _get_rag_context_parts(self, query: str) -> tuple[str, list]:
+        """RAG retrieval returning (legacy content, ContextPart list).
+
+        The content string keeps the historical labels and truncation
+        (grandfathered); parts carry FULL text + score/locator so the
+        chat-seam budgeter can select without blind char-cuts.
+        """
+        from domain.inference._internal.context_contract import ContextPart
+
         if not self.rag_enabled:
-            return ""
+            return "", []
 
         if self._vector_store is None:
             # Query KnowledgeMemory through the relevance-gated augmenter — the
@@ -335,11 +351,11 @@ Be concise, accurate, and helpful."""
                     result = enrich_with_knowledge(
                         query, auto_search=False, max_facts=self.rag_top_k
                     )
-                    return result.get("facts", [])
+                    return result.get("facts", []), result.get("parts", [])
 
-                facts = await asyncio.to_thread(_query_aug)
+                facts, aug_parts = await asyncio.to_thread(_query_aug)
                 if facts:
-                    return "\n".join(f"[Knowledge] {f}" for f in facts)
+                    return "\n".join(f"[Knowledge] {f}" for f in facts), list(aug_parts)
             except Exception as e:
                 logger.debug(
                     "context_core: knowledge augmenter query failed",
@@ -355,8 +371,18 @@ Be concise, accurate, and helpful."""
             facts = self.search_semantic(query, limit=self.rag_top_k)
             if facts:
                 parts = [f"Related: {f['key']} = {f['value']}" for f in facts]
-                return "\n".join(parts)
-            return ""
+                sem_parts = [
+                    ContextPart(
+                        text=str(f.get("value", "")),
+                        source="semantic_memory",
+                        layer="rag",
+                        locator=str(f.get("key", "")),
+                    )
+                    for f in facts
+                    if f.get("value")
+                ]
+                return "\n".join(parts), sem_parts
+            return "", []
 
         try:
             # Generate embedding for query
@@ -368,22 +394,44 @@ Be concise, accurate, and helpful."""
             results = await self._vector_store.query(query_vec, top_k=self.rag_top_k)
 
             if not results:
-                return ""
+                return "", []
 
             parts = []
+            vs_parts = []
             for r in results:
                 text = r.text[: self.rag_max_chars] if len(r.text) > self.rag_max_chars else r.text
                 parts.append(f"[Doc: {r.id}] {text}")
+                # Full text, no [:500]: the seam budgeter owns selection now.
+                score = getattr(r, "score", None)
+                vs_parts.append(
+                    ContextPart(
+                        text=r.text,
+                        source="vector_store",
+                        layer="rag",
+                        score=float(score) if score is not None else None,
+                        locator=str(r.id),
+                    )
+                )
 
-            return "\n".join(parts)
+            return "\n".join(parts), vs_parts
         except Exception as e:
             logger.warning("Vector store RAG query failed, falling back to semantic memory: %s", e)
             # Fallback to semantic memory
             facts = self.search_semantic(query, limit=self.rag_top_k)
             if facts:
                 parts = [f"Related: {f['key']} = {f['value']}" for f in facts]
-                return "\n".join(parts)
-            return ""
+                sem_parts = [
+                    ContextPart(
+                        text=str(f.get("value", "")),
+                        source="semantic_memory",
+                        layer="rag",
+                        locator=str(f.get("key", "")),
+                    )
+                    for f in facts
+                    if f.get("value")
+                ]
+                return "\n".join(parts), sem_parts
+            return "", []
 
     async def get_auto_memory_context(self, query: str = "", limit: int = 5) -> str:
         """
@@ -477,7 +525,7 @@ Be concise, accurate, and helpful."""
 
         # Layer 3: RAG
         if include_rag and self.rag_enabled:
-            rag_content = await self.get_rag_context(query)
+            rag_content, rag_parts = await self._get_rag_context_parts(query)
             if rag_content:
                 layer = ContextLayer(
                     layer_type="rag",
@@ -486,6 +534,7 @@ Be concise, accurate, and helpful."""
                     source="vector_store",
                     timestamp=datetime.now().isoformat(),
                     priority=0.7,
+                    parts=rag_parts or None,
                 )
                 if used_tokens + layer.tokens <= self.max_tokens:
                     layers.append(layer)
