@@ -77,6 +77,7 @@ def _engine(
     provider=None,
     status: dict | None = None,
     pressure: PressureLevel = PressureLevel.NORMAL,
+    model_ready: bool = True,
     infer_info=None,
     infer_embed=None,
 ):
@@ -87,6 +88,9 @@ def _engine(
         stack.enter_context(
             patch("routers.inference._get_model_status", return_value=status or {"ready": True})
         )
+        # /v1/models reads the materialization probe directly; without this the
+        # suite's answer would depend on whatever a prior test left loaded.
+        stack.enter_context(patch("routers.inference._model_ready", return_value=model_ready))
         stack.enter_context(
             patch(
                 "domain.infrastructure.memory_pressure.get_memory_pressure_monitor",
@@ -239,6 +243,26 @@ class TestModelsList:
         assert body["data"] == [
             {"id": "slonet-test", "object": "model", "created": 0, "owned_by": "sloughgpt"}
         ]
+
+    def test_models_is_discovery_not_a_generation_gate(self):
+        """No materialized model -> 200 with an empty list, never 503.
+
+        Clients poll /v1/models as a health probe; a 503 here (the old
+        ``_require_engine()`` gate) spammed two ERROR lines per probe while
+        telling the client nothing it could not learn from an empty list.
+        """
+        app = _build_app()
+        status = {
+            "ready": False,
+            "reason": "No local weights for Qwen/Qwen2.5-0.5B-Instruct — SLO_BOOTSTRAP_HF is off",
+            "code": "E_MODEL_LOAD_FAILED",
+            "status": 503,
+        }
+        with _engine(status=status, model_ready=False):
+            resp = TestClient(app).get("/v1/models")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"object": "list", "data": []}
 
 
 # ── /v1/embeddings ──────────────────────────────────────────────────────────
