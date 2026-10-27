@@ -3780,6 +3780,26 @@ Examples:
             )
             return
 
+        # Fail fast when no model is loaded -- generate would block the full
+        # 120s _api_post timeout and leave the client's 60s auto-cancel in limbo
+        # (card 20261026_123132). Covers single-shot and --loop alike.
+        if not status.get("model_loaded"):
+            from .log_buffer import LogEntry
+
+            self._print(
+                f"  {_C_RED}\u2717 No model loaded.{_C_RESET} Load one: models load <id>"
+            )
+            self._log_buffer.append(
+                LogEntry(
+                    timestamp=time.time(),
+                    level="ERROR",
+                    source="shell.ai",
+                    message="ai blocked: no model loaded",
+                )
+            )
+            self._last_exit_code = 1
+            return
+
         # Interactive agent loop mode
         if use_loop:
             self._run_agent_loop(args, auto_approve)
