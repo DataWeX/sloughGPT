@@ -8,6 +8,7 @@ import { SoulSelectorDropdown } from './SoulSelectorDropdown'
 import { ChatMoreMenu } from './ChatMoreMenu'
 import { ConsciousnessToggle } from '@/features/chat/components/ConsciousnessToggle'
 import { IconSearch, IconMenu, IconPlus, IconChat } from '@sloughgpt/strui'
+import { MODE_LABELS } from '@/features/chat/components/toolbar/ModeBar'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
 
 interface ChatToolbarProps {
@@ -15,15 +16,22 @@ interface ChatToolbarProps {
   onConsciousnessToggle?: () => void
 }
 
-export const ChatToolbar = memo(function ChatToolbar({ consciousnessOpen, onConsciousnessToggle }: ChatToolbarProps) {
+export const ChatToolbar = memo(function ChatToolbar({
+  consciousnessOpen,
+  onConsciousnessToggle,
+}: ChatToolbarProps) {
   const ctx = useChatToolbarContext()
 
   const currentName = ctx.conversations.conversations.find(
-    c => c.session_id === ctx.conversations.sessionIdRef.current
+    (c) => c.session_id === ctx.conversations.sessionIdRef.current,
   )?.name
 
   return (
-    <div className="z-10 flex items-center justify-between px-2 sm:px-3 py-1.5 border-b border-border/20 shrink-0 bg-background/80 backdrop-blur-sm gap-2" role="toolbar" aria-label="Chat toolbar">
+    <div
+      className="z-10 flex items-center justify-between px-2 sm:px-3 py-1.5 border-b border-border/20 shrink-0 bg-background/80 backdrop-blur-sm gap-2"
+      role="toolbar"
+      aria-label="Chat toolbar"
+    >
       {/* Left cluster: conversation identity */}
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <button
@@ -55,6 +63,18 @@ export const ChatToolbar = memo(function ChatToolbar({ consciousnessOpen, onCons
             <span className="text-sm text-muted-foreground">New chat</span>
           )}
         </div>
+
+        {/* Active behavior-protocol chip — the session title is a historical
+            artifact (named by its first message); this chip is what's in
+            effect NOW, so the header can't go stale against the mode tabs. */}
+        {ctx.mode && (
+          <span
+            className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 shrink-0"
+            aria-label={`Active mode: ${MODE_LABELS[ctx.mode.current]}`}
+          >
+            {MODE_LABELS[ctx.mode.current]}
+          </span>
+        )}
 
         {ctx.actions.hasMessages && (
           <span className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded shrink-0 tabular-nums">
