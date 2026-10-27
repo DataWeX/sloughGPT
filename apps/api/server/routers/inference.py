@@ -124,7 +124,18 @@ def _get_model_status() -> dict:
             "status": 503,
         }
 
-    # Phase is ready but model isn't materialized — still loading in background
+    # Phase is ready but model isn't materialized. If the load thread
+    # recorded a permanent failure, surface it — "still loading" would lie
+    # forever (nothing is in flight and nothing ever will be). No verdict
+    # recorded means a load is genuinely in flight.
+    model_error = STARTUP_PHASE.get("model_error")
+    if model_error:
+        return {
+            "ready": False,
+            "reason": f"No model loaded — {model_error}",
+            "code": "E_NO_MODEL",
+            "status": 503,
+        }
     return {
         "ready": False,
         "reason": "Model still loading — please wait.",

@@ -25,7 +25,7 @@ import time
 from typing import Any
 
 from fastapi import FastAPI
-from startup_progress import STARTUP_PHASE
+from startup_progress import STARTUP_PHASE, set_model_error
 
 from config import ServerConfig
 
@@ -666,6 +666,7 @@ class StartupOrchestrator:
                 loaded_provider = _autoload_model(cfg)
             except Exception as e:
                 logger.error("Model load failed: %s", e, exc_info=True, extra={"tag": "START"})
+                set_model_error(f"Model load raised: {e}")
                 return
 
             # After model is loaded, register with registry + providers
@@ -676,6 +677,11 @@ class StartupOrchestrator:
                 logger.error(
                     "Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"}
                 )
+                # A registration failure with no model materialized leaves the
+                # server permanently unready — record it, or readiness surfaces
+                # would answer "still loading" forever.
+                if server_state.model is None and server_state.provider is None:
+                    set_model_error(f"Model registration failed: {e}")
 
         # Fire-and-forget: model loads in background while routers register
         from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
@@ -709,6 +715,7 @@ class StartupOrchestrator:
             return
         else:
             logger.error("Model load failed: %s", proc.error, extra={"tag": "START"})
+            set_model_error(f"Model load process failed: {proc.error}")
             loader.set_model_progress(0.0, f"Model load failed: {proc.error}")
             return
 
@@ -1618,11 +1625,20 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     except Exception as e:
         logger.warning("GPU precision auto-select failed: %s", e, extra={"tag": "START"})
     _sync_soul_traits()
-    logger.info(
-        "Model loaded + providers registered: %s",
-        server_state.model_type,
-        extra={"op": "model.load", "ok": True, "model": {"id": server_state.model_type}},
-    )
+    # Verdict must match reality: never log ok=True when nothing materialized.
+    _loaded = server_state.model is not None or preloaded_provider is not None
+    if _loaded:
+        logger.info(
+            "Model loaded + providers registered: %s",
+            server_state.model_type,
+            extra={"op": "model.load", "ok": True, "model": {"id": server_state.model_type}},
+        )
+    else:
+        logger.warning(
+            "Registration finished but no model materialized (model_type=%s)",
+            server_state.model_type,
+            extra={"op": "model.load", "ok": False, "model": {"id": server_state.model_type}},
+        )
 
 
 def _autoload_model(cfg: ServerConfig):
@@ -1645,6 +1661,9 @@ def _autoload_model(cfg: ServerConfig):
 
     if server_state.model is not None:
         return None
+
+    # A fresh attempt supersedes any stale failure verdict (retry, reload).
+    set_model_error(None)
 
     # 0) Explicit native .soul path — skip HuggingFace entirely
     if cfg.native_soul_path:
@@ -1675,6 +1694,9 @@ def _autoload_model(cfg: ServerConfig):
             )
 
     model_id = cfg.autoload_model
+
+    # A fresh attempt supersedes any stale failure verdict (retry, reload).
+    set_model_error(None)
 
     # 1) Try local .slnc / safetensors via ModelLoader (with retries)
     from domain.infrastructure.model_loader import ModelLoader
@@ -1728,6 +1750,10 @@ def _autoload_model(cfg: ServerConfig):
             model_id,
             extra={"tag": "START"},
         )
+        set_model_error(
+            f"Autoload failed for {model_id}: {result.error or 'no local weights'} "
+            f"(SLO_BOOTSTRAP_HF is off — HF download disabled)"
+        )
         return None
 
     logger.info(
@@ -1745,6 +1771,7 @@ def _autoload_model(cfg: ServerConfig):
         logger.info("Download complete: %s", model_id, extra={"tag": "START"})
     except Exception as e:
         logger.warning("HuggingFace download failed: %s", e, extra={"tag": "START"})
+        set_model_error(f"Autoload failed for {model_id}: HuggingFace download failed — {e}")
         return None
 
     # 3) Retry load now that safetensors are cached (with retries)
@@ -1786,6 +1813,7 @@ def _autoload_model(cfg: ServerConfig):
             _time.sleep(delay)
 
     logger.error("Autoload failed after all attempts: %s", result.error, extra={"tag": "START"})
+    set_model_error(f"Autoload failed for {model_id} after all attempts: {result.error}")
 
 
 # ── Standalone inference engine ───────────────────────────────────────
