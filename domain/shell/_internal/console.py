@@ -38,6 +38,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .interactive import InteractivePrompt
+from .options_screen import OptionsScreen
 
 _COLOR_ENABLED = not os.environ.get("NO_COLOR")
 if _COLOR_ENABLED:
@@ -900,6 +901,23 @@ class Console:
         """Options screen: rows are command-line options named by their flag."""
         self._emit("options_screen", {"message": message})
         return self._interactive.options_screen(rows, message)
+
+    def run_options_screen(self, screen: OptionsScreen) -> dict[str, str]:
+        """Drive an already-built screen: raw loop on a TTY, plain lines otherwise.
+
+        One model, two drivers — the degradation lives here, at the
+        driver, so the fallback can never become a second hand-drawn
+        view of the same options.  The plain path writes through this
+        Console's io (the one the capture and streaming paths already
+        share) using the model's own `render()` lines, and returns the
+        current values, exactly as the non-TTY interactive prompt does.
+        """
+        self._emit("options_screen", {"message": screen.message})
+        if not self._interactive._is_tty:
+            for text, _style in screen.render():
+                self.write(text)
+            return screen.values()
+        return self._interactive._options_screen_raw(screen)
 
     def playlist_manager(self, items: list[str], message: str = "Playlist:") -> list[str]:
         """Manage ordered list with move up/down and delete."""
