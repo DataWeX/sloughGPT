@@ -26,6 +26,7 @@ Single source of truth for navigation. Read this first.
 | **PRODUCER_CONSUMER_QUEUE.md** | Queue pattern |
 | **PUGQEEP.md** | PGQ: points, pools, Pipe |
 | **TRANSPORT_PROJECTIONS.md** | Capability → contract → route |
+| **DOMAIN_CONSOLIDATION.md** | Record of `packages/core-py/domains/` → `domain/` consolidation |
 
 ## Features
 
@@ -60,6 +61,7 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 | **ENVIRONMENT.md** | Environment setup |
 | **DEPLOYMENT.md** | Deployment guide |
 | **DEPLOYMENT_CHECKLIST.md** | Pre-deploy checks |
+| **WORKTREE_RECOVERY.md** | Worktree wipe prevention + prune/recreate recovery runbook |
 | **scripts/systemd/** | systemd --user unit for the shared API (:8000) + install.sh |
 
 ## Integration

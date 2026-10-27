@@ -246,10 +246,13 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             )}
           </span>
-          {role === 'assistant' && model && !isError && <span>{model}</span>}
+          {role === 'assistant' && model && !isError && hasContent && <span>{model}</span>}
           {metricsText && <span>{metricsText}</span>}
           {isError && <span className="text-destructive">Interrupted</span>}
-          {showTimestamp && (
+          {/* Timestamp = the log's "entry closed" marker; don't claim a finished
+              entry before the first token lands. Role label + StatusDot above
+              still signal the in-progress turn. */}
+          {showTimestamp && (hasContent || role === 'user') && (
             <span className="flex items-center gap-1.5">
               {formatRelativeTime(timestamp)}
               {role === 'assistant' && messageId && (

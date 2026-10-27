@@ -68,11 +68,9 @@ def _load_presets() -> list[dict]:
 
 
 def _seed_default_presets() -> None:
-    """Seed default presets if collection is empty."""
+    """Seed default presets if missing (idempotent)."""
     db = _get_db()
     col = db.collection("presets")
-    if col.count() > 0:
-        return
     defaults = [
         {
             "id": "warm",
@@ -104,7 +102,8 @@ def _seed_default_presets() -> None:
         },
     ]
     for p in defaults:
-        col.insert_one(p)
+        if not col.find_one({"id": p["id"]}):
+            col.insert_one(p)
 
 
 class ChatRequest(BaseModel):

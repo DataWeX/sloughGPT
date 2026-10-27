@@ -20,6 +20,7 @@
 
 import { PUBLIC_API_URL } from '@/lib/config'
 import { inferStateKind, isStateEventKind } from '@/lib/event-kinds'
+import { configureTransport } from '../../lib/ports'
 
 export type LogTag =
   | 'REQ'
@@ -360,6 +361,12 @@ export const trackEvent = (event: string, data?: Record<string, unknown>) =>
 // ── Singleton ────────────────────────────────────────────────────────
 
 export const logger = new WebLogger('slo.web')
+
+// Self-registration: this module OWNS the app logger, so it hands it to the
+// transport rather than the transport importing it upward (apps/lib must never
+// import apps/web). A host that mocks this module simply never registers, and
+// the transport falls back to its silent port instead of throwing.
+configureTransport({ logger })
 
 /**
  * Logs only in development — keeps production consoles clean for expected API/network failures.

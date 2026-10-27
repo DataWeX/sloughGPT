@@ -13,10 +13,12 @@ export function DevVoiceTestCard() {
   const [ttsError, setTtsError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     voiceController.getStatus()
-      .then(d => setStatus(d))
+      .then(d => { if (!cancelled) setStatus(d) })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [])
 
   const handleGenerate = async () => {

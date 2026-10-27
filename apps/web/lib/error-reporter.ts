@@ -11,6 +11,7 @@
 
 import { chatDB } from '@/lib/db'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { authFetch } from '@/lib/http-client'
 
 const BATCH_INTERVAL_MS = 5000
 const MAX_BATCH_SIZE = 10
@@ -83,11 +84,12 @@ export class ErrorReporter {
     this._batch = []
     this._timer = null
 
-    fetch(`${this._apiUrl}/errors/log`, {
+    authFetch(`${this._apiUrl}/errors/log`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ errors: payload }),
       keepalive: true,
+      noAuth: true, // telemetry never carried a token — don't change that now
     }).catch(() => {
       /* silent — don't loop on network errors */
     })

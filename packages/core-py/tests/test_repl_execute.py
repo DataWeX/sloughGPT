@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from domain.shell._internal.commands import ShellCommands
 from domain.shell._internal.repl import ShellREPL
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -223,3 +224,93 @@ class TestCompleteArgsFor:
         result = repl._complete_args_for_uncached("finetuned")
         assert "load" in result
         assert "rm" in result
+
+
+# ── spinner discipline: no animation, no residue on non-TTY captures ─────────
+
+
+class TestSpinnerNonTty:
+    def test_spinner_is_quiet_on_memory_io(self):
+        repl = _make_repl()
+        with repl.console.spinner("Fetching models"):
+            pass
+        assert repl.io.get_output() == ""
+
+    def test_spinner_is_not_the_animated_class(self):
+        from domain.shell._internal.console import _Spinner
+
+        repl = _make_repl()
+        spin = repl.console.spinner("Loading")
+        assert not isinstance(spin, _Spinner)
+
+    def test_spinner_ok_reports_final_status_only(self):
+        repl = _make_repl()
+        with repl.console.spinner("Loading") as s:
+            pass
+        s.ok("Done")
+        out = repl.io.get_output()
+        assert "Done" in out
+        assert "Loading" not in out  # enter must not replay the label
+        assert "\r" not in out  # no frame protocol; color policy is NO_COLOR/B3's job
+
+
+# ── execute("models") end-to-end on the live API payload shape ──────────────
+
+
+def _repl_with_live_models():
+    """A repl whose `models` command runs the REAL ShellCommands adapter
+    against the REAL /models payload shape (no mock in the data path)."""
+    repl = _make_repl()
+    repl.COMMANDS = {"models": ShellREPL._cmd_models}
+    repl.cmds = ShellCommands()
+    return repl
+
+
+_LIVE_MODELS_PAYLOAD = {
+    "data": [
+        {
+            "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+            "status": "loaded",
+            "device": "cpu",
+            "parameters": 0,
+            "vocab_size": 0,
+        },
+        {"model_id": "openai-community/gpt2", "status": "available", "device": "cpu"},
+    ]
+}
+
+
+def _execute_models(repl):
+    from unittest.mock import patch
+
+    with patch("domain.shell._internal.commands._api_get", return_value=_LIVE_MODELS_PAYLOAD):
+        return repl.execute("models")
+
+
+class TestExecuteModelsContract:
+    def test_exit_zero(self):
+        repl = _repl_with_live_models()
+        out, code = _execute_models(repl)
+        assert code == 0
+
+    def test_no_control_bytes_in_output(self):
+        repl = _repl_with_live_models()
+        out, _ = _execute_models(repl)
+        assert "\r" not in out
+        assert "\x1b" not in out
+
+    def test_no_spinner_residue(self):
+        repl = _repl_with_live_models()
+        out, _ = _execute_models(repl)
+        assert "Fetching" not in out
+
+    def test_rows_show_real_model_ids(self):
+        repl = _repl_with_live_models()
+        out, _ = _execute_models(repl)
+        assert "Qwen/Qwen2.5-0.5B-Instruct" in out
+        assert "openai-community/gpt2" in out
+
+    def test_status_column_marks_loaded(self):
+        repl = _repl_with_live_models()
+        out, _ = _execute_models(repl)
+        assert "loaded" in out

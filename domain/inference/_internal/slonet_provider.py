@@ -681,6 +681,11 @@ class SloNetChatProvider:
                     if info is not None and info.is_quantized:
                         module.set_quantized_weight(info)
                         quantized_count += 1
+                        # interleaved free: release this layer's fp32 now that
+                        # its quantized array exists, so the full-fp32 model and
+                        # the full quantized copy never co-reside (bounds peak).
+                        if free_quantized_originals:
+                            module.free_quantized_originals()
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded pre-quantized weights (%d tensors) from %s",
                     quantized_count,
@@ -720,6 +725,9 @@ class SloNetChatProvider:
                             linear_map[mod_name].set_quantized_weight(info)
                             tensor_infos[mod_name] = info
                             quantized_count += 1
+                            # interleaved free: bounds peak (see Priority 1).
+                            if free_quantized_originals:
+                                linear_map[mod_name].free_quantized_originals()
 
                 # Save pre-quantized arrays for future fast loads
                 if tensor_infos:
@@ -739,6 +747,9 @@ class SloNetChatProvider:
                         linear_map[mod_name].set_quantized_weight(info)
                         tensor_infos[mod_name] = info
                         quantized_count += 1
+                        # interleaved free: bounds peak (see Priority 1).
+                        if free_quantized_originals:
+                            linear_map[mod_name].free_quantized_originals()
 
                 engine.save_metadata(str(quant_meta_path))
                 if tensor_infos:

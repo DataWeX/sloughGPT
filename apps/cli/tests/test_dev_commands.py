@@ -605,9 +605,12 @@ class TestWebDevEnv:
 class TestCmdDevWebPort:
     """`slo dev --web-port N` must make the dev server listen on N.
 
-    Next.js reads PORT from env; Vite ignores PORT and needs --port argv.
-    The web subprocess previously got neither, so Next always listened on
-    its default 3000 while the readiness check polled the requested port.
+    Vite ignores PORT, so the port reaches it as `--port` argv — and which
+    channel is legal depends on package.json's dev script: a vite script
+    gets `--port`/`--host`, any other script gets the plain npm form (no
+    argv we cannot validate against a script we cannot read). Getting
+    neither used to leave the real server on its default while the
+    readiness check polled the requested port.
     """
 
     @pytest.mark.parametrize("watch_web", [False, True])
@@ -685,7 +688,8 @@ class TestWebDevCmd:
         monkeypatch.setattr("commands.dev._repo_root", lambda: tmp_path)
         return root
 
-    def test_next_script_uses_plain_npm_run_dev(self, web_root):
+    def test_non_vite_script_gets_plain_npm_run_dev(self, web_root):
+        """No argv is passed to a dev script whose flags we cannot read."""
         from commands.dev import _web_dev_cmd
 
         (web_root / "package.json").write_text('{"scripts": {"dev": "next dev"}}')
@@ -706,12 +710,12 @@ class TestWebDevCmd:
             "0.0.0.0",
         ]
 
-    def test_missing_package_json_defaults_to_next_form(self, web_root):
+    def test_missing_package_json_falls_back_to_plain_form(self, web_root):
         from commands.dev import _web_dev_cmd
 
         assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
 
-    def test_malformed_package_json_defaults_to_next_form(self, web_root):
+    def test_malformed_package_json_falls_back_to_plain_form(self, web_root):
         from commands.dev import _web_dev_cmd
 
         (web_root / "package.json").write_text("{not json")
@@ -722,6 +726,36 @@ class TestWebDevCmd:
 
         (web_root / "package.json").write_text('{"name": "web"}')
         assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
+
+
+class TestNoNextBuildInCli:
+    """`serve --web` must not reach for a Next build (card d484f48a follow-through).
+
+    `apps/api/server/main.py --web` was retired onto the vite/gateway path
+    (gateway serves dist-vite), but the CLI kept building
+    `.next/standalone` and spawning `node server.js` — so the same
+    user-facing flag meant two different things depending on which layer
+    you called. The web child now always goes through the `_web_dev_cmd`
+    argv seam, the same path `slo dev` uses.
+    """
+
+    @staticmethod
+    def _src() -> str:
+        import commands.dev as mod
+
+        return open(mod.__file__, encoding="utf-8").read()
+
+    def test_no_next_build_standalone_or_node_server(self):
+        src = self._src()
+        for forbidden in ('"npx", "next"', ".next/standalone", '"node", "server.js"'):
+            assert forbidden not in src, f"Next-era serve path reintroduced: {forbidden}"
+
+    def test_no_nextauth_env_in_serve_path(self):
+        assert "NEXTAUTH_URL" not in self._src(), "NextAuth env leaked back into the CLI"
+
+    def test_serve_web_spawns_through_the_argv_seam(self):
+        # spawn + monitor-loop restart — both must use the one seam
+        assert self._src().count("_web_dev_cmd(web_port)") >= 2
 
 
 class TestCmdDevFailureReporting:

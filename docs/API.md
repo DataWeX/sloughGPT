@@ -62,6 +62,7 @@ both shells at the same endpoints, never by giving one shell a private path.
 | Health       | `/health`, `/health/live`, `/health/ready`, `/health/detailed`, `/health/startup-progress`, `/health/services` | liveness/readiness, phase progress    |
 | System state | `/system/metrics`, `/system/info`, `/system/disk`, `/system/lifecycle`, `/system/inference-pool`               | server state read-model               |
 | Streaming    | `/system/stream` (SSE output), `/chat/stream` (SSE chat), `/errors/stream`, `/training/stream`                 | live state + generation               |
+| Feeds        | `/training/feed`, `/training/feeds`, `/training/live-stream` (SSE)                                             | live training corpus + arrival stream |
 | Executor     | `/system/executor`, `/system/executor/{job_id}`, `/result`, `/purge`, `/cancel`                                | training job pool                     |
 | Core flows   | `/chat`, `/inference/*`, `/models/*`, `/session/*`, `/knowledge`, `/memory`, `/settings/*`                     | feature surface shared by both shells |
 
@@ -89,7 +90,7 @@ lines `data: {json}` with no `event:` name, framed per `domain/api` SSE envelope
 Structured errors via `classify_and_raise(e, source="router.method")`:
 `E_INFRA_STARTUP` (503), `E_NOT_FOUND` (404), `E_DOMAIN` (422/400), `E_AUTH`
 (401/403). The error body is **flat** (built by `schemas.common.error_response()`,
-the single source of truth) — it is *not* wrapped in a `status`/`data` envelope:
+the single source of truth) — it is _not_ wrapped in a `status`/`data` envelope:
 
 ```json
 { "error": "human message", "code": "E_NOT_FOUND", "details": { ... }, "correlation_id": "..." }

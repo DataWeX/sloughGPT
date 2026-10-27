@@ -23,8 +23,16 @@ import baseline from './page-baseline.json'
 const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const APP_ROOT = join(WEB_ROOT, 'app')
 
-/** Measured on main 2026-10-17 (AGENTS.md Page Rule cites the same numbers). */
-const GRANDFATHERED_CEILING = 110
+/**
+ * Measured on main 2026-10-17 (AGENTS.md Page Rule cites the same numbers).
+ * 2026-10-21: 110 -> 109 — the `/images` page was absorbed into `/files`
+ * (route-map row `/files` <- `/files` + `/images`, card 7839a7c6), and the
+ * old path now 307s through `lib/redirects.ts`.
+ * 2026-10-24: 109 -> 73 — the 36 `knownShadowed` pages (a live `page.tsx`
+ * AND a redirect source, so unreachable) were deleted with their colocated
+ * tests and error/loading companions; `knownShadowed` is now empty.
+ */
+const GRANDFATHERED_CEILING = 73
 
 interface PageBaseline {
   grandfathered: string[]
