@@ -7266,7 +7266,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True, "model_loaded": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "models"})
             repl._cmd_ai("show models")
@@ -7276,7 +7279,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True, "model_loaded": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"error": "timeout"})
             repl._cmd_ai("show models")
@@ -7286,7 +7292,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True, "model_loaded": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value="just a string")
             repl._cmd_ai("show models")
@@ -7296,7 +7305,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True, "model_loaded": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "sleep 1 &"})
             repl._cmd_ai("background sleep")
@@ -7306,7 +7318,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True, "model_loaded": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "echo hello | wc"})
             repl._cmd_ai("count hello")
@@ -7647,7 +7662,10 @@ class TestCmdAiContext:
 
         repl._history = ["models", "health", "ls"]
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True, "model_loaded": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help me")
@@ -7664,7 +7682,10 @@ class TestCmdAiContext:
         ]
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True, "model_loaded": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help")
@@ -7676,7 +7697,10 @@ class TestCmdAiContext:
         repl._get_current_model = MagicMock(return_value="gpt2")
         repl._get_current_soul = MagicMock(return_value="friendly")
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True, "model_loaded": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help")
