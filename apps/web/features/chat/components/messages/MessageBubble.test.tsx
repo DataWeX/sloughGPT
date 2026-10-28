@@ -250,9 +250,15 @@ describe('MessageBubble', () => {
     expect(container.textContent).not.toContain('just now')
   })
 
-  it('shows loading dots when content is empty and assistant', () => {
+  it('shows loading dots when content is empty, assistant, and streaming', () => {
     const { container } = render(
-      <MessageBubble content="" role="assistant" timestamp={new Date()} showTimestamp />,
+      <MessageBubble
+        content=""
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        isStreaming
+      />,
     )
     const dots = container.querySelector('.animate-bounce')
     expect(dots).toBeInTheDocument()
@@ -289,6 +295,13 @@ describe('MessageBubble', () => {
     )
     expect(container.textContent).toContain('Qwen/Qwen2.5-0.5B-Instruct')
     expect(container.textContent).toContain('just now')
+  })
+
+  it('shows no loading dots when content is empty and not streaming', () => {
+    const { container } = render(
+      <MessageBubble content="" role="assistant" timestamp={new Date()} showTimestamp />,
+    )
+    expect(container.querySelector('.animate-bounce')).not.toBeInTheDocument()
   })
 
   it('shows streaming cursor when isStreaming', () => {
