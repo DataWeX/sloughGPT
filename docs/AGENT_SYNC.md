@@ -977,6 +977,34 @@ tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
     `git rev-list HEAD..origin/main` = 0 at push time (round-9 tip = our
     merge) — push `HEAD:main`, then restore `stash@{0}` (the foreign 119-file
     WIP parked for the 2.5-day suspension).
+    **Post-push — Mobile CI surfaced (and fixed).** The push carried the
+    stream-first mobile delta (`/chat/stream` → `/chat` in `sse-client.test`
+    ×10 + `chat-store.ts`), the first `apps/mobile/**` change in weeks and
+    therefore the first Mobile CI run in that window: **4 suites / 37 tests
+    red, all pre-existing drift our content merely re-triggered** (CI at the
+    previous tip `5fef7194a` was already red on CI+CI/CD; Mobile CI had not
+    run there at all). Fixed in `fix(mobile)` on top of the integration:
+    (1) `TrainingScreen` — `2d429412b` added `rehydrate()` without updating
+    the test's `mockTrainState` → `TypeError: rehydrate is not a function`
+    killed all 30 screen tests; mock now carries `rehydrate: jest.fn()`.
+    (2) `training-service.test` — 10 stale `/auto-train/*` pins (service and
+    server both live on `/training/*`; service side touched by the flagged
+    `bbd7214df` wip commit, test last touched Aug-18 = born-red class;
+    server truth `apps/api/server/training/router.py`).
+    (3) `SettingsScreen` — `d7d468f91` (health-error display, deliberately
+    not test-updated) makes API rejection render badge `Error` + message
+    instead of `Offline`; test retitled/re-pinned accordingly.
+    (4) `sse-client` — `4de915db3`'s reconnect loop swallowed the plain
+    `No response body` error (retrying past the 15s jest timeout); new
+    `SSENoBodyError` rethrown as permanent alongside `SSEHttpError` — a
+    200-without-stream is a contract break, not a blip.
+    Plus lock sync: committed `apps/mobile/package.json` declared
+    `react-native-gesture-handler`/`reanimated`/`worklets` absent from the
+    committed lock (stale-lock born-red class) — regenerated.
+    **Evidence: full local mobile jest = 100 suites / 949 tests / 0 failed**
+    (pre-fix reproduction was a deterministic 37 failures, not a flake;
+    `apps/mobile` sits outside npm workspaces — install + jest run
+    standalone from `apps/mobile/`).
 
 - **2026-10-09 · logs unification — monitor folded into logs** (card `8182563a`, fix
   `6bb3a97ea`, gates 439 CLI passed + 17 new): `commands/monitor.py` deleted — its
