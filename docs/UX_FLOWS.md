@@ -528,3 +528,19 @@ results.
 - Message IDs, parent pointers, or "fork" jargon — it's "Branch from here"
 - A branch that arrives missing the earlier messages it should have copied
 - Any change to the original conversation
+
+### Mobile: Annotate a Message
+
+**What the user sees:**
+
+- Long-press a message → "Add note" → a small note box opens under it; type something only they care about ("the punchline goes here") → Save
+- The note stays pinned under that message as a soft highlighted strip — visible while scrolling, quiet enough not to shout
+- Long-press again → "Edit note" to change it, or clear the text and Save to remove it
+- Notes survive closing and reopening the app, and even reloading the conversation — the note finds its message again
+- Clone or branch a chat and each copy keeps its own notes namespace — annotating a copy never touches the original
+
+**What they should NOT see:**
+
+- Message IDs, storage keys, or anything that orphans a note when the chat reloads
+- Notes leaking into clones/branches of the conversation
+- A blank screen or error when the notes store is empty — no note means no strip
