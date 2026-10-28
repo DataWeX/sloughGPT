@@ -16,9 +16,9 @@ vi.mock('@/lib/toast-store', () => ({
     selector({ addToast: vi.fn() }),
 }))
 
-import MolePage from './page'
+import { MolePluginPanel } from './MolePluginPanel'
 import { apiGet } from '@/lib/http-client'
-import type { MoleReportResponse } from '@/components/mole/types'
+import type { MoleReportResponse } from './types'
 
 const get = vi.mocked(apiGet)
 
@@ -54,34 +54,39 @@ const REPORT = {
   overall: 'warn',
 }
 
-describe('MolePage', () => {
+describe('MolePluginPanel', () => {
   afterEach(cleanup)
 
   beforeEach(() => {
     get.mockReset()
   })
 
-  it('shows the loading state until the report resolves', async () => {
+  it('renders nothing while the plugin list has not resolved', () => {
     get.mockReturnValue(new Promise(() => {}) as never)
-    render(<MolePage />)
-    expect(screen.getByTestId('page-container')).toHaveAttribute('data-state', 'loading')
-    expect(await screen.findByText('Mole')).toBeInTheDocument()
+    const { container } = render(<MolePluginPanel plugin={null} />)
+    expect(container.firstChild).toBeNull()
   })
 
-  it('shows the empty state when no report exists yet', async () => {
+  it('shows the disabled empty-state when the plugin is disabled', () => {
+    render(<MolePluginPanel plugin={{ enabled: false }} />)
+    expect(screen.getByText('Mole plugin disabled')).toBeInTheDocument()
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it('shows the empty state when enabled but no report exists', async () => {
     get.mockResolvedValue({
       report: null,
       path: '/home/user/.cache/slog-doctor/findings-report.json',
       age_s: null,
     } as MoleReportResponse)
-    render(<MolePage />)
+    render(<MolePluginPanel plugin={{ enabled: true }} />)
     expect(await screen.findByText('No report yet — run a check')).toBeInTheDocument()
     expect(screen.getByTestId('run-mole-button')).toBeInTheDocument()
   })
 
-  it('renders summary, findings and the live component strip', async () => {
+  it('renders summary, findings and the live component strip when enabled', async () => {
     get.mockResolvedValue({ report: REPORT, path: '/tmp/report.json', age_s: 30 })
-    render(<MolePage />)
+    render(<MolePluginPanel plugin={{ enabled: true }} />)
     expect(await screen.findByTestId('mole-summary')).toBeInTheDocument()
     expect(screen.getByTestId('mole-overall')).toHaveTextContent('Overall Warning')
     expect(screen.getByTestId('findings-list')).toBeInTheDocument()
@@ -91,7 +96,7 @@ describe('MolePage', () => {
 
   it('keeps finding detail collapsed by default', async () => {
     get.mockResolvedValue({ report: REPORT, path: '/tmp/report.json', age_s: 30 })
-    const { container } = render(<MolePage />)
+    const { container } = render(<MolePluginPanel plugin={{ enabled: true }} />)
     await screen.findByTestId('findings-list')
     const disclosures = container.querySelectorAll('details')
     expect(disclosures.length).toBeGreaterThanOrEqual(1)
@@ -102,7 +107,7 @@ describe('MolePage', () => {
 
   it('shows an error state when the report cannot be loaded', async () => {
     get.mockRejectedValue(new Error('Connection unavailable — server may be starting up'))
-    render(<MolePage />)
+    render(<MolePluginPanel plugin={{ enabled: true }} />)
     await waitFor(() => {
       const alerts = screen.getAllByRole('alert')
       expect(alerts.length).toBeGreaterThan(0)
@@ -110,10 +115,10 @@ describe('MolePage', () => {
     })
   })
 
-  it('has a run button in the page header', async () => {
+  it('loads the report only when the plugin is enabled', async () => {
     get.mockResolvedValue({ report: null, path: '/tmp/report.json', age_s: null })
-    render(<MolePage />)
-    expect(await screen.findByTestId('run-mole-button')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Mole')
+    render(<MolePluginPanel plugin={{ enabled: false }} />)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(get).not.toHaveBeenCalled()
   })
 })

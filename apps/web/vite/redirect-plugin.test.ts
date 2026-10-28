@@ -34,8 +34,14 @@ describe('resolveRedirect / splitTarget', () => {
     expect(splitTarget('/datasets')).toEqual({ path: '/datasets', search: '' })
   })
 
-  it('has 46 entries matching proxy table', () => {
-    expect(Object.keys(REDIRECTS).length).toBe(46)
+  it('has 47 entries matching proxy table', () => {
+    expect(Object.keys(REDIRECTS).length).toBe(47)
+  })
+
+  it('redirects the retired /mole page to the plugin surface', () => {
+    // /mole stopped being a hardwired page (2026-10-28) — the checks are now
+    // the Mole plugin's panel on /plugins-cloud.
+    expect(resolveRedirect('/mole')).toBe('/plugins-cloud')
   })
 
   it('never redirects a live route away from itself', () => {
