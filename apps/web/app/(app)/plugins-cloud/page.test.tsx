@@ -15,7 +15,7 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
@@ -37,7 +37,9 @@ vi.mock('@sloughgpt/strui', () => {
     CardDescription: ({ children }: any) => <p>{children}</p>,
     CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
     Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
     ),
     Input: ({ value, onChange, placeholder }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} />
@@ -112,9 +114,10 @@ describe('PluginsCloudPage', () => {
 
   it('displays cloud jobs after data loads', async () => {
     mockApiGet.mockImplementation(async (url: string) => {
-      if (url === '/cloud-training/jobs') return {
-        jobs: [{ job_id: 'job-1', provider: 'aws', status: 'completed', progress: 100 }],
-      }
+      if (url === '/cloud-training/jobs')
+        return {
+          jobs: [{ job_id: 'job-1', provider: 'aws', status: 'completed', progress: 100 }],
+        }
       return { plugins: [] }
     })
     render(<PluginsCloudPage />)
@@ -126,9 +129,18 @@ describe('PluginsCloudPage', () => {
 
   it('displays plugins after data loads', async () => {
     mockApiGet.mockImplementation(async (url: string) => {
-      if (url === '/plugins') return {
-        plugins: [{ name: 'my-plugin', version: '1.0.0', description: 'desc', author: 'test', enabled: true }],
-      }
+      if (url === '/plugins')
+        return {
+          plugins: [
+            {
+              name: 'my-plugin',
+              version: '1.0.0',
+              description: 'desc',
+              author: 'test',
+              enabled: true,
+            },
+          ],
+        }
       return { jobs: [] }
     })
     const user = userEvent.setup()
@@ -151,7 +163,10 @@ describe('PluginsCloudPage', () => {
     const input = screen.getByPlaceholderText('e.g. my-dataset')
     await user.type(input, 'my-dataset')
     await user.click(screen.getByText('Submit Job'))
-    expect(mockApiPost).toHaveBeenCalledWith('/cloud-training/submit', { provider: 'local', dataset_id: 'my-dataset' })
+    expect(mockApiPost).toHaveBeenCalledWith('/cloud-training/submit', {
+      provider: 'local',
+      dataset_id: 'my-dataset',
+    })
     expect(mockAddToast).toHaveBeenCalledWith('Job submitted', 'success')
   })
 

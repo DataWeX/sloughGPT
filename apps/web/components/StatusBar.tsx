@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Link from 'next/link'
+import Link from '@/vite/next-compat/link'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useConsciousnessStatus, getQualiaMood } from '@/hooks/useConsciousnessStatus'
 import { soulsController } from '@/lib/souls-controller'

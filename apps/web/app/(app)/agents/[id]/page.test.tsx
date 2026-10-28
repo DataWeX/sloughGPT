@@ -52,7 +52,7 @@ const { mockList, mockListRuns, mockUpdate, mockDelete, mockExecute, mockPush, m
 }))
 
 const stableRouter = { push: mockPush }
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useParams: () => ({ id: 'agent-1' }),
   useRouter: () => stableRouter,
 }))

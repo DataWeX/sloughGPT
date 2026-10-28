@@ -1,3 +1,11 @@
 {
-  "extends": "@sloughgpt/eslint-config/next"
+  "extends": "@sloughgpt/eslint-config/react",
+  "overrides": [
+    {
+      "files": ["components/kanban3d/**"],
+      "rules": {
+        "react/no-unknown-property": "off"
+      }
+    }
+  ]
 }

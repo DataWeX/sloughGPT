@@ -3,12 +3,12 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import React from 'react'
 
 const mockPathname = '/chat'
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   usePathname: () => mockPathname,
   useRouter: () => ({ push: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
 }))
 
-vi.mock('next/link', () => ({
+vi.mock('@/vite/next-compat/link', () => ({
   default: ({ children, href, className }: any) => (
     <a href={href} className={className}>
       {children}

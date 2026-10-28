@@ -11,13 +11,19 @@ vi.mock('@/lib/kb-controller', () => ({
   },
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 
 vi.mock('@sloughgpt/strui', () => ({
   Card: ({ children, className, onDrop, onDragOver, onDragLeave }: any) => (
-    <div data-testid="card" className={className} onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
+    <div
+      data-testid="card"
+      className={className}
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+    >
       {children}
     </div>
   ),
@@ -71,9 +77,7 @@ describe('ReadMyFilesCard', () => {
     const { addToast, onIngested } = renderCard()
     uploadFile(new File(['hello world'], 'notes.txt', { type: 'text/plain' }))
 
-    await waitFor(() =>
-      expect(screen.getByText(/Got it — I read 2 pieces from/)).toBeTruthy(),
-    )
+    await waitFor(() => expect(screen.getByText(/Got it — I read 2 pieces from/)).toBeTruthy())
     expect(screen.getByText('notes.txt')).toBeTruthy()
     expect(screen.getByText('Summarize this')).toBeTruthy()
     expect(screen.getByText('What are the key points?')).toBeTruthy()

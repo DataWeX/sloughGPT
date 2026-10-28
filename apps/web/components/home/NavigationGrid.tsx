@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/vite/next-compat/link'
 import { IconChat, IconModels } from '@/components/icons/NavIcons'
 import { IconChevronRight, IconSearch, IconBolt, IconChart } from '@sloughgpt/strui'
 import { formatBytes } from '@/lib/format-bytes'

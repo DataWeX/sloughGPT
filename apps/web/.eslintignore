@@ -1,4 +1,4 @@
-cypress/
+dist/
 dist-vite/
 .next/
 .next-dev/

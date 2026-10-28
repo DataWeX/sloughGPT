@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import QuizCard from './QuizCard'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => '/phoneme',
 }))
@@ -10,7 +10,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/phoneme-controller', () => ({
   phonemeController: {
     encode: vi.fn().mockResolvedValue({
-      word: 'hello', language: 'en', phonemes: ['HH', 'EH', 'L', 'OW'], ids: [1, 2, 3, 4], decoded: 'hello',
+      word: 'hello',
+      language: 'en',
+      phonemes: ['HH', 'EH', 'L', 'OW'],
+      ids: [1, 2, 3, 4],
+      decoded: 'hello',
     }),
     score: vi.fn(),
   },
@@ -26,10 +30,16 @@ vi.mock('@/lib/phoneme-controller', () => ({
 }))
 
 vi.mock('@/lib/phoneme-store', () => ({
-  usePhonemeStore: vi.fn((selector: any) => selector({
-    quizScore: 0, quizTotal: 0, quizStreak: 0, quizBestStreak: 0,
-    incrementQuizScore: vi.fn(), resetQuiz: vi.fn(),
-  })),
+  usePhonemeStore: vi.fn((selector: any) =>
+    selector({
+      quizScore: 0,
+      quizTotal: 0,
+      quizStreak: 0,
+      quizBestStreak: 0,
+      incrementQuizScore: vi.fn(),
+      resetQuiz: vi.fn(),
+    }),
+  ),
 }))
 
 vi.mock('@/lib/toast-store', () => ({
@@ -37,7 +47,9 @@ vi.mock('@/lib/toast-store', () => ({
 }))
 
 describe('QuizCard', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('renders quiz sections', () => {
     render(<QuizCard />)
@@ -53,11 +65,13 @@ describe('QuizCard', () => {
 
   it('shows game UI after starting', async () => {
     render(<QuizCard />)
-    const startBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Start Quiz'))!
+    const startBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.includes('Start Quiz'))!
 
     await act(async () => {
       fireEvent.click(startBtn)
-      await new Promise(r => setTimeout(r, 100))
+      await new Promise((r) => setTimeout(r, 100))
     })
 
     expect(screen.getByText('Check')).toBeInTheDocument()
@@ -67,11 +81,13 @@ describe('QuizCard', () => {
 
   it('shows new word button after starting', async () => {
     render(<QuizCard />)
-    const startBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Start Quiz'))!
+    const startBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.includes('Start Quiz'))!
 
     await act(async () => {
       fireEvent.click(startBtn)
-      await new Promise(r => setTimeout(r, 100))
+      await new Promise((r) => setTimeout(r, 100))
     })
 
     expect(screen.getAllByText('New Word').length).toBeGreaterThan(0)
