@@ -82,7 +82,7 @@ describe('ThemeSwitcher', () => {
     renderSwitcher()
     const groups = screen.getAllByRole('radiogroup', { name: 'Palette' })
     expect(groups.length).toBeGreaterThanOrEqual(1)
-    expect(groups[0].querySelectorAll('[role="radio"]').length).toBe(2)
+    expect(groups[0].querySelectorAll('[role="radio"]').length).toBe(3)
   })
 
   it('clicking a palette radio selects it', () => {
