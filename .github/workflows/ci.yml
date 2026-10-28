@@ -49,7 +49,7 @@ jobs:
         working-directory: apps/web
 
   frontend-build:
-    name: Next.js build
+    name: Vite build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,9 +67,7 @@ jobs:
     name: E2E tests
     runs-on: ubuntu-latest
     # No frontend-build dependency: the 21 specs target the Vite dev server
-    # (cypress.config.ts defaults baseUrl to 5173; next-compat shims are
-    # react-router-backed and SSR under `next start` throws useLocation()).
-    # The Vite server needs no .next production build.
+    # (cypress.config.ts defaults baseUrl to 5173).
     env:
       NEXTAUTH_SECRET: ci-test-secret
     steps:

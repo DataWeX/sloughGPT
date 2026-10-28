@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, IconChevronDown, IconCheck, Spinner } from '@sloughgpt/strui'
 import {
   DropdownMenu,

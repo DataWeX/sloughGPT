@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { Button, Card, CardContent, IconUpload, Spinner } from '@sloughgpt/strui'
 import { kbController } from '@/lib/kb-controller'
 
@@ -101,9 +101,7 @@ export function ReadMyFilesCard({ addToast, onIngested }: Props) {
               <p className="text-sm text-muted-foreground">Reading your file...</p>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Drop a file here or click to upload
-            </p>
+            <p className="text-sm text-muted-foreground">Drop a file here or click to upload</p>
           )}
         </div>
 
