@@ -75,6 +75,9 @@ class _FakeRequests(types.ModuleType):
 
 @pytest.fixture
 def fake_requests(monkeypatch):
+    # These tests pin the HTTP half of the transport seam — declare remote
+    # mode (card ad4f5ec2); local in-process dispatch is the default.
+    monkeypatch.setenv("MAN_API_URL", "http://localhost:8000")
     fr = _FakeRequests()
     fr._install(monkeypatch)
     return fr
