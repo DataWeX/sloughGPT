@@ -17,6 +17,7 @@ import {
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
+import { MolePluginPanel } from '@/components/mole/MolePluginPanel'
 
 interface CloudJob {
   job_id: string
@@ -42,7 +43,7 @@ export default function PluginsCloudPage() {
   const [submitting, setSubmitting] = useState(false)
   const [provider, setProvider] = useState('local')
   const [datasetId, setDatasetId] = useState('')
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -60,7 +61,9 @@ export default function PluginsCloudPage() {
     }
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const startJob = async () => {
     if (!datasetId) {
@@ -80,11 +83,34 @@ export default function PluginsCloudPage() {
     }
   }
 
+  const togglePlugin = async (plugin: PluginInfo) => {
+    const action = plugin.enabled ? 'disable' : 'enable'
+    try {
+      await apiPost(`/plugins/${plugin.name}/${action}`)
+      addToast(`Plugin ${action}d`, 'success')
+      loadData()
+    } catch {
+      addToast(`Failed to ${action} plugin`, 'error')
+    }
+  }
+
+  const reloadPlugins = async () => {
+    try {
+      await apiPost('/plugins/reload')
+      addToast('Plugins reloaded', 'success')
+      loadData()
+    } catch {
+      addToast('Failed to reload plugins', 'error')
+    }
+  }
+
+  const molePlugin = plugins.find((p) => p.name === 'MolePlugin') ?? null
+
   return (
     <PageContainer title="Plugins & Cloud Training">
       <div className="border-b border-border/40 mb-6">
         <div className="flex gap-0">
-          {(['cloud', 'plugins'] as const).map(tab => (
+          {(['cloud', 'plugins'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -149,13 +175,24 @@ export default function PluginsCloudPage() {
                 <p className="text-sm text-muted-foreground">No training jobs yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {cloudJobs.map(job => (
-                    <div key={job.job_id} className="flex items-center justify-between p-2 border border-border/40 rounded">
+                  {cloudJobs.map((job) => (
+                    <div
+                      key={job.job_id}
+                      className="flex items-center justify-between p-2 border border-border/40 rounded"
+                    >
                       <div>
                         <span className="font-mono text-xs">{job.job_id}</span>
                         <span className="ml-2 text-xs text-muted-foreground">{job.provider}</span>
                       </div>
-                      <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'secondary'}>
+                      <Badge
+                        variant={
+                          job.status === 'completed'
+                            ? 'default'
+                            : job.status === 'failed'
+                              ? 'destructive'
+                              : 'secondary'
+                        }
+                      >
                         {job.status}
                       </Badge>
                     </div>
@@ -175,28 +212,59 @@ export default function PluginsCloudPage() {
               <CardDescription>Manage loaded plugins</CardDescription>
             </CardHeader>
             <CardContent>
+              <Button variant="outline" size="sm" className="mb-3" onClick={reloadPlugins}>
+                Reload Plugins
+              </Button>
               {loading ? (
                 <Skeleton className="h-20 w-full" />
               ) : plugins.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No plugins installed. Add plugins to ~/.config/sloughgpt/plugins/</p>
+                <p className="text-sm text-muted-foreground">
+                  No plugins installed. Add plugins to the repo plugins/ directory, then hit reload.
+                </p>
               ) : (
                 <div className="space-y-2">
-                  {plugins.map(plugin => (
-                    <div key={plugin.name} className="flex items-center justify-between p-2 border border-border/40 rounded">
+                  {plugins.map((plugin) => (
+                    <div
+                      key={plugin.name}
+                      className="flex items-center justify-between p-2 border border-border/40 rounded"
+                    >
                       <div>
                         <span className="font-medium text-sm">{plugin.name}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">v{plugin.version}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">by {plugin.author}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          v{plugin.version}
+                        </span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          by {plugin.author}
+                        </span>
                       </div>
-                      <Badge variant={plugin.enabled ? 'default' : 'secondary'}>
-                        {plugin.enabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={plugin.enabled ? 'default' : 'secondary'}>
+                          {plugin.enabled ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                        <Button variant="outline" size="sm" onClick={() => togglePlugin(plugin)}>
+                          {plugin.enabled ? 'Disable' : 'Enable'}
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          {!loading && molePlugin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Mole — Site Checks</CardTitle>
+                <CardDescription>
+                  Read-only checks across the API, streams and journeys
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MolePluginPanel plugin={molePlugin} />
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </PageContainer>
