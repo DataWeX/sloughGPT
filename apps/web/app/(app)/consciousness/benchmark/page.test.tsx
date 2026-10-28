@@ -15,9 +15,12 @@ vi.mock('@/hooks/useLocale', () => {
   }
 })
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: Object.assign(vi.fn((sel: any) => sel({ addToast: vi.fn() })), { getState: () => ({ addToast: vi.fn() }) }),
+  useToastStore: Object.assign(
+    vi.fn((sel: any) => sel({ addToast: vi.fn() })),
+    { getState: () => ({ addToast: vi.fn() }) },
+  ),
 }))
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
@@ -27,7 +30,7 @@ function renderPage() {
   return render(
     <LocaleProvider>
       <ConsciousnessBenchmarkPage />
-    </LocaleProvider>
+    </LocaleProvider>,
   )
 }
 

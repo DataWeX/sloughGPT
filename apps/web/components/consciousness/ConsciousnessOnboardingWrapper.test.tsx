@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ConsciousnessOnboardingWrapper } from './ConsciousnessOnboardingWrapper'
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://localhost:8000' }))
 vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: (key: string) => key }),
@@ -24,7 +24,7 @@ describe('ConsciousnessOnboardingWrapper', () => {
     render(
       <ConsciousnessOnboardingWrapper>
         <div>Child content</div>
-      </ConsciousnessOnboardingWrapper>
+      </ConsciousnessOnboardingWrapper>,
     )
     expect(screen.getByText('Child content')).toBeDefined()
   })
@@ -33,7 +33,7 @@ describe('ConsciousnessOnboardingWrapper', () => {
     render(
       <ConsciousnessOnboardingWrapper>
         <div>Child content</div>
-      </ConsciousnessOnboardingWrapper>
+      </ConsciousnessOnboardingWrapper>,
     )
     expect(document.querySelector('.fixed.inset-0')).not.toBeNull()
   })
@@ -43,7 +43,7 @@ describe('ConsciousnessOnboardingWrapper', () => {
     render(
       <ConsciousnessOnboardingWrapper>
         <div>Child content</div>
-      </ConsciousnessOnboardingWrapper>
+      </ConsciousnessOnboardingWrapper>,
     )
     expect(screen.getByText('Child content')).toBeDefined()
     expect(document.querySelector('.fixed.inset-0')).toBeNull()
@@ -53,7 +53,7 @@ describe('ConsciousnessOnboardingWrapper', () => {
     const { container } = render(
       <ConsciousnessOnboardingWrapper>
         <div>Child content</div>
-      </ConsciousnessOnboardingWrapper>
+      </ConsciousnessOnboardingWrapper>,
     )
     // Onboarding should be visible
     expect(document.querySelector('.fixed.inset-0')).not.toBeNull()

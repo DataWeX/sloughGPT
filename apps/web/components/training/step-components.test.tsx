@@ -23,6 +23,7 @@ vi.mock('@sloughgpt/strui', () => {
     CardContent: passthrough,
     CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div data-testid="card-title">{children}</div>,
+    CardDescription: ({ children }: any) => <p data-testid="card-description">{children}</p>,
     Button: button,
     ToggleGroup: ({ value, onValueChange, children }: any) => (
       <div data-testid="toggle-group" data-value={value}>
@@ -76,6 +77,8 @@ vi.mock('@sloughgpt/strui', () => {
     Spinner: () => <div data-testid="spinner" />,
     IconFile: () => <span data-testid="icon-file" />,
     IconUpload: () => <span data-testid="icon-upload" />,
+    IconGrid: () => <span data-testid="icon-grid" />,
+    IconSparkle: () => <span data-testid="icon-sparkle" />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children, asChild }: any) => <>{children}</>,
     TooltipContent: ({ children }: any) => <div>{children}</div>,

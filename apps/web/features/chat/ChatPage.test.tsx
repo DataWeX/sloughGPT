@@ -51,7 +51,7 @@ vi.mock('@sloughgpt/strui', () => ({
   CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
-vi.mock('next/dynamic', () => ({
+vi.mock('@/vite/next-compat/dynamic', () => ({
   __esModule: true,
   default: () => (props: Record<string, unknown>) =>
     React.createElement('div', { 'data-testid': 'dynamic' }),
@@ -116,7 +116,7 @@ const state = vi.hoisted(() => ({
   ui: { showSettings: false, toolPanelOpen: false },
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
   useSearchParams: () => ({ get: mockSearchParamsGet }),
 }))
@@ -344,7 +344,7 @@ vi.mock('@/features/chat/hooks/useChatMessages', async () => {
         // Record hook-side writes separately so tests can assert the
         // dual-write contract (store for display, hook for send paths).
         setInput: (...args: [string]) => {
-          (storeSetInput as (...a: [string]) => void)(...args)
+          ;(storeSetInput as (...a: [string]) => void)(...args)
           mockChatSetInput(...args)
         },
         loading,

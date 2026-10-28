@@ -82,7 +82,7 @@ const { mockGet, mockUpdate, mockDelete, mockExport, mockGetStats, mockPush, moc
 }))
 const stableRouter = { push: mockPush }
 
-vi.mock('next/navigation', () => ({ useRouter: () => stableRouter, useParams: () => ({ id: 'shakespeare' }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => stableRouter, useParams: () => ({ id: 'shakespeare' }) }))
 vi.mock('@/lib/dataset-controller', () => ({ datasetController: { get: mockGet, update: mockUpdate, delete: mockDelete, export: mockExport, getStats: mockGetStats, listVersions: mockListVersions, createVersion: mockCreateVersion, restoreVersion: mockRestoreVersion, convertToMessages: mockConvertToMessages } }))
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
 vi.mock('@/components/DatasetPreview', () => ({ DatasetPreview: () => null }))

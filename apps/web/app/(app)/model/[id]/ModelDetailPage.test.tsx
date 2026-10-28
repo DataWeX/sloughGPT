@@ -2,11 +2,17 @@ import { describe, it, expect, vi, afterEach, beforeEach, beforeAll, afterAll } 
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-afterEach(() => { cleanup() })
+afterEach(() => {
+  cleanup()
+})
 
 vi.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>,
-  LineChart: ({ children }: { children: React.ReactNode }) => <div data-testid="line-chart">{children}</div>,
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="responsive-container">{children}</div>
+  ),
+  LineChart: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="line-chart">{children}</div>
+  ),
   Line: () => null,
   XAxis: () => null,
   YAxis: () => null,
@@ -15,9 +21,17 @@ vi.mock('recharts', () => ({
 }))
 
 const {
-  mockPush, mockParams, mockModelList, mockGetHealth,
-  mockModelLoad, mockUnload, mockBenchRun, mockAddToast, mockApiGet,
-  mockListFineTuned, mockLoadFineTuned,
+  mockPush,
+  mockParams,
+  mockModelList,
+  mockGetHealth,
+  mockModelLoad,
+  mockUnload,
+  mockBenchRun,
+  mockAddToast,
+  mockApiGet,
+  mockListFineTuned,
+  mockLoadFineTuned,
 } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockParams: vi.fn(),
@@ -32,7 +46,7 @@ const {
   mockLoadFineTuned: vi.fn(),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useParams: () => mockParams(),
 }))
@@ -65,12 +79,14 @@ vi.mock('@/lib/http-client', () => ({
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
+  useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
 }))
 
 vi.mock('@/lib/generation-config-controller', () => ({
   generationConfigController: {
-    get: vi.fn().mockResolvedValue({ temperature: 0.7, max_new_tokens: 256, top_p: 1.0, top_k: 50 }),
+    get: vi
+      .fn()
+      .mockResolvedValue({ temperature: 0.7, max_new_tokens: 256, top_p: 1.0, top_k: 50 }),
     update: vi.fn().mockResolvedValue(undefined),
   },
 }))
@@ -166,9 +182,7 @@ describe('ModelDetailPage', () => {
     await waitFor(() => expect(screen.getByText('Load model')).toBeDefined())
     fireEvent.click(screen.getByText('Load model'))
     await waitFor(() => expect(mockModelLoad).toHaveBeenCalledWith('gpt2'))
-    expect(mockAddToast).toHaveBeenCalledWith(
-      expect.stringContaining('Model ready'), 'success',
-    )
+    expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Model ready'), 'success')
   })
 
   it('unloads model on Remove click', async () => {
@@ -219,10 +233,18 @@ describe('ModelDetailPage', () => {
     mockParams.mockReturnValue({ id: 'gpt2_dataset_x' })
     mockModelList.mockResolvedValue([])
     mockGetHealth.mockResolvedValue(mockHealthUnloaded)
-    mockListFineTuned.mockResolvedValue([{
-      name: 'gpt2_dataset_x', model_name: 'gpt2_dataset_x', model: 'gpt2', dataset: 'dataset_x',
-      size_mb: 2.5, final_loss: 0.3333, epochs: 2, model_path: '/tmp/x',
-    }])
+    mockListFineTuned.mockResolvedValue([
+      {
+        name: 'gpt2_dataset_x',
+        model_name: 'gpt2_dataset_x',
+        model: 'gpt2',
+        dataset: 'dataset_x',
+        size_mb: 2.5,
+        final_loss: 0.3333,
+        epochs: 2,
+        model_path: '/tmp/x',
+      },
+    ])
     render(<ModelDetailPage />)
     await waitFor(() => expect(screen.getAllByText('gpt2_dataset_x').length).toBeGreaterThan(0))
     expect(screen.getAllByText('finetuned').length).toBeGreaterThan(0)
@@ -233,11 +255,24 @@ describe('ModelDetailPage', () => {
     mockParams.mockReturnValue({ id: 'my_model_dataset_x' })
     mockModelList.mockResolvedValue([])
     mockGetHealth.mockResolvedValue(mockHealthUnloaded)
-    mockListFineTuned.mockResolvedValue([{
-      id: 'my_model_dataset_x', model_name: 'my_model_dataset_x', model: 'gpt2', dataset: 'dataset_x',
-      size_mb: 2.5, final_loss: 0.3333, epochs: 2, model_path: '/tmp/x',
-    }])
-    mockLoadFineTuned.mockResolvedValue({ status: 'loaded', name: 'my_model_dataset_x', model_path: '/tmp/x', model_id: 'my_model_dataset_x' })
+    mockListFineTuned.mockResolvedValue([
+      {
+        id: 'my_model_dataset_x',
+        model_name: 'my_model_dataset_x',
+        model: 'gpt2',
+        dataset: 'dataset_x',
+        size_mb: 2.5,
+        final_loss: 0.3333,
+        epochs: 2,
+        model_path: '/tmp/x',
+      },
+    ])
+    mockLoadFineTuned.mockResolvedValue({
+      status: 'loaded',
+      name: 'my_model_dataset_x',
+      model_path: '/tmp/x',
+      model_id: 'my_model_dataset_x',
+    })
     render(<ModelDetailPage />)
     await waitFor(() => expect(screen.getAllByText('my_model_dataset_x').length).toBeGreaterThan(0))
     fireEvent.click(screen.getByText('Load model'))

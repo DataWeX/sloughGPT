@@ -3,24 +3,24 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
 const mockPush = vi.fn()
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 
 const mockCtx: {
   model: {
-    availableModels: string[];
-    current: string | null;
-    loading: string | null;
-    generating: boolean;
-    infoMap: Record<string, { cached?: boolean; size_gb?: number }>;
-    descriptions: Record<string, string>;
-    downloadProgress: Record<string, any>;
-    onSelect: ReturnType<typeof vi.fn>;
-    onUnload: ReturnType<typeof vi.fn>;
+    availableModels: string[]
+    current: string | null
+    loading: string | null
+    generating: boolean
+    infoMap: Record<string, { cached?: boolean; size_gb?: number }>
+    descriptions: Record<string, string>
+    downloadProgress: Record<string, any>
+    onSelect: ReturnType<typeof vi.fn>
+    onUnload: ReturnType<typeof vi.fn>
     fineTuned?: {
-      models: Array<{ name: string; model?: string; dataset?: string; size_mb?: number }>;
-      loading: boolean;
-      onLoad: ReturnType<typeof vi.fn>;
-    };
+      models: Array<{ name: string; model?: string; dataset?: string; size_mb?: number }>
+      loading: boolean
+      onLoad: ReturnType<typeof vi.fn>
+    }
   }
 } = {
   model: {
@@ -36,23 +36,44 @@ const mockCtx: {
     fineTuned: { models: [], loading: false, onLoad: vi.fn() },
   },
 }
-vi.mock('@/features/chat/contexts/ChatToolbarContext', () => ({ useChatToolbarContext: () => mockCtx }))
+vi.mock('@/features/chat/contexts/ChatToolbarContext', () => ({
+  useChatToolbarContext: () => mockCtx,
+}))
 
 vi.mock('@sloughgpt/strui', () => {
-  function DM({ children }: any) { return <div>{children}</div> }
-  function DMT({ children, asChild, ...props }: any) { return asChild ? <>{children}</> : <button>{children}</button> }
+  function DM({ children }: any) {
+    return <div>{children}</div>
+  }
+  function DMT({ children, asChild, ...props }: any) {
+    return asChild ? <>{children}</> : <button>{children}</button>
+  }
   function DMI({ children, onSelect, disabled }: any) {
-    return <button role="menuitem" disabled={disabled} onClick={onSelect}>{children}</button>
+    return (
+      <button role="menuitem" disabled={disabled} onClick={onSelect}>
+        {children}
+      </button>
+    )
   }
   return {
     cn: vi.fn((...args: any[]) => args.join(' ')),
-    DropdownMenu: DM, DropdownMenuTrigger: DMT, DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuItem: DMI, DropdownMenuSeparator: () => <hr />, DropdownMenuLabel: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuCheckboxItem: DMI, DropdownMenuPortal: ({ children }: any) => <div>{children}</div>,
+    DropdownMenu: DM,
+    DropdownMenuTrigger: DMT,
+    DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuItem: DMI,
+    DropdownMenuSeparator: () => <hr />,
+    DropdownMenuLabel: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuCheckboxItem: DMI,
+    DropdownMenuPortal: ({ children }: any) => <div>{children}</div>,
     DropdownMenuGroup: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuSub: ({ children }: any) => <div>{children}</div>, DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuSubTrigger: DMT, DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
-    Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    DropdownMenuSub: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuSubTrigger: DMT,
+    DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
+    Button: ({ children, onClick, ...props }: any) => (
+      <button onClick={onClick} {...props}>
+        {children}
+      </button>
+    ),
     Spinner: () => <span data-testid="spinner">...</span>,
     IconChevronDown: () => <span data-testid="icon-chevron-down">▼</span>,
     IconCheck: () => <span data-testid="icon-check">✓</span>,
@@ -99,7 +120,9 @@ describe('ModelDropdown', () => {
 
   it('shows download progress in dropdown for loading model', () => {
     mockCtx.model.loading = 'gpt2'
-    mockCtx.model.downloadProgress = { gpt2: { percentage: 45, status: 'downloading', speed_mb_per_sec: 10, eta_seconds: 30 } }
+    mockCtx.model.downloadProgress = {
+      gpt2: { percentage: 45, status: 'downloading', speed_mb_per_sec: 10, eta_seconds: 30 },
+    }
     render(<ModelDropdown />)
     const matches = screen.getAllByText('45%')
     expect(matches.length).toBeGreaterThanOrEqual(1)
@@ -125,7 +148,9 @@ describe('ModelDropdown', () => {
 
   it('download progress bar uses actual percentage not hardcoded', () => {
     mockCtx.model.loading = 'gpt2'
-    mockCtx.model.downloadProgress = { gpt2: { percentage: 73, status: 'downloading', speed_mb_per_sec: 15, eta_seconds: 10 } }
+    mockCtx.model.downloadProgress = {
+      gpt2: { percentage: 73, status: 'downloading', speed_mb_per_sec: 15, eta_seconds: 10 },
+    }
     render(<ModelDropdown />)
     const bar = document.querySelector('[style*="width: 73%"]')
     expect(bar).not.toBeNull()

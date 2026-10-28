@@ -14,11 +14,13 @@ type LoaderResult = AnyComponent | { default: AnyComponent } | Record<string, un
 /**
  * next/dynamic → React.lazy + Suspense (ssr:false is a no-op in the browser).
  * Loader may resolve to a component, a module with default, or a named-export module.
+ * Props are inferred from the loader's resolved component so call sites keep
+ * full type checking (matching next/dynamic's inference).
  */
-export default function dynamic<P = any>(
-  loader: () => Promise<LoaderResult>,
+export default function dynamic<Props = Record<string, unknown>>(
+  loader: () => Promise<ComponentType<Props> | { default: ComponentType<Props> } | LoaderResult>,
   options: DynamicOptions = {},
-): ComponentType<P> {
+): ComponentType<Props> {
   const Lazy = lazy(async () => {
     const mod = (await loader()) as LoaderResult
     if (typeof mod === 'function') return { default: mod as AnyComponent }
@@ -37,19 +39,19 @@ export default function dynamic<P = any>(
     throw new Error('next/dynamic compat: loader did not yield a component')
   })
   const Loading = options.loading
-  return function DynamicClient(props: P) {
+  return function DynamicClient(props: Props) {
     return (
       <Suspense
         fallback={
           Loading ? (
-            <Loading {...(props as Record<string, unknown>)} />
+            <Loading {...(props as unknown as Record<string, unknown>)} />
           ) : (
             (null as unknown as ReactNode)
           )
         }
       >
-        <Lazy {...(props as Record<string, unknown>)} />
+        <Lazy {...(props as unknown as Record<string, unknown>)} />
       </Suspense>
     )
-  } as ComponentType<P>
+  } as ComponentType<Props>
 }

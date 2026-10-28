@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, StatCard, KpiGrid, cn, FoldSection } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
