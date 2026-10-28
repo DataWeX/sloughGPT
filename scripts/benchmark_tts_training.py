@@ -70,7 +70,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--steps", type=int, default=200, help="optimizer steps (default 200)")
     parser.add_argument("--lr", type=float, default=1e-3, help="SloAdam lr (default 1e-3)")
     parser.add_argument("--max-frames", type=int, default=200, help="mel frame cap per sample")
-    parser.add_argument("--holdout", type=int, default=0, help="hold-out phrases (default DEFAULT_HOLDOUT)")
+    parser.add_argument(
+        "--holdout", type=int, default=0, help="hold-out phrases (default DEFAULT_HOLDOUT)"
+    )
     parser.add_argument("--seed", type=int, default=0, help="numpy RNG seed (default 0)")
     parser.add_argument(
         "--json",

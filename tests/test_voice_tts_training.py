@@ -144,9 +144,7 @@ class TestInferenceParity:
         tts.train_step(text, wav)
         result = tts.text_to_waveform("hello world")
         assert isinstance(result, np.ndarray) and result.size > 0
-        mel = tts.decoder.generate(
-            tts._phoneme_encoder.encode("hello"), max_frames=10
-        )
+        mel = tts.decoder.generate(tts._phoneme_encoder.encode("hello"), max_frames=10)
         assert mel.ndim == 2 and mel.shape[0] == tts.decoder.n_mels
 
 

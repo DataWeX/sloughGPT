@@ -213,9 +213,7 @@ class SpectrogramDecoder:
         stop_acc = None
         for t in range(target_frames):
             dec_input = _concat_last(context, prev_mel)
-            gates = _sn._add(
-                _sn._matmul(dec_input, dec_in_T), _sn._matmul(h, dec_hid_T)
-            )
+            gates = _sn._add(_sn._matmul(dec_input, dec_in_T), _sn._matmul(h, dec_hid_T))
             gi = _sn.sigmoid(_sn._slice(gates, (slice(None), slice(0, hd))))
             gf = _sn.sigmoid(_sn._slice(gates, (slice(None), slice(hd, 2 * hd))))
             gg = _sn.tanh(_sn._slice(gates, (slice(None), slice(2 * hd, 3 * hd))))
