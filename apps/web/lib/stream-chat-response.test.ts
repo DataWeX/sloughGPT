@@ -47,7 +47,7 @@ describe('streamChatResponse', () => {
     ])
     await streamChatResponse(mockParams)
     expect(mockParams.onToolCall).toHaveBeenCalledWith(
-      expect.objectContaining({ tool: 'calculator', status: 'executing' })
+      expect.objectContaining({ tool: 'calculator', status: 'executing' }),
     )
   })
 
@@ -57,7 +57,12 @@ describe('streamChatResponse', () => {
     ])
     await streamChatResponse(mockParams)
     expect(mockParams.onToolCall).toHaveBeenCalledWith(
-      expect.objectContaining({ tool: 'calculator', status: 'success', output: '4', duration_ms: 12.5 })
+      expect.objectContaining({
+        tool: 'calculator',
+        status: 'success',
+        output: '4',
+        duration_ms: 12.5,
+      }),
     )
   })
 
@@ -67,7 +72,7 @@ describe('streamChatResponse', () => {
     ])
     await streamChatResponse(mockParams)
     expect(mockParams.onToolCall).toHaveBeenCalledWith(
-      expect.objectContaining({ tool: 'run_code', status: 'error', error: 'SyntaxError' })
+      expect.objectContaining({ tool: 'run_code', status: 'error', error: 'SyntaxError' }),
     )
   })
 
@@ -83,15 +88,23 @@ describe('streamChatResponse', () => {
     await streamChatResponse(mockParams)
     expect(mockParams.onThinking).toHaveBeenCalled()
     expect(mockParams.onToolCall).toHaveBeenCalledTimes(2)
-    expect(mockParams.onToolCall).toHaveBeenNthCalledWith(1, expect.objectContaining({ status: 'executing' }))
-    expect(mockParams.onToolCall).toHaveBeenNthCalledWith(2, expect.objectContaining({ status: 'success' }))
+    expect(mockParams.onToolCall).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ status: 'executing' }),
+    )
+    expect(mockParams.onToolCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ status: 'success' }),
+    )
     expect(mockParams.onToken).toHaveBeenCalledWith('The')
     expect(mockParams.onToken).toHaveBeenCalledWith(' answer')
     expect(mockParams.onComplete).toHaveBeenCalled()
   })
 
   it('does not dispatch tool_call for non-tool events', async () => {
-    mockSSE(['data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"hello"},"message":""}'])
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"hello"},"message":""}',
+    ])
     await streamChatResponse(mockParams)
     expect(mockParams.onToolCall).not.toHaveBeenCalled()
   })
@@ -130,9 +143,29 @@ describe('streamChatResponse', () => {
         order.push('complete')
       },
     })
-    expect(onMeta).toHaveBeenCalledWith({ tokens: 2, elapsedMs: expect.any(Number) })
+    expect(onMeta).toHaveBeenCalledWith({
+      tokens: 2,
+      elapsedMs: expect.any(Number),
+      maxTokens: 256,
+    })
     expect(onMeta.mock.calls[0][0].elapsedMs).toBeGreaterThanOrEqual(0)
-    expect(order).toEqual(['meta', 'complete'])
+    expect(order).toEqual(['meta', 'meta', 'complete'])
+  })
+
+  it('emits a live metrics tick on the first token carrying the request cap', async () => {
+    const onMeta = vi.fn()
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"hi"},"message":""}',
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}',
+    ])
+    await streamChatResponse({ ...mockParams, onMeta })
+    expect(onMeta).toHaveBeenCalledTimes(2)
+    expect(onMeta.mock.calls[0][0]).toEqual({
+      tokens: 1,
+      elapsedMs: expect.any(Number),
+      maxTokens: 256,
+    })
+    expect(onMeta.mock.calls[1][0].maxTokens).toBe(256)
   })
 
   it('does not call onMeta when it is not provided', async () => {
@@ -149,7 +182,10 @@ describe('streamChatResponse', () => {
     ])
     await streamChatResponse(mockParams)
     expect(mockParams.onComplete).toHaveBeenCalledTimes(1)
-    expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: true, fact: 'The capital of France is Paris.' })
+    expect(mockParams.onMemory).toHaveBeenCalledWith({
+      stored: true,
+      fact: 'The capital of France is Paris.',
+    })
   })
 
   it('dispatches memory event without fact when payload omits it', async () => {
@@ -203,7 +239,11 @@ describe('streamChatResponse', () => {
       'data: {"stream":"chat","phase":"MEMORY","status":"success","data":{"stored":true,"fact":"A.","facts":["A.","B.","C."]},"message":"New fact remembered"}',
     ])
     await streamChatResponse(mockParams)
-    expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: true, fact: 'A.', facts: ['A.', 'B.', 'C.'] })
+    expect(mockParams.onMemory).toHaveBeenCalledWith({
+      stored: true,
+      fact: 'A.',
+      facts: ['A.', 'B.', 'C.'],
+    })
   })
 
   it('drops non-string entries from the facts array', async () => {
@@ -211,7 +251,11 @@ describe('streamChatResponse', () => {
       'data: {"stream":"chat","phase":"MEMORY","status":"success","data":{"stored":true,"fact":"A.","facts":["A.",7,null,"B."]},"message":"New fact remembered"}',
     ])
     await streamChatResponse(mockParams)
-    expect(mockParams.onMemory).toHaveBeenCalledWith({ stored: true, fact: 'A.', facts: ['A.', 'B.'] })
+    expect(mockParams.onMemory).toHaveBeenCalledWith({
+      stored: true,
+      fact: 'A.',
+      facts: ['A.', 'B.'],
+    })
   })
 
   it('does not call onComplete twice when post-complete events follow', async () => {
@@ -233,15 +277,27 @@ describe('streamChatResponse', () => {
       text: () => Promise.resolve('Service unavailable'),
     } as unknown as Response)
     await streamChatResponse(mockParams)
-    expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'), expect.any(Object))
+    expect(mockParams.onError).toHaveBeenCalledWith(
+      503,
+      expect.stringContaining('503'),
+      expect.any(Object),
+    )
   })
 
   it('retries on transient 503 before calling onError', async () => {
     const encoder = new TextEncoder()
     const successStream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode('data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"Hi"},"message":""}\n'))
-        controller.enqueue(encoder.encode('data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}\n'))
+        controller.enqueue(
+          encoder.encode(
+            'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"Hi"},"message":""}\n',
+          ),
+        )
+        controller.enqueue(
+          encoder.encode(
+            'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}\n',
+          ),
+        )
         controller.close()
       },
     })
@@ -277,7 +333,11 @@ describe('streamChatResponse', () => {
     await streamChatResponse(mockParams)
 
     expect(mockParams.onError).toHaveBeenCalledTimes(1)
-    expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'), expect.any(Object))
+    expect(mockParams.onError).toHaveBeenCalledWith(
+      503,
+      expect.stringContaining('503'),
+      expect.any(Object),
+    )
   }, 40_000)
 
   it('does not retry on non-retryable 400 error', async () => {
@@ -290,7 +350,11 @@ describe('streamChatResponse', () => {
     await streamChatResponse(mockParams)
 
     expect(mockParams.onError).toHaveBeenCalledTimes(1)
-    expect(mockParams.onError).toHaveBeenCalledWith(400, expect.stringContaining('400'), expect.any(Object))
+    expect(mockParams.onError).toHaveBeenCalledWith(
+      400,
+      expect.stringContaining('400'),
+      expect.any(Object),
+    )
   })
 
   it('does not retry when signal is aborted', async () => {
@@ -314,7 +378,12 @@ describe('streamChatResponse', () => {
       'data: {"stream":"chat","phase":"CONTROL","status":"cancelled","data":{"action":"cancel"},"message":"Stream cancelled"}',
     ])
     await streamChatResponse({ ...mockParams, onControl })
-    expect(onControl).toHaveBeenCalledWith({ action: 'cancelled', tool: undefined, approved: undefined, context: undefined })
+    expect(onControl).toHaveBeenCalledWith({
+      action: 'cancelled',
+      tool: undefined,
+      approved: undefined,
+      context: undefined,
+    })
   })
 
   it('dispatches control event for tool approval', async () => {
@@ -323,7 +392,12 @@ describe('streamChatResponse', () => {
       'data: {"stream":"chat","phase":"CONTROL","status":"approved","data":{"tool":"calculator","approved":true},"message":"Tool approved"}',
     ])
     await streamChatResponse({ ...mockParams, onControl })
-    expect(onControl).toHaveBeenCalledWith({ action: 'approved', tool: 'calculator', approved: true, context: undefined })
+    expect(onControl).toHaveBeenCalledWith({
+      action: 'approved',
+      tool: 'calculator',
+      approved: true,
+      context: undefined,
+    })
   })
 
   it('dispatches control event for context injection', async () => {
@@ -332,6 +406,11 @@ describe('streamChatResponse', () => {
       'data: {"stream":"chat","phase":"CONTROL","status":"context","data":{"context":"extra info"},"message":"Context injected"}',
     ])
     await streamChatResponse({ ...mockParams, onControl })
-    expect(onControl).toHaveBeenCalledWith({ action: 'context', tool: undefined, approved: undefined, context: 'extra info' })
+    expect(onControl).toHaveBeenCalledWith({
+      action: 'context',
+      tool: undefined,
+      approved: undefined,
+      context: 'extra info',
+    })
   })
 })

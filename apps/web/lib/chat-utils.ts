@@ -16,8 +16,8 @@ export interface ChatMessage {
   isError?: boolean
   pinned?: boolean
   toolCalls?: Array<{ id?: string; name?: string; arguments?: string; status?: string }>
-  /** Per-turn stream metrics, set when the assistant turn completes. */
-  metrics?: { tokens?: number; elapsedMs?: number }
+  /** Per-turn stream metrics — live throttled ticks while streaming, final on completion. */
+  metrics?: { tokens?: number; elapsedMs?: number; maxTokens?: number }
 }
 
 export interface ImageAttachment {
@@ -140,10 +140,13 @@ export async function copyConversationAsMarkdown(messages: ChatMessage[]): Promi
   }
 }
 
-export function computeSearchMatches(messages: ChatMessage[], query: string): { matchIds: string[]; matchCount: number } {
+export function computeSearchMatches(
+  messages: ChatMessage[],
+  query: string,
+): { matchIds: string[]; matchCount: number } {
   if (!query) return { matchIds: [], matchCount: 0 }
   const q = query.toLowerCase()
-  const matchIds = messages.filter(m => m.content.toLowerCase().includes(q)).map(m => m.id)
+  const matchIds = messages.filter((m) => m.content.toLowerCase().includes(q)).map((m) => m.id)
   return { matchIds, matchCount: matchIds.length }
 }
 
