@@ -3788,9 +3788,7 @@ Examples:
         if not status.get("model_loaded"):
             from .log_buffer import LogEntry
 
-            self._print(
-                f"  {_C_RED}\u2717 No model loaded.{_C_RESET} Load one: models load <id>"
-            )
+            self._print(f"  {_C_RED}\u2717 No model loaded.{_C_RESET} Load one: models load <id>")
             self._log_buffer.append(
                 LogEntry(
                     timestamp=time.time(),
@@ -4322,9 +4320,7 @@ Examples:
             return
         rows = command_rows(name, self)
         if not rows:
-            self._print(
-                f"  Unknown option view: {name!r} — known: {', '.join(option_commands())}"
-            )
+            self._print(f"  Unknown option view: {name!r} — known: {', '.join(option_commands())}")
             self._last_exit_code = 1
             return
 

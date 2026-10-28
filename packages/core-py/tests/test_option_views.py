@@ -51,12 +51,8 @@ def repl():
                 "domain.shell._internal.runtime._probe_api",
                 return_value={"available": False, "error": "mock"},
             ),
-            patch(
-                "domain.shell._internal.repl.ShellREPL._get_current_model", return_value=""
-            ),
-            patch(
-                "domain.shell._internal.repl.ShellREPL._get_current_soul", return_value=""
-            ),
+            patch("domain.shell._internal.repl.ShellREPL._get_current_model", return_value=""),
+            patch("domain.shell._internal.repl.ShellREPL._get_current_soul", return_value=""),
             patch.object(ShellREPL, "_setup_readline"),
             patch(
                 "domain.shell._internal.runtime.APIServerProcess.start",
@@ -268,9 +264,7 @@ class TestBootView:
         api.is_running = False
         api.start.return_value = {"ok": True, "message": "started"}
         with (
-            patch.object(
-                type(repl.os), "api", new_callable=PropertyMock, return_value=api
-            ),
+            patch.object(type(repl.os), "api", new_callable=PropertyMock, return_value=api),
             patch.object(
                 type(repl.os),
                 "api_status",
