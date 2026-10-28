@@ -7,7 +7,7 @@ const { mockPush, bootstrapState } = vi.hoisted(() => ({
   bootstrapState: { payload: null as any },
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 

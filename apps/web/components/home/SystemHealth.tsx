@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/vite/next-compat/link'
 import { Card, CardContent, cn } from '@sloughgpt/strui'
 import { formatUptime } from '@/lib/chat-utils'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
@@ -52,27 +52,53 @@ export function SystemHealth({ apiStatus, loading, liveHealth }: SystemHealthPro
         <CardContent className="py-3">
           <div className="flex items-center gap-2 mb-3">
             <p className="text-xs font-medium">System</p>
-            <Link href="/monitoring" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">Details →</Link>
+            <Link
+              href="/monitoring"
+              prefetch={false}
+              className="text-xs text-primary hover:text-primary/80 ml-auto"
+            >
+              Details →
+            </Link>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-lg bg-muted/30 px-3 py-2">
               <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">CPU</p>
-              <p className={cn("text-sm font-semibold tabular-nums", resourceColor(liveHealth.cpu_percent))}>
+              <p
+                className={cn(
+                  'text-sm font-semibold tabular-nums',
+                  resourceColor(liveHealth.cpu_percent),
+                )}
+              >
                 {liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '—'}
               </p>
             </div>
             <div className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Memory</p>
-              <p className={cn("text-sm font-semibold tabular-nums", resourceColor(liveHealth.memory_percent))}>
-                {liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '—'}
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                Memory
+              </p>
+              <p
+                className={cn(
+                  'text-sm font-semibold tabular-nums',
+                  resourceColor(liveHealth.memory_percent),
+                )}
+              >
+                {liveHealth.memory_percent !== null
+                  ? `${Math.round(liveHealth.memory_percent)}%`
+                  : '—'}
               </p>
             </div>
             <div className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Requests</p>
-              <p className="text-sm font-semibold tabular-nums text-foreground/80">{(liveHealth.request_count ?? 0).toLocaleString()}</p>
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                Requests
+              </p>
+              <p className="text-sm font-semibold tabular-nums text-foreground/80">
+                {(liveHealth.request_count ?? 0).toLocaleString()}
+              </p>
             </div>
             <div className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Uptime</p>
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                Uptime
+              </p>
               <p className="text-sm font-semibold tabular-nums text-foreground/80">
                 {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
               </p>
@@ -88,7 +114,8 @@ export function SystemHealth({ apiStatus, loading, liveHealth }: SystemHealthPro
               Mix and match AI models with personalities. Each one has its own voice and style.
             </p>
             <p className="text-[11px] text-muted-foreground/70">
-              Import text, files, or conversations. The AI learns from your data and gets better over time.
+              Import text, files, or conversations. The AI learns from your data and gets better
+              over time.
             </p>
           </div>
         </div>

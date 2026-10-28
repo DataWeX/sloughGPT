@@ -3,8 +3,8 @@
 export const dynamic = 'force-dynamic'
 
 import React, { Suspense, useEffect, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/vite/next-compat/link'
+import { useRouter } from '@/vite/next-compat/navigation'
 
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'

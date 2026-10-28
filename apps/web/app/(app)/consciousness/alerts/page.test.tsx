@@ -62,7 +62,7 @@ vi.mock('@/lib/toast-store', () => ({
   ),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
@@ -74,7 +74,15 @@ const mockHealth = {
   episodes: 50,
   avg_growth: 0.15,
   positive_ratio: 0.8,
-  qualia: { valence: 0.5, arousal: 0.3, novelty: 0.6, coherence: 0.7, salience: 0.4, certainty: 0.3, complexity: 0.5 },
+  qualia: {
+    valence: 0.5,
+    arousal: 0.3,
+    novelty: 0.6,
+    coherence: 0.7,
+    salience: 0.4,
+    certainty: 0.3,
+    complexity: 0.5,
+  },
   last_reflection: 'System is performing well',
 }
 
@@ -105,7 +113,9 @@ describe('ConsciousnessAlertsPage', () => {
   it('shows alert cards section', async () => {
     render(<ConsciousnessAlertsPage />)
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_alerts.active_alerts_title').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_alerts.active_alerts_title').length,
+      ).toBeGreaterThan(0)
     })
   })
 
@@ -144,7 +154,9 @@ describe('ConsciousnessAlertsPage', () => {
     } as any)
     render(<ConsciousnessAlertsPage />)
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_alerts.active_alerts_title').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_alerts.active_alerts_title').length,
+      ).toBeGreaterThan(0)
     })
     const countEl = screen.getAllByText('consciousness_alerts.active_alerts')
     expect(countEl.length).toBeGreaterThan(0)
@@ -170,7 +182,9 @@ describe('ConsciousnessAlertsPage', () => {
   it('shows settings toggles', async () => {
     render(<ConsciousnessAlertsPage />)
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_alerts.notifications_label').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_alerts.notifications_label').length,
+      ).toBeGreaterThan(0)
       expect(screen.getAllByText('consciousness_alerts.sound_label').length).toBeGreaterThan(0)
     })
   })

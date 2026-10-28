@@ -112,7 +112,7 @@ vi.mock('@/components/icons/NavIcons', () => ({
   IconModels: () => <span data-testid="icon-models">models</span>,
 }))
 
-vi.mock('next/link', () => ({
+vi.mock('@/vite/next-compat/link', () => ({
   default: ({ children, href, className, ...rest }: any) => (
     <a href={href} className={className} {...rest}>
       {children}
@@ -251,7 +251,6 @@ vi.mock('@/components/home/SystemHealth', () => ({
     )
   },
 }))
-/* eslint-disable @next/next/no-html-link-for-pages -- test mock stands in for next/link */
 vi.mock('@/components/home/NavigationGrid', () => ({
   NavigationGrid: () => (
     <div>
@@ -307,7 +306,7 @@ const mockT = vi.fn((key: string, params?: Record<string, string | number>) => {
   return text
 })
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: mockT, locale: 'en', setLocale: vi.fn(), locales: ['en'] }),
 }))

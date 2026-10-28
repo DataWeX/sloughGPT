@@ -1,5 +1,5 @@
-import type { NextRequest } from 'next/server'
-import { NextResponse } from 'next/server'
+import type { NextRequest } from '@/vite/next-compat/server'
+import { NextResponse } from '@/vite/next-compat/server'
 import { addCardNote, updateCardNote, deleteCardNote } from '../../../../helpers'
 
 // POST /api/planner/board/cards/[id]/notes

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { cn } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'

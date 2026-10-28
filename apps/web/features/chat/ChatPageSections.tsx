@@ -1,6 +1,6 @@
 'use client'
 
-import dynamicNext from 'next/dynamic'
+import dynamicNext from '@/vite/next-compat/dynamic'
 import { memo, useCallback, useMemo } from 'react'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'

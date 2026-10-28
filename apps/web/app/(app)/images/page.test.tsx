@@ -2,22 +2,28 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
 const { mockGet, mockPost, mockAddToast } = vi.hoisted(() => ({
-  mockGet: vi.fn(), mockPost: vi.fn(), mockAddToast: vi.fn(),
+  mockGet: vi.fn(),
+  mockPost: vi.fn(),
+  mockAddToast: vi.fn(),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
     ),
     Input: ({ value, onChange, placeholder }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} />
@@ -27,10 +33,15 @@ vi.mock('@sloughgpt/strui', () => {
     ),
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
@@ -62,7 +73,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/lib/http-client', () => ({
@@ -94,7 +105,13 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockGet.mockImplementation((url: string) => {
     if (url.includes('gallery')) return Promise.resolve({ images: [] })
-    if (url.includes('styles')) return Promise.resolve({ styles: [['realistic', 'Realistic'], ['cartoon', 'Cartoon']] })
+    if (url.includes('styles'))
+      return Promise.resolve({
+        styles: [
+          ['realistic', 'Realistic'],
+          ['cartoon', 'Cartoon'],
+        ],
+      })
     return Promise.resolve(null)
   })
   mockPost.mockResolvedValue({ image: 'base64data' })
@@ -132,7 +149,9 @@ describe('ImagesPage — prompt flow', () => {
 
   it('allows typing a prompt', async () => {
     render(<ImagesPage />)
-    await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
+    })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
     fireEvent.change(textarea, { target: { value: 'A sunset over mountains' } })
@@ -151,7 +170,9 @@ describe('ImagesPage — style selection flow', () => {
 
   it('allows selecting a style', async () => {
     render(<ImagesPage />)
-    await waitFor(() => { expect(screen.getByText('Realistic')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Realistic')).toBeTruthy()
+    })
 
     fireEvent.click(screen.getByText('Cartoon'))
     // No crash = success
@@ -162,20 +183,24 @@ describe('ImagesPage — style selection flow', () => {
 describe('ImagesPage — generate flow', () => {
   it('generate button triggers image generation', async () => {
     render(<ImagesPage />)
-    await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
+    })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
     fireEvent.change(textarea, { target: { value: 'A cat' } })
 
-    const genBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('generate')
-    )
+    const genBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('generate'))
     if (genBtn) {
-      await act(async () => { fireEvent.click(genBtn) })
+      await act(async () => {
+        fireEvent.click(genBtn)
+      })
       await waitFor(() => {
         expect(mockPost).toHaveBeenCalledWith(
           expect.stringContaining('generate'),
-          expect.objectContaining({ prompt: 'A cat' })
+          expect.objectContaining({ prompt: 'A cat' }),
         )
       })
     }
@@ -183,11 +208,13 @@ describe('ImagesPage — generate flow', () => {
 
   it('empty prompt does not trigger generation', async () => {
     render(<ImagesPage />)
-    await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
+    })
 
-    const genBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('generate')
-    )
+    const genBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('generate'))
     if (genBtn) {
       fireEvent.click(genBtn)
       // Should not call API with empty prompt
@@ -206,9 +233,10 @@ describe('ImagesPage — gallery display', () => {
 
   it('displays images when gallery has items', async () => {
     mockGet.mockImplementation((url: string) => {
-      if (url.includes('gallery')) return Promise.resolve({
-        images: [{ id: '1', path: '/img1.png', created: Date.now() }]
-      })
+      if (url.includes('gallery'))
+        return Promise.resolve({
+          images: [{ id: '1', path: '/img1.png', created: Date.now() }],
+        })
       if (url.includes('styles')) return Promise.resolve({ styles: [] })
       return Promise.resolve(null)
     })
@@ -232,16 +260,20 @@ describe('ImagesPage — error handling', () => {
   it('handles generation failure gracefully', async () => {
     mockPost.mockRejectedValue(new Error('generation failed'))
     render(<ImagesPage />)
-    await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
+    })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
     fireEvent.change(textarea, { target: { value: 'A cat' } })
 
-    const genBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('generate')
-    )
+    const genBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('generate'))
     if (genBtn) {
-      await act(async () => { fireEvent.click(genBtn) })
+      await act(async () => {
+        fireEvent.click(genBtn)
+      })
       await waitFor(() => {
         // Page should still render after error
         expect(screen.getAllByText('Images').length).toBeGreaterThanOrEqual(1)

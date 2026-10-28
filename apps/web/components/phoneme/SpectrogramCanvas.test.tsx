@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => '/phoneme',
 }))
@@ -48,11 +48,7 @@ describe('SpectrogramCanvas', () => {
 
   it('handles empty spectrogram gracefully', async () => {
     const { default: SpectrogramCanvas } = await import('./SpectrogramCanvas')
-    render(
-      <SpectrogramCanvas
-        spectrogram={{ data: [], n_mels: 0, n_frames: 0 }}
-      />
-    )
+    render(<SpectrogramCanvas spectrogram={{ data: [], n_mels: 0, n_frames: 0 }} />)
     expect(screen.getByRole('img', { name: /mel spectrogram visualization/i })).toBeInTheDocument()
   })
 })

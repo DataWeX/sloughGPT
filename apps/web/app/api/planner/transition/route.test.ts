@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import os from 'os'
 import { join } from 'path'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'fs'
-import type { NextRequest } from 'next/server'
+import type { NextRequest } from '@/vite/next-compat/server'
 
 const tmpDir = join(
   os.tmpdir(),

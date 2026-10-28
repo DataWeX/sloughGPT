@@ -6,13 +6,17 @@ import { PageContainer } from '@/components/PageContainer'
 import { Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { multimodalController } from '@/lib/controllers'
-import type { MultimodalCapabilities, TrainingReport, TrainingStatus } from '@/lib/multimodal-controller'
+import type {
+  MultimodalCapabilities,
+  TrainingReport,
+  TrainingStatus,
+} from '@/lib/multimodal-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { apiPost } from '@/lib/http-client'
 import { logger } from '@/lib/dev-log'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
-import dynamicNext from 'next/dynamic'
+import dynamicNext from '@/vite/next-compat/dynamic'
 import CapabilitiesCard from '@/components/multimodal/CapabilitiesCard'
 import ImageTrainingCard from '@/components/multimodal/ImageTrainingCard'
 import BatchTrainingCard from '@/components/multimodal/BatchTrainingCard'
@@ -23,11 +27,12 @@ import AudioCard from '@/components/multimodal/AudioCard'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
 import { ImageSection } from '@/components/multimodal/ImageSection'
 
-
-const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingCard'), { ssr: false })
+const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingCard'), {
+  ssr: false,
+})
 
 export default function MultimodalPage() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [caps, setCaps] = useState<MultimodalCapabilities | null>(null)
   const [report, setReport] = useState<TrainingReport | null>(null)
   const [trainStatus, setTrainStatus] = useState<TrainingStatus | null>(null)
@@ -74,9 +79,16 @@ export default function MultimodalPage() {
         const status = await multimodalController.getTrainingStatus()
         setTrainStatus(status)
         if (!status.running) {
-          if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null }
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current)
+            pollIntervalRef.current = null
+          }
           fetchAll()
-          if (status.completed > 0) addToast(`Training complete: ${status.completed} images, ${status.errors} errors`, status.errors > 0 ? 'error' : 'success')
+          if (status.completed > 0)
+            addToast(
+              `Training complete: ${status.completed} images, ${status.errors} errors`,
+              status.errors > 0 ? 'error' : 'success',
+            )
         }
       } catch (err) {
         logger.error('Could not poll training status', { exception: String(err) })
@@ -91,12 +103,16 @@ export default function MultimodalPage() {
       setDpoAccepted(s.accepted_count)
       setDpoRejected(s.rejected_count)
       if (s.status === 'completed' && s.result) {
-        setDpoResult(s.result); setDpoRunning(false)
+        setDpoResult(s.result)
+        setDpoRunning(false)
         addToast('DPO training complete', 'success')
       } else if (s.status === 'error') {
-        setDpoError(s.result?.error as string || 'Could not dpo'); setDpoRunning(false)
-        addToast(s.result?.error as string || 'Could not dpo', 'error')
-      } else if (s.status === 'idle') { setDpoRunning(false) }
+        setDpoError((s.result?.error as string) || 'Could not dpo')
+        setDpoRunning(false)
+        addToast((s.result?.error as string) || 'Could not dpo', 'error')
+      } else if (s.status === 'idle') {
+        setDpoRunning(false)
+      }
     } catch (err) {
       logger.error('Could not dpo status poll', { exception: String(err) })
     }
@@ -104,10 +120,24 @@ export default function MultimodalPage() {
 
   useRefreshShortcut(fetchAll)
 
-  useEffect(() => { fetchAll() }, [fetchAll])
-  useEffect(() => () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current) }, [])
-  useEffect(() => { if (trainStatus?.running && !pollIntervalRef.current) startPolling() }, [trainStatus?.running, startPolling])
-  useEffect(() => { if (dpoStatus === 'running') { const interval = setInterval(pollDPOStatus, 3000); return () => clearInterval(interval) } }, [dpoStatus, pollDPOStatus])
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+  useEffect(
+    () => () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+    },
+    [],
+  )
+  useEffect(() => {
+    if (trainStatus?.running && !pollIntervalRef.current) startPolling()
+  }, [trainStatus?.running, startPolling])
+  useEffect(() => {
+    if (dpoStatus === 'running') {
+      const interval = setInterval(pollDPOStatus, 3000)
+      return () => clearInterval(interval)
+    }
+  }, [dpoStatus, pollDPOStatus])
 
   const handleUploadImage = async (file: File) => {
     setUploading(true)
@@ -120,8 +150,11 @@ export default function MultimodalPage() {
         fetchAll()
       }
       reader.readAsDataURL(file)
-    } catch { addToast('Could not upload', 'error')
-    } finally { setUploading(false) }
+    } catch {
+      addToast('Could not upload', 'error')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleBatchUpload = async (files: File[]) => {
@@ -131,8 +164,11 @@ export default function MultimodalPage() {
       const result = await multimodalController.trainBatch(files)
       addToast(`Training started: ${result.total_images} images`, 'success')
       startPolling()
-    } catch { addToast('Could not upload', 'error')
-    } finally { setBatchUploading(false) }
+    } catch {
+      addToast('Could not upload', 'error')
+    } finally {
+      setBatchUploading(false)
+    }
   }
 
   const handleBatchDir = async (dirPath: string) => {
@@ -141,63 +177,90 @@ export default function MultimodalPage() {
       const result = await multimodalController.trainBatchFromDir(dirPath)
       addToast(`Training started: ${result.total_images} images from ${dirPath}`, 'success')
       startPolling()
-    } catch (err: unknown) { addToast(extractErrorMessage(err, 'Could not start training'), 'error')
-    } finally { setBatchUploading(false) }
+    } catch (err: unknown) {
+      addToast(extractErrorMessage(err, 'Could not start training'), 'error')
+    } finally {
+      setBatchUploading(false)
+    }
   }
 
   const handleCreateVisualDataset = async (name: string, imageDir: string) => {
     setCreatingDataset(true)
     try {
-      const result = await apiPost<{ dataset: string; entries: number }>('/multimodal/visual-dataset', {
-        name,
-        image_dir: imageDir,
-        caption_prompt: 'Describe this image in detail.',
-        auto_caption: true,
-      })
+      const result = await apiPost<{ dataset: string; entries: number }>(
+        '/multimodal/visual-dataset',
+        {
+          name,
+          image_dir: imageDir,
+          caption_prompt: 'Describe this image in detail.',
+          auto_caption: true,
+        },
+      )
       addToast(`Dataset "${result.dataset}" created: ${result.entries} entries`, 'success')
-    } catch (err: unknown) { addToast(extractErrorMessage(err, 'Could not dataset creation'), 'error')
-    } finally { setCreatingDataset(false) }
+    } catch (err: unknown) {
+      addToast(extractErrorMessage(err, 'Could not dataset creation'), 'error')
+    } finally {
+      setCreatingDataset(false)
+    }
   }
 
   const handleTriggerDPO = async () => {
     if (dpoRunning || dpoStatus === 'running') return
-    setDpoRunning(true); setDpoError(null); setDpoResult(null); setDpoStatus('running')
+    setDpoRunning(true)
+    setDpoError(null)
+    setDpoResult(null)
+    setDpoStatus('running')
     try {
       const result = await apiPost<{ status: string }>('/multimodal/dpo')
       addToast(`DPO training started: ${result.status || ''}`, 'success')
     } catch (err: unknown) {
       const msg = extractErrorMessage(err, 'Could not dpo trigger')
-      setDpoError(msg); setDpoStatus('error'); setDpoRunning(false); addToast(msg, 'error')
+      setDpoError(msg)
+      setDpoStatus('error')
+      setDpoRunning(false)
+      addToast(msg, 'error')
     }
   }
 
   const handleGenerateImage = async (prompt: string) => {
-    setGenerating(true); setGeneratedImage(null)
+    setGenerating(true)
+    setGeneratedImage(null)
     try {
       const result = await multimodalController.generateImage(prompt)
       setGeneratedImage(result.image)
       addToast(`Generated: "${result.prompt}"`, 'success')
-    } catch { addToast('Could not image generation', 'error')
-    } finally { setGenerating(false) }
+    } catch {
+      addToast('Could not image generation', 'error')
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const handleTranscribe = async (file: File) => {
-    setTranscribing(true); setTranscript(null)
+    setTranscribing(true)
+    setTranscript(null)
     try {
       const result = await multimodalController.transcribeAudio(file)
       setTranscript(result.text)
-    } catch { addToast('Could not speech-to-text', 'error')
-    } finally { setTranscribing(false) }
+    } catch {
+      addToast('Could not speech-to-text', 'error')
+    } finally {
+      setTranscribing(false)
+    }
   }
 
   const handleSynthesize = async (text: string) => {
-    setSynthesizing(true); setSynthAudio(null)
+    setSynthesizing(true)
+    setSynthAudio(null)
     try {
       const result = await multimodalController.synthesizeSpeech(text)
       setSynthAudio({ audio: result.audio, duration_sec: result.duration_sec })
       addToast(`Voice generated (${result.duration_sec.toFixed(1)}s)`, 'success')
-    } catch { addToast('Could not speech generation', 'error')
-    } finally { setSynthesizing(false) }
+    } catch {
+      addToast('Could not speech generation', 'error')
+    } finally {
+      setSynthesizing(false)
+    }
   }
 
   const headerRight = (
@@ -209,7 +272,10 @@ export default function MultimodalPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchAll() }
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        void fetchAll()
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -225,11 +291,35 @@ export default function MultimodalPage() {
       <CapabilitiesCard caps={caps} />
       {report && <TrainingCard report={report} trainStatus={trainStatus} />}
       <ImageTrainingCard uploading={uploading} onUpload={handleUploadImage} />
-      <BatchTrainingCard batchUploading={batchUploading} trainStatus={trainStatus} onFileUpload={handleBatchUpload} onDirUpload={handleBatchDir} />
+      <BatchTrainingCard
+        batchUploading={batchUploading}
+        trainStatus={trainStatus}
+        onFileUpload={handleBatchUpload}
+        onDirUpload={handleBatchDir}
+      />
       <VisualDatasetCard creatingDataset={creatingDataset} onCreate={handleCreateVisualDataset} />
-      <PreferenceOptimizationCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
-      <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
-      <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
+      <PreferenceOptimizationCard
+        dpoRunning={dpoRunning}
+        dpoStatus={dpoStatus}
+        dpoResult={dpoResult}
+        dpoError={dpoError}
+        dpoAccepted={dpoAccepted}
+        dpoRejected={dpoRejected}
+        onTrigger={handleTriggerDPO}
+      />
+      <ImageGenerationCard
+        generating={generating}
+        onGenerate={handleGenerateImage}
+        generatedImage={generatedImage}
+      />
+      <AudioCard
+        transcribing={transcribing}
+        transcript={transcript}
+        synthesizing={synthesizing}
+        synthAudio={synthAudio}
+        onTranscribe={handleTranscribe}
+        onSynthesize={handleSynthesize}
+      />
       <VoiceSection />
       <ImageSection />
     </PageContainer>

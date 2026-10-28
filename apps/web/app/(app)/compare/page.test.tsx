@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/compare',
@@ -125,7 +125,7 @@ vi.mock('@/lib/format-bytes', () => ({
   getJsonItem: vi.fn().mockReturnValue([]),
 }))
 
-vi.mock('next/dynamic', async () => {
+vi.mock('@/vite/next-compat/dynamic', async () => {
   const React = await import('react')
   return {
     __esModule: true,

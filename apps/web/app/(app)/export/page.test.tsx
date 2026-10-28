@@ -2,40 +2,72 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
 const {
-  mockList, mockGetExportFormats, mockExportFeedbackPairs, mockApiGet,
-  mockDownloadJson, mockDownloadBlob, mockAddToast,
+  mockList,
+  mockGetExportFormats,
+  mockExportFeedbackPairs,
+  mockApiGet,
+  mockDownloadJson,
+  mockDownloadBlob,
+  mockAddToast,
 } = vi.hoisted(() => ({
-  mockList: vi.fn(), mockGetExportFormats: vi.fn(), mockExportFeedbackPairs: vi.fn(),
-  mockApiGet: vi.fn(), mockDownloadJson: vi.fn(), mockDownloadBlob: vi.fn(), mockAddToast: vi.fn(),
+  mockList: vi.fn(),
+  mockGetExportFormats: vi.fn(),
+  mockExportFeedbackPairs: vi.fn(),
+  mockApiGet: vi.fn(),
+  mockDownloadJson: vi.fn(),
+  mockDownloadBlob: vi.fn(),
+  mockAddToast: vi.fn(),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; return C }
+  const iconMock = (name: string) => {
+    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
+    return C
+  }
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled, variant, size, 'aria-label': ariaLabel }: any) => (
-      <button onClick={onClick} disabled={disabled} data-variant={variant} data-size={size} aria-label={ariaLabel}>{children}</button>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        data-variant={variant}
+        data-size={size}
+        aria-label={ariaLabel}
+      >
+        {children}
+      </button>
     ),
     Badge: ({ children, variant }: any) => <span data-variant={variant}>{children}</span>,
-    IconRefresh: iconMock('refresh'), IconDownload: iconMock('download'), IconX: iconMock('x'),
+    IconRefresh: iconMock('refresh'),
+    IconDownload: iconMock('download'),
+    IconX: iconMock('x'),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -62,7 +94,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/lib/model-controller', () => ({
@@ -158,7 +190,9 @@ describe('ExportPage — format selection flow', () => {
 
   it('clicking a different format changes selection', async () => {
     render(<ExportPage />)
-    await waitFor(() => { expect(screen.getByText(/safetensors/i)).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText(/safetensors/i)).toBeTruthy()
+    })
 
     const safetensorsBtn = screen.getByText(/safetensors/i)
     fireEvent.click(safetensorsBtn)
@@ -219,9 +253,9 @@ describe('ExportPage — checkpoint download flow', () => {
     await waitFor(() => {
       expect(screen.getByText('cp-1')).toBeTruthy()
     })
-    const downloadBtns = screen.getAllByRole('button').filter(b =>
-      b.textContent?.toLowerCase().includes('download')
-    )
+    const downloadBtns = screen
+      .getAllByRole('button')
+      .filter((b) => b.textContent?.toLowerCase().includes('download'))
     expect(downloadBtns.length).toBeGreaterThanOrEqual(1)
   })
 })

@@ -1,5 +1,5 @@
-import type { NextRequest } from 'next/server'
-import { NextResponse } from 'next/server'
+import type { NextRequest } from '@/vite/next-compat/server'
+import { NextResponse } from '@/vite/next-compat/server'
 import { getHashTree, readHashTrees } from '../helpers'
 
 // GET /api/planner/hashtree?cardId=xxx — hash tree for one card

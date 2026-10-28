@@ -34,5 +34,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: sloughgpt-web
-          directory: apps/web/.next
+          directory: apps/web/dist-vite
           branch: session/agent_4563443b-dfec-4a33-8ddd-a92fc5c84485

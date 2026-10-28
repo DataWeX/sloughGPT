@@ -1,11 +1,27 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, cn, Slider } from '@sloughgpt/strui'
+import { useRouter } from '@/vite/next-compat/navigation'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  StatCard,
+  KpiGrid,
+  Skeleton,
+  cn,
+  Slider,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { companionController, type CompanionTraits, type CompanionPreset } from '@/lib/companion-controller'
+import {
+  companionController,
+  type CompanionTraits,
+  type CompanionPreset,
+} from '@/lib/companion-controller'
 import { CompanionInsightsCard } from '@/components/companion/CompanionInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -25,13 +41,15 @@ export default function CompanionPage() {
   const [presets, setPresets] = useState<CompanionPreset[]>([])
   const [systemPrompt, setSystemPrompt] = useState('')
   const [chatInput, setChatInput] = useState('')
-  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
+  const [chatMessages, setChatMessages] = useState<
+    Array<{ role: 'user' | 'assistant'; content: string }>
+  >([])
   const [chatLoading, setChatLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   useRefreshShortcut(() => router.refresh())
 
   useEffect(() => {
@@ -40,15 +58,22 @@ export default function CompanionPage() {
       companionController.getInfo(),
       companionController.listPresets(),
       companionController.getPrompt(),
-    ]).then(([info, presetRes, promptRes]) => {
-      if (ignore) return
-      setTraits(info.traits)
-      setPresets(presetRes.presets)
-      setSystemPrompt(promptRes.system_prompt)
-    }).catch((err) => {
-      if (!ignore) setError(extractErrorMessage(err, 'Could not load companion data'))
-    }).finally(() => { if (!ignore) setLoading(false) })
-    return () => { ignore = true }
+    ])
+      .then(([info, presetRes, promptRes]) => {
+        if (ignore) return
+        setTraits(info.traits)
+        setPresets(presetRes.presets)
+        setSystemPrompt(promptRes.system_prompt)
+      })
+      .catch((err) => {
+        if (!ignore) setError(extractErrorMessage(err, 'Could not load companion data'))
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const handleTraitChange = (key: string, value: number) => {
@@ -96,14 +121,20 @@ export default function CompanionPage() {
   const handleChat = async () => {
     if (!chatInput.trim() || chatLoading) return
     const userMsg = chatInput.trim()
-    setChatMessages(prev => [...prev, { role: 'user', content: userMsg }])
+    setChatMessages((prev) => [...prev, { role: 'user', content: userMsg }])
     setChatLoading(true)
     setChatInput('')
     try {
       const res = await companionController.chat(userMsg)
-      setChatMessages(prev => [...prev, { role: 'assistant', content: res.response }])
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: res.response }])
     } catch (err) {
-      setChatMessages(prev => [...prev, { role: 'assistant', content: `[Error: ${extractErrorMessage(err, 'could not reach model')}]` }])
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `[Error: ${extractErrorMessage(err, 'could not reach model')}]`,
+        },
+      ])
     } finally {
       setChatLoading(false)
     }
@@ -122,37 +153,54 @@ export default function CompanionPage() {
           <StatCard label="Curiosity" value={<Skeleton className="h-5 w-8" />} />
           <StatCard label="Creativity" value={<Skeleton className="h-5 w-8" />} />
         </KpiGrid>
-        <Card><CardContent className="px-2.5 pb-2.5"><div className="h-48 animate-pulse bg-muted/20 rounded-lg" /></CardContent></Card>
+        <Card>
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="h-48 animate-pulse bg-muted/20 rounded-lg" />
+          </CardContent>
+        </Card>
       </PageContainer>
     )
   }
 
   if (error) {
     return (
-      <PageContainer title="Companion" subtitle="AI personality management" error={error} onRetry={() => window.location.reload()}>
+      <PageContainer
+        title="Companion"
+        subtitle="AI personality management"
+        error={error}
+        onRetry={() => window.location.reload()}
+      >
         <></>
       </PageContainer>
     )
   }
 
-  const avgTrait = traits ? Math.round(Object.values(traits).reduce((a, b) => a + b, 0) / Object.values(traits).length) : 0
+  const avgTrait = traits
+    ? Math.round(Object.values(traits).reduce((a, b) => a + b, 0) / Object.values(traits).length)
+    : 0
 
   return (
     <PageContainer title="Companion" subtitle="AI personality management">
       <KpiGrid>
         <StatCard label="Active Preset" value={presets.length > 0 ? presets[0].name : 'Custom'} />
-        <StatCard label="Warmth" value={traits ? String(traits.warmth ?? 0) : <Skeleton className="h-5 w-8" />} />
-        <StatCard label="Curiosity" value={traits ? String(traits.curiosity ?? 0) : <Skeleton className="h-5 w-8" />} />
+        <StatCard
+          label="Warmth"
+          value={traits ? String(traits.warmth ?? 0) : <Skeleton className="h-5 w-8" />}
+        />
+        <StatCard
+          label="Curiosity"
+          value={traits ? String(traits.curiosity ?? 0) : <Skeleton className="h-5 w-8" />}
+        />
         <StatCard label="Avg Trait" value={String(avgTrait)} />
       </KpiGrid>
 
-        <Card>
+      <Card>
         <CardHeader className="pb-2 pt-2.5 px-2.5">
           <CardTitle className="text-[11px] font-medium">Presets</CardTitle>
         </CardHeader>
         <CardContent className="px-2.5 pb-2.5">
           <div className="flex flex-wrap gap-2">
-            {presets.map(p => (
+            {presets.map((p) => (
               <button
                 key={p.id}
                 type="button"
@@ -184,25 +232,34 @@ export default function CompanionPage() {
             {(() => {
               const traitKeys = Object.keys(TRAIT_LABELS)
               const n = traitKeys.length
-              const cx = 100, cy = 100, r = 70
+              const cx = 100,
+                cy = 100,
+                r = 70
               const angleStep = (2 * Math.PI) / n
               const points = traitKeys.map((key, i) => {
                 const val = (traits[key as keyof CompanionTraits] as number) ?? 0.5
                 const angle = angleStep * i - Math.PI / 2
                 return { x: cx + r * val * Math.cos(angle), y: cy + r * val * Math.sin(angle) }
               })
-              const polygonPoints = points.map(p => `${p.x},${p.y}`).join(' ')
+              const polygonPoints = points.map((p) => `${p.x},${p.y}`).join(' ')
               return (
                 <div className="flex justify-center">
-                  <svg viewBox="0 0 200 200" className="w-48 h-48" role="img" aria-label="Companion trait radar chart">
+                  <svg
+                    viewBox="0 0 200 200"
+                    className="w-48 h-48"
+                    role="img"
+                    aria-label="Companion trait radar chart"
+                  >
                     {/* Grid rings */}
-                    {[0.25, 0.5, 0.75, 1].map(scale => (
+                    {[0.25, 0.5, 0.75, 1].map((scale) => (
                       <polygon
                         key={scale}
-                        points={traitKeys.map((_, i) => {
-                          const angle = angleStep * i - Math.PI / 2
-                          return `${cx + r * scale * Math.cos(angle)},${cy + r * scale * Math.sin(angle)}`
-                        }).join(' ')}
+                        points={traitKeys
+                          .map((_, i) => {
+                            const angle = angleStep * i - Math.PI / 2
+                            return `${cx + r * scale * Math.cos(angle)},${cy + r * scale * Math.sin(angle)}`
+                          })
+                          .join(' ')}
                         fill="none"
                         stroke="currentColor"
                         className="text-border/40"
@@ -239,7 +296,12 @@ export default function CompanionPage() {
                       const labelR = r + 18
                       return (
                         <g key={key}>
-                          <circle cx={points[i].x} cy={points[i].y} r="3" fill="rgb(var(--primary))" />
+                          <circle
+                            cx={points[i].x}
+                            cy={points[i].y}
+                            r="3"
+                            fill="rgb(var(--primary))"
+                          />
                           <text
                             x={cx + labelR * Math.cos(angle)}
                             y={cy + labelR * Math.sin(angle)}
@@ -298,7 +360,12 @@ export default function CompanionPage() {
         <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
           <CardTitle className="text-[11px] font-medium">Test Chat</CardTitle>
           {chatMessages.length > 0 && (
-            <Button size="sm" variant="ghost" onClick={handleClearChat} aria-label="Clear chat history">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleClearChat}
+              aria-label="Clear chat history"
+            >
               Clear
             </Button>
           )}
@@ -312,7 +379,12 @@ export default function CompanionPage() {
                   className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
                 >
                   <div
-                    className={cn('max-w-[80%] rounded-lg px-3 py-2 text-sm', msg.role === 'user' ? 'bg-primary/10 text-foreground' : 'bg-muted/50 text-foreground')}
+                    className={cn(
+                      'max-w-[80%] rounded-lg px-3 py-2 text-sm',
+                      msg.role === 'user'
+                        ? 'bg-primary/10 text-foreground'
+                        : 'bg-muted/50 text-foreground',
+                    )}
                   >
                     {msg.content}
                   </div>
@@ -328,14 +400,16 @@ export default function CompanionPage() {
             </div>
           )}
           {chatMessages.length === 0 && !chatLoading && (
-            <p className="text-[10px] text-muted-foreground/60 text-center py-4">Say something to your companion...</p>
+            <p className="text-[10px] text-muted-foreground/60 text-center py-4">
+              Say something to your companion...
+            </p>
           )}
           <div ref={chatEndRef} />
           <div className="flex gap-2">
             <Input
               value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleChat()}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleChat()}
               placeholder="Type a message..."
               disabled={chatLoading}
               aria-label="Chat message"
