@@ -24,7 +24,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.sse_fallback import sse_error, sse_token
+from infrastructure.sse_fallback import sse_error, sse_event, sse_token
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
@@ -39,6 +39,7 @@ from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
 from domain.infrastructure.server_state import get_server_state
 from domain.learner import extract_and_store, get_learner
+from domain.memory import get_memory_service
 from domain.models import get_provider
 
 logger = logging.getLogger("slo.inference")
@@ -1929,28 +1930,65 @@ class InferenceRouter:
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
 
-        if req.knowledge:
-            knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
-            system_prompt = (
-                f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}"
-                if system_prompt
-                else f"Use the following context to answer:\n{knowledge_str}"
-            )
+        session_id = req.session_id or "default"
 
-        # Knowledge enrichment — retrieve user facts and inject context.
+        # Knowledge enrichment — ContextCore frame first (memory/rag layers),
+        # enrichment fallback when the frame yields nothing. Gated on stored
+        # facts: an empty memory skips the frame build entirely.
+        frame = None
+        skip_context = False
         try:
-            enrichment = await asyncio.wait_for(
-                asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
-            )
-            if enrichment.get("facts"):
-                k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
-                system_prompt = (
-                    f"{system_prompt}\n\nUse the following context to answer:\n{k_text}"
-                    if system_prompt
-                    else f"Use the following context to answer:\n{k_text}"
-                )
+            if get_memory_service().stats().get("total_facts", 0) == 0:
+                skip_context = True
         except Exception as e:
-            logger.debug("Knowledge enrichment failed: %s", e)
+            logger.debug("Knowledge memory check failed: %s", e)
+
+        if not skip_context:
+            ctx_core = self._get_context_core()
+            if ctx_core:
+                ctx_core.set_session_id(session_id)
+                ctx_core.add_message("user", user_msg)
+                try:
+                    frame = await asyncio.wait_for(
+                        ctx_core.build_context_frame(
+                            include_rag=True,
+                            include_memory=True,
+                            query=user_msg,
+                        ),
+                        timeout=5.0,
+                    )
+                except TimeoutError:
+                    logger.warning("Context frame build timed out after 5.0s")
+                    frame = None
+                except Exception as e:
+                    logger.debug("Context frame build failed: %s", e)
+                    frame = None
+
+        frame_context = []
+        if frame:
+            for layer in frame.layers:
+                if layer.layer_type in ("memory", "rag") and layer.content:
+                    frame_context.append(layer.content)
+
+        knowledge_retrieved = []
+        if not frame_context:
+            try:
+                enrichment = await asyncio.wait_for(
+                    asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
+                )
+                if enrichment.get("facts"):
+                    knowledge_retrieved = enrichment["facts"]
+            except Exception as e:
+                logger.debug("Knowledge enrichment failed: %s", e)
+
+        all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
+        if all_knowledge:
+            k_text = "\n".join(f"- {k}" for k in all_knowledge)
+            system_prompt = (
+                f"{system_prompt}\n\nUse the following context to answer:\n{k_text}"
+                if system_prompt
+                else f"Use the following context to answer:\n{k_text}"
+            )
 
         # Production RAG — retrieve relevant context from ingested documents
         # and inject it as a leading system block (gated on req.use_rag).
@@ -1996,7 +2034,6 @@ class InferenceRouter:
             raise_error("Model not loaded", "E_INFRA_REGISTRY", status_code=503)
 
         model = _chat_state.model_type or req.model
-        session_id = req.session_id or "default"
 
         collected: list[str] = []
         try:
@@ -2038,6 +2075,23 @@ class InferenceRouter:
         except Exception as e:
             logger.warning("Failed to capture conversation: %s", e)
 
+        # Auto-memory — mine salient facts from the exchange. Post-gen on the
+        # single live path, so every surface (SSE chat, folds, BFF) stores.
+        memory_event = ""
+        try:
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+            _memory_fact = _memory_facts[0] if _memory_facts else None
+            if _memory_fact:
+                memory_event = sse_event(
+                    "chat",
+                    "MEMORY",
+                    "success",
+                    data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
+                    message="New fact remembered",
+                )
+        except Exception as e:
+            logger.debug("Auto-memory remember failed: %s", e)
+
         yield TurnResult(
             text=text,
             session_id=session_id,
@@ -2047,6 +2101,7 @@ class InferenceRouter:
             elapsed_ms=elapsed,
             finish_reason="stop",
             tokens=collected,
+            events=[memory_event] if memory_event else [],
         )
 
     async def chat(
