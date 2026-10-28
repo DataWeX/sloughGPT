@@ -130,6 +130,19 @@ def build_pairs(texts: list[str], **render_kwargs) -> list[tuple[str, np.ndarray
     return [(t, render(t, **render_kwargs)) for t in texts]
 
 
+def load_corpus(path) -> list[str]:
+    """Read training texts from a file: one per line, blanks/#comments skipped."""
+    from pathlib import Path
+
+    lines: list[str] = []
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        lines.append(line)
+    return lines
+
+
 __all__ = [
     "DEFAULT_CORPUS",
     "DEFAULT_HOLDOUT",
@@ -137,5 +150,6 @@ __all__ = [
     "build_pairs",
     "espeak_available",
     "espeak_bin",
+    "load_corpus",
     "render",
 ]
