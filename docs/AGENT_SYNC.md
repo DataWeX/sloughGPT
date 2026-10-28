@@ -4,7 +4,7 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**2026-10-27 — OPENCODE (shell ai fail-fast lane): `fix/shell-ai-fail-fast` LANDED on main `529747c9a` (rebased from `fd4046a64` onto `dcbf8020a` — main had advanced 2 planner-only commits, zero file overlap, re-gated after rebase), card `20261026_123132` → done — `ai` fails fast when no model is loaded, and the 60s auto-cancel is loud.** Server: `_cmd_ai` gates on the already-fetched `api_status.model_loaded` (no extra HTTP) right after the availability check — no model ⇒ prints card wording `\u2717 No model loaded. Load one: models load <id>`, appends `LogEntry(ERROR, source="shell.ai")`, sets `_last_exit_code = 1`, returns before `cmds.generate` (the 120s `_api_post` hang never starts; covers single-shot **and** `--loop`). Client: `useShell.cancel(reason?)` — reason path writes `\u2717 cancelled — <reason>` through `engine.writeLine` + `rows` snapshot (the pane renders rows, not lines — a lines-only row is exactly the old limbo) + `trackEvent('shell_command_cancelled', {reason})`; `TerminalPanel`'s 60s timer passes `'after 60s timeout'`; **user ruling: timeout-only** — the Stop button stays silent, pinned by a zero-args test. **Bug caught by tsc mid-flight:** the Stop button was `onClick={cancel}` — the new signature would forward the MouseEvent as the *reason*, making every user cancel loud (scope inverted) → `onClick={() => cancel()}`. **TDD:** RED confirmed on both sides first (pytest: generate called → fail; vitest: 2 failed) → GREEN; collateral = **13** generate-path stubs gained `model_loaded: True` (5 `TestCmdAiLLMExecution` + 5 `TestCmdAiV2` + 3 `TestCmdAiContext` — the file has 126 `available: True` stubs; find the real collateral by running the whole file, never by grep). **Gates:** `test_shell_repl_more.py` **4060 passed**, vitest **34/34**, ruff clean; tsc **89 errors byte-identical to baseline** (`next` is absent from this machine's `node_modules` — baseline method: `git stash push -- <files>` → tsc → pop → `diff` the sorted error lists); eslint exit 0, both warnings verified identical in HEAD. Benchmark N/A (control-flow guard). **Pitfall:** a fresh worktree needs `cp -al` hardlink of `node_modules` (root 489M + `apps/web` 47M, 0.7s) or npx falls back to its cache and vitest cannot load the config. Landed per the shell-console ff precedent (rebase onto tip → re-gate → direct `git push origin HEAD:main`, no PR); this entry rides the landing push, and the card's done-note carries the final hashes + CI evidence.
+**2026-10-27 — OPENCODE (shell ai fail-fast lane): `fix/shell-ai-fail-fast` LANDED on main `529747c9a` (rebased from `fd4046a64` onto `dcbf8020a` — main had advanced 2 planner-only commits, zero file overlap, re-gated after rebase), card `20261026_123132` → done — `ai` fails fast when no model is loaded, and the 60s auto-cancel is loud.** Server: `_cmd_ai` gates on the already-fetched `api_status.model_loaded` (no extra HTTP) right after the availability check — no model ⇒ prints card wording `\u2717 No model loaded. Load one: models load <id>`, appends `LogEntry(ERROR, source="shell.ai")`, sets `_last_exit_code = 1`, returns before `cmds.generate` (the 120s `_api_post` hang never starts; covers single-shot **and** `--loop`). Client: `useShell.cancel(reason?)` — reason path writes `\u2717 cancelled — <reason>` through `engine.writeLine` + `rows` snapshot (the pane renders rows, not lines — a lines-only row is exactly the old limbo) + `trackEvent('shell_command_cancelled', {reason})`; `TerminalPanel`'s 60s timer passes `'after 60s timeout'`; **user ruling: timeout-only** — the Stop button stays silent, pinned by a zero-args test. **Bug caught by tsc mid-flight:** the Stop button was `onClick={cancel}` — the new signature would forward the MouseEvent as the _reason_, making every user cancel loud (scope inverted) → `onClick={() => cancel()}`. **TDD:** RED confirmed on both sides first (pytest: generate called → fail; vitest: 2 failed) → GREEN; collateral = **13** generate-path stubs gained `model_loaded: True` (5 `TestCmdAiLLMExecution` + 5 `TestCmdAiV2` + 3 `TestCmdAiContext` — the file has 126 `available: True` stubs; find the real collateral by running the whole file, never by grep). **Gates:** `test_shell_repl_more.py` **4060 passed**, vitest **34/34**, ruff clean; tsc **89 errors byte-identical to baseline** (`next` is absent from this machine's `node_modules` — baseline method: `git stash push -- <files>` → tsc → pop → `diff` the sorted error lists); eslint exit 0, both warnings verified identical in HEAD. Benchmark N/A (control-flow guard). **Pitfall:** a fresh worktree needs `cp -al` hardlink of `node_modules` (root 489M + `apps/web` 47M, 0.7s) or npx falls back to its cache and vitest cannot load the config. Landed per the shell-console ff precedent (rebase onto tip → re-gate → direct `git push origin HEAD:main`, no PR); this entry rides the landing push, and the card's done-note carries the final hashes + CI evidence.
 
 **2026-10-27 — OPENCODE (autoload-failure lane): fix pushed to `main` `a21524e13` (fix commit `098d0a2e9`, pushed directly per the shell-console lane's ff precedent) — `GET /v1/models` no longer 503s `E_MODEL_LOADING` forever for a load that already failed.** Root cause chain (3 defects, `logs/sloughgpt.log`, server on lucky-meadow): `_autoload_model()` returns `None` on failure (no local `.slnc/.soul` for default `Qwen/Qwen2.5-0.5B-Instruct`, `SLO_BOOTSTRAP_HF` off) and `_load_and_register` never checks → registers anyway, false success `Model loaded + providers registered: None`, `ProcessGuard creation failed: 'NoneType'…replace` swallowed, PGQ COMPLETED → staged loader claims `Model loaded successfully` → `_wait_for_model` burns 120s → phase `ready` → `_get_model_status()` had only E_NO_MODEL/E_STARTING/E_MODEL_LOADING, so it answered `Model still loading — please wait.` forever; `/v1/models` was additionally `_require_engine()`-gated (2 ERROR lines per probe). Fix: `startup_progress.MODEL_LOAD_STATE` pending→loading→ready|failed + reason; `startup.py` records the give-up reason at all 3 give-up points, checks materialization before registering (`_finish_autoload` — no register/no success log for an empty load), `_on_pgq_model_load_done` + `_wait_for_model` honour failure, `_phase2_model_load` resets state; `_get_model_status` failed→`E_MODEL_LOAD_FAILED` with the actionable reason; `list_models` is a discovery read (`200 {"object":"list","data":[]}` when nothing materialized — chat/embeddings stay gated; `domain/**`, readiness-gate semantics and frontend untouched, no ToolSpec/`contracts.gen.ts` churn). **Machine root cause (separate from the code fix):** the weights are intact at `Documents/Default Project/sloughGPT/models/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/` (safetensors 988MB + `.slnc` 2.5GB) but `~/.cache/huggingface/hub/models--Qwen…` was a refs-only stub (2026-09-24, `refs/main="default"`, zero blobs) shadowing it — `get_model_dir` prefers candidate 1 whenever it `exists()`. Fixed in place: stub renamed `*.refs-only-stub.bak-20261027` + symlinked to the real dir (0 bandwidth; `get_model_dir` verified resolving safetensors+`.slnc`). Follow-up card `ab8c7931`: resolver should prefer a candidate that actually contains weights over an empty stub. **Gates:** ruff check clean on all 7 files; targeted pytest **139 passed** (re-run after each rebase); full gate **3351 passed / 3 failed** = pre-existing `test_consciousness_router` SSE order-flakes reproduced identically on a pristine-HEAD probe and green isolated in both trees; `ruff format --check` failures proven pre-existing on HEAD copies; my hunks formatted. **Landing mechanics:** base moved twice mid-flight (`bb866e989` → `f67944c9b` → `21a432509`, PRs #209–#211) → two clean rebases with zero file overlap + re-gate each; local `main` lives in worktree `quick-engine` (ff/reset there), pushed `21a432509..a21524e13`. **Watch-out:** the fix only reaches a server restarted from code containing `098d0a2e9` — lucky-meadow's `pr/chat-transcript-visual` predates it. Card `34f30938` done.
 
@@ -642,9 +642,9 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `7d07b8631`)
 
-- **2026-10-24 · full `origin/main` integration of `feat/aml-cruncher` — FIVE
-  merge rounds (69 branch commits + origin's 72 across PR#175–#196), all
-  green, pushed.** Card `63116e83` cruncher chain + stream-first chat + web
+- **2026-10-24→28 · full `origin/main` integration of `feat/aml-cruncher` — SEVEN
+  merge rounds (69 branch commits + origin's 72 across PR#175–#196, PR#197–#200,
+  and a 54-commit wave through `886575931`), all green; final push rides round 8.** Card `63116e83` cruncher chain + stream-first chat + web
   quality-bar + hygiene AST. **Round 1** (`9483282e0`, 14 conflicts) resolved
   origin-canonical with per-hunk semantic re-application (notes journal union
   newest-`updated_at`-wins, board resealed via `PlannerStore.compute_chains()`,
@@ -671,7 +671,7 @@ git push -u origin feat/<name>   # push your own branch when done
   Origin's new raw-egress chokepoint gate then caught OUR kanban lane's raw
   `fetch('/api/planner/transition')` (13 files vs pin of 12) — fixed by
   routing `transitionCard` through `apiPost` (envelope passthrough verified,
-   consumer try/catches). **Round 4** (PR#191 VQA, web-only) auto-merged.
+  consumer try/catches). **Round 4** (PR#191 VQA, web-only) auto-merged.
   **Round 5** (PR#193–196: system-search subsystem + Cmd+K, route-content
   pins, 36-page prune 109→73, state-refresh lane, bootstrap fan-out perf —
   26 commits/206 files): 3 conflicts — inference.py's re-added
@@ -700,6 +700,56 @@ git push -u origin feat/<name>   # push your own branch when done
   were repeatedly killed by session aborts — chunked foreground runs are the
   reliable pattern; worktree gate commands need root `node_modules/.bin`
   (vitest/eslint are hoisted, only tsc lives in `apps/web/.bin`).
+  **Round 6** (PR#197–#200, committed `3a44e65db`): hf-hub `skip .bin` +
+  downloader-faithful size truth (the weight-estimate red was already being
+  fixed in-flight by a parallel session's `0af38cb25`), the
+  `vm_programs`/`vm_builtins` port (new `apps/api/server/vm_builtins.py`,
+  ~1350 lines), `speech-engine.ts` + `useVoiceChat`, `DOMAIN_CONSOLIDATION.md`,
+  and the consciousness-compare flake fix. One conflict —
+  `DevVoiceTestCard.tsx` carried the identical unmount-cancel fix on both
+  sides; kept ours (keeps the explanatory comment). **Round 7** (54 origin
+  commits, committed `bc4ad9575`, 135 files +11129/−1548): slonet native key
+  family, shell `ai` fail-fast, autoload-failure terminal state
+  (`098d0a2e9`), chat-transcript visual PR#211 (which is where origin removed
+  ChatInputRow's duplicate standalone cancel — took theirs ×2, our
+  server-side cancel lives on inside `onCancel ?? onStop`), the CI workflow +
+  `.dockerignore` COPY-source gate, avion recording/ai packages. **7
+  conflicts:** the 3 code files took origin where theirs was the superset
+  (`page.test.tsx` vocabPager card-scoping, `ChatInputRow` single-stop,
+  `MessageImages` named fallback wrapping our lightbox); the inference router
+  test kept OUR SSE asserts (stream-first is the live contract — origin's
+  JSON fold handler in `inference.py` is unregistered dead code)
+  - origin's new `TestModelStateReadiness`; journal union 38+5 entries
+    (ids disjoint); board union by id newer-`updated_at`-wins → **exact
+    `s2 ∪ s3` = 1015 cards** (1 row theirs-newer, 19 column-changed overlaps
+    kept ours) then resealed — `PlannerStore.compute_chains()` → cycles `[]`,
+    `verify_chain()` `[]`, and both trailing meta headers survived
+    byte-for-byte: **trap — `save_board`/`_write_board` would DROP the
+    `slot_history`/`tray_roots` meta line (no `Board` field), only
+    `_reorder_cards` preserves non-card lines, so reseal via `compute_chains`,
+    never `save_board`.** AGENT_SYNC union (theirs' underscore-italics style
+    adopted on the shared 08:10 entry). Hygiene `97c1ad54d` (ruff format the
+    3 test files our resolutions touched). **Round-7 gates:** ruff CI scope
+    (`packages/core-py` + `apps/api/server`) + all changed files clean — 2
+    `domain/shell` format fails proven byte-identical at origin (out of CI
+    scope, left as upstream) and `scripts/finetune_gpt2.py` I001 likewise
+    outside scope; pytest `tests/`+`apps/cli/tests` **3920 passed / 1 flake**
+    (`test_chat_trainer::test_generate` passes isolated — the documented
+    chat-trainer class); changed core-py **4808 passed / 56 skipped**;
+    avion **577**; apps/api **1345**; new tests/server+dockerignore **130**;
+    cargo check clean; web `tsc` **0**, eslint **0 errors**, targeted vitest
+    **387**, full vitest **816 files / 7794 tests / 0 unhandled**
+    (`~/.amlint-vitest-r7-full.log`, `~/.amlint-pytest-r7-full.log`).
+    **Landmine (node_modules):** `.wt-amlint/node_modules` is a symlink to the
+    shared root tree (created Oct 23) which had LOST the `next`/`next-auth`
+    closure — 72 top-level lock entries missing → 94 `tsc` TS2307s + 8
+    implicit-any cascades, while main's stale manifest at `f53190f7f` lacks
+    the root `next` dep that our lock carries. Restored additively with
+    `npm install` in `.wt-amlint` (workspace reify); 13 stray `three`-ecosystem
+    packages a foreign session had installed were tar-backed-up first, pruned
+    by the reify, restored from the tar; the resulting `package-lock.json`
+    delta was local-npm `libc`-metadata noise only → reverted to committed.
+    `tsc` 0 immediately after.
 
 - **2026-10-09 · logs unification — monitor folded into logs** (card `8182563a`, fix
   `6bb3a97ea`, gates 439 CLI passed + 17 new): `commands/monitor.py` deleted — its
