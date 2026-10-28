@@ -786,11 +786,13 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `7d07b8631`)
+## Landed on main (origin/main = `5fef7194a`)
 
-- **2026-10-24→28 · full `origin/main` integration of `feat/aml-cruncher` — SEVEN
+- **2026-10-24→28 · full `origin/main` integration of `feat/aml-cruncher` — NINE
   merge rounds (69 branch commits + origin's 72 across PR#175–#196, PR#197–#200,
-  and a 54-commit wave through `886575931`), all green; final push rides round 8.** Card `63116e83` cruncher chain + stream-first chat + web
+  a 54-commit wave through `886575931`, the 25-commit remove-next wave through
+  `a06e5bde6`, and a 22-commit wave through `5fef7194a`), all green; final push
+  rides round 9.** Card `63116e83` cruncher chain + stream-first chat + web
   quality-bar + hygiene AST. **Round 1** (`9483282e0`, 14 conflicts) resolved
   origin-canonical with per-hunk semantic re-application (notes journal union
   newest-`updated_at`-wins, board resealed via `PlannerStore.compute_chains()`,
@@ -896,6 +898,85 @@ git push -u origin feat/<name>   # push your own branch when done
     by the reify, restored from the tar; the resulting `package-lock.json`
     delta was local-npm `libc`-metadata noise only → reverted to committed.
     `tsc` 0 immediately after.
+    **Round 8** (25 commits / 215 files, committed `bccb2a06a`): PR#217
+    remove-next-entirely (Vite-only SPA on next-compat shims — root `next` dep
+    gone from manifest + lock, codemod import rewrite over 160 web files),
+    `e888d5da6` shell in-process core dispatch (API server = web/remote-client
+    only), PR#214 context-contract, PR#220 ui-layering, the Command Rule parity
+    gate + change-scoped testing (`scripts/run_affected.sh`, testmon), husky
+    prelude. **5 conflicts:** inference.py ×2 modify/delete → **OURS-empty both**
+    (origin re-modified their unregistered `chat_stream` fold handler + a second
+    frame-builder copy; our live path is `chat.py` `stream_turn`; verified no
+    round-8 test references `/chat/stream` — the 5 referencing test files are
+    byte-identical over `886575931..origin/main`, and origin's own r8
+    registration line had already been silently lost to our r5 deletion — plus
+    the now-unused `ContextPart`/`budget_parts`/`DEFAULT_KNOWLEDGE_BUDGET`
+    import block dropped for the F401 guard since `apps/api/server` is CI ruff
+    scope; the dropped `"parts"` SSE provenance field has zero consumers —
+    grep of tests + web empty); `.eslintignore` union; `Providers.tsx` accepted
+    origin's deletion (remove-next, zero importers repo-wide); AGENT_SYNC took
+    theirs (superset incl. our ai-fail entry — planner/kaggle/SEVEN local
+    entries verified intact after); board union by id newer-wins → exact
+    `s2 ∪ s3` = **1023 cards** (1 theirs-newer, 8 appended, 20 col-changed
+    kept ours) + `compute_chains()` reseal, both meta headers preserved.
+    **Round-8 gates:** ruff CI scope + format 1069 files clean;
+    shell/command-parity/context-contract suites **4382 passed / 4 xfailed**;
+    tests/ + apps/cli split (house standard) **3921 passed / 0 failed** — the
+    combined `apps/api tests/ cli` run showed 2 failures (consciousness
+    reflection-injection + startup missing-slnc guard) that pass isolated →
+    order/contention flakes of the combined invocation, not code; full core-py
+    **42,569 passed / 25 failed = the known env class exactly** (journey
+    browser ×7 needs a live stack, quantization e2e ×7, slonet numba/kernels ×7,
+    gpu fp16, ml cuda, shell-tui live ×2, vm tcp ioctl — zero r8-feature
+    failures); `tsc` **0**, eslint **0**, **Vite production build ✓ 11.2s**
+    (new path after remove-next; no `npm install` re-run needed — codemod only
+    removed imports, all remaining deps already present), `check_contract` ✓;
+    full vitest **809 files / 7756 tests passed on 2 runs**, 1–2 post-teardown
+    unhandled rejections per run (StatusBar `useConsciousnessStatus`
+    setState-after-teardown; chat DELETE 501s landing on a concurrent session's
+    servers on `:8000`) — non-reproducible in isolation (3× each clean), the
+    same teardown-flake class origin's own PR#223 entry documents as CI-rerun →
+    green; a third run came back 0 unhandled. **Ops:** one background-suite
+    launch pair was killed at ~2 min (kill race with the launching tool-call's
+    timeout) — relaunching with `setsid nohup bash -c '…; echo DONE'` and
+    exiting the tool-call immediately survived; journey tests wrote
+    `packages/core-py/tests/test_results/*.json` artifacts (they hit the other
+    session's `:8000` uvicorn mid-run) → reverted, never commit run artifacts.
+    **Round 9** (21 commits / 225 files, committed `cb5a3c86d`): PR#223
+    agent-loop × live-provider (`POST /agents/loop` SSE — `plan →
+tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
+    a provider, `provider_infer` adapter teaching the tool-call protocol via
+    system-prompt injection + `SloTransformer` tool-role → `[tool result: …]`
+    user translation, double-`__getattr__` facade fix, 23+3 new tests), PR#224
+    ui-layering lane 2 (`StatTileGrid` dedupe of 6 hand-rolled stat-tile clones
+    ×2 data sources, surface ladder on `/training`, dead `FeedbackTrainCard`
+    pruned user-approved), PR#218 tts-real-training (`SpectrogramDecoder.train_step`
+    under the `DirectGradientHandler` one-loop contract — `tests/contract/test_scatter_gate.py`
+    is NOT in the TTS suite, run it explicitly before pushing — plus
+    `espeak_pairs` dataset adapter + train/benchmark drivers), husky
+    sync-guard hooks (`scripts/check-main-sync.sh` blocks >5 unpushed commits
+    on local main), Command Rule / Test Rule landed in AGENTS.md. Gateway
+    `filters.rs` kept OURS (`/chat/stream` → `/chat/voice` doc+test-comment
+    retarget, our r7 stream-doctrine edit; origin still carries the stale
+    mention — only-side-changed auto-merge, user re-confirmed chat-stream-as-default);
+    `filters.rs` constant since r7 → r7's cargo check still stands.
+    **2 conflicts:** AGENT_SYNC ours-empty ×2 → take theirs (local
+    SEVEN/planner/kaggle/live-feed entries verified after), board union → exact
+    `s2 ∪ s3` = **1015 cards** (2 appended, 0 theirs-newer) + reseal **1025**
+    cards incl. 10 context rows, meta ×2 preserved; inference.py/chat.py
+    auto-merged = unchanged (agents.py +108 only) and the residual
+    `chat_stream` greps are the provider method + doctrine docstrings —
+    contract tests still green. **Round-9 gates:** ruff CI scope + format 1070
+    files clean; `test_chat_stream_only` + `test_scatter_gate` **10/10**;
+    r9-targeted suites **119 passed** (provider_infer, voice×2, agents +
+    inference routers); tests/ + apps/cli **3939 passed / 0 failed**; apps/api
+    **1348 passed / 1 skipped**; `tsc` **0**, eslint **0**, Vite build ✓; full
+    vitest **809 files / 7758 tests / 0 unhandled** (clean run); no rust delta.
+    Logs: `~/.amlint-pytest-r8-*.log`, `~/.amlint-vitest-r8-full*.log`,
+    `~/.amlint-pytest-r9-{a,b}.log`, `~/.amlint-vitest-r9.log`.
+    `git rev-list HEAD..origin/main` = 0 at push time (round-9 tip = our
+    merge) — push `HEAD:main`, then restore `stash@{0}` (the foreign 119-file
+    WIP parked for the 2.5-day suspension).
 
 - **2026-10-09 · logs unification — monitor folded into logs** (card `8182563a`, fix
   `6bb3a97ea`, gates 439 CLI passed + 17 new): `commands/monitor.py` deleted — its
