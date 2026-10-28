@@ -791,7 +791,7 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `5fef7194a`)
+## Landed on main (origin/main = `83d91dedc`)
 
 - **2026-10-24→28 · full `origin/main` integration of `feat/aml-cruncher` — NINE
   merge rounds (69 branch commits + origin's 72 across PR#175–#196, PR#197–#200,
@@ -1010,6 +1010,14 @@ tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
     (pre-fix reproduction was a deterministic 37 failures, not a flake;
     `apps/mobile` sits outside npm workspaces — install + jest run
     standalone from `apps/mobile/`).
+    **Round 11** (6 commits, auto-merged — **zero conflicts**): PR#227 os-blue
+    palette-as-protocol (+ `os-blue-palette.ts`/test), PR#226 mole-plugin
+    (`plugins/mole.py` + `MolePluginPanel`), Page Rule surface ladder in
+    AGENTS.md + UX_FLOWS flow-14, and origin's own mobile lock edits which
+    merged cleanly over our sync (3-dep entries intact). Delta gates:
+    `test_plugins` **17P**, ruff CI scope + `plugins/` clean (1071 files),
+    `tsc` **0**, eslint **0**, mobile jest **949/949**, full vitest run
+    recorded in `~/.amlint-vitest-r11.log`.
 
 - **2026-10-09 · logs unification — monitor folded into logs** (card `8182563a`, fix
   `6bb3a97ea`, gates 439 CLI passed + 17 new): `commands/monitor.py` deleted — its
