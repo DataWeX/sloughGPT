@@ -34,6 +34,11 @@ from config import gen_config as _gen_config
 from domain.agents import get_agent_system, get_tool_registry
 from domain.cognition import get_rag_service
 from domain.feedback import get_response_tracker
+from domain.inference import (
+    DEFAULT_KNOWLEDGE_BUDGET,
+    ContextPart,
+    budget_parts,
+)
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
@@ -721,6 +726,19 @@ async def _build_context_frame(
                 "layers": [l.layer_type for l in frame.layers],
                 "total_tokens": frame.total_tokens,
                 "max_tokens": frame.max_tokens,
+                # Structured provenance for the UI (additive): what the frame
+                # carries, source-attributed, without the raw text payloads.
+                "parts": [
+                    {
+                        "source": p.source,
+                        "layer": p.layer,
+                        "score": p.score,
+                        "rank": p.rank,
+                        "locator": p.locator,
+                    }
+                    for l in frame.layers
+                    for p in (l.parts or [])
+                ],
             }
 
     return frame, context_info
@@ -2200,12 +2218,26 @@ class InferenceRouter:
                 )
 
             frame_context = []
+            frame_parts: list = []
             if frame:
                 for layer in frame.layers:
                     if layer.layer_type in ("memory", "rag") and layer.content:
                         frame_context.append(layer.content)
+                        if layer.parts:
+                            frame_parts.extend(layer.parts)
+                        else:
+                            # Legacy layer without structured parts: synthesize
+                            # one so it isn't dropped when siblings carry parts.
+                            frame_parts.append(
+                                ContextPart(
+                                    text=layer.content,
+                                    source=layer.layer_type,
+                                    layer=layer.layer_type,
+                                )
+                            )
 
             knowledge_retrieved = []
+            enrichment_parts: list = []
             if not frame_context:
                 try:
                     logger.debug(
@@ -2222,6 +2254,8 @@ class InferenceRouter:
                     )
                     if enrichment.get("facts"):
                         knowledge_retrieved = enrichment["facts"]
+                    if enrichment.get("parts"):
+                        enrichment_parts.extend(enrichment["parts"])
                     logger.debug(
                         "CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH done facts=%d",
                         corr_id,
@@ -2253,24 +2287,51 @@ class InferenceRouter:
                     )
                     yield sse_error("chat", "KNOWLEDGE_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
+            # Context contract: gather structured parts from every source,
+            # budget ONCE (ranked, whole-part drops, omitted announced),
+            # render via KnowledgeProcessor's contract path. Request-level
+            # knowledge is user-supplied — layer="request" outranks retrieval.
+            all_parts: list = list(frame_parts) + list(enrichment_parts)
+            all_parts.extend(
+                ContextPart(text=k, source="request", layer="request")
+                for k in (req.knowledge or [])
+            )
+            # Legacy string fallback only when NO source produced parts
+            # (older frames / providers without contract support).
             all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
-            if all_knowledge:
+            _k_proc: Any = None
+            if all_parts:
+                _budgeted = budget_parts(all_parts, DEFAULT_KNOWLEDGE_BUDGET)
+                _k_proc = KnowledgeProcessor(
+                    knowledge=_budgeted.parts, omitted_count=_budgeted.omitted_count
+                )
+                logger.debug(
+                    "CHAT_PIPELINE corr=%s step=CONTEXT_BUDGET parts=%d selected=%d omitted=%d tokens=%d/%d",
+                    corr_id,
+                    len(all_parts),
+                    len(_budgeted.parts),
+                    _budgeted.omitted_count,
+                    _budgeted.total_tokens,
+                    _budgeted.max_tokens,
+                )
+            elif all_knowledge:
+                _k_proc = KnowledgeProcessor(knowledge=all_knowledge)
+            if _k_proc is not None:
                 try:
                     logger.debug(
                         "CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC start count=%d",
                         corr_id,
-                        len(all_knowledge),
+                        len(all_parts) if all_parts else len(all_knowledge),
                         extra={
                             "tag": "CHAT",
                             "context": {
                                 "corr": corr_id,
                                 "step": "KNOWLEDGE_PROC",
-                                "count": len(all_knowledge),
+                                "count": len(all_parts) if all_parts else len(all_knowledge),
                             },
                         },
                     )
-                    k_proc = KnowledgeProcessor(knowledge=all_knowledge)
-                    provider_messages = await apply_processors(provider_messages, [k_proc])
+                    provider_messages = await apply_processors(provider_messages, [_k_proc])
                     logger.debug(
                         "CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC done",
                         corr_id,
