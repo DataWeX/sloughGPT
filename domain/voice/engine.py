@@ -16,10 +16,22 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("slo.voice.engine")
+
+TTS_CHECKPOINT_ENV = "SLOUGHGPT_TTS_CHECKPOINT"
+TTS_CHECKPOINT_DEFAULT = Path("models/tts/espeak_distilled.npz")
+
+
+def _resolve_tts_checkpoint() -> str | None:
+    """Env override wins; else the default distillation path if it exists."""
+    raw = os.environ.get(TTS_CHECKPOINT_ENV)
+    candidate = Path(raw) if raw else TTS_CHECKPOINT_DEFAULT
+    return str(candidate) if candidate.is_file() else None
 
 
 @dataclass
@@ -45,6 +57,7 @@ class VoiceEngine:
 
     def __init__(self) -> None:
         self._tts: Any = None
+        self._tts_checkpoint: str | None = None
         self._recognizer: Any = None
         self._encoder: Any = None
 
@@ -52,7 +65,22 @@ class VoiceEngine:
         if self._tts is None:
             from domain.voice._internal.tts import TTSEngine
 
-            self._tts = TTSEngine()
+            tts = TTSEngine()
+            checkpoint = _resolve_tts_checkpoint()
+            if checkpoint is not None:
+                try:
+                    tts.load(checkpoint)
+                    self._tts_checkpoint = checkpoint
+                    logger.info("TTS checkpoint loaded: %s", checkpoint)
+                except Exception:
+                    # load may have partially mutated weights — rebuild clean
+                    logger.warning(
+                        "TTS checkpoint %s unusable, using untrained weights",
+                        checkpoint,
+                        exc_info=True,
+                    )
+                    tts = TTSEngine()
+            self._tts = tts
         return self._tts
 
     def _get_recognizer(self) -> Any:
@@ -170,6 +198,7 @@ class VoiceEngine:
         """
         return {
             "tts": self._tts is not None,
+            "tts_checkpoint": self._tts_checkpoint,
             "recognizer": self._recognizer is not None,
             "encoder": self._encoder is not None,
             "capabilities": ["tts", "stt", "phonemes", "language_detection"],
