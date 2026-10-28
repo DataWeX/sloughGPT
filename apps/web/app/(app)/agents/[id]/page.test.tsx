@@ -215,10 +215,18 @@ describe('AgentDetailPage', () => {
     render(<Page />)
     await waitFor(() => { expect(screen.getByText('Execute')).toBeTruthy() })
     const input = screen.getByTestId('exec-input')
-    await act(async () => { fireEvent.change(input, { target: { value: 'What is 2+2?' } }) })
-    await act(async () => { screen.getByText('Run').click() })
-    await waitFor(() => { expect(mockExecute).toHaveBeenCalledWith('agent-1', 'What is 2+2?') })
-    expect(screen.getByText('Execution result')).toBeTruthy()
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'What is 2+2?' } })
+    })
+    await act(async () => {
+      screen.getByText('Run').click()
+    })
+    await waitFor(() => {
+      expect(mockExecute).toHaveBeenCalledWith('agent-1', 'What is 2+2?')
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Execution result')).toBeTruthy()
+    })
   })
 
   it('handles execution error', async () => {

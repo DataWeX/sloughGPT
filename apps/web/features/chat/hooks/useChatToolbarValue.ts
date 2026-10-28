@@ -12,6 +12,7 @@ import type { useChatMessages } from './useChatMessages'
 import type { ApiHealthSnapshot } from './../../../hooks/useApiHealth'
 import { datasetController } from '@/lib/dataset-controller'
 import { todayDateString } from '@/lib/format-bytes'
+import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
 type HealthStatus = 'loading' | 'offline' | 'ok' | 'loading' | 'degraded'
 
@@ -48,110 +49,148 @@ interface UseChatToolbarValueConfig {
   onSystemPrompt: () => void
   onSearchConversations: () => void
   bookmarkCount: number
+  /** Active behavior-protocol mode — surfaced as a header chip so the toolbar
+   *  identity matches the protocol actually in effect (not the session title). */
+  chatMode: ChatMode
 }
 
 export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatToolbarContextValue {
   const {
-    ui, agents, engine, model, chat, health,
-    matchCount, matchIds, handlePrevMatch, handleNextMatch,
-    handleSelectAgentWithToast, modelDescriptions, showToast,
+    ui,
+    agents,
+    engine,
+    model,
+    chat,
+    health,
+    matchCount,
+    matchIds,
+    handlePrevMatch,
+    handleNextMatch,
+    handleSelectAgentWithToast,
+    modelDescriptions,
+    showToast,
   } = config
 
-  return useMemo<ChatToolbarContextValue>(() => ({
-    conversations: {
-      conversations: chat.sidebarConversations,
-      sessionIdRef: chat.sessionIdRef,
-      onLoad: chat.loadSession,
-      onStar: chat.starSession,
-      onPin: chat.pinSession,
-      onNewChat: chat.newChat,
-    },
-    search: {
-      query: ui.searchQuery,
-      onChange: ui.handleSearchChange,
-      onClear: ui.handleSearchClear,
-      matchIndex: ui.matchIndex,
-      matchCount: config.matchCount,
-      matchIds: config.matchIds,
-      onPrevMatch: config.handlePrevMatch,
-      onNextMatch: config.handleNextMatch,
-      showMobile: ui.showMobileSearch,
-      setShowMobile: ui.setShowMobileSearch,
-      searchInputRef: ui.searchInputRef,
-    },
-    model: {
-      availableModels: model.availableModels,
-      current: model.model,
-      loading: model.loadingModel,
-      generating: chat.loading,
-      infoMap: model.modelInfoMap,
-      descriptions: modelDescriptions,
-      downloadProgress: model.downloadProgress,
-      onSelect: model.handleSelectModel,
-      onUnload: model.handleUnloadModel,
-      fineTuned: {
-        models: model.fineTuned,
-        loading: model.fineTunedLoading,
-        onLoad: model.handleLoadFineTuned,
+  return useMemo<ChatToolbarContextValue>(
+    () => ({
+      conversations: {
+        conversations: chat.sidebarConversations,
+        sessionIdRef: chat.sessionIdRef,
+        onLoad: chat.loadSession,
+        onStar: chat.starSession,
+        onPin: chat.pinSession,
+        onNewChat: chat.newChat,
       },
-    },
-    soul: {
-      souls: model.souls,
-      current: model.currentSoul,
-      onSelect: model.handleSelectSoul,
-    },
-    knowledge: {
-      showing: agents.knowledgeCtx.showing,
-      count: agents.knowledgeCtx.count,
-      context: agents.knowledgeCtx.context,
-      onToggle: agents.handleToggleKnowledge,
-    },
-    agent: {
-      agents: agents.agents,
-      current: agents.currentAgent,
-      onSelect: config.handleSelectAgentWithToast,
-    },
-    localEngine: {
-      modelUrl: engine.localModelUrl,
-      useLocal: engine.useLocalEngine,
-      loading: engine.localEngineLoading,
-      archInfo: engine.localArchInfo,
-      onToggle: engine.handleToggleLocalEngine,
-    },
-    actions: {
-      onVoiceMode: () => ui.setVoiceMode(true),
-      onToggleTools: () => ui.setToolPanelOpen(prev => !prev),
-      onExportMarkdown: chat.handleExportMarkdown,
-      onCopyMarkdown: chat.handleCopyMarkdown,
-      onSystemPrompt: config.onSystemPrompt,
-      onSearchConversations: config.onSearchConversations,
-      onSaveAsDataset: async () => {
-        try {
-          const msgs = chat.messages
-            .filter(m => m.role === 'user' || m.role === 'assistant')
-            .map(m => ({ role: m.role, content: m.content }))
-          if (msgs.length === 0) { showToast('No messages to save', 'error'); return }
-          const res = await datasetController.createFromChat({
-            messages: msgs,
-            name: `chat-${todayDateString()}`,
-          })
-          showToast(`Saved ${res.messages_exported} messages as dataset: ${res.name}`, 'success')
-        } catch { showToast('Could not save dataset', 'error') }
+      search: {
+        query: ui.searchQuery,
+        onChange: ui.handleSearchChange,
+        onClear: ui.handleSearchClear,
+        matchIndex: ui.matchIndex,
+        matchCount: config.matchCount,
+        matchIds: config.matchIds,
+        onPrevMatch: config.handlePrevMatch,
+        onNextMatch: config.handleNextMatch,
+        showMobile: ui.showMobileSearch,
+        setShowMobile: ui.setShowMobileSearch,
+        searchInputRef: ui.searchInputRef,
       },
-      hasMessages: chat.messages.length > 0,
-      messageCount: chat.messages.length,
-      bookmarkCount: config.bookmarkCount,
-    },
-    health: {
-      status: resolveHealthStatus(health),
-      summary: resolveHealthSummary(health),
-      modelLoaded: health !== null && health !== 'offline' && health.model_loaded,
-      modelType: health !== null && health !== 'offline' ? health.model_type : '',
-    },
-    sidebar: {
-      open: ui.sidebarOpen,
-      onToggle: () => ui.setSidebarOpen(prev => !prev),
-      onClose: () => ui.setSidebarOpen(false),
-    },
-  }), [chat, ui, model, agents, engine, health, matchCount, matchIds, handlePrevMatch, handleNextMatch, handleSelectAgentWithToast, modelDescriptions, showToast, config.onSearchConversations])
+      model: {
+        availableModels: model.availableModels,
+        current: model.model,
+        loading: model.loadingModel,
+        generating: chat.loading,
+        infoMap: model.modelInfoMap,
+        descriptions: modelDescriptions,
+        downloadProgress: model.downloadProgress,
+        onSelect: model.handleSelectModel,
+        onUnload: model.handleUnloadModel,
+        fineTuned: {
+          models: model.fineTuned,
+          loading: model.fineTunedLoading,
+          onLoad: model.handleLoadFineTuned,
+        },
+      },
+      soul: {
+        souls: model.souls,
+        current: model.currentSoul,
+        onSelect: model.handleSelectSoul,
+      },
+      knowledge: {
+        showing: agents.knowledgeCtx.showing,
+        count: agents.knowledgeCtx.count,
+        context: agents.knowledgeCtx.context,
+        onToggle: agents.handleToggleKnowledge,
+      },
+      agent: {
+        agents: agents.agents,
+        current: agents.currentAgent,
+        onSelect: config.handleSelectAgentWithToast,
+      },
+      localEngine: {
+        modelUrl: engine.localModelUrl,
+        useLocal: engine.useLocalEngine,
+        loading: engine.localEngineLoading,
+        archInfo: engine.localArchInfo,
+        onToggle: engine.handleToggleLocalEngine,
+      },
+      actions: {
+        onVoiceMode: () => ui.setVoiceMode(true),
+        onToggleTools: () => ui.setToolPanelOpen((prev) => !prev),
+        onExportMarkdown: chat.handleExportMarkdown,
+        onCopyMarkdown: chat.handleCopyMarkdown,
+        onSystemPrompt: config.onSystemPrompt,
+        onSearchConversations: config.onSearchConversations,
+        onSaveAsDataset: async () => {
+          try {
+            const msgs = chat.messages
+              .filter((m) => m.role === 'user' || m.role === 'assistant')
+              .map((m) => ({ role: m.role, content: m.content }))
+            if (msgs.length === 0) {
+              showToast('No messages to save', 'error')
+              return
+            }
+            const res = await datasetController.createFromChat({
+              messages: msgs,
+              name: `chat-${todayDateString()}`,
+            })
+            showToast(`Saved ${res.messages_exported} messages as dataset: ${res.name}`, 'success')
+          } catch {
+            showToast('Could not save dataset', 'error')
+          }
+        },
+        hasMessages: chat.messages.length > 0,
+        messageCount: chat.messages.length,
+        bookmarkCount: config.bookmarkCount,
+      },
+      health: {
+        status: resolveHealthStatus(health),
+        summary: resolveHealthSummary(health),
+        modelLoaded: health !== null && health !== 'offline' && health.model_loaded,
+        modelType: health !== null && health !== 'offline' ? health.model_type : '',
+      },
+      mode: { current: config.chatMode },
+      sidebar: {
+        open: ui.sidebarOpen,
+        onToggle: () => ui.setSidebarOpen((prev) => !prev),
+        onClose: () => ui.setSidebarOpen(false),
+      },
+    }),
+    [
+      chat,
+      ui,
+      model,
+      agents,
+      engine,
+      health,
+      matchCount,
+      matchIds,
+      handlePrevMatch,
+      handleNextMatch,
+      handleSelectAgentWithToast,
+      modelDescriptions,
+      showToast,
+      config.onSearchConversations,
+      config.chatMode,
+    ],
+  )
 }

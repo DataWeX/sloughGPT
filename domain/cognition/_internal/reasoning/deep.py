@@ -67,6 +67,10 @@ class DeepReasoning:
         self.memory_store = memory_store
         self.llm_call = llm_call or self._default_llm
         self.max_retrieval = 5
+        # Token budget for retrieved knowledge in prompts. Replaces the old
+        # per-prompt context[:500] char-slices (~125 tokens, blind) with one
+        # budgeted, ranked, whole-part selection via the context contract.
+        self.max_context_tokens = 256
 
     async def reason(
         self,
@@ -207,13 +211,40 @@ class DeepReasoning:
         retrieved: list[RetrievedKnowledge],
         ctx: DeepReasoningContext,
     ) -> str:
-        """Build grounded context from retrieved knowledge."""
+        """Build grounded context from retrieved knowledge.
+
+        Retrieved items become ContextParts (relevance = score) and are
+        budgeted ONCE via the context contract — the old per-prompt
+        ``context[:500]`` char-slices in _critique_step/_synthesize are
+        gone; they re-truncated an already-delivered string mid-sentence.
+        """
+        from domain.inference._internal.context_contract import (
+            ContextPart,
+            budget_parts,
+            render_context_block,
+        )
+
         context_parts = [f"Problem: {problem}"]
 
         if retrieved:
-            context_parts.append("\nRelevant Knowledge:")
-            for i, know in enumerate(retrieved, 1):
-                context_parts.append(f"  {i}. {know.content} (relevance: {know.relevance:.2f})")
+            parts = [
+                ContextPart(
+                    text=know.content,
+                    source="deep_reasoning",
+                    layer="rag",
+                    score=float(know.relevance),
+                    rank=i,
+                )
+                for i, know in enumerate(retrieved, 1)
+            ]
+            budgeted = budget_parts(parts, self.max_context_tokens)
+            rendered = render_context_block(
+                budgeted.parts,
+                omitted_count=budgeted.omitted_count,
+                header="Relevant Knowledge",
+            )
+            if rendered:
+                context_parts.append(rendered)
 
         if ctx.constraints:
             context_parts.append(f"\nConstraints: {', '.join(ctx.constraints)}")
@@ -286,7 +317,7 @@ class DeepReasoning:
         """Critique a single reasoning step."""
         critique_prompt = f"""Critique this reasoning step:
 Step: {step.thought}
-Context: {context[:500]}
+Context: {context}
 
 Check for:
 1. Factual errors (contradicts known facts)
@@ -354,7 +385,7 @@ Critique:"""
         """Synthesize final conclusion."""
         synthesis_prompt = f"""Given the reasoning steps and corrections, provide a final answer.
 
-Context: {context[:500]}
+Context: {context}
 Initial reasoning: {initial[-1].thought if initial else "N/A"}
 Corrections applied: {len(corrected.get("corrections", []))}
 
