@@ -22,6 +22,45 @@ API_BASE = get_api_base()  # backward compat
 
 
 def _api_get(path: str) -> dict[str, Any] | list:
+    """GET across the transport seam (card ad4f5ec2).
+
+    Local in-process mode (default) dispatches to ``local_api`` — same
+    process, no HTTP. Remote mode (``MAN_API_URL`` / ``shell --remote``)
+    goes over HTTP to a running API server.
+    """
+    from .config import is_remote_mode
+
+    if not is_remote_mode():
+        from . import local_api
+
+        return local_api.dispatch_get(path)
+    return _http_get(path)
+
+
+def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
+    """POST across the transport seam — local dispatch or HTTP (see ``_api_get``)."""
+    from .config import is_remote_mode
+
+    if not is_remote_mode():
+        from . import local_api
+
+        return local_api.dispatch_post(path, data)
+    return _http_post(path, data)
+
+
+def _api_delete(path: str) -> dict[str, Any]:
+    """DELETE across the transport seam — local dispatch or HTTP (see ``_api_get``)."""
+    from .config import is_remote_mode
+
+    if not is_remote_mode():
+        from . import local_api
+
+        return local_api.dispatch_delete(path)
+    return _http_delete(path)
+
+
+def _http_get(path: str) -> dict[str, Any] | list:
+    """GET over HTTP to the API server (remote mode only)."""
     import requests
 
     try:
@@ -42,7 +81,8 @@ def _api_get(path: str) -> dict[str, Any] | list:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
+def _http_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
+    """POST over HTTP to the API server (remote mode only)."""
     import requests
 
     try:
@@ -63,7 +103,8 @@ def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
-def _api_delete(path: str) -> dict[str, Any]:
+def _http_delete(path: str) -> dict[str, Any]:
+    """DELETE over HTTP to the API server (remote mode only)."""
     import requests
 
     try:
@@ -134,6 +175,15 @@ class ShellCommands:
     @staticmethod
     def load_model(model_name: str) -> dict[str, Any]:
         """Load a model by name."""
+        from .config import is_remote_mode
+
+        if not is_remote_mode():
+            from . import local_api
+
+            return local_api.dispatch_post(
+                "/models/load", {"model_id": model_name, "device": "cpu"}
+            )
+
         import requests
 
         try:
@@ -393,6 +443,16 @@ class ShellCommands:
         temperature: float = 0.7,
     ):
         """Stream a chat response token by token. Yields tokens as they arrive."""
+        from .config import is_remote_mode
+
+        if not is_remote_mode():
+            from . import local_api
+
+            yield from local_api.local_chat_stream(
+                messages, session_id=session_id, max_tokens=max_tokens, temperature=temperature
+            )
+            return
+
         import requests
 
         try:

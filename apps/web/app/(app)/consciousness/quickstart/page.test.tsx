@@ -7,7 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { LocaleProvider } from '@/hooks/useLocale'
 import ConsciousnessQuickstartPage from './page'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),
   }),
@@ -56,16 +56,24 @@ describe('ConsciousnessQuickstartPage', () => {
   it('displays welcome section', async () => {
     render(<ConsciousnessQuickstartPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_quickstart.welcome_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_quickstart.welcome_title').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 
   it('displays benefits', async () => {
     render(<ConsciousnessQuickstartPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_quickstart.benefit1_title').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_quickstart.benefit2_title').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_quickstart.benefit3_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_quickstart.benefit1_title').length).toBeGreaterThan(
+        0,
+      )
+      expect(screen.getAllByText('consciousness_quickstart.benefit2_title').length).toBeGreaterThan(
+        0,
+      )
+      expect(screen.getAllByText('consciousness_quickstart.benefit3_title').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 
@@ -90,21 +98,27 @@ describe('ConsciousnessQuickstartPage', () => {
   it('displays quick actions section', async () => {
     render(<ConsciousnessQuickstartPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_quickstart.quick_actions_title').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_quickstart.quick_actions_title').length,
+      ).toBeGreaterThan(0)
     })
   })
 
   it('displays enable button', async () => {
     render(<ConsciousnessQuickstartPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_quickstart.action_enable').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_quickstart.action_enable').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 
   it('displays personality button', async () => {
     render(<ConsciousnessQuickstartPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_quickstart.action_personality').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_quickstart.action_personality').length,
+      ).toBeGreaterThan(0)
     })
   })
 
@@ -118,7 +132,9 @@ describe('ConsciousnessQuickstartPage', () => {
   it('displays progress section', async () => {
     render(<ConsciousnessQuickstartPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_quickstart.progress_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_quickstart.progress_title').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 
@@ -129,10 +145,12 @@ describe('ConsciousnessQuickstartPage', () => {
     })
   })
 
-  it('displays what\'s next section', async () => {
+  it("displays what's next section", async () => {
     render(<ConsciousnessQuickstartPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_quickstart.whats_next_title').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_quickstart.whats_next_title').length,
+      ).toBeGreaterThan(0)
     })
   })
 

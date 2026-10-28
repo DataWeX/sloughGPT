@@ -2,8 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { SystemHealth } from './SystemHealth'
 
-vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+vi.mock('@/vite/next-compat/link', () => ({
+  default: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@/lib/chat-utils', () => ({
@@ -20,17 +24,24 @@ vi.mock('@sloughgpt/strui', () => {
     Card: passthrough,
     CardContent: passthrough,
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -57,7 +68,7 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 const baseProps = {
@@ -108,24 +119,33 @@ describe('SystemHealth', () => {
   })
 
   it('shows em dash for null CPU', () => {
-    const { container } = render(<SystemHealth {...baseProps} liveHealth={{ ...baseProps.liveHealth, cpu_percent: null }} />)
+    const { container } = render(
+      <SystemHealth {...baseProps} liveHealth={{ ...baseProps.liveHealth, cpu_percent: null }} />,
+    )
     expect(container.textContent).toContain('\u2014')
   })
 
   it('shows em dash for null memory', () => {
-    const { container } = render(<SystemHealth {...baseProps} liveHealth={{ ...baseProps.liveHealth, memory_percent: null }} />)
+    const { container } = render(
+      <SystemHealth
+        {...baseProps}
+        liveHealth={{ ...baseProps.liveHealth, memory_percent: null }}
+      />,
+    )
     expect(container.textContent).toContain('\u2014')
   })
 
   it('shows em dash for 0 uptime', () => {
-    const { container } = render(<SystemHealth {...baseProps} liveHealth={{ ...baseProps.liveHealth, uptime_seconds: 0 }} />)
+    const { container } = render(
+      <SystemHealth {...baseProps} liveHealth={{ ...baseProps.liveHealth, uptime_seconds: 0 }} />,
+    )
     expect(container.textContent).toContain('\u2014')
   })
 
   it('links to monitoring page', () => {
     const { container } = render(<SystemHealth {...baseProps} />)
     const links = container.querySelectorAll('a')
-    const monitoringLink = Array.from(links).find(a => a.getAttribute('href') === '/monitoring')
+    const monitoringLink = Array.from(links).find((a) => a.getAttribute('href') === '/monitoring')
     expect(monitoringLink).toBeDefined()
     expect(monitoringLink!.textContent).toContain('Details →')
   })

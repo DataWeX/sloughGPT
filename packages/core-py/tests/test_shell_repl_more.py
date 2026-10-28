@@ -22,6 +22,17 @@ from domain.shell._internal.repl import ShellREPL, _CaptureOutput
 from domain.shell._internal.runtime import DaitRuntime
 
 
+@pytest.fixture(autouse=True)
+def _remote_transport(monkeypatch):
+    """Pin HTTP transport (remote mode, card ad4f5ec2).
+
+    Tests in this file pin pre-seam HTTP semantics (requests patched or a
+    dead server expected), so they declare remote mode via MAN_API_URL —
+    local in-process dispatch is the default since the shell-core seam.
+    """
+    monkeypatch.setenv("MAN_API_URL", "http://localhost:8000")
+
+
 @pytest.fixture
 def repl():
     import tempfile

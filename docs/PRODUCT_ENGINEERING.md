@@ -72,6 +72,22 @@ only through the same stable interfaces:
 - No client imports from `domain.*_internal*`; no core file imports from
   `apps/web`, `apps/cli`, or `apps/gateway`.
 
+### Three-tier deployment (shell-core seam, card `ad4f5ec2`)
+
+One domain core, two runtimes, one contract:
+
+| Tier             | Who                                   | Talks to the core via                    | Serves                        |
+| ---------------- | ------------------------------------- | ---------------------------------------- | ----------------------------- |
+| **Model**        | `sloughgpt` shell binary, scripts     | in-process `domain/` calls (default)     | itself; `--remote` demotes it |
+| **Cloud**        | API server (`api start`)              | HTTP only (auth, SSE, sessions)          | web UI + remote clients       |
+| **Clients**      | web, mobile, SDK, CLI                 | the one descriptor-projected contract    | —                             |
+
+The shell is part of the model tier: every shell command dispatches to an
+in-process handler (`domain/shell/_internal/local_api.py`) and needs no
+server. `MAN_API_URL` or `shell --remote` flips the whole process to remote
+mode, where the same commands ride HTTP to an API server instead. The API
+server never imports shell code; clients never import `domain.*`.
+
 ---
 
 ## Core Features (what Alex actually uses)

@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+import pytest
 import requests
 
 import domain.shell._internal.commands as commands
 from domain.shell._internal.commands import ShellCommands
+
+
+@pytest.fixture(autouse=True)
+def _remote_transport(monkeypatch):
+    """Pin HTTP transport (remote mode, card ad4f5ec2).
+
+    These tests exercise the HTTP half of the transport seam, so they
+    declare remote mode via MAN_API_URL — local in-process dispatch is
+    the default since the shell-core seam landed.
+    """
+    monkeypatch.setenv("MAN_API_URL", "http://localhost:8000")
 
 
 class _Resp:

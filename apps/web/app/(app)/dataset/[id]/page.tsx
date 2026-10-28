@@ -1,9 +1,9 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import dynamicNext from 'next/dynamic'
+import dynamicNext from '@/vite/next-compat/dynamic'
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import {

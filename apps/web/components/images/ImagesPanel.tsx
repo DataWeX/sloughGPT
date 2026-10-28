@@ -7,7 +7,7 @@
 // rendered; only the PageContainer wrapper is gone, because the host page
 // owns it.
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'

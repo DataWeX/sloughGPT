@@ -23,6 +23,13 @@ Row spec (a dict, like the rest of the family):
     invert     bool rows only: emit the flag when the value is False
     on_label / off_label   bool display strings (default "on"/"off")
     action     "action" rows only: Callable[[OptionsScreen], None]
+    setter     Callable[[str], None] — pushes this row's displayed value
+               into real state (a config key, an env var, a session pref);
+               `apply()` calls it, so row, flag and effect share one spec
+
+The screen has two drivers: the raw-mode loop in `interactive`, and the
+plain-line one in `console.run_options_screen` for non-TTY / SSE — both
+drive this same model, so they can never render a different screen.
 
 Command-line assembly: choice/text emit `[flag, value]` unless the value
 is empty or listed in `omit`; bool emits `[flag]` when the effective
@@ -43,7 +50,7 @@ MODE_INPUT = "input"
 
 _KINDS = ("choice", "text", "bool", "action")
 
-_FOOTER = "Enter Open  Esc Back  Left/Right Set  ? Help"
+_FOOTER = "Enter Open - Esc Back - Left/Right Set - ? Help"
 _SUBTITLE = "Each row is an option of the command line, named on the right."
 
 
@@ -62,6 +69,10 @@ class OptionRow:
     on_label: str = "on"
     off_label: str = "off"
     action: Callable[[OptionsScreen], None] | None = None
+    setter: Callable[[str], None] | None = None
+    """Push this row's displayed value into real state (a config key,
+    an env var, a session pref).  The fourth half of the descriptor:
+    the same spec draws the row, spells the flag, and applies the value."""
 
     @classmethod
     def from_spec(cls, spec: dict) -> OptionRow:
@@ -86,6 +97,7 @@ class OptionRow:
             on_label=str(spec.get("on_label", "on")),
             off_label=str(spec.get("off_label", "off")),
             action=spec.get("action"),
+            setter=spec.get("setter"),
         )
 
     @property
@@ -246,6 +258,23 @@ class OptionsScreen:
     def values(self) -> dict[str, str]:
         """Keyed by the row's `key` (flag name by default)."""
         return {row.key: row.display_value() for row in self.rows if not row.is_action}
+
+    def apply(self) -> list[str]:
+        """Push every row's displayed value through its setter.
+
+        Returns the keys written.  An aborted screen writes nothing —
+        the invariant the driver's Esc/Ctrl+C split rests on.  Rows
+        without a setter are simply stateless decoration and are skipped.
+        """
+        if self.aborted:
+            return []
+        applied: list[str] = []
+        for row in self.rows:
+            if row.is_action or row.setter is None:
+                continue
+            row.setter(row.display_value())
+            applied.append(row.key)
+        return applied
 
     # ── render (pure text + style tags; the driver owns the ANSI) ───
 

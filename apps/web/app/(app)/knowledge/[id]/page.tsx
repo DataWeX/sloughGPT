@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'

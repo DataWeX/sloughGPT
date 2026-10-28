@@ -22,6 +22,17 @@ def _temp_mogdb(tmp_path):
     reset_permissions_db()
 
 
+@pytest.fixture(autouse=True)
+def _remote_transport(monkeypatch):
+    """Pin HTTP transport (remote mode, card ad4f5ec2).
+
+    The unstubbed ShellCommands calls below expect a dead server (error
+    dict), so they declare remote mode via MAN_API_URL — local in-process
+    dispatch is the default since the shell-core seam landed.
+    """
+    monkeypatch.setenv("MAN_API_URL", "http://localhost:8000")
+
+
 # ── ShellPermissions ──────────────────────────────────────────────
 
 

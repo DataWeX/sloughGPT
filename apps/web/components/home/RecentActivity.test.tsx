@@ -4,12 +4,16 @@ import { RecentActivity } from './RecentActivity'
 
 const mockPush = vi.fn()
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 
-vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+vi.mock('@/vite/next-compat/link', () => ({
+  default: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@/lib/time-ago', () => ({
@@ -22,17 +26,24 @@ vi.mock('@sloughgpt/strui', () => {
     Card: passthrough,
     CardContent: passthrough,
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -59,7 +70,7 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 const baseProps = {
@@ -67,7 +78,14 @@ const baseProps = {
   loading: false,
   modelStatus: { loaded: true, model: 'gpt2' },
   recentSessions: [
-    { id: 's1', name: 'Chat 1', updated_at: '2026-01-01', message_count: 10, starred: true, pinned: false },
+    {
+      id: 's1',
+      name: 'Chat 1',
+      updated_at: '2026-01-01',
+      message_count: 10,
+      starred: true,
+      pinned: false,
+    },
     { id: 's2', name: 'Chat 2', updated_at: '2026-01-02', message_count: 5 },
   ],
   recentJobs: [
@@ -92,7 +110,9 @@ describe('RecentActivity', () => {
   })
 
   it('renders nothing when model not loaded', () => {
-    const { container } = render(<RecentActivity {...baseProps} modelStatus={{ loaded: false, model: null }} />)
+    const { container } = render(
+      <RecentActivity {...baseProps} modelStatus={{ loaded: false, model: null }} />,
+    )
     expect(container.innerHTML).toBe('')
   })
 
@@ -110,7 +130,7 @@ describe('RecentActivity', () => {
   it('navigates to chat on session click', () => {
     const { container } = render(<RecentActivity {...baseProps} />)
     const buttons = container.querySelectorAll('button')
-    const chat1Btn = Array.from(buttons).find(b => b.textContent?.includes('Chat 1'))
+    const chat1Btn = Array.from(buttons).find((b) => b.textContent?.includes('Chat 1'))
     fireEvent.click(chat1Btn!)
     expect(mockPush).toHaveBeenCalledWith('/chat?session=s1')
   })
@@ -131,7 +151,7 @@ describe('RecentActivity', () => {
   it('navigates to training on dataset click', () => {
     const { container } = render(<RecentActivity {...baseProps} />)
     const buttons = container.querySelectorAll('button')
-    const datasetBtn = Array.from(buttons).find(b => b.textContent?.includes('Dataset A'))
+    const datasetBtn = Array.from(buttons).find((b) => b.textContent?.includes('Dataset A'))
     fireEvent.click(datasetBtn!)
     expect(mockPush).toHaveBeenCalledWith('/training?dataset=d1')
   })
@@ -144,7 +164,7 @@ describe('RecentActivity', () => {
   it('links to datasets page', () => {
     const { container } = render(<RecentActivity {...baseProps} />)
     const links = container.querySelectorAll('a')
-    const datasetsLink = Array.from(links).find(a => a.getAttribute('href') === '/datasets')
+    const datasetsLink = Array.from(links).find((a) => a.getAttribute('href') === '/datasets')
     expect(datasetsLink).toBeDefined()
     expect(datasetsLink!.textContent).toContain('View all →')
   })
