@@ -1,5 +1,6 @@
 """Events tests — record, filter, export, listeners."""
 
+import base64
 import json
 import os
 import tempfile
@@ -63,7 +64,9 @@ class TestListenersExport:
         rec.record(EventType.CLICK, name="a")
         assert [e.name for e in seen] == ["a"]
 
-    def test_screenshot_kept_out_of_json(self):
+    def test_screenshot_pixels_persist_as_base64_never_raw(self):
+        """save() persists the pixels (base64) — the flag-only hole is closed;
+        raw byte literals still never appear in the JSON."""
         rec = EventRecorder()
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "events.json")
@@ -71,10 +74,33 @@ class TestListenersExport:
             rec.save(p)
             data = json.load(open(p))
             assert data["events"][0]["has_screenshot"] is True
+            saved = data["events"][0]["data"]["screenshot"]
+            assert saved == base64.b64encode(b"raw-bytes").decode("ascii")
             assert "raw-bytes" not in json.dumps(data)
+            # the durable file round-trips back to pixels
+            back = Event.from_dict(data["events"][0])
+            assert back.data["screenshot"] == b"raw-bytes"
 
     def test_clear(self):
         rec = EventRecorder()
         rec.record(EventType.CLICK)
         rec.clear()
         assert len(rec) == 0
+
+
+class TestJournalScreenshotRoundTrip:
+    def test_journal_restores_pixels_and_stores_base64(self):
+        """The journal (source of truth) persists pixels as base64 JSON and
+        hands them back as bytes on reload — same contract as save()."""
+        from avion.events.journal import EventJournal
+        from avion.events.logger import EventLogger
+
+        with tempfile.TemporaryDirectory() as d:
+            jpath = os.path.join(d, "events.jsonl")
+            with EventLogger(EventJournal(jpath)) as log:
+                log.log(Event(EventType.SCREENSHOT, name="s", data={"screenshot": b"\x89PNG\x00"}))
+            raw_line = open(jpath).read()
+            assert "b'\\x89" not in raw_line  # never the bytes repr
+            with EventLogger(EventJournal(jpath)) as again:
+                back = again.events()[0]
+            assert back.data["screenshot"] == b"\x89PNG\x00"
