@@ -123,11 +123,18 @@ export class ErrorBoundary extends React.Component<Props, State> {
     console.error('[ErrorBoundary]', error, errorInfo);
     try {
       const {api} = require('../services/api-client');
-      api.post('/mobile/errors', {
-        level: 'error',
-        message: error.message,
-        stack: error.stack,
-        componentStack: errorInfo.componentStack,
+      api.post('/errors/log', {
+        errors: [
+          {
+            message: (error.message || 'Unknown error').slice(0, 5000),
+            source: 'mobile',
+            stack: error.stack?.slice(0, 20000),
+            metadata: {
+              componentStack: errorInfo.componentStack,
+              level: 'error',
+            },
+          },
+        ],
       }).catch(() => {});
     } catch {}
   }
