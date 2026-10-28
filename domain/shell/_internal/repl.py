@@ -161,68 +161,70 @@ except ImportError:
 
 
 def _fetch_model_names() -> list[str]:
-    """Fetch available model names from the API for tab completion."""
-    import requests
+    """Fetch available model names for tab completion.
+
+    Rides the commands transport seam: in-process by default, HTTP in
+    remote mode (card ad4f5ec2).
+    """
+    from .commands import _api_get
 
     try:
-        from .commands import get_api_base
-
-        r = requests.get(f"{get_api_base()}/models", timeout=3)
-        if r.status_code == 200:
-            data = r.json()
-            models = data if isinstance(data, list) else data.get("models", [])
-            return sorted({m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)})
+        data = _api_get("/models")
+        if isinstance(data, dict) and "error" in data:
+            return []
+        models = data if isinstance(data, list) else data.get("models", [])
+        return sorted(
+            {
+                m.get("name", m.get("id", m.get("model_id", "")))
+                for m in models
+                if isinstance(m, dict)
+            }
+        )
     except Exception as e:
         logger.debug("model names fetch failed: %s", e)
     return []
 
 
 def _fetch_soul_names() -> list[str]:
-    """Fetch soul names from the API for tab completion."""
-    import requests
+    """Fetch soul names for tab completion (in-process by default)."""
+    from .commands import _api_get
 
     try:
-        from .commands import get_api_base
-
-        r = requests.get(f"{get_api_base()}/souls", timeout=3)
-        if r.status_code == 200:
-            data = r.json()
-            souls = data if isinstance(data, list) else data.get("souls", [])
-            return sorted({s.get("name", "") for s in souls if isinstance(s, dict)})
+        data = _api_get("/souls")
+        if isinstance(data, dict) and "error" in data:
+            return []
+        souls = data if isinstance(data, list) else data.get("souls", [])
+        return sorted({s.get("name", "") for s in souls if isinstance(s, dict)})
     except Exception as e:
         logger.debug("soul names fetch failed: %s", e)
     return []
 
 
 def _fetch_dataset_names() -> list[str]:
-    """Fetch dataset names from the API for tab completion."""
-    import requests
+    """Fetch dataset names for tab completion (in-process by default)."""
+    from .commands import _api_get
 
     try:
-        from .commands import get_api_base
-
-        r = requests.get(f"{get_api_base()}/datasets", timeout=3)
-        if r.status_code == 200:
-            data = r.json()
-            datasets = data if isinstance(data, list) else data.get("datasets", [])
-            return sorted({d.get("name", "") for d in datasets if isinstance(d, dict)})
+        data = _api_get("/datasets")
+        if isinstance(data, dict) and "error" in data:
+            return []
+        datasets = data if isinstance(data, list) else data.get("datasets", [])
+        return sorted({d.get("name", "") for d in datasets if isinstance(d, dict)})
     except Exception as e:
         logger.debug("dataset names fetch failed: %s", e)
     return []
 
 
 def _fetch_checkpoint_names() -> list[str]:
-    """Fetch checkpoint names from the API for tab completion."""
-    import requests
+    """Fetch checkpoint names for tab completion (in-process by default)."""
+    from .commands import _api_get
 
     try:
-        from .commands import get_api_base
-
-        r = requests.get(f"{get_api_base()}/auto-train/checkpoints", timeout=3)
-        if r.status_code == 200:
-            data = r.json()
-            cps = data if isinstance(data, list) else data.get("checkpoints", [])
-            return sorted({c.get("name", "") for c in cps if isinstance(c, dict)})
+        data = _api_get("/auto-train/checkpoints")
+        if isinstance(data, dict) and "error" in data:
+            return []
+        cps = data if isinstance(data, list) else data.get("checkpoints", [])
+        return sorted({c.get("name", "") for c in cps if isinstance(c, dict)})
     except Exception as e:
         logger.debug("checkpoint names fetch failed: %s", e)
     return []
@@ -695,14 +697,11 @@ class ShellREPL(LinuxCommandsMixin):
             if now - ts < 30.0:
                 return val
         try:
-            import requests
+            from .commands import _api_get
 
-            from .config import get_api_base
-
-            r = requests.get(f"{get_api_base()}/health", timeout=2)
-            if r.status_code == 200:
-                data = r.json()
-                model = data.get("model", data.get("model_name", ""))
+            data = _api_get("/health")
+            if isinstance(data, dict) and "error" not in data:
+                model = data.get("model", data.get("model_name", data.get("model_type", "")))
                 if model:
                     val = str(model).split("/")[-1]
                     self._completion_cache["__model__"] = (now, val)
@@ -720,13 +719,10 @@ class ShellREPL(LinuxCommandsMixin):
             if now - ts < 30.0:
                 return val
         try:
-            import requests
+            from .commands import _api_get
 
-            from .config import get_api_base
-
-            r = requests.get(f"{get_api_base()}/souls/current", timeout=2)
-            if r.status_code == 200:
-                data = r.json()
+            data = _api_get("/souls/current")
+            if isinstance(data, dict) and "error" not in data:
                 soul = data.get("name", "")
                 if soul:
                     self._completion_cache["__soul__"] = (now, soul)
