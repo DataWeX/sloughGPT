@@ -98,10 +98,12 @@ describe('TokenTreeMatrixCard', () => {
     mocks.mockGetMatrixSummary.mockResolvedValue(SUMMARY)
     render(<TokenTreeMatrixCard />)
     await waitFor(() => expect(mocks.mockGetMatrixSummary).toHaveBeenCalledWith(8))
-    expect(screen.getByText('128 x 16 matrix')).toBeDefined()
-    expect(screen.getByText('norm 0.500–1.000')).toBeDefined()
-    expect(screen.getByText('mean 0.800')).toBeDefined()
-    expect(screen.getByText('126 live / 2 dead')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('128 x 16 matrix')).toBeDefined()
+      expect(screen.getByText('norm 0.500–1.000')).toBeDefined()
+      expect(screen.getByText('mean 0.800')).toBeDefined()
+      expect(screen.getByText('126 live / 2 dead')).toBeDefined()
+    })
   })
 
   it('shows most and least energetic tokens', async () => {

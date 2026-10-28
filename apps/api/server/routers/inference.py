@@ -96,7 +96,7 @@ def _get_model_status() -> dict:
     if _model_ready():
         return {"ready": True}
 
-    from startup_progress import STARTUP_PHASE
+    from startup_progress import MODEL_LOAD_STATE, STARTUP_PHASE
 
     from config import ServerConfig
 
@@ -111,6 +111,16 @@ def _get_model_status() -> dict:
             "ready": False,
             "reason": f"No model loaded. Autoload is disabled. Set SLO_AUTOLOAD_MODEL={model_name} to enable.",
             "code": "E_NO_MODEL",
+            "status": 503,
+        }
+
+    # Terminal: the load already ended in failure. Report the real cause —
+    # "still loading" would be a lie for a load that stopped long ago.
+    if MODEL_LOAD_STATE.get("status") == "failed":
+        return {
+            "ready": False,
+            "reason": MODEL_LOAD_STATE.get("error") or "Model load failed — no model is available.",
+            "code": "E_MODEL_LOAD_FAILED",
             "status": 503,
         }
 
@@ -2047,9 +2057,7 @@ class InferenceRouter:
         _memory_fact = None
         _memory_facts: list[str] = []
         try:
-            _memory_facts = await get_memory_service().remember_facts_async(
-                user_msg or "", text
-            )
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
             _memory_stored = len(_memory_facts) > 0
             if _memory_stored:
                 _memory_fact = _memory_facts[0]

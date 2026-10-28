@@ -40,6 +40,28 @@ class HistoryStore:
         self._state = state
         self._max_entries = max_entries
 
+    @property
+    def max_entries(self) -> int:
+        """Cap on in-memory entries (the settings `--history` row)."""
+        return self._max_entries
+
+    @max_entries.setter
+    def max_entries(self, value: int) -> None:
+        try:
+            size = int(value)
+        except (TypeError, ValueError):
+            return
+        if size < 1:
+            return
+        self._max_entries = size
+        self._trim()
+
+    def _trim(self) -> None:
+        """Drop oldest entries past the cap — newest wins, numbering stays stable."""
+        over = len(self.entries) - self._max_entries
+        if over > 0:
+            del self.entries[:over]
+
     def append(self, line: str) -> bool:
         """Append *line*; sync to state when attached.
 
@@ -48,6 +70,7 @@ class HistoryStore:
         if not line:
             return False
         self.entries.append(line)
+        self._trim()
         if self._state is not None:
             try:
                 self._state.add_history(line)

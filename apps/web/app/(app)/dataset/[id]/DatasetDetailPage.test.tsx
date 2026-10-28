@@ -270,9 +270,18 @@ describe('DatasetDetailPage', () => {
     mockConvertToMessages.mockResolvedValue({ status: 'converted', new_dataset_id: 'shakespeare-messages', total_conversations: 3 })
     render(<DatasetDetailPage />)
     await waitForName()
-    await act(async () => { screen.getByRole('button', { name: /Convert to chat format/ }).click() })
-    await waitFor(() => { expect(mockConvertToMessages).toHaveBeenCalledWith('shakespeare', 'You are a helpful assistant.') })
-    expect(screen.getByText(/Created Shakespeare Works-messages with 3 conversations/)).toBeTruthy()
+    await act(async () => {
+      screen.getByRole('button', { name: /Convert to chat format/ }).click()
+    })
+    await waitFor(() => {
+      expect(mockConvertToMessages).toHaveBeenCalledWith(
+        'shakespeare',
+        'You are a helpful assistant.',
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByText(/Created Shakespeare Works-messages with 3 conversations/)).toBeTruthy()
+    })
   })
 
   it('uses a custom system prompt when provided', async () => {
@@ -280,10 +289,20 @@ describe('DatasetDetailPage', () => {
     mockConvertToMessages.mockResolvedValue({ status: 'converted', new_dataset_id: 'shakespeare-messages', total_conversations: 1 })
     render(<DatasetDetailPage />)
     await waitForName()
-    await act(async () => { fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'You are a poet.' } }) })
-    await act(async () => { screen.getByRole('button', { name: /Convert to chat format/ }).click() })
-    await waitFor(() => { expect(mockConvertToMessages).toHaveBeenCalledWith('shakespeare', 'You are a poet.') })
-    expect(screen.getByText(/1 conversation/)).toBeTruthy()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('System prompt'), {
+        target: { value: 'You are a poet.' },
+      })
+    })
+    await act(async () => {
+      screen.getByRole('button', { name: /Convert to chat format/ }).click()
+    })
+    await waitFor(() => {
+      expect(mockConvertToMessages).toHaveBeenCalledWith('shakespeare', 'You are a poet.')
+    })
+    await waitFor(() => {
+      expect(screen.getByText(/1 conversation/)).toBeTruthy()
+    })
   })
 
   it('shows an error toast when conversion fails', async () => {
@@ -291,9 +310,15 @@ describe('DatasetDetailPage', () => {
     mockConvertToMessages.mockRejectedValueOnce(new Error('conversion failed'))
     render(<DatasetDetailPage />)
     await waitForName()
-    await act(async () => { screen.getByRole('button', { name: /Convert to chat format/ }).click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not conversion', 'error') })
-    expect(screen.queryByText('Open converted dataset')).toBeFalsy()
+    await act(async () => {
+      screen.getByRole('button', { name: /Convert to chat format/ }).click()
+    })
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Could not conversion', 'error')
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('Open converted dataset')).toBeFalsy()
+    })
   })
 
   it('opens the converted dataset from the result banner', async () => {

@@ -498,11 +498,15 @@ class ShellREPL(LinuxCommandsMixin):
 
     # ── Programmatic API (TUI / tests) ─────────────────────────────
 
-    def execute(self, line: str) -> tuple[str, int]:
+    def execute(self, line: str, *, on_write=None) -> tuple[str, int]:
         """Execute a command line, return (output, exit_code).
 
         Does NOT touch readline or the terminal — safe for TUI usage.
         Still audit-logs every execution.
+
+        ``on_write`` (optional) is forwarded to the per-run MemoryIO and
+        receives every output chunk as it is produced — the streaming
+        seam used by ``POST /shell/exec/stream``.
         """
         import time as _time
 
@@ -511,7 +515,7 @@ class ShellREPL(LinuxCommandsMixin):
         if not line.strip():
             return "", 0
 
-        mem = MemoryIO()
+        mem = MemoryIO(on_write=on_write)
         old_io = self.io
         old_console_io = self.console._io
         self.io = mem
@@ -2008,6 +2012,8 @@ class ShellREPL(LinuxCommandsMixin):
                 "uptime": "  uptime  — Show system uptime",
                 "lsdev": "  lsdev  — List AI device nodes",
                 "render": "  render  — Neural scene rendering (path tracer)",
+                "settings": "  settings  — RetroBIOS option rows for shell settings",
+                "options": "  options <command>  — Option rows for a command's flags (logs, ai)",
             }
             if args in cmd_help:
                 self._print(cmd_help[args])
@@ -3776,6 +3782,24 @@ Examples:
             )
             return
 
+        # Fail fast when no model is loaded -- generate would block the full
+        # 120s _api_post timeout and leave the client's 60s auto-cancel in limbo
+        # (card 20261026_123132). Covers single-shot and --loop alike.
+        if not status.get("model_loaded"):
+            from .log_buffer import LogEntry
+
+            self._print(f"  {_C_RED}\u2717 No model loaded.{_C_RESET} Load one: models load <id>")
+            self._log_buffer.append(
+                LogEntry(
+                    timestamp=time.time(),
+                    level="ERROR",
+                    source="shell.ai",
+                    message="ai blocked: no model loaded",
+                )
+            )
+            self._last_exit_code = 1
+            return
+
         # Interactive agent loop mode
         if use_loop:
             self._run_agent_loop(args, auto_approve)
@@ -4265,24 +4289,109 @@ Examples:
 
         return format_error(e, cmd)
 
+    def _cmd_settings(self, args: str = "") -> None:
+        """Open the shell settings as RetroBIOS-style option rows.
+
+        Each row is an option of the command line, named by its flag on
+        the right: Enter opens, Left/Right sets, Esc applies (Ctrl+C
+        cancels), ? helps.  Without a TTY the same screen prints as
+        plain lines and changes nothing.
+        """
+        from .option_views import settings_rows
+        from .options_screen import OptionsScreen
+
+        screen = OptionsScreen(settings_rows(self), "Settings")
+        self.console.run_options_screen(screen)
+        self._apply_screen(screen, "setting")
+
+    def _cmd_options(self, args: str = "") -> None:
+        """Option rows for one command's flags — one descriptor, three projections.
+
+        Usage: options <command>    (known: logs, ai)
+
+        Prints the equivalent command line, assembled from the very rows
+        on screen, so the menu and the CLI can never spell a flag apart.
+        """
+        from .option_views import command_rows, option_commands
+
+        name = args.strip().split()[0] if args.strip() else ""
+        if not name:
+            self._print(f"  Usage: options <command>   (known: {', '.join(option_commands())})")
+            return
+        rows = command_rows(name, self)
+        if not rows:
+            self._print(f"  Unknown option view: {name!r} — known: {', '.join(option_commands())}")
+            self._last_exit_code = 1
+            return
+
+        from .options_screen import OptionsScreen
+
+        screen = OptionsScreen(rows, f"Options — {name}")
+        self.console.run_options_screen(screen)
+        self._apply_screen(screen, "option")
+        self._print(f"  Equivalent: {name} {screen.command_line_str()}".rstrip())
+
+    def _apply_screen(self, screen, noun: str) -> None:
+        """Push a submitted option screen into real state.
+
+        A non-TTY run never sets `done`, so the plain fallback prints the
+        screen and writes nothing — the DoD's "plain output unchanged".
+        Ctrl+C sets `aborted` and writes nothing either.
+        """
+        if screen.aborted:
+            self._print(f"  Cancelled — {noun} view: nothing changed.")
+            return
+        if not screen.done:
+            return
+        applied = screen.apply()
+        if applied:
+            self._print(f"  ✓ applied {len(applied)} {noun}(s)")
+
+    def _boot_api_pref(self) -> bool:
+        """Session pref behind the `--api` row — settings and boot share it."""
+        from .option_views import boot_api_pref
+
+        return boot_api_pref(self)
+
     def _cmd_boot(self, args: str = "") -> None:
         """Boot the shell — start kernel + init system + services.
 
         Automatically starts the API server if not already running.
+        Run it with no arguments on a TTY and the boot option rows open
+        first (Esc cancels the boot); --api / --no-api force the
+        auto-start for this one boot.
         """
         if self._running and self._piped_input is None:
             self._print(
                 "  Already booted. Use 'shutdown' to halt, then 'sloughgpt shell' to restart."
             )
             return
+        parts = args.split()
+        if not parts and self.console._interactive._is_tty:
+            from .option_views import boot_rows
+            from .options_screen import OptionsScreen
+
+            screen = OptionsScreen(boot_rows(self), "Boot")
+            self.console.run_options_screen(screen)
+            if screen.aborted:
+                self._print("  Boot cancelled.")
+                return
+            self._apply_screen(screen, "option")
+        auto_api = self._boot_api_pref()
+        if "--no-api" in parts:
+            auto_api = False
+        elif "--api" in parts:
+            auto_api = True
         self._running = True
         # Auto-start API if not available
         api = self.os.api
-        if not api.is_running:
-            self._print("  \u26a1 Auto-starting API server...")
+        if auto_api and not api.is_running:
+            self._print("  ⚡ Auto-starting API server...")
             result = api.start()
             if not result.get("ok"):
-                self._print(f"  \u2717 API auto-start failed: {result.get('error', 'unknown')}")
+                self._print(f"  ✗ API auto-start failed: {result.get('error', 'unknown')}")
+        elif not auto_api:
+            self._print("  Skipping API auto-start (--no-api).")
         result = self.os.boot(shell_run=self._shell_cmd if hasattr(self, "_shell_cmd") else None)
         if isinstance(result, tuple):
             log, api_status = result
@@ -5321,6 +5430,8 @@ _command_specs = [
     ("uptime", "_cmd_uptime"),
     ("lsdev", "_cmd_lsdev"),
     ("render", "_cmd_render"),
+    ("settings", "_cmd_settings"),
+    ("options", "_cmd_options"),
 ]
 _shell_commands = {
     _cmd_name: getattr(ShellREPL, _handler_attr)

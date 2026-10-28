@@ -261,8 +261,18 @@ async def _stream_frames(
 
 
 async def list_models(auth_user: dict = Depends(require_auth_if_enabled)) -> dict[str, Any]:
-    """GET /v1/models — the loaded model, list shape."""
-    _require_engine()
+    """GET /v1/models — the model list, raw wire shape.
+
+    Discovery, not a generation gate: out-of-process clients poll this as a
+    health probe, so a server whose load has not materialized answers 200
+    with an empty list (nothing to serve) instead of 503. Chat and
+    embeddings keep the full readiness gate.
+    """
+    from routers.inference import _model_ready
+
+    if not _model_ready():
+        return {"object": "list", "data": []}
+
     from routers.infer import InferRouter
 
     try:

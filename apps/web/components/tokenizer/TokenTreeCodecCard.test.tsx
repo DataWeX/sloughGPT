@@ -96,11 +96,13 @@ describe('TokenTreeCodecCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Encode/i }))
 
     await waitFor(() => expect(mocks.mockEncode).toHaveBeenCalledWith('the quick brown'))
-    expect(screen.getByText('3 tokens')).toBeDefined()
-    expect(screen.getByText('the')).toBeDefined()
-    expect(screen.getByText('quick')).toBeDefined()
-    expect(screen.getByText('brown')).toBeDefined()
-    expect(screen.getByLabelText('Token ids to decode')).toHaveValue('3, 12, 45')
+    await waitFor(() => {
+      expect(screen.getByText('3 tokens')).toBeDefined()
+      expect(screen.getByText('the')).toBeDefined()
+      expect(screen.getByText('quick')).toBeDefined()
+      expect(screen.getByText('brown')).toBeDefined()
+      expect(screen.getByLabelText('Token ids to decode')).toHaveValue('3, 12, 45')
+    })
   })
 
   it('shows an error toast when encode fails', async () => {
@@ -119,7 +121,9 @@ describe('TokenTreeCodecCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Decode/i }))
 
     await waitFor(() => expect(mocks.mockDecode).toHaveBeenCalledWith([3, 12, 99]))
-    expect(screen.getByText('"hello world"')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('"hello world"')).toBeDefined()
+    })
   })
 
   it('shows an error toast when decode input is empty', async () => {
