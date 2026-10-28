@@ -34,7 +34,7 @@ vi.mock('@/lib/dev-log', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock('next/dynamic', async () => {
+vi.mock('@/vite/next-compat/dynamic', async () => {
   const React = await import('react')
   return {
     __esModule: true,

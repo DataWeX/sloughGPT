@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'

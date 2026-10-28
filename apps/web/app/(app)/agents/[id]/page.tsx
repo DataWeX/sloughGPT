@@ -2,15 +2,33 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Skeleton } from '@sloughgpt/strui'
+import { useParams, useRouter } from '@/vite/next-compat/navigation'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Badge,
+  Button,
+  Input,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { agentsController, type Agent, type AgentRun } from '@/lib/agents-controller'
 import { useToastStore } from '@/lib/toast-store'
 import {
-  ArrowLeft, Bot, Wrench, FileText, Play, History, Edit,
-  Trash2, Loader2, CheckCircle, XCircle
+  ArrowLeft,
+  Bot,
+  Wrench,
+  FileText,
+  Play,
+  History,
+  Edit,
+  Trash2,
+  Loader2,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react'
 
 const TOOL_LABELS: Record<string, string> = {
@@ -28,7 +46,7 @@ export default function AgentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const agentId = params.id as string
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [runs, setRuns] = useState<AgentRun[]>([])
@@ -49,7 +67,7 @@ export default function AgentDetailPage() {
     setLoading(true)
     try {
       const agents = await agentsController.list()
-      const found = agents.find(a => a.id === agentId)
+      const found = agents.find((a) => a.id === agentId)
       if (found) {
         setAgent(found)
       } else {
@@ -58,7 +76,7 @@ export default function AgentDetailPage() {
       }
 
       const runsData = await agentsController.listRuns(10)
-      setRuns(runsData.runs.filter(r => r.tasks.some(t => t.agent === agentId)))
+      setRuns(runsData.runs.filter((r) => r.tasks.some((t) => t.agent === agentId)))
     } catch {
       addToast('Failed to load agent', 'error')
     } finally {
@@ -66,7 +84,9 @@ export default function AgentDetailPage() {
     }
   }, [agentId, addToast, router])
 
-  useEffect(() => { fetchAgent() }, [fetchAgent])
+  useEffect(() => {
+    fetchAgent()
+  }, [fetchAgent])
 
   const handleSave = async () => {
     if (!agent) return
@@ -78,7 +98,13 @@ export default function AgentDetailPage() {
         instructions: editInstructions,
         tools: editTools,
       })
-      setAgent({ ...agent, name: editName, description: editDesc, instructions: editInstructions, tools: editTools })
+      setAgent({
+        ...agent,
+        name: editName,
+        description: editDesc,
+        instructions: editInstructions,
+        tools: editTools,
+      })
       setEditing(false)
       addToast('Updated', 'success')
     } catch {
@@ -115,9 +141,7 @@ export default function AgentDetailPage() {
   }
 
   const toggleTool = (tool: string) => {
-    setEditTools(prev =>
-      prev.includes(tool) ? prev.filter(t => t !== tool) : [...prev, tool]
-    )
+    setEditTools((prev) => (prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]))
   }
 
   return (
@@ -150,21 +174,36 @@ export default function AgentDetailPage() {
                 <div className="flex items-center gap-1">
                   {editing ? (
                     <>
-                      <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setEditing(false)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[10px]"
+                        onClick={() => setEditing(false)}
+                      >
                         Cancel
                       </Button>
-                      <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={saving}>
+                      <Button
+                        size="sm"
+                        className="h-6 text-[10px]"
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
                         {saving ? '...' : 'Save'}
                       </Button>
                     </>
                   ) : (
-                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => {
-                      setEditing(true)
-                      setEditName(agent.name)
-                      setEditDesc(agent.description)
-                      setEditInstructions(agent.instructions)
-                      setEditTools([...agent.tools])
-                    }}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[10px]"
+                      onClick={() => {
+                        setEditing(true)
+                        setEditName(agent.name)
+                        setEditDesc(agent.description)
+                        setEditInstructions(agent.instructions)
+                        setEditTools([...agent.tools])
+                      }}
+                    >
                       <Edit className="h-3 w-3 mr-1" /> Edit
                     </Button>
                   )}
@@ -174,11 +213,21 @@ export default function AgentDetailPage() {
             <CardContent className="space-y-3">
               {editing ? (
                 <div className="space-y-3">
-                  <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name" className="h-8 text-sm" />
-                  <Input value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Description" className="h-8 text-sm" />
+                  <Input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Name"
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    placeholder="Description"
+                    className="h-8 text-sm"
+                  />
                   <textarea
                     value={editInstructions}
-                    onChange={e => setEditInstructions(e.target.value)}
+                    onChange={(e) => setEditInstructions(e.target.value)}
                     placeholder="Instructions"
                     className="w-full h-24 p-2 text-sm border rounded-md resize-none bg-background"
                   />
@@ -233,8 +282,10 @@ export default function AgentDetailPage() {
                   {agent.tools.length === 0 ? (
                     <span className="text-xs text-muted-foreground">No tools assigned</span>
                   ) : (
-                    agent.tools.map(tool => (
-                      <Badge key={tool} variant="secondary">{TOOL_LABELS[tool] || tool}</Badge>
+                    agent.tools.map((tool) => (
+                      <Badge key={tool} variant="secondary">
+                        {TOOL_LABELS[tool] || tool}
+                      </Badge>
                     ))
                   )}
                 </div>
@@ -251,7 +302,9 @@ export default function AgentDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">{agent.instructions || 'No instructions set'}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                {agent.instructions || 'No instructions set'}
+              </p>
             </CardContent>
           </Card>
 
@@ -267,12 +320,19 @@ export default function AgentDetailPage() {
               <div className="flex gap-2">
                 <Input
                   value={execPrompt}
-                  onChange={e => setExecPrompt(e.target.value)}
+                  onChange={(e) => setExecPrompt(e.target.value)}
                   placeholder="Enter a prompt to execute..."
                   className="flex-1 h-8 text-sm"
-                  onKeyDown={e => { if (e.key === 'Enter') handleExecute() }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleExecute()
+                  }}
                 />
-                <Button size="sm" className="h-8 text-xs" onClick={handleExecute} disabled={executing || !execPrompt.trim()}>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={handleExecute}
+                  disabled={executing || !execPrompt.trim()}
+                >
                   {executing ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Run'}
                 </Button>
               </div>
@@ -294,13 +354,17 @@ export default function AgentDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {runs.slice(0, 5).map(run => (
+                {runs.slice(0, 5).map((run) => (
                   <div key={run.id} className="flex items-center gap-2 text-xs">
                     {run.status === 'completed' && <CheckCircle className="h-3 w-3 text-success" />}
                     {run.status === 'failed' && <XCircle className="h-3 w-3 text-destructive" />}
-                    {run.status === 'running' && <Loader2 className="h-3 w-3 text-info animate-spin" />}
+                    {run.status === 'running' && (
+                      <Loader2 className="h-3 w-3 text-info animate-spin" />
+                    )}
                     <span className="flex-1 truncate">{run.goal}</span>
-                    <span className="text-muted-foreground">{run.completed_count}/{run.tasks.length} tasks</span>
+                    <span className="text-muted-foreground">
+                      {run.completed_count}/{run.tasks.length} tasks
+                    </span>
                   </div>
                 ))}
               </CardContent>
@@ -311,10 +375,20 @@ export default function AgentDetailPage() {
           <Card>
             <CardContent className="py-3">
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => router.push(`/chat?agent=${agent.id}`)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px]"
+                  onClick={() => router.push(`/chat?agent=${agent.id}`)}
+                >
                   <Play className="h-3 w-3 mr-1" /> Chat with Agent
                 </Button>
-                <Button variant="outline" size="sm" className="h-7 text-[11px] text-destructive border-destructive/30" onClick={handleDelete}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] text-destructive border-destructive/30"
+                  onClick={handleDelete}
+                >
                   <Trash2 className="h-3 w-3 mr-1" /> Delete
                 </Button>
               </div>

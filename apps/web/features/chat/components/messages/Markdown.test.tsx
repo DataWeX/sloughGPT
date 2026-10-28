@@ -25,11 +25,11 @@ vi.mock('./CodeBlock', () => {
   }
 })
 
-vi.mock('next/dynamic', () => ({
+vi.mock('@/vite/next-compat/dynamic', () => ({
   default: (factory: () => Promise<any>) => {
     let _resolved: any = null
     factory().then((mod: any) => {
-      _resolved = typeof mod === 'function' ? mod : (mod.default || mod.CodeBlock)
+      _resolved = typeof mod === 'function' ? mod : mod.default || mod.CodeBlock
     })
     return function ResolvedDynamic(props: any) {
       if (!_resolved) return null
@@ -166,14 +166,14 @@ describe('Markdown', () => {
   })
 
   it('renders code block without language', () => {
-    const { container } = render(<Markdown content={"```\nplain code\n```"} />)
+    const { container } = render(<Markdown content={'```\nplain code\n```'} />)
     const pre = container.querySelector('pre')
     expect(pre).toBeInTheDocument()
     expect(container.textContent).toContain('code')
   })
 
   it('code block has copy button', () => {
-    const { container } = render(<Markdown content={"```js\nvar x = 1\n```"} />)
+    const { container } = render(<Markdown content={'```js\nvar x = 1\n```'} />)
     const copyBtn = container.querySelector('button')
     expect(copyBtn).toBeInTheDocument()
     expect(copyBtn).toHaveAttribute('aria-label', 'Copy code')
@@ -183,7 +183,7 @@ describe('Markdown', () => {
     Object.assign(navigator, {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
     })
-    const { container } = render(<Markdown content={"```js\nvar x = 1\n```"} />)
+    const { container } = render(<Markdown content={'```js\nvar x = 1\n```'} />)
     const copyBtn = container.querySelector('button')!
     fireEvent.click(copyBtn)
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('var x = 1')

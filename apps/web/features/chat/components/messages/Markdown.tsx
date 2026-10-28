@@ -10,7 +10,7 @@
  */
 
 import { memo, useMemo, useRef, useCallback } from 'react'
-import dynamic from 'next/dynamic'
+import dynamic from '@/vite/next-compat/dynamic'
 import { cn } from '@sloughgpt/strui'
 
 const CodeBlock = dynamic(

@@ -29,7 +29,7 @@ vi.mock('@/lib/toast-store', () => ({
   ),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 

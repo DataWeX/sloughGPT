@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import ConsciousnessHelpPage from './page'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
