@@ -40,11 +40,8 @@ router = APIRouter(tags=["training"])
 router.include_router(execution_router)
 router.include_router(jobs_router)
 router.include_router(control_router)
-router.include_router(feeds_router)
 
 # Include training data feed endpoints (live corpus over HTTP)
-from .feeds import router as feeds_router
-
 router.include_router(feeds_router)
 
 # Include the live feed/job observability stream (SSE)
