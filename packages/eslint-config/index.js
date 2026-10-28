@@ -16,9 +16,11 @@ module.exports = {
   ignorePatterns: ['node_modules/', 'dist/', '.next/', '*.d.ts'],
   overrides: [
     {
-      // CommonJS config files (next.config.js, tailwind.config.js, …)
-      // legitimately use require(); the TS ruleset would flag them otherwise.
+      // CommonJS/Node script files (postcss.config.js, tailwind.config.js,
+      // codemod-*.mjs, …) legitimately use require/module/process/console;
+      // the TS ruleset and browser env would flag them otherwise.
       files: ['**/*.js', '**/*.cjs', '**/*.mjs'],
+      env: { node: true },
       rules: {
         '@typescript-eslint/no-require-imports': 'off',
         '@typescript-eslint/no-var-requires': 'off',

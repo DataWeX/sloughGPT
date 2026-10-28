@@ -26,7 +26,6 @@ export default defineConfig({
       ['vite/**/*.test.tsx', 'jsdom'],
     ],
     include: [
-      'proxy.test.ts',
       'lib/**/*.test.ts',
       'lib/**/*.test.tsx',
       'contexts/**/*.test.{ts,tsx}',

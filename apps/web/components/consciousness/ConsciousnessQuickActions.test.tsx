@@ -21,7 +21,7 @@ vi.mock('@/lib/toast-store', () => ({
   ),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
@@ -29,7 +29,7 @@ function renderComponent() {
   return render(
     <LocaleProvider>
       <ConsciousnessQuickActions />
-    </LocaleProvider>
+    </LocaleProvider>,
   )
 }
 
@@ -66,7 +66,9 @@ describe('ConsciousnessQuickActions', () => {
   it('shows dashboard and chat links when open', () => {
     renderComponent()
     fireEvent.click(screen.getByLabelText('consciousness_quick_actions.toggle'))
-    expect(screen.getAllByText('consciousness_quick_actions.open_dashboard').length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText('consciousness_quick_actions.open_dashboard').length,
+    ).toBeGreaterThan(0)
     expect(screen.getAllByText('consciousness_quick_actions.open_chat').length).toBeGreaterThan(0)
   })
 

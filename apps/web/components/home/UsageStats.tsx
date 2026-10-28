@@ -1,13 +1,19 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/vite/next-compat/link'
 import { Card, CardContent } from '@sloughgpt/strui'
 import { formatBytes } from '@/lib/format-bytes'
 
 interface UsageStatsProps {
   apiStatus: string
   loading: boolean
-  convStats: { totalConversations: number; totalMessages: number; totalWords: number; activeDays: number; mostActiveHour: number | null } | null
+  convStats: {
+    totalConversations: number
+    totalMessages: number
+    totalWords: number
+    activeDays: number
+    mostActiveHour: number | null
+  } | null
   datasetStats: { totalDatasets: number; totalSize: number; totalSamples: number } | null
 }
 
@@ -56,22 +62,36 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
       {convStats && convStats.totalConversations > 0 && (
         <Card>
           <CardContent className="py-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Your stats</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+              Your stats
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Conversations</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                  Conversations
+                </p>
                 <p className="text-sm font-semibold tabular-nums">{convStats.totalConversations}</p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Messages</p>
-                <p className="text-sm font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                  Messages
+                </p>
+                <p className="text-sm font-semibold tabular-nums">
+                  {convStats.totalMessages.toLocaleString()}
+                </p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Words</p>
-                <p className="text-sm font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                  Words
+                </p>
+                <p className="text-sm font-semibold tabular-nums">
+                  {convStats.totalWords.toLocaleString()}
+                </p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Active days</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                  Active days
+                </p>
                 <p className="text-sm font-semibold tabular-nums">{convStats.activeDays}</p>
               </div>
             </div>
@@ -87,24 +107,40 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
         <Card>
           <CardContent className="py-3">
             <div className="flex items-center gap-2 mb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Datasets</p>
-              <Link href="/datasets" prefetch={false} className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Datasets
+              </p>
+              <Link
+                href="/datasets"
+                prefetch={false}
+                className="text-[10px] text-primary hover:text-primary/80 ml-auto"
+              >
+                View all →
+              </Link>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Datasets</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                  Datasets
+                </p>
                 <p className="text-sm font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total size</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                  Total size
+                </p>
                 <p className="text-sm font-semibold tabular-nums">
                   {formatBytes(datasetStats.totalSize)}
                 </p>
               </div>
             </div>
             <div className="mt-2 pt-2 border-t border-border/30">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Samples</p>
-              <p className="text-sm font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Samples
+              </p>
+              <p className="text-sm font-semibold tabular-nums">
+                {datasetStats.totalSamples.toLocaleString()}
+              </p>
             </div>
           </CardContent>
         </Card>

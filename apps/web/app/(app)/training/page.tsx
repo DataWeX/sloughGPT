@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -241,7 +241,10 @@ export default function TrainingPage() {
       </FoldSection>
 
       {/* Live feed + job activity stream */}
-      <SectionHeader title="Live stream" description="Feed arrivals and job activity, as they happen." />
+      <SectionHeader
+        title="Live stream"
+        description="Feed arrivals and job activity, as they happen."
+      />
       <LiveFeedStream />
 
       <TestModelDialog

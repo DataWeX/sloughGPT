@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-li
 import React from 'react'
 import { act } from 'react'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 

@@ -1,59 +1,36 @@
-# Build from repository root: docker build -f apps/web/Dockerfile .
+# Vite static SPA image.
+# Build from repository root:
+#   docker build -f apps/web/Dockerfile -t sloughgpt/web .
+# Optional: --build-arg API_BASE=http://api:8000  (default for compose)
+
 FROM node:20-alpine AS base
 
 FROM base AS deps
 WORKDIR /app
-# Workspace-root install: root package-lock.json is the ONE dependency tree CI
-# tests (npm workspaces — member installs are a shadow tree nobody validates;
-# the old standalone apps/web install could not resolve plugin-react/vite/vitest
-# peers). All four member manifests must be present for `npm ci` to accept the
-# workspace layout.
-COPY package.json package-lock.json ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/strui/package.json ./packages/strui/
-COPY packages/sdk-ts/typescript-sdk/package.json ./packages/sdk-ts/typescript-sdk/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY apps/web/package.json apps/web/package-lock.json* ./apps/web/
+COPY packages/strui/package.json packages/strui/package-lock.json* ./packages/strui/
+WORKDIR /app/apps/web
 RUN npm ci
+WORKDIR /app/packages/strui
+RUN npm ci --omit=peer
 
 FROM base AS builder
 WORKDIR /app
-# Carry the whole installed workspace (root node_modules + nested per-member
-# entries such as apps/web/node_modules/typescript@5.9.3), then overlay sources.
-COPY --from=deps /app ./
-COPY tsconfig.base.json ./
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages/strui/node_modules ./packages/strui/node_modules
 COPY apps/web ./apps/web
-# apps/lib is imported by apps/web via relative paths (http-client -> ../../lib).
-COPY apps/lib ./apps/lib
 COPY packages/strui ./packages/strui
 WORKDIR /app/apps/web
-ENV NEXT_TELEMETRY_DISABLED=1
-# next.config.js only enables output:'standalone' when NODE_ENV=production at
-# config-load time; the runner stage COPYs .next/standalone. CI runs the same
-# command (npx next build --webpack) so the artifact graph matches the tested one.
-# With outputFileTracingRoot = repo root, standalone mirrors the workspace:
-# server.js lands at .next/standalone/apps/web/server.js and resolves public/
-# .next/static relative to its own dir (__dirname) at runtime.
-RUN NODE_ENV=production npx next build --webpack \
-  && test -f .next/standalone/apps/web/server.js \
-  && test -d .next/static
+RUN npm run build:vite \
+  && test -f dist-vite/index.html
 
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# standalone mirrors the workspace (outputFileTracingRoot = repo root):
-# server.js sits at apps/web/server.js and resolves public/ + .next/static
-# relative to its own directory at runtime.
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
-
-USER nextjs
-
+FROM nginx:1.27-alpine AS runner
+ARG API_BASE=http://api:8000
+# nginx.conf proxies /api/ to localhost:8000 by default (host static serve);
+# in Docker the API is the compose service `api`.
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+RUN sed -i "s|http://localhost:8000|${API_BASE}|g" /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/apps/web/dist-vite /usr/share/nginx/html
 EXPOSE 3000
-ENV PORT=3000
-
-CMD ["node", "apps/web/server.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1

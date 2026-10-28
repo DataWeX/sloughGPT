@@ -2,8 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { FeedbackBar } from './FeedbackBar'
 
-vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+vi.mock('@/vite/next-compat/link', () => ({
+  default: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
@@ -14,17 +18,24 @@ vi.mock('@sloughgpt/strui', () => {
     IconThumbUp: () => <span data-testid="thumb-up" />,
     IconThumbDown: () => <span data-testid="thumb-down" />,
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -51,7 +62,7 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 function makeStats(overrides: Record<string, any> = {}) {
@@ -73,7 +84,9 @@ describe('FeedbackBar', () => {
   })
 
   it('renders nothing when feedback_total is 0', () => {
-    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats({ feedback_total: 0 })} />)
+    const { container } = render(
+      <FeedbackBar loading={false} feedbackStats={makeStats({ feedback_total: 0 })} />,
+    )
     expect(container.innerHTML).toBe('')
   })
 
@@ -94,19 +107,23 @@ describe('FeedbackBar', () => {
   })
 
   it('shows positive ratio when >= 50%', () => {
-    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats({ ratio: 0.8 })} />)
+    const { container } = render(
+      <FeedbackBar loading={false} feedbackStats={makeStats({ ratio: 0.8 })} />,
+    )
     expect(container.textContent).toContain('80%')
   })
 
   it('shows warning ratio when < 50%', () => {
-    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats({ ratio: 0.3 })} />)
+    const { container } = render(
+      <FeedbackBar loading={false} feedbackStats={makeStats({ ratio: 0.3 })} />,
+    )
     expect(container.textContent).toContain('30%')
   })
 
   it('links to training page', () => {
     const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats()} />)
     const links = container.querySelectorAll('a')
-    const trainingLink = Array.from(links).find(a => a.getAttribute('href') === '/training')
+    const trainingLink = Array.from(links).find((a) => a.getAttribute('href') === '/training')
     expect(trainingLink).toBeDefined()
     expect(trainingLink!.textContent).toContain('Train from feedback →')
   })

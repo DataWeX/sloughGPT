@@ -403,7 +403,8 @@ class TestRender:
         footer = self._texts(s)[-1]
         s.toggle_help()
         help_lines = self._texts(s)[-2:]
-        assert footer == "Enter Open  Esc Back  Left/Right Set  ? Help"
+        # footer wording is card D's contract: "Enter Open - Esc Back - ..."
+        assert footer == "Enter Open - Esc Back - Left/Right Set - ? Help"
         assert help_lines[0].startswith("Up/Down rows")
         assert "Esc" in help_lines[1]
         assert footer not in help_lines
@@ -557,3 +558,142 @@ class TestDriverLoop:
                 assert line.rstrip().endswith("--region")
                 return
         pytest.fail("regions row never rendered")
+
+
+# ── card D: the plain driver + the setter ───────────────────────────
+#
+# The screen must exist when there is no TTY: the SAME model, rendered
+# by a driver that writes through the Console (which owns the redirected
+# io, so capture/stream paths see it).  Nothing here is hand-drawn —
+# every plain line is a `render()` line, which is why the TTY screen and
+# the fallback can never disagree.  `setter` completes the descriptor:
+# label + flag + value + setter drives row, CLI and apply from one spec.
+
+
+class TestPlainFallback:
+    """Non-TTY must print the screen, not swallow it."""
+
+    def _run(self, rows: list[dict] | None = None, message: str = "Settings"):
+        from domain.shell._internal.console import Console
+
+        io = MemoryIO()
+        con = Console(io)
+        con._interactive._is_tty = False
+        screen = OptionsScreen(rows if rows is not None else _specs(), message)
+        values = con.run_options_screen(screen)
+        return values, _plain(io.get_output()), screen
+
+    def test_non_tty_writes_header_rows_and_footer(self):
+        values, out, _ = self._run()
+        # header contract, verbatim from the model
+        assert "Each row is an option of the command line" in out
+        # a row's label, value and flag all present
+        assert "Preferred regions" in out and "--region" in out
+        # cursor marker + footer
+        assert ">" in out
+        assert "Enter Open" in out and "Esc Back" in out and "? Help" in out
+        # the return contract is unchanged (same as the interactive path)
+        assert values["region"] == "any"
+
+    def test_every_plain_line_is_a_render_line(self):
+        """The fallback is a driver over render() — never a second view."""
+        _, out, screen = self._run()
+        rendered = {text for text, _style in screen.render()}
+        written = {line for line in out.splitlines() if line.strip()}
+        stray = written - rendered
+        assert not stray, f"hand-drawn plain lines: {stray!r}"
+
+    def test_plain_output_goes_through_console_io(self):
+        """Written to Console's io — so capture_cmd and the stream see it."""
+        from domain.shell._internal.console import Console
+
+        io = MemoryIO()
+        con = Console(io)
+        con._interactive._is_tty = False
+        con.run_options_screen(OptionsScreen(_specs(), "Options"))
+        assert io.get_output().strip(), "nothing reached the io"
+        # and it is recorded as a structured block for the SSE surface
+        assert any(b.get("type") == "options_screen" for b in con.get_blocks())
+
+    def test_tty_path_delegates_to_the_raw_driver(self):
+        from domain.shell._internal.console import Console
+
+        io = MemoryIO()
+        con = Console(io)
+        con._interactive._is_tty = True
+        seen: dict = {}
+
+        def fake_raw(screen, **kw):
+            seen["message"] = screen.message
+            return {"region": "eu"}
+
+        con._interactive._options_screen_raw = fake_raw  # type: ignore[method-assign]
+        values = con.run_options_screen(OptionsScreen(_specs(), "Options"))
+        assert seen["message"] == "Options"
+        assert values == {"region": "eu"}
+
+
+class TestSetterBinding:
+    """{label, value, flag, setter} — the setter is the fourth half."""
+
+    def _screen(self, got: list) -> OptionsScreen:
+        return OptionsScreen(
+            [
+                {
+                    "label": "History size",
+                    "flag": "--history",
+                    "type": "text",
+                    "value": "500",
+                    "setter": got.append,
+                },
+                {"label": "No setter here", "flag": "--bare", "type": "text", "value": "x"},
+            ],
+            "Settings",
+        )
+
+    def test_from_spec_carries_the_setter(self):
+        got: list = []
+        row = OptionRow.from_spec(
+            {"label": "History size", "flag": "--history", "value": "500", "setter": got.append}
+        )
+        assert row.setter is not None and callable(row.setter)
+        # a spec without one stays None — the descriptor default
+        bare = OptionRow.from_spec({"label": "x", "flag": "--x", "value": "1"})
+        assert bare.setter is None
+
+    def test_apply_pushes_display_values_to_setters(self):
+        got: list = []
+        screen = self._screen(got)
+        applied = screen.apply()
+        assert got == ["500"], "setter must receive the displayed value"
+        assert applied == ["history"], "apply reports which keys it wrote"
+
+    def test_apply_skips_rows_without_setters(self):
+        got: list = []
+        screen = self._screen(got)
+        screen.apply()
+        assert got == ["500"], "rows with no setter must be left alone"
+
+    def test_bool_row_setter_gets_the_label_not_python_truth(self):
+        got: list = []
+        screen = OptionsScreen(
+            [
+                {
+                    "label": "Auto-start API",
+                    "flag": "--api",
+                    "type": "bool",
+                    "value": True,
+                    "setter": got.append,
+                }
+            ],
+            "Boot",
+        )
+        screen.apply()
+        assert got == ["on"], "bool rows hand setters their on/off label"
+
+    def test_aborted_screen_applies_nothing(self):
+        got: list = []
+        screen = self._screen(got)
+        screen.aborted = True
+        assert screen.apply() == []
+        assert got == [], "an aborted screen must not write anything"

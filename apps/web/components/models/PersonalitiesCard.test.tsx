@@ -4,7 +4,7 @@ import React from 'react'
 import type * as Strui from '@sloughgpt/strui'
 
 const mockPush = vi.fn()
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 
 vi.mock('@sloughgpt/strui', async () => {

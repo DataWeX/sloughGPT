@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { proxyRequest } from './planner-proxy'
 
-vi.mock('next/server', () => {
+vi.mock('@/vite/next-compat/server', () => {
   class NextResponse {
     body: unknown
     status: number
@@ -28,7 +28,10 @@ function fakeResponse(status: number, text: string, headers: Record<string, stri
     ok: status < 400,
     status,
     text: () => Promise.resolve(text),
-    headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? (headers[name] ?? null) : null) },
+    headers: {
+      get: (name: string) =>
+        name.toLowerCase() === 'content-type' ? (headers[name] ?? null) : null,
+    },
   }
 }
 
@@ -38,7 +41,9 @@ beforeEach(() => {
 
 describe('proxyRequest', () => {
   it('proxies GET request to planner backend', async () => {
-    mockFetch.mockResolvedValue(fakeResponse(200, '{"data":"test"}', { 'content-type': 'application/json' }))
+    mockFetch.mockResolvedValue(
+      fakeResponse(200, '{"data":"test"}', { 'content-type': 'application/json' }),
+    )
 
     const res = await proxyRequest('/board')
     expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:8787/board', {
@@ -51,7 +56,9 @@ describe('proxyRequest', () => {
   })
 
   it('proxies POST request with body and custom headers', async () => {
-    mockFetch.mockResolvedValue(fakeResponse(201, '{"id":"new"}', { 'content-type': 'application/json' }))
+    mockFetch.mockResolvedValue(
+      fakeResponse(201, '{"id":"new"}', { 'content-type': 'application/json' }),
+    )
 
     const res = await proxyRequest('/cards', {
       method: 'POST',
@@ -76,7 +83,9 @@ describe('proxyRequest', () => {
   })
 
   it('preserves backend error status codes', async () => {
-    mockFetch.mockResolvedValue(fakeResponse(404, '{"error":"Not found"}', { 'content-type': 'application/json' }))
+    mockFetch.mockResolvedValue(
+      fakeResponse(404, '{"error":"Not found"}', { 'content-type': 'application/json' }),
+    )
 
     const res = await proxyRequest('/cards/nonexistent')
     expect(res.status).toBe(404)
