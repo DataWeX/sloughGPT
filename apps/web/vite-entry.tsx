@@ -17,6 +17,7 @@ import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import { StartupOverlay } from '@/components/startup/StartupOverlay'
 import { ConsciousnessQuickActionsWrapper } from '@/components/consciousness/ConsciousnessQuickActionsWrapper'
 import { RouteDigestBoundary, ViteNavigatorBinder } from '@/vite/next-compat/digest-boundary'
+import { AppReadySentinel } from '@/vite/AppReadySentinel'
 import { discoveredRoutes } from '@/vite/routes'
 import { REDIRECTS, splitTarget } from '@/lib/redirects'
 
@@ -94,6 +95,11 @@ function App() {
                     />
                   )
                 })}
+                {/* The sentinel sits INSIDE each route's Suspense boundary,
+                    beside the (lazy) page: React mounts a suspended boundary's
+                    children only once its chunk has committed, so the
+                    data-app-ready flag can never lead the route content it
+                    declares readiness for. */}
                 {discoveredRoutes.map(({ path, Component }) => (
                   <Route
                     key={path}
@@ -101,12 +107,24 @@ function App() {
                     element={
                       <Suspense fallback={<PageFallback />}>
                         <Component />
+                        <AppReadySentinel />
                       </Suspense>
                     }
                   />
                 ))}
                 {!hasHome ? <Route path="/" element={<Navigate to="/datasets" replace />} /> : null}
-                <Route path="*" element={<NotFound />} />
+                {/* 404s render a real (static) route — the sentinel still has to
+                    ride beside the content so readiness is declared for THIS
+                    commit, not for the shell that loaded before it. */}
+                <Route
+                  path="*"
+                  element={
+                    <>
+                      <NotFound />
+                      <AppReadySentinel />
+                    </>
+                  }
+                />
               </Route>
             </Routes>
           </BrowserRouter>

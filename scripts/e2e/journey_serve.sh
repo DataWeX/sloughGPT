@@ -36,66 +36,19 @@ for P in $API_P $WEB_P; do
 done
 ok "ports $API_P + $WEB_P free"
 
-MODE="${1:-success}"
 CLEAN=$LOG_DIR/journey_serve.clean
 
-# Fresh build path every run (stale .next would skip the npx build step)
-rm -rf apps/web/.next
-rm -f "$LOG" "$NPMLOG"
-
-if [ "$MODE" = "buildfail" ]; then
-  # ── Negative path: build fails → CLI exits AND must not leak the API ──
-  # Plain setsid (no `script` pty): script's exit SIGHUPs the process group
-  # and would mask the leak by killing the orphaned uvicorn for us.
-  FAKE_NPX_FAIL=1 FAKE_NPX_DELAY=20 NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
-    setsid ./sloughgpt serve --port $API_P --web --web-port $WEB_P --host localhost \
-    > "$LOG" 2>&1 < /dev/null &
-  SPID=$!
-
-  CLI_PID=""
-  DEAD=""
-  for i in $(seq 1 30); do
-    if [ -z "$CLI_PID" ]; then
-      CLI_PID=$(pgrep -f "cli.py .*--web-port $WEB_P" | head -1 || true)
-    elif ! kill -0 "$CLI_PID" 2>/dev/null; then
-      DEAD=$i; break
-    fi
-    sleep 1
-  done
-  if [ -n "$DEAD" ]; then ok "cli exited after build failure (${DEAD}s)"
-  else bad "cli still alive 30s after build failure"; fi
-
-  sed 's/\x1b\[[0-9;]*[A-Za-z]//g' "$LOG" > "$CLEAN"
-  if grep -q "Next.js build failed" "$CLEAN"; then ok "build failure reported"
-  else bad "no build-failure message in log"; fi
-
-  # Leak check: a leaked uvicorn finishes importing and binds ~10s in —
-  # watch the API port for 15s after CLI exit.
-  C="CLOSED"
-  for i in $(seq 1 15); do
-    C=$(port_state "$API_P")
-    [ "$C" = "OPEN" ] && break
-    sleep 1
-  done
-  if [ "$C" = "CLOSED" ]; then ok "api port not leaked (closed for 15s after exit)"
-  else bad "LEAK: api port $API_P open after build failure"; fi
-  LEFT=$(pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" || true)
-  if [ -z "$LEFT" ]; then ok "no orphan uvicorn"
-  else kill -9 $LEFT 2>/dev/null; bad "orphan uvicorn: $LEFT"; fi
-
-  if grep -A8 "Traceback" "$CLEAN" | grep -q "cli.py\|commands/dev.py"; then
-    bad "CLI traceback in log"
-    grep -A8 "Traceback" "$CLEAN" | head -8 | sed 's/^/  | /'
-  else ok "no CLI traceback"; fi
-
-  kill -TERM "$SPID" 2>/dev/null
-  sleep 1
-  LEFT=$(pgrep -f "cli.py .*--web-port $WEB_P" || true)
-  if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "leftover cli"; fi
-  rm -f "$CLEAN"
-  echo "RESULT[serve-buildfail]: $([ $FAIL -eq 0 ] && echo ALL PASS || echo FAILURES)"
-  exit $FAIL
+# The former `buildfail` mode (`npx next build` fails → CLI must exit without
+# leaking uvicorn) went away with the Next build step: `serve --web` no longer
+# builds anything, so there is no build to fail. The leak invariant it guarded
+# still has owners — journey_serve_api.sh phaseA (API orphan when startup
+# aborts) and the _cleanup unit contract in apps/cli/tests/test_dev_commands.py.
+if [ "${1:-success}" != "success" ]; then
+  echo "journey_serve.sh: mode '$1' retired — serve --web no longer runs a Node build" >&2
+  exit 2
 fi
+
+rm -f "$LOG" "$NPMLOG"
 
 NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
   setsid script -qec "./sloughgpt serve --port $API_P --web --web-port $WEB_P --host localhost" /dev/null \
@@ -130,16 +83,20 @@ done
 if [ -n "$WEB_T" ]; then ok "web answered on :$WEB_P at t+${WEB_T}s"
 else bad "web never answered on :$WEB_P (30s)"; fi
 
-# 3) build went through the shim, then node served the standalone
+# 3) the web child went through the vite argv channel — no Node build
 if [ -f "$NPMLOG" ]; then
   ARGV=$(grep '^argv:' "$NPMLOG" | head -1)
-  if [ "$ARGV" = "argv: next build" ]; then
-    ok "npx next build intercepted by shim"
-  else bad "build did not run through shim: $ARGV"; fi
-  if grep -q "server.js" <(pgrep -af "node server.js" || true); then ok "standalone node server running"
-  else bad "node server.js not running"; fi
+  if echo "$ARGV" | grep -q -- "run dev -- --port $WEB_P --host 0.0.0.0"; then
+    ok "web spawned via vite argv (--port $WEB_P)"
+  else bad "web argv missing vite port flags: $ARGV"; fi
+  if grep -q "npx next" "$NPMLOG"; then
+    bad "next build still invoked: $(grep 'npx next' "$NPMLOG")"
+  else ok "no next build invoked"; fi
+  if pgrep -af "node server.js" | grep -q .; then
+    bad "Next standalone server.js still running"
+  else ok "no Next standalone server"; fi
 else
-  bad "build never invoked npx (no $NPMLOG)"
+  bad "web child never invoked npm (no $NPMLOG)"
 fi
 
 # 4) both URLs shown to the user (TTY status block)
@@ -182,7 +139,7 @@ done
 
 kill -TERM "$SPID" 2>/dev/null
 sleep 1
-for PAT in "cli.py .*--web-port $WEB_P" "uvicorn apps.api.server.main:app.*--port $API_P" "node server.js"; do
+for PAT in "cli.py .*--web-port $WEB_P" "uvicorn apps.api.server.main:app.*--port $API_P" "http.server $WEB_P"; do
   LEFT=$(pgrep -f "$PAT" || true)
   if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "leftover killed: $PAT"; fi
 done

@@ -4,6 +4,7 @@ Public API:
     SecurityConfig, SecurityBoundary, ToolCapability, ToolDefinition
     ToolExecutionContext, ToolRunner, AgentConfig, Agent
     ToolSpec, ToolParam, get_agent, get_runner, get_agent_system, get_tool_registry
+    AgentLoop, Event, ToolCall, ProtocolError, decode, encode_tool_block, validate_args
 """
 
 from __future__ import annotations
@@ -13,6 +14,13 @@ def __getattr__(name):
     _lazy = {
         "MultiAgentOrchestrator": "domain.agents._internal.multi",
         "get_agent_run_store": "domain.agents._internal.run_history",
+        "AgentLoop": "domain.agents._internal.loop",
+        "Event": "domain.agents._internal.loop",
+        "validate_args": "domain.agents._internal.loop",
+        "ToolCall": "domain.agents._internal.protocol",
+        "ProtocolError": "domain.agents._internal.protocol",
+        "decode": "domain.agents._internal.protocol",
+        "encode_tool_block": "domain.agents._internal.protocol",
     }
     if name in _lazy:
         import importlib

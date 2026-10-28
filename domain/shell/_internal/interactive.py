@@ -22,6 +22,8 @@ import tty
 from collections.abc import Callable
 from typing import Any
 
+from domain.shell._internal.options_screen import MODE_INPUT, MODE_PICKER, OptionsScreen
+
 # ── Raw key reading ──────────────────────────────────────────────────────────
 
 _KEY_UP = "up"
@@ -2714,6 +2716,154 @@ class InteractivePrompt:
                             idx = (idx + 1) % len(fields)
         except (termios.error, OSError):
             return results
+
+    # ── Options screen ────────────────────────────────────────────────
+
+    def options_screen(
+        self, rows: list[dict], message: str = "Options"
+    ) -> dict[str, str]:
+        """Interactive options screen; returns {key: value}.
+
+        Each row is one option of a command line, named by its flag on
+        the right of the screen.  See `options_screen.OptionsScreen` for
+        the row spec.  Non-TTY returns each row's default value.
+        """
+        if not self._is_tty:
+            return OptionsScreen(rows, message).values()
+        return self._options_screen_raw(OptionsScreen(rows, message))
+
+    def _options_screen_raw(
+        self,
+        screen: OptionsScreen,
+        read_key: Callable[[], _RawKey] | None = None,
+        fd: int | None = None,
+    ) -> dict[str, str]:
+        """Raw-mode loop for options_screen.  All state lives in *screen*.
+
+        Args:
+            screen: the options-screen model.
+            read_key: key-source seam for tests; defaults to
+                ``lambda: _read_raw_key(fd)``.
+            fd: terminal fd; defaults to ``self._get_fd()``.
+        """
+        if fd is None:
+            fd = self._get_fd()
+        key_source = read_key if read_key is not None else (lambda: _read_raw_key(fd))
+        prev_count = 0  # lines the frame on screen occupies
+
+        # Model style tag -> ANSI prefix.  The model stays free of
+        # escapes; this table is the whole translation, so restyling
+        # is a one-place change.
+        styles = {
+            "title": _BOLD,
+            "sub": _DIM,
+            "row": "",
+            "rowsel": _REVERSE + _CYAN,
+            "pick": _DIM,
+            "picksel": _CYAN,
+            "input": _REVERSE,
+            "status": _YELLOW,
+            "foot": _DIM,
+            "help": _DIM,
+            "empty": "",
+        }
+
+        def _render() -> list[str]:
+            lines = []
+            for text, style in screen.render():
+                prefix = styles.get(style, "")
+                # reverse must be explicitly released or it bleeds
+                # into the next repaint's plain rows.
+                close = _RESET_REVERSE if style in ("rowsel", "input") else _RESET
+                lines.append(f"{_ERASE_LINE}\r  {prefix}{text}{close}")
+            return lines
+
+        def _write(lines: list[str]) -> None:
+            sys.stdout.write(_HIDE_CURSOR)
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
+            sys.stdout.flush()
+
+        def _clear(count: int) -> None:
+            for _ in range(count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
+
+        try:
+            with _RawTerminal(fd):
+                while not screen.done:
+                    _clear(prev_count)
+                    lines = _render()
+                    _write(lines)
+                    prev_count = len(lines)
+                    self._options_dispatch(screen, key_source())
+        except (termios.error, OSError):
+            return screen.values()
+        _clear(prev_count)
+        return screen.values()
+
+    def _options_dispatch(self, screen: OptionsScreen, key: _RawKey) -> None:
+        """One key -> one model move.  Split by mode so no branch has to
+        remember which keys belong to which level."""
+        if key.kind == _KEY_CTRL_C:
+            screen.abort()
+            return
+        if screen.mode == MODE_INPUT:
+            if key.kind == _KEY_ENTER:
+                screen.input_commit()
+            elif key.kind == _KEY_ESC:
+                screen.back()
+            else:
+                # Motion and rubout — the same editing the family's
+                # other fields get, inlined (main has no _filter_key).
+                buf = list(screen.input_buf)
+                caret = screen.input_caret
+                if key.kind == _KEY_BACKSPACE:
+                    if caret > 0:
+                        buf.pop(caret - 1)
+                        caret -= 1
+                elif key.kind == _KEY_DELETE:
+                    if caret < len(buf):
+                        buf.pop(caret)
+                elif key.kind == _KEY_LEFT:
+                    caret = max(0, caret - 1)
+                elif key.kind == _KEY_RIGHT:
+                    caret = min(len(buf), caret + 1)
+                elif key.kind == _KEY_HOME:
+                    caret = 0
+                elif key.kind == _KEY_END:
+                    caret = len(buf)
+                elif key.kind == _KEY_CHAR:
+                    buf.insert(caret, key.char)
+                    caret += 1
+                screen.set_input("".join(buf), caret)
+            return
+        if screen.mode == MODE_PICKER:
+            if key.kind == _KEY_ENTER:
+                screen.picker_select()
+            elif key.kind == _KEY_ESC:
+                screen.back()
+            elif key.kind in (_KEY_UP, _KEY_LEFT):
+                screen.picker_move(-1)
+            elif key.kind in (_KEY_DOWN, _KEY_RIGHT):
+                screen.picker_move(1)
+            return
+        # MODE_FORM
+        if key.kind == _KEY_ESC:
+            screen.back()
+        elif key.kind == _KEY_ENTER:
+            screen.open()
+        elif key.kind == _KEY_UP:
+            screen.move(-1)
+        elif key.kind == _KEY_DOWN:
+            screen.move(1)
+        elif key.kind == _KEY_LEFT:
+            screen.cycle(-1)
+        elif key.kind == _KEY_RIGHT:
+            screen.cycle(1)
+        elif key.kind == _KEY_CHAR and key.char == "?":
+            screen.toggle_help()
 
     # ── Playlist manager ──────────────────────────────────────────────
 

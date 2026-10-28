@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor, cleanup } from '@testing-library/react'
-import { useQueryStore, invalidateQuery, isStale } from './client'
+import { useQueryStore, invalidateQuery, revalidateAll, isStale } from './client'
 import { useQuery, useMutation, useInvalidate, useIsFetching } from './hooks'
 
 function resetStore() {
-  useQueryStore.setState({ cache: {}, fetchingKeys: new Set() })
+  useQueryStore.setState({ cache: {}, fetchingKeys: new Set(), refreshVersion: 0 })
 }
 
 describe('useQuery', () => {
@@ -67,6 +67,81 @@ describe('useQuery', () => {
     const { result: result2 } = renderHook(() => useQuery('k', fetcher))
     await waitFor(() => expect(result2.current.data).toBe('v2'))
     expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it('revalidateAll() refetches an ALREADY-MOUNTED view (no remount)', async () => {
+    // invalidateQuery alone is a no-op here: it only clears updatedAt, and the
+    // fetch effect keys off [sk, enabled] — neither changes. The version bump
+    // is the signal that makes a live view refetch, which is what lets
+    // router.refresh() stop being a document reload.
+    const fetcher = vi.fn().mockResolvedValueOnce('v1').mockResolvedValue('v2')
+    const { result } = renderHook(() => useQuery('k', fetcher))
+    await waitFor(() => expect(result.current.data).toBe('v1'))
+
+    act(() => {
+      revalidateAll()
+    })
+
+    await waitFor(() => expect(result.current.data).toBe('v2'))
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps previous data visible (isLoading false) while revalidating', async () => {
+    // No spinner flash: cached data stays and isLoading stays false, because
+    // isLoading requires data === undefined.
+    let resolve: (v: string) => void = () => {}
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce('v1')
+      .mockImplementationOnce(() => new Promise<string>((r) => (resolve = r)))
+    const { result } = renderHook(() => useQuery('k', fetcher))
+    await waitFor(() => expect(result.current.data).toBe('v1'))
+
+    act(() => {
+      revalidateAll()
+    })
+
+    // Previous data still on screen, no loading flag, while the refetch is open
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+    expect(result.current.data).toBe('v1')
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.isFetching).toBe(true)
+
+    await act(async () => {
+      resolve('v2')
+    })
+    await waitFor(() => expect(result.current.data).toBe('v2'))
+    expect(result.current.isLoading).toBe(false)
+  })
+
+  it('does not issue a second request if one is already in flight', async () => {
+    let resolve: (v: string) => void = () => {}
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<string>((r) => (resolve = r)))
+    const { result } = renderHook(() => useQuery('k', fetcher))
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      revalidateAll()
+    })
+
+    // The in-flight result is the freshest data available — no duplicate call.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(fetcher).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolve('v1')
+    })
+    await waitFor(() => expect(result.current.data).toBe('v1'))
+  })
+
+  it('revalidateAll() bumps refreshVersion', () => {
+    const before = useQueryStore.getState().refreshVersion
+    act(() => {
+      revalidateAll()
+    })
+    expect(useQueryStore.getState().refreshVersion).toBe(before + 1)
   })
 })
 

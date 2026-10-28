@@ -201,7 +201,11 @@ class TestFusedAttentionBias:
         v = np.random.randn(B, S, H, E).astype(np.float32)
         out, weights = attn(q, k, v)
         assert out.shape == (B, N, H, E)
-        assert weights.shape == (B, H, S, N)
+        # Weights are query-major [B, H, N, S], per the class docstring and the
+        # softmax over the key axis. (This previously asserted (B, H, S, N),
+        # which encoded a transposed-einsum bug: it also made the causal mask
+        # raise for N != S and normalized attention over queries, not keys.)
+        assert weights.shape == (B, H, N, S)
 
     def test_attention_weights_sum_to_one(self):
         attn = FusedAttentionBias(num_heads=2)

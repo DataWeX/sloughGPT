@@ -8,6 +8,9 @@ Public API:
     VectorStore, InMemoryVectorStore, VectorEntry
     simple_embed
 
+    # Generation entry (from inference) — the one language-API contract:
+    LanguageClient, hosted, soul, engine, extract_json
+
     # From models
     ModelInterface, SloughGPTModel
 
@@ -38,6 +41,13 @@ from domain.inference import (
     VectorStore,
     simple_embed,
 )
+from domain.inference.generation import (
+    LanguageClient,
+    engine,
+    extract_json,
+    hosted,
+    soul,
+)
 from domain.models import (
     ModelInterface,
     SloughGPTModel,
@@ -56,6 +66,12 @@ __all__ = [
     "InMemoryVectorStore",
     "VectorEntry",
     "simple_embed",
+    # Generation entry (inference subsystem — the language API)
+    "LanguageClient",
+    "hosted",
+    "soul",
+    "engine",
+    "extract_json",
     # Models
     "ModelInterface",
     "SloughGPTModel",

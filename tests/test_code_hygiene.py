@@ -82,6 +82,7 @@ PRINT_ALLOWLIST = {
     "domain/infrastructure/_internal/inference_engine.py": "ENGINE_READY parent-process protocol handshake",
     "domain/logging/_internal/config.py": "bootstrap warning — cannot log while configuring logging",
     "domain/shell/_internal/input_device.py": "terminal echo in readline()",
+    "domain/shell/_internal/vm.py": "guest console: _sys_write sends VM stdout/stderr to the process console (the capsys syscall contract)",
     "domain/shell/_internal/realm_live.py": "argparse CLI run summary",
     "domain/training/_internal/lm_eval_char.py": "--json machine-readable stdout mode",
     "domain/journeys/runner.py": "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",

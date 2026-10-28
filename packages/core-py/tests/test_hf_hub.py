@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure.hf_hub — HFFile, ResumeInfo, _matches_ignore, _strip_incomplete_suffix, _derive_model_id, _match_repo_file, IGNORED_PATTERNS."""
+"""Tests for domain.infrastructure.hf_hub — HFFile, ResumeInfo, _matches_ignore, _strip_incomplete_suffix, _derive_model_id, _match_repo_file, IGNORED_PATTERNS, list_model_files dual-format bin skip."""
 
 from pathlib import Path
 
@@ -416,3 +416,68 @@ class TestStaleStateDiskTruth:
 
         assert downloaded == []
         assert result["status"] == "complete"
+
+
+# ── list_model_files (dual-format .bin skip) ────────────────────────────────
+
+
+class TestListModelFilesBinSkip:
+    """Dual-format repos: .bin pickle copies are ignored when safetensors exist.
+
+    The loader resolves safetensors only (model_resolver), so a repo shipping
+    both formats must not download the pickle — gpt2 fetched 1044MiB (both)
+    instead of 548MiB (safetensors) before this filter.
+    """
+
+    @staticmethod
+    def _list(monkeypatch, siblings):
+        from domain.infrastructure._internal import hf_hub
+
+        monkeypatch.setattr(hf_hub, "fetch_model_info", lambda mid: {"siblings": siblings})
+        return hf_hub.list_model_files("org/model")
+
+    def test_bin_ignored_when_safetensors_present(self, monkeypatch):
+        files = self._list(
+            monkeypatch,
+            [
+                {"rfilename": "config.json", "size": 10},
+                {"rfilename": "model.safetensors", "size": 100},
+                {"rfilename": "pytorch_model.bin", "size": 100},
+                {"rfilename": "tokenizer.json", "size": 5},
+            ],
+        )
+        by_path = {f.path: f for f in files}
+        assert by_path["pytorch_model.bin"].is_ignored is True
+        assert by_path["pytorch_model.bin"].download_url == ""
+        assert by_path["model.safetensors"].is_ignored is False
+        assert by_path["model.safetensors"].download_url != ""
+        assert by_path["config.json"].is_ignored is False
+        assert by_path["tokenizer.json"].is_ignored is False
+
+    def test_bin_kept_when_repo_is_bin_only(self, monkeypatch):
+        files = self._list(
+            monkeypatch,
+            [
+                {"rfilename": "config.json", "size": 10},
+                {"rfilename": "pytorch_model.bin", "size": 100},
+            ],
+        )
+        by_path = {f.path: f for f in files}
+        assert by_path["pytorch_model.bin"].is_ignored is False
+        assert by_path["pytorch_model.bin"].download_url != ""
+
+    def test_sharded_safetensors_also_suppress_bin(self, monkeypatch):
+        files = self._list(
+            monkeypatch,
+            [
+                {"rfilename": "model-00001-of-00002.safetensors", "size": 100},
+                {"rfilename": "model-00002-of-00002.safetensors", "size": 100},
+                {"rfilename": "pytorch_model.bin", "size": 200},
+                {"rfilename": "pytorch_model.bin.index.json", "size": 3},
+            ],
+        )
+        by_path = {f.path: f for f in files}
+        assert by_path["pytorch_model.bin"].is_ignored is True
+        assert by_path["model-00001-of-00002.safetensors"].is_ignored is False
+        # metadata jsons stay downloadable either way
+        assert by_path["pytorch_model.bin.index.json"].is_ignored is False

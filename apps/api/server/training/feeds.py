@@ -37,7 +37,7 @@ _SOURCES: dict[str, str] = {
 
 
 def list_feed_sources() -> list[dict[str, Any]]:
-    """Summarize every registered feed source (name, total records, last write)."""
+    """Summarize every registered feed source (name, dataset spec, totals)."""
     sources: list[dict[str, Any]] = []
     for name in sorted(_SOURCES):
         path = _feed_path(name)
@@ -51,12 +51,76 @@ def list_feed_sources() -> list[dict[str, Any]]:
             {
                 "name": name,
                 "source": name,
+                "spec": f"feed:{name}",
                 "total": total,
                 "path": str(path),
                 "last_updated": _iso_mtime(_source_paths(name)),
             }
         )
     return sources
+
+
+def resolve_feed_source(name: str) -> Path | None:
+    """Resolve a feed source name to its corpus path, or None when unknown.
+
+    Registry names (``_SOURCES``) resolve directly. Unregistered names are
+    accepted only when a corpus file exists under the repo, mirroring the
+    trainer's ``TrainingFeedClient`` candidate lookup — so an unregistered but
+    resolvable corpus still trains, while a typo fails fast.
+
+    Args:
+        name: feed source name (without the ``feed:`` prefix).
+
+    Returns:
+        Corpus path, or None when the name is neither registered nor resolvable.
+    """
+    if name in _SOURCES:
+        return _feed_path(name)
+    root = find_repo_root(Path(__file__).resolve())
+    for spelling in {name, name.replace("-", "_")}:
+        for candidate in (
+            root / "data" / spelling / "corpus.jsonl",
+            root / "data" / f"{spelling}.jsonl",
+            root / "datasets" / spelling / "corpus.jsonl",
+        ):
+            if candidate.exists():
+                return candidate
+    return None
+
+
+def validate_feed_dataset(dataset: str) -> str:
+    """Validate a ``feed:<name>`` dataset spec and return it unchanged.
+
+    Non-feed specs pass through untouched. An unknown ``feed:`` source raises
+    a 400 listing the registered specs, so a typo fails at the API boundary
+    instead of deep in the trainer thread.
+
+    Args:
+        dataset: dataset spec from a training request.
+
+    Returns:
+        The spec, unchanged.
+
+    Raises:
+        HTTPException: 400 when the ``feed:`` source is empty or unknown.
+    """
+    if not dataset.startswith("feed:"):
+        return dataset
+    name = dataset.split(":", 1)[1].strip()
+    if not name:
+        raise_error(
+            "feed: dataset needs a source name, e.g. feed:api-conversations",
+            "E_BAD_REQUEST",
+            status_code=400,
+        )
+    if resolve_feed_source(name) is None:
+        valid = ", ".join(f"feed:{n}" for n in sorted(_SOURCES))
+        raise_error(
+            f"Unknown feed source: {name}. Valid specs: {valid} (or a path-resolvable corpus name)",
+            "E_BAD_REQUEST",
+            status_code=400,
+        )
+    return dataset
 
 
 def _iso_mtime(paths: list[Path]) -> str | None:

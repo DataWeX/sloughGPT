@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { liveStatusStore, useLiveStatus, mapDetailedToSnapshot, initLiveStatus } from './useLiveStatus'
+import { useQueryStore } from '@/lib/cache/client'
 
 const mocks = vi.hoisted(() => ({
   createSSEStream: vi.fn(),
@@ -340,6 +341,25 @@ describe('initLiveStatus', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(liveStatusStore.getState().failureCount).toBeGreaterThanOrEqual(1)
     expect(liveStatusStore.getState().connectionStatus).toBe('connecting')
+    cleanup()
+  })
+
+  it('revalidates the client cache instead of reloading at the failure threshold', () => {
+    const cleanup = initLiveStatus()
+    const versionBefore = useQueryStore.getState().refreshVersion
+
+    for (let i = 0; i < 6; i++) {
+      streamConfig.onError(new Error('stream failed'))
+    }
+
+    // Cache revalidated in place…
+    expect(useQueryStore.getState().refreshVersion).toBe(versionBefore + 1)
+    // …no document reload and no sessionStorage loop-guard left behind…
+    expect(liveStatusStore.getState().connectionStatus).not.toBe('reloading')
+    expect(sessionStorage.getItem('slo-reload-count')).toBeNull()
+    expect(sessionStorage.getItem('slo-reload-window-start')).toBeNull()
+    // …and the counter resets so it re-fires every N failures, not every poll.
+    expect(liveStatusStore.getState().failureCount).toBe(0)
     cleanup()
   })
 

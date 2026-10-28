@@ -82,6 +82,11 @@ def _patch_fetch(monkeypatch, info):
 
 class TestGetHubFileSize:
     def test_sums_weight_siblings(self, monkeypatch):
+        """Count only bytes the downloader fetches (card f74361ea).
+
+        Safetensors are present, so ``tokenizer.bin`` is excluded — the
+        estimate mirrors ``list_model_files`` download truth.
+        """
         _patch_fetch(
             monkeypatch,
             _model_info(
@@ -92,7 +97,7 @@ class TestGetHubFileSize:
             ),
         )
         result = ms._get_hub_file_size_gb("org/model")
-        assert result == round((1000 + 500 + 512) * 1024 * 1024 / 1024**3, 2)
+        assert result == round((1000 + 500) * 1024 * 1024 / 1024**3, 2)
 
     def test_ignores_none_size(self, monkeypatch):
         _patch_fetch(monkeypatch, _model_info(_Sib("model.safetensors", None)))

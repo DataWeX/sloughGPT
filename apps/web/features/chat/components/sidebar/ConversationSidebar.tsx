@@ -525,10 +525,17 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
   return (
     <>
       {/* Desktop: collapsible aside */}
+      {/* The nav's bookmark tab (AppLayout) floats OVER this panel like a
+          sticker: it protrudes --nav-tab-protrusion past the nav edge at z-40,
+          so the panel docks it in a matching left gutter (same token) — content
+          keeps the full 16rem and never sits under the tab (it used to cover
+          row titles and steal their clicks at vertical center). Token is the
+          single source of truth for tab width + gutter width (they cannot
+          drift). Ported from 8aec74365 (card 88e4d9fb). */}
       <aside
         className={cn(
           "hidden lg:flex shrink-0 flex-col border-r border-border/40 bg-background/80 transition-all duration-200 ease-in-out overflow-hidden",
-          collapsed ? "w-0 border-r-0" : "w-[var(--conv-sidebar-width)]"
+          collapsed ? "w-0 border-r-0" : "w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))] pl-[var(--nav-tab-protrusion)]"
         )}
       >
         <div className={cn("min-w-[var(--conv-sidebar-width)] h-full", collapsed && "pointer-events-none")}>
