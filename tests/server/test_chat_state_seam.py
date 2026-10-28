@@ -314,6 +314,42 @@ def test_post_chat_surfaces_engine_details(client, manager):
         assert key in body, f"closing frame must carry {key} off the TurnResult"
 
 
+def test_post_chat_forwards_engine_sideband_events(client, manager):
+    """Sideband frames staged on the TurnResult must reach the wire verbatim.
+
+    The engine yields raw tokens, so it cannot emit SSE frames mid-stream —
+    MEMORY/CONSCIOUSNESS events ride on the final result instead, and chat
+    forwards them ahead of the closing frame (the web client parses them via
+    ``stream-chat-response``'s phase handlers).
+    """
+    memory_frame = (
+        'data: {"stream": "chat", "phase": "MEMORY", "status": "success", '
+        '"message": "New fact remembered", "data": {"stored": true}, "meta": {}}\n\n'
+    )
+    turn = TurnResult(text="answer", session_id="s1", events=[memory_frame])
+    # Token first, then the final result carrying the sideband frames.
+    fake_engine = _engine_yielding("answer", turn)
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+        patch.object(ChatManager, "_store"),
+        patch.object(ChatManager, "_track", return_value=("op-6", None)),
+        patch.object(ChatManager, "_untrack"),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": "s1", "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert '"phase": "MEMORY"' in body, "the engine's MEMORY frame must reach the wire"
+    assert body.index('"phase": "MEMORY"') < body.index(
+        '"phase": "STREAMING", "status": "complete"'
+    ), "sideband events must precede the closing frame"
+
+
 def test_chat_router_does_not_import_inference_router():
     """Layering pin: the chat surface must read the engine via its port, never
     by importing the sibling inference router (routers must not import routers)."""

@@ -84,6 +84,10 @@ class TurnResult:
     elapsed_ms: float | None = None
     finish_reason: str | None = None
     tokens: list[str] = field(default_factory=list)
+    events: list[str] = field(default_factory=list)
+    """Sideband SSE frames the engine staged for this turn (MEMORY,
+    CONSCIOUSNESS, ...). Raw tokens stay tokens; the chat edge forwards
+    these verbatim before closing the stream."""
 
 
 @runtime_checkable
