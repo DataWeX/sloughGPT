@@ -10,6 +10,7 @@ import {
   Pressable,
   Image,
   Share,
+  TextInput,
 } from 'react-native';
 import {Markdown} from './Markdown';
 import {useColors} from '../theme/colors';
@@ -20,6 +21,7 @@ import {addBookmark, removeBookmark, isBookmarked} from '../services/bookmarks';
 import {pinMessage, unpinMessage, isPinned} from '../services/pins';
 import {getMessageReactions, toggleReaction, REACTION_EMOJIS, type ReactionEmoji} from '../services/reactions';
 import {saveToKnowledge, getKnowledgeForMessage} from '../services/knowledge-store';
+import {getMessageNotes, saveMessageNote, removeMessageNote} from '../services/message-notes';
 import {toast} from '../services/toast';
 import {AudioPlayer} from './AudioPlayer';
 import {Icon, type IconName} from './Icon';
@@ -294,6 +296,56 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
     contextLabelDestructive: {
       color: colors.error,
     },
+    noteStrip: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 6,
+      marginTop: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+      borderRadius: R.sm,
+      backgroundColor: colors.primaryAlpha(0.08),
+      borderWidth: 1,
+      borderColor: colors.primaryAlpha(0.25),
+    },
+    noteText: {
+      ...T.small,
+      color: textColor,
+      flex: 1,
+      fontStyle: 'italic',
+    },
+    noteEditor: {
+      marginTop: 8,
+      padding: 8,
+      borderRadius: R.sm,
+      borderWidth: 1,
+      borderColor: border,
+      backgroundColor: colors.whiteAlpha(0.06),
+    },
+    noteInput: {
+      ...T.small,
+      color: textColor,
+      minHeight: 44,
+      textAlignVertical: 'top',
+      padding: 0,
+    },
+    noteActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 8,
+    },
+    noteSaveBtn: {
+      backgroundColor: primary,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: R.sm,
+    },
+    noteSaveLabel: {
+      ...T.small,
+      color: '#FFFFFF',
+      fontWeight: '600',
+    },
   }), [bg, border, textColor, textMuted, primary]);
 
   const isUser = message.role === 'user';
@@ -305,6 +357,9 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
   const [showFullDate, setShowFullDate] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
   const [savedToKnowledge, setSavedToKnowledge] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [noteEditorOpen, setNoteEditorOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
@@ -318,6 +373,15 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
     if (sessionId) isPinned(sessionId, message.id).then(setPinned);
     getMessageReactions(message.id).then(setReactions);
     getKnowledgeForMessage(message.id).then(f => setSavedToKnowledge(!!f));
+    if (sessionId && message.id) {
+      getMessageNotes(sessionId)
+        .then(notes =>
+          setNote(
+            notes.find(n => n.messageId === message.id)?.content ?? null,
+          ),
+        )
+        .catch(() => {});
+    }
   }, []);
   const isSwipeOpen = useRef(false);
 
@@ -412,6 +476,37 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
     }
   };
 
+  const handleOpenNoteEditor = () => {
+    setShowContextMenu(false);
+    setNoteDraft(note || '');
+    setNoteEditorOpen(true);
+  };
+
+  const handleSaveNote = async () => {
+    if (!sessionId || !message.id) return;
+    const trimmed = noteDraft.trim();
+    const now = Date.now();
+    if (trimmed) {
+      await saveMessageNote({
+        id: `${sessionId}:${message.id}`,
+        sessionId,
+        messageId: message.id,
+        content: trimmed,
+        createdAt: now,
+        updatedAt: now,
+      });
+      setNote(trimmed);
+      triggerHaptic('success');
+      toast.success('Note saved');
+    } else if (note) {
+      await removeMessageNote(sessionId, message.id);
+      setNote(null);
+      toast.info('Note removed');
+    }
+    setNoteEditorOpen(false);
+    setNoteDraft('');
+  };
+
   const handleToggleReaction = async (emoji: ReactionEmoji) => {
     const updated = await toggleReaction(message.id, emoji);
     setReactions(updated);
@@ -430,6 +525,15 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
       toast.info('Already in knowledge base');
     }
   };
+
+  const canNote = !!sessionId && !!message.id;
+  const noteAction: ContextAction | null = canNote
+    ? {
+        icon: 'sticky-note' as IconName,
+        label: note ? 'Edit note' : 'Add note',
+        onPress: handleOpenNoteEditor,
+      }
+    : null;
 
   const contextActions: ContextAction[] = [
     {icon: 'copy', label: 'Copy', onPress: handleCopy},
@@ -456,6 +560,7 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
     {icon: (pinned ? 'pin' as IconName : 'pin-off' as IconName), label: pinned ? 'Unpin' : 'Pin', onPress: handleTogglePin},
     {icon: (bookmarked ? 'star' as IconName : 'star-outline' as IconName), label: bookmarked ? 'Remove bookmark' : 'Bookmark', onPress: handleToggleBookmark},
     {icon: (savedToKnowledge ? 'check' as IconName : 'book-open' as IconName), label: savedToKnowledge ? 'In knowledge base' : 'Save to knowledge', onPress: handleSaveToKnowledge},
+    ...(noteAction ? [noteAction] : []),
     {icon: 'smile-plus' as IconName, label: 'React', onPress: () => { setShowContextMenu(false); setShowReactionPicker(true); }},
     ...(isUser ? [] : [
       {icon: 'thumbs-up' as IconName, label: 'Good response', onPress: () => { setShowContextMenu(false); onFeedback?.(true); }},
@@ -548,6 +653,37 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
                 </Pressable>
               </View>
             )}
+            {noteEditorOpen ? (
+              <View style={styles.noteEditor}>
+                <TextInput
+                  style={styles.noteInput}
+                  value={noteDraft}
+                  onChangeText={setNoteDraft}
+                  placeholder="Add a note..."
+                  placeholderTextColor={textMuted}
+                  multiline
+                  autoFocus
+                  accessibilityLabel="Add a note"
+                />
+                <View style={styles.noteActions}>
+                  <Pressable style={styles.noteSaveBtn} onPress={handleSaveNote}>
+                    <Text style={styles.noteSaveLabel}>Save</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setNoteEditorOpen(false);
+                      setNoteDraft('');
+                    }}>
+                    <Text style={[styles.timestamp, {color: textMuted}]}>Cancel</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : note ? (
+              <Pressable style={styles.noteStrip} onPress={handleOpenNoteEditor}>
+                <Icon name="sticky-note" size={12} color={primary} />
+                <Text style={styles.noteText}>{note}</Text>
+              </Pressable>
+            ) : null}
           </Pressable>
         </Animated.View>
       </View>

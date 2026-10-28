@@ -54,13 +54,34 @@ function genId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Deterministic id for messages that came back without one (the context
+ * store historically stripped ids). Same session + position + payload ⇒
+ * same id on every reload, so id-keyed client state (notes, pins, delete)
+ * rebinds instead of orphaning.
+ */
+function stableMessageId(
+  sessionId: string,
+  index: number,
+  m: {role?: string; content?: string},
+): string {
+  const raw = `${sessionId}:${index}:${m.role ?? ''}:${m.content ?? ''}`;
+  let h = 5381;
+  for (let i = 0; i < raw.length; i++) h = ((h * 33) ^ raw.charCodeAt(i)) >>> 0;
+  return `sm${h.toString(36)}`;
+}
+
 async function saveSessionContext(
   sessionId: string,
-  messages: {role: string; content: string}[],
+  messages: {role: string; content: string; id?: string}[],
 ) {
   try {
     await api.post(`/session/${sessionId}/context`, {
-      messages: messages.map(m => ({role: m.role, content: m.content})),
+      messages: messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        ...(m.id ? {id: m.id} : {}),
+      })),
     });
   } catch (e) {
     if (__DEV__) console.warn('[chat-store] sendContext failed:', e);
@@ -90,7 +111,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         `/session/${id}/messages`,
       );
       _everConnected = true;
-      const msgs = data.messages || [];
+      const msgs = (data.messages || []).map((m, i) =>
+        m.id ? m : {...m, id: stableMessageId(id, i, m)},
+      );
       set({activeSessionId: id, messages: msgs});
       await cacheActiveSessionId(id);
       await cacheMessages(id, msgs);
@@ -157,9 +180,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const source = await api.get<{messages: Message[]}>(
         `/session/${sourceId}/messages`,
       );
-      const messages = (source.messages || []).map(m => ({
+      const messages = (source.messages || []).map((m, i) => ({
         ...m,
-        id: `${newId}-${m.id}`,
+        // refetched history may predate id persistence — recompute the same
+        // deterministic id loadSession would have produced, then prefix
+        id: `${newId}-${m.id ?? stableMessageId(sourceId, i, m)}`,
       }));
       await api.put(`/chat/sessions/${newId}`, {
         name: newTitle,

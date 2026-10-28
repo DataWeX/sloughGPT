@@ -317,6 +317,22 @@ MOBILE_FLOWS: list[Flow] = [
             "tests/server/test_session_branch.py",
         ),
     ),
+    _mobile_flow(
+        "m4-notes",
+        "Mobile: Annotate a Message",
+        "### Mobile: Annotate a Message",
+        ("### Mobile: Annotate a Message",),
+        (
+            "apps/mobile/src/services/message-notes.ts",
+            "apps/mobile/src/stores/chat-store.ts",
+            "apps/mobile/src/components/MessageBubble.tsx",
+            "domain/infrastructure/_internal/session_core.py",
+        ),
+        (
+            "apps/mobile/src/components/__tests__/journeys/message-notes.test.tsx",
+            "tests/server/test_session_id_passthrough.py",
+        ),
+    ),
 ]
 
 ALL_FLOWS: list[Flow] = [*FLOWS, *MOBILE_FLOWS]
