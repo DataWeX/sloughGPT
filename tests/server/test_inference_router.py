@@ -820,67 +820,70 @@ class TestCachedReplayChunking:
 
 
 class TestChatPostGenTasks:
-    """POST /chat must run the same post-generation task set as streaming.
+    """POST /chat must run the post-generation task set on every turn.
 
     Audit gap G2 (card db19c373): ``_run_post_gen_tasks`` was launched from
-    exactly one site — ``chat_stream`` — so a non-streaming turn recorded no
-    substrate episode at all. Consciousness, entity extraction, the continual
-    learner and response tracking all silently skipped half of all chat.
-
-    Seam note (engine port): POST /chat always streams now (the fold is the
-    edge's job), the engine behind it is ``inference.stream_turn``, and the
-    launcher is called from ``stream_turn`` itself — so the fakes here are the
-    provider (generation) and ``_run_post_gen_tasks`` (the task set under
-    test). The contract is unchanged: one call per turn, attributed to the
-    turn that produced it, no inline capture alongside it, and a task-set
-    failure never fails the reply.
+    exactly one site, so half of all chat recorded no substrate episode —
+    consciousness, entity extraction, the continual learner and response
+    tracking all silently skipped. Stream-first (POST /chat is the one path;
+    it frames the engine's token stream) runs the task set in
+    ``stream_turn``; these tests pin that contract on the SSE path.
     """
 
-    @staticmethod
-    def _fake_provider(text: str = "Hello back"):
-        provider = MagicMock()
+    def _fake_provider(self) -> MagicMock:
+        mock_provider = MagicMock()
 
         async def _chat_stream(messages, **kwargs):
-            yield text
+            for tok in ["Hello", " back"]:
+                yield tok
 
-        provider.chat_stream = _chat_stream
-        return provider
+        mock_provider.chat_stream = _chat_stream
+        return mock_provider
 
     @patch.dict(
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
     @patch("apps.api.server.routers.inference.get_provider")
     @patch("apps.api.server.routers.inference._run_post_gen_tasks")
-    def test_non_stream_chat_runs_post_gen_tasks(self, mock_post_gen, mock_get_provider, client):
-        """The gap itself: this call did not exist before G2."""
+    def test_chat_runs_post_gen_tasks(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        """The gap itself: this call must fire on the SSE turn path."""
         mock_post_gen.return_value = {"narrative": "", "level": 0}
         mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
-        resp = client.post(
-            "/chat",
-            json={"session_id": "sess-1", "messages": [{"role": "user", "content": "Hello"}]},
-        )
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
 
         assert resp.status_code == 200
+        assert "Hello" in resp.text
         mock_post_gen.assert_called_once()
 
     @patch.dict(
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
     @patch("apps.api.server.routers.inference.get_provider")
     @patch("apps.api.server.routers.inference._run_post_gen_tasks")
     def test_post_gen_receives_the_turn_it_belongs_to(
-        self, mock_post_gen, mock_get_provider, client
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
     ):
         """Post-gen work must be attributed to the response that produced it."""
         mock_post_gen.return_value = {"narrative": "", "level": 0}
         mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
         client.post(
             "/chat",
-            json={"session_id": "sess-1", "messages": [{"role": "user", "content": "Hello"}]},
+            json={
+                "session_id": "sess-1",
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
         )
 
         args = mock_post_gen.call_args.args
@@ -901,12 +904,11 @@ class TestChatPostGenTasks:
     ):
         """No double-run: post-gen already captures, so the turn must not too.
 
-        Post-gen is spied out here, so any capture reached directly on the
-        stream path would still fire — asserting it does not is the
+        Post-gen is spied out here, so any capture reached directly by the
+        turn path would still fire — asserting it does not is the
         anti-double-count guarantee.
         """
         mock_post_gen.return_value = {"narrative": "", "level": 0}
-        mock_get_provider.return_value = self._fake_provider()
 
         client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
 
@@ -916,21 +918,27 @@ class TestChatPostGenTasks:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
     @patch("apps.api.server.routers.inference.get_provider")
     @patch(
         "apps.api.server.routers.inference._run_post_gen_tasks",
         side_effect=RuntimeError("post-gen exploded"),
     )
     def test_post_gen_failure_does_not_fail_the_turn(
-        self, mock_post_gen, mock_get_provider, client
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
     ):
         """These tasks are best-effort: the reply must still reach the user."""
         mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
         resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
 
         assert resp.status_code == 200
-        assert "Hello back" in resp.text
+        assert "Hello" in resp.text
+        assert " back" in resp.text
+
+
 class TestModelStateReadiness:
     """_get_model_status — a terminal autoload failure must name its cause.
 

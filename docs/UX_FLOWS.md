@@ -354,6 +354,33 @@ a flow loses its anchor. Run them with
 
 ---
 
+### 13. Manage My Work (Kanban Board)
+
+**What the user sees:**
+
+- One board with their cards in simple columns: Inbox → Ready → Doing → Review → Verify → Done
+- Cards can be moved forward or back; the board tells them right away if a move makes sense
+- Blocked cards sit in their own lane so nothing gets lost
+- A warning when a column is getting too full (WIP limit), in plain words
+- A refresh button if the board looks stale
+
+**User flow:**
+
+1. Open the kanban page → the board loads with their cards in each column
+2. Pick a card → see which columns it may legally move to
+3. Move it (e.g. Ready → Doing) → the move is accepted or rejected with a short reason
+4. If blocked: move it to Blocked, add context, unblock it when ready
+5. Keep moving cards until everything sits in Done
+
+**What they should NOT see:**
+
+- Transition rule tables or engine internals (why a move is legal is enough)
+- Hash chains, state signatures, or validation hashes
+- Raw API errors — a rejected move gets a plain-language reason
+- WIP limit numbers without context ("column full" beats "limit: 3")
+
+---
+
 ## Navigation & Layout (Plain English)
 
 **Home screen (what they see first):**

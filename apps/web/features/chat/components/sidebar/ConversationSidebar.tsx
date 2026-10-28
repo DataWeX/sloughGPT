@@ -287,7 +287,7 @@ function SidebarContent({
           <span className="text-xs font-medium text-foreground">Conversations</span>
           {unreadCount > 0 && (
             <>
-              <span className="h-4 min-w-[16px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-bold px-1 tabular-nums">
+              <span className="h-4 min-w-4 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium px-1 tabular-nums">
                 {unreadCount}
               </span>
               <button
@@ -331,7 +331,7 @@ function SidebarContent({
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') setSortOpen(false)
                   }}
-                  className="absolute left-0 top-full mt-1 z-50 bg-background border border-border/60 rounded-lg shadow-md py-1 min-w-[140px]"
+                  className="absolute left-0 top-full mt-1 z-50 bg-background border border-border/60 rounded-lg shadow-md py-1 min-w-36"
                 >
                   {(
                     [
@@ -380,7 +380,7 @@ function SidebarContent({
           {isDrawer && onClose && (
             <button
               onClick={onClose}
-              className="active:bg-muted flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted flex items-center justify-center h-6 w-6 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label="Close sidebar"
             >
               <IconX className="h-4 w-4" />
@@ -416,7 +416,7 @@ function SidebarContent({
                 onNewChat()
                 onClose?.()
               }}
-              className="text-[11px] h-6 px-2 gap-1 text-primary hover:text-primary/80"
+              className="text-xs h-6 px-2 gap-1 text-primary hover:text-primary/80"
             >
               <IconPlus className="h-4 w-4" />
               Start chatting
@@ -556,7 +556,7 @@ function SidebarContent({
                   setArchivedLoading(false)
                 }
               }}
-              className="active:bg-muted flex items-center gap-2 w-full px-2 py-1 text-left group rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="active:bg-muted flex items-center gap-2 w-full px-2 py-1 text-left group rounded transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-expanded={archivedExpanded}
               aria-controls="archived-conversations-list"
             >
@@ -589,7 +589,7 @@ function SidebarContent({
                     <div className="h-11 rounded-md bg-muted animate-pulse motion-reduce:animate-none opacity-70" />
                   </div>
                 ) : archivedConversations.length === 0 ? (
-                  <div className="text-[11px] text-muted-foreground/50 px-2 py-2">
+                  <div className="text-xs text-muted-foreground/50 px-2 py-2">
                     No archived conversations
                   </div>
                 ) : (
@@ -664,7 +664,9 @@ export function ConversationSidebar({
       <aside
         className={cn(
           'hidden lg:flex shrink-0 flex-col border-r border-border/40 bg-background/80 transition-all duration-200 ease-in-out overflow-hidden',
-          collapsed ? 'w-0 border-r-0' : 'w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))] pl-[var(--nav-tab-protrusion)]',
+          collapsed
+            ? 'w-0 border-r-0'
+            : 'w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))] pl-[var(--nav-tab-protrusion)]',
         )}
       >
         <div

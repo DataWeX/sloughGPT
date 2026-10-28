@@ -123,3 +123,34 @@ class TestGetPluginManager:
         pm1 = get_plugin_manager()
         pm2 = get_plugin_manager()
         assert pm1 is pm2
+
+
+class TestMolePlugin:
+    """The Mole ships as a plugin (repo plugins/ dir), not a hardwired feature."""
+
+    def _repo_plugins_dir(self):
+        from pathlib import Path
+
+        from domain.shared import find_repo_root
+
+        return find_repo_root(Path(__file__)) / "plugins"
+
+    def test_mole_plugin_loads_from_repo_dir(self):
+        pm = PluginManager()
+        loaded = pm.load_from_directory(self._repo_plugins_dir())
+        assert loaded >= 1
+        assert "MolePlugin" in pm._plugins
+
+    def test_mole_plugin_metadata(self):
+        pm = PluginManager()
+        pm.load_from_directory(self._repo_plugins_dir())
+        meta = pm._metadata["MolePlugin"]
+        assert meta.enabled is True
+        assert meta.version
+        assert "checks" in meta.description or "Mole" in meta.description
+
+    def test_mole_plugin_surfaces_in_list(self):
+        pm = PluginManager()
+        pm.load_from_directory(self._repo_plugins_dir())
+        names = [p["name"] for p in pm.list_plugins()]
+        assert "MolePlugin" in names

@@ -559,6 +559,52 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
         return {"facts": [], "source": "error", "topics": [], "error": str(e)}
 
 
+async def _build_context_frame(
+    ctx_core: Any,
+    session_id: str,
+    user_msg: str,
+    corr_id: str,
+) -> tuple[Any, dict]:
+    """Build context frame from ContextCore. Returns (frame, context_info)."""
+    context_info: dict = {}
+    frame = None
+
+    skip_context = False
+    try:
+        if get_memory_service().stats().get("total_facts", 0) == 0:
+            skip_context = True
+    except Exception as e:
+        logger.debug("Knowledge memory check failed: %s", e)
+
+    if not skip_context:
+        ctx_core.set_session_id(session_id)
+        ctx_core.add_message("user", user_msg)
+        try:
+            frame = await asyncio.wait_for(
+                ctx_core.build_context_frame(
+                    include_rag=True,
+                    include_memory=True,
+                    query=user_msg,
+                ),
+                timeout=5.0,
+            )
+        except TimeoutError:
+            logger.warning(
+                "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
+                corr_id,
+            )
+            frame = None
+
+        if frame is not None:
+            context_info = {
+                "layers": [l.layer_type for l in frame.layers],
+                "total_tokens": frame.total_tokens,
+                "max_tokens": frame.max_tokens,
+            }
+
+    return frame, context_info
+
+
 # ── In-memory session search index ──────────────────────────────────────────
 
 
@@ -631,7 +677,7 @@ def _run_post_gen_tasks(
     user_msg: str,
     session_id: str,
     start_time: datetime.datetime,
-    req: ChatRequest,
+    req: TurnRequest,
     ctx_core: Any,
     bg_tasks_lock: Any,
     bg_tasks: Any,
@@ -1875,49 +1921,35 @@ class InferenceRouter:
                     "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
                 )
 
-        # MEMORY + CONTEXT FRAME — recall side, ported from main's
-        # _build_context_frame: with zero stored facts there is nothing to
-        # recall, so the ContextCore frame build is skipped; knowledge
-        # enrichment stays the fallback whenever the frame yields no layers.
-        skip_context = False
+        session_id = req.session_id or "default"
+
+        # Context frame — memory/rag layers via ContextCore, gated on the memory
+        # service holding at least one fact (the gate travels with the frame
+        # builder: empty memory means skip the frame entirely).
+        frame = None
         try:
-            if get_memory_service().stats().get("total_facts", 0) == 0:
-                skip_context = True
+            frame, _context_info = await _build_context_frame(
+                self._get_context_core(), session_id, user_msg, corr_id="stream"
+            )
         except Exception as e:
-            logger.debug("Knowledge memory check failed: %s", e)
+            logger.debug("Context frame build failed: %s", e)
 
-        frame_context: list[str] = []
-        knowledge_retrieved: list[str] = []
-        if not skip_context:
-            _ctx = self._get_context_core()
-            try:
-                _ctx.set_session_id(req.session_id or "default")
-                _ctx.add_message("user", user_msg)
-                frame = await asyncio.wait_for(
-                    _ctx.build_context_frame(
-                        include_rag=True,
-                        include_memory=True,
-                        query=user_msg,
-                    ),
-                    timeout=5.0,
-                )
-            except TimeoutError:
-                logger.warning("Context frame build timed out after 5.0s")
-                frame = None
-            except Exception as e:
-                logger.debug("Context frame build failed: %s", e)
-                frame = None
-            if frame:
-                for layer in frame.layers:
-                    if layer.layer_type in ("memory", "rag") and layer.content:
-                        frame_context.append(layer.content)
+        frame_context = []
+        if frame:
+            for layer in frame.layers:
+                if layer.layer_type in ("memory", "rag") and layer.content:
+                    frame_context.append(layer.content)
 
+        # Knowledge enrichment — only when the frame carried no memory/rag
+        # layer content; facts learned live feed the prompt otherwise.
+        knowledge_retrieved = []
         if not frame_context:
             try:
                 enrichment = await asyncio.wait_for(
                     asyncio.to_thread(_enrich_knowledge, user_msg, False, 5), timeout=10.0
                 )
-                knowledge_retrieved = enrichment.get("facts") or []
+                if enrichment.get("facts"):
+                    knowledge_retrieved = enrichment["facts"]
             except Exception as e:
                 logger.debug("Knowledge enrichment failed: %s", e)
 
@@ -1934,7 +1966,7 @@ class InferenceRouter:
         # and inject it as a leading system block (gated on req.use_rag).
         if req.use_rag:
             try:
-                from domain.core import is_rag_service_ready
+                from domain.cognition import is_rag_service_ready
 
                 if is_rag_service_ready():
                     rag_svc = await asyncio.wait_for(
@@ -1978,7 +2010,6 @@ class InferenceRouter:
             raise_error("Model not loaded", "E_INFRA_REGISTRY", status_code=503)
 
         model = _chat_state.model_type or req.model
-        session_id = req.session_id or "default"
 
         collected: list[str] = []
         try:
@@ -2005,12 +2036,15 @@ class InferenceRouter:
         try:
             tokens = _count_tokens(text, _chat_state)
         except Exception as e:
-            logger.warning("Failed to count tokens: %s", e)
-            tokens = 0
-        # G2 (card db19c373): ONE task set, ONE call site. _run_post_gen_tasks
-        # performs the capture, the metrics record, response tracking, learner
-        # ingest and consciousness — the inline copies that used to sit here
-        # would double-count every streaming turn.
+            logger.debug("Token count failed: %s", e)
+
+        # One task set, one call site: _run_post_gen_tasks performs the
+        # metrics record and the conversation capture that used to live
+        # inline here, alongside RAG verification, response tracking,
+        # continual-learning ingest, entity extraction, and consciousness
+        # post-processing. Retaining the inline copies would double-count
+        # every turn (audit gap G2's rule, applied to the single path the
+        # stream-first architecture left).
         _post_gen: dict[str, Any] = {}
         try:
             _post_gen = _run_post_gen_tasks(
@@ -2023,16 +2057,24 @@ class InferenceRouter:
                 self._bg_tasks_lock,
                 self._BG_TASKS,
                 self._bg_tasks_lock_discard,
-                corr_id="turn",
+                corr_id="stream",
             )
-            if _post_gen.get("narrative"):
-                logger.info(
-                    "Turn reflection recorded (level=%s)",
-                    _post_gen["level"],
-                    extra={"tag": "INF"},
-                )
         except Exception as e:
             logger.warning("Post-gen tasks failed: %s", e)
+        if _post_gen.get("narrative"):
+            logger.info(
+                "Chat reflection recorded (level=%s)",
+                _post_gen["level"],
+                extra={"tag": "INF"},
+            )
+
+        _memory: dict | None = None
+        try:
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+            if _memory_facts:
+                _memory = {"stored": True, "fact": _memory_facts[0], "facts": _memory_facts}
+        except Exception as e:
+            logger.debug("Auto-memory remember failed: %s", e)
 
         # Sideband frames the chat edge forwards verbatim before close:
         # the consciousness reflection surfaced by post-gen, then the
@@ -2084,7 +2126,15 @@ class InferenceRouter:
             elapsed_ms=elapsed,
             finish_reason="stop",
             tokens=collected,
-            events=_sideband_events,
+            consciousness=(
+                {
+                    "level": _post_gen.get("level", 0),
+                    "self_insight": _post_gen.get("narrative", ""),
+                }
+                if _post_gen.get("narrative")
+                else None
+            ),
+            memory=_memory,
         )
 
     async def chat(

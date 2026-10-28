@@ -160,7 +160,7 @@ describe('ChatScreen', () => {
       />,
     )
     const rowWrappers = [...container.querySelectorAll('div')].filter((d) =>
-      d.className.includes('w-full px-4 sm:px-6 py-1.5'),
+      d.className.includes('mx-auto w-full px-4 sm:px-6 py-1.5'),
     )
     expect(rowWrappers).toHaveLength(2)
   })

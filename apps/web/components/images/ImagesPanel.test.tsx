@@ -7,17 +7,22 @@ vi.mock('@/vite/next-compat/navigation', () => ({
 }))
 
 const { mockGet, mockPost } = vi.hoisted(() => ({
-  mockGet: vi.fn(), mockPost: vi.fn(),
+  mockGet: vi.fn(),
+  mockPost: vi.fn(),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
     ),
     Textarea: ({ value, onChange, placeholder }: any) => (
       <textarea value={value} onChange={onChange} placeholder={placeholder} />
@@ -55,7 +60,13 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockGet.mockImplementation((url: string) => {
     if (url.includes('gallery')) return Promise.resolve({ images: [] })
-    if (url.includes('styles')) return Promise.resolve({ styles: [['realistic', 'Realistic'], ['cartoon', 'Cartoon']] })
+    if (url.includes('styles'))
+      return Promise.resolve({
+        styles: [
+          ['realistic', 'Realistic'],
+          ['cartoon', 'Cartoon'],
+        ],
+      })
     return Promise.resolve(null)
   })
   mockPost.mockResolvedValue({ image: 'base64data' })
@@ -94,7 +105,9 @@ describe('ImagesPanel — prompt flow', () => {
 
   it('allows typing a prompt', async () => {
     render(<ImagesPanel />)
-    await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
+    })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
     fireEvent.change(textarea, { target: { value: 'A sunset over mountains' } })
@@ -113,7 +126,9 @@ describe('ImagesPanel — style selection flow', () => {
 
   it('allows selecting a style', async () => {
     render(<ImagesPanel />)
-    await waitFor(() => { expect(screen.getByText('Realistic')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Realistic')).toBeTruthy()
+    })
 
     fireEvent.click(screen.getByText('Cartoon'))
     expect(screen.getByText('Cartoon')).toBeTruthy()
@@ -123,32 +138,38 @@ describe('ImagesPanel — style selection flow', () => {
 describe('ImagesPanel — generate flow', () => {
   it('generate button triggers image generation', async () => {
     render(<ImagesPanel />)
-    await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
+    })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
     fireEvent.change(textarea, { target: { value: 'A cat' } })
 
-    const genBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('generate')
-    )
+    const genBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('generate'))
     expect(genBtn).toBeTruthy()
 
-    await act(async () => { fireEvent.click(genBtn!) })
+    await act(async () => {
+      fireEvent.click(genBtn!)
+    })
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith(
         expect.stringContaining('generate'),
-        expect.objectContaining({ prompt: 'A cat' })
+        expect.objectContaining({ prompt: 'A cat' }),
       )
     })
   })
 
   it('empty prompt does not trigger generation', async () => {
     render(<ImagesPanel />)
-    await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
+    })
 
-    const genBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('generate')
-    )
+    const genBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('generate'))
     if (genBtn) {
       fireEvent.click(genBtn)
       expect(mockPost).not.toHaveBeenCalled()
@@ -166,9 +187,10 @@ describe('ImagesPanel — gallery display', () => {
 
   it('displays images when gallery has items', async () => {
     mockGet.mockImplementation((url: string) => {
-      if (url.includes('gallery')) return Promise.resolve({
-        images: [{ id: '1', path: '/img1.png', created: Date.now() }]
-      })
+      if (url.includes('gallery'))
+        return Promise.resolve({
+          images: [{ id: '1', path: '/img1.png', created: Date.now() }],
+        })
       if (url.includes('styles')) return Promise.resolve({ styles: [] })
       return Promise.resolve(null)
     })
@@ -180,9 +202,13 @@ describe('ImagesPanel — gallery display', () => {
 
   it('insights card reports the gallery contents', async () => {
     mockGet.mockImplementation((url: string) => {
-      if (url.includes('gallery')) return Promise.resolve({
-        images: [{ id: '1', path: '/a.png', created: Date.now() }, { id: '2', path: '/b.png', created: Date.now() }]
-      })
+      if (url.includes('gallery'))
+        return Promise.resolve({
+          images: [
+            { id: '1', path: '/a.png', created: Date.now() },
+            { id: '2', path: '/b.png', created: Date.now() },
+          ],
+        })
       if (url.includes('styles')) return Promise.resolve({ styles: [['realistic', 'Realistic']] })
       return Promise.resolve(null)
     })
@@ -205,15 +231,19 @@ describe('ImagesPanel — error handling', () => {
   it('handles generation failure gracefully', async () => {
     mockPost.mockRejectedValue(new Error('generation failed'))
     render(<ImagesPanel />)
-    await waitFor(() => { expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText(/describe/i).length).toBeGreaterThanOrEqual(1)
+    })
 
     const textarea = screen.getAllByPlaceholderText(/describe/i)[0]
     fireEvent.change(textarea, { target: { value: 'A cat' } })
 
-    const genBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('generate')
-    )
-    await act(async () => { fireEvent.click(genBtn!) })
+    const genBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('generate'))
+    await act(async () => {
+      fireEvent.click(genBtn!)
+    })
     await waitFor(() => {
       expect(screen.getByTestId('status-banner').textContent).toContain('generation failed')
     })

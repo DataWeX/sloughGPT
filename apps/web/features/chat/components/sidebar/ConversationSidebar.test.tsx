@@ -182,7 +182,9 @@ describe('ConversationSidebar', () => {
     render(<ConversationSidebar {...defaultProps} />)
     const aside = document.querySelector('aside')
     expect(aside!.className).toContain('pl-[var(--nav-tab-protrusion)]')
-    expect(aside!.className).toContain('w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))]')
+    expect(aside!.className).toContain(
+      'w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))]',
+    )
   })
 
   it('drops the gutter when collapsed (width must be 0, no padding)', () => {

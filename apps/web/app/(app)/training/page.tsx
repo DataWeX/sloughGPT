@@ -241,7 +241,10 @@ export default function TrainingPage() {
       </FoldSection>
 
       {/* Live feed + job activity stream */}
-      <SectionHeader title="Live stream" description="Feed arrivals and job activity, as they happen." />
+      <SectionHeader
+        title="Live stream"
+        description="Feed arrivals and job activity, as they happen."
+      />
       <LiveFeedStream />
 
       <TestModelDialog
