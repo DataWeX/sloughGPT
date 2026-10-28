@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from '@/vite/next-compat/dynamic'
 import { cn, IconStar, StatusDot } from '@sloughgpt/strui'
+import { computeGenerationEta, formatEtaDuration } from '@/lib/generation-eta'
 import { formatRelativeTime } from '@/lib/time-format'
 import { ConsciousnessMessageBadge } from '../ConsciousnessMessageBadge'
 
@@ -48,16 +49,25 @@ export interface MessageBubbleProps {
   onThread?: (messageId: string) => void
   /** Position of this turn in the transcript (1-based). Renders in the gutter. */
   turnNumber?: number
-  /** Per-turn stream metrics for the margin (tok/s, token count, latency). */
-  metrics?: { tokens?: number; elapsedMs?: number }
+  /** Per-turn stream metrics for the margin (tok/s, token count, latency, ETA while streaming). */
+  metrics?: { tokens?: number; elapsedMs?: number; maxTokens?: number }
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
-function formatMetrics(m?: { tokens?: number; elapsedMs?: number }): string | null {
+function formatMetrics(
+  m?: { tokens?: number; elapsedMs?: number; maxTokens?: number },
+  streaming = false,
+): string | null {
   if (!m || m.tokens == null || m.elapsedMs == null || m.elapsedMs <= 0) return null
-  const tps = m.tokens / (m.elapsedMs / 1000)
-  const secs = (m.elapsedMs / 1000).toFixed(1)
-  return `${tps.toFixed(1)} tok/s · ${m.tokens} tok · ${secs}s`
+  const { tokens, elapsedMs, maxTokens } = m
+  const tps = tokens / (elapsedMs / 1000)
+  const secs = (elapsedMs / 1000).toFixed(1)
+  let eta = ''
+  if (streaming && maxTokens != null) {
+    const projected = computeGenerationEta({ tokens, elapsedMs, maxTokens })
+    if (projected?.etaMs != null) eta = ` · ~${formatEtaDuration(projected.etaMs)} left`
+  }
+  return `${tps.toFixed(1)} tok/s · ${tokens} tok · ${secs}s${eta}`
 }
 
 /**
@@ -106,7 +116,7 @@ export const MessageBubble = memo(function MessageBubble({
   const hasContent = content && content.trim().length > 0
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
   const id = messageId || 'msg'
-  const metricsText = formatMetrics(metrics)
+  const metricsText = formatMetrics(metrics, isStreaming)
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {

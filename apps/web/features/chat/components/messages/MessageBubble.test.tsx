@@ -483,6 +483,49 @@ describe('MessageBubble', () => {
       expect(zero.textContent).not.toContain('tok/s')
     })
 
+    it('appends an ETA projection to the margin while streaming against a cap', () => {
+      const { container } = render(
+        <MessageBubble
+          content="hi"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          isStreaming
+          metrics={{ tokens: 50, elapsedMs: 5000, maxTokens: 200 }}
+        />,
+      )
+      expect(container.textContent).toContain('10.0 tok/s · 50 tok · 5.0s · ~15s left')
+    })
+
+    it('omits the ETA when the turn is not streaming', () => {
+      const { container } = render(
+        <MessageBubble
+          content="hi"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          metrics={{ tokens: 50, elapsedMs: 5000, maxTokens: 200 }}
+        />,
+      )
+      expect(container.textContent).toContain('10.0 tok/s · 50 tok · 5.0s')
+      expect(container.textContent).not.toContain('left')
+    })
+
+    it('omits the ETA when streaming without a max-token cap', () => {
+      const { container } = render(
+        <MessageBubble
+          content="hi"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          isStreaming
+          metrics={{ tokens: 50, elapsedMs: 5000 }}
+        />,
+      )
+      expect(container.textContent).toContain('50 tok · 5.0s')
+      expect(container.textContent).not.toContain('left')
+    })
+
     it('shows a pulsing primary StatusDot while streaming', () => {
       render(
         <MessageBubble

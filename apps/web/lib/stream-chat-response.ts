@@ -11,6 +11,7 @@ const RETRYABLE_STATUSES = new Set([408, 429, 502, 503, 504])
 const MAX_RETRIES = 2
 const BASE_DELAY_MS = 500
 const MODEL_LOADING_DELAY_MS = 3000 // Longer delay for model loading (503)
+const META_TICK_MS = 400
 
 export interface ToolCallEvent {
   tool: string
@@ -35,8 +36,8 @@ interface StreamChatParams {
   knowledge?: string[]
   onToken: (token: string) => void
   onComplete: () => void
-  /** Per-turn stream metrics (fires just before onComplete). */
-  onMeta?: (meta: { tokens: number; elapsedMs: number }) => void
+  /** Per-turn stream metrics — throttled live ticks while streaming; final fires just before onComplete. */
+  onMeta?: (meta: { tokens: number; elapsedMs: number; maxTokens: number }) => void
   onError: (
     status: number,
     text?: string,
@@ -97,6 +98,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
   let retries = 0
   let lastEventId: string | undefined
   let tokenCount = 0
+  let lastMetaAtMs = 0
   const startTime = Date.now()
 
   _log.debug('streamChatResponse START', {
@@ -254,12 +256,24 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           tokenCount++
           hasContent = true
           params.onToken(token)
+          if (params.onMeta && Date.now() - lastMetaAtMs >= META_TICK_MS) {
+            lastMetaAtMs = Date.now()
+            params.onMeta({
+              tokens: tokenCount,
+              elapsedMs: lastMetaAtMs - startTime,
+              maxTokens: params.maxTokens,
+            })
+          }
         }
 
         if (event.status === 'complete') {
           _log.debug('Stream complete', { tokens: tokenCount, elapsed: Date.now() - startTime })
           if (!hasContent) params.onToken('')
-          params.onMeta?.({ tokens: tokenCount, elapsedMs: Date.now() - startTime })
+          params.onMeta?.({
+            tokens: tokenCount,
+            elapsedMs: Date.now() - startTime,
+            maxTokens: params.maxTokens,
+          })
           params.onComplete()
           completed = true
           continue

@@ -57,6 +57,12 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
       '@sloughgpt/strui': path.resolve(__dirname, '../../packages/strui/src'),
+      'next/link': path.resolve(__dirname, 'vite/next-compat/link.tsx'),
+      'next/navigation': path.resolve(__dirname, 'vite/next-compat/navigation.ts'),
+      'next/dynamic': path.resolve(__dirname, 'vite/next-compat/dynamic.tsx'),
+      'next/web-vitals': path.resolve(__dirname, 'vite/next-compat/web-vitals.ts'),
+      'next/server': path.resolve(__dirname, 'vite/next-compat/server.ts'),
+      'next-auth/react': path.resolve(__dirname, 'vite/next-compat/next-auth.tsx'),
       react: path.resolve(__dirname, '../../node_modules/react'),
       'react/jsx-runtime': path.resolve(__dirname, '../../node_modules/react/jsx-runtime.js'),
       'react/jsx-dev-runtime': path.resolve(
