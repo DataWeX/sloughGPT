@@ -18,6 +18,7 @@ import numpy as np
 
 logger = logging.getLogger("slo.multimodal.tts")
 
+from domain.training._internal.training_handler import DirectGradientHandler
 from domain.voice._internal.phoneme_encoder import NUM_PHONEMES, PhonemeEncoder
 
 # SSML tag patterns
@@ -148,6 +149,9 @@ class SpectrogramDecoder:
         self.fc_stop = SloLinear(hidden_dim, 1)
 
         self.optimizer = SloAdam(lr=lr)
+        # One-loop contract: backward/clip/step/zero lives in the training
+        # engine (training_handler.DirectGradientHandler), not in this file.
+        self.gradient_handler = DirectGradientHandler(grad_clip=1.0)
 
     def train_step(
         self,
@@ -156,7 +160,10 @@ class SpectrogramDecoder:
         stop_targets: np.ndarray = None,
         update: bool = True,
     ) -> float:
-        """One REAL gradient step: Tensor-graph forward -> backward -> Adam.
+        """One REAL gradient step: Tensor-graph forward -> loss; the step
+        itself is delegated to DirectGradientHandler (the one-loop engine in
+        training_handler) so this file never pairs a backward pass with an
+        optimizer step — the scatter gate's one-loop contract.
 
         Parity contract with the numpy inference path (encode_text/decode_step/
         generate): same weights, sequence-mean context, bias-free recurrent
@@ -243,8 +250,7 @@ class SpectrogramDecoder:
         if stop_acc is not None:
             total = total + stop_acc * (0.5 / float(target_frames))
         if update:
-            total.backward()
-            self.optimizer.step([p for p in self.parameters() if p.grad is not None])
+            self.gradient_handler.step(self, total, self.optimizer)
         return float(np.asarray(total.data).real)
 
     def encode_text(self, phoneme_ids: np.ndarray):
