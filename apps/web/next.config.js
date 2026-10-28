@@ -3,6 +3,22 @@ const path = require('path')
 const isProd = process.env.NODE_ENV === 'production'
 const isExport = process.env.NEXT_EXPORT === '1'
 
+// Mirror of vite.config.ts: Vite maps `next/*` -> `@/vite/next-compat/*` so the
+// app can coexist with Next. The compat shims are react-router under the hood,
+// which requires a `<Router>` context — Vite supplies one (vite-entry.tsx wraps
+// in BrowserRouter), but Next's SSR tree has no react-router Router, so any
+// component importing the compat path throws
+// `useLocation() may be used only in the context of <Router>` server-side
+// (digest 3835366826, first seen from Sidebar via usePathname).
+// Next-side alias flips the same imports to the native modules; only the three
+// subpaths present in Next's graph are aliased (`digest-boundary` is
+// vite-entry-only), and vitest/Vite are untouched so compat-path mocks keep working.
+const compatAliases = {
+  '@/vite/next-compat/navigation': 'next/navigation',
+  '@/vite/next-compat/link': 'next/link',
+  '@/vite/next-compat/dynamic': 'next/dynamic',
+}
+
 const nextConfig = {
   outputFileTracingRoot: path.join(__dirname, '../../'),
   reactStrictMode: true,
@@ -37,10 +53,18 @@ const nextConfig = {
     // the webpack `externals: { v86: 'v86' }` handling used by `next build`.
     // The stub only surfaces if the in-browser VM is actually initialized.
     resolveAlias: {
+      ...compatAliases,
       v86: { browser: './lib/node-builtin-stub.ts' },
     },
   },
   webpack: (config, { isServer }) => {
+    // Mirror of turbopack.resolveAlias above — `next build` may run on webpack
+    // where the `turbopack` key is ignored. Both halves must map the compat
+    // shims to the native modules or SSR throws the useLocation digest.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      ...compatAliases,
+    }
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,

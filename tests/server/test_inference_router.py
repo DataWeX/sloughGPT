@@ -941,3 +941,82 @@ class TestChatPostGenTasks:
         assert resp.status_code == 200
         assert "Hello" in resp.text
         assert " back" in resp.text
+
+
+class TestModelStateReadiness:
+    """_get_model_status — a terminal autoload failure must name its cause.
+
+    Before MODEL_LOAD_STATE existed the function had three answers
+    (E_NO_MODEL / E_STARTING / E_MODEL_LOADING), so a load that had already
+    failed kept getting "Model still loading — please wait." forever.
+    """
+
+    @pytest.fixture
+    def no_materialized_model(self, monkeypatch):
+        import state as server_state
+        from startup_progress import MODEL_LOAD_STATE, STARTUP_PHASE
+
+        from domain.infrastructure.server_state import get_server_state
+
+        monkeypatch.setenv("SLO_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct")
+
+        saved_state = dict(MODEL_LOAD_STATE)
+        saved_phase = STARTUP_PHASE["phase"]
+        saved_model = getattr(server_state, "model", None)
+        saved_provider = getattr(server_state, "provider", None)
+        core = get_server_state()
+        saved_core_model = core.model.get()
+
+        server_state.model = None
+        server_state.provider = None
+        core.model.set(None)
+        STARTUP_PHASE["phase"] = "ready"
+        MODEL_LOAD_STATE.update(status="pending", error=None)
+        try:
+            yield MODEL_LOAD_STATE
+        finally:
+            MODEL_LOAD_STATE.clear()
+            MODEL_LOAD_STATE.update(saved_state)
+            STARTUP_PHASE["phase"] = saved_phase
+            server_state.model = saved_model
+            server_state.provider = saved_provider
+            core.model.set(saved_core_model)
+
+    def test_failed_autoload_reports_the_real_cause(self, no_materialized_model):
+        from apps.api.server.routers.inference import _get_model_status
+
+        no_materialized_model.update(
+            status="failed",
+            error=(
+                "No local weights for Qwen/Qwen2.5-0.5B-Instruct (no .slnc/.soul/safetensors) "
+                "and SLO_BOOTSTRAP_HF is off — set SLO_BOOTSTRAP_HF=1 to download them, or "
+                "point SLO_AUTOLOAD_MODEL at a model you already have."
+            ),
+        )
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOAD_FAILED"
+        assert ms["status"] == 503
+        assert "SLO_BOOTSTRAP_HF" in ms["reason"]
+
+    def test_in_flight_load_still_reports_still_loading(self, no_materialized_model):
+        from apps.api.server.routers.inference import _get_model_status
+
+        no_materialized_model.update(status="loading", error=None)
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOADING"
+        assert ms["status"] == 503
+
+    def test_ready_phase_with_no_failure_keeps_the_waiting_answer(self, no_materialized_model):
+        """Pending (no load started) + phase ready stays E_MODEL_LOADING."""
+        from apps.api.server.routers.inference import _get_model_status
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOADING"
