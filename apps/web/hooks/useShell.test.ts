@@ -8,7 +8,12 @@ vi.mock('@/lib/shell-controller', () => ({
   shellExecStream: vi.fn(),
 }))
 
+vi.mock('@/lib/dev-log', () => ({
+  trackEvent: vi.fn(),
+}))
+
 import { shellExecStream } from '@/lib/shell-controller'
+import { trackEvent } from '@/lib/dev-log'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -117,6 +122,53 @@ describe('useShell', () => {
       expect.any(Object),
       expect.anything(),
       expect.objectContaining({ raw: true }),
+    )
+  })
+
+  it('cancel(reason) appends a visible cancelled row + tracks the event (60s timeout path)', async () => {
+    let resolveStream: (() => void) | null = null
+    vi.mocked(shellExecStream).mockImplementation(
+      async () => new Promise<void>(r => { resolveStream = r }),
+    )
+
+    const { result } = renderHook(() => useShell())
+
+    act(() => { result.current.execute('long command') })
+    expect(result.current.state.isRunning).toBe(true)
+
+    act(() => { result.current.cancel('after 60s timeout') })
+
+    expect(result.current.state.isRunning).toBe(false)
+    const visible = result.current.state.rows
+      .map(r => r.spans.map(s => s.text).join(''))
+      .join('\n')
+    expect(visible).toContain('cancelled')
+    expect(visible).toContain('60s')
+    expect(vi.mocked(trackEvent)).toHaveBeenCalledWith(
+      'shell_command_cancelled',
+      expect.objectContaining({ reason: 'after 60s timeout' }),
+    )
+    expect(resolveStream).toBeTruthy()
+  })
+
+  it('user cancel without a reason stays silent — no cancelled row (timeout-only scope)', async () => {
+    vi.mocked(shellExecStream).mockImplementation(
+      async () => new Promise<void>(() => {}),
+    )
+
+    const { result } = renderHook(() => useShell())
+
+    act(() => { result.current.execute('long command') })
+    act(() => { result.current.cancel() })
+
+    expect(result.current.state.isRunning).toBe(false)
+    const visible = result.current.state.rows
+      .map(r => r.spans.map(s => s.text).join(''))
+      .join('\n')
+    expect(visible).not.toContain('cancelled')
+    expect(vi.mocked(trackEvent)).not.toHaveBeenCalledWith(
+      'shell_command_cancelled',
+      expect.anything(),
     )
   })
 

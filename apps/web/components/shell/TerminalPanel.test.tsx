@@ -2,7 +2,7 @@
  * Tests for TerminalPanel component.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 
 vi.mock('@/hooks/useShell', () => ({
@@ -135,6 +135,37 @@ describe('TerminalPanel', () => {
     )
     render(<TerminalPanel />)
     expect(screen.getByTestId('shell-running')).toBeDefined()
+  })
+
+  it('auto-cancels after 60s with a reason argument (loud timeout, not silent)', () => {
+    vi.useFakeTimers()
+    try {
+      const shell = createMockShell({
+        state: { lines: [], rows: [], isRunning: true, exitCode: null, error: null },
+      })
+      mockUseShell.mockReturnValue(shell)
+      render(<TerminalPanel />)
+
+      act(() => { vi.advanceTimersByTime(60_000) })
+
+      expect(shell.cancel).toHaveBeenCalledTimes(1)
+      expect(shell.cancel).toHaveBeenCalledWith(expect.stringContaining('60s'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Stop button calls cancel with no reason — user cancel stays silent (timeout-only scope)', () => {
+    const shell = createMockShell({
+      state: { lines: [], rows: [], isRunning: true, exitCode: null, error: null },
+    })
+    mockUseShell.mockReturnValue(shell)
+    render(<TerminalPanel />)
+
+    fireEvent.click(screen.getByTestId('shell-cancel'))
+
+    expect(shell.cancel).toHaveBeenCalledTimes(1)
+    expect(shell.cancel).toHaveBeenCalledWith()
   })
 
   it('renders error message', () => {

@@ -49,7 +49,7 @@ export function TerminalPanel({
     if (state.isRunning) {
       startRef.current = Date.now()
       const timer = setTimeout(() => {
-        cancel()
+        cancel('after 60s timeout')
         startRef.current = null
       }, 60_000)
       return () => clearTimeout(timer)
@@ -218,7 +218,7 @@ export function TerminalPanel({
         {state.isRunning && (
           <button
             type="button"
-            onClick={cancel}
+            onClick={() => cancel()}
             className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-medium bg-term-close/10 text-term-close hover:bg-term-close/20 transition-colors"
             data-testid="shell-cancel"
           >

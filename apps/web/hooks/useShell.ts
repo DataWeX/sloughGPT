@@ -162,10 +162,32 @@ export function useShell(maxLines = DEFAULT_MAX_LINES) {
     [maxLines, getEngine],
   )
 
-  const cancel = useCallback(() => {
-    abortRef.current?.abort()
-    setState((prev) => ({ ...prev, isRunning: false }))
-  }, [])
+  const cancel = useCallback(
+    (reason?: string) => {
+      abortRef.current?.abort()
+      if (reason) {
+        // Loud path — only the 60s auto-cancel passes a reason (timeout-only
+        // scope, card 20261026_123132). Write the row through the engine so it
+        // lands in rows (what the pane renders), not just lines.
+        const engine = getEngine()
+        const text = `✗ cancelled — ${reason}`
+        engine.writeLine(text)
+        setState((prev) => ({
+          ...prev,
+          isRunning: false,
+          lines: capLines(
+            [...prev.lines, { text, index: prev.lines.length, timestamp: Date.now() }],
+            maxLines,
+          ),
+          rows: engine.snapshot(),
+        }))
+        trackEvent('shell_command_cancelled', { reason })
+        return
+      }
+      setState((prev) => ({ ...prev, isRunning: false }))
+    },
+    [getEngine, maxLines],
+  )
 
   useEffect(() => {
     return () => {
