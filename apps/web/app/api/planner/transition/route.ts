@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from '@/vite/next-compat/server'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { readBoard, boardPath, type Board, type BoardCard } from '../helpers'
 
