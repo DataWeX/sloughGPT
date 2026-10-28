@@ -6,7 +6,7 @@
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
-import type { Card, Board, Note, TagCount, Stats } from '@/components/planner/types'
+import type { Card, Board, Note, TagCount, Stats, HashTree } from '@/components/planner/types'
 
 // ── Board ───────────────────────────────────────────────────────────────
 
@@ -98,4 +98,86 @@ export async function deleteNote(id: string): Promise<void> {
 
 export async function syncNotes(): Promise<{ added: number; updated: number; total: number }> {
   return apiPost<{ added: number; updated: number; total: number }>('/api/planner/sync', {})
+}
+
+// ── Hash tree ───────────────────────────────────────────────────────────
+
+export async function fetchHashTree(cardId: string): Promise<HashTree | null> {
+  try {
+    return await apiGet<HashTree>('/api/planner/hashtree', { cardId })
+  } catch {
+    return null
+  }
+}
+
+export async function fetchHashTrees(): Promise<{ trees: HashTree[]; count: number }> {
+  return apiGet<{ trees: HashTree[]; count: number }>('/api/planner/hashtree')
+}
+
+// ── Card notes (writes card.notes + hash tree in one save) ──────────────
+
+export async function addCardNote(
+  cardId: string,
+  text: string,
+  author?: string,
+): Promise<{ card: Card }> {
+  return apiPost<{ card: Card }>(`/api/planner/board/cards/${cardId}/notes`, {
+    action: 'add',
+    text,
+    author,
+  })
+}
+
+export async function updateCardNote(
+  cardId: string,
+  noteId: string,
+  text: string,
+): Promise<{ card: Card }> {
+  return apiPost<{ card: Card }>(`/api/planner/board/cards/${cardId}/notes`, {
+    action: 'update',
+    note_id: noteId,
+    text,
+  })
+}
+
+export async function deleteCardNote(cardId: string, noteId: string): Promise<{ card: Card }> {
+  return apiPost<{ card: Card }>(`/api/planner/board/cards/${cardId}/notes`, {
+    action: 'delete',
+    note_id: noteId,
+  })
+}
+
+// ── Transition (engine-validated) ───────────────────────────────────────
+
+export interface TransitionResult {
+  ok: boolean
+  card_id: string
+  from_state: string
+  to_state: string
+  error: string
+  wip_count: number
+  wip_limit: number
+  event: {
+    type: string
+    card_id: string
+    from_state: string
+    to_state: string
+    actor: string
+    timestamp: string
+    metadata: Record<string, unknown>
+  } | null
+}
+
+export async function transitionCard(payload: {
+  card_id: string
+  to_state: string
+  actor?: string
+  force?: boolean
+}): Promise<TransitionResult> {
+  const res = await fetch('/api/planner/transition', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  return res.json()
 }

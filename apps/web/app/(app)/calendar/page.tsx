@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { addGlobalError } from '@/lib/error-store'
 
 interface CalendarEvent {
   id: string
@@ -97,7 +98,7 @@ export default function CalendarPage() {
       const data = await res.json()
       setEvents(data.events || [])
     } catch (err) {
-      console.error('Failed to fetch events:', err)
+      addGlobalError(err, 'Calendar')
     } finally {
       setLoading(false)
     }

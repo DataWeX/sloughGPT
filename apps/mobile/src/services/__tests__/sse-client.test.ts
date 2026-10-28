@@ -53,7 +53,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const tokens: string[] = [];
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['Hel', 'lo']);
@@ -67,7 +67,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const statuses: string[] = [];
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       if (event.status === 'complete') statuses.push('complete');
     }
     expect(statuses).toEqual(['complete']);
@@ -80,7 +80,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const errors: Array<{status: string; message?: string}> = [];
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       if (event.status === 'error') {
         errors.push({status: event.status, message: event.message});
       }
@@ -94,7 +94,7 @@ describe('streamSSE', () => {
     ];
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       expect(event.meta).toEqual({tokens: 5, elapsed_ms: 100});
     }
   });
@@ -111,7 +111,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const tokens: string[] = [];
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['hi']);
@@ -126,7 +126,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const tokens: string[] = [];
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['ok']);
@@ -154,7 +154,7 @@ describe('streamSSE', () => {
     } as unknown as Response);
 
     const tokens: string[] = [];
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['Hello']);
@@ -203,7 +203,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const envelopes: unknown[] = [];
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       envelopes.push(event);
     }
     expect(envelopes).toHaveLength(2);
@@ -219,7 +219,7 @@ describe('streamSSE', () => {
     ];
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
-    for await (const event of streamSSE('/chat/stream', {messages: []})) {
+    for await (const event of streamSSE('/chat', {messages: []})) {
       expect(event.status).toBe('error');
       expect(event.data?.error).toBe('Token limit exceeded');
     }
@@ -228,7 +228,7 @@ describe('streamSSE', () => {
   it('passes Accept and Cache-Control headers', async () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
 
-    for await (const _ of streamSSE('/chat/stream', {messages: []})) {}
+    for await (const _ of streamSSE('/chat', {messages: []})) {}
 
     const [, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(init.headers).toMatchObject({

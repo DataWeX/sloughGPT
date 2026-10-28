@@ -87,7 +87,7 @@ export const Typography: StoryObj = {
         <div>
           <p className="sl-label">Code</p>
           <pre className="sl-code overflow-x-auto p-4 text-left text-xs sm:text-sm">
-            <code>{`POST /chat/stream\nmodel_id: "sloughgpt"`}</code>
+            <code>{`POST /chat\nmodel_id: "sloughgpt"`}</code>
           </pre>
         </div>
       </div>

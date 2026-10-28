@@ -28,13 +28,13 @@ import os
 import random
 import tempfile
 import time
-import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
 from . import config
+from .ids import make_readable_id
 
 logger = logging.getLogger("app_planner.store")
 
@@ -181,8 +181,8 @@ def chain_hash_for(card: Card, prev_hash: str) -> str:
 # 4/40 hammer runs under box load spikes (2026-10-04 evidence). POSIX-only.
 
 _OCC_ATTEMPTS = 30
-_OCC_BACKOFF_S = 0.005       # first retry delay; doubles per attempt
-_OCC_BACKOFF_CAP_S = 0.1     # per-sleep ceiling (worst total ≈ 3s, then LOUD)
+_OCC_BACKOFF_S = 0.005  # first retry delay; doubles per attempt
+_OCC_BACKOFF_CAP_S = 0.1  # per-sleep ceiling (worst total ≈ 3s, then LOUD)
 
 
 class BoardWriteConflict(RuntimeError):
@@ -301,9 +301,7 @@ class PlannerStore:
                 if attempt < _OCC_ATTEMPTS:
                     delay = min(_OCC_BACKOFF_CAP_S, _OCC_BACKOFF_S * 2 ** (attempt - 1))
                     time.sleep(delay * rng.uniform(0.5, 1.5))
-        raise BoardWriteConflict(
-            f"unresolved after {_OCC_ATTEMPTS} OCC attempts: {last}"
-        ) from last
+        raise BoardWriteConflict(f"unresolved after {_OCC_ATTEMPTS} OCC attempts: {last}") from last
 
     @staticmethod
     def _has_schema_header(lines: list[str]) -> bool:
@@ -375,11 +373,7 @@ class PlannerStore:
         """
 
         def attempt() -> None:
-            raw = (
-                self._board_file.read_text(encoding="utf-8")
-                if self._board_file.exists()
-                else ""
-            )
+            raw = self._board_file.read_text(encoding="utf-8") if self._board_file.exists() else ""
             token = _token_of(raw)
             body = [line for line in raw.splitlines() if line.strip()]
             out = list(body)
@@ -437,8 +431,7 @@ class PlannerStore:
         for card in board.cards:
             if card.column not in declared_set:
                 logger.warning(
-                    "Card %s has undeclared column %r — coercing to %r "
-                    "(declared: %s)",
+                    "Card %s has undeclared column %r — coercing to %r (declared: %s)",
                     card.id,
                     card.column,
                     fallback,
@@ -489,9 +482,25 @@ class PlannerStore:
         self._write_board(board)
 
     def get_card(self, card_id: str) -> Card | None:
-        for obj in self._read_board_lines():
-            if obj.get("id") == card_id and obj.get("title"):
-                return Card.from_dict(obj)
+        cards = [Card.from_dict(obj) for obj in self._read_board_lines() if obj.get("title")]
+        lower = card_id.lower()
+        matches = [c for c in cards if c.id.lower() == lower]
+        if not matches:
+            matches = [c for c in cards if c.id.lower().startswith(lower)]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            matches.sort(
+                key=lambda c: c.updated_at or c.created_at or c.id,
+                reverse=True,
+            )
+            logger.warning(
+                "Ambiguous card id '%s' (%d matches); using most recently updated: %s",
+                card_id,
+                len(matches),
+                matches[0].id,
+            )
+            return matches[0]
         return None
 
     def add_card(
@@ -509,8 +518,9 @@ class PlannerStore:
     ) -> Card:
         self.validate_column(column)
         now = datetime.now(UTC).isoformat()
+        board = self.load_board()
         card = Card(
-            id=str(uuid.uuid4()),
+            id=make_readable_id(title, (c.id for c in board.cards)),
             title=title,
             description=description,
             column=column,
@@ -642,11 +652,7 @@ class PlannerStore:
 
     def _read_notes_with_token(self) -> tuple[list[Note], str]:
         """Read the journal AND its generation token from ONE snapshot (OCC)."""
-        raw = (
-            self._notes_file.read_text(encoding="utf-8")
-            if self._notes_file.exists()
-            else ""
-        )
+        raw = self._notes_file.read_text(encoding="utf-8") if self._notes_file.exists() else ""
         notes: list[Note] = []
         for line in raw.splitlines():
             stripped = line.strip()
@@ -683,9 +689,25 @@ class PlannerStore:
         return notes[:limit]
 
     def get_note(self, note_id: str) -> Note | None:
-        for note in self._read_notes():
-            if note.id == note_id:
-                return note
+        notes = self._read_notes()
+        lower = note_id.lower()
+        matches = [n for n in notes if n.id.lower() == lower]
+        if not matches:
+            matches = [n for n in notes if n.id.lower().startswith(lower)]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            matches.sort(
+                key=lambda n: n.updated_at or n.created_at or n.id,
+                reverse=True,
+            )
+            logger.warning(
+                "Ambiguous note id '%s' (%d matches); using most recently updated: %s",
+                note_id,
+                len(matches),
+                matches[0].id,
+            )
+            return matches[0]
         return None
 
     def create_note(
@@ -700,7 +722,7 @@ class PlannerStore:
     ) -> Note:
         now = datetime.now(UTC).isoformat()
         note = Note(
-            id=str(uuid.uuid4()),
+            id=make_readable_id(title, (n.id for n in self._read_notes())),
             title=title,
             body=body,
             status=status,

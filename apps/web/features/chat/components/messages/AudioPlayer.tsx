@@ -10,7 +10,11 @@ interface AudioPlayerProps {
   className?: string
 }
 
-export const AudioPlayer = memo(function AudioPlayer({ src, durationMs = 0, className }: AudioPlayerProps) {
+export const AudioPlayer = memo(function AudioPlayer({
+  src,
+  durationMs = 0,
+  className,
+}: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -49,13 +53,13 @@ export const AudioPlayer = memo(function AudioPlayer({ src, durationMs = 0, clas
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className={cn("flex items-center gap-2 p-2 rounded-lg bg-muted/30", className)}>
+    <div className={cn('flex items-center gap-2 p-2 rounded-lg bg-muted/30', className)}>
       <audio ref={audioRef} src={src} preload="metadata" />
-      
+
       <button
         type="button"
         onClick={togglePlay}
-        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
         {isPlaying ? (
@@ -67,7 +71,7 @@ export const AudioPlayer = memo(function AudioPlayer({ src, durationMs = 0, clas
 
       <div className="flex-1 min-w-0">
         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-          <div 
+          <div
             className="h-full bg-primary/50 transition-all duration-100"
             style={{ width: `${progress}%` }}
           />

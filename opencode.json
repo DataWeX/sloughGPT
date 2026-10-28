@@ -1,12 +1,37 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "sloughgpt": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "sloughGPT (local)",
+      "options": {
+        "baseURL": "http://localhost:8000/v1"
+      },
+      "models": {
+        "default": {
+          "name": "SloNet Qwen2.5-0.5B (local)",
+          "limit": {
+            "context": 32768,
+            "output": 2048
+          }
+        }
+      }
+    }
+  },
   "skills": {
     "paths": [".opencode/skills"]
   },
   "mcp": {
     "chrome-devtools": {
       "type": "local",
-      "command": ["npx", "-y", "chrome-devtools-mcp", "--browserUrl", "http://localhost:9222", "--headless"],
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp",
+        "--browserUrl",
+        "http://localhost:9222",
+        "--headless"
+      ],
       "enabled": true
     }
   },

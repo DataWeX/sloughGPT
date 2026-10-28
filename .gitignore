@@ -217,6 +217,10 @@ models/unified-trained/
 # User data and backups
 .git-corrupted-backup/
 data/
+# …but not app source: the bare `data/` above shadows this Next.js route
+# dir (its files are tracked yet un-addable without -f, and lint-staged's
+# apply step fails on every commit that touches it).
+!apps/web/app/(app)/workspace/data/
 /models/
 /datasets/
 

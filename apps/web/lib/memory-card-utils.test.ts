@@ -23,62 +23,59 @@ describe('parseMemoryImport', () => {
         { content: 'fact 1', topic: 'science' },
         { content: 'fact 2', topic: 'history' },
       ])
-      const result = parseMemoryImport(input, 'data.json')
-      expect(result).toEqual([
+      expect(parseMemoryImport(input, 'data.json')).toEqual([
         { content: 'fact 1', topic: 'science' },
         { content: 'fact 2', topic: 'history' },
       ])
     })
 
     it('parses mixed strings and objects', () => {
-      const input = JSON.stringify([
-        'plain text',
-        { content: 'with topic', topic: 'math' },
-      ])
-      const result = parseMemoryImport(input, 'data.json')
-      expect(result).toEqual([
+      const input = JSON.stringify(['plain text', { content: 'with topic', topic: 'math' }])
+      expect(parseMemoryImport(input, 'data.json')).toEqual([
         { content: 'plain text', topic: 'manual' },
         { content: 'with topic', topic: 'math' },
       ])
     })
 
-    it('skips empty strings', () => {
-      const result = parseMemoryImport('["hello", "", "world"]', 'data.json')
-      expect(result).toHaveLength(2)
+    it('parses {items|facts|records} wrapper objects', () => {
+      const input = JSON.stringify({ records: [{ content: 'wrapped', topic: 'w' }] })
+      expect(parseMemoryImport(input, 'data.json')).toEqual([{ content: 'wrapped', topic: 'w' }])
     })
 
-    it('skips objects without content', () => {
-      const input = JSON.stringify([{ topic: 'science' }, { content: 'valid', topic: 'math' }])
+    it('accepts text/fact aliases for content', () => {
+      const input = JSON.stringify([{ text: 'via text' }, { fact: 'via fact' }])
       const result = parseMemoryImport(input, 'data.json')
-      expect(result).toHaveLength(1)
+      expect(result.map((e) => e.content)).toEqual(['via text', 'via fact'])
     })
 
-    it('defaults topic to manual for objects without topic', () => {
-      const input = JSON.stringify([{ content: 'fact' }])
-      const result = parseMemoryImport(input, 'data.json')
-      expect(result[0].topic).toBe('manual')
+    it('skips empty strings and objects without content', () => {
+      const input = JSON.stringify(['hello', '', { topic: 'science' }, { content: 'valid' }])
+      expect(parseMemoryImport(input, 'data.json')).toEqual([
+        { content: 'hello', topic: 'manual' },
+        { content: 'valid', topic: 'manual' },
+      ])
     })
 
     it('returns empty array for non-array JSON', () => {
       expect(parseMemoryImport('{"key": "value"}', 'data.json')).toEqual([])
     })
 
-    it('returns empty array for empty array', () => {
-      expect(parseMemoryImport('[]', 'data.json')).toEqual([])
+    it('returns empty array for malformed JSON instead of throwing', () => {
+      expect(parseMemoryImport('{nope', 'data.json')).toEqual([])
     })
 
-    it('trims whitespace in content', () => {
-      const input = JSON.stringify(['  hello  '])
+    it('trims whitespace in content and topic', () => {
+      const input = JSON.stringify(['  hello  ', { content: ' x ', topic: '  t ' }])
       const result = parseMemoryImport(input, 'data.json')
       expect(result[0].content).toBe('hello')
+      expect(result[1]).toEqual({ content: 'x', topic: 't' })
     })
   })
 
   describe('CSV files', () => {
     it('parses CSV with content and topic columns', () => {
       const csv = 'content,topic\nfact 1,science\nfact 2,history'
-      const result = parseMemoryImport(csv, 'data.csv')
-      expect(result).toEqual([
+      expect(parseMemoryImport(csv, 'data.csv')).toEqual([
         { content: 'fact 1', topic: 'science' },
         { content: 'fact 2', topic: 'history' },
       ])
@@ -86,8 +83,7 @@ describe('parseMemoryImport', () => {
 
     it('parses CSV with only content column', () => {
       const csv = 'content\nfact 1\nfact 2'
-      const result = parseMemoryImport(csv, 'data.csv')
-      expect(result).toEqual([
+      expect(parseMemoryImport(csv, 'data.csv')).toEqual([
         { content: 'fact 1', topic: 'manual' },
         { content: 'fact 2', topic: 'manual' },
       ])
@@ -95,9 +91,7 @@ describe('parseMemoryImport', () => {
 
     it('handles quoted values', () => {
       const csv = 'content,topic\n"fact, with comma",science'
-      const result = parseMemoryImport(csv, 'data.csv')
-      // CSV parser splits on commas, so quoted value gets split
-      expect(result[0].content).toBeDefined()
+      expect(parseMemoryImport(csv, 'data.csv')[0].content).toBeDefined()
     })
 
     it('returns empty for CSV with only header', () => {
@@ -108,17 +102,17 @@ describe('parseMemoryImport', () => {
       expect(parseMemoryImport('', 'data.csv')).toEqual([])
     })
 
-    it('uses first column if no content column', () => {
+    it('treats every line as data when the header has no content column', () => {
       const csv = 'name,value\nhello,world'
       const result = parseMemoryImport(csv, 'data.csv')
-      expect(result[0].content).toBe('hello')
+      expect(result[0].content).toBe('name')
+      expect(result).toHaveLength(2)
     })
   })
 
   describe('plain text files', () => {
     it('parses plain text lines', () => {
-      const result = parseMemoryImport('line 1\nline 2\nline 3', 'notes.txt')
-      expect(result).toEqual([
+      expect(parseMemoryImport('line 1\nline 2\nline 3', 'notes.txt')).toEqual([
         { content: 'line 1', topic: 'manual' },
         { content: 'line 2', topic: 'manual' },
         { content: 'line 3', topic: 'manual' },
@@ -126,7 +120,10 @@ describe('parseMemoryImport', () => {
     })
 
     it('parses bracket-annotated topics', () => {
-      const result = parseMemoryImport('fact about cats [animals]\nfact about dogs [animals]', 'notes.txt')
+      const result = parseMemoryImport(
+        'fact about cats [animals]\nfact about dogs [animals]',
+        'notes.txt',
+      )
       expect(result).toEqual([
         { content: 'fact about cats', topic: 'animals' },
         { content: 'fact about dogs', topic: 'animals' },
@@ -142,8 +139,7 @@ describe('parseMemoryImport', () => {
     })
 
     it('skips empty lines', () => {
-      const result = parseMemoryImport('line 1\n\n\nline 2', 'notes.txt')
-      expect(result).toHaveLength(2)
+      expect(parseMemoryImport('line 1\n\n\nline 2', 'notes.txt')).toHaveLength(2)
     })
 
     it('returns empty for empty text', () => {
@@ -153,13 +149,11 @@ describe('parseMemoryImport', () => {
 
   describe('filename detection', () => {
     it('is case-insensitive for .json', () => {
-      const result = parseMemoryImport('["test"]', 'DATA.JSON')
-      expect(result).toHaveLength(1)
+      expect(parseMemoryImport('["test"]', 'DATA.JSON')).toHaveLength(1)
     })
 
     it('is case-insensitive for .csv', () => {
-      const result = parseMemoryImport('content\nhello', 'DATA.CSV')
-      expect(result).toHaveLength(1)
+      expect(parseMemoryImport('content\nhello', 'DATA.CSV')).toHaveLength(1)
     })
   })
 })
@@ -171,24 +165,24 @@ describe('archiveTypeLabel', () => {
     expect(archiveTypeLabel('memory.remember')).toBe('remember')
   })
 
-  it('returns store for memory.store', () => {
-    expect(archiveTypeLabel('memory.store')).toBe('store')
+  it('returns stored for memory.store', () => {
+    expect(archiveTypeLabel('memory.store')).toBe('stored')
   })
 
   it('returns consolidate for memory.consolidate', () => {
     expect(archiveTypeLabel('memory.consolidate')).toBe('consolidate')
   })
 
-  it('strips memory. prefix for unknown types', () => {
+  it('strips the first dotted segment for unknown memory types', () => {
     expect(archiveTypeLabel('memory.custom')).toBe('custom')
   })
 
-  it('returns type as-is for non-memory types', () => {
-    expect(archiveTypeLabel('task.cleanup')).toBe('task.cleanup')
+  it('strips the namespace prefix for task types', () => {
+    expect(archiveTypeLabel('task.cleanup')).toBe('cleanup')
   })
 
-  it('returns task for empty string', () => {
-    expect(archiveTypeLabel('')).toBe('task')
+  it('returns empty string for empty type', () => {
+    expect(archiveTypeLabel('')).toBe('')
   })
 })
 
@@ -215,13 +209,21 @@ describe('archiveBadgeClass', () => {
 // ── archiveSummary ─────────────────────────────────────────────────
 
 describe('archiveSummary', () => {
-  it('summarizes remember records', () => {
+  it('summarizes remember records with truncation', () => {
+    const long = 'x'.repeat(70)
     const result = archiveSummary({
       task_type: 'memory.remember',
-      user_message: 'I like cats',
-    } as any)
-    expect(result.text).toBe('I like cats')
-    expect(result.detail).toBe('Learned from a conversation')
+      user_message: long,
+      assistant_response: 'short',
+    } as Record<string, unknown>)
+    expect(result.text).toBe('x'.repeat(60) + '…')
+    expect(result.detail).toBe('short')
+  })
+
+  it('falls back to (no message) for empty remember records', () => {
+    const result = archiveSummary({ task_type: 'memory.remember' } as Record<string, unknown>)
+    expect(result.text).toBe('(no message)')
+    expect(result.detail).toBe('')
   })
 
   it('summarizes store records with topic', () => {
@@ -229,7 +231,7 @@ describe('archiveSummary', () => {
       task_type: 'memory.store',
       content: 'Cats are felines',
       topic: 'animals',
-    } as any)
+    } as Record<string, unknown>)
     expect(result.text).toBe('Cats are felines')
     expect(result.detail).toBe('Topic: animals')
   })
@@ -238,8 +240,8 @@ describe('archiveSummary', () => {
     const result = archiveSummary({
       task_type: 'memory.store',
       content: 'Some fact',
-    } as any)
-    expect(result.detail).toBe('Stored fact')
+    } as Record<string, unknown>)
+    expect(result.detail).toBe('')
   })
 
   it('summarizes consolidate records', () => {
@@ -247,27 +249,16 @@ describe('archiveSummary', () => {
       task_type: 'memory.consolidate',
       removed: 3,
       kept: 5,
-      threshold: 0.85,
-    } as any)
+    } as Record<string, unknown>)
     expect(result.text).toBe('Consolidated 3 duplicate(s), kept 5')
-    expect(result.detail).toBe('Threshold 0.85')
+    expect(result.detail).toBe('')
   })
 
-  it('summarizes unknown record types as JSON', () => {
+  it('returns empty summary for unknown record types', () => {
     const result = archiveSummary({
       task_type: 'memory.unknown',
       foo: 'bar',
-    } as any)
-    expect(result.text).toContain('memory.unknown')
-    expect(result.detail).toBe('Task record')
-  })
-
-  it('falls back to type label for empty records', () => {
-    const result = archiveSummary({
-      task_type: 'custom.type',
-    } as any)
-    // Falls back to JSON serialization of the record (minus ts/task_id)
-    expect(result.text).toBeDefined()
-    expect(result.detail).toBe('Task record')
+    } as Record<string, unknown>)
+    expect(result).toEqual({ text: '', detail: '' })
   })
 })

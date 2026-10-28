@@ -79,6 +79,7 @@ vi.mock('lucide-react', () => ({
 }))
 
 const mockFilterTrainingRuns = vi.fn()
+const mockAddGlobalError = vi.fn()
 const mockExportTrainingHistory = vi.fn()
 const mockDeleteTrainingRun = vi.fn()
 const mockAddRunTag = vi.fn()
@@ -109,6 +110,14 @@ vi.mock('@/lib/settings-controller', () => ({
     bulkBookmark: (...args: any[]) => mockBulkBookmark(...args),
   },
 }))
+
+vi.mock('@/lib/error-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/error-store')>()
+  return {
+    ...actual,
+    addGlobalError: (...args: any[]) => mockAddGlobalError(...args),
+  }
+})
 
 import TrainingRunsPage from './page'
 
@@ -267,14 +276,14 @@ describe('TrainingRunsPage', () => {
   })
 
   it('handles error from filterTrainingRuns gracefully', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockFilterTrainingRuns.mockRejectedValue(new Error('fetch failed'))
     render(<TrainingRunsPage />)
+    // The error-funnel sweep (839c160fd) replaced the bare console.error with
+    // addGlobalError — assert the error reaches the funnel, then the empty state.
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch training runs:', expect.any(Error))
+      expect(mockAddGlobalError).toHaveBeenCalledWith(expect.any(Error), 'TrainingRuns')
     })
     expect(screen.getByText('No training runs found.')).toBeTruthy()
-    consoleSpy.mockRestore()
   })
 
   it('shows tags on run cards when present', async () => {

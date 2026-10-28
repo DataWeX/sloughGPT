@@ -75,5 +75,10 @@
     "app/(app)/workspace/settings/page.tsx",
     "app/(app)/workspaces/page.tsx"
   ],
-  "journeys": []
+  "journeys": [
+    {
+      "path": "app/(app)/kanban/page.tsx",
+      "journeyId": "ux/kanban"
+    }
+  ]
 }

@@ -52,6 +52,15 @@ REGRESSION_THRESHOLDS = {
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
     },
+    "bootstrap": {
+        # GET /bootstrap → landing first paint; frontend overlay watchdog = 8s
+        # rel limits are PERCENT (100.0 = 100%): load-tolerant but still
+        # catching fan-out storms (pre-fix cold envelope ~19.5s vs ~1.0s)
+        "first_s": (100.0, "rel"),
+        "warm_p95_s": (50.0, "rel"),
+        # a degraded member = partial landing page; zero tolerance
+        "member_errors": (0, "abs"),
+    },
 }
 
 
@@ -271,6 +280,12 @@ def do_record(args) -> int:
                 file=sys.stderr,
             )
             return 1
+        elif kind == "bootstrap":
+            print(
+                "[ERR] bootstrap kind requires --json-file (from benchmark_bootstrap.py)",
+                file=sys.stderr,
+            )
+            return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
             return 1
@@ -331,7 +346,9 @@ def _metric_entries(record: dict) -> list[dict]:
 def do_history(args) -> int:
     """List stored runs (all kinds unless --kind narrows it)."""
     for kind in (
-        [args.kind] if args.kind else ["stability", "latency", "startup", "execution", "training"]
+        [args.kind]
+        if args.kind
+        else ["stability", "latency", "startup", "execution", "training", "bootstrap"]
     ):
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
@@ -363,6 +380,12 @@ def do_history(args) -> int:
                     print(
                         f"  {stamp}  {model:<24} dispatch_us={str(c.get('dispatch_us', '?')):<9} "
                         f"threads={str(c.get('peak_threads', '?')):<7}  {p.name}"
+                    )
+                elif kind == "bootstrap":
+                    print(
+                        f"  {stamp}  {model:<24} first={str(c.get('first_s', '?')):<7} "
+                        f"p95={str(c.get('warm_p95_s', '?')):<7} "
+                        f"errs={c.get('member_errors', '?')}  {p.name}"
                     )
                 else:  # latency and unknown kinds
                     print(
@@ -442,7 +465,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup"],
+        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -453,7 +476,9 @@ def main() -> int:
 
     p_h = sub.add_parser("history", help="list stored runs")
     p_h.add_argument(
-        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup"]
+        "--kind",
+        default=None,
+        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
     )
     p_h.set_defaults(fn=do_history)
 
@@ -461,7 +486,7 @@ def main() -> int:
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup"],
+        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)

@@ -382,9 +382,7 @@ class TestReadPathColumnValidation:
         assert cards["good-1"].column == "wip"
 
     def test_load_board_warns_on_undeclared_column(self, store, caplog):
-        self._write_board(
-            store, {"id": "bad-1", "title": "Typo", "column": "in-progres"}
-        )
+        self._write_board(store, {"id": "bad-1", "title": "Typo", "column": "in-progres"})
         with caplog.at_level("WARNING", logger="app_planner.store"):
             store.load_board()
         assert any("in-progres" in r.message for r in caplog.records)

@@ -30,7 +30,7 @@ const RESOURCE_ICONS: Record<string, typeof Database> = {
 
 const RESOURCE_COLORS: Record<string, string> = {
   dataset: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
-  knowledge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  knowledge: 'bg-accent/15 text-accent dark:bg-accent/10 dark:text-accent',
   api_key: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
 }
 

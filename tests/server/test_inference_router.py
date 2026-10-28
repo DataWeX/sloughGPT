@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
+from apps.api.server.routers.chat import router as _chat_router
 from apps.api.server.routers.inference import _instance as _inference_router
 
 
@@ -17,6 +18,10 @@ def app():
     _app = FastAPI()
     register_all_handlers(_app)
     _app.include_router(_inference_router.router)
+    # POST /chat is owned by ChatRouter (it streams — that is its only state),
+    # the inference kernel through its public facades (card 13c37a23) —
+    # mount both routers so this app mirrors the deployed surface.
+    _app.include_router(_chat_router)
     return _app
 
 
@@ -192,21 +197,29 @@ class TestGenerateStream:
         assert "No provider available" in resp.text
 
 
-class TestChatStream:
-    """POST /chat/stream"""
+class TestChatErrorFrames:
+    """POST /chat streams, so a handler error arrives as an SSE frame, not a status.
+
+    This is the shape every error inside the turn takes once the response has
+    started: HTTP-level gates (model readiness) are caught earlier by
+    ``ReadinessGateMiddleware`` and keep returning a real 503 — see
+    ``tests/server/test_readiness_gate.py``. Everything that fails *during* the
+    turn surfaces here instead.
+    """
 
     @patch.dict(
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    def test_chat_stream_no_user_message(self, client):
+    def test_chat_no_user_message_frame(self, client):
         resp = client.post(
-            "/chat/stream",
+            "/chat",
             json={
                 "messages": [{"role": "system", "content": "You are helpful."}],
             },
         )
         assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
         assert "No user message" in resp.text
 
     @patch.dict(
@@ -214,21 +227,73 @@ class TestChatStream:
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
     @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
-    @patch("apps.api.server.routers.inference.get_memory_service")
     @patch("apps.api.server.routers.inference.get_rag_service")
     @patch("apps.api.server.routers.inference.get_provider", return_value=None)
-    def test_chat_stream_no_provider(
-        self, mock_get_provider, mock_rag, mock_mem_svc, mock_enrich, client
-    ):
-        mock_mem_svc.return_value.stats.return_value = {"total_facts": 0}
+    def test_chat_no_provider_frame(self, mock_get_provider, mock_rag, mock_enrich, client):
         mock_rag.return_value.stats.return_value = {"total_chunks": 0}
         resp = client.post(
-            "/chat/stream",
+            "/chat",
             json={
                 "messages": [{"role": "user", "content": "Hi"}],
             },
         )
         assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+
+
+class TestChatStreamCancel:
+    """The cancel channel must reach the provider's token loop, end to end.
+
+    ``CancelManager`` sets a ``threading.Event``; the provider's token loop
+    polls ``is_set()``. The only way a cancel is real is if those are the SAME
+    object, so this walks the whole chain in one request:
+
+      chat manager `_track` mints stop  →  hands it to the stream factory
+        →  `_stream_tokens(request, stop)`  →  `to_turn(cancel_event=stop)`
+        →  `TurnRequest.cancel_event`  →  `stream_turn`  →  provider kwarg
+
+    Before the fix the factory took zero arguments, so ``_stop`` was discarded
+    and the provider always received ``None`` — the API still answered
+    ``cancelled: true`` while generation ran to completion.
+    """
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_cancel_event_reaches_provider(self, mock_get_provider, mock_rag, mock_enrich, client):
+        import threading
+
+        seen: dict = {}
+
+        async def _stream(messages, **kw):
+            seen["cancel_event"] = kw.get("cancel_event", "NOT_PASSED")
+            yield "hi"
+
+        mock_prov = MagicMock()
+        mock_prov.chat_stream = _stream
+        mock_get_provider.return_value = mock_prov
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "session_id": "cancel-pin",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert "cancel_event" in seen, "provider.chat_stream was never called"
+        assert seen["cancel_event"] is not None, (
+            "provider received cancel_event=None — the registry's stop event was "
+            "dropped before reaching the token loop, so POST /chat/control "
+            "cancel would report success while generation continues"
+        )
+        assert isinstance(seen["cancel_event"], threading.Event)
 
 
 class TestChat:
@@ -238,28 +303,30 @@ class TestChat:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domain.get_chat_domain")
-    def test_chat_success(self, mock_get_domain, client):
-        mock_domain = MagicMock()
-        mock_domain.respond = AsyncMock(
-            return_value=MagicMock(
-                text="Hello back",
-                session_id="sess-1",
-                done=True,
-            )
-        )
-        mock_get_domain.return_value = mock_domain
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_chat_success(self, mock_get_provider, client):
+        # POST /chat streams the engine's raw tokens (streaming is the endpoint's
+        # only state), so the seam to fake is the provider's chat_stream.
+        mock_provider = MagicMock()
+
+        async def _chat_stream(messages, **kwargs):
+            for tok in ["Hello", " back"]:
+                yield tok
+
+        mock_provider.chat_stream = _chat_stream
+        mock_get_provider.return_value = mock_provider
 
         resp = client.post(
             "/chat",
             json={
+                "session_id": "sess-1",
                 "messages": [{"role": "user", "content": "Hello"}],
             },
         )
         assert resp.status_code == 200
-        body = resp.json()
-        assert body["message"] == "Hello back"
-        assert body["session_id"] == "sess-1"
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        assert "Hello" in resp.text
+        assert " back" in resp.text
 
     @patch.dict(
         "sys.modules",
@@ -267,11 +334,17 @@ class TestChat:
     )
     def test_chat_no_message(self, client):
         resp = client.post("/chat", json={"messages": []})
-        assert resp.status_code == 400
+        # The turn fails after the response has started, so the error arrives as
+        # an SSE frame rather than a 400 (see TestChatErrorFrames).
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
 
     def test_chat_no_model(self, client, no_model_state):
         resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hi"}]})
-        assert resp.status_code == 503
+        # This bare test app has no ReadinessGateMiddleware; in the deployed app
+        # the middleware answers 503 before the handler (test_readiness_gate.py).
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
 
     def test_chat_temperature_too_high_422(self, client):
         resp = client.post(

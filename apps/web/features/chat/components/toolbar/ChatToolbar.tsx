@@ -36,7 +36,7 @@ export const ChatToolbar = memo(function ChatToolbar({
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <button
           type="button"
-          className="flex lg:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors shrink-0"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex lg:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors shrink-0"
           onClick={ctx.sidebar.onToggle}
           aria-label="Toggle conversations"
         >
@@ -45,7 +45,7 @@ export const ChatToolbar = memo(function ChatToolbar({
 
         <button
           type="button"
-          className="flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors text-muted-foreground shrink-0"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors text-muted-foreground shrink-0"
           onClick={ctx.conversations.onNewChat}
           aria-label="New chat"
           title="New chat"
@@ -91,7 +91,7 @@ export const ChatToolbar = memo(function ChatToolbar({
 
       <button
         type="button"
-        className="flex sm:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors shrink-0"
+        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex sm:hidden items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 transition-colors shrink-0"
         onClick={() => ctx.search.setShowMobile(!ctx.search.showMobile)}
         aria-label="Toggle search"
       >

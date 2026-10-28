@@ -121,6 +121,41 @@ def line_hits(pattern, exts):
     return found
 
 
+def bare_except_hits():
+    """Real ``except:`` handlers via AST, same file scope as ``line_hits``.
+
+    AST rather than the ``BARE_EXCEPT`` line-regex because prose counts as a
+    hit under text matching: ``atomic_write.py`` quotes the banned pattern
+    (``except: unlink``) while explaining why it exists, and the scanner
+    flagged its own rule's documentation. Only a parseable
+    ``ExceptHandler`` with no type is a violation; a file that fails to parse
+    falls back to the regex so unparsable code stays conservatively covered.
+    """
+    found = []
+    for path in iter_files(PY):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(text, filename=str(path))
+        except SyntaxError:
+            for lineno, line in enumerate(text.splitlines(), 1):
+                if BARE_EXCEPT.search(line):
+                    found.append(f"{rel}:{lineno}: {line.strip()[:120]}")
+            continue
+        lines = text.splitlines()
+        hits = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler) and node.type is None:
+                lineno = node.lineno
+                line = lines[lineno - 1] if 0 < lineno <= len(lines) else ""
+                hits.append(f"{rel}:{lineno}: {line.strip()[:120]}")
+        found.extend(sorted(hits))
+    return found
+
+
 def fmt(found, limit=40):
     body = "\n".join(found[:limit])
     extra = len(found) - limit
@@ -142,23 +177,11 @@ def test_no_fstring_logger_calls():
 def test_no_bare_except():
     """Bare except: swallows SystemExit/KeyboardInterrupt — catch types.
 
-    AST-based on purpose: a line regex also matches prose *describing* the
-    anti-pattern (``atomic_write.py`` documents ``except: unlink``), and a
-    guard that fires on documentation gets ignored. Parsing finds only real
-    ``ExceptHandler`` nodes with no type, and it catches multi-line
-    ``except :`` forms a per-line scan misses.
+    Matches the pattern, not the prose (``bare_except_hits``): a line-regex
+    flags docstrings that quote ``except:`` while documenting why it is
+    banned, which is how this gate went red with zero real violations.
     """
-    found = []
-    for path in iter_files(PY):
-        rel = path.relative_to(ROOT).as_posix()
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
-        except SyntaxError as exc:
-            found.append(f"{rel}: syntax error: {exc}")
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ExceptHandler) and node.type is None:
-                found.append(f"{rel}:{node.lineno}: bare except: — catch a type")
+    found = bare_except_hits()
     assert not found, "bare except clauses (catch explicit types):\n" + fmt(found)
 
 

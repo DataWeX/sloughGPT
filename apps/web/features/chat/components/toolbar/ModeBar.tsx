@@ -170,6 +170,8 @@ function SubOptionPill({
         active
           ? 'bg-foreground/10 text-foreground font-medium shadow-sm'
           : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+        'active:bg-muted',
       )}
       aria-pressed={active}
     >
@@ -361,6 +363,8 @@ export const ModeBar = memo(function ModeBar({
               m.value === mode
                 ? cn('shadow-sm border', m.color)
                 : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30 border border-transparent',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              'active:bg-muted',
             )}
           >
             <span className="shrink-0">{m.icon}</span>
