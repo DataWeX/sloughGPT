@@ -15,6 +15,7 @@ import { ConfigureStep } from '@/components/training/ConfigureStep'
 import { TrainStep } from '@/components/training/TrainStep'
 import { ResultsStep } from '@/components/training/ResultsStep'
 import { formatDuration } from '@/lib/formatDuration'
+import { StatTileGrid, type StatTile } from '@/components/training/stat-tile'
 
 const LossChart = dynamic(
   () => import('@/components/training/LossChart').then((m) => m.LossChart),
@@ -179,6 +180,40 @@ export const TrainingPipeline = memo(function TrainingPipeline({
       : (runningJob?.loss_history?.map((l) => ({ step: l.step, loss: l.value })) ?? [])
   const displayMethod = session.method || runningJob?.method || null
 
+  // Conditional live stats as data — absent values don't produce a tile, so the
+  // row fills without the grid-cols-4 hole the old markup left at 6 items.
+  const runningTiles: StatTile[] = []
+  if (displayTotalSteps > 0)
+    runningTiles.push({
+      key: 'step',
+      label: 'Step',
+      value: displayGlobalStep,
+      hint: `/${displayTotalSteps}`,
+    })
+  if (displayEpoch > 0 && displayTotalEpochs > 0)
+    runningTiles.push({
+      key: 'epoch',
+      label: 'Epoch',
+      value: displayEpoch,
+      hint: `/${displayTotalEpochs}`,
+    })
+  if (displayLoss != null)
+    runningTiles.push({ key: 'loss', label: 'Loss', value: displayLoss.toFixed(4) })
+  if (displayStepsPerSec != null && displayStepsPerSec > 0)
+    runningTiles.push({
+      key: 'speed',
+      label: 'Speed',
+      value: displayStepsPerSec.toFixed(1),
+      hint: ' steps/s',
+    })
+  if (displayEta != null)
+    runningTiles.push({ key: 'eta', label: 'ETA', value: formatDuration(displayEta) })
+  runningTiles.push({
+    key: 'elapsed',
+    label: 'Elapsed',
+    value: formatDuration(displayElapsed),
+  })
+
   const stepIdx = STEPS.findIndex((s) => s.id === step)
   const [animatingStep, setAnimatingStep] = useState<StepId | null>(null)
 
@@ -232,14 +267,16 @@ export const TrainingPipeline = memo(function TrainingPipeline({
         </CardHeader>
         <CardContent className="space-y-4">
           {displayLossHistory.length > 0 && (
-            <LossChart
-              data={displayLossHistory.map((p) => ({
-                step: p.step,
-                value: p.loss,
-                type: 'train' as const,
-              }))}
-              height={200}
-            />
+            <div className="rounded-lg border border-border/60 p-3">
+              <LossChart
+                data={displayLossHistory.map((p) => ({
+                  step: p.step,
+                  value: p.loss,
+                  type: 'train' as const,
+                }))}
+                height={200}
+              />
+            </div>
           )}
 
           {session.phase !== 'complete' && session.phase !== 'error' && (
@@ -253,71 +290,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
                 </div>
               )}
               <Progress value={displayProgress} max={100} label="Progress" showValue size="sm" />
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {displayTotalSteps > 0 && (
-                  <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                      Step
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums">
-                      {displayGlobalStep}
-                      <span className="text-muted-foreground/40 font-normal">
-                        /{displayTotalSteps}
-                      </span>
-                    </p>
-                  </div>
-                )}
-                {displayEpoch > 0 && displayTotalEpochs > 0 && (
-                  <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                      Epoch
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums">
-                      {displayEpoch}
-                      <span className="text-muted-foreground/40 font-normal">
-                        /{displayTotalEpochs}
-                      </span>
-                    </p>
-                  </div>
-                )}
-                {displayLoss != null && (
-                  <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                      Loss
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums">{displayLoss.toFixed(4)}</p>
-                  </div>
-                )}
-                {displayStepsPerSec != null && displayStepsPerSec > 0 && (
-                  <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                      Speed
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums">
-                      {displayStepsPerSec.toFixed(1)}
-                      <span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span>
-                    </p>
-                  </div>
-                )}
-                {displayEta != null && (
-                  <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                      ETA
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums">
-                      {formatDuration(displayEta)}
-                    </p>
-                  </div>
-                )}
-                <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                    Elapsed
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {formatDuration(displayElapsed)}
-                  </p>
-                </div>
-              </div>
+              <StatTileGrid tiles={runningTiles} />
               {session.dataQuality && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <span>
@@ -352,7 +325,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
                   <span>Language: {(session.dataQuality.language_quality * 100).toFixed(0)}%</span>
                 </div>
               )}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 border-t border-border/60 pt-3">
                 <Button size="sm" onClick={onTest}>
                   Test model
                 </Button>

@@ -41,6 +41,7 @@
   - `scripts/benchmark_latency.py` — end-to-end request latency
   - `scripts/benchmark_results.py record/history/compare` — track results over time
   - If no benchmark exists for your change, create one in `scripts/` and document what it measures.
+- **Local `main` tracks `origin/main` — never let it drift.** Land on main via a PR (canonical) or commit on a lane branch and `git push origin HEAD:main`. Never build a stack of local-only commits on main (pre-commit/pre-push block **>5 ahead** via `scripts/check-main-sync.sh`; `SLO_MAIN_SYNC_SKIP=1` only when you mean it), and never `git reset` main onto a lane tip. Evidence: the 2026-10-27/28 fork — 149 local-only commits vs 35 pushed the other way = 8-file conflicts and a Next-era tree that would have reverted the Next removal if pushed.
 
 ## File Safety
 
@@ -54,7 +55,7 @@
 - **Notes** (`~/.config/dev-notes/*.md`) are the user's journal — source of truth for task metadata (sprint, gh, status, body).
 - **Board** (`.kanban/board.jsonl`) is the kanban view derived from notes via sync.
 - Sync is bidirectional: note status ↔ card column.
-- **Agent sync** (`docs/AGENT_SYNC.md`) — read it first: what has landed across sessions, what is in flight, how to push your own changes; update it when you push.
+- **Agent sync** (`docs/AGENT_SYNC.md`) — read it first: what has landed across sessions, what is in flight, how to push your own changes; update it when you push. Local `main` must equal `origin/main` (enforced by `scripts/check-main-sync.sh`).
 - **Product docs** (`docs/PRODUCT_ENGINEERING.md`) are the source of truth for what to build. Reference before creating new features, routers, or pages. User flows in `docs/UX_FLOWS.md`, persona in `docs/USER_PERSONA.md`.
 
 ## Execution Philosophy (sync core, async seam)
