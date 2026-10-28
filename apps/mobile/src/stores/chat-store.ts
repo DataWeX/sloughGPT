@@ -35,6 +35,7 @@ interface ChatState {
   archiveSession: (id: string, archived: boolean) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
   cloneSession: (sourceId: string, newTitle: string) => Promise<string>;
+  branchFromMessage: (fromIndex: number) => Promise<string>;
   injectContext: (context: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
   sendMessage: (content: string, images?: string[]) => Promise<void>;
@@ -174,6 +175,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return newId;
     } catch (err: any) {
       toast.error('Failed to clone session');
+      set({error: err.message});
+      return '';
+    }
+  },
+
+  branchFromMessage: async (fromIndex: number): Promise<string> => {
+    const sessionId = get().activeSessionId;
+    if (!sessionId) {
+      toast.error('No active session');
+      return '';
+    }
+    try {
+      const result = await api.branchSession(sessionId, fromIndex);
+      await get().loadSession(result.session_id);
+      await get().refreshSessions();
+      triggerHaptic('light');
+      toast.success('Branched into new session');
+      return result.session_id;
+    } catch (err: any) {
+      toast.error('Failed to branch session');
       set({error: err.message});
       return '';
     }

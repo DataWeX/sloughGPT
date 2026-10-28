@@ -21,6 +21,7 @@ export function useChatScroll(
   setForwardTo: (m: Message | null) => void,
   setSelectMode: (v: boolean) => void,
   setSelectedIds: (v: Set<string>) => void,
+  branchFromMessage: (index: number) => Promise<string>,
 ) {
   const [atBottom, setAtBottom] = useState(true);
   const lastHeaderTap = useRef<number>(0);
@@ -34,7 +35,7 @@ export function useChatScroll(
   }, [messages, atBottom]);
 
   const renderItem = useCallback(
-    ({item}: {item: Message}) => {
+    ({item, index}: {item: Message; index: number}) => {
       const {MessageBubble} = require('../../components/MessageBubble');
       return (
         <MessageBubble
@@ -56,6 +57,9 @@ export function useChatScroll(
           }
           onReply={() => setReplyTo(item)}
           onForward={() => setForwardTo(item)}
+          onBranch={() => {
+            branchFromMessage(index);
+          }}
           selectMode={selectMode}
           selected={selectedIds.has(item.id)}
           onSelect={() => toggleSelectMessage(item.id)}
@@ -68,7 +72,7 @@ export function useChatScroll(
         />
       );
     },
-    [regenerate, recordFeedback, searchQuery, deleteMessage, activeSessionId, selectMode, selectedIds, toggleSelectMessage],
+    [regenerate, recordFeedback, searchQuery, deleteMessage, activeSessionId, selectMode, selectedIds, toggleSelectMessage, branchFromMessage],
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);

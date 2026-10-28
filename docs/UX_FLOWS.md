@@ -512,3 +512,19 @@ results.
 
 - Token counts as raw jargon without context, model names, or prompt IDs
 - API errors or stack traces when inspection fails — a friendly "Couldn't read it, try again"
+
+### Mobile: Branch a Conversation
+
+**What the user sees:**
+
+- Long-press any message → a familiar action sheet with "Branch from here"
+- Tapping it forks the chat: everything up to and including that message becomes a new conversation, opened right away
+- The new chat is named "... (Branch)" and shows up in the drawer beside the original — the original is never changed
+- Details → "Branch Lineage" shows where this chat came from: this session first, then its parents, in plain words
+- Branching from a branch keeps the whole family tree reachable
+
+**What they should NOT see:**
+
+- Message IDs, parent pointers, or "fork" jargon — it's "Branch from here"
+- A branch that arrives missing the earlier messages it should have copied
+- Any change to the original conversation

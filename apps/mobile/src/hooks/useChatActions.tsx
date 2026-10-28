@@ -38,6 +38,7 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     deleteMessage,
     forwardMessage,
     createSession,
+    branchFromMessage,
     offlineQueue,
     retryPendingSends,
   } = useChatStore();
@@ -69,6 +70,7 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     searchQuery, select.selectMode, select.selectedIds,
     select.toggleSelectMessage, setEditingMessage,
     setReplyTo, setForwardTo, select.setSelectMode, select.setSelectedIds,
+    branchFromMessage,
   );
 
   const searchNext = useCallback(() => {
