@@ -63,13 +63,14 @@ interface Props {
   onEdit?: (newContent: string) => void;
   onReply?: () => void;
   onForward?: () => void;
+  onBranch?: () => void;
   selectMode?: boolean;
   selected?: boolean;
   onSelect?: () => void;
   onLongPressSelect?: () => void;
 }
 
-export function MessageBubble({message, sessionId, highlight, searchQuery, streaming, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
+export function MessageBubble({message, sessionId, highlight, searchQuery, streaming, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, onBranch, selectMode, selected, onSelect, onLongPressSelect}: Props) {
   const colors = useColors();
   const bg = colors.background;
   const border = colors.border;
@@ -443,6 +444,10 @@ export function MessageBubble({message, sessionId, highlight, searchQuery, strea
     ...(onForward ? [{icon: 'forward' as IconName, label: 'Forward', onPress: () => {
       setShowContextMenu(false);
       onForward();
+    }}] : []),
+    ...(onBranch ? [{icon: 'git-branch' as IconName, label: 'Branch from here', onPress: () => {
+      setShowContextMenu(false);
+      onBranch();
     }}] : []),
     ...(isUser && onEdit ? [{icon: 'edit' as IconName, label: 'Edit', onPress: () => {
       setShowContextMenu(false);

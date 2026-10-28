@@ -272,6 +272,17 @@ class UpsertSessionRequest(BaseModel):
     pinned: bool | None = None
 
 
+class BranchSessionRequest(BaseModel):
+    """Schema for branching a session at a message index.
+
+    Server-side messages carry no ids (`MessageData` is role+content), so the
+    branch point is the position in the ordered list.
+    """
+
+    from_index: int
+    name: str | None = Field(None, max_length=200)
+
+
 # Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
 # chat router no longer imports this router. Re-exported here for backwards
 # compatibility with existing importers (mobile BFF, tests).
@@ -2278,6 +2289,114 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.delete_session")
 
+    async def branch_session(
+        self,
+        session_id: str,
+        req: BranchSessionRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Create a new session from messages[:from_index + 1] of a source.
+
+        The prefix lands in both projections the source session uses: the
+        drawer file (name/lineage/message preview) and the context store that
+        `GET /session/{id}/messages` (mobile loadSession) reads.
+        """
+        try:
+            source_file = self._session_repo.get(session_id)
+            if source_file is None:
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and source_file.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+            from domain.infrastructure.session_core import SessionCore
+
+            history = SessionCore.get_messages(session_id) or source_file.get("messages") or []
+            if not history:
+                raise_error("No messages to branch from", "E_BAD_REQUEST", status_code=400)
+            if req.from_index < 0 or req.from_index >= len(history):
+                raise_error(
+                    f"from_index {req.from_index} out of range (0..{len(history) - 1})",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
+
+            prefix = history[: req.from_index + 1]
+            new_id = str(uuid.uuid4())
+            new_data = {
+                "id": new_id,
+                "session_id": new_id,
+                "name": req.name or f"{source_file.get('name') or session_id} (Branch)",
+                "parent_session_id": session_id,
+                "branch_from_index": req.from_index,
+                "messages": json.loads(json.dumps(prefix)),
+                "created_at": datetime.datetime.now().isoformat(),
+            }
+            if auth_user:
+                new_data["user_id"] = auth_user.get("sub", "")
+
+            self._save_session(new_id, new_data)
+            SessionCore.store_context(new_id, prefix)
+            await self._flush_session_to_disk(new_id)
+            safe_audit_log("inference.session_branch", resource=new_id)
+            return success_response(
+                data={
+                    "session_id": new_id,
+                    "branched_from": session_id,
+                    "from_index": req.from_index,
+                },
+                message="branched",
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.branch_session")
+
+    async def get_session_lineage(
+        self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Walk the parent chain of a session (nearest parent first)."""
+        try:
+            data = self._session_repo.get(session_id)
+            if data is None:
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+            ancestors: list[dict] = []
+            parent = data.get("parent_session_id")
+            seen = {session_id}
+            depth = 0
+            while parent and parent not in seen and depth < 50:
+                seen.add(parent)
+                pdata = self._session_repo.get(parent)
+                if pdata is None:
+                    break
+                ancestors.append(
+                    {
+                        "session_id": parent,
+                        "parent_session_id": pdata.get("parent_session_id"),
+                        "branch_from_index": pdata.get("branch_from_index"),
+                        "name": pdata.get("name") or parent,
+                    }
+                )
+                parent = pdata.get("parent_session_id")
+                depth += 1
+
+            return success_response(
+                data={
+                    "session_id": session_id,
+                    "parent_session_id": data.get("parent_session_id"),
+                    "branch_from_index": data.get("branch_from_index"),
+                    "ancestors": ancestors,
+                }
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_session_lineage")
+
     def _clear_session_kv(self, session_id: str):
         """Drop cross-turn KV state for a deleted session.
 
@@ -2541,6 +2660,12 @@ class InferenceRouter:
         r.add_api_route("/chat/sessions", self.create_session, methods=["POST"])
         r.add_api_route("/chat/sessions/{session_id}", self.get_session, methods=["GET"])
         r.add_api_route("/chat/sessions/{session_id}", self.delete_session, methods=["DELETE"])
+        r.add_api_route("/chat/sessions/{session_id}/branch", self.branch_session, methods=["POST"])
+        r.add_api_route(
+            "/chat/sessions/{session_id}/lineage",
+            self.get_session_lineage,
+            methods=["GET"],
+        )
         r.add_api_route("/chat/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/providers", self.list_model_providers, methods=["GET"])
         r.add_api_route("/operations", self.list_operations, methods=["GET"])

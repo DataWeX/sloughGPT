@@ -14,7 +14,7 @@ import {SearchSessionsModal} from './SearchSessionsModal';
 import {StatusBadge} from './StatusBadge';
 import {ContextWindowViewer} from './ContextWindowViewer';
 import {contextItemsFromInspector, type ContextInspector} from '../services/context-items';
-import type {Message, Session} from '../types';
+import type {Message, Session, SessionLineage} from '../types';
 
 const BG_PRESETS = [
   {label: 'None', value: ''},
@@ -109,6 +109,7 @@ export function ChatBottomSheets({
     ReturnType<typeof contextItemsFromInspector>
   >([]);
   const [contextLoading, setContextLoading] = useState(false);
+  const [lineage, setLineage] = useState<SessionLineage | null>(null);
 
   const loadContext = React.useCallback(async () => {
     setContextLoading(true);
@@ -122,11 +123,26 @@ export function ChatBottomSheets({
     }
   }, []);
 
+  const loadLineage = React.useCallback(async () => {
+    if (!activeSessionId) {
+      setLineage(null);
+      return;
+    }
+    try {
+      setLineage((await api.getSessionLineage(activeSessionId)) ?? null);
+    } catch {
+      setLineage(null);
+    }
+  }, [activeSessionId]);
+
   useEffect(() => {
     if (showInfo) {
       loadContext();
+      loadLineage();
+    } else {
+      setLineage(null);
     }
-  }, [showInfo, loadContext]);
+  }, [showInfo, loadContext, loadLineage]);
 
   return (
     <TamaguiProvider>
@@ -204,6 +220,34 @@ export function ChatBottomSheets({
                 </XStack>
               </XStack>
             </YStack>
+
+            {lineage && lineage.parent_session_id && (
+              <YStack paddingHorizontal={20} paddingTop={12} paddingBottom={4}>
+                <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color={colors.textSecondary} marginBottom={12}>BRANCH LINEAGE</Text>
+                <YStack gap={8}>
+                  <XStack alignItems="center" gap={8}>
+                    <Icon name="git-branch" size={12} color={colors.primary} />
+                    <Text fontSize={13} color={colors.text} fontWeight="500" numberOfLines={1}>
+                      This session
+                      {lineage.branch_from_index != null
+                        ? ` · from message #${lineage.branch_from_index + 1}`
+                        : ''}
+                    </Text>
+                  </XStack>
+                  {lineage.ancestors.slice(0, 5).map(anc => (
+                    <XStack key={anc.session_id} alignItems="center" gap={8} paddingLeft={16}>
+                      <Icon name="chevron-down" size={12} color={colors.textMuted} />
+                      <Text fontSize={12} color={colors.textMuted} numberOfLines={1}>
+                        {anc.name || anc.session_id.slice(0, 12)}
+                        {anc.branch_from_index != null
+                          ? ` · branched at #${anc.branch_from_index + 1}`
+                          : ''}
+                      </Text>
+                    </XStack>
+                  ))}
+                </YStack>
+              </YStack>
+            )}
 
             <YStack paddingHorizontal={20} paddingTop={12} paddingBottom={4}>
               <Text fontSize={11} fontWeight="700" letterSpacing={0.6} color={colors.textSecondary} marginBottom={12}>CONTEXT WINDOW</Text>

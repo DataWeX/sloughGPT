@@ -301,6 +301,22 @@ MOBILE_FLOWS: list[Flow] = [
             "tests/test_journeys_vertical.py",
         ),
     ),
+    _mobile_flow(
+        "m3-branch",
+        "Mobile: Branch a Conversation",
+        "### Mobile: Branch a Conversation",
+        ("### Mobile: Branch a Conversation",),
+        (
+            "apps/mobile/src/stores/chat-store.ts",
+            "apps/mobile/src/components/MessageBubble.tsx",
+            "apps/mobile/src/components/ChatBottomSheets.tsx",
+            "apps/api/server/routers/inference.py",
+        ),
+        (
+            "apps/mobile/src/components/__tests__/journeys/conversation-branch.test.tsx",
+            "tests/server/test_session_branch.py",
+        ),
+    ),
 ]
 
 ALL_FLOWS: list[Flow] = [*FLOWS, *MOBILE_FLOWS]
