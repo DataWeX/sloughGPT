@@ -307,12 +307,8 @@ class TestPhaseTaskQueue:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         q = object()
         with (
-            patch(
-                "domain.infrastructure.task_queue.get_task_queue", return_value=q
-            ) as mock_q,
-            patch(
-                "domain.infrastructure.training_queue.register_training_handlers"
-            ) as mock_reg,
+            patch("domain.infrastructure.task_queue.get_task_queue", return_value=q) as mock_q,
+            patch("domain.infrastructure.training_queue.register_training_handlers") as mock_reg,
             patch("domain.memory.register_memory_handlers") as mock_mem,
             patch("domain.memory._internal.maintenance.start_memory_maintenance") as mock_maint,
         ):
@@ -330,9 +326,7 @@ class TestPhaseTaskQueue:
                 "domain.infrastructure.task_queue.get_task_queue",
                 side_effect=RuntimeError("boom"),
             ),
-            patch(
-                "domain.infrastructure.training_queue.register_training_handlers"
-            ) as mock_reg,
+            patch("domain.infrastructure.training_queue.register_training_handlers") as mock_reg,
             patch("domain.memory.register_memory_handlers") as mock_mem,
             patch("domain.memory._internal.maintenance.start_memory_maintenance"),
         ):
@@ -351,9 +345,7 @@ class TestPhaseConfigReady:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with (
             patch("domain.infrastructure._internal.config.get_config") as mock_cfg,
-            patch(
-                "domain.infrastructure.resource_manager.get_resource_manager"
-            ) as mock_rm,
+            patch("domain.infrastructure.resource_manager.get_resource_manager") as mock_rm,
         ):
             rm = mock_rm.return_value
             rm.apply_blas_env.return_value = None
@@ -600,9 +592,7 @@ class TestRun:
         wh = MagicMock()
         wh.emit = AsyncMock()
         return (
-            patch(
-                "infrastructure.staged_loader.get_staged_loader", return_value=loader
-            ),
+            patch("infrastructure.staged_loader.get_staged_loader", return_value=loader),
             patch("infrastructure.startup_terminal.get_terminal_viz"),
             patch("infrastructure.startup_webhooks.get_webhook_manager", return_value=wh),
             patch("infrastructure.db_pool.get_db"),

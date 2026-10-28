@@ -856,9 +856,7 @@ class TestChatPostGenTasks:
         mock_get_provider.return_value = self._fake_provider()
         mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
-        resp = client.post(
-            "/chat", json={"messages": [{"role": "user", "content": "Hello"}]}
-        )
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
 
         assert resp.status_code == 200
         assert "Hello" in resp.text
@@ -934,9 +932,7 @@ class TestChatPostGenTasks:
         mock_get_provider.return_value = self._fake_provider()
         mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
-        resp = client.post(
-            "/chat", json={"messages": [{"role": "user", "content": "Hello"}]}
-        )
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
 
         assert resp.status_code == 200
         assert "Hello" in resp.text
