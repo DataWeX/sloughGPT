@@ -323,9 +323,13 @@ class GuiHandler(BaseHTTPRequestHandler):
                 force=force,
             )
             if card is None:
-                # Distinguish "not found" from "illegal transition / WIP"
+                # Distinguish "unknown column" / "not found" from
+                # "illegal transition / WIP" — the first two are 404s.
                 board = self.stores.kanban_store.load_board()
                 exists = any(c.id == card_id or c.id.startswith(card_id) for c in board.cards)
+                known_cols = {c.name for c in board.columns}
+                if column not in known_cols:
+                    return self._error(404, f"unknown column: {column}")
                 if not exists:
                     return self._error(404, f"card not found: {card_id}")
                 return self._error(

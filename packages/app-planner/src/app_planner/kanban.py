@@ -325,7 +325,23 @@ class KanbanStore:
         self._bk.save(board)
         return True
 
-    def move_card(self, card_id: str, column: str) -> Card | None:
+    def move_card(
+        self,
+        card_id: str,
+        column: str,
+        *,
+        validate: bool = True,
+        actor: str = "",
+        force: bool = False,
+    ) -> Card | None:
+        """Move *card_id* to *column*; return the card, or ``None``.
+
+        An unknown column always fails (board integrity), regardless of
+        *validate* — that flag is reserved for engine-owned transition/WIP
+        rules; the store itself enforces column existence only. *actor*
+        records a history entry on the card; *force* is accepted for
+        engine-path parity (nothing store-side to override).
+        """
         board = self.load_board()
         col_names = {c.name for c in board.columns}
         if column not in col_names:
@@ -336,6 +352,10 @@ class KanbanStore:
             return None
         card.column = column
         card.updated_at = datetime.now(UTC).isoformat()
+        if actor:
+            card.history.append(
+                {"actor": actor, "action": "move", "to": column, "at": card.updated_at}
+            )
         self._bk.save(board)
         return card
 

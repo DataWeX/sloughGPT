@@ -304,6 +304,56 @@ def _sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def _migrate(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from app_planner.migrate import MigrationError, migrate
+
+    try:
+        result = migrate(
+            Path(args.source_root) if args.source_root else None,
+            dry_run=args.dry_run,
+            board_dir=Path(args.board_dir) if args.board_dir else None,
+            notes_dir=Path(args.notes_dir) if args.notes_dir else None,
+        )
+    except MigrationError as exc:
+        print(f"migration refused: {exc}")
+        return 1
+    verb = "would import" if result["dry_run"] else "imported"
+    print(f"source: {result['source']}")
+    print(
+        f"board: {verb} {result['board']['imported']} card(s), "
+        f"{result['board']['skipped']} already present"
+    )
+    print(
+        f"notes: {verb} {result['notes']['imported']} note(s), "
+        f"{result['notes']['skipped']} already present"
+    )
+    if result["board"].get("cycles"):
+        print(f"warning: blocked_by cycles involving: {result['board']['cycles'][:10]}")
+    for backup in result["backups"]:
+        print(f"backup: {backup}")
+    return 0
+
+
+def _snapshot(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from app_planner.snapshot import SnapshotError, snapshot
+
+    try:
+        result = snapshot(
+            Path(args.repo),
+            board_dir=Path(args.board_dir) if args.board_dir else None,
+        )
+    except SnapshotError as exc:
+        print(f"snapshot failed: {exc}")
+        return 1
+    print(f"snapshot: {result['snapshot']} ({result['bytes']} bytes)")
+    print(f"suggested: git add {result['snapshot']} && git commit -m 'chore(kanban): board snapshot'")
+    return 0
+
+
 def _gui(args: argparse.Namespace) -> int:
     from app_planner.gui import main as gui_main
 
@@ -408,6 +458,42 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verify_p.add_argument("--board-file", default=None, help="board.jsonl path (default: config)")
 
+    # Migrate
+    migrate_p = sub.add_parser(
+        "migrate",
+        help="Import repo-local .kanban/.dev-notes into the canonical store",
+        description=(
+            "One-time import of repo-local planner data into the canonical "
+            "user-config store. Source chain is verified first; canonical "
+            "rows win on id conflicts; existing canonical files are backed "
+            "up before any write; source files are never modified."
+        ),
+    )
+    migrate_p.add_argument(
+        "--source-root",
+        default=None,
+        help="Repo root holding .kanban/.dev-notes (default: repository detection)",
+    )
+    migrate_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Verify + report what would be imported; write nothing",
+    )
+
+    # Snapshot
+    snapshot_p = sub.add_parser(
+        "snapshot",
+        help="Copy the canonical board into <repo>/.kanban/snapshots/",
+        description=(
+            "Export a dated, byte-exact copy of the canonical board into the "
+            "repo for versioned history. Prints the suggested commit command; "
+            "never runs git itself."
+        ),
+    )
+    snapshot_p.add_argument(
+        "--repo", default=".", help="Destination repo root (default: cwd)"
+    )
+
     # GUI
     gui_p = sub.add_parser(
         "gui",
@@ -467,6 +553,8 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "stats"): _board_stats,
         ("sync", None): _sync,
         ("verify", None): _verify,
+        ("migrate", None): _migrate,
+        ("snapshot", None): _snapshot,
         ("gui", None): _gui,
     }
 
