@@ -1,4 +1,4 @@
-import { type NextRequest } from 'next/server'
+import { type NextRequest } from '@/vite/next-compat/server'
 import { proxyRequest } from '@/lib/planner-proxy'
 
 export async function POST(request: NextRequest) {
