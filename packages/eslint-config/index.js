@@ -30,7 +30,14 @@ module.exports = {
       // Vitest test files legitimately carry `/// <reference types="vitest" />`
       // for global describe/it typings; removing it would break `tsc`.
       files: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
-      rules: { '@typescript-eslint/triple-slash-reference': 'off' },
+      rules: {
+        '@typescript-eslint/triple-slash-reference': 'off',
+        // Ruling 2026-10-24 (card d715327c): mocks are not production
+        // contracts — test files may cast (`vi.mocked(...) as any`,
+        // fireEvent props). Strictness stays on prod code; the warning
+        // budget is measured against non-test files only.
+        '@typescript-eslint/no-explicit-any': 'off',
+      },
     },
   ],
 }
