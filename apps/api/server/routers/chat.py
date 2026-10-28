@@ -124,6 +124,10 @@ class ChatRouter:
                             _token_count += 1
                             yield self._sse_token("chat", item)
                     else:
+                        # Structured end-of-turn events (e.g. MEMORY) ride the
+                        # TurnResult; surface them before closing the stream.
+                        for _frame in getattr(item, "events", []):
+                            yield _frame
                         # Final TurnResult: close the stream. The engine computes
                         # usage/timing/finish on it, so surface them here — that
                         # detail is the point of the port, and folding callers

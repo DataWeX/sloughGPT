@@ -84,6 +84,7 @@ class TurnResult:
     elapsed_ms: float | None = None
     finish_reason: str | None = None
     tokens: list[str] = field(default_factory=list)
+    events: list[str] = field(default_factory=list)
 
 
 @runtime_checkable
