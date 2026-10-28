@@ -10,6 +10,7 @@ Usage:
     ./scripts/python scripts/train_tts_espeak.py --steps 500 --lr 5e-4
     ./scripts/python scripts/train_tts_espeak.py --out models/tts/seed7.npz --seed 7
     ./scripts/python scripts/train_tts_espeak.py --corpus-file runs/said.txt   # own texts
+    ./scripts/python scripts/train_tts_espeak.py --response-logs               # chat logs
 
 Reports: pair build time, hold-out loss before/after (eval_loss — forward
 only, never trains on the hold-out), train-loss curve every ~10%, steps/sec,
@@ -80,9 +81,20 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="train on texts from this file (one per line, # comments) instead of the built-in corpus",
     )
+    parser.add_argument(
+        "--response-logs",
+        type=str,
+        nargs="?",
+        const="data/response_logs",
+        default=None,
+        metavar="DIR",
+        help="train on texts from ResponseTracker chat logs (bare flag = data/response_logs); mutually exclusive with --corpus-file",
+    )
     args = parser.parse_args(argv)
 
     np.random.seed(args.seed)
+    if args.response_logs and args.corpus_file:
+        parser.error("--corpus-file and --response-logs are mutually exclusive")
     corpus = None
     if args.corpus_file:
         from domain.voice._internal.espeak_pairs import load_corpus
@@ -90,6 +102,13 @@ def main(argv: list[str] | None = None) -> int:
         corpus = load_corpus(args.corpus_file)
         if not corpus:
             print(f"ERROR: {args.corpus_file} has no usable lines", file=sys.stderr)
+            return 1
+    elif args.response_logs:
+        from domain.voice._internal.espeak_pairs import load_response_logs
+
+        corpus = load_response_logs(args.response_logs)
+        if not corpus:
+            print(f"ERROR: {args.response_logs} has no usable response lines", file=sys.stderr)
             return 1
     train, holdout = build_data(args.holdout, args.max_frames, corpus=corpus)
     if not train:
