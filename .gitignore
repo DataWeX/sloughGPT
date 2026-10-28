@@ -96,6 +96,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Change-scoped test selection DB (scripts/run_affected.sh — local state)
+.testmondata
+
 # TypeScript (tsc --incremental)
 *.tsbuildinfo
 
