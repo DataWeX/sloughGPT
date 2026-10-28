@@ -186,3 +186,28 @@ class TestDefaultCorpus:
         train, holdout = DEFAULT_CORPUS[:-DEFAULT_HOLDOUT], DEFAULT_CORPUS[-DEFAULT_HOLDOUT:]
         assert len(train) >= 24 and len(holdout) == DEFAULT_HOLDOUT
         assert all(t.strip() for t in train + holdout)
+
+
+class TestLoadCorpus:
+    def test_reads_lines_skipping_blanks_and_comments(self, tmp_path):
+        from domain.voice._internal.espeak_pairs import load_corpus
+
+        f = tmp_path / "corpus.txt"
+        f.write_text(
+            "The kanban board moved to done.\n"
+            "\n"
+            "# leading comment\n"
+            "  espeak distills text into waveforms.  \n"
+            "\n",
+            encoding="utf-8",
+        )
+        assert load_corpus(f) == [
+            "The kanban board moved to done.",
+            "espeak distills text into waveforms.",
+        ]
+
+    def test_missing_file_raises_file_not_found(self, tmp_path):
+        from domain.voice._internal.espeak_pairs import load_corpus
+
+        with pytest.raises(FileNotFoundError):
+            load_corpus(tmp_path / "does_not_exist.txt")

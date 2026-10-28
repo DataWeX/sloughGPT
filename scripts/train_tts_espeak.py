@@ -9,6 +9,7 @@ Usage:
     ./scripts/python scripts/train_tts_espeak.py                     # 300 steps, default out
     ./scripts/python scripts/train_tts_espeak.py --steps 500 --lr 5e-4
     ./scripts/python scripts/train_tts_espeak.py --out models/tts/seed7.npz --seed 7
+    ./scripts/python scripts/train_tts_espeak.py --corpus-file runs/said.txt   # own texts
 
 Reports: pair build time, hold-out loss before/after (eval_loss — forward
 only, never trains on the hold-out), train-loss curve every ~10%, steps/sec,
@@ -29,7 +30,7 @@ sys.path.insert(0, str(_root))
 sys.path.insert(0, str(_root / "packages" / "core-py"))
 
 
-def build_data(holdout_n: int, max_frames: int):
+def build_data(holdout_n: int, max_frames: int, corpus: list[str] | None = None):
     from domain.voice._internal.espeak_pairs import (
         DEFAULT_CORPUS,
         DEFAULT_HOLDOUT,
@@ -40,10 +41,14 @@ def build_data(holdout_n: int, max_frames: int):
     if not espeak_available():
         print("ERROR: espeak/espeak-ng binary not found — install espeak", file=sys.stderr)
         raise SystemExit(2)
-    holdout_n = max(0, min(holdout_n, len(DEFAULT_CORPUS) - 2))
-    holdout_n = holdout_n or DEFAULT_HOLDOUT
-    train_texts = DEFAULT_CORPUS[:-holdout_n] if holdout_n else list(DEFAULT_CORPUS)
-    holdout_texts = DEFAULT_CORPUS[-holdout_n:] if holdout_n else []
+    texts = list(corpus) if corpus else list(DEFAULT_CORPUS)
+    if len(texts) < 2:
+        print("ERROR: corpus needs at least 2 usable lines", file=sys.stderr)
+        raise SystemExit(2)
+    holdout_n = max(0, min(holdout_n, len(texts) - 2))
+    holdout_n = holdout_n or min(DEFAULT_HOLDOUT, len(texts) - 2)
+    train_texts = texts[:-holdout_n] if holdout_n else texts
+    holdout_texts = texts[-holdout_n:] if holdout_n else []
     t0 = time.perf_counter()
     train = build_pairs(train_texts)
     holdout = build_pairs(holdout_texts) if holdout_texts else []
@@ -69,10 +74,24 @@ def main(argv: list[str] | None = None) -> int:
         help="checkpoint output path",
     )
     parser.add_argument("--seed", type=int, default=0, help="numpy RNG seed (default 0)")
+    parser.add_argument(
+        "--corpus-file",
+        type=str,
+        default=None,
+        help="train on texts from this file (one per line, # comments) instead of the built-in corpus",
+    )
     args = parser.parse_args(argv)
 
     np.random.seed(args.seed)
-    train, holdout = build_data(args.holdout, args.max_frames)
+    corpus = None
+    if args.corpus_file:
+        from domain.voice._internal.espeak_pairs import load_corpus
+
+        corpus = load_corpus(args.corpus_file)
+        if not corpus:
+            print(f"ERROR: {args.corpus_file} has no usable lines", file=sys.stderr)
+            return 1
+    train, holdout = build_data(args.holdout, args.max_frames, corpus=corpus)
     if not train:
         print("ERROR: empty training set", file=sys.stderr)
         return 1
