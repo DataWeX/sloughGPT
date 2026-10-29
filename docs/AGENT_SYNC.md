@@ -1425,6 +1425,30 @@ tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
 
 ## In flight
 
+- **2026-10-28 · card 093 on `fix/shell-logs-follow-guard` (pushed `7c2b785a9`;
+  `main` is checked out in `sloughgpt-api-std`, so landing is PR-side).**
+  Systems-audit fixes, **rebuilt from scratch after the originals were lost**
+  (worktree `.wt-sysfix` deleted, stash commit `2d062fbf2` gc'd, `/tmp/opencode`
+  wiped; `git log --all -S` over 1204 refs confirms no copy ever landed — if a
+  card looks vanished, pickaxe before rebuilding). Content: `logs -f` follow
+  loop in `repl.py` now gated on `io._is_tty` (scripts / `capture_output` /
+  `MemoryIO` get one snapshot instead of the `while True: time.sleep(0.5)` that
+  hung the whole `test_shell_*` run at ~63%; interactive Ctrl+C unchanged);
+  deterministic `TestCmdLogsExplainV2::test_logs_follow_non_tty_skips_loop`;
+  systems SKILL.md Key Files rows + full 30-row INT 0x80 table and
+  `sloughgpt vm info` syscall/RBAC tables truthed from `X86SyscallHandler` +
+  `_perm_map`, with the two decoy numberings called out
+  (`kernel_syscall.SyscallNumber`; dead module-level `SYS_PRINT = 111 …`).
+  Gates (conda `sloughgpt` via `scripts/python` — root `.venv` is gone):
+  shell suite **5345 passed / 89 skipped / 0 failed**, logs suites **208
+  passed**, `ruff check` clean, `mypy` **56 = 56** on a pristine baseline, no
+  new format diffs (the 2 `ruff format --check` offenders are pre-existing
+  under conda ruff 0.16.8). Watch: pty test
+  `test_shell_tui_live.py::test_ctrl_c_interrupts_running_command` is
+  load-flaky (failed 1/3 full runs, passes 3/3 isolated, green on a pristine
+  `main` baseline run) — not attributable to this change. Base `ee17a4d45`,
+  merged `223fbecd7` (zero file overlap).
+
 - **2026-10-24 · root session on `feat/error-funnel` (NOT on main; merge
   blocked).** Contents: browser error funnel (`error-store` fan-out →
   GlobalBanner / opt-in toast / `state_events` / backend batch, ~39 bare
