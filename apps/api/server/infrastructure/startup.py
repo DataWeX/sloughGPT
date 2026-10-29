@@ -1029,6 +1029,18 @@ class StartupOrchestrator:
         except Exception as e:
             logger.warning("ResourceManager init: %s", e, extra={"tag": "START"})
 
+        # Kick the accelerator probe at boot (kick-only, non-blocking: the
+        # detection runs on its own daemon thread, bounded by
+        # SLO_ACCEL_PROBE_TIMEOUT). Without this the first cupy/metal import
+        # happens under a live /health request — the 2026-10-29 wedge.
+        try:
+            from domain.slolib import prewarm_accelerator
+
+            prewarm_accelerator()
+            logger.debug("Accelerator probe prewarmed", extra={"tag": "START"})
+        except Exception as e:
+            logger.debug("Accelerator prewarm unavailable: %s", e)
+
         # Warn if auth is disabled
         import os
 

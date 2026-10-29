@@ -1,8 +1,9 @@
 """slolib — Unified tensor library (autograd, GPU acceleration, inference).
 
 Public API:
-    get_accelerator, reset_accelerator, set_accelerator_precision
-    to_gpu, from_gpu, gelu, silu, softmax, benchmark_accelerators
+    get_accelerator, prewarm_accelerator, reset_accelerator,
+    set_accelerator_precision, to_gpu, from_gpu, gelu, silu, softmax,
+    benchmark_accelerators
 """
 
 from domain.slolib._internal.gpu import (
@@ -19,6 +20,7 @@ from domain.slolib._internal.gpu import (
 # at call time (AGENT_SYNC facade-patch gotcha).
 _LAZY_IMPORTS = {
     "get_accelerator": ("._internal.gpu", "get_accelerator"),
+    "prewarm_accelerator": ("._internal.gpu", "prewarm_accelerator"),
     "set_accelerator_precision": ("._internal.gpu", "set_accelerator_precision"),
 }
 
@@ -35,6 +37,7 @@ def __getattr__(name):
 
 __all__ = [
     "get_accelerator",
+    "prewarm_accelerator",
     "reset_accelerator",
     "set_accelerator_precision",
     "to_gpu",

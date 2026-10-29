@@ -173,6 +173,9 @@ _SKIP_ENV_KEYS: frozenset[str] = frozenset(
         # CORS-middleware wiring); the local dev drop-in 10-cors-vite-origin
         # sets it, so it warned at every boot.
         "SLO_CORS_ORIGINS",
+        # Accelerator probe bound — read directly by domain/slolib gpu.py
+        # (get_accelerator's per-epoch wait), not by the AppConfig schema.
+        "SLO_ACCEL_PROBE_TIMEOUT",
     }
 )
 

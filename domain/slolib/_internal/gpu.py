@@ -15,10 +15,12 @@ Usage:
 
 from __future__ import annotations
 
+import ctypes
 import logging
 import math
 import os  # noqa: F401 — used in function bodies below
 import sys
+import threading
 import time
 from typing import Any
 
@@ -82,18 +84,105 @@ _POOL = _BufferPool()
 
 _BACKEND: _Accelerator | None = None
 
+# Probe lifecycle — one bounded, off-thread detection per reset epoch.
+#
+# Incident 2026-10-29 05:06 (:8000 fully stopped serving): the lazy cupy
+# first-import hung natively under the health path, and because the cache
+# only filled AFTER detection returned, every concurrent get_accelerator()
+# caller re-entered detection and piled onto the poisoned import lock.
+# Now: a single daemon probe per epoch; callers wait at most
+# _PROBE_TIMEOUT (env SLO_ACCEL_PROBE_TIMEOUT, default 5s); a hung or
+# failed probe serves the CPU fallback instead of wedging the caller; a
+# late probe result supersedes the fallback when it lands.
+_PROBE_LOCK = threading.Lock()
+_PROBE_DONE = threading.Event()
+_PROBE_GEN = 0
+_PROBE_STARTED = False
+_PROBE_LATCHED = False
+_PROBE_TIMEOUT = float(os.environ.get("SLO_ACCEL_PROBE_TIMEOUT", "5"))
+_CPU_FALLBACK: _Accelerator | None = None
+
 
 def get_accelerator() -> _Accelerator:
+    global _PROBE_LATCHED
+
+    acc = _BACKEND
+    if acc is not None:
+        return acc
+
+    if not _PROBE_LATCHED:
+        _ensure_probe()
+        if _PROBE_DONE.wait(_PROBE_TIMEOUT):
+            if _BACKEND is not None:
+                return _BACKEND
+            # Probe finished without a result — hard failure inside detection.
+            logger.warning("Accelerator probe failed — using CPU fallback", extra={"tag": "GPU"})
+        else:
+            logger.warning(
+                "Accelerator probe still running after %.1fs — using CPU fallback "
+                "(probe continues in background; its result applies once it lands)",
+                _PROBE_TIMEOUT,
+                extra={"tag": "GPU"},
+            )
+        _PROBE_LATCHED = True
+
+    # Late completion: a probe that lands after the latch still wins.
+    acc = _BACKEND
+    return acc if acc is not None else _cpu_fallback()
+
+
+def _ensure_probe() -> None:
+    """Start the detection probe at most once per reset epoch (daemon thread)."""
+    global _PROBE_STARTED
+    with _PROBE_LOCK:
+        if _PROBE_STARTED:
+            return
+        _PROBE_STARTED = True
+        gen = _PROBE_GEN
+        threading.Thread(target=_run_probe, args=(gen,), name="accel-probe", daemon=True).start()
+
+
+def _run_probe(gen: int) -> None:
     global _BACKEND
-    if _BACKEND is not None:
-        return _BACKEND
-    _BACKEND = _detect_best_backend()
-    return _BACKEND
+    try:
+        result = _detect_best_backend()
+        if gen == _PROBE_GEN:
+            _BACKEND = result
+            logger.info(
+                "Accelerator probe complete: %s (%s)",
+                getattr(result, "name", "?"),
+                getattr(result, "device_type", "?"),
+                extra={"tag": "GPU"},
+            )
+    except Exception as e:
+        logger.warning("Accelerator probe failed: %s", e, extra={"tag": "GPU"})
+    finally:
+        if gen == _PROBE_GEN:
+            _PROBE_DONE.set()
+
+
+def _cpu_fallback() -> _Accelerator:
+    global _CPU_FALLBACK
+    if _CPU_FALLBACK is None:
+        _CPU_FALLBACK = _CPUBackend()
+    return _CPU_FALLBACK
+
+
+def prewarm_accelerator() -> None:
+    """Kick detection without waiting — the first (possibly slow) import
+    happens at boot in the background, not under a live /health request."""
+    _ensure_probe()
 
 
 def reset_accelerator() -> None:
-    global _BACKEND
-    _BACKEND = None
+    global _BACKEND, _PROBE_GEN, _PROBE_STARTED, _PROBE_LATCHED, _CPU_FALLBACK
+    with _PROBE_LOCK:
+        _PROBE_GEN += 1  # discard any in-flight probe from the old epoch
+        _BACKEND = None
+        _PROBE_STARTED = False
+        _PROBE_LATCHED = False
+        _PROBE_DONE = threading.Event()  # old probes may still set the old event
+        _CPU_FALLBACK = None
 
 
 def set_accelerator_precision(mode: str = "auto") -> str:
@@ -911,6 +1000,25 @@ class _MetalBackend(_Accelerator):
     # Use base class numpy implementations for all compute ops
 
 
+def _cuda_driver_present() -> bool:
+    """Cheap driver-presence check (dlopen only — no cuInit, no cupy import).
+
+    Runs BEFORE the cupy import so machines without an NVIDIA driver fail in
+    milliseconds instead of paying cupy's expensive first-import (which can
+    hang natively on a broken/mismatched driver — the 2026-10-29 :8000
+    wedge). A present-but-broken driver is then still bounded by the
+    per-epoch probe timeout in get_accelerator().
+    """
+    if sys.platform == "darwin":
+        return False  # Metal covers CUDA-less macs
+    lib = "nvcuda.dll" if sys.platform == "win32" else "libcuda.so.1"
+    try:
+        ctypes.CDLL(lib)
+        return True
+    except OSError:
+        return False
+
+
 class _CUDABackend(_Accelerator):
     """CUDA (NVIDIA GPU) backend via CuPy.
 
@@ -926,6 +1034,12 @@ class _CUDABackend(_Accelerator):
         self._cp = None
 
     def is_available(self) -> bool:
+        if not _cuda_driver_present():
+            # No NVIDIA driver: skip cupy's import entirely — on driverless
+            # machines it is the slow/hanging operation being guarded
+            # (incident 2026-10-29: first import wedged the whole server).
+            logger.debug("CUDA skipped: no NVIDIA driver present")
+            return False
         try:
             import cupy as cp
 
