@@ -125,6 +125,48 @@ describe('streamChatResponse', () => {
     expect(mockParams.onComplete).toHaveBeenCalled()
   })
 
+  it('runs the new chat sequence: working → generating → streaming → finalized', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"PROCESSING","status":"working","data":{},"message":"Preparing"}',
+      'data: {"stream":"chat","phase":"PROCESSING","status":"generating","data":{},"message":"Generating"}',
+      'data: {"stream":"chat","phase":"STREAMING","status":"streaming","data":{"token":"Hi"},"message":""}',
+      'data: {"stream":"chat","phase":"PROCESSING","status":"finalizing","data":{},"message":"Finalizing"}',
+      'data: {"stream":"chat","phase":"FINALIZED","status":"finalized","data":{},"meta":{"usage_tokens":1},"message":""}',
+    ])
+    await streamChatResponse(mockParams)
+
+    // generating opens the reasoning phase; working/finalizing are silent stages
+    expect(mockParams.onThinking).toHaveBeenCalledTimes(1)
+    // the token is the only content dispatch
+    expect(mockParams.onToken).toHaveBeenCalledTimes(1)
+    expect(mockParams.onToken).toHaveBeenCalledWith('Hi')
+    // finalized closes the stream exactly once
+    expect(mockParams.onComplete).toHaveBeenCalledTimes(1)
+    expect(mockParams.onError).not.toHaveBeenCalled()
+  })
+
+  it('closes on the cancelled terminal without an error or retry', async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"streaming","data":{"token":"half"},"message":""}',
+      'data: {"stream":"chat","phase":"CANCELLED","status":"cancelled","data":{},"message":""}',
+    ])
+    await streamChatResponse(mockParams)
+
+    expect(mockParams.onToken).toHaveBeenCalledWith('half')
+    expect(mockParams.onComplete).toHaveBeenCalledTimes(1)
+    expect(mockParams.onError).not.toHaveBeenCalled()
+  })
+
+  it("tolerates the legacy 'thinking' status (grandfathered streams)", async () => {
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"thinking","data":{},"message":"Thinking..."}',
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}',
+    ])
+    await streamChatResponse(mockParams)
+    expect(mockParams.onThinking).toHaveBeenCalledTimes(1)
+    expect(mockParams.onComplete).toHaveBeenCalledTimes(1)
+  })
+
   it('dispatches onMeta with token count and elapsed time before onComplete', async () => {
     const onMeta = vi.fn()
     mockSSE([

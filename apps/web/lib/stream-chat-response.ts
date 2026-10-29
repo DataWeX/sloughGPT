@@ -159,7 +159,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           lastEventId = event.id as string
         }
 
-        if (event.status === 'thinking') {
+        if (event.status === 'thinking' || event.status === 'generating') {
           params.onThinking?.()
           startThinkingTicks()
           continue
@@ -302,7 +302,11 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           }
         }
 
-        if (event.status === 'complete') {
+        if (
+          event.status === 'finalized' ||
+          event.status === 'complete' ||
+          event.status === 'cancelled'
+        ) {
           _log.debug('Stream complete', { tokens: tokenCount, elapsed: Date.now() - startTime })
           if (!hasContent) params.onToken('')
           stopThinkingTicks()

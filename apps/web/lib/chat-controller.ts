@@ -16,71 +16,7 @@ export interface ChatMessage {
   content: string
 }
 
-interface ChatResponse {
-  message: string
-  session_id: string
-  done: boolean
-}
-
 export const chatController = {
-  async send(
-    message: string,
-    options?: {
-      max_tokens?: number
-      temperature?: number
-      session_id?: string
-      waitForModel?: boolean
-    },
-  ): Promise<ChatResponse> {
-    let modelStatus = await modelController.status()
-    if (!modelStatus.loaded) {
-      if (options?.waitForModel) {
-        modelStatus = await modelController.waitForReady()
-        if (!modelStatus.loaded) throw new Error('Model still loading — please wait.')
-      } else {
-        throw new Error('No model loaded. Load a model first.')
-      }
-    }
-
-    try {
-      const data = await apiPost<{ message?: string; text?: string; session_id?: string }>(
-        '/chat',
-        {
-          messages: [{ role: 'user', content: message }],
-          max_tokens: options?.max_tokens ?? 100,
-          temperature: options?.temperature ?? 0.8,
-        },
-      )
-      return {
-        message: data.message || data.text || '',
-        session_id: data.session_id || options?.session_id || 'default',
-        done: true,
-      }
-    } catch (err) {
-      _log.warning('chat endpoint failed, falling back to /inference/generate', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-      try {
-        const { useToastStore } = await import('./toast-store')
-        useToastStore
-          .getState()
-          .addToast('Using basic mode — conversation context unavailable', 'info')
-      } catch {
-        /* best-effort */
-      }
-      const fallback = await apiPost<{ text?: string }>('/inference/generate', {
-        prompt: `User: ${message}\nAssistant:`,
-        max_new_tokens: options?.max_tokens ?? 100,
-        temperature: options?.temperature ?? 0.8,
-      })
-      return {
-        message: fallback.text || '',
-        session_id: options?.session_id || 'default',
-        done: true,
-      }
-    }
-  },
-
   async *stream(
     message: string,
     options?: {
@@ -116,7 +52,12 @@ export const chatController = {
           return
         }
         if (event.data?.token) yield event.data.token as string
-        if (event.status === 'complete') return
+        if (
+          event.status === 'finalized' ||
+          event.status === 'complete' ||
+          event.status === 'cancelled'
+        )
+          return
       }
     } catch (err) {
       yield `[Connection error: ${err instanceof Error ? err.message : 'unknown'}]`
@@ -139,7 +80,11 @@ export const chatController = {
           return
         }
         if (event.data?.token) yield { token: event.data.token as string }
-        if (event.status === 'complete') {
+        if (
+          event.status === 'finalized' ||
+          event.status === 'complete' ||
+          event.status === 'cancelled'
+        ) {
           yield { done: true }
           return
         }
@@ -239,5 +184,3 @@ export interface ContextInspector {
   last_frame?: Record<string, unknown> | null
   error?: string
 }
-
-export type { ChatResponse }

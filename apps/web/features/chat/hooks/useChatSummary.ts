@@ -23,40 +23,54 @@ export function useChatSummary({
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const generateSummary = useCallback(async (messages: ChatMessage[]) => {
-    if (messages.length === 0) {
-      setError('No messages to summarize')
-      return
-    }
+  const generateSummary = useCallback(
+    async (messages: ChatMessage[]) => {
+      if (messages.length === 0) {
+        setError('No messages to summarize')
+        return
+      }
 
-    setIsGenerating(true)
-    setError(null)
-    setSummary(null)
+      setIsGenerating(true)
+      setError(null)
+      setSummary(null)
 
-    try {
-      const conversationText = messages
-        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-        .join('\n\n')
+      try {
+        const conversationText = messages
+          .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+          .join('\n\n')
 
-      const prompt = `Summarize the following conversation concisely. Focus on key topics, decisions, and outcomes. Use bullet points for main points.
+        const prompt = `Summarize the following conversation concisely. Focus on key topics, decisions, and outcomes. Use bullet points for main points.
 
 Conversation:
 ${conversationText}
 
 Summary:`
 
-      const result = await chatController.send(prompt, {
-        temperature,
-        max_tokens: 500,
-      })
+        // Summary rides the normal chat stream — it is a prompt, not a
+        // feature: collect the tokens and fold at this edge. stream()'s
+        // bracketed sentinels ([No model loaded], [Connection error…]) are
+        // errors, not content.
+        let out = ''
+        for await (const token of chatController.stream(prompt, {
+          temperature,
+          max_tokens: 500,
+        })) {
+          out += token
+        }
 
-      setSummary(result.message)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate summary')
-    } finally {
-      setIsGenerating(false)
-    }
-  }, [temperature])
+        if (out.startsWith('[') && out.endsWith(']')) {
+          setError(out.slice(1, -1))
+        } else {
+          setSummary(out)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to generate summary')
+      } finally {
+        setIsGenerating(false)
+      }
+    },
+    [temperature],
+  )
 
   const clearSummary = useCallback(() => {
     setSummary(null)

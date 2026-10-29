@@ -37,7 +37,9 @@ describe('chatController.stream', () => {
 
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      body: sseResponse(['data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":"ok"}}\n\n']),
+      body: sseResponse([
+        'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{"token":"ok"}}\n\n',
+      ]),
     } as Response)
 
     const tokens: string[] = []
@@ -112,41 +114,42 @@ describe('chatController.stream', () => {
     expect(tokens[0]).toContain('[Connection error:')
     expect(tokens[0]).toContain('network fail')
   })
-})
 
-describe('chatController.send', () => {
-  it('rejects when no model is loaded', async () => {
-    apiClient.apiGet.mockResolvedValue({ model_loaded: false, model_type: null })
-    await expect(chatController.send('hello')).rejects.toThrow('No model loaded')
+  it('collects lifecycle frames and stops on the finalized terminal', async () => {
+    apiClient.apiGet.mockResolvedValue({ model_loaded: true, model_type: 'gpt2' })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      body: sseResponse([
+        'data: {"stream":"chat","phase":"PROCESSING","status":"working","data":{}}\n\n',
+        'data: {"stream":"chat","phase":"PROCESSING","status":"generating","data":{}}\n\n',
+        'data: {"stream":"chat","phase":"STREAMING","status":"streaming","data":{"token":"Hi"}}\n\n',
+        'data: {"stream":"chat","phase":"PROCESSING","status":"finalizing","data":{}}\n\n',
+        'data: {"stream":"chat","phase":"FINALIZED","status":"finalized","data":{},"meta":{"usage_tokens":1}}\n\n',
+      ]),
+    } as Response)
+
+    const tokens: string[] = []
+    for await (const token of chatController.stream('hi')) {
+      tokens.push(token)
+    }
+    expect(tokens).toEqual(['Hi'])
   })
 
-  it('returns chat response when model loaded', async () => {
+  it('stops on the cancelled terminal without an error', async () => {
     apiClient.apiGet.mockResolvedValue({ model_loaded: true, model_type: 'gpt2' })
-    apiClient.apiPost.mockResolvedValue({ message: 'hi there', session_id: 's1', done: true })
-    const result = await chatController.send('hello')
-    expect(result.message).toBe('hi there')
-    expect(result.session_id).toBe('s1')
-    expect(result.done).toBe(true)
-  })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      body: sseResponse([
+        'data: {"stream":"chat","phase":"STREAMING","status":"streaming","data":{"token":"half"}}\n\n',
+        'data: {"stream":"chat","phase":"CANCELLED","status":"cancelled","data":{}}\n\n',
+      ]),
+    } as Response)
 
-  it('falls back to /inference/generate on chat failure', async () => {
-    apiClient.apiGet.mockResolvedValue({ model_loaded: true, model_type: 'gpt2' })
-    apiClient.apiPost
-      .mockRejectedValueOnce(new Error('chat failed'))
-      .mockResolvedValueOnce({ text: 'fallback response' })
-    const result = await chatController.send('hello')
-    expect(result.message).toBe('fallback response')
-    expect(result.done).toBe(true)
-  })
-
-  it('uses default options when none provided', async () => {
-    apiClient.apiGet.mockResolvedValue({ model_loaded: true, model_type: 'gpt2' })
-    apiClient.apiPost.mockResolvedValue({ message: 'ok' })
-    await chatController.send('test')
-    expect(apiClient.apiPost).toHaveBeenCalledWith(
-      '/chat',
-      expect.objectContaining({ max_tokens: 100, temperature: 0.8 }),
-    )
+    const tokens: string[] = []
+    for await (const token of chatController.stream('hi')) {
+      tokens.push(token)
+    }
+    expect(tokens).toEqual(['half'])
   })
 })
 
@@ -242,13 +245,31 @@ describe('chatController.regenerateStream', () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       body: sseResponse([
+        'data: {"stream":"chat","phase":"STREAMING","status":"streaming","data":{"token":"re"}}\n\n',
+        'data: {"stream":"chat","phase":"FINALIZED","status":"finalized","data":{}}\n\n',
+      ]),
+    } as Response)
+
+    const results: any[] = []
+    for await (const r of chatController.regenerateStream('sess-1', [
+      { role: 'user', content: 'hi' },
+    ])) {
+      results.push(r)
+    }
+    expect(results).toEqual([{ token: 're' }, { done: true }])
+  })
+
+  it('yields done on legacy complete frame (grandfathered tolerance)', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      body: sseResponse([
         'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"re"}}\n\n',
         'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{}}\n\n',
       ]),
     } as Response)
 
     const results: any[] = []
-    for await (const r of chatController.regenerateStream('sess-1', [{ role: 'user', content: 'hi' }])) {
+    for await (const r of chatController.regenerateStream('sess-1', [])) {
       results.push(r)
     }
     expect(results).toEqual([{ token: 're' }, { done: true }])
@@ -257,9 +278,7 @@ describe('chatController.regenerateStream', () => {
   it('yields error on SSE error event', async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      body: sseResponse([
-        'data: {"stream":"chat","status":"error","message":"regen failed"}\n\n',
-      ]),
+      body: sseResponse(['data: {"stream":"chat","status":"error","message":"regen failed"}\n\n']),
     } as Response)
 
     const results: any[] = []

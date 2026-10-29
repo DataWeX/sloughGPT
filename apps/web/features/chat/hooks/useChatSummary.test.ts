@@ -7,7 +7,7 @@ afterEach(cleanup)
 
 vi.mock('@/lib/chat-controller', () => ({
   chatController: {
-    send: vi.fn(),
+    stream: vi.fn(),
   },
 }))
 
@@ -15,6 +15,12 @@ const mockMessages = [
   { id: '1', role: 'user' as const, content: 'Hello', timestamp: new Date() },
   { id: '2', role: 'assistant' as const, content: 'Hi there!', timestamp: new Date() },
 ]
+
+function mockStream(...tokens: string[]) {
+  vi.mocked(chatController.stream).mockImplementation(async function* () {
+    for (const t of tokens) yield t
+  })
+}
 
 describe('useChatSummary', () => {
   beforeEach(() => {
@@ -28,14 +34,18 @@ describe('useChatSummary', () => {
     expect(result.current.error).toBeNull()
   })
 
-  it('generates summary successfully', async () => {
-    vi.mocked(chatController.send).mockResolvedValue({ message: 'Test summary', session_id: 'test', done: true })
+  it('generates summary by folding the chat stream', async () => {
+    mockStream('Test ', 'summary')
     const { result } = renderHook(() => useChatSummary())
 
     await act(async () => {
       await result.current.generateSummary(mockMessages)
     })
 
+    expect(chatController.stream).toHaveBeenCalledWith(expect.any(String), {
+      temperature: 0.3,
+      max_tokens: 500,
+    })
     expect(result.current.summary).toBe('Test summary')
     expect(result.current.isGenerating).toBe(false)
     expect(result.current.error).toBeNull()
@@ -52,8 +62,10 @@ describe('useChatSummary', () => {
     expect(result.current.summary).toBeNull()
   })
 
-  it('handles errors', async () => {
-    vi.mocked(chatController.send).mockRejectedValue(new Error('API error'))
+  it('handles stream exceptions', async () => {
+    vi.mocked(chatController.stream).mockImplementation(() => {
+      throw new Error('API error')
+    })
     const { result } = renderHook(() => useChatSummary())
 
     await act(async () => {
@@ -64,8 +76,20 @@ describe('useChatSummary', () => {
     expect(result.current.summary).toBeNull()
   })
 
+  it("treats stream()'s bracketed sentinel as an error, not content", async () => {
+    mockStream('[No model loaded]')
+    const { result } = renderHook(() => useChatSummary())
+
+    await act(async () => {
+      await result.current.generateSummary(mockMessages)
+    })
+
+    expect(result.current.error).toBe('No model loaded')
+    expect(result.current.summary).toBeNull()
+  })
+
   it('clears summary', async () => {
-    vi.mocked(chatController.send).mockResolvedValue({ message: 'Test summary', session_id: 'test', done: true })
+    mockStream('Test summary')
     const { result } = renderHook(() => useChatSummary())
 
     await act(async () => {
