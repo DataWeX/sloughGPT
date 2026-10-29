@@ -9,7 +9,7 @@ const { mockPush, mockSessionList, mockModelList, mockApiGet } = vi.hoisted(() =
   mockApiGet: vi.fn(),
 }))
 
-vi.mock('@/vite/next-compat/navigation', () => ({
+vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 

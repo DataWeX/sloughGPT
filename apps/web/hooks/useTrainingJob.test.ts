@@ -8,7 +8,7 @@ import { useTrainingJob } from './useTrainingJob'
 import type { TrainingJob } from '@/lib/training-controller'
 
 const mockPush = vi.fn()
-vi.mock('@/vite/next-compat/navigation', () => ({
+vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'job-1' }),
   useRouter: () => ({ push: mockPush }),
 }))
