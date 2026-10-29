@@ -55,7 +55,7 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null)
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
-  const currentWorkspaceId = useAuthStore(s => s.currentWorkspace?.id)
+  const currentWorkspaceId = useAuthStore((s) => s.currentWorkspace?.id)
 
   // Sessions/models/souls for the palette come from the /bootstrap payload
   // (the same slices the landing consumes) — no mount prewarm fetches.
@@ -91,7 +91,7 @@ export function CommandPalette() {
       const params = new URLSearchParams({ q })
       if (currentWorkspaceId) params.set('workspace_id', currentWorkspaceId)
       apiGet<SystemSearchResponse>(`/search?${params.toString()}`)
-        .then(res => {
+        .then((res) => {
           if (res?.hits) {
             setDataHits(res.hits)
             setDataPartial(res.partial ?? [])
@@ -250,10 +250,11 @@ export function CommandPalette() {
 
   const filtered = useMemo(() => {
     const local = query.trim()
-      ? actions.filter((a) => {
-          const q = query.toLowerCase()
-          return a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
-        })
+      ? actions.filter(
+          (a) =>
+            a.label.toLowerCase().includes(query.toLowerCase()) ||
+            a.description.toLowerCase().includes(query.toLowerCase()),
+        )
       : actions
     return [...local, ...dataActions]
   }, [actions, query, dataActions])
@@ -401,7 +402,10 @@ export function CommandPalette() {
             )}
           </div>
           {dataPartial.length > 0 && (
-            <p className="border-t border-border/30 px-4 py-1.5 text-[10px] text-warning" role="status">
+            <p
+              className="border-t border-border/30 px-4 py-1.5 text-[10px] text-warning"
+              role="status"
+            >
               Partial results — some sources are unavailable: {dataPartial.join(', ')}
             </p>
           )}

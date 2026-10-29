@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { cn } from '@sloughgpt/strui'
 import { IconBrain } from '@/components/icons/NavIcons'
 import {

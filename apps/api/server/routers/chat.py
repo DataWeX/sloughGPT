@@ -128,6 +128,22 @@ class ChatRouter:
                         # usage/timing/finish on it, so surface them here — that
                         # detail is the point of the port, and folding callers
                         # read it off this frame.
+                        if item.consciousness:
+                            yield self._sse_event(
+                                "chat",
+                                "CONSCIOUSNESS",
+                                "complete",
+                                data=item.consciousness,
+                                message="Reflection updated",
+                            )
+                        if item.memory:
+                            yield self._sse_event(
+                                "chat",
+                                "MEMORY",
+                                "success",
+                                data=item.memory,
+                                message="New fact remembered",
+                            )
                         yield self._sse_token(
                             "chat",
                             "",

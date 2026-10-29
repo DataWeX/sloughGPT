@@ -121,9 +121,7 @@ describe('LiveFeedStream', () => {
         changed: true,
       }),
     )
-    expect(
-      screen.getByText('feed:api-conversations received 2 new records'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('feed:api-conversations received 2 new records')).toBeInTheDocument()
     expect(screen.getByText('+2')).toBeInTheDocument()
   })
 
@@ -144,7 +142,13 @@ describe('LiveFeedStream', () => {
       snapshot({
         jobs: {
           active: [
-            { id: 'j1', name: 'Live job', status: 'running', dataset: 'feed:feedback', progress: 40 },
+            {
+              id: 'j1',
+              name: 'Live job',
+              status: 'running',
+              dataset: 'feed:feedback',
+              progress: 40,
+            },
           ],
           count: 1,
         },

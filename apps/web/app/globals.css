@@ -271,7 +271,17 @@ html {
   }
 }
 
-/* Restarting banner */
+/* Global banner — one surface for every tone (card 87345605).
+   The tone lives in --banner-tone; every surface derives from it so all four
+   tones are distinct AND legible in both modes with one formula:
+     ink    = 35% tone + 65% foreground (the mode's own foreground anchors it)
+     border = 35% tone + 65% background (decorative hue identity)
+   The background stays the plain page surface — a tone-tinted background
+   collapses contrast for dark tones (info-on-light lands at 1.9:1), and
+   opacity-dimmed copy put light-mode warning text at 1.44:1.
+   NB: every token is an RGB TRIPLET (248 246 252), so each reference must
+   be wrapped rgb() — a bare var() substitutes the digits and invalidates the
+   whole declaration (transparent background, inherited ink). */
 .sl-app-banner {
   display: flex;
   align-items: center;
@@ -279,14 +289,51 @@ html {
   gap: 0.5rem;
   flex-shrink: 0;
   height: 1.75rem;
-  background-color: color-mix(in srgb, rgb(var(--warning)) 9%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, rgb(var(--warning)) 20%, transparent);
+  background: rgb(var(--background));
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--banner-tone)) 35%, rgb(var(--background)));
   font-size: 11px;
   font-weight: 500;
-  /* Faded warning ink: full-saturation amber read as a glowing strip. The
-     status dot still carries the pure tone; the copy sits at 65% warning over
-     the page background so it stays legible without flaring. */
-  color: color-mix(in srgb, rgb(var(--warning)) 65%, rgb(var(--background)));
+  color: color-mix(in srgb, rgb(var(--banner-tone)) 35%, rgb(var(--foreground)));
+  /* Entrance only — the banner drops in from the top edge. The animated
+     properties live in the keyframes below, never in this block, so the
+     token-guard contract above stays the single surface definition. */
+  animation: sl-banner-in 180ms ease-out;
+}
+
+/* From just above the top edge: the bar is the topmost element, so a short
+   slide reads as "this arrived", not "the page shifted". */
+@keyframes sl-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced motion: the banner still appears — instantly, in place. */
+@media (prefers-reduced-motion: reduce) {
+  .sl-app-banner {
+    animation: none;
+  }
+}
+
+.sl-app-banner[data-tone='info'] {
+  --banner-tone: var(--primary);
+}
+
+.sl-app-banner[data-tone='success'] {
+  --banner-tone: var(--success);
+}
+
+.sl-app-banner[data-tone='warning'] {
+  --banner-tone: var(--warning);
+}
+
+.sl-app-banner[data-tone='destructive'] {
+  --banner-tone: var(--destructive);
 }
 
 /* Mobile drawer backdrop */
@@ -536,7 +583,7 @@ html {
   gap: 0.25rem;
   padding: 0.125rem 0.375rem;
   border-radius: 9999px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -559,11 +606,9 @@ html {
 .sl-badge-primary {
   background-color: color-mix(in srgb, rgb(var(--primary)) 10%, transparent);
   color: rgb(var(--primary));
-  opacity: 0.8;
 }
 .sl-badge-primary:hover {
   background-color: color-mix(in srgb, rgb(var(--primary)) 18%, transparent);
-  opacity: 1;
 }
 .sl-badge-secondary {
   background-color: color-mix(in srgb, rgb(var(--muted-foreground)) 10%, transparent);
@@ -1137,6 +1182,102 @@ html.dark.palette-neural-precision {
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
 }
 
+/* Operating System Blue (system-cobalt) — PROJECTION of apps/web/lib/os-blue-palette.ts.
+   Do not hand-edit: apps/web/lib/os-blue-palette.test.ts re-runs the OKLCH derivation
+   and fails if this block drifts from the module. */
+html.palette-system-cobalt {
+  --background: 242 248 255;
+  --foreground: 35 43 52;
+  --card: 254 255 255;
+  --card-foreground: 35 43 52;
+  --popover: 254 255 255;
+  --popover-foreground: 35 43 52;
+  --primary: 23 89 157;
+  --primary-foreground: 255 255 255;
+  --secondary: 220 234 252;
+  --secondary-foreground: 38 47 57;
+  --muted: 230 240 253;
+  --muted-foreground: 101 118 139;
+  --accent: 0 140 170;
+  --accent-foreground: 244 253 255;
+  --ring: 23 89 157;
+  --border: 197 217 242;
+  --input: 197 217 242;
+  --chart-1: 23 89 157;
+  --chart-2: 0 140 170;
+  --chart-3: 51 114 183;
+  --chart-4: 52 176 125;
+  --chart-5: 220 80 90;
+  --shadow-sm: 0 1px 2px rgba(35, 43, 52, 0.06);
+  --shadow-md: 0 4px 12px rgba(35, 43, 52, 0.08);
+  --shadow-lg: 0 8px 30px rgba(35, 43, 52, 0.10);
+  --shadow-xl: 0 16px 48px rgba(35, 43, 52, 0.14);
+}
+html.dark.palette-system-cobalt {
+  --chat-bg: 0 14 24;
+  --background: 0 14 24;
+  --foreground: 235 241 248;
+  --card: 1 38 57;
+  --card-foreground: 235 241 248;
+  --popover: 1 51 75;
+  --popover-foreground: 235 241 248;
+  --primary: 76 194 255;
+  --primary-foreground: 8 18 28;
+  --secondary: 1 51 75;
+  --secondary-foreground: 235 241 248;
+  --muted: 1 38 57;
+  --muted-foreground: 152 163 178;
+  --accent: 0 183 195;
+  --accent-foreground: 6 18 22;
+  --ring: 76 194 255;
+  --border: 2 74 104;
+  --input: 2 74 104;
+  --chart-1: 76 194 255;
+  --chart-2: 0 183 195;
+  --chart-3: 6 134 186;
+  --chart-4: 52 176 125;
+  --chart-5: 235 100 110;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+html.palette-system-cobalt {
+  accent-color: rgb(var(--primary));
+}
+html.palette-system-cobalt option {
+  background-color: rgb(var(--popover));
+  color: rgb(var(--popover-foreground));
+}
+html.palette-system-cobalt option:checked {
+  background-color: rgb(23,89,157);
+  color: rgb(var(--primary-foreground));
+}
+html.palette-system-cobalt option:hover {
+  background-color: rgb(24,74,127);
+  color: rgb(var(--primary-foreground));
+}
+html.palette-system-cobalt select:hover {
+  border-color: rgb(78,135,201);
+}
+html.palette-system-cobalt select:active {
+  border-color: rgb(7,51,95);
+}
+html.dark.palette-system-cobalt option:checked {
+  background-color: rgb(76,194,255);
+  color: rgb(var(--primary-foreground));
+}
+html.dark.palette-system-cobalt option:hover {
+  background-color: rgb(186,229,255);
+  color: rgb(var(--primary-foreground));
+}
+html.dark.palette-system-cobalt select:hover {
+  border-color: rgb(6,134,186);
+}
+html.dark.palette-system-cobalt select:active {
+  border-color: rgb(46,170,230);
+}
+
 /* Accent themes — website color for accented elements (message bubbles,
    buttons, focus rings). Override --primary/--ring on <html> so the chosen
    accent wins even when a palette class is present; the palette still
@@ -1154,6 +1295,7 @@ html.dark.theme-blue {
 }
 html.dark.theme-blue {
   --secondary: 38 48 72;
+  --secondary-foreground: 230 237 250;
   --muted: 30 38 58;
   --border: 44 56 80;
   --input: 44 56 80;
@@ -1172,6 +1314,7 @@ html.dark.theme-purple {
 }
 html.dark.theme-purple {
   --secondary: 50 40 72;
+  --secondary-foreground: 240 232 252;
   --muted: 40 34 58;
   --border: 58 48 80;
   --input: 58 48 80;
@@ -1190,6 +1333,7 @@ html.dark.theme-pink {
 }
 html.dark.theme-pink {
   --secondary: 62 40 52;
+  --secondary-foreground: 250 234 242;
   --muted: 50 34 44;
   --border: 72 48 62;
   --input: 72 48 62;
@@ -1208,6 +1352,7 @@ html.dark.theme-red {
 }
 html.dark.theme-red {
   --secondary: 62 38 42;
+  --secondary-foreground: 250 234 236;
   --muted: 50 32 36;
   --border: 72 46 50;
   --input: 72 46 50;
@@ -1226,6 +1371,7 @@ html.dark.theme-orange {
 }
 html.dark.theme-orange {
   --secondary: 62 48 34;
+  --secondary-foreground: 250 240 230;
   --muted: 50 40 28;
   --border: 72 56 40;
   --input: 72 56 40;
@@ -1244,6 +1390,7 @@ html.dark.theme-green {
 }
 html.dark.theme-green {
   --secondary: 34 56 44;
+  --secondary-foreground: 232 248 240;
   --muted: 28 46 38;
   --border: 42 66 52;
   --input: 42 66 52;
@@ -1262,6 +1409,7 @@ html.dark.theme-teal {
 }
 html.dark.theme-teal {
   --secondary: 34 50 62;
+  --secondary-foreground: 232 244 250;
   --muted: 28 42 52;
   --border: 42 60 72;
   --input: 42 60 72;

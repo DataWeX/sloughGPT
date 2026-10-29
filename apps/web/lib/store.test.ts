@@ -31,6 +31,12 @@ describe('useAppStore', () => {
     expect(settings.streaming).toBe(true)
   })
 
+  it('has default connection-banner timing flags', () => {
+    const { settings } = useAppStore.getState()
+    expect(settings.bannerGraceMs).toBe(5_000)
+    expect(settings.bannerHoldMs).toBe(4_000)
+  })
+
   it('starts with empty knowledge', () => {
     const { injectedKnowledge } = useAppStore.getState()
     expect(injectedKnowledge).toEqual([])

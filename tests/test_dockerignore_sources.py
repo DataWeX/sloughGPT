@@ -43,8 +43,7 @@ def test_every_copy_source_survives_dockerignore() -> None:
     """Exit 0: no Dockerfile COPY source is excluded from the build context."""
     proc = _run_checker()
     assert proc.returncode == 0, (
-        "check_dockerignore.py reported excluded COPY source(s):\n"
-        f"{proc.stdout}{proc.stderr}"
+        f"check_dockerignore.py reported excluded COPY source(s):\n{proc.stdout}{proc.stderr}"
     )
 
 
@@ -72,9 +71,7 @@ def test_rejects_a_dockerignore_that_excludes_a_copy_source(tmp_path: Path) -> N
         "FROM scratch\nCOPY packages/strui/ /app/strui\n", encoding="utf-8"
     )
     (tmp_path / "packages" / "strui").mkdir(parents=True)
-    (tmp_path / ".dockerignore").write_text(
-        "packages/strui/\napps/web/\n", encoding="utf-8"
-    )
+    (tmp_path / ".dockerignore").write_text("packages/strui/\napps/web/\n", encoding="utf-8")
 
     proc = subprocess.run(
         [sys.executable, str(CHECKER), str(tmp_path)],

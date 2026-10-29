@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/vite/next-compat/link'
 import { Card, CardContent, cn } from '@sloughgpt/strui'
 import { IconThumbUp, IconThumbDown } from '@sloughgpt/strui'
 import type { FeedbackStats } from '@/lib/feedback-controller'
@@ -40,11 +40,15 @@ export function FeedbackBar({ loading, feedbackStats }: FeedbackBarProps) {
           </div>
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1 text-xs">
-              <span className="text-success"><IconThumbUp className="h-3 w-3" /></span>
+              <span className="text-success">
+                <IconThumbUp className="h-3 w-3" />
+              </span>
               <span className="font-medium tabular-nums">{thumbs_up}</span>
             </span>
             <span className="inline-flex items-center gap-1 text-xs">
-              <span className="text-destructive"><IconThumbDown className="h-3 w-3" /></span>
+              <span className="text-destructive">
+                <IconThumbDown className="h-3 w-3" />
+              </span>
               <span className="font-medium tabular-nums">{thumbs_down}</span>
             </span>
           </div>
@@ -52,16 +56,18 @@ export function FeedbackBar({ loading, feedbackStats }: FeedbackBarProps) {
             <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
               <div
                 className={cn(
-                  "h-full rounded-full transition-all duration-500",
-                  ratio >= 0.7 ? 'bg-success' : ratio >= 0.4 ? 'bg-warning' : 'bg-destructive'
+                  'h-full rounded-full transition-all duration-500',
+                  ratio >= 0.7 ? 'bg-success' : ratio >= 0.4 ? 'bg-warning' : 'bg-destructive',
                 )}
                 style={{ width: `${positivePercent}%` }}
               />
             </div>
-            <span className={cn(
-              "text-xs font-medium tabular-nums shrink-0",
-              ratio >= 0.7 ? 'text-success' : ratio >= 0.4 ? 'text-warning' : 'text-destructive'
-            )}>
+            <span
+              className={cn(
+                'text-xs font-medium tabular-nums shrink-0',
+                ratio >= 0.7 ? 'text-success' : ratio >= 0.4 ? 'text-warning' : 'text-destructive',
+              )}
+            >
               {positivePercent}%
             </span>
           </div>

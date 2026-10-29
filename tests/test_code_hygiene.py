@@ -177,9 +177,11 @@ def test_no_fstring_logger_calls():
 def test_no_bare_except():
     """Bare except: swallows SystemExit/KeyboardInterrupt — catch types.
 
-    Matches the pattern, not the prose (``bare_except_hits``): a line-regex
-    flags docstrings that quote ``except:`` while documenting why it is
-    banned, which is how this gate went red with zero real violations.
+    AST-based on purpose: a line regex also matches prose *describing* the
+    anti-pattern (``atomic_write.py`` documents ``except: unlink``), and a
+    guard that fires on documentation gets ignored. Parsing finds only real
+    ``ExceptHandler`` nodes with no type, and it catches multi-line
+    ``except :`` forms a per-line scan misses.
     """
     found = bare_except_hits()
     assert not found, "bare except clauses (catch explicit types):\n" + fmt(found)

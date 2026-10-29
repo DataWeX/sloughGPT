@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from domain.shell._internal.repl import (
     _COLOR_ENABLED,
     _COMMAND_CACHE_FETCHERS,
@@ -17,6 +19,18 @@ from domain.shell._internal.repl import (
     _get_file_handler,
     _get_log_buffer_handler,
 )
+
+
+@pytest.fixture(autouse=True)
+def _remote_transport(monkeypatch):
+    """Pin HTTP transport (remote mode, card ad4f5ec2).
+
+    The _fetch_* tests patch requests.get, which is only reached in remote
+    mode — local in-process dispatch is the default since the shell-core
+    seam landed.
+    """
+    monkeypatch.setenv("MAN_API_URL", "http://localhost:8000")
+
 
 # ── _color ──────────────────────────────────────────────────────────────────
 

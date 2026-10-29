@@ -35,6 +35,8 @@ export function SettingsBackupRestoreCard({ settings, onImport, version }: Setti
       if (typeof raw.streaming === 'boolean') valid.streaming = raw.streaming
       if (typeof raw.customContext === 'string') valid.customContext = raw.customContext
       if (typeof raw.collapsibleMessageLength === 'number') valid.collapsibleMessageLength = raw.collapsibleMessageLength
+      if (typeof raw.bannerGraceMs === 'number') valid.bannerGraceMs = raw.bannerGraceMs
+      if (typeof raw.bannerHoldMs === 'number') valid.bannerHoldMs = raw.bannerHoldMs
       if (Object.keys(valid).length === 0) throw new Error('No valid settings found')
       onImport(valid)
       addToast('Settings imported', 'success')

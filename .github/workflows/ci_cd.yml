@@ -226,16 +226,14 @@ jobs:
       # One workspace install at the repo root — the local shared-tree layout.
       # npm ci inside a workspace subdir resolves the workspace root and
       # installs there anyway, so the previous split (apps/web, then
-      # packages/strui) ended with the strui tree wiping the web tree: `next`
-      # vanished and eslint-config-next's parser could not resolve
-      # next/dist/compiled/babel/eslint-parser — test-web's exit 2 since Aug.
+      # packages/strui) ended with the strui tree wiping the web tree.
       # The root install also links @sloughgpt/strui automatically, so the old
       # manual symlink step is no longer needed.
       - run: npm ci --ignore-scripts
 
       - name: Lint
         working-directory: apps/web
-        run: npx eslint .
+        run: npx eslint . --max-warnings 900
 
       - name: Typecheck
         working-directory: apps/web
@@ -247,7 +245,7 @@ jobs:
 
       - name: Build
         working-directory: apps/web
-        run: npx next build --webpack
+        run: npm run build
 
   # ─── Python SDK tests ──────────────────────────────────────────
   test-sdk-py:

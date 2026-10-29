@@ -5,14 +5,22 @@ import { act } from 'react'
 
 // ── strui mock ──
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
+  const iconMock = (name: string) => {
+    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
+    C.displayName = `Icon${name}`
+    return C
+  }
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...args: any[]) => args.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
     Button: ({ children, onClick, disabled, 'aria-label': ariaLabel, className }: any) => (
-      <button onClick={onClick} disabled={disabled} aria-label={ariaLabel} className={className}>{children}</button>
+      <button onClick={onClick} disabled={disabled} aria-label={ariaLabel} className={className}>
+        {children}
+      </button>
     ),
     Skeleton: () => <div data-testid="skeleton" />,
     Badge: ({ children, className }: any) => <span className={className}>{children}</span>,
@@ -21,7 +29,14 @@ vi.mock('@sloughgpt/strui', () => {
 })
 
 // ── controller & router mocks ──
-const { mockApiGet, mockKnowledgeList, mockKnowledgeUpdate, mockKnowledgeDelete, mockPush, mockAddToast } = vi.hoisted(() => ({
+const {
+  mockApiGet,
+  mockKnowledgeList,
+  mockKnowledgeUpdate,
+  mockKnowledgeDelete,
+  mockPush,
+  mockAddToast,
+} = vi.hoisted(() => ({
   mockApiGet: vi.fn(),
   mockKnowledgeList: vi.fn(),
   mockKnowledgeUpdate: vi.fn(),
@@ -31,12 +46,21 @@ const { mockApiGet, mockKnowledgeList, mockKnowledgeUpdate, mockKnowledgeDelete,
 }))
 
 const stableRouter = { push: mockPush }
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'kb-1' }), useRouter: () => stableRouter }))
+vi.mock('@/vite/next-compat/navigation', () => ({
+  useParams: () => ({ id: 'kb-1' }),
+  useRouter: () => stableRouter,
+}))
 vi.mock('@/lib/http-client', () => ({ apiGet: mockApiGet }))
 vi.mock('@/lib/knowledge-controller', () => ({
-  knowledgeController: { list: mockKnowledgeList, update: mockKnowledgeUpdate, delete: mockKnowledgeDelete },
+  knowledgeController: {
+    list: mockKnowledgeList,
+    update: mockKnowledgeUpdate,
+    delete: mockKnowledgeDelete,
+  },
 }))
-vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
+vi.mock('@/lib/toast-store', () => ({
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 vi.mock('@/lib/conversations-utils', () => ({ formatDate: vi.fn(() => 'Jan 1, 2026') }))
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ children, title, loading, loadingCards, headerRight }: any) => (
@@ -64,7 +88,9 @@ const MOCK_ITEM: any = {
   score: 3.42,
 }
 
-afterEach(() => { cleanup() })
+afterEach(() => {
+  cleanup()
+})
 beforeEach(() => {
   vi.clearAllMocks()
   mockApiGet.mockResolvedValue(MOCK_ITEM)
@@ -128,17 +154,27 @@ describe('KnowledgeDetailPage', () => {
 
   it('navigates back via Back button', async () => {
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Back')).toBeTruthy() })
-    await act(async () => { screen.getByText('Back').click() })
+    await waitFor(() => {
+      expect(screen.getByText('Back')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Back').click()
+    })
     expect(mockPush).toHaveBeenCalledWith('/knowledge')
   })
 
   it('deletes item and navigates to knowledge list', async () => {
     mockKnowledgeDelete.mockResolvedValue({})
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Delete')).toBeTruthy() })
-    await act(async () => { screen.getByText('Delete').click() })
-    await waitFor(() => { expect(mockKnowledgeDelete).toHaveBeenCalledWith('kb-1') })
+    await waitFor(() => {
+      expect(screen.getByText('Delete')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Delete').click()
+    })
+    await waitFor(() => {
+      expect(mockKnowledgeDelete).toHaveBeenCalledWith('kb-1')
+    })
     expect(mockAddToast).toHaveBeenCalledWith('Deleted', 'success')
     expect(mockPush).toHaveBeenCalledWith('/knowledge')
   })
@@ -146,8 +182,12 @@ describe('KnowledgeDetailPage', () => {
   it('shows toast on delete failure', async () => {
     mockKnowledgeDelete.mockRejectedValue(new Error('fail'))
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Delete')).toBeTruthy() })
-    await act(async () => { screen.getByText('Delete').click() })
+    await waitFor(() => {
+      expect(screen.getByText('Delete')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Delete').click()
+    })
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Delete failed', 'error')
     })
@@ -170,37 +210,63 @@ describe('KnowledgeDetailPage', () => {
 
   it('navigates to chat with context on Use in Chat click', async () => {
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Use in Chat')).toBeTruthy() })
-    await act(async () => { screen.getByText('Use in Chat').click() })
+    await waitFor(() => {
+      expect(screen.getByText('Use in Chat')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Use in Chat').click()
+    })
     expect(mockPush).toHaveBeenCalledWith('/chat?context=kb-1')
   })
 
   it('opens edit mode when Edit clicked', async () => {
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Edit')).toBeTruthy() })
-    await act(async () => { screen.getByText('Edit').click() })
+    await waitFor(() => {
+      expect(screen.getByText('Edit')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Edit').click()
+    })
     expect(screen.getByText('Save')).toBeTruthy()
     expect(screen.getByText('Cancel')).toBeTruthy()
-    expect(screen.getByDisplayValue('The user prefers dark mode and likes TypeScript.')).toBeTruthy()
+    expect(
+      screen.getByDisplayValue('The user prefers dark mode and likes TypeScript.'),
+    ).toBeTruthy()
   })
 
   it('saves edits and exits edit mode', async () => {
     mockKnowledgeUpdate.mockResolvedValue({})
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Edit')).toBeTruthy() })
-    await act(async () => { screen.getByText('Edit').click() })
-    await act(async () => {
-      screen.getByDisplayValue('The user prefers dark mode and likes TypeScript.').setAttribute('value', 'Updated content')
+    await waitFor(() => {
+      expect(screen.getByText('Edit')).toBeTruthy()
     })
-    await act(async () => { screen.getByText('Save').click() })
-    await waitFor(() => { expect(mockKnowledgeUpdate).toHaveBeenCalled() })
+    await act(async () => {
+      screen.getByText('Edit').click()
+    })
+    await act(async () => {
+      screen
+        .getByDisplayValue('The user prefers dark mode and likes TypeScript.')
+        .setAttribute('value', 'Updated content')
+    })
+    await act(async () => {
+      screen.getByText('Save').click()
+    })
+    await waitFor(() => {
+      expect(mockKnowledgeUpdate).toHaveBeenCalled()
+    })
   })
 
   it('cancels editing without saving', async () => {
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Edit')).toBeTruthy() })
-    await act(async () => { screen.getByText('Edit').click() })
-    await act(async () => { screen.getByText('Cancel').click() })
+    await waitFor(() => {
+      expect(screen.getByText('Edit')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Edit').click()
+    })
+    await act(async () => {
+      screen.getByText('Cancel').click()
+    })
     expect(mockKnowledgeUpdate).not.toHaveBeenCalled()
     expect(screen.getByText('Edit')).toBeTruthy()
   })
@@ -208,9 +274,15 @@ describe('KnowledgeDetailPage', () => {
   it('shows saving state during save', async () => {
     mockKnowledgeUpdate.mockReturnValue(new Promise(() => {}))
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Edit')).toBeTruthy() })
-    await act(async () => { screen.getByText('Edit').click() })
-    await act(async () => { screen.getByText('Save').click() })
+    await waitFor(() => {
+      expect(screen.getByText('Edit')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Edit').click()
+    })
+    await act(async () => {
+      screen.getByText('Save').click()
+    })
     await waitFor(() => {
       const saveBtn = screen.getByText('...')
       expect(saveBtn).toBeTruthy()
@@ -226,12 +298,16 @@ describe('KnowledgeDetailPage', () => {
 
   it('refetches on refresh button click', async () => {
     render(<Page />)
-    await waitFor(() => { expect(screen.getByText('Back')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Back')).toBeTruthy()
+    })
     await act(async () => {
       const headerRight = screen.getByTestId('header-right')
       const refreshBtn = headerRight.querySelector('button:last-child') as HTMLElement
       refreshBtn.click()
     })
-    await waitFor(() => { expect(mockApiGet).toHaveBeenCalledTimes(2) })
+    await waitFor(() => {
+      expect(mockApiGet).toHaveBeenCalledTimes(2)
+    })
   })
 })

@@ -3,31 +3,14 @@
 Public API:
     SecurityConfig, SecurityBoundary, ToolCapability, ToolDefinition
     ToolExecutionContext, ToolRunner, AgentConfig, Agent
-    ToolSpec, ToolParam, get_agent, get_runner, get_agent_system, get_tool_registry
-    AgentLoop, Event, ToolCall, ProtocolError, decode, encode_tool_block, validate_args
+    ToolSpec, ToolParam, ToolRegistry, get_agent, get_runner, get_agent_system,
+    get_tool_registry
+    AgentLoop, Event, ToolCall, ProtocolError, decode, encode_tool_block,
+    validate_args
+    make_provider_infer, resolve_provider, render_tool_contract
 """
 
 from __future__ import annotations
-
-
-def __getattr__(name):
-    _lazy = {
-        "MultiAgentOrchestrator": "domain.agents._internal.multi",
-        "get_agent_run_store": "domain.agents._internal.run_history",
-        "AgentLoop": "domain.agents._internal.loop",
-        "Event": "domain.agents._internal.loop",
-        "validate_args": "domain.agents._internal.loop",
-        "ToolCall": "domain.agents._internal.protocol",
-        "ProtocolError": "domain.agents._internal.protocol",
-        "decode": "domain.agents._internal.protocol",
-        "encode_tool_block": "domain.agents._internal.protocol",
-    }
-    if name in _lazy:
-        import importlib
-
-        return getattr(importlib.import_module(_lazy[name]), name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 
 from domain.agents._internal.agents import (
     Agent,
@@ -42,11 +25,25 @@ from domain.agents._internal.agents import (
     get_runner,
 )
 from domain.agents._internal.system import get_agent_system
-from domain.agents._internal.tools import ToolParam, ToolSpec, get_tool_registry
+from domain.agents._internal.tools import ToolParam, ToolRegistry, ToolSpec, get_tool_registry
 
 _LAZY_IMPORTS = {
+    # orchestrator + run history (heavier graphs)
     "MultiAgentOrchestrator": ("._internal.multi", "MultiAgentOrchestrator"),
     "get_agent_run_store": ("._internal.run_history", "get_agent_run_store"),
+    # canonical loop + protocol
+    "AgentLoop": ("._internal.loop", "AgentLoop"),
+    "Event": ("._internal.loop", "Event"),
+    "validate_args": ("._internal.loop", "validate_args"),
+    "ToolCall": ("._internal.protocol", "ToolCall"),
+    "ProtocolError": ("._internal.protocol", "ProtocolError"),
+    "decode": ("._internal.protocol", "decode"),
+    "encode_tool_block": ("._internal.protocol", "encode_tool_block"),
+    # provider-backed InferFn (Qwen/SmolLM/SloNet → AgentLoop seam)
+    "make_provider_infer": ("._internal.provider_infer", "make_provider_infer"),
+    "resolve_provider": ("._internal.provider_infer", "resolve_provider"),
+    "render_tool_contract": ("._internal.provider_infer", "render_tool_contract"),
+    "NO_PROVIDER_MSG": ("._internal.provider_infer", "NO_PROVIDER_MSG"),
 }
 
 
@@ -75,6 +72,18 @@ __all__ = [
     "get_tool_registry",
     "ToolSpec",
     "ToolParam",
+    "ToolRegistry",
     "MultiAgentOrchestrator",
     "get_agent_run_store",
+    "AgentLoop",
+    "Event",
+    "validate_args",
+    "ToolCall",
+    "ProtocolError",
+    "decode",
+    "encode_tool_block",
+    "make_provider_infer",
+    "resolve_provider",
+    "render_tool_contract",
+    "NO_PROVIDER_MSG",
 ]

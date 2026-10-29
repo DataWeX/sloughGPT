@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { Button } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
 import { useToastStore } from '@/lib/toast-store'

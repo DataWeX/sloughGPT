@@ -7,7 +7,11 @@ import { ThemeSwitcher } from './ThemeSwitcher'
 import { MODE_STORAGE_KEY, THEME_STORAGE_KEY, PALETTE_STORAGE_KEY } from '@/lib/theme-storage'
 
 function renderSwitcher() {
-  return render(<ThemeProvider><ThemeSwitcher /></ThemeProvider>)
+  return render(
+    <ThemeProvider>
+      <ThemeSwitcher />
+    </ThemeProvider>,
+  )
 }
 
 describe('ThemeSwitcher', () => {
@@ -16,7 +20,11 @@ describe('ThemeSwitcher', () => {
   })
 
   it('renders mode-stable markup on the server (prevents hydration mismatch)', () => {
-    const html = renderToString(<ThemeProvider><ThemeSwitcher /></ThemeProvider>)
+    const html = renderToString(
+      <ThemeProvider>
+        <ThemeSwitcher />
+      </ThemeProvider>,
+    )
     expect(html).toContain('Switch to light mode')
     expect(html).not.toContain('Switch to dark mode')
     expect(html).not.toContain('aria-checked="true"')
@@ -34,7 +42,7 @@ describe('ThemeSwitcher', () => {
   it('renders mode toggle button', () => {
     renderSwitcher()
     const btns = screen.getAllByRole('button')
-    expect(btns.some(b => b.getAttribute('aria-label') === 'Switch to dark mode'))
+    expect(btns.some((b) => b.getAttribute('aria-label') === 'Switch to dark mode'))
   })
 
   it('renders color swatches as radio buttons', () => {
@@ -82,7 +90,7 @@ describe('ThemeSwitcher', () => {
     renderSwitcher()
     const groups = screen.getAllByRole('radiogroup', { name: 'Palette' })
     expect(groups.length).toBeGreaterThanOrEqual(1)
-    expect(groups[0].querySelectorAll('[role="radio"]').length).toBe(2)
+    expect(groups[0].querySelectorAll('[role="radio"]').length).toBe(3)
   })
 
   it('clicking a palette radio selects it', () => {

@@ -16,10 +16,22 @@ setupApiMocks()
 import { sessionController, deriveConversationTitle } from './session-controller'
 
 describe('sessionController.list', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /chat/sessions and returns sessions', async () => {
-    const sessions = [{ id: 's1', name: 'Chat 1', created_at: '2026-01-01', updated_at: '2026-01-01', pinned: false, starred: false, message_count: 0 }]
+    const sessions = [
+      {
+        id: 's1',
+        name: 'Chat 1',
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+        pinned: false,
+        starred: false,
+        message_count: 0,
+      },
+    ]
     apiClient.apiGet.mockResolvedValue({ sessions })
 
     const result = await sessionController.list()
@@ -36,10 +48,20 @@ describe('sessionController.list', () => {
 })
 
 describe('sessionController.getCurrent', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /chat/sessions/current', async () => {
-    apiClient.apiGet.mockResolvedValue({ id: 's1', name: 'Current', created_at: '', updated_at: '', pinned: false, starred: false, message_count: 0 })
+    apiClient.apiGet.mockResolvedValue({
+      id: 's1',
+      name: 'Current',
+      created_at: '',
+      updated_at: '',
+      pinned: false,
+      starred: false,
+      message_count: 0,
+    })
 
     const result = await sessionController.getCurrent()
     expect(result?.id).toBe('s1')
@@ -54,30 +76,51 @@ describe('sessionController.getCurrent', () => {
 })
 
 describe('sessionController.create', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /chat/sessions with name', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: 's2', name: 'New Chat', created_at: '', updated_at: '', pinned: false, starred: false, message_count: 0 })
+    apiClient.apiPost.mockResolvedValue({
+      id: 's2',
+      name: 'New Chat',
+      created_at: '',
+      updated_at: '',
+      pinned: false,
+      starred: false,
+      message_count: 0,
+    })
 
     const result = await sessionController.create('New Chat')
     expect(result.id).toBe('s2')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/chat/sessions', { name: 'New Chat', session_id: undefined })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/chat/sessions', {
+      name: 'New Chat',
+      session_id: undefined,
+    })
   })
 })
 
 describe('sessionController.update', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('PUTs to /chat/sessions/{id}', async () => {
     apiClient.apiPut.mockResolvedValue(undefined)
 
     await sessionController.update('s1', { name: 'Renamed', starred: true })
-    expect(apiClient.apiPut).toHaveBeenCalledWith('/chat/sessions/s1', { name: 'Renamed', starred: true, pinned: undefined })
+    expect(apiClient.apiPut).toHaveBeenCalledWith('/chat/sessions/s1', {
+      name: 'Renamed',
+      starred: true,
+      pinned: undefined,
+    })
   })
 })
 
 describe('sessionController.delete', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('DELETEs /chat/sessions/{id}', async () => {
     apiClient.apiDelete.mockResolvedValue(undefined)
@@ -88,18 +131,24 @@ describe('sessionController.delete', () => {
 })
 
 describe('sessionController.saveContext', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /session/{id}/context', async () => {
     apiClient.apiPost.mockResolvedValue(undefined)
 
     await sessionController.saveContext('s1', [{ role: 'user', content: 'hi' }])
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/session/s1/context', { messages: [{ role: 'user', content: 'hi' }] })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/session/s1/context', {
+      messages: [{ role: 'user', content: 'hi' }],
+    })
   })
 })
 
 describe('sessionController.fetchMessages', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /session/{id}/messages', async () => {
     apiClient.apiGet.mockResolvedValue({ messages: [{ role: 'user', content: 'hello' }] })
@@ -120,14 +169,16 @@ describe('sessionController.fetchMessages', () => {
     apiClient.apiGet.mockResolvedValue({ messages: [{ role: 'user', content: 'hello' }] })
     const controller = new AbortController()
 
-    const result = await sessionController.fetchMessages('s1', { signal: controller.signal, silent: true })
+    const result = await sessionController.fetchMessages('s1', {
+      signal: controller.signal,
+      silent: true,
+    })
 
     expect(result).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith(
-      '/session/s1/messages',
-      undefined,
-      { signal: controller.signal, silent: true },
-    )
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/session/s1/messages', undefined, {
+      signal: controller.signal,
+      silent: true,
+    })
   })
 })
 
@@ -163,11 +214,23 @@ describe('deriveConversationTitle', () => {
 })
 
 describe('sessionController.list title derivation', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('sanitizes messy names from the API', async () => {
     apiClient.apiGet.mockResolvedValue({
-      sessions: [{ id: 's1', name: '  spaced \u0001 name ', created_at: '', updated_at: '', pinned: false, starred: false, message_count: 0 }],
+      sessions: [
+        {
+          id: 's1',
+          name: '  spaced \u0001 name ',
+          created_at: '',
+          updated_at: '',
+          pinned: false,
+          starred: false,
+          message_count: 0,
+        },
+      ],
     })
 
     const result = await sessionController.list()
@@ -176,7 +239,17 @@ describe('sessionController.list title derivation', () => {
 
   it('renders empty names as Untitled instead of a blank sidebar row', async () => {
     apiClient.apiGet.mockResolvedValue({
-      sessions: [{ id: 's1', name: '', created_at: '', updated_at: '', pinned: false, starred: false, message_count: 0 }],
+      sessions: [
+        {
+          id: 's1',
+          name: '',
+          created_at: '',
+          updated_at: '',
+          pinned: false,
+          starred: false,
+          message_count: 0,
+        },
+      ],
     })
 
     const result = await sessionController.list()
@@ -185,12 +258,21 @@ describe('sessionController.list title derivation', () => {
 })
 
 describe('sessionController.search title derivation', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('sanitizes result names and falls back to Untitled', async () => {
     apiClient.apiGet.mockResolvedValue({
       results: [
-        { id: 'a', name: '  Hello  there ', created_at: '', updated_at: '', match_count: 1, matches: [] },
+        {
+          id: 'a',
+          name: '  Hello  there ',
+          created_at: '',
+          updated_at: '',
+          match_count: 1,
+          matches: [],
+        },
         { id: 'b', name: '', created_at: '', updated_at: '', match_count: 1, matches: [] },
       ],
     })

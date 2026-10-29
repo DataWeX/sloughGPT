@@ -68,15 +68,15 @@ Rules:
 /** Text of the newest completed compaction message, or "" when there is none. */
 function latestPriorSummary(messages: any[]): string {
   let bestTime = -1
-  let bestText = ""
+  let bestText = ''
   for (const m of messages) {
     const info = m?.info ?? m
-    if (info?.mode !== "compaction" && info?.summary !== true) continue
+    if (info?.mode !== 'compaction' && info?.summary !== true) continue
     const parts = Array.isArray(m?.parts) ? m.parts : []
     const text = parts
-      .filter((p: any) => p?.type === "text" && typeof p.text === "string")
+      .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
       .map((p: any) => p.text)
-      .join("\n")
+      .join('\n')
       .trim()
     if (!text) continue
     const created = info?.time?.created ?? 0
@@ -88,18 +88,23 @@ function latestPriorSummary(messages: any[]): string {
   return bestText
 }
 
-export default (async (input: { client?: any }) => {
+export default async (input: { client?: any }) => {
   const client = input?.client
 
   return {
-    "experimental.session.compacting": async (hookInput: CompactingInput, output: CompactingOutput) => {
+    'experimental.session.compacting': async (
+      hookInput: CompactingInput,
+      output: CompactingOutput,
+    ) => {
       try {
         const sessionID = hookInput?.sessionID
-        if (!sessionID || !output || typeof output !== "object") return
+        if (!sessionID || !output || typeof output !== 'object') return
 
         const messagesFn = client?.session?.messages
-        if (typeof messagesFn !== "function") {
-          console.error("[compaction-tight] client.session.messages unavailable — using stock prompt")
+        if (typeof messagesFn !== 'function') {
+          console.error(
+            '[compaction-tight] client.session.messages unavailable — using stock prompt',
+          )
           return
         }
 
@@ -110,32 +115,28 @@ export default (async (input: { client?: any }) => {
           path: { id: sessionID },
           query: { limit: 10000 },
         })
-        const messages: any[] = Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res)
-            ? res
-            : []
+        const messages: any[] = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
 
         const priorText = latestPriorSummary(messages)
         const prior = priorText
           ? `<prior-summary>\n${priorText}\n</prior-summary>\n\n${MERGE_RULES}`
-          : ""
+          : ''
 
         output.prompt = [
-          "Summarize the conversation appended below into an anchored handoff that another coding agent can act on without reading the transcript.",
+          'Summarize the conversation appended below into an anchored handoff that another coding agent can act on without reading the transcript.',
           prior,
           TEMPLATE,
         ]
           .filter(Boolean)
-          .join("\n\n")
+          .join('\n\n')
 
         console.error(
-          `[compaction-tight] prompt override applied (messages=${messages.length}, prior-summary=${priorText ? "yes" : "no"})`,
+          `[compaction-tight] prompt override applied (messages=${messages.length}, prior-summary=${priorText ? 'yes' : 'no'})`,
         )
       } catch (err) {
         // Fail open: leave `prompt` unset so the stock prompt runs.
-        console.error("[compaction-tight] override failed, using stock prompt:", err)
+        console.error('[compaction-tight] override failed, using stock prompt:', err)
       }
     },
   }
-})
+}

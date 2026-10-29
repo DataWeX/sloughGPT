@@ -744,11 +744,29 @@ class ProductionRAG:
         logger.debug("RAG query returned %d results", len(results))
 
         context = ""
+        parts: list[Any] = []
         if return_context:
             context_parts = []
             for r in results:
                 context_parts.append(r.chunk.content)
             context = "\n\n".join(context_parts)
+
+        # Context contract: structured parts carry score/rank/locator that
+        # the legacy "context" string above throws away. Producers rank,
+        # they never truncate — selection happens at the consumer seam.
+        from domain.inference._internal.context_contract import ContextPart
+
+        parts = [
+            ContextPart(
+                text=r.chunk.content,
+                source="rag",
+                layer="rag",
+                score=float(r.combined_score),
+                rank=int(r.rank),
+                locator=str(r.chunk.id),
+            )
+            for r in results
+        ]
 
         return {
             "question": question,
@@ -763,6 +781,7 @@ class ProductionRAG:
                 for r in results
             ],
             "context": context,
+            "parts": parts,
             "num_results": len(results),
         }
 

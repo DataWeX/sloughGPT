@@ -2,9 +2,11 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
-const { mockPush, bootstrapState, mockApiGet } = vi.hoisted(() => ({
+const { mockPush, bootstrapState, mockSessionList, mockModelList, mockApiGet } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   bootstrapState: { payload: null as any },
+  mockSessionList: vi.fn(),
+  mockModelList: vi.fn(),
   mockApiGet: vi.fn(),
 }))
 
@@ -51,6 +53,8 @@ describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     bootstrapState.payload = null
+    mockSessionList.mockResolvedValue([])
+    mockModelList.mockResolvedValue([])
     mockApiGet.mockResolvedValue({ hits: [], partial: [], skipped: [], query: '' })
   })
   afterEach(cleanup)

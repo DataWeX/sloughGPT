@@ -2,7 +2,13 @@ import { _log } from './ports'
 import { HttpCache } from './resilience'
 import type { CacheOptions, RequestOptions } from './types'
 import { request } from './request'
-import { _globalCache, _globalThrottler, _inflight, _recentDedup, _cleanupRecentDedup } from './state'
+import {
+  _globalCache,
+  _globalThrottler,
+  _inflight,
+  _recentDedup,
+  _cleanupRecentDedup,
+} from './state'
 
 export async function apiGet<T>(
   url: string,

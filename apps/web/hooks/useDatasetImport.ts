@@ -1,7 +1,12 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { datasetController, type ImportSource, type GitHubRepo, type BookResult } from '@/lib/dataset-controller'
+import {
+  datasetController,
+  type ImportSource,
+  type GitHubRepo,
+  type BookResult,
+} from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { reportError } from '@/lib/error-reporter'
 import { trackEvent } from '@/lib/dev-log'
@@ -47,7 +52,7 @@ const DEFAULT_EXTENSIONS = ['.py', '.js', '.ts', '.md', '.txt', '.json', '.yaml'
 
 export function useDatasetImport(
   onImportComplete: (datasetId: string) => void,
-  onOpenChange: (open: boolean) => void
+  onOpenChange: (open: boolean) => void,
 ): UseDatasetImportReturn {
   const [source, setSource] = useState<ImportSource>('github')
   const [url, setUrl] = useState('')
@@ -105,9 +110,7 @@ export function useDatasetImport(
   }
 
   const toggleExtension = (ext: string) => {
-    setExtensions(prev =>
-      prev.includes(ext) ? prev.filter(e => e !== ext) : [...prev, ext]
-    )
+    setExtensions((prev) => (prev.includes(ext) ? prev.filter((e) => e !== ext) : [...prev, ext]))
   }
 
   const handleSearch = async () => {
@@ -151,11 +154,14 @@ export function useDatasetImport(
             return
           }
           const repoName = name.trim() || url.split('/').pop()?.replace('.git', '') || 'dataset'
-          result = await datasetController.importFromGitHub({
-            url: url.trim(),
-            name: repoName,
-            extensions,
-          }, { signal })
+          result = await datasetController.importFromGitHub(
+            {
+              url: url.trim(),
+              name: repoName,
+              extensions,
+            },
+            { signal },
+          )
           break
         }
         case 'huggingface': {
@@ -164,10 +170,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromHuggingFace({
-            dataset_id: datasetId.trim(),
-            name: name.trim() || datasetId.trim().split('/').pop() || 'dataset',
-          }, { signal })
+          result = await datasetController.importFromHuggingFace(
+            {
+              dataset_id: datasetId.trim(),
+              name: name.trim() || datasetId.trim().split('/').pop() || 'dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'isbn': {
@@ -179,10 +188,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromISBN({
-            isbn: isbnValue,
-            name: name.trim() || selectedBook?.title || 'book-dataset',
-          }, { signal })
+          result = await datasetController.importFromISBN(
+            {
+              isbn: isbnValue,
+              name: name.trim() || selectedBook?.title || 'book-dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'kaggle': {
@@ -191,10 +203,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromKaggle({
-            dataset: kaggleDataset.trim(),
-            name: name.trim() || kaggleDataset.trim().split('/').pop() || 'dataset',
-          }, { signal })
+          result = await datasetController.importFromKaggle(
+            {
+              dataset: kaggleDataset.trim(),
+              name: name.trim() || kaggleDataset.trim().split('/').pop() || 'dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'csv': {
@@ -203,10 +218,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromCSV({
-            url: url.trim(),
-            name: name.trim() || 'csv-dataset',
-          }, { signal })
+          result = await datasetController.importFromCSV(
+            {
+              url: url.trim(),
+              name: name.trim() || 'csv-dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'url': {
@@ -215,10 +233,13 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromURL({
-            url: url.trim(),
-            name: name.trim() || 'downloaded-dataset',
-          }, { signal })
+          result = await datasetController.importFromURL(
+            {
+              url: url.trim(),
+              name: name.trim() || 'downloaded-dataset',
+            },
+            { signal },
+          )
           break
         }
         case 'local': {
@@ -227,11 +248,14 @@ export function useDatasetImport(
             setLoading(false)
             return
           }
-          result = await datasetController.importFromLocal({
-            path: path.trim(),
-            name: name.trim() || path.trim().split('/').pop() || 'local-dataset',
-            extensions,
-          }, { signal })
+          result = await datasetController.importFromLocal(
+            {
+              path: path.trim(),
+              name: name.trim() || path.trim().split('/').pop() || 'local-dataset',
+              extensions,
+            },
+            { signal },
+          )
           break
         }
         default:
@@ -259,22 +283,39 @@ export function useDatasetImport(
   }
 
   return {
-    source, setSource,
-    url, setUrl,
-    name, setName,
-    datasetId, setDatasetId,
-    kaggleDataset, setKaggleDataset,
-    path, setPath,
-    extensions, toggleExtension,
-    loading, error, notice, success, clearError: () => setError(null),
-    searchResults, bookResults,
+    source,
+    setSource,
+    url,
+    setUrl,
+    name,
+    setName,
+    datasetId,
+    setDatasetId,
+    kaggleDataset,
+    setKaggleDataset,
+    path,
+    setPath,
+    extensions,
+    toggleExtension,
+    loading,
+    error,
+    notice,
+    success,
+    clearError: () => setError(null),
+    searchResults,
+    bookResults,
     searching,
-    selectedBook, selectedRepo,
-    setSelectedRepo, setSelectedBook,
-    setSearchResults, setBookResults,
+    selectedBook,
+    selectedRepo,
+    setSelectedRepo,
+    setSelectedBook,
+    setSearchResults,
+    setBookResults,
     abortRef,
     selectSource,
-    handleSearch, handleImport,
-    handleOpenChange, resetForm,
+    handleSearch,
+    handleImport,
+    handleOpenChange,
+    resetForm,
   }
 }

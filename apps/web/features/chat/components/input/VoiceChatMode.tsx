@@ -57,7 +57,11 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
           <div
-            className={cn('w-2 h-2 rounded-full', tone.dot, tone.pulse && 'animate-pulse motion-reduce:animate-none')}
+            className={cn(
+              'w-2 h-2 rounded-full',
+              tone.dot,
+              tone.pulse && 'animate-pulse motion-reduce:animate-none',
+            )}
           />
           <span className="text-sm font-medium" aria-live="polite">
             {isListening
