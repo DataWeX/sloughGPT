@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from '@/vite/next-compat/navigation'
+import { useRouter } from 'next/navigation'
 import { cn, Badge, Chip, Spinner } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'

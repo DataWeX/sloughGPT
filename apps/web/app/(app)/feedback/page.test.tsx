@@ -5,7 +5,7 @@ import React from 'react'
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
-vi.mock('@/vite/next-compat/navigation', () => ({
+vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
