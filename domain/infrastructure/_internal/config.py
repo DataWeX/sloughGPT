@@ -169,6 +169,10 @@ _SKIP_ENV_KEYS: frozenset[str] = frozenset(
         # sets it (all of them, since the fail-closed default) logs
         # "Unknown config key: auth_required" at boot.
         "SLO_AUTH_REQUIRED",
+        # CORS allowlist — read directly by main.py (os.environ.get at the
+        # CORS-middleware wiring); the local dev drop-in 10-cors-vite-origin
+        # sets it, so it warned at every boot.
+        "SLO_CORS_ORIGINS",
     }
 )
 

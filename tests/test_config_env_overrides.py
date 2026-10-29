@@ -47,3 +47,14 @@ class TestSkipEnvKeys:
         with caplog.at_level(logging.WARNING, logger=_CONFIG_LOGGER):
             _apply_env_overrides(AppConfig())
         assert not [r for r in caplog.records if "Unknown config key" in r.getMessage()]
+
+    def test_cors_origins_directly_consumed_key_is_quiet(self, monkeypatch, caplog):
+        # SLO_CORS_ORIGINS is read by main.py via os.environ.get — same
+        # defect class as SLO_AUTH_REQUIRED (warned at every boot since the
+        # local dev drop-in sets it).
+        from domain.infrastructure._internal.config import AppConfig, _apply_env_overrides
+
+        monkeypatch.setenv("SLO_CORS_ORIGINS", "http://localhost:5173")
+        with caplog.at_level(logging.WARNING, logger=_CONFIG_LOGGER):
+            _apply_env_overrides(AppConfig())
+        assert not [r for r in caplog.records if "Unknown config key" in r.getMessage()]
