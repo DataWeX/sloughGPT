@@ -19,6 +19,7 @@ import { GlobalBanner } from '@/components/GlobalBanner'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
 import { useToastStore } from '@/lib/toast-store'
+import { useAppStore } from '@/lib/store'
 import { useBannerStore } from '@/lib/banner-store'
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
@@ -30,11 +31,14 @@ import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
 import { useLocale } from '@/hooks/useLocale'
 
 /** Hold-off before a non-connected status raises the global drop banner —
- *  one failed poll is a blip, not an outage the user should be told about. */
+ *  one failed poll is a blip, not an outage the user should be told about.
+ *  Default only: the live value is the `bannerGraceMs` setting (see below). */
 export const OFFLINE_BANNER_GRACE_MS = 5_000
 
 /** How long the green "Backend reconnected" confirmation stays up before it
- *  retires itself — long enough to read, short enough to be gone. */
+ *  retires itself — long enough to read, short enough to be gone.
+ *  Default only: the live value is the `bannerHoldMs` setting (0 = no
+ *  confirmation). */
 export const RECOVERY_BANNER_HOLD_MS = 4_000
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -137,10 +141,16 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   // never flashes a green banner, and (b) recovery only confirms what the
   // user saw. Same key 'backend-connection' throughout — red and green
   // replace each other in the single slot instead of stacking two rows.
+  // Timings are settings-backed flags (bannerGraceMs / bannerHoldMs in
+  // lib/store): read via getState() when each timer arms, so editing a flag
+  // applies to the NEXT lifecycle event without re-running this effect and
+  // re-arming an in-flight grace/hold. Local settings — readable offline,
+  // which is exactly when this banner is up.
   const connectionDropRef = useRef(false)
   useEffect(() => {
     const down = apiStatus === 'offline' || apiStatus === 'error'
     if (down) {
+      const { bannerGraceMs } = useAppStore.getState().settings
       let id: string | null = null
       const timer = setTimeout(() => {
         id = useBannerStore.getState().showBanner({
@@ -156,7 +166,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           },
         })
         connectionDropRef.current = true
-      }, OFFLINE_BANNER_GRACE_MS)
+      }, bannerGraceMs ?? OFFLINE_BANNER_GRACE_MS)
       return () => {
         clearTimeout(timer)
         // A superseded id is a no-op (single-slot store) — another producer's
@@ -175,6 +185,12 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       connectionDropRef.current = false
       return
     }
+    const { bannerHoldMs } = useAppStore.getState().settings
+    // 0 disables the recovery confirmation — the drop ref clears silently.
+    if ((bannerHoldMs ?? RECOVERY_BANNER_HOLD_MS) <= 0) {
+      connectionDropRef.current = false
+      return
+    }
     const greenId = useBannerStore.getState().showBanner({
       key: 'backend-connection',
       tone: 'success',
@@ -187,7 +203,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     const timer = setTimeout(() => {
       useBannerStore.getState().dismissBanner(greenId)
       connectionDropRef.current = false
-    }, RECOVERY_BANNER_HOLD_MS)
+    }, bannerHoldMs ?? RECOVERY_BANNER_HOLD_MS)
     return () => {
       clearTimeout(timer)
       // Retire the green banner on re-run/unmount; the drop ref stays set so a

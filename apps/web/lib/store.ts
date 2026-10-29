@@ -24,6 +24,13 @@ export interface AppSettings {
   trainingAutoTrain: boolean
   trainingAutoTrainThreshold: number
   trainingEnableTracking: boolean
+  /** Grace before the backend-drop banner raises (ms) — a blip never flashes it.
+   *  Local-only: the banner fires when the backend is unreachable, so these
+   *  flags must be readable offline — backend-persisted settings can't be. */
+  bannerGraceMs: number
+  /** How long the green reconnected banner stays before it retires (ms).
+   *  0 disables the recovery confirmation entirely. */
+  bannerHoldMs: number
 }
 
 export interface InjectedKnowledge {
@@ -73,6 +80,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   trainingAutoTrain: false,
   trainingAutoTrainThreshold: 0.8,
   trainingEnableTracking: true,
+  bannerGraceMs: 5_000,
+  bannerHoldMs: 4_000,
 }
 
 let _settingsTimer: ReturnType<typeof setTimeout> | null = null

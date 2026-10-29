@@ -117,12 +117,21 @@ vi.mock('@/components/WhatsNewDialog', () => ({
   getUnseenCount: () => 0,
 }))
 
-const { mockToastStore, mockApiMonitor } = vi.hoisted(() => ({
+const { mockToastStore, mockApiMonitor, mockAppSettings } = vi.hoisted(() => ({
   mockToastStore: { toasts: [], dismissToast: vi.fn(), clearToasts: vi.fn() },
   mockApiMonitor: { status: 'connected' },
+  // Defaults mirror lib/store DEFAULT_SETTINGS for the banner timing flags;
+  // individual tests mutate these to exercise flag-driven behavior.
+  mockAppSettings: { bannerGraceMs: 5_000, bannerHoldMs: 4_000 },
 }))
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel?: any) => (sel ? sel(mockToastStore) : mockToastStore),
+}))
+vi.mock('@/lib/store', () => ({
+  useAppStore: Object.assign(
+    (sel?: any) => (sel ? sel({ settings: mockAppSettings }) : { settings: mockAppSettings }),
+    { getState: () => ({ settings: mockAppSettings }) },
+  ),
 }))
 vi.mock('@/lib/api-monitor-store', () => ({
   useApiMonitor: (sel?: any) => (sel ? sel(mockApiMonitor) : mockApiMonitor),
@@ -154,6 +163,8 @@ describe('AppLayout', () => {
     // dismisses via its timer — reset so no banner leaks between tests.
     useBannerStore.getState().clearBanners()
     mockApiMonitor.status = 'connected'
+    mockAppSettings.bannerGraceMs = 5_000
+    mockAppSettings.bannerHoldMs = 4_000
   })
 
   it('renders children', () => {
@@ -381,6 +392,95 @@ describe('AppLayout', () => {
           <div />
         </AppLayout>,
       )
+      act(() => {
+        vi.advanceTimersByTime(RECOVERY_BANNER_HOLD_MS + 1_000)
+      })
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+      mockApiMonitor.status = 'connected'
+    }
+  })
+
+  it('honors the bannerGraceMs flag instead of the default grace', () => {
+    vi.useFakeTimers()
+    try {
+      mockAppSettings.bannerGraceMs = 1_500
+      mockApiMonitor.status = 'offline'
+      render(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      act(() => {
+        vi.advanceTimersByTime(1_499)
+      })
+      expect(screen.queryByRole('alert')).toBeNull()
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(screen.getByRole('alert').textContent).toContain('Backend unreachable')
+    } finally {
+      vi.useRealTimers()
+      mockApiMonitor.status = 'connected'
+    }
+  })
+
+  it('honors the bannerHoldMs flag instead of the default hold', () => {
+    vi.useFakeTimers()
+    try {
+      mockAppSettings.bannerHoldMs = 1_000
+      mockApiMonitor.status = 'offline'
+      const { rerender } = render(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      act(() => {
+        vi.advanceTimersByTime(OFFLINE_BANNER_GRACE_MS)
+      })
+      mockApiMonitor.status = 'connected'
+      rerender(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      expect(screen.getByRole('alert').textContent).toContain('Backend reconnected')
+      act(() => {
+        vi.advanceTimersByTime(999)
+      })
+      expect(screen.getByRole('alert')).toBeTruthy()
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+      mockApiMonitor.status = 'connected'
+    }
+  })
+
+  it('skips the recovery confirmation entirely when bannerHoldMs is 0', () => {
+    vi.useFakeTimers()
+    try {
+      mockAppSettings.bannerHoldMs = 0
+      mockApiMonitor.status = 'offline'
+      const { rerender } = render(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      act(() => {
+        vi.advanceTimersByTime(OFFLINE_BANNER_GRACE_MS)
+      })
+      expect(screen.getByRole('alert').textContent).toContain('Backend unreachable')
+      mockApiMonitor.status = 'connected'
+      rerender(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      expect(screen.queryByRole('alert')).toBeNull()
       act(() => {
         vi.advanceTimersByTime(RECOVERY_BANNER_HOLD_MS + 1_000)
       })
