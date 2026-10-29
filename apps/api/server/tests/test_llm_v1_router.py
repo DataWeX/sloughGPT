@@ -225,6 +225,55 @@ class TestChatCompletionsWireShape:
         assert resp.status_code == 422  # pydantic rejects — the wire schema is the validator
 
 
+# ── session_id passthrough (cross-turn KV reuse — card 20261029_035756) ──────
+
+
+class TestSessionIdPassthrough:
+    """``session_id`` must reach the provider seam — it keys cross-turn KV reuse.
+
+    SloNetServer._resolve_kv_state: no session_id => fresh state every call,
+    i.e. every /v1 multi-turn client re-prefills the whole prefix. The
+    machinery below the seam is fully built (SessionKVManager, LRU+TTL) and
+    the internal /chat route already feeds it; /v1 must too. Pydantic ignores
+    extra body fields, so without this field clients that DO send session_id
+    had it silently discarded.
+    """
+
+    def test_nonstream_passes_session_id_to_provider(self):
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            resp = _post_chat(app, session_id="sess-abc")
+        assert resp.status_code == 200
+        _, kwargs = provider.calls[0]
+        assert kwargs["session_id"] == "sess-abc"
+
+    def test_stream_passes_session_id_to_provider(self):
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            resp = _post_chat(app, stream=True, session_id="sess-abc")
+        assert resp.status_code == 200
+        _, kwargs = provider.calls[0]
+        assert kwargs["session_id"] == "sess-abc"
+
+    def test_absent_session_id_is_not_injected(self):
+        # Requests without it stay byte-identical for every adapter provider —
+        # no session_id=None key pollution into kwargs.
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            _post_chat(app)
+        _, kwargs = provider.calls[0]
+        assert "session_id" not in kwargs
+
+    def test_descriptor_documents_session_id(self):
+        # The descriptor is the contract source of truth — the wire field must
+        # appear in CHAT_SPEC parameters (TS contract halves regenerate from it).
+        assert any(p.name == "session_id" for p in shim.CHAT_SPEC.parameters)
+        assert "session_id" in shim.CHAT_SPEC.params["properties"]  # JSON-Schema view derives it
+
+
 # ── Stream cancellation (lock hygiene — native /infer parity) ───────────────
 
 

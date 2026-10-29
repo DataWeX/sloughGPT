@@ -77,6 +77,13 @@ class ChatBody(BaseModel):
     stop: str | list[str] | None = Field(default=None, description="Accepted; phase 1 ignores")
     stream: bool = False
     stream_options: StreamOptions | None = None
+    session_id: str | None = Field(
+        default=None,
+        description=(
+            "Serving-session key — cross-turn KV-cache reuse (SloNet extension; "
+            "absent = no reuse, fresh state per request)"
+        ),
+    )
 
 
 class EmbedBody(BaseModel):
@@ -164,6 +171,12 @@ async def chat_completions(
     messages = _messages(req)
     model_id = req.model or "default"
     kwargs = _sampling(req)
+    if req.session_id:
+        # Keys cross-turn KV reuse below the seam (SloNetServer._resolve_kv_state
+        # -> SessionKVManager). Injected only when set — requests without it stay
+        # byte-identical for every adapter provider. The stream path inherits it
+        # (_stream_frames spreads kwargs into chat_stream).
+        kwargs["session_id"] = req.session_id
     prompt_text = "\n".join(m["content"] for m in messages)
 
     if req.stream:
@@ -340,6 +353,11 @@ CHAT_SPEC = ToolSpec(
         ToolParam(name="max_tokens", type="integer", description="Sampling cap"),
         ToolParam(name="temperature", type="number", description="Sampling temperature"),
         ToolParam(name="stream", type="boolean", description="Streaming toggle"),
+        ToolParam(
+            name="session_id",
+            type="string",
+            description="Serving-session key for cross-turn KV-cache reuse (optional)",
+        ),
     ],
     execute=chat_completions,
     auth_scope="authenticated",
