@@ -160,9 +160,9 @@ function ShellTab() {
         </button>
       </div>
       {shellMode === 'backend' ? (
-        <TerminalPanel className="h-[calc(100vh-12rem)]" />
+        <TerminalPanel className="h-[calc(100vh-14rem)]" />
       ) : (
-        <V86TerminalPanel className="h-[calc(100vh-12rem)]" />
+        <V86TerminalPanel className="h-[calc(100vh-14rem)]" />
       )}
     </div>
   )
