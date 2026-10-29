@@ -1489,7 +1489,7 @@ class InferenceRouter:
 
         import os as _ws_os
 
-        auth_required = _ws_os.environ.get("SLO_AUTH_REQUIRED", "false").lower() in (
+        auth_required = _ws_os.environ.get("SLO_AUTH_REQUIRED", "true").lower() in (
             "true",
             "1",
             "yes",

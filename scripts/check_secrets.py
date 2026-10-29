@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Pre-commit hook: catch hardcoded secrets in committed files."""
+"""Secret scanner: pre-commit hook + CI gate for hardcoded secrets in tracked files.
+
+Usage:
+    scripts/check_secrets.py <file>...            (pre-commit: staged files)
+    git ls-files -z | xargs -0 scripts/check_secrets.py   (CI: whole tree)
+
+Placeholder values (CHANGE_ME, test fixtures, etc.) are allowlisted below so
+the gate flags real secrets only. Tune the allowlist, never the patterns.
+"""
 
 import re
 import sys
@@ -16,15 +24,42 @@ PATTERNS = [
     (r"xox[bpsa]-[A-Za-z0-9-]+", "Slack token"),
 ]
 
+# Explicit placeholders, docs-instructions and test fixtures. A matched line
+# containing any of these is not a finding (case-insensitive substring).
+ALLOWLIST = [
+    "change_me",
+    "changeme",
+    "generate-with",
+    "openssl rand",
+    "placeholder",
+    "example",
+    "dummy",
+    "no-such",
+    "fake-",
+    "test-token",
+    "xxxx",
+    "redacted",
+    "<your",
+    "your-",
+]
+
+
+def _allowed(line: str) -> bool:
+    low = line.lower()
+    return any(marker in low for marker in ALLOWLIST)
+
 
 def main():
     failed = False
     for path in sys.argv[1:]:
         try:
-            content = open(path).read()
-        except Exception:
+            with open(path, encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+        except OSError:
             continue
         for i, line in enumerate(content.splitlines(), 1):
+            if _allowed(line):
+                continue
             for pattern, desc in PATTERNS:
                 if re.search(pattern, line):
                     print(f"\033[31m{path}:{i}: {desc}\033[0m {line.strip()[:80]}")

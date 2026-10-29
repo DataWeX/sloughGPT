@@ -1,10 +1,16 @@
 """Shared test fixtures and helpers for router tests."""
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# Fail-closed auth default (SLO_AUTH_REQUIRED=true) — opt this package's
+# suite out explicitly (rootdir is packages/core-py, so the repo-root
+# conftest that does the same never loads here).
+os.environ.setdefault("SLO_AUTH_REQUIRED", "false")
 
 
 def pytest_configure(config):

@@ -1032,7 +1032,7 @@ class StartupOrchestrator:
         # Warn if auth is disabled
         import os
 
-        if os.environ.get("SLO_AUTH_REQUIRED", "false").lower() not in ("true", "1", "yes"):
+        if os.environ.get("SLO_AUTH_REQUIRED", "true").lower() not in ("true", "1", "yes"):
             logger.warning(
                 "Auth disabled (SLO_AUTH_REQUIRED=false) — all endpoints are accessible without credentials. "
                 "Set SLO_AUTH_REQUIRED=true for production.",

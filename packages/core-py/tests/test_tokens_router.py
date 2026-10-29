@@ -160,12 +160,14 @@ class TestCheckTokens:
 
 class TestAuthDisabled:
     def test_balance_is_anonymous_when_auth_disabled(self, monkeypatch):
-        """Regression: with SLO_AUTH_REQUIRED off (dev default) the auth
+        """Regression: with SLO_AUTH_REQUIRED explicitly off, the auth
         dependency returns None — the router must resolve an anonymous
-        identity instead of dereferencing None (was TypeError -> 500)."""
+        identity instead of dereferencing None (was TypeError -> 500).
+        Auth is fail-closed by default now, so the disabled state must be
+        set explicitly rather than left unset."""
         import domain.billing._internal.token_service as billing
 
-        monkeypatch.delenv("SLO_AUTH_REQUIRED", raising=False)
+        monkeypatch.setenv("SLO_AUTH_REQUIRED", "false")
         billing._token_billing_service = None
 
         app = FastAPI()

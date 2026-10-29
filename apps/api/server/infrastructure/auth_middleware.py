@@ -48,17 +48,17 @@ _AUTH_EXEMPT_RE = re.compile(
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """JWT authentication middleware.
+    """JWT authentication middleware — fail-closed, on unless explicitly disabled.
 
-    When ``SLO_AUTH_REQUIRED=true``, validates the Bearer token on every
-    request (except allowlisted paths) and sets ``request.state.user``.
-
-    When disabled, sets ``request.state.user = None`` for all requests.
+    ``SLO_AUTH_REQUIRED`` defaults to **true**; validate the Bearer token on
+    every request (except allowlisted paths) and set ``request.state.user``.
+    An explicit ``SLO_AUTH_REQUIRED=false`` (local dev / tests) sets
+    ``request.state.user = None`` for all requests instead.
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Check if auth is enabled
-        auth_required = os.environ.get("SLO_AUTH_REQUIRED", "false").lower() in (
+        # Fail-closed: auth on unless explicitly disabled (dev/tests opt out)
+        auth_required = os.environ.get("SLO_AUTH_REQUIRED", "true").lower() in (
             "true",
             "1",
             "yes",

@@ -47,6 +47,28 @@ jobs:
       - name: Mypy type check
         run: mypy packages/core-py/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
 
+  # ─── Secret scan (whole tracked tree) ───────────────────────────
+  # The pre-commit hook only sees staged files; CI is the backstop for
+  # anything that bypassed it (force-push, web edits, missed hook install).
+  # Also fails if a .env.production / .env.local ever gets tracked again
+  # (apps/web/.env.production held a real NEXTAUTH_SECRET until 2026-10-29).
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: No tracked .env files with secrets
+        run: |
+          BAD=$(git ls-files | grep -E '(^|/)\.env\.(production|local)$' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::tracked env files with real secrets are forbidden: $BAD"
+            exit 1
+          fi
+      - name: Scan tracked files for hardcoded secrets
+        run: git ls-files -z | xargs -0 python scripts/check_secrets.py
+
   # ─── Core Python tests (packages/core-py) ───────────────────────
   test-core-py:
     runs-on: ubuntu-latest

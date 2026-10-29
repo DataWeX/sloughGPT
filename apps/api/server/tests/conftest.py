@@ -1,6 +1,12 @@
 """Shared pytest fixtures for API server tests."""
 
+import os
+
 import pytest
+
+# Fail-closed auth default (SLO_AUTH_REQUIRED=true) — opt the test suite out
+# explicitly; tests asserting fail-closed behaviour override per-test.
+os.environ.setdefault("SLO_AUTH_REQUIRED", "false")
 
 
 @pytest.fixture(autouse=True)

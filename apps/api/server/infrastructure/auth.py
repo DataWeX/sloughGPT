@@ -348,16 +348,21 @@ async def require_auth_if_enabled(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_security),
 ) -> dict | None:
-    """FastAPI dependency — enforces auth only when ``SLO_AUTH_REQUIRED=true``.
+    """FastAPI dependency — fail-closed: auth is ON unless explicitly disabled.
 
-    When disabled, returns None (anonymous). When enabled, validates bearer token.
+    ``SLO_AUTH_REQUIRED`` defaults to **true** (fail-closed) so a fresh
+    deployment never exposes an unauthenticated control plane. Local dev and
+    test environments opt out explicitly (``SLO_AUTH_REQUIRED=false``).
+
+    When disabled (explicit ``false``), returns None (anonymous). Otherwise
+    validates the bearer token.
 
     Returns:
-        Decoded token payload, or None if auth is disabled.
+        Decoded token payload, or None if auth is explicitly disabled.
     """
     import os
 
-    if os.environ.get("SLO_AUTH_REQUIRED", "false").lower() not in ("true", "1", "yes"):
+    if os.environ.get("SLO_AUTH_REQUIRED", "true").lower() not in ("true", "1", "yes"):
         return None
     if credentials is None:
         raise_error(

@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# Auth is fail-closed by default (SLO_AUTH_REQUIRED=true) as of the
+# fail-closed auth change. Test suites exercise routes without tokens, so
+# opt out here — explicitly, once, for the whole suite. Individual tests
+# that assert fail-closed behaviour re-enable it via monkeypatch/delenv.
+os.environ.setdefault("SLO_AUTH_REQUIRED", "false")
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 # Add project sub-packages at high priority (position 0).
