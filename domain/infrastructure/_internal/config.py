@@ -163,6 +163,12 @@ _SKIP_ENV_KEYS: frozenset[str] = frozenset(
         "SLO_WATCHDOG",
         "SLO_WEB",
         "SLO_AUTO_WORKFLOW",
+        # Fail-closed auth flag — read directly by infrastructure/auth.py,
+        # auth_middleware.py and routers/inference.py (os.environ), not by
+        # the AppConfig schema. Without this entry every deployment that
+        # sets it (all of them, since the fail-closed default) logs
+        # "Unknown config key: auth_required" at boot.
+        "SLO_AUTH_REQUIRED",
     }
 )
 
