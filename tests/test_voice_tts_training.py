@@ -211,3 +211,85 @@ class TestLoadCorpus:
 
         with pytest.raises(FileNotFoundError):
             load_corpus(tmp_path / "does_not_exist.txt")
+
+
+class TestLoadResponseLogs:
+    def test_projects_both_fields_flattens_and_dedupes(self, tmp_path):
+        import json
+
+        from domain.voice._internal.espeak_pairs import load_response_logs
+
+        (tmp_path / "responses_20261028.jsonl").write_text(
+            json.dumps(
+                {
+                    "user_message": "what is the kanban\nboard status",
+                    "assistant_response": "The board moved to review.",
+                }
+            )
+            + "\n"
+            + json.dumps({"user_message": "hi", "assistant_response": "The board moved to review."})
+            + "\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "responses_20261029.jsonl").write_text(
+            json.dumps(
+                {"user_message": "hi", "assistant_response": "espeak distills our vocabulary."}
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        texts = load_response_logs(tmp_path)
+        assert texts == [
+            "The board moved to review.",
+            "what is the kanban board status",
+            "hi",
+            "espeak distills our vocabulary.",
+        ]
+
+    def test_empty_or_missing_dir_returns_empty(self, tmp_path):
+        from domain.voice._internal.espeak_pairs import load_response_logs
+
+        assert load_response_logs(tmp_path / "nope") == []
+        assert load_response_logs(tmp_path) == []
+
+    def test_malformed_lines_are_skipped(self, tmp_path):
+        from domain.voice._internal.espeak_pairs import load_response_logs
+
+        (tmp_path / "responses_20261028.jsonl").write_text(
+            "{not json}\n" + '{"assistant_response": "ok line"}\n',
+            encoding="utf-8",
+        )
+        assert load_response_logs(tmp_path) == ["ok line"]
+
+
+class TestCorpusFlagExclusivity:
+    def test_corpus_file_and_response_logs_reject_together(self, tmp_path, capsys):
+        import importlib.util
+
+        driver = Path(__file__).resolve().parents[1] / "scripts" / "train_tts_espeak.py"
+        spec = importlib.util.spec_from_file_location("train_tts_espeak", driver)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with pytest.raises(SystemExit):
+            mod.main(
+                [
+                    "--steps",
+                    "1",
+                    "--corpus-file",
+                    str(tmp_path / "c.txt"),
+                    "--response-logs",
+                    str(tmp_path),
+                ]
+            )
+        captured = capsys.readouterr()
+        assert "mutually exclusive" in captured.err
+
+
+@pytest.mark.skipif(not HAS_ESPEAK, reason="espeak not installed")
+class TestRenderRobustness:
+    def test_leading_dash_text_renders(self, tmp_path):
+        from domain.voice._internal.espeak_pairs import render
+
+        wav = render("- sure, the board moved to done.")
+        assert wav.size > 0 and np.isfinite(wav).all()
