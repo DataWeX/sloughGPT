@@ -69,38 +69,35 @@ export interface RAGVerifyResponse {
 
 /**
  * Ingest a document into the RAG index.
+ *
+ * Omit `chunkSize` to use the backend's fine-grained char windows (sized to
+ * the retrieval budget); pass a value only for legacy token chunking.
  */
 export async function ingestDocument(
   content: string,
   source: string = 'user',
   topic: string = 'general',
-  chunkSize: number = 512,
+  chunkSize?: number,
 ): Promise<RAGIngestResponse> {
   return apiPost('/knowledge/rag/ingest', {
     content,
     source,
     topic,
-    chunk_size: chunkSize,
+    ...(chunkSize !== undefined ? { chunk_size: chunkSize } : {}),
   }) as Promise<RAGIngestResponse>
 }
 
 /**
  * Query the RAG index for relevant context.
  */
-export async function queryRAG(
-  question: string,
-  topK: number = 5,
-): Promise<RAGQueryResponse> {
+export async function queryRAG(question: string, topK: number = 5): Promise<RAGQueryResponse> {
   return apiPost('/knowledge/rag/query', { question, top_k: topK }) as Promise<RAGQueryResponse>
 }
 
 /**
  * Verify generated text against the RAG index.
  */
-export async function verifyRAG(
-  text: string,
-  question: string,
-): Promise<RAGVerifyResponse> {
+export async function verifyRAG(text: string, question: string): Promise<RAGVerifyResponse> {
   return apiPost('/knowledge/rag/verify', { text, question }) as Promise<RAGVerifyResponse>
 }
 
@@ -111,7 +108,10 @@ export async function listRAGDocuments(): Promise<{
   documents: RAGDocument[]
   stats: RAGStats
 }> {
-  return apiGet('/knowledge/rag/documents') as Promise<{ documents: RAGDocument[]; stats: RAGStats }>
+  return apiGet('/knowledge/rag/documents') as Promise<{
+    documents: RAGDocument[]
+    stats: RAGStats
+  }>
 }
 
 /**

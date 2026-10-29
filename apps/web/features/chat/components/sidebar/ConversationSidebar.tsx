@@ -664,7 +664,9 @@ export function ConversationSidebar({
       <aside
         className={cn(
           'hidden lg:flex shrink-0 flex-col border-r border-border/40 bg-background/80 transition-all duration-200 ease-in-out overflow-hidden',
-          collapsed ? 'w-0 border-r-0' : 'w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))] pl-[var(--nav-tab-protrusion)]',
+          collapsed
+            ? 'w-0 border-r-0'
+            : 'w-[calc(var(--conv-sidebar-width)_+_var(--nav-tab-protrusion))] pl-[var(--nav-tab-protrusion)]',
         )}
       >
         <div

@@ -46,13 +46,13 @@ interface GroupedError {
 function levelBadge(level: ErrorEvent['level']): { label: string; color: string } {
   switch (level) {
     case 'critical':
-      return { label: 'CRIT', color: 'bg-primary/20 text-primary border-purple-500/30' }
+      return { label: 'CRIT', color: 'bg-primary/20 text-primary border-primary/30' }
     case 'error':
       return { label: 'ERR', color: 'bg-destructive/15 text-destructive border-destructive/30' }
     case 'warning':
-      return { label: 'WRN', color: 'bg-warning/15 text-warning border-yellow-500/30' }
+      return { label: 'WRN', color: 'bg-warning/15 text-warning border-warning/30' }
     case 'info':
-      return { label: 'INFO', color: 'bg-info/15 text-info border-blue-500/30' }
+      return { label: 'INFO', color: 'bg-info/15 text-info border-info/30' }
     default:
       return { label: level, color: 'bg-muted text-muted-foreground' }
   }
@@ -361,13 +361,13 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
 }
 
 const KIND_STYLES: Record<string, string> = {
-  connection: 'bg-info/15 text-info border-blue-500/30',
-  startup: 'bg-success/15 text-success border-green-500/30',
+  connection: 'bg-info/15 text-info border-info/30',
+  startup: 'bg-success/15 text-success border-success/30',
   sse: 'bg-info/15 text-info border-info/30',
   health: 'bg-muted text-muted-foreground',
-  overlay: 'bg-primary/15 text-primary border-purple-500/30',
-  api: 'bg-warning/15 text-warning border-yellow-500/30',
-  auth: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+  overlay: 'bg-primary/15 text-primary border-primary/30',
+  api: 'bg-warning/15 text-warning border-warning/30',
+  auth: 'bg-accent/15 text-accent border-accent/30',
   chat: 'bg-info/15 text-info border-info/30',
   training: 'bg-success/15 text-success border-success/30',
   model: 'bg-primary/15 text-primary border-primary/30',

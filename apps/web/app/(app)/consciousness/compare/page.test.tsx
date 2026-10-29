@@ -192,7 +192,7 @@ describe('ConsciousnessComparePage', () => {
       expect(screen.getAllByText('consciousness_compare.page_title').length).toBeGreaterThan(0)
     })
 
-    const applyBtn = screen.getAllByText('consciousness_compare.apply')[0]
+    const applyBtn = await screen.findByText('consciousness_compare.apply')
     fireEvent.click(applyBtn)
 
     await waitFor(() => {

@@ -142,7 +142,9 @@ export const MessageContextMenu = memo(function MessageContextMenu({
       onCopy?.(content)
       if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current)
       closeTimerRef.current = setTimeout(() => setOpen(false), 400)
-    } catch { /* clipboard unavailable */ }
+    } catch {
+      /* clipboard unavailable */
+    }
   }, [content, onCopy])
 
   const items: MenuItem[] = useMemo(

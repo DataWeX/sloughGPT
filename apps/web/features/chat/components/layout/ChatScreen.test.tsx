@@ -148,7 +148,7 @@ describe('ChatScreen', () => {
     expect(bubbles[1].textContent).toContain('Hi there')
   })
 
-  it('constrains every message row to the centered transcript column', () => {
+  it('constrains every message row to the full transcript column', () => {
     const messages = [msg('m1', 'user', 'Hello'), msg('m2', 'assistant', 'Hi there')]
     const { container } = render(
       <ChatScreen

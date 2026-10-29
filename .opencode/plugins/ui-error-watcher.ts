@@ -1,64 +1,64 @@
-import type { Plugin } from "@opencode-ai/plugin"
-import { homedir } from "os"
-import { join } from "path"
-import { writeFileSync, readFileSync } from "fs"
+import type { Plugin } from '@opencode-ai/plugin'
+import { homedir } from 'os'
+import { join } from 'path'
+import { writeFileSync, readFileSync } from 'fs'
 
 const UI_ERROR_PATTERNS = [
   // React / Next.js runtime
-  { pattern: /Hydration (mismatch|failed)/i, category: "hydration" },
-  { pattern: /Text content does not match/i, category: "hydration" },
-  { pattern: /server-rendered text.*does not match/i, category: "hydration" },
-  { pattern: /Cannot read propert(y|ies) of (null|undefined)/i, category: "null-access" },
-  { pattern: /is not a function/i, category: "null-access" },
-  { pattern: /TypeError: .* is undefined/i, category: "null-access" },
-  { pattern: /React.*state update.*unmounted/i, category: "memory-leak" },
-  { pattern: /Can't perform a React state update.*unmounted/i, category: "memory-leak" },
-  { pattern: /Warning:.*useEffect.*dependency/i, category: "hook-warning" },
-  { pattern: /Maximum update depth exceeded/i, category: "infinite-loop" },
-  { pattern: /Too many re-renders/i, category: "infinite-loop" },
+  { pattern: /Hydration (mismatch|failed)/i, category: 'hydration' },
+  { pattern: /Text content does not match/i, category: 'hydration' },
+  { pattern: /server-rendered text.*does not match/i, category: 'hydration' },
+  { pattern: /Cannot read propert(y|ies) of (null|undefined)/i, category: 'null-access' },
+  { pattern: /is not a function/i, category: 'null-access' },
+  { pattern: /TypeError: .* is undefined/i, category: 'null-access' },
+  { pattern: /React.*state update.*unmounted/i, category: 'memory-leak' },
+  { pattern: /Can't perform a React state update.*unmounted/i, category: 'memory-leak' },
+  { pattern: /Warning:.*useEffect.*dependency/i, category: 'hook-warning' },
+  { pattern: /Maximum update depth exceeded/i, category: 'infinite-loop' },
+  { pattern: /Too many re-renders/i, category: 'infinite-loop' },
 
   // Next.js specific
-  { pattern: /NextRouter/i, category: "router" },
-  { pattern: /next\/navigation/i, category: "router" },
-  { pattern: /ChunkLoadError/i, category: "chunk-load" },
-  { pattern: /Loading chunk.*failed/i, category: "chunk-load" },
-  { pattern: /Dynamic server usage/i, category: "ssr" },
+  { pattern: /NextRouter/i, category: 'router' },
+  { pattern: /next\/navigation/i, category: 'router' },
+  { pattern: /ChunkLoadError/i, category: 'chunk-load' },
+  { pattern: /Loading chunk.*failed/i, category: 'chunk-load' },
+  { pattern: /Dynamic server usage/i, category: 'ssr' },
 
   // TypeScript / build
-  { pattern: /Type .* is not assignable to type/i, category: "type-error" },
-  { pattern: /Property .* does not exist on type/i, category: "type-error" },
-  { pattern: /Argument of type .* is not assignable/i, category: "type-error" },
-  { pattern: /TS\d{4,}/i, category: "type-error" },
+  { pattern: /Type .* is not assignable to type/i, category: 'type-error' },
+  { pattern: /Property .* does not exist on type/i, category: 'type-error' },
+  { pattern: /Argument of type .* is not assignable/i, category: 'type-error' },
+  { pattern: /TS\d{4,}/i, category: 'type-error' },
 
   // Network / API
-  { pattern: /fetch failed/i, category: "network" },
-  { pattern: /ECONNREFUSED/i, category: "network" },
-  { pattern: /NetworkError/i, category: "network" },
-  { pattern: /Failed to fetch/i, category: "network" },
-  { pattern: /AbortError/i, category: "network" },
-  { pattern: /Load failed/i, category: "network" },
+  { pattern: /fetch failed/i, category: 'network' },
+  { pattern: /ECONNREFUSED/i, category: 'network' },
+  { pattern: /NetworkError/i, category: 'network' },
+  { pattern: /Failed to fetch/i, category: 'network' },
+  { pattern: /AbortError/i, category: 'network' },
+  { pattern: /Load failed/i, category: 'network' },
 
   // HTTP errors
-  { pattern: /\b401\b.*Unauthorized/i, category: "auth" },
-  { pattern: /\b403\b.*Forbidden/i, category: "auth" },
-  { pattern: /\b404\b.*Not Found/i, category: "not-found" },
-  { pattern: /\b500\b.*Internal/i, category: "server-error" },
-  { pattern: /\b503\b.*Unavailable/i, category: "server-error" },
+  { pattern: /\b401\b.*Unauthorized/i, category: 'auth' },
+  { pattern: /\b403\b.*Forbidden/i, category: 'auth' },
+  { pattern: /\b404\b.*Not Found/i, category: 'not-found' },
+  { pattern: /\b500\b.*Internal/i, category: 'server-error' },
+  { pattern: /\b503\b.*Unavailable/i, category: 'server-error' },
 
   // Build errors
-  { pattern: /npm ERR!/i, category: "build" },
-  { pattern: /Build error occurred/i, category: "build" },
-  { pattern: /Failed to compile/i, category: "build" },
-  { pattern: /Module not found/i, category: "build" },
-  { pattern: /Import.*could not be resolved/i, category: "build" },
-  { pattern: /Cannot find module/i, category: "build" },
+  { pattern: /npm ERR!/i, category: 'build' },
+  { pattern: /Build error occurred/i, category: 'build' },
+  { pattern: /Failed to compile/i, category: 'build' },
+  { pattern: /Module not found/i, category: 'build' },
+  { pattern: /Import.*could not be resolved/i, category: 'build' },
+  { pattern: /Cannot find module/i, category: 'build' },
 
   // CORS
-  { pattern: /CORS.*blocked/i, category: "cors" },
-  { pattern: /Access-Control-Allow-Origin/i, category: "cors" },
+  { pattern: /CORS.*blocked/i, category: 'cors' },
+  { pattern: /Access-Control-Allow-Origin/i, category: 'cors' },
 ]
 
-const ERROR_LOG_PATH = join(homedir(), ".opencode-ui-error-log.json")
+const ERROR_LOG_PATH = join(homedir(), '.opencode-ui-error-log.json')
 const MAX_ENTRIES = 50
 
 interface UIErrorRecord {
@@ -68,11 +68,79 @@ interface UIErrorRecord {
   pattern: string
   snippet: string
   cwd?: string
+  /** Backend record id when this row was pulled from /errors/recent. */
+  runtimeId?: string
+}
+
+/** Minimal shape of an error record returned by the backend buffer. */
+interface BackendError {
+  id?: string
+  message?: string
+  source?: string
+  stack?: string | null
+  timestamp?: string
+}
+
+const API_BASE = (process.env.SLO_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
+const RUNTIME_POLL_MS = 30_000
+let lastRuntimePoll = 0
+
+/**
+ * Merge backend runtime errors (browser funnel -> POST /errors/log) into the
+ * local log, deduped by backend record id. Pure — the only side effect is a
+ * persist when something new arrived.
+ */
+export function mergeRuntimeErrors(
+  log: UIErrorRecord[],
+  errors: BackendError[],
+): { log: UIErrorRecord[]; added: number } {
+  const known = new Set(log.filter((e) => e.runtimeId).map((e) => e.runtimeId as string))
+  let added = 0
+  for (const e of errors) {
+    if (!e.id || known.has(e.id)) continue
+    known.add(e.id)
+    log.push({
+      timestamp: e.timestamp ?? new Date().toISOString(),
+      command: `backend:${e.source ?? 'web'}`,
+      category: 'runtime',
+      pattern: (e.message ?? 'runtime error').slice(0, 120),
+      snippet: (e.stack ?? e.message ?? '').slice(0, 400),
+      runtimeId: e.id,
+    })
+    added++
+  }
+  if (added > 0) persist(log)
+  return { log, added }
+}
+
+/** Throttled poll of the backend error buffer; silent when the API is down. */
+async function pollRuntimeErrors(): Promise<number> {
+  const now = Date.now()
+  if (now - lastRuntimePoll < RUNTIME_POLL_MS) return 0
+  lastRuntimePoll = now
+  try {
+    const res = await fetch(`${API_BASE}/errors/recent?limit=20`, {
+      signal: AbortSignal.timeout(2000),
+    })
+    if (!res.ok) return 0
+    const body = (await res.json()) as { data?: { errors?: BackendError[] } }
+    const items = body?.data?.errors
+    if (!Array.isArray(items) || items.length === 0) return 0
+    const { added } = mergeRuntimeErrors(loadLog(), items)
+    if (added > 0) {
+      console.log(`\n  \x1b[31m⚠ UI runtime errors pulled from backend:\x1b[0m ${added} new`)
+      console.log(`  \x1b[90mRun "opencode ui-fix" to diagnose\x1b[0m\n`)
+    }
+    return added
+  } catch {
+    /* backend not running or unreachable — expected, stay quiet */
+    return 0
+  }
 }
 
 function loadLog(): UIErrorRecord[] {
   try {
-    return JSON.parse(readFileSync(ERROR_LOG_PATH, "utf-8"))
+    return JSON.parse(readFileSync(ERROR_LOG_PATH, 'utf-8'))
   } catch {
     return []
   }
@@ -81,22 +149,38 @@ function loadLog(): UIErrorRecord[] {
 function persist(log: UIErrorRecord[]) {
   try {
     writeFileSync(ERROR_LOG_PATH, JSON.stringify(log.slice(-MAX_ENTRIES), null, 2))
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 }
 
 function isUIRelatedCommand(command: string): boolean {
   const uiCommands = [
-    "npm run dev", "npm run build", "next dev", "next build", "next start",
-    "npx next", "yarn dev", "yarn build", "pnpm dev", "pnpm build",
-    "vitest", "jest", "cypress", "tsc", "eslint",
-    "npm run test", "npm run e2e", "npm run typecheck",
+    'npm run dev',
+    'npm run build',
+    'next dev',
+    'next build',
+    'next start',
+    'npx next',
+    'yarn dev',
+    'yarn build',
+    'pnpm dev',
+    'pnpm build',
+    'vitest',
+    'jest',
+    'cypress',
+    'tsc',
+    'eslint',
+    'npm run test',
+    'npm run e2e',
+    'npm run typecheck',
   ]
-  return uiCommands.some(cmd => command.includes(cmd))
+  return uiCommands.some((cmd) => command.includes(cmd))
 }
 
 function formatAge(ts: string): string {
   const diff = Date.now() - new Date(ts).getTime()
-  if (diff < 60_000) return "just now"
+  if (diff < 60_000) return 'just now'
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
   return `${Math.floor(diff / 86_400_000)}d ago`
@@ -111,9 +195,9 @@ function printStartupSummary(log: UIErrorRecord[]) {
     byCategory.set(e.category, (byCategory.get(e.category) || 0) + 1)
   }
 
-  console.log("")
-  console.log("  \x1b[33m⚠ UI Errors\x1b[0m")
-  console.log("  ─────────────────────────────────────")
+  console.log('')
+  console.log('  \x1b[33m⚠ UI Errors\x1b[0m')
+  console.log('  ─────────────────────────────────────')
 
   // Category summary
   const cats = [...byCategory.entries()].sort((a, b) => b[1] - a[1])
@@ -123,10 +207,10 @@ function printStartupSummary(log: UIErrorRecord[]) {
 
   // Latest error
   const latest = recent[recent.length - 1]
-  console.log("")
+  console.log('')
   console.log(`  \x1b[31mlatest\x1b[0m  ${latest.pattern}`)
   console.log(`  \x1b[90m${formatAge(latest.timestamp)} · ${latest.command.slice(0, 60)}\x1b[0m`)
-  console.log("")
+  console.log('')
 }
 
 export default (async () => {
@@ -136,15 +220,20 @@ export default (async () => {
     printStartupSummary(log)
   }
 
-  return {
-    "tool.execute.after": async (input: any, output: any) => {
-      const toolName = input?.tool ?? ""
-      if (toolName !== "bash") return
+  // Pull browser runtime errors from the backend buffer (throttled, quiet).
+  void pollRuntimeErrors()
 
-      const command = input?.input?.command ?? ""
+  return {
+    'tool.execute.after': async (input: any, output: any) => {
+      void pollRuntimeErrors()
+
+      const toolName = input?.tool ?? ''
+      if (toolName !== 'bash') return
+
+      const command = input?.input?.command ?? ''
       if (!command) return
 
-      const combined = [output?.stdout ?? "", output?.stderr ?? ""].join("\n")
+      const combined = [output?.stdout ?? '', output?.stderr ?? ''].join('\n')
       const exitCode = output?.exit_code ?? output?.exitCode
       const cwd = input?.input?.workdir ?? input?.cwd
 
@@ -182,7 +271,7 @@ export default (async () => {
         log.push({
           timestamp: new Date().toISOString(),
           command: command.slice(0, 150),
-          category: "unknown",
+          category: 'unknown',
           pattern: `exit code ${exitCode}`,
           snippet: combined.slice(0, 400),
           cwd,

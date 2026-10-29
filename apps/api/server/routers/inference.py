@@ -24,7 +24,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.sse_fallback import sse_error, sse_token
+from infrastructure.sse_fallback import sse_error, sse_event, sse_token
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
@@ -1985,6 +1985,10 @@ class InferenceRouter:
             except Exception as e:
                 logger.debug("RAG query skipped: %s", e)
 
+        # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
+        # main's chat-pipeline wiring onto the stream_turn restructure).
+        messages = await _apply_consciousness_reflection(messages, "-")
+
         gen_params = _apply_meta_weights(
             temperature=req.temperature,
             top_p=req.top_p,
@@ -2029,7 +2033,6 @@ class InferenceRouter:
 
         text = "".join(collected)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
-        tokens = 0
         try:
             tokens = _count_tokens(text, _chat_state)
         except Exception as e:
@@ -2072,6 +2075,47 @@ class InferenceRouter:
                 _memory = {"stored": True, "fact": _memory_facts[0], "facts": _memory_facts}
         except Exception as e:
             logger.debug("Auto-memory remember failed: %s", e)
+
+        # Sideband frames the chat edge forwards verbatim before close:
+        # the consciousness reflection surfaced by post-gen, then the
+        # auto-memory store step (main's chat_stream wiring, re-seamed
+        # onto TurnResult — stream_turn yields tokens, not SSE frames).
+        _sideband_events: list[str] = []
+        if _post_gen.get("narrative"):
+            _sideband_events.append(
+                sse_event(
+                    "chat",
+                    "CONSCIOUSNESS",
+                    "complete",
+                    data={
+                        "level": _post_gen["level"],
+                        "self_insight": _post_gen["narrative"],
+                    },
+                    message="Reflection updated",
+                )
+            )
+
+        _memory_stored = False
+        _memory_fact = None
+        _memory_facts: list[str] = []
+        try:
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+            _memory_stored = len(_memory_facts) > 0
+            if _memory_stored:
+                _memory_fact = _memory_facts[0]
+        except Exception as e:
+            logger.debug("Auto-memory remember failed: %s", e)
+
+        if _memory_stored:
+            _sideband_events.append(
+                sse_event(
+                    "chat",
+                    "MEMORY",
+                    "success",
+                    data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
+                    message="New fact remembered",
+                )
+            )
 
         yield TurnResult(
             text=text,

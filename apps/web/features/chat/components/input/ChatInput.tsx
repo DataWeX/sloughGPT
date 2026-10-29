@@ -42,47 +42,47 @@ const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color:
   rewrite: {
     label: 'Rewrite',
     icon: <IconSparkle className="h-3 w-3" />,
-    color: 'bg-warning/10 text-amber-500 border-warning/20',
+    color: 'bg-warning/10 text-warning border-warning/20',
   },
   translate: {
     label: 'Translate',
     icon: <IconVision className="h-3 w-3" />,
-    color: 'bg-info/10 text-info border-blue-500/20',
+    color: 'bg-info/10 text-info border-info/20',
   },
   brainstorm: {
     label: 'Brainstorm',
     icon: <IconBolt className="h-3 w-3" />,
-    color: 'bg-success/10 text-emerald-500 border-success/20',
+    color: 'bg-success/10 text-success border-success/20',
   },
   decide: {
     label: 'Decide',
     icon: <IconBrain className="h-3 w-3" />,
-    color: 'bg-destructive/10 text-rose-500 border-destructive/20',
+    color: 'bg-destructive/10 text-destructive border-destructive/20',
   },
   explain: {
     label: 'Explain',
     icon: <IconSearch className="h-3 w-3" />,
-    color: 'bg-info/10 text-cyan-500 border-info/20',
+    color: 'bg-info/10 text-info border-info/20',
   },
   wellness: {
     label: 'Wellness',
     icon: <Waves className="h-3 w-3" />,
-    color: 'bg-info/10 text-teal-500 border-teal-500/20',
+    color: 'bg-info/10 text-info border-info/20',
   },
   create: {
     label: 'Create',
     icon: <IconVision className="h-3 w-3" />,
-    color: 'bg-primary/10 text-pink-500 border-primary/20',
+    color: 'bg-primary/10 text-primary border-primary/20',
   },
   read: {
     label: 'Read',
     icon: <IconDocument className="h-3 w-3" />,
-    color: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+    color: 'bg-accent/10 text-accent border-accent/20',
   },
   talk: {
     label: 'Talk',
     icon: <IconMic className="h-3 w-3" />,
-    color: 'bg-primary/10 text-indigo-500 border-primary/20',
+    color: 'bg-primary/10 text-primary border-primary/20',
   },
 }
 

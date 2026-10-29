@@ -477,7 +477,7 @@ export default function PersonalityPage() {
 
         {/* Conflict Warnings */}
         {conflicts.length > 0 && (
-          <Card className="border-yellow-500/50">
+          <Card className="border-warning/50">
             <CardHeader>
               <CardTitle className="text-warning dark:text-warning">
                 Personality Conflicts
@@ -486,10 +486,7 @@ export default function PersonalityPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {conflicts.map((c, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5"
-                >
+                <div key={i} className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5">
                   <Badge
                     variant={c.severity === 'medium' ? 'destructive' : 'outline'}
                     className="text-[10px] mt-0.5"
@@ -639,11 +636,9 @@ export default function PersonalityPage() {
 
         {/* Import Comparison */}
         {showComparison && originalProfile && profile && (
-          <Card className="border-blue-500/50">
+          <Card className="border-info/50">
             <CardHeader>
-              <CardTitle className="text-info dark:text-info">
-                Imported Profile — Review
-              </CardTitle>
+              <CardTitle className="text-info dark:text-info">Imported Profile — Review</CardTitle>
               <CardDescription>Compare imported values with your current profile</CardDescription>
             </CardHeader>
             <CardContent>

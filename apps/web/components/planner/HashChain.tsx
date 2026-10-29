@@ -12,10 +12,10 @@ interface HashChainProps {
 }
 
 const CHANGE_COLOR: Record<string, string> = {
-  note_add: 'text-emerald-400',
-  note_edit: 'text-amber-400',
-  note_delete: 'text-red-400',
-  rehash: 'text-sky-400',
+  note_add: 'text-success',
+  note_edit: 'text-warning',
+  note_delete: 'text-destructive',
+  rehash: 'text-info',
 }
 
 export function HashChain({ cardId, refreshKey = 0 }: HashChainProps) {

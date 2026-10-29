@@ -204,7 +204,7 @@ export function BuffetEngine() {
   if (error) {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
-        <p className="text-sm text-red-400 font-mono">{error}</p>
+        <p className="text-sm text-destructive font-mono">{error}</p>
         <Button size="sm" variant="outline" onClick={refresh}>
           Retry
         </Button>
@@ -222,14 +222,15 @@ export function BuffetEngine() {
       role="application"
       aria-label="Kanban board"
       style={{
-        backgroundImage: `radial-gradient(ellipse 900px 500px at ${light.x}% ${light.y}%, rgba(255,245,220,0.035), transparent 65%)`,
+        backgroundImage: `radial-gradient(ellipse 900px 500px at ${light.x}% ${light.y}%, rgb(var(--accent) / 0.035), transparent 65%)`,
       }}
     >
       {/* Vignette */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(0,0,0,0.45) 100%)',
+          background:
+            'radial-gradient(ellipse at 50% 40%, transparent 30%, rgb(var(--elevation-rgb) / 0.45) 100%)',
         }}
         aria-hidden
       />
@@ -237,7 +238,7 @@ export function BuffetEngine() {
       {/* Header — fixed top bar */}
       <header
         className="relative shrink-0 px-5 py-3"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        style={{ borderBottom: '1px solid rgb(var(--sheen-rgb) / 0.06)' }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-baseline gap-3">
@@ -314,7 +315,7 @@ export function BuffetEngine() {
                 'bg-zinc-800 text-zinc-300 border border-zinc-700',
                 'hover:bg-zinc-700 hover:text-zinc-100 hover:border-zinc-600',
                 'active:scale-[0.97] transition-all duration-150',
-                'shadow-[0_1px_2px_rgba(0,0,0,0.3)]',
+                'shadow-[0_1px_2px_rgb(var(--elevation-rgb)/0.3)]',
               )}
             >
               <IconPlus className="h-3.5 w-3.5 mr-1 inline" />
@@ -378,7 +379,7 @@ export function BuffetEngine() {
       {/* Status bar */}
       <footer
         className="relative shrink-0 px-5 py-1.5 flex items-center justify-between text-[10px] font-mono text-zinc-700"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+        style={{ borderTop: '1px solid rgb(var(--sheen-rgb) / 0.04)' }}
       >
         <div className="flex items-center gap-4">
           <span>←→ columns</span>

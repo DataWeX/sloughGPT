@@ -12,10 +12,10 @@ interface CardItemProps {
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
-  critical: '#ef4444',
-  high: '#f59e0b',
-  medium: '#a1a1aa',
-  low: '#22c55e',
+  critical: 'rgb(var(--destructive))',
+  high: 'rgb(var(--warning))',
+  medium: 'rgb(var(--muted-foreground))',
+  low: 'rgb(var(--success))',
 }
 
 export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProps) {
@@ -49,15 +49,13 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
       )}
       style={{
         // Card material — off-white paper
-        background: hovered
-          ? 'linear-gradient(178deg, #fafaf9 0%, #f5f5f4 100%)'
-          : 'linear-gradient(178deg, #f0f0ef 0%, #e8e8e7 100%)',
+        background: 'rgb(var(--card))',
         borderRadius: '4px',
-        border: '1px solid rgba(0,0,0,0.07)',
+        border: '1px solid rgb(var(--elevation-rgb) / 0.07)',
         // Shadow: lifts on hover
         boxShadow: hovered
-          ? '0 4px 16px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.03)'
-          : '0 1px 3px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.04)',
+          ? '0 4px 16px rgb(var(--elevation-rgb) / 0.25), 0 1px 3px rgb(var(--elevation-rgb) / 0.15), 0 0 0 1px rgb(var(--elevation-rgb) / 0.03)'
+          : '0 1px 3px rgb(var(--elevation-rgb) / 0.1), 0 0 0 1px rgb(var(--elevation-rgb) / 0.04)',
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
       }}
     >
@@ -73,8 +71,11 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
           <p className="text-[13px] font-medium leading-snug flex-1 text-zinc-800">{card.title}</p>
           {card.root_hash && (
             <span
-              className="mt-1 h-1.5 w-1.5 rounded-full shrink-0 bg-emerald-500"
-              style={{ boxShadow: '0 0 4px rgba(16,185,129,0.4)' }}
+              className="mt-1 h-1.5 w-1.5 rounded-full shrink-0"
+              style={{
+                backgroundColor: 'rgb(var(--success))',
+                boxShadow: '0 0 4px rgb(var(--success) / 0.4)',
+              }}
               title="Hash chain active"
               aria-label="Hash chain active"
             />
@@ -101,7 +102,7 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
         className="absolute bottom-0 left-0 right-0 h-px rounded-b-[4px]"
         style={{
           background:
-            'linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.5) 50%, transparent 90%)',
+            'linear-gradient(90deg, transparent 10%, rgb(var(--sheen-rgb) / 0.5) 50%, transparent 90%)',
         }}
         aria-hidden
       />
