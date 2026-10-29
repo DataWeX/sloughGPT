@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo, memo } from 'react'
-import Link from '@/vite/next-compat/link'
+import Link from 'next/link'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconX, IconSearch, IconEdit } from '@sloughgpt/strui'
 import { chatDB, type KnowledgeItem } from '@/lib/db'

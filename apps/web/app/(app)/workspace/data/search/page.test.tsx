@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 const mockApiGet = vi.fn()
 const mockSearchParams = new URLSearchParams()
 
-vi.mock('@/vite/next-compat/navigation', () => ({
+vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => mockSearchParams,
   usePathname: () => '/workspace/data/search',
