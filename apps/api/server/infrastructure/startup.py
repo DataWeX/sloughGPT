@@ -390,6 +390,23 @@ class StartupOrchestrator:
         loader.on(Stage.CRITICAL, "model_load", _init_model_load, timeout=5.0)
         loader.on(Stage.CRITICAL, "core_routers", _init_core_routers, timeout=30.0)
 
+        # Kick the accelerator probe BEFORE stage 1 (kick-only — detection
+        # runs on its own daemon thread, bounded by SLO_ACCEL_PROBE_TIMEOUT).
+        # The first cupy/metal import must happen here, at boot, and never
+        # under a live /health request: 2026-10-29 05:06 — first import hung
+        # natively, the import lock poisoned, and :8000 stopped serving
+        # entirely. NOTE: this lives on the staged_loader path, NOT in
+        # _phase_config — the lifecycle startup hooks are registered but no
+        # runner executes them on this line (proved by boot logs: this block
+        # produced no probe when it sat in _phase_config).
+        try:
+            from domain.slolib import prewarm_accelerator
+
+            prewarm_accelerator()
+            logger.debug("Accelerator probe prewarmed", extra={"tag": "START"})
+        except Exception as e:
+            logger.debug("Accelerator prewarm unavailable: %s", e)
+
         await loader.run_stage(Stage.CRITICAL)
 
         # ── Stage 2: READY ───────────────────────────────────────
@@ -1028,18 +1045,6 @@ class StartupOrchestrator:
             )
         except Exception as e:
             logger.warning("ResourceManager init: %s", e, extra={"tag": "START"})
-
-        # Kick the accelerator probe at boot (kick-only, non-blocking: the
-        # detection runs on its own daemon thread, bounded by
-        # SLO_ACCEL_PROBE_TIMEOUT). Without this the first cupy/metal import
-        # happens under a live /health request — the 2026-10-29 wedge.
-        try:
-            from domain.slolib import prewarm_accelerator
-
-            prewarm_accelerator()
-            logger.debug("Accelerator probe prewarmed", extra={"tag": "START"})
-        except Exception as e:
-            logger.debug("Accelerator prewarm unavailable: %s", e)
 
         # Warn if auth is disabled
         import os
