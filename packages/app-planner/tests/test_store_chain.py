@@ -160,3 +160,87 @@ class TestChainSync:
         assert [c.chain_index for c in cards] == [0]
         assert store.verify_chain() == []
         assert _file_card_ids(store) == [cards[0].id]
+
+
+class TestCardRevision:
+    """`rev` — the per-card edit counter used for change tracking.
+
+    `rev` is derived metadata: it is excluded from the chain payload, so
+    bumping it never invalidates a stored hash and legacy lines that predate
+    the field verify exactly as before.
+    """
+
+    def test_new_card_starts_at_rev_zero(self, store: PlannerStore):
+        card = store.add_card("fresh")
+        assert card.rev == 0
+        assert store.get_card(card.id).rev == 0
+
+    def test_update_bumps_rev_and_persists(self, store: PlannerStore):
+        card = store.add_card("editable")
+        store.update_card(card.id, title="edited once")
+        assert store.get_card(card.id).rev == 1
+        store.update_card(card.id, priority="high")
+        assert store.get_card(card.id).rev == 2
+        # survives a re-seal (chain recomputation rewrites every line)
+        store.compute_chains()
+        assert store.get_card(card.id).rev == 2
+        assert store.verify_chain() == []
+
+    def test_move_bumps_rev(self, store: PlannerStore):
+        card = store.add_card("movable")
+        store.move_card(card.id, "wip")
+        assert store.get_card(card.id).rev == 1
+        assert store.get_card(card.id).column == "wip"
+
+    def test_block_and_unblock_bump_rev(self, store: PlannerStore):
+        blocker = store.add_card("blocker")
+        card = store.add_card("blocked")
+        store.block_card(card.id, blocker.id)
+        assert store.get_card(card.id).rev == 1
+        store.block_card(card.id, blocker.id)  # no-op: already blocked
+        assert store.get_card(card.id).rev == 1
+        store.unblock_card(card.id, blocker.id)
+        assert store.get_card(card.id).rev == 2
+
+    def test_rev_excluded_from_chain_payload(self, store: PlannerStore):
+        """Same content at different revs must hash identically — the
+        property that keeps legacy (pre-rev) card hashes valid."""
+        from app_planner.store import chain_hash_for
+
+        card = store.add_card("hash-stable")
+        store.compute_chains()
+        base = store.get_card(card.id)
+        with_zero = chain_hash_for(base, base.chain_prev)
+        bumped = store.get_card(card.id)
+        bumped.rev = 7
+        assert chain_hash_for(bumped, bumped.chain_prev) == with_zero
+
+    def test_legacy_line_without_rev_field_still_verifies(self, store: PlannerStore):
+        """A board line stripped of `rev` (as any pre-upgrade card is)
+        must still pass chain verification."""
+        store.add_card("legacy-ish")
+        store.add_card("second")
+        store.compute_chains()
+        assert store.verify_chain() == []
+
+        # rewrite the first card line without its rev key
+        text = store._board_file.read_text()
+        lines = text.splitlines()
+        stripped = []
+        for raw in lines:
+            try:
+                obj = json.loads(raw)
+            except json.JSONDecodeError:
+                stripped.append(raw)
+                continue
+            if isinstance(obj, dict) and "rev" in obj:
+                del obj["rev"]
+                stripped.append(json.dumps(obj, sort_keys=True, ensure_ascii=False))
+            else:
+                stripped.append(raw)
+        store._atomic_write("\n".join(stripped) + "\n")
+
+        assert store.verify_chain() == []
+        # and re-reading it gives the field a sane default
+        first = next(c for c in store.load_board().cards if c.chain_index == 0)
+        assert first.rev == 0

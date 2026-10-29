@@ -64,6 +64,10 @@ class Card:
     chain_index: int = -1
     chain_prev: str = ""
     chain_hash: str = ""
+    # Edit counter: bumped on every content mutation (update/move/block).
+    # Derived metadata — deliberately NOT hashed (see _UNHASHED_FIELDS), so
+    # adding it cannot invalidate the stored hashes of legacy cards.
+    rev: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -71,6 +75,7 @@ class Card:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Card:
         chain_index = d.get("chain_index", -1)
+        rev = d.get("rev", 0)
         return cls(
             id=d.get("id", ""),
             title=d.get("title", ""),
@@ -90,6 +95,7 @@ class Card:
             chain_index=chain_index if isinstance(chain_index, int) else -1,
             chain_prev=d.get("chain_prev", "") or "",
             chain_hash=d.get("chain_hash", "") or "",
+            rev=rev if isinstance(rev, int) else 0,
         )
 
 
@@ -147,6 +153,10 @@ class Board:
 
 CHAIN_GENESIS = "0" * 64
 _CHAIN_FIELDS = ("chain_index", "chain_prev", "chain_hash")
+# `rev` is a derived edit counter, not content: excluding it keeps hashes
+# recomputable over legacy cards that predate the field (adding it to the
+# payload would flag all 1028 pre-existing cards as mutated).
+_UNHASHED_FIELDS = _CHAIN_FIELDS + ("rev",)
 
 
 def chain_hash_for(card: Card, prev_hash: str) -> str:
@@ -154,8 +164,11 @@ def chain_hash_for(card: Card, prev_hash: str) -> str:
 
     The chain fields themselves are excluded so a card's hash depends only
     on its content and its predecessor — recomputation is well-founded.
+    The ``rev`` counter is excluded for forward compatibility (see
+    ``_UNHASHED_FIELDS``); the content it counts *is* hashed, so tampering
+    with a card's text is still caught.
     """
-    payload = {k: v for k, v in card.to_dict().items() if k not in _CHAIN_FIELDS}
+    payload = {k: v for k, v in card.to_dict().items() if k not in _UNHASHED_FIELDS}
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256((prev_hash + "\x00" + blob).encode()).hexdigest()
 
@@ -226,8 +239,17 @@ class PlannerStore:
 
     @staticmethod
     def _card_line(card: Card) -> str:
-        """Canonical, byte-stable JSONL serialization of a card line."""
-        return json.dumps(card.to_dict(), sort_keys=True, ensure_ascii=False)
+        """Canonical, byte-stable JSONL serialization of a card line.
+
+        ``rev`` is omitted while it is 0: legacy lines (and never-edited
+        cards) stay byte-identical to pre-upgrade output, so sealing the
+        board after an edit produces a one-line diff instead of rewriting
+        all 1000+ cards.
+        """
+        payload = card.to_dict()
+        if not payload.get("rev"):
+            payload.pop("rev", None)
+        return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
     @staticmethod
     def _schema_line(name: str, columns: list[dict[str, Any]]) -> str:
@@ -546,6 +568,7 @@ class PlannerStore:
                 for key, value in kwargs.items():
                     if hasattr(card, key):
                         setattr(card, key, value)
+                card.rev += 1
                 card.updated_at = datetime.now(UTC).isoformat()
                 self._surgical_rewrite({card_id: self._card_line(card)})
                 return card
@@ -560,6 +583,7 @@ class PlannerStore:
         for card in board.cards:
             if card.id == card_id:
                 card.column = to_column
+                card.rev += 1
                 card.updated_at = datetime.now(UTC).isoformat()
                 self._surgical_rewrite({card_id: self._card_line(card)})
                 return True
@@ -599,6 +623,7 @@ class PlannerStore:
             if card.id == card_id:
                 if blocker_id not in card.blocked_by:
                     card.blocked_by.append(blocker_id)
+                    card.rev += 1
                     card.updated_at = datetime.now(UTC).isoformat()
                     self._surgical_rewrite({card_id: self._card_line(card)})
                 return card
@@ -610,6 +635,7 @@ class PlannerStore:
             if card.id == card_id:
                 if blocker_id in card.blocked_by:
                     card.blocked_by.remove(blocker_id)
+                    card.rev += 1
                     card.updated_at = datetime.now(UTC).isoformat()
                     self._surgical_rewrite({card_id: self._card_line(card)})
                 return card
