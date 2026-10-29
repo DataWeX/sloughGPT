@@ -77,7 +77,7 @@ vi.mock('@/lib/memory-events', () => {
   }
 })
 
-vi.mock('@/vite/next-compat/link', () => ({
+vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: any) => (
     <a href={typeof href === 'string' ? href : String(href)} {...rest}>
       {children}
