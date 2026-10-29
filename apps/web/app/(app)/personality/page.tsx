@@ -389,10 +389,10 @@ export default function PersonalityPage() {
                       {/* Rose-blue traits icon — identity marker for a persona */}
                       <span
                         aria-hidden="true"
-                        className="w-7 h-7 shrink-0 rounded-full bg-gradient-to-br from-rose-400/25 to-blue-500/25 border border-blue-400/40 flex items-center justify-center"
+                        className="w-7 h-7 shrink-0 rounded-full bg-gradient-to-br from-[rgb(var(--chart-5)/0.25)] to-[rgb(var(--chart-4)/0.25)] border border-[rgb(var(--chart-4)/0.4)] flex items-center justify-center"
                       >
                         <IconHeart
-                          className="w-3.5 h-3.5 text-blue-500 dark:text-blue-300"
+                          className="w-3.5 h-3.5 text-[rgb(var(--chart-4))]"
                           filled
                         />
                       </span>
@@ -422,7 +422,7 @@ export default function PersonalityPage() {
                             </span>
                             <div className="flex-1 h-1 rounded-full bg-muted/50 overflow-hidden">
                               <div
-                                className="h-full rounded-full bg-gradient-to-r from-rose-400 to-blue-500"
+                                className="h-full rounded-full bg-gradient-to-r from-[rgb(var(--chart-5))] to-[rgb(var(--chart-4))]"
                                 style={{ width: `${Math.round(value * 100)}%` }}
                               />
                             </div>
