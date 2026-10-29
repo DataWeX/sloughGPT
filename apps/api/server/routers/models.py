@@ -1111,11 +1111,17 @@ class ModelsRouter:
         import urllib.error
         import urllib.request
 
-        try:
+        def _fetch() -> list:
             url = f"{cfg['url']}/models"
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=10) as resp:
-                models = json.loads(resp.read())
+                return json.loads(resp.read())
+
+        try:
+            # Off-loop: a slow/hung upstream must not stall the event loop
+            # for every other route/stream (sync-core/async-host seam — same
+            # pattern as routers/tokenizer.py _fetch).
+            models = await asyncio.to_thread(_fetch)
         except Exception as e:
             raise_error(f"Failed to list models from {server}: {e}", status_code=502)
 

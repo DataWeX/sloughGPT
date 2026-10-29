@@ -162,7 +162,9 @@ class InferencePool:
                     break
                 yield item
         finally:
-            thread.join(timeout=5)
+            # Off-loop join: a wedged worker must not stall the event loop
+            # during stream teardown (still bounded at 5s).
+            await asyncio.to_thread(thread.join, 5)
             self._semaphore.release()
 
     async def shutdown(self):

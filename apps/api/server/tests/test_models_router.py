@@ -6,11 +6,15 @@ Tests for models router — list, current, hf, cache-usage, export-formats.
 Only registers the models router to avoid pulling in heavy dependencies.
 """
 
+import asyncio
 import json
 import tempfile
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -646,3 +650,54 @@ class TestDownloadHistory:
         for entry in data["history"]:
             assert "detail" in entry
             assert "status" in entry
+
+
+class TestExternalModelsLoopResponsiveness:
+    async def test_hung_upstream_does_not_block_event_loop(self):
+        """A hung external upstream must not stall the event loop.
+
+        Regression (card 20261029_031406): list_external_models ran
+        urllib.request.urlopen inline inside the async handler — a slow or
+        hung upstream stalled EVERY coroutine on the loop (all routes, all
+        SSE streams, health) for up to the socket timeout. The loop must keep
+        serving other coroutines while the fetch is in flight.
+        """
+        ModelsRouter._external_servers.clear()
+        client.post(
+            "/models/external/servers",
+            json={"name": "peer", "url": "http://localhost:8000"},
+        )
+
+        upstream_gate = threading.Event()
+
+        def _hung_urlopen(req, timeout=None):
+            # Upstream "hangs" until the test releases it (3s safety bound).
+            upstream_gate.wait(timeout=3)
+            resp = MagicMock()
+            resp.read.return_value = json.dumps([{"model_id": "llama-7b"}]).encode()
+            resp.__enter__ = lambda s: s
+            resp.__exit__ = MagicMock(return_value=False)
+            return resp
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+        ) as ac:
+            with patch("urllib.request.urlopen", side_effect=_hung_urlopen):
+                task = asyncio.create_task(ac.get("/models/external/models?server=peer"))
+                # The request is now in flight against a hung upstream. While
+                # it hangs, a concurrent coroutine on THIS loop must still be
+                # serviced promptly.
+                t0 = time.monotonic()
+                await asyncio.sleep(0.1)
+                loop_stayed_free_for = time.monotonic() - t0
+                upstream_gate.set()  # upstream finally answers
+                resp = await task
+
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["models"] == [{"model_id": "llama-7b"}]
+        # RED: the handler blocks the loop inside urlopen, so the sleep above
+        # only completes after the gate times out (~3s). GREEN: the fetch runs
+        # off-loop (asyncio.to_thread) and the sleep completes in ~0.1s while
+        # the fetch is still in flight.
+        assert loop_stayed_free_for < 1.0
