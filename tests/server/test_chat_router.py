@@ -253,7 +253,7 @@ class TestStreamReconnectReplay:
         body = self._body()
         mgr = self._fake_manager(
             ["The ", "answer."],
-            result=SimpleNamespace(usage=3, model="m", finish_reason="stop", elapsed_ms=5.0),
+            result=SimpleNamespace(usage=3, model="m", finish_reason="stop", elapsed_ms=5.0, consciousness=None, memory=None),
         )
         mock_gcm.return_value = mgr
 
@@ -289,7 +289,7 @@ class TestStreamReconnectReplay:
         body = self._body(content="New question")
         mgr = self._fake_manager(
             ["Fresh ", "reply."],
-            result=SimpleNamespace(usage=3, model="m", finish_reason="stop", elapsed_ms=5.0),
+            result=SimpleNamespace(usage=3, model="m", finish_reason="stop", elapsed_ms=5.0, consciousness=None, memory=None),
         )
         mock_gcm.return_value = mgr
 
@@ -313,7 +313,7 @@ class TestStreamReconnectReplay:
         body = self._body()
         mgr = self._fake_manager(
             ["First", "Second"],
-            result=SimpleNamespace(usage=3, model="m", finish_reason="stop", elapsed_ms=5.0),
+            result=SimpleNamespace(usage=3, model="m", finish_reason="stop", elapsed_ms=5.0, consciousness=None, memory=None),
         )
         mock_gcm.return_value = mgr
         mock_disc.side_effect = [False, True]
@@ -348,7 +348,7 @@ class TestStreamReconnectReplay:
         )
         mgr = self._fake_manager(
             ["Full ", "answer."],
-            result=SimpleNamespace(usage=3, model="m", finish_reason="stop", elapsed_ms=5.0),
+            result=SimpleNamespace(usage=3, model="m", finish_reason="stop", elapsed_ms=5.0, consciousness=None, memory=None),
         )
         mock_gcm.return_value = mgr
 

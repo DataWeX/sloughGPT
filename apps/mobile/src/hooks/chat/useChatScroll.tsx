@@ -81,7 +81,6 @@ export function useChatScroll(
       selectMode,
       selectedIds,
       toggleSelectMessage,
-    ],
       branchFromMessage,
     ],
   )
