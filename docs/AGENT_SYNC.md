@@ -853,7 +853,36 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `83d91dedc`)
+## Landed on main (origin/main = `405fe62b9`)
+
+- **2026-10-29 00:31Z · PR #192 `feat/error-funnel` → MERGED (`405fe62b`)** — error
+  funnel (`addGlobalError` single entry → banner/toast/state-event/backend),
+  stock-palette ratchet held through main's rounds (semantic `bg-success` kept
+  over raw `bg-green-400` in StatusBar/ConsciousnessSidebarWidget), memory
+  pipeline restored on the engine stream path — **main's dict-shape
+  `TurnResult.consciousness/memory` + edge-rendered SSE won the final merge
+  over our `events[]` sideband** (domain returns data, edge owns the wire
+  format; `test_post_chat_renders_turn_result_sideband_before_close` ported
+  accordingly), stream-first chat gates, planner `transition/route.test.ts`
+  rewritten from the dead fs fixtures to a proxy-seam test (main's
+  `proxyRequest` onto the Python engine superseded our fs-sandbox TS impl),
+  next-compat codemod re-run on the four planner routes, root package-lock
+  regenerated for the 3D kanban lane's three/r3f workspace deps (`fd86ab831`
+  never got CI — CONFLICTING head — so its desync surfaced only at merge
+  time; every npm job died at `npm ci`). Five merge rounds absorbed:
+  `fc8cefdde` → `370cc9e27` → `c330752c9` (Next-removal) → `5fef7194a` →
+  `ae1e67639` (+22 palette/mole) → `111e718b3` (+376, main had already
+  absorbed most of our funnel via parallel lanes). **Gates:** server+contract
+  **2039**, core-py memory 68 + hygiene 5 + substrate, seam 10, planner/web
+  vitest 226+76, tsc exit 0; PR merged MERGEABLE with only born-red Mobile CI
+  red. **Pitfalls:** (1) workspace `package.json` deps without a root-lock
+  regen = all npm CI jobs die at `npm ci` — `npm install --package-lock-only`
+  at the root, additive; (2) fresh worktrees need a
+  `packages/strui/node_modules` symlink to the main checkout or lint-staged's
+  strui eslint ENOENT cascade-kills every task as "KILLED without output";
+  (3) a branch moving mid-CI flips the PR to CONFLICTING with zero checks —
+  poll `mergeable`, merge the instant required checks are green; (4)
+  `.wt-efmerge` removed post-merge (0 dirty at discard).
 
 - **2026-10-24→28 · full `origin/main` integration of `feat/aml-cruncher` — NINE
   merge rounds (69 branch commits + origin's 72 across PR#175–#196, PR#197–#200,
