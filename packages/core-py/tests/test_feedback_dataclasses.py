@@ -65,7 +65,7 @@ class TestMessageData:
 
     def test_dataclass_fields(self):
         fields = {f.name for f in dataclasses.fields(MessageData)}
-        assert fields == {"role", "content"}
+        assert fields == {"role", "content", "id"}
 
     def test_not_hashable(self):
         md = MessageData(role="user", content="hello")
