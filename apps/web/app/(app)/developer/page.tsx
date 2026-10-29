@@ -818,9 +818,10 @@ function StartupTab() {
   // plain strings so they are referentially stable: `refetch` is
   // `useCallback([key])`, and stable `refetch` identities keep the poll below
   // from being re-created on every render.
-  const { data: startupData, refetch: refetchStartupProgress } = useQuery<
-    Record<string, unknown>
-  >('developer-startup-progress', fetchStartupProgress)
+  const { data: startupData, refetch: refetchStartupProgress } = useQuery<Record<string, unknown>>(
+    'developer-startup-progress',
+    fetchStartupProgress,
+  )
   const { data: historyData, refetch: refetchStartupHistory } = useStartupHistory()
 
   // The 2s poll stays a plain effect: it is a timer, i.e. a side effect, not a
