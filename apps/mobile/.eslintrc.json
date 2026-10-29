@@ -1,0 +1,31 @@
+{
+  "root": true,
+  "extends": ["@sloughgpt/eslint-config"],
+  "overrides": [
+    {
+      "files": [
+        "**/__tests__/**",
+        "**/__mocks__/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test.js",
+        "jest-setup.js",
+        "jest.config.js"
+      ],
+      "env": { "jest": true }
+    },
+    {
+      "files": ["**/*.js", "**/*.cjs", "**/*.mjs"],
+      "env": { "node": true },
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off",
+        "@typescript-eslint/no-var-requires": "off"
+      }
+    }
+  ],
+  "rules": {
+    "@typescript-eslint/no-require-imports": "off",
+    "no-empty": ["error", { "allowEmptyCatch": true }],
+    "no-constant-condition": ["error", { "checkLoops": false }]
+  }
+}

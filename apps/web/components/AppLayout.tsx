@@ -24,9 +24,14 @@ import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
+import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 import { ConvSidebarProvider, useConvSidebar } from '@/features/chat/contexts/ConvSidebarContext'
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
 import { useLocale } from '@/hooks/useLocale'
+
+/** Hold-off before a non-connected status raises the global drop banner —
+ *  one failed poll is a blip, not an outage the user should be told about. */
+export const OFFLINE_BANNER_GRACE_MS = 5_000
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -121,19 +126,34 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const closeMobileNav = () => setMobileNavOpen(false)
 
   // Backend health lives on ONE banner surface (GlobalBanner + useBannerStore).
-  // The restarting notice shares the boot-stall key 'backend-connection' so the
-  // two states replace each other instead of stacking two rows for one failure.
-  // Cleanup dismisses it the moment the status leaves 'reloading' — a reconnect
-  // clears the banner on its own.
+  // A connection drop (offline/error, held past a short grace so a blip never
+  // flashes a banner) shares the boot-stall key 'backend-connection' so the
+  // states replace each other instead of stacking two rows for one failure.
+  // Recovery dismisses it via the effect cleanup. The old version keyed on
+  // 'reloading' — a status nothing produced anymore — so the banner was dead.
   useEffect(() => {
-    if (apiStatus !== 'reloading') return
-    const id = useBannerStore.getState().showBanner({
-      key: 'backend-connection',
-      tone: 'warning',
-      title: 'Backend restarting',
-      message: 'reconnecting…',
-    })
-    return () => useBannerStore.getState().dismissBanner(id)
+    if (apiStatus !== 'offline' && apiStatus !== 'error') return
+    let id: string | null = null
+    const timer = setTimeout(() => {
+      id = useBannerStore.getState().showBanner({
+        key: 'backend-connection',
+        tone: 'destructive',
+        title: 'Backend unreachable',
+        message: 'The connection dropped — retrying automatically.',
+        action: {
+          label: 'Retry',
+          onAction: () => {
+            void probeBackendAndRevalidate()
+          },
+        },
+      })
+    }, OFFLINE_BANNER_GRACE_MS)
+    return () => {
+      clearTimeout(timer)
+      // A superseded id is a no-op (single-slot store) — another producer's
+      // banner is left alone.
+      if (id) useBannerStore.getState().dismissBanner(id)
+    }
   }, [apiStatus])
 
   return (

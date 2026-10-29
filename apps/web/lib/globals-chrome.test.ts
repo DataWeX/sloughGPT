@@ -96,3 +96,94 @@ describe('dark aura secondary pairings (card 73ad1c78)', () => {
     }
   })
 })
+
+/**
+ * Banner tone surfaces (card 87345605):
+ *
+ * The banner used to be a single warning-tinted surface with 80%-opacity text
+ * — tones were dead (all four rendered byte-identical) and light-mode text
+ * computed to 1.44:1. The contract now passes WCAG 4.5:1 in both modes with
+ * ONE formula, because the mode's own --foreground anchors the ink:
+ *
+ *   surface = --background (never tinted: a tone-tinted surface collapses
+ *             contrast for dark tones — info-on-light lands at 1.9:1)
+ *   ink     = 35% tone + 65% --foreground
+ *   border  = 35% tone + 65% --background (decorative hue identity)
+ *
+ * 65% foreground (not less) is the binding number: light-mode warning is the
+ * highest-luminance tone on the palest surface, and it still clears 7.7:1 —
+ * margins that survive future palette drift.
+ */
+const TONE_TOKENS = {
+  info: '--primary',
+  success: '--success',
+  warning: '--warning',
+  destructive: '--destructive',
+} as const
+
+type RGB = [number, number, number]
+
+function mix(a: RGB, b: RGB, t: number): RGB {
+  return [a[0] * (1 - t) + b[0] * t, a[1] * (1 - t) + b[1] * t, a[2] * (1 - t) + b[2] * t]
+}
+
+describe('banner tone surfaces (card 87345605)', () => {
+  it('.sl-app-banner derives every surface from tokens (no fixed colors, no opacity dimming)', () => {
+    const block = blockWith('.sl-app-banner')
+    // Tokens are RGB triplets — every reference MUST be wrapped rgb(), else
+    // the declaration substitutes bare digits and invalidates (the live bug
+    // this test now pins: transparent bg + inherited ink on every tone).
+    expect(block).toMatch(/background:\s*rgb\(var\(--background\)\)/)
+    expect(block).toMatch(
+      /color:\s*color-mix\(in srgb,\s*rgb\(var\(--banner-tone\)\)\s*35%,\s*rgb\(var\(--foreground\)\)\)/,
+    )
+    expect(block).toMatch(
+      /border(?:-bottom)?:\s*1px solid color-mix\(in srgb,\s*rgb\(var\(--banner-tone\)\)\s*35%,\s*rgb\(var\(--background\)\)\)/,
+    )
+    // Opacity-dimmed text silently breaks the ink contrast the next test pins.
+    expect(block).not.toMatch(/opacity/)
+    // No palette leaks: the base surface block names tokens, never colors.
+    expect(block).not.toMatch(/rgb\(\s*\d/)
+    expect(block).not.toMatch(/rgba\(/)
+    expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+  })
+
+  it('maps each data-tone to its semantic token', () => {
+    for (const [tone, name] of Object.entries(TONE_TOKENS)) {
+      const block = blockWith(`.sl-app-banner[data-tone='${tone}']`)
+      expect(block, `${tone} maps to ${name}`).toContain(`--banner-tone: var(${name})`)
+    }
+  })
+
+  it('banner ink passes WCAG 4.5:1 in both modes for every tone', () => {
+    for (const [mode, selector] of [
+      ['light', ':root'],
+      ['dark', 'html.dark'],
+    ] as const) {
+      const block = tokenBlock(selector, '--foreground:')
+      const bg = token(block, '--background')
+      const fg = token(block, '--foreground')
+      for (const [tone, name] of Object.entries(TONE_TOKENS)) {
+        const rgb = token(block, name)
+        const ink = mix(rgb, fg, 0.65)
+        const ratio = contrast(ink, bg)
+        expect(
+          ratio,
+          `${mode}/${tone}: ink rgb(${ink.map(Math.round)}) on rgb(${bg})`,
+        ).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  })
+})
+
+/** The `${selector} {` block that actually declares the probe property —
+ *  `:root` appears three times in globals.css (app-shell vars, color tokens,
+ *  and a later utility block), so first-match is the wrong block. */
+function tokenBlock(selector: string, probe: string): string {
+  let idx = -1
+  while ((idx = css.indexOf(`${selector} {`, idx + 1)) !== -1) {
+    const block = css.slice(idx, css.indexOf('}', idx))
+    if (block.includes(probe)) return block
+  }
+  throw new Error(`no ${selector} block containing ${probe} in globals.css`)
+}

@@ -13,6 +13,13 @@ vi.mock('@/lib/state-events', () => ({
   logStateEvent: vi.fn(),
 }))
 
+const { probeBackendAndRevalidateMock } = vi.hoisted(() => ({
+  probeBackendAndRevalidateMock: vi.fn(),
+}))
+vi.mock('@/lib/backend-retry', () => ({
+  probeBackendAndRevalidate: probeBackendAndRevalidateMock,
+}))
+
 import { useBannerStore } from '@/lib/banner-store'
 import { logStateEvent } from '@/lib/state-events'
 import { StartupOverlay } from './StartupOverlay'
@@ -87,7 +94,7 @@ describe('StartupOverlay', () => {
     expect(screen.getByRole('status').textContent).toBe('Stage 2 of 4: Starting core services')
   })
 
-  it('shows stuck-connecting recovery after timeout and reloads on Retry', () => {
+  it('shows stuck-connecting recovery after timeout and probes the backend on Retry', () => {
     useLiveStatusMock.mockReturnValue(status())
     const reload = vi.fn()
     Object.defineProperty(window, 'location', {
@@ -111,7 +118,10 @@ describe('StartupOverlay', () => {
     expect(screen.getByRole('status').textContent).toContain('no response')
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    expect(reload).toHaveBeenCalledTimes(1)
+    // Retry probes first (silent /health + cache revalidate) — a document
+    // reload threw away client state and looped under a down backend.
+    expect(probeBackendAndRevalidateMock).toHaveBeenCalledTimes(1)
+    expect(reload).not.toHaveBeenCalled()
   })
 
   it('does not show stuck UI when stage is known', () => {
@@ -137,6 +147,15 @@ describe('StartupOverlay', () => {
     expect(banners[0].key).toBe('backend-connection')
     expect(banners[0].tone).toBe('warning')
     expect(banners[0].action?.label).toBe('Retry')
+    // The banner Retry probes first too — reload is gone from this path.
+    const reload = vi.fn()
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, reload },
+      writable: true,
+    })
+    banners[0].action?.onAction?.()
+    expect(probeBackendAndRevalidateMock).toHaveBeenCalledTimes(1)
+    expect(reload).not.toHaveBeenCalled()
     expect(logStateEvent).toHaveBeenCalledWith('overlay_timeout', expect.anything())
     expect(screen.getByRole('progressbar', { name: 'Startup progress' })).toBeTruthy()
 
@@ -233,8 +252,6 @@ describe('StartupOverlay', () => {
     act(() => {
       vi.advanceTimersByTime(8_000)
     })
-    expect(screen.getByRole('button', { name: 'Retry' }).className).toContain(
-      'pointer-events-auto',
-    )
+    expect(screen.getByRole('button', { name: 'Retry' }).className).toContain('pointer-events-auto')
   })
 })

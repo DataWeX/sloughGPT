@@ -36,7 +36,7 @@ const RESOURCE_COLORS: Record<string, string> = {
 
 export default function SharedDataPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [shares, setShares] = useState<Share[]>([])
   const [loading, setLoading] = useState(true)
   const [showShareDialog, setShowShareDialog] = useState(false)
@@ -60,19 +60,30 @@ export default function SharedDataPage() {
     return map
   }, [datasets])
 
-  const resolveName = useCallback((type: string, id: string): string => {
-    if (type === 'dataset') return datasetMap[id] || id.slice(0, 8)
-    return id.slice(0, 8)
-  }, [datasetMap])
+  const resolveName = useCallback(
+    (type: string, id: string): string => {
+      if (type === 'dataset') return datasetMap[id] || id.slice(0, 8)
+      return id.slice(0, 8)
+    },
+    [datasetMap],
+  )
 
-  const resolveWorkspace = useCallback((id: string): string => {
-    return workspaceMap[id] || id.slice(0, 8)
-  }, [workspaceMap])
+  const resolveWorkspace = useCallback(
+    (id: string): string => {
+      return workspaceMap[id] || id.slice(0, 8)
+    },
+    [workspaceMap],
+  )
 
   const fetchShares = useCallback(async () => {
-    if (!currentWorkspace?.id) { setLoading(false); return }
+    if (!currentWorkspace?.id) {
+      setLoading(false)
+      return
+    }
     try {
-      const res = await apiGet<{ data: { shares: Share[] } }>(`/workspaces/${currentWorkspace.id}/shared`)
+      const res = await apiGet<{ data: { shares: Share[] } }>(
+        `/workspaces/${currentWorkspace.id}/shared`,
+      )
       setShares(res?.data?.shares ?? [])
     } catch {
       addToast('Could not load shared data', 'error')
@@ -84,18 +95,26 @@ export default function SharedDataPage() {
   const fetchWorkspaces = useCallback(async () => {
     try {
       const res = await apiGet<{ data: Array<{ id: string; name: string }> }>('/workspaces')
-      setWorkspaces((res?.data ?? []).filter(w => w.id !== currentWorkspace?.id))
-    } catch { /* silent */ }
+      setWorkspaces((res?.data ?? []).filter((w) => w.id !== currentWorkspace?.id))
+    } catch {
+      /* silent */
+    }
   }, [currentWorkspace?.id])
 
   const fetchDatasets = useCallback(async () => {
     try {
       const list = await datasetController.list()
-      setDatasets(list.map(d => ({ id: d.id, name: d.name })))
-    } catch { /* silent */ }
+      setDatasets(list.map((d) => ({ id: d.id, name: d.name })))
+    } catch {
+      /* silent */
+    }
   }, [])
 
-  useEffect(() => { fetchShares(); fetchWorkspaces(); fetchDatasets() }, [fetchShares, fetchWorkspaces, fetchDatasets])
+  useEffect(() => {
+    fetchShares()
+    fetchWorkspaces()
+    fetchDatasets()
+  }, [fetchShares, fetchWorkspaces, fetchDatasets])
 
   const handleShare = async () => {
     if (!shareResourceId.trim() || !shareTargetWs) {
@@ -129,14 +148,15 @@ export default function SharedDataPage() {
     }
   }
 
-  const incoming = shares.filter(s => s.target_workspace_id === currentWorkspace?.id)
-  const outgoing = shares.filter(s => s.source_workspace_id === currentWorkspace?.id)
+  const incoming = shares.filter((s) => s.target_workspace_id === currentWorkspace?.id)
+  const outgoing = shares.filter((s) => s.source_workspace_id === currentWorkspace?.id)
 
   if (loading) {
     return (
-      <PageContainer title="Shared Data"
-      toolbar={<WorkspaceSectionTabs tabs={dataTabs} ariaLabel="Workspace data" />}
-    >
+      <PageContainer
+        title="Shared Data"
+        toolbar={<WorkspaceSectionTabs tabs={dataTabs} ariaLabel="Workspace data" />}
+      >
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -148,7 +168,16 @@ export default function SharedDataPage() {
       title="Shared Data"
       headerRight={
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { fetchShares(); fetchWorkspaces(); fetchDatasets() }}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px]"
+            onClick={() => {
+              fetchShares()
+              fetchWorkspaces()
+              fetchDatasets()
+            }}
+          >
             <RefreshCw className="h-3 w-3 mr-1" /> Refresh
           </Button>
           <Button size="sm" className="h-6 text-[10px]" onClick={() => setShowShareDialog(true)}>
@@ -158,7 +187,6 @@ export default function SharedDataPage() {
       }
       toolbar={<WorkspaceSectionTabs tabs={dataTabs} ariaLabel="Workspace data" />}
     >
-
       {/* Share dialog */}
       {showShareDialog && (
         <Card className="mb-4 border-primary/30">
@@ -169,7 +197,7 @@ export default function SharedDataPage() {
             <div className="flex gap-2">
               <select
                 value={shareType}
-                onChange={e => setShareType(e.target.value)}
+                onChange={(e) => setShareType(e.target.value)}
                 className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
               >
                 <option value="dataset">Dataset</option>
@@ -179,18 +207,20 @@ export default function SharedDataPage() {
               {shareType === 'dataset' ? (
                 <select
                   value={shareResourceId}
-                  onChange={e => setShareResourceId(e.target.value)}
+                  onChange={(e) => setShareResourceId(e.target.value)}
                   className="flex-1 h-6 text-[10px] rounded-md border border-border bg-background px-2"
                 >
                   <option value="">Select dataset...</option>
-                  {datasets.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+                  {datasets.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
                   ))}
                 </select>
               ) : (
                 <Input
                   value={shareResourceId}
-                  onChange={e => setShareResourceId(e.target.value)}
+                  onChange={(e) => setShareResourceId(e.target.value)}
                   placeholder={`${shareType} ID`}
                   className="flex-1 h-6 text-[10px]"
                 />
@@ -199,17 +229,19 @@ export default function SharedDataPage() {
             <div className="flex gap-2">
               <select
                 value={shareTargetWs}
-                onChange={e => setShareTargetWs(e.target.value)}
+                onChange={(e) => setShareTargetWs(e.target.value)}
                 className="flex-1 h-6 text-[10px] rounded-md border border-border bg-background px-2"
               >
                 <option value="">Select workspace...</option>
-                {workspaces.map(w => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
+                {workspaces.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
                 ))}
               </select>
               <select
                 value={sharePermission}
-                onChange={e => setSharePermission(e.target.value)}
+                onChange={(e) => setSharePermission(e.target.value)}
                 className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
               >
                 <option value="read">Read only</option>
@@ -217,8 +249,17 @@ export default function SharedDataPage() {
               </select>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" className="h-6 text-[10px]" onClick={handleShare}>Share</Button>
-              <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setShowShareDialog(false)}>Cancel</Button>
+              <Button size="sm" className="h-6 text-[10px]" onClick={handleShare}>
+                Share
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px]"
+                onClick={() => setShowShareDialog(false)}
+              >
+                Cancel
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -234,25 +275,38 @@ export default function SharedDataPage() {
         </CardHeader>
         <CardContent className="space-y-1">
           {incoming.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground text-center py-4">No data shared with this workspace</p>
+            <p className="text-[10px] text-muted-foreground text-center py-4">
+              No data shared with this workspace
+            </p>
           ) : (
-            incoming.map(s => {
+            incoming.map((s) => {
               const Icon = RESOURCE_ICONS[s.resource_type] || Database
               return (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40">
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
+                      >
                         <Icon className="h-2.5 w-2.5 inline mr-0.5" />
                         {s.resource_type}
                       </span>
-                      <span className="font-medium">{resolveName(s.resource_type, s.resource_id)}</span>
+                      <span className="font-medium">
+                        {resolveName(s.resource_type, s.resource_id)}
+                      </span>
                     </div>
                     <div className="text-muted-foreground mt-0.5 flex items-center gap-1">
-                      From <span className="font-medium">{resolveWorkspace(s.source_workspace_id)}</span> · {s.permission}
+                      From{' '}
+                      <span className="font-medium">{resolveWorkspace(s.source_workspace_id)}</span>{' '}
+                      · {s.permission}
                     </div>
                   </div>
-                  <span className="text-muted-foreground">{new Date(s.shared_at).toLocaleDateString()}</span>
+                  <span className="text-muted-foreground">
+                    {new Date(s.shared_at).toLocaleDateString()}
+                  </span>
                 </div>
               )
             })
@@ -270,27 +324,45 @@ export default function SharedDataPage() {
         </CardHeader>
         <CardContent className="space-y-1">
           {outgoing.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground text-center py-4">No data shared from this workspace</p>
+            <p className="text-[10px] text-muted-foreground text-center py-4">
+              No data shared from this workspace
+            </p>
           ) : (
-            outgoing.map(s => {
+            outgoing.map((s) => {
               const Icon = RESOURCE_ICONS[s.resource_type] || Database
               return (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40">
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
+                      >
                         <Icon className="h-2.5 w-2.5 inline mr-0.5" />
                         {s.resource_type}
                       </span>
-                      <span className="font-medium">{resolveName(s.resource_type, s.resource_id)}</span>
+                      <span className="font-medium">
+                        {resolveName(s.resource_type, s.resource_id)}
+                      </span>
                     </div>
                     <div className="text-muted-foreground mt-0.5 flex items-center gap-1">
-                      To <span className="font-medium">{resolveWorkspace(s.target_workspace_id)}</span> · {s.permission}
+                      To{' '}
+                      <span className="font-medium">{resolveWorkspace(s.target_workspace_id)}</span>{' '}
+                      · {s.permission}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{new Date(s.shared_at).toLocaleDateString()}</span>
-                    <Button size="sm" variant="ghost" className="h-5 text-[9px] text-destructive" onClick={() => handleRevoke(s.id)}>
+                    <span className="text-muted-foreground">
+                      {new Date(s.shared_at).toLocaleDateString()}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 text-[9px] text-destructive"
+                      onClick={() => handleRevoke(s.id)}
+                    >
                       Revoke
                     </Button>
                   </div>
