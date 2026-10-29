@@ -60,9 +60,14 @@ export const MessageContent = memo(function MessageContent({
     return highlightText(content, searchQuery)
   }, [content, searchQuery])
 
+  // Loading UI is gated by the explicit `isStreaming` boolean — never inferred
+  // from content emptiness (a persisted empty message or an error-cleared one
+  // is not "loading"). Empty + streaming + assistant → dots; otherwise → null.
   if (!hasContent) {
-    if (role === 'assistant') {
+    if (isStreaming && role === 'assistant') {
       return (
+        // aria-hidden: the bubble already carries aria-live="polite" while
+        // streaming, so these decorative dots must not be announced twice.
         <div className="flex gap-1 items-center h-5" aria-hidden="true">
           <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0ms]" />
           <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:150ms]" />
