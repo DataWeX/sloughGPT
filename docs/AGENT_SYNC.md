@@ -884,7 +884,29 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `405fe62b9`)
+## Landed on main (origin/main = `8d1aa1ccf`)
+
+- **2026-10-29 14:27Z · PR #247 `feat/meta-trainer` → MERGED (`8d1aa1ccf`)** —
+  StepStrategy seam + MetaTrainer strategy host: `SloughGPTTrainer.train_step`
+  runs a `StepStrategy` list at the loss→backward point; legacy EWC + owned
+  objective wrapped as adapters (identical order, `owned_` namespace, EWC
+  guards empty snapshots → byte-identical metrics when unused); `MetaTrainer`
+  is a thin host (`with_ewc`/`with_distillation`), no second loop, no phase
+  scheduling (that stays with `ComprehensiveTrainer`); distillation computes
+  temperature-scaled soft KL on SloNet tensors (`DistillationLoss`'s float
+  boundary cannot carry gradients), teacher under `no_grad`. **Validation:**
+  ruff/format clean, mypy 0 new (16 pre-existing at ≥L1616), 376 tests
+  (11 new `test_meta_trainer.py` + 365 train/EWC/feedback parity), benchmark
+  A/B vs pristine origin/main: identical final losses (gate 0.0000 / tiny
+  3.0006 / small 2.3953), s/s within run noise. **Born-red at merge time**
+  (all pre-exist on main, independent of this Python-only diff):
+  `test_dataclass_fields` + `test_returns_stored_messages` — the
+  stable-message-ids lane added `id` to `MessageData` while its CI was
+  cancelled pre-merge, leaving stale field-set expectations — plus the known
+  `test_ctrl_c_interrupts_running_command` pty flake; same test-core-py job
+  that was already red on main's own `9643c69ee` run. Frontend unit tests
+  (`vi.mock` http-client `apiGet` gap, zero TS in this diff) rerun still
+  pending at merge.
 
 - **2026-10-29 00:31Z · PR #192 `feat/error-funnel` → MERGED (`405fe62b`)** — error
   funnel (`addGlobalError` single entry → banner/toast/state-event/backend),
