@@ -1,5 +1,6 @@
 #!/bin/sh
-# pre-push guards — CI format parity + board done-row guard (cards ca7d10ff, 6179df70).
+# pre-push guards — CI format parity + board done-row guard (cards ca7d10ff, 6179df70)
+#                  + board chain guard (card 20261029).
 #
 # GUARD 1 — format parity. CI (.github/workflows/ci_cd.yml) runs:
 #     ruff format --check packages/core-py/ apps/api/server/   (ruff==0.16.8)
@@ -12,6 +13,14 @@
 # card whose work LANDED silently reverts done -> todo. scripts/
 # check_board_reopen.py blocks ranges that move cards out of `done` without
 # a `board-reopen: <id-prefix>` marker in a pushed commit message.
+#
+# GUARD 3 — board integrity (schema + unique ids + hash chain). Merge
+# 5e5c8ce36 union-merged two board versions onto main: 975 duplicate rows,
+# chain broken at every index, schema header dragged to EOF — landed
+# silently because nothing verified the REAL file (card 20261029).
+# scripts/check_board_chain.py runs on the PUSHED blob whenever the range
+# touches the board; the always-on CI job 'Board integrity' is the hard
+# backstop for boards that arrive by merge instead of push.
 #
 # - One toolchain, one verdict: resolves ruff through scripts/python (the
 #   shared conda-env wrapper), the same interpreter CI pins.
