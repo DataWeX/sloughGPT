@@ -859,7 +859,32 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `405fe62b9`)
+## Landed on main (origin/main = `388a2bba9`)
+
+- **2026-10-29 04:15Z · PR #240 `feat/banner-live-state` → MERGED (`1412e38b`)** —
+  card `87345605`, seven global-banner / live-connection defects (L1–L7): every
+  Retry goes through one shared seam `probeBackendAndRevalidate()`
+  (`apps/web/lib/backend-retry.ts` — re-probe + SWR revalidate, never
+  `location.reload()`); ink contract = banner paints a pure `--background`
+  surface, tone enters only via
+  `color-mix(in srgb, rgb(var(--banner-tone)) 35%, rgb(var(--foreground)))` +
+  35/65 tone/background border — all 8 tone×mode combos ≥7.77:1 measured
+  in-browser; every token reference wrapped `rgb()` (bare `var()` inside
+  `color-mix` broke under alpha tokens); offline escalation counts real
+  failures (`OFFLINE_ESCALATION_FAILURES = 2`, `OFFLINE_BANNER_GRACE_MS = 5000`)
+  instead of timer ticks; error badge cached `ERROR_BADGE_TTL_MS = 10min`.
+  Origin/main moved under us (PRs #236/#237 overlapped `globals.css` /
+  `StatusBar.tsx`, auto-merged clean). **Gates on merged tree:** tsc 0, eslint
+  0 errors (13 pre-existing warnings), prettier clean, scoped vitest 88/88,
+  full `apps/web` 7848 tests green. **Pitfalls:** (1) repo stashes are SHARED
+  across all worktrees — a concurrent session popped ours between push and pop,
+  and our blind `git pop` dropped theirs (harmless only because the content was
+  already in HEAD; see Gotchas); (2) a parallel session committed `bf26c5495`
+  onto our branch mid-lane (foreign `developer/page.tsx` 12rem→14rem) —
+  captured to `/tmp/bf26c5495-captured.patch`, branch reset to pushed tip;
+  (3) card moved to done via `KanbanStore.move_card` with the legacy
+  `todo`/`done` vocabulary — accepted, maps to raw columns, no engine
+  rejection.
 
 - **2026-10-29 00:31Z · PR #192 `feat/error-funnel` → MERGED (`405fe62b`)** — error
   funnel (`addGlobalError` single entry → banner/toast/state-event/backend),
@@ -1671,6 +1696,15 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
 
 ## Gotchas that cost hours (add yours here)
 
+- **Repo `git stash` is shared across ALL worktrees — read the message before
+  you pop.** Stashes are repo-global, not worktree-scoped: between our push and
+  our pop a concurrent session had already taken OUR entry (its reflog slot
+  vanished silently), so `stash@{0}` was now THEIRS — a "RESCE" rescue stash
+  with a do-not-discard marker — and a blind `git stash pop` dropped it. Cost
+  hours of archaeology; harmless only because the content was already in HEAD
+  (object still in the DB). Rule: `git stash list`, read the top entry's
+  message and diff, and only pop if it is unmistakably yours; to hand work
+  across sessions safely, commit to a branch instead of a stash.
 - **Stale `main` behind a foreign worktree is untouchable.** `main` may be
   checked out by another session's worktree with hundreds of uncommitted
   changes; git refuses checkout/merge/reset there and you must not disturb it.
