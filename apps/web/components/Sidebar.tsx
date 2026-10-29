@@ -1,7 +1,7 @@
 'use client'
 
-import Link from '@/vite/next-compat/link'
-import { usePathname } from '@/vite/next-compat/navigation'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconClose } from '@/components/icons/NavIcons'
 import { ManMark } from '@/components/brand/ManMark'

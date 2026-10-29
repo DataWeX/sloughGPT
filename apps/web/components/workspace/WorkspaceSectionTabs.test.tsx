@@ -4,11 +4,11 @@ import type { ReactNode } from 'react'
 
 const pathname = vi.fn(() => '/workspace')
 
-vi.mock('@/vite/next-compat/navigation', () => ({
+vi.mock('next/navigation', () => ({
   usePathname: () => pathname(),
 }))
 
-vi.mock('@/vite/next-compat/link', () => ({
+vi.mock('next/link', () => ({
   default: ({ href, children, className, ...rest }: Record<string, unknown>) => {
     const { prefetch: _p, ...anchor } = rest
     return (
