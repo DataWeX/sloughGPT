@@ -512,7 +512,7 @@ html {
   gap: 0.25rem;
   padding: 0.125rem 0.375rem;
   border-radius: 9999px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -535,11 +535,9 @@ html {
 .sl-badge-primary {
   background-color: color-mix(in srgb, rgb(var(--primary)) 10%, transparent);
   color: rgb(var(--primary));
-  opacity: 0.8;
 }
 .sl-badge-primary:hover {
   background-color: color-mix(in srgb, rgb(var(--primary)) 18%, transparent);
-  opacity: 1;
 }
 .sl-badge-secondary {
   background-color: color-mix(in srgb, rgb(var(--muted-foreground)) 10%, transparent);
@@ -1226,6 +1224,7 @@ html.dark.theme-blue {
 }
 html.dark.theme-blue {
   --secondary: 38 48 72;
+  --secondary-foreground: 230 237 250;
   --muted: 30 38 58;
   --border: 44 56 80;
   --input: 44 56 80;
@@ -1244,6 +1243,7 @@ html.dark.theme-purple {
 }
 html.dark.theme-purple {
   --secondary: 50 40 72;
+  --secondary-foreground: 240 232 252;
   --muted: 40 34 58;
   --border: 58 48 80;
   --input: 58 48 80;
@@ -1262,6 +1262,7 @@ html.dark.theme-pink {
 }
 html.dark.theme-pink {
   --secondary: 62 40 52;
+  --secondary-foreground: 250 234 242;
   --muted: 50 34 44;
   --border: 72 48 62;
   --input: 72 48 62;
@@ -1280,6 +1281,7 @@ html.dark.theme-red {
 }
 html.dark.theme-red {
   --secondary: 62 38 42;
+  --secondary-foreground: 250 234 236;
   --muted: 50 32 36;
   --border: 72 46 50;
   --input: 72 46 50;
@@ -1298,6 +1300,7 @@ html.dark.theme-orange {
 }
 html.dark.theme-orange {
   --secondary: 62 48 34;
+  --secondary-foreground: 250 240 230;
   --muted: 50 40 28;
   --border: 72 56 40;
   --input: 72 56 40;
@@ -1316,6 +1319,7 @@ html.dark.theme-green {
 }
 html.dark.theme-green {
   --secondary: 34 56 44;
+  --secondary-foreground: 232 248 240;
   --muted: 28 46 38;
   --border: 42 66 52;
   --input: 42 66 52;
@@ -1334,6 +1338,7 @@ html.dark.theme-teal {
 }
 html.dark.theme-teal {
   --secondary: 34 50 62;
+  --secondary-foreground: 232 244 250;
   --muted: 28 42 52;
   --border: 42 60 72;
   --input: 42 60 72;
