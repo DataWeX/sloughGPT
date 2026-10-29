@@ -41,7 +41,7 @@ vi.mock('@/lib/training-facade', () => ({
 }))
 
 vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (e: unknown, fallback: string) =>
+  extractErrorMessage: (e: unknown, fallback = 'Unknown error') =>
     e instanceof Error ? e.message : fallback,
 }))
 
