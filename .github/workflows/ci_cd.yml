@@ -233,7 +233,7 @@ jobs:
 
       - name: Lint
         working-directory: apps/web
-        run: npx eslint .
+        run: npx eslint . --max-warnings 900
 
       - name: Typecheck
         working-directory: apps/web

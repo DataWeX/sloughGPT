@@ -331,7 +331,7 @@ function SidebarContent({
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') setSortOpen(false)
                   }}
-                  className="absolute left-0 top-full mt-1 z-50 bg-background border border-border/60 rounded-lg shadow-lg py-1 min-w-36"
+                  className="absolute left-0 top-full mt-1 z-50 bg-background border border-border/60 rounded-lg shadow-md py-1 min-w-36"
                 >
                   {(
                     [

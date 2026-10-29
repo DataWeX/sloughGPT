@@ -19,6 +19,10 @@ Usage::
     avion agent "sign in and search" --soul model.soul --profile x  # our model drives the loop
     avion repl --record flow.json      # author a flow by driving; avion run completes it
     avion repl
+    avion record http://x/ --out rec/ --fps 3 --target element --selector "#app"
+    avion stop rec/                    # recover a recording whose process died
+    avion view rec/                    # one self-contained HTML player (scrubber + boxes)
+    avion export rec/ --mp4            # capability-gated: needs imageio-ffmpeg
 
 One invocation = one CDP session, but ``console``/``network`` keep history:
 each session appends what it captured to a per-endpoint store, and ``open``
@@ -265,6 +269,37 @@ async def _cmd_network(b, as_json: bool, history: list[dict[str, Any]] | None = 
     return 0
 
 
+async def _repl_loop(backend, recorder=None, session=None) -> None:
+    """Read verb-args lines until quit — shared by ``repl`` and ``record``.
+
+    Teardown belongs to the caller (each command finalizes its own artifacts);
+    this only drives dispatch, so recording gets the exact same verb
+    semantics as a plain REPL session.
+    """
+    while True:
+        try:
+            line = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: sys.stdin.readline()
+            )
+        except (EOFError, KeyboardInterrupt):
+            break
+        if not line:
+            break
+        line = line.strip()
+        if not line:
+            continue
+        if line in ("quit", "exit", "q"):
+            break
+        try:
+            code = await _dispatch(
+                backend, shlex.split(line), in_session=True, recorder=recorder, session=session
+            )
+        except SystemExit as e:
+            code = int(e.code or 1)
+        if code:
+            print(f"(exit {code})")
+
+
 async def _cmd_repl(cdp_url: str, record_path: str | None = None) -> int:
     """Persistent session: read verb-args lines until quit."""
     from avion.backends.cdp import CdpBackend
@@ -285,28 +320,7 @@ async def _cmd_repl(cdp_url: str, record_path: str | None = None) -> int:
     else:
         print(f"avion repl — connected to {cdp_url} (quit to exit)")
     try:
-        while True:
-            try:
-                line = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: sys.stdin.readline()
-                )
-            except (EOFError, KeyboardInterrupt):
-                break
-            if not line:
-                break
-            line = line.strip()
-            if not line:
-                continue
-            if line in ("quit", "exit", "q"):
-                break
-            try:
-                code = await _dispatch(
-                    backend, shlex.split(line), in_session=True, recorder=recorder
-                )
-            except SystemExit as e:
-                code = int(e.code or 1)
-            if code:
-                print(f"(exit {code})")
+        await _repl_loop(backend, recorder=recorder)
     finally:
         await backend.stop()
         _persist_events(cdp_url, backend)
@@ -316,14 +330,38 @@ async def _cmd_repl(cdp_url: str, record_path: str | None = None) -> int:
     return 0
 
 
-async def _dispatch(backend, argv: list[str], in_session: bool = False, recorder=None) -> int:
-    """Run one command against an existing backend (repl path)."""
+def _stamp(session, data: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Event data carrying the shared-clock stamp — passthrough without a session."""
+    if session is None:
+        return data
+    return session.stamp(data)
+
+
+async def _event_rect(session, backend, locator) -> dict[str, Any] | None:
+    """Element rect for a recorded event; None when not recording or unresolvable."""
+    if session is None:
+        return None
+    try:
+        return await session.event_rect(backend, locator)
+    except Exception:
+        return None  # rect is overlay sugar — never fail a verb over it
+
+
+async def _dispatch(
+    backend, argv: list[str], in_session: bool = False, recorder=None, session=None
+) -> int:
+    """Run one command against an existing backend (repl/record path).
+
+    ``session`` is a RecordingSession: when present, replayable events are
+    stamped with the shared clock (``_t_ns``) and click/fill resolve their
+    element rect so box derivation has per-event geometry.
+    """
     verb, rest = argv[0], argv[1:]
     if verb == "open" and len(rest) >= 1:
         code = await _cmd_open(backend, rest[0])
         rec = _replayable(recorder, code)
         if rec is not None:
-            rec.record(EventType.NAVIGATE, name=rest[0])
+            rec.record(EventType.NAVIGATE, name=rest[0], data=_stamp(session))
         return code
     if verb == "snapshot":
         return await _cmd_snapshot(backend)
@@ -338,8 +376,16 @@ async def _dispatch(backend, argv: list[str], in_session: bool = False, recorder
             # recordings, so replay settles after submits instead of
             # racing them. Unparseable (xpath) names are skipped as
             # noise by replay itself.
-            rec.record(EventType.ELEMENT_FOUND, name=loc.describe())
-            rec.record(EventType.CLICK, name=loc.describe())
+            rec.record(EventType.ELEMENT_FOUND, name=loc.describe(), data=_stamp(session))
+            click_rect = await _event_rect(session, backend, loc)
+            click_data: dict[str, Any] = {}
+            if click_rect is not None:
+                click_data["rect"] = click_rect
+            rec.record(
+                EventType.CLICK,
+                name=loc.describe(),
+                data=_stamp(session, click_data),
+            )
         return code
     if verb == "fill" and len(rest) >= 2:
         by, rest = _pop_by(rest)
@@ -347,8 +393,12 @@ async def _dispatch(backend, argv: list[str], in_session: bool = False, recorder
         rec = _replayable(recorder, code)
         if rec is not None:
             loc = _locator(rest[0], by)
-            rec.record(EventType.ELEMENT_FOUND, name=loc.describe())
-            rec.record(EventType.FILL, name=loc.describe(), data={"value": rest[1]})
+            rec.record(EventType.ELEMENT_FOUND, name=loc.describe(), data=_stamp(session))
+            rect = await _event_rect(session, backend, loc)
+            data: dict[str, Any] = {"value": rest[1]}
+            if rect is not None:
+                data["rect"] = rect
+            rec.record(EventType.FILL, name=loc.describe(), data=_stamp(session, data))
         return code
     if verb == "wait" and len(rest) >= 1:
         timeout = 10.0
@@ -361,7 +411,15 @@ async def _dispatch(backend, argv: list[str], in_session: bool = False, recorder
         if rec is not None:
             from avion.core.element import ElementLocator
 
-            rec.record(EventType.ELEMENT_FOUND, name=ElementLocator.text(rest[0]).describe())
+            # Shared-clock stamp: the wait's discovery lands on the SAME
+            # monotonic axis as frames and every other event, so the viewer
+            # aligns this step too (an unstamped step falls back to the
+            # previous mapping — degraded, not broken).
+            rec.record(
+                EventType.ELEMENT_FOUND,
+                name=ElementLocator.text(rest[0]).describe(),
+                data=_stamp(session),
+            )
         return code
     if verb == "shot" and len(rest) >= 1:
         return await _cmd_shot(backend, rest[0])
@@ -565,6 +623,158 @@ async def _cmd_agent(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+# ── recording commands ──────────────────────────────────────────────────
+
+
+def _cmd_stop(args: argparse.Namespace) -> int:
+    """Close a recording dir: derive boxes from what's on disk, finalize.
+
+    The recovery path for a ``record`` process that died before finishing —
+    boxes are derived data, so this never touches the frames.
+    """
+    from avion.recording import RecordingArtifact, rebuild_boxes
+
+    try:
+        artifact = RecordingArtifact.load(args.dir)
+    except FileNotFoundError as e:
+        return _fail(str(e))
+    except (OSError, ValueError) as exc:
+        return _fail(f"stop: {exc}")
+    summary = rebuild_boxes(artifact, completed=True)
+    print(
+        f"stopped: {summary['frame_count']} frames \u00b7 "
+        f"{summary['event_count']} events \u00b7 {summary['box_count']} boxes "
+        f"-> {args.dir}"
+    )
+    return 0
+
+
+def _cmd_view(args: argparse.Namespace) -> int:
+    """Render a recording into ONE self-contained HTML viewer (file:// safe)."""
+    from avion.flow import build_flow, save_html
+    from avion.flow.viewer import RecordingData
+    from avion.recording import RecordingArtifact, rebuild_boxes
+
+    try:
+        artifact = RecordingArtifact.load(args.dir)
+    except FileNotFoundError as e:
+        return _fail(str(e))
+    except (OSError, ValueError) as exc:
+        return _fail(f"view: {exc}")
+    if artifact.frames and not artifact.boxes_path.exists():
+        # boxes.jsonl is derived — rebuild rather than render a blind player.
+        rebuild_boxes(artifact, completed=False)
+        artifact = RecordingArtifact.load(args.dir)
+    payload = artifact.read_events()
+    graph = build_flow(
+        payload.get("events", []),
+        session_name=payload.get("session", "") or str(artifact.manifest.get("id", "")),
+    )
+    recording = RecordingData.from_artifact(artifact)
+    out = Path(args.out) if args.out else artifact.root / "viewer.html"
+    save_html(graph, str(out), recording=recording)
+    # Summarize, don't dump: one line, the numbers that matter.
+    print(
+        f"wrote {out} ({len(recording.frames)} frames \u00b7 "
+        f"{len(graph.steps)} steps \u00b7 {recording.box_count} boxes"
+        + (f" \u00b7 {recording.truncated} frames omitted" if recording.truncated else "")
+        + ")"
+    )
+    return 0
+
+
+def _cmd_export(args: argparse.Namespace) -> int:
+    """Capability-gated export: mp4 when the encoder exists, a stated reason
+    when it doesn't — never a traceback, never a silent no-op."""
+    from avion.recording import export_mp4, export_summary
+
+    if args.mp4 is None:
+        report = export_summary(Path(args.dir))
+        if not report.get("ok"):
+            return _fail(str(report.get("error") or "export failed"))
+        if args.json:
+            print(json.dumps(report, indent=2))
+            return 0
+        mp4 = "mp4 ready" if report.get("mp4") else str(report.get("error", "mp4 unavailable"))
+        print(
+            f"{args.dir}: {report.get('frames', 0)} frames \u00b7 "
+            f"{report.get('events', 0)} events \u00b7 {report.get('boxes', 0)} boxes "
+            f"\u00b7 {mp4}"
+        )
+        return 0
+    out = Path(args.mp4) if args.mp4 else None
+    result = export_mp4(Path(args.dir), out, rebuild=bool(args.rebuild))
+    if not result.get("ok"):
+        # Exact capability message, verbatim (contract-tested) — no prefix,
+        # no decoration: the reason IS the report.
+        print(str(result.get("error") or "export failed"), file=sys.stderr)
+        return 1
+    print(f"wrote {result['out']} ({result['frames']} frames @ {result['fps']:g} fps)")
+    return 0
+
+
+async def _cmd_record(args: argparse.Namespace) -> int:
+    """Drive verbs while sampling frames into a recording artifact."""
+    from avion.backends.cdp import CdpBackend
+    from avion.events.recorder import EventRecorder
+    from avion.recording import RecordingSession, new_recording_id
+
+    out = Path(args.out) if args.out else Path("recordings") / new_recording_id()
+    try:
+        session = RecordingSession(
+            out,
+            fps=args.fps,
+            target=args.target,
+            rect=args.rect,
+            selector=args.selector,
+            by=args.by,
+        )
+    except ValueError as e:
+        return _fail(str(e))
+
+    backend = CdpBackend(cdp_url=args.cdp)
+    try:
+        await backend.start()
+    except Exception as e:
+        print(f"avion: cannot reach Chromium at {args.cdp}: {e}", file=sys.stderr)
+        print(_HINT, file=sys.stderr)
+        return 2
+
+    recorder = EventRecorder(session_name=f"record:{session.recording_id}")
+    summary: dict[str, Any] = {"ok": False, "error": "recording never began"}
+    fatal: str = ""
+    try:
+        await session.begin(backend, recorder, url=args.url)
+        print(
+            f"avion record — target={args.target} @ {session.fps:g} fps "
+            f"-> {session.artifact.root} (quit to stop)"
+        )
+        await _repl_loop(backend, recorder=recorder, session=session)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        fatal = str(e)
+        print(f"avion: record failed: {e}", file=sys.stderr)
+    finally:
+        if session.artifact is not None:
+            # Close the artifact even after a mid-run failure: the frames on
+            # disk are real, and stop/view can still derive boxes from them.
+            summary = session.finalize(recorder)
+        await backend.stop()
+        _persist_events(args.cdp, backend)
+    if fatal:
+        return _fail(fatal)
+    if not summary.get("ok"):
+        return _fail(str(summary.get("error") or "recording failed"))
+    print(
+        f"recorded {summary['frames_written']} frames "
+        f"({summary.get('dropped_frames', 0)} dropped) \u00b7 "
+        f"{summary['event_count']} events \u00b7 {summary['box_count']} boxes "
+        f"-> {summary['path']}"
+    )
+    return 0
+
+
 # ── parser / entry ──────────────────────────────────────────────────────
 
 
@@ -612,6 +822,57 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="record successful verbs into a flow file avion run can complete",
     )
+
+    sp = sub.add_parser(
+        "record",
+        help="record frames + events into a viewer-ready recording artifact",
+        description=(
+            "Samples 2-5 fps frames on its own thread while you drive verbs "
+            "in a REPL (same verbs as `avion repl`). Quit to finalize; "
+            "`avion view <dir>` renders the player, `avion stop <dir>` "
+            "recovers a recording whose process died."
+        ),
+    )
+    sp.add_argument("url", nargs="?", default=None, help="optional page to open first")
+    sp.add_argument("--out", default=None, help="artifact dir (default: recordings/<id>)")
+    sp.add_argument("--fps", type=float, default=3.0, help="frame rate, clamped to 2-5")
+    sp.add_argument(
+        "--target",
+        default="full",
+        choices=["full", "rect", "element"],
+        help="capture target: full frame, --rect crop, or one element",
+    )
+    sp.add_argument("--rect", default=None, metavar="X,Y,W,H", help="crop rect (--target rect)")
+    sp.add_argument("--selector", default=None, help="element selector (--target element)")
+    sp.add_argument(
+        "--by",
+        default="css",
+        choices=["css", "text", "testid", "label", "role", "xpath"],
+        help="selector strategy for --target element",
+    )
+
+    sp = sub.add_parser("stop", help="finalize a recording dir (derive boxes, close manifest)")
+    sp.add_argument("dir", help="recording artifact directory")
+
+    sp = sub.add_parser("view", help="render a recording into one self-contained HTML viewer")
+    sp.add_argument("dir", help="recording artifact directory")
+    sp.add_argument("--out", default=None, help="output HTML (default: <dir>/viewer.html)")
+
+    sp = sub.add_parser(
+        "export",
+        help="export a recording (mp4 is capability-gated: needs imageio-ffmpeg)",
+    )
+    sp.add_argument("dir", help="recording artifact directory")
+    sp.add_argument(
+        "--mp4",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="OUT",
+        help="encode to mp4 (default <dir>/export.mp4); without it: a capability report",
+    )
+    sp.add_argument("--rebuild", action="store_true", help="re-derive boxes before encoding")
+    sp.add_argument("--json", action="store_true", help="print the capability report as JSON")
 
     sp = sub.add_parser("launch", help="start a persistent-profile browser")
     sp.add_argument("--profile", default="default", help="named profile (logins persist in it)")
@@ -705,6 +966,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "repl":
         return asyncio.run(_cmd_repl(args.cdp, record_path=args.record))
+    if args.cmd == "record":
+        return asyncio.run(_cmd_record(args))
+    if args.cmd == "stop":
+        return _cmd_stop(args)
+    if args.cmd == "view":
+        return _cmd_view(args)
+    if args.cmd == "export":
+        return _cmd_export(args)
     if args.cmd == "launch":
         return _cmd_launch(args)
     if args.cmd == "run":

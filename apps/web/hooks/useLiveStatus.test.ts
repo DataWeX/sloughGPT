@@ -453,3 +453,112 @@ describe('initLiveStatus', () => {
     }
   })
 })
+
+describe('offline escalation & drop honesty (card 87345605)', () => {
+  let streamConfig: any
+
+  beforeEach(() => {
+    streamConfig = null
+    mocks.createSSEStream.mockImplementation((cfg: any) => {
+      streamConfig = cfg
+      return { start: vi.fn(), stop: vi.fn() }
+    })
+    mocks.getDetailedHealth.mockResolvedValue(null)
+    liveStatusStore.setState({
+      connectionStatus: 'connecting',
+      health: null,
+      healthLegacy: null,
+      lastUpdate: null,
+      failureCount: 0,
+      lastError: null,
+    })
+  })
+
+  it('escalates to offline after two consecutive stream errors', () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onError(new Error('stream failed'))
+    expect(liveStatusStore.getState().connectionStatus).toBe('connecting')
+    streamConfig.onError(new Error('stream failed'))
+    // Second consecutive failure = a real drop, not a hiccup. The Retry UI
+    // (and its probe path) hangs off this state — before the fix nothing in
+    // production ever emitted 'offline', so the offline UI was unreachable.
+    expect(liveStatusStore.getState().connectionStatus).toBe('offline')
+    cleanup()
+  })
+
+  it('escalates to offline after repeated fallback-poll failures', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.getDetailedHealth.mockResolvedValue(null)
+      const cleanup = initLiveStatus()
+      streamConfig.onClose()
+      await vi.advanceTimersByTimeAsync(25_000)
+      expect(liveStatusStore.getState().failureCount).toBeGreaterThanOrEqual(2)
+      expect(liveStatusStore.getState().connectionStatus).toBe('offline')
+      cleanup()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers to connected when a poll succeeds after offline', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.getDetailedHealth.mockResolvedValue(null)
+      const cleanup = initLiveStatus()
+      streamConfig.onClose()
+      await vi.advanceTimersByTimeAsync(25_000)
+      expect(liveStatusStore.getState().connectionStatus).toBe('offline')
+
+      mocks.getDetailedHealth.mockResolvedValue({
+        model_loaded: true,
+        model_type: 'gpt2',
+        soul: 'friendly',
+        health_score: { score: 90, status: 'healthy' },
+        num_parameters: 124000000,
+        inference: { inference_count: 3, is_inferencing: false },
+        model_metrics: [],
+        path_latencies: [],
+        recent_errors: [],
+        model_events: [],
+        rate_violations: [],
+        health_history: [],
+        memory_history: [],
+      } as any)
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(liveStatusStore.getState().connectionStatus).toBe('connected')
+      cleanup()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps last known health across an SSE drop', async () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_type: 'qwen', health_status: 'healthy' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(liveStatusStore.getState().health).not.toBeNull()
+    streamConfig.onClose()
+    // The drop changes connection status only — the last snapshot must
+    // survive so the status bar can say "Reconnecting" WITH the model it
+    // lost instead of flashing an empty "No model".
+    expect(liveStatusStore.getState().health).not.toBeNull()
+    cleanup()
+  })
+
+  it('does not wipe health when the stream reopens', async () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_type: 'qwen', health_status: 'healthy' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    streamConfig.onOpen()
+    expect(liveStatusStore.getState().health).not.toBeNull()
+    expect(liveStatusStore.getState().connectionStatus).toBe('connected')
+    cleanup()
+  })
+})

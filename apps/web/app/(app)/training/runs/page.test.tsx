@@ -283,7 +283,9 @@ describe('TrainingRunsPage', () => {
     await waitFor(() => {
       expect(mockAddGlobalError).toHaveBeenCalledWith(expect.any(Error), 'TrainingRuns')
     })
-    expect(screen.getByText('No training runs found.')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('No training runs found.')).toBeTruthy()
+    })
   })
 
   it('shows tags on run cards when present', async () => {

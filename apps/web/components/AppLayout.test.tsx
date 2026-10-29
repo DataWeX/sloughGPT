@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
 const mockPathname = '/chat'
@@ -130,6 +130,7 @@ vi.mock('@/lib/api-monitor-store', () => ({
 
 vi.mock('@/hooks/useGlobalShortcuts', () => ({ useGlobalShortcuts: vi.fn() }))
 vi.mock('@/hooks/useLiveStatus', () => ({ initLiveStatus: vi.fn(() => vi.fn()) }))
+vi.mock('@/lib/backend-retry', () => ({ probeBackendAndRevalidate: vi.fn() }))
 
 import AppLayout from './AppLayout'
 
@@ -227,20 +228,82 @@ describe('AppLayout', () => {
     expect(main).toBeDefined()
   })
 
-  it('shows reloading banner when apiStatus is reloading', () => {
-    mockApiMonitor.status = 'reloading'
-    render(
-      <AppLayout>
-        <div />
-      </AppLayout>,
-    )
-    // The restarting notice now flows through the single banner surface
-    // (useBannerStore + <GlobalBanner />), so its title and message are
-    // separate structured nodes rather than one flat text node.
-    const banner = screen.getByRole('alert')
-    expect(banner.textContent).toContain('Backend restarting — reconnecting…')
-    expect(banner.getAttribute('data-tone')).toBe('warning')
-    mockApiMonitor.status = 'connected'
+  it('raises the backend-down banner after the grace period when the connection drops', () => {
+    vi.useFakeTimers()
+    try {
+      mockApiMonitor.status = 'offline'
+      render(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      // Grace: a single failed poll must not flash a banner.
+      expect(screen.queryByRole('alert')).toBeNull()
+      act(() => {
+        vi.advanceTimersByTime(5_000)
+      })
+      const banner = screen.getByRole('alert')
+      expect(banner.textContent).toContain('Backend unreachable')
+      expect(banner.getAttribute('data-tone')).toBe('destructive')
+      expect(banner.textContent).toContain('Retry')
+    } finally {
+      vi.useRealTimers()
+      mockApiMonitor.status = 'connected'
+    }
+  })
+
+  it('never raises the drop banner for a blip that recovers within the grace period', () => {
+    vi.useFakeTimers()
+    try {
+      mockApiMonitor.status = 'offline'
+      const { rerender } = render(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      act(() => {
+        vi.advanceTimersByTime(3_000)
+      })
+      mockApiMonitor.status = 'connected'
+      rerender(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      act(() => {
+        vi.advanceTimersByTime(10_000)
+      })
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+      mockApiMonitor.status = 'connected'
+    }
+  })
+
+  it('clears the drop banner when the connection recovers', () => {
+    vi.useFakeTimers()
+    try {
+      mockApiMonitor.status = 'offline'
+      const { rerender } = render(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      act(() => {
+        vi.advanceTimersByTime(5_000)
+      })
+      expect(screen.getByRole('alert')).toBeTruthy()
+      mockApiMonitor.status = 'connected'
+      rerender(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+      mockApiMonitor.status = 'connected'
+    }
   })
 
   it('closes mobile nav on pathname change', () => {

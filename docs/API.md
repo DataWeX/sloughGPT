@@ -61,7 +61,7 @@ both shells at the same endpoints, never by giving one shell a private path.
 | ------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | Health       | `/health`, `/health/live`, `/health/ready`, `/health/detailed`, `/health/startup-progress`, `/health/services` | liveness/readiness, phase progress    |
 | System state | `/system/metrics`, `/system/info`, `/system/disk`, `/system/lifecycle`, `/system/inference-pool`               | server state read-model               |
-| Streaming    | `/system/stream` (SSE output), `/chat` (SSE chat), `/errors/stream`, `/training/stream`                        | live state + generation               |
+| Streaming    | `/system/stream` (SSE output), `/chat` (SSE chat), `/errors/stream`, `/training/stream`                         | live state + generation               |
 | Feeds        | `/training/feed`, `/training/feeds`, `/training/live-stream` (SSE)                                             | live training corpus + arrival stream |
 | Executor     | `/system/executor`, `/system/executor/{job_id}`, `/result`, `/purge`, `/cancel`                                | training job pool                     |
 | Core flows   | `/chat`, `/inference/*`, `/models/*`, `/session/*`, `/knowledge`, `/memory`, `/settings/*`                     | feature surface shared by both shells |

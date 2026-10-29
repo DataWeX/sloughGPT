@@ -29,6 +29,9 @@ exact heading from this document as its `spec`, and
 a flow loses its anchor. Run them with
 `.venv/bin/python -m domain.journeys` (`--list` shows ids + spec links;
 `--flow <id>` for one; the live sweep needs a running stack).
+**Exception:** flow 14 is doc-only for now — the plugins journey has no
+executable sweep yet. The gate checks registry→doc anchors, so an
+unregistered heading is allowed; register it when the sweep exists.
 
 ---
 
@@ -351,6 +354,62 @@ a flow loses its anchor. Run them with
 - Save/load training configs
 - View detailed loss chart with step numbers
 - Compare checkpoints side by side
+
+---
+
+### 13. Manage My Work (Kanban Board)
+
+**What the user sees:**
+
+- One board with their cards in simple columns: Inbox → Ready → Doing → Review → Verify → Done
+- Cards can be moved forward or back; the board tells them right away if a move makes sense
+- Blocked cards sit in their own lane so nothing gets lost
+- A warning when a column is getting too full (WIP limit), in plain words
+- A refresh button if the board looks stale
+
+**User flow:**
+
+1. Open the kanban page → the board loads with their cards in each column
+2. Pick a card → see which columns it may legally move to
+3. Move it (e.g. Ready → Doing) → the move is accepted or rejected with a short reason
+4. If blocked: move it to Blocked, add context, unblock it when ready
+5. Keep moving cards until everything sits in Done
+
+**What they should NOT see:**
+
+- Transition rule tables or engine internals (why a move is legal is enough)
+- Hash chains, state signatures, or validation hashes
+- Raw API errors — a rejected move gets a plain-language reason
+- WIP limit numbers without context ("column full" beats "limit: 3")
+
+---
+
+### 14. Add an Ability (Plugins)
+
+**What the user sees:**
+
+- A "Plugins" list showing each installed ability with a plain-language
+  name, one sentence about what it adds, and one switch
+- Switching one on makes its panel appear right there in the list;
+  switching it off makes it disappear — nothing else changes
+- A "Look for new plugins" button for when they've added a plugin file
+
+**User flow:**
+
+1. Open Plugins → see "Site checks" with the switch off
+2. Read one line: "Read-only checks across the app — looks at how it is
+   doing and reports anything wrong"
+3. Flip the switch on → the panel appears below with a "Run a check" button
+4. Tap "Run a check" → results appear in the same panel, plain language
+5. Flip the switch off → panel gone; the app works exactly as before
+
+**What they should NOT see:**
+
+- File names, Python, "plugin class", module paths, or load-error stack traces
+- Lifecycle jargon ("setup", "teardown", "hooks", "registration")
+- Anything broken when a plugin is off — off means gone, not error
+- A plugin taking over the home screen or sidebar — abilities live in their
+  panel
 
 ---
 

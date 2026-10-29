@@ -7,7 +7,9 @@ setup(
     package_dir={"": "src"},
     entry_points={
         "console_scripts": [
-            "planner = planner.cli:main",
+            # The CLI consolidated into app_planner.cli; planner.cli was
+            # deleted with it. Both dists now ship the same real CLI.
+            "planner = app_planner.cli:main",
         ],
     },
 )

@@ -36,9 +36,7 @@ class TestCurriculum:
     def test_untried_task(self):
         lib = SkillLibrary()
         lib.add_from_trajectory(trajectory("open chat"), "open_chat")
-        proposals = Curriculum().suggest(
-            known_tasks=["open chat", "search datasets"], skills=lib
-        )
+        proposals = Curriculum().suggest(known_tasks=["open chat", "search datasets"], skills=lib)
         assert proposals[0].source == "untried"
         assert proposals[0].task == "search datasets"
 
@@ -66,8 +64,9 @@ class TestCurriculum:
         assert len(proposals) == 2
 
     def test_proposal_roundtrip(self):
-        p = TaskProposal(task="t", reason="r", goal=[{"kind": "text_present", "value": "x"}],
-                         source="untried")
+        p = TaskProposal(
+            task="t", reason="r", goal=[{"kind": "text_present", "value": "x"}], source="untried"
+        )
         assert p.to_dict()["goal"][0]["kind"] == "text_present"
 
     def test_uses_experience_param(self):
@@ -96,8 +95,7 @@ class TestClosedLoop:
 
         # 1. Agent fails at clicking; feedback recorded.
         fb = FeedbackLoop()
-        bad = Step(step_number=0, action=Action(ActionType.MOUSE_CLICK),
-                   observation="missed")
+        bad = Step(step_number=0, action=Action(ActionType.MOUSE_CLICK), observation="missed")
         fb.record_feedback(bad, -1.0)
         fb.record_feedback(bad, -1.0)
 

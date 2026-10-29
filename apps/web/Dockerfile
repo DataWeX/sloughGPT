@@ -7,27 +7,18 @@ FROM node:20-alpine AS base
 
 FROM base AS deps
 WORKDIR /app
-# Workspace-root install: root package-lock.json is the ONE dependency tree CI
-# tests (npm workspaces — member installs are a shadow tree nobody validates;
-# the old standalone apps/web install could not resolve plugin-react/vite/vitest
-# peers). All four member manifests must be present for `npm ci` to accept the
-# workspace layout.
-COPY package.json package-lock.json ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/strui/package.json ./packages/strui/
-COPY packages/sdk-ts/typescript-sdk/package.json ./packages/sdk-ts/typescript-sdk/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY apps/web/package.json apps/web/package-lock.json* ./apps/web/
+COPY packages/strui/package.json packages/strui/package-lock.json* ./packages/strui/
+WORKDIR /app/apps/web
 RUN npm ci
+WORKDIR /app/packages/strui
+RUN npm ci --omit=peer
 
 FROM base AS builder
 WORKDIR /app
-# Carry the whole installed workspace (root node_modules + nested per-member
-# entries such as apps/web/node_modules/typescript@5.9.3), then overlay sources.
-COPY --from=deps /app ./
-COPY tsconfig.base.json ./
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages/strui/node_modules ./packages/strui/node_modules
 COPY apps/web ./apps/web
-# apps/lib is imported by apps/web via relative paths (http-client -> ../../lib).
-COPY apps/lib ./apps/lib
 COPY packages/strui ./packages/strui
 WORKDIR /app/apps/web
 RUN npm run build:vite \

@@ -32,7 +32,7 @@ const APP_ROOT = join(WEB_ROOT, 'app')
  * AND a redirect source, so unreachable) were deleted with their colocated
  * tests and error/loading companions; `knownShadowed` is now empty.
  */
-const GRANDFATHERED_CEILING = 73
+const GRANDFATHERED_CEILING = 72
 
 interface PageBaseline {
   grandfathered: string[]

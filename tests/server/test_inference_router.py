@@ -820,49 +820,71 @@ class TestCachedReplayChunking:
 
 
 class TestChatPostGenTasks:
-    """POST /chat must run the same post-generation task set as streaming.
+    """POST /chat must run the post-generation task set on every turn.
 
     Audit gap G2 (card db19c373): ``_run_post_gen_tasks`` was launched from
-    exactly one site — ``chat_stream`` — so a non-streaming turn recorded no
-    substrate episode at all. Consciousness, entity extraction, the continual
-    learner and response tracking all silently skipped half of all chat.
+    exactly one site, so half of all chat recorded no substrate episode —
+    consciousness, entity extraction, the continual learner and response
+    tracking all silently skipped. Stream-first (POST /chat is the one path;
+    it frames the engine's token stream) runs the task set in
+    ``stream_turn``; these tests pin that contract on the SSE path.
     """
 
-    def _domain_mock(self):
-        mock_domain = MagicMock()
-        mock_domain.respond = AsyncMock(
-            return_value=MagicMock(text="Hello back", session_id="sess-1", done=True)
-        )
-        return mock_domain
+    def _fake_provider(self) -> MagicMock:
+        mock_provider = MagicMock()
+
+        async def _chat_stream(messages, **kwargs):
+            for tok in ["Hello", " back"]:
+                yield tok
+
+        mock_provider.chat_stream = _chat_stream
+        return mock_provider
 
     @patch.dict(
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domain.get_chat_domain")
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
     @patch("apps.api.server.routers.inference._run_post_gen_tasks")
-    def test_non_stream_chat_runs_post_gen_tasks(self, mock_post_gen, mock_get_domain, client):
-        """The gap itself: this call did not exist before G2."""
+    def test_chat_runs_post_gen_tasks(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        """The gap itself: this call must fire on the SSE turn path."""
         mock_post_gen.return_value = {"narrative": "", "level": 0}
-        mock_get_domain.return_value = self._domain_mock()
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
         resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
 
         assert resp.status_code == 200
+        assert "Hello" in resp.text
         mock_post_gen.assert_called_once()
 
     @patch.dict(
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domain.get_chat_domain")
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
     @patch("apps.api.server.routers.inference._run_post_gen_tasks")
-    def test_post_gen_receives_the_turn_it_belongs_to(self, mock_post_gen, mock_get_domain, client):
+    def test_post_gen_receives_the_turn_it_belongs_to(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
         """Post-gen work must be attributed to the response that produced it."""
         mock_post_gen.return_value = {"narrative": "", "level": 0}
-        mock_get_domain.return_value = self._domain_mock()
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
-        client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+        client.post(
+            "/chat",
+            json={
+                "session_id": "sess-1",
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        )
 
         args = mock_post_gen.call_args.args
         assert args[0] == "Hello back", "full_response must be the generated text"
@@ -874,20 +896,19 @@ class TestChatPostGenTasks:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domain.get_chat_domain")
+    @patch("apps.api.server.routers.inference.get_provider")
     @patch("apps.api.server.routers.inference.capture")
     @patch("apps.api.server.routers.inference._run_post_gen_tasks")
     def test_no_inline_capture_alongside_post_gen(
-        self, mock_post_gen, mock_capture, mock_get_domain, client
+        self, mock_post_gen, mock_capture, mock_get_provider, client
     ):
-        """No double-run: post-gen already captures, so chat() must not too.
+        """No double-run: post-gen already captures, so the turn must not too.
 
-        Post-gen is spied out here, so any capture reached directly by chat()
-        would still fire — asserting it does not is the anti-double-count
-        guarantee.
+        Post-gen is spied out here, so any capture reached directly by the
+        turn path would still fire — asserting it does not is the
+        anti-double-count guarantee.
         """
         mock_post_gen.return_value = {"narrative": "", "level": 0}
-        mock_get_domain.return_value = self._domain_mock()
 
         client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
 
@@ -897,19 +918,25 @@ class TestChatPostGenTasks:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domain.get_chat_domain")
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
     @patch(
         "apps.api.server.routers.inference._run_post_gen_tasks",
         side_effect=RuntimeError("post-gen exploded"),
     )
-    def test_post_gen_failure_does_not_fail_the_turn(self, mock_post_gen, mock_get_domain, client):
+    def test_post_gen_failure_does_not_fail_the_turn(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
         """These tasks are best-effort: the reply must still reach the user."""
-        mock_get_domain.return_value = self._domain_mock()
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
 
         resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
 
         assert resp.status_code == 200
-        assert resp.json()["message"] == "Hello back"
+        assert "Hello" in resp.text
+        assert " back" in resp.text
 
 
 class TestModelStateReadiness:

@@ -131,6 +131,11 @@ export interface LiveStatusState {
 }
 
 const FALLBACK_POLL_MS = 8000
+
+/** One failure is a hiccup; the Nth consecutive one is a drop. Until this
+ *  escalation existed, nothing in production ever emitted 'offline' — the
+ *  offline UI (status text, Retry button, drop banner) was unreachable. */
+const OFFLINE_ESCALATION_FAILURES = 2
 const MAX_FAILURES_BEFORE_REVALIDATE = 6
 
 /**
@@ -302,6 +307,7 @@ export function initLiveStatus(): () => void {
               message: 'health_fallback_empty offline',
             })
           }
+          escalateOffline()
           checkRevalidate()
         }
       } catch {
@@ -314,6 +320,7 @@ export function initLiveStatus(): () => void {
             message: 'health_fallback_error offline',
           })
         }
+        escalateOffline()
         checkRevalidate()
       }
     }
@@ -348,6 +355,18 @@ export function initLiveStatus(): () => void {
       liveStatusStore.getState().setConnectionStatus('connecting')
       liveStatusStore.getState().setFailureCount(0)
     }
+  }
+
+  /** First failure is a hiccup ('connecting'); the second consecutive one is
+   *  a real drop ('offline') — the state the Retry UI and drop banner hang
+   *  off. Called after every incrementFailures, before checkRevalidate (the
+   *  threshold reset re-enters through 'connecting', which is honest: the
+   *  cache was just revalidated and the next poll is a fresh probe). */
+  function escalateOffline() {
+    const { failureCount } = liveStatusStore.getState()
+    liveStatusStore
+      .getState()
+      .setConnectionStatus(failureCount >= OFFLINE_ESCALATION_FAILURES ? 'offline' : 'connecting')
   }
 
   // Convert SSE envelope to our store shape
@@ -466,7 +485,7 @@ export function initLiveStatus(): () => void {
 
   function onError(_err: Error) {
     liveStatusStore.getState().incrementFailures()
-    liveStatusStore.getState().setConnectionStatus('connecting')
+    escalateOffline()
     logStateEvent('sse_error', {
       kind: 'sse',
       message: `sse_error ${_err?.message ?? 'stream failed'}`,
@@ -476,7 +495,10 @@ export function initLiveStatus(): () => void {
   }
 
   function onOpen() {
-    liveStatusStore.getState().reset()
+    // Reconnect, not fresh boot: keep the last health snapshot — wiping it
+    // flashed an empty "No model" through every SSE reconnect — but clear
+    // the failure tally, the stream is up again.
+    liveStatusStore.getState().setFailureCount(0)
     liveStatusStore.getState().setConnectionStatus('connected')
     logStateEvent('sse_open', { kind: 'sse', message: 'sse_open connected' })
   }

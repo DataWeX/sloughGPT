@@ -27,9 +27,7 @@ export const GlobalBanner = memo(function GlobalBanner() {
             the action to the far edge — a status bar, not a message. */}
         <span className="flex min-w-0 max-w-[44rem] items-baseline gap-1.5">
           <strong className="shrink-0 font-medium">{banner.title}</strong>
-          {banner.message && (
-            <span className="min-w-0 truncate opacity-80"> — {banner.message}</span>
-          )}
+          {banner.message && <span className="min-w-0 truncate"> — {banner.message}</span>}
         </span>
         {banner.action && (
           <Button

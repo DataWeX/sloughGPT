@@ -376,7 +376,9 @@ describe('AdaptersPage', () => {
     await waitFor(() => {
       expect(mockPrune).toHaveBeenCalled()
     })
-    expect(screen.getByText('Pruned 2 adapters')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Pruned 2 adapters')).toBeTruthy()
+    })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalledTimes(2)
     })

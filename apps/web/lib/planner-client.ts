@@ -175,11 +175,24 @@ export async function transitionCard(payload: {
   force?: boolean
 }): Promise<TransitionResult> {
   try {
-    return await apiPost<TransitionResult>('/api/planner/transition', payload, { silent: true })
-  } catch (e) {
-    if (e instanceof ApiError && e.data?.raw) {
-      return JSON.parse(e.data.raw) as TransitionResult
+    // silent + skipCircuitBreaker: a rejected transition (4xx) is an expected
+    // outcome of the engine's validation, not a transport failure — it must
+    // neither toast through the global error store nor count against the
+    // shared circuit breaker.
+    return await apiPost<TransitionResult>('/api/planner/transition', payload, {
+      silent: true,
+      skipCircuitBreaker: true,
+    })
+  } catch (err) {
+    // The rejection body ({ok:false, error, legal targets...}) rides a 4xx —
+    // hand it back to the caller so the UI can show WHY the move was refused.
+    if (err instanceof ApiError && err.data?.raw) {
+      try {
+        return JSON.parse(err.data.raw) as TransitionResult
+      } catch {
+        /* unparseable body — fall through to the original error */
+      }
     }
-    throw e
+    throw err
   }
 }

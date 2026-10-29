@@ -103,6 +103,7 @@ export default function ConsciousnessDebugPage() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [autoRefreshInterval, setAutoRefreshInterval] = useState(10)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const aliveRef = useRef(true)
 
   const [stateData, setStateData] = useState<Record<string, unknown>>({})
   const [stateLoading, setStateLoading] = useState<Record<string, boolean>>({})
@@ -139,14 +140,16 @@ export default function ConsciousnessDebugPage() {
         const json = await res.json()
         data = json.data ?? json
       }
+      if (!aliveRef.current) return
       setStateData((prev) => ({ ...prev, [key]: data }))
       setConnected(true)
     } catch (e) {
+      if (!aliveRef.current) return
       setConnected(false)
       setLastError(extractErrorMessage(e))
       setStateData((prev) => ({ ...prev, [key]: { error: extractErrorMessage(e) } }))
     } finally {
-      setStateLoading((prev) => ({ ...prev, [key]: false }))
+      if (aliveRef.current) setStateLoading((prev) => ({ ...prev, [key]: false }))
     }
   }, [])
 
@@ -160,14 +163,16 @@ export default function ConsciousnessDebugPage() {
     setHealthLoading(true)
     try {
       const data = await consciousnessController.healthCheck()
+      if (!aliveRef.current) return
       setHealthData(data)
       setConnected(true)
     } catch (e) {
+      if (!aliveRef.current) return
       setConnected(false)
       setLastError(extractErrorMessage(e))
       setHealthData({ error: extractErrorMessage(e) })
     } finally {
-      setHealthLoading(false)
+      if (aliveRef.current) setHealthLoading(false)
     }
   }, [])
 
@@ -175,14 +180,16 @@ export default function ConsciousnessDebugPage() {
     setEvalLoading(true)
     try {
       const data = await consciousnessController.evaluate()
+      if (!aliveRef.current) return
       setEvalData(data)
       setConnected(true)
     } catch (e) {
+      if (!aliveRef.current) return
       setConnected(false)
       setLastError(extractErrorMessage(e))
       setEvalData({ error: extractErrorMessage(e) })
     } finally {
-      setEvalLoading(false)
+      if (aliveRef.current) setEvalLoading(false)
     }
   }, [])
 
@@ -323,6 +330,13 @@ export default function ConsciousnessDebugPage() {
     setLastError(null)
     addToast(t('consciousness_debug.toast_cleared'), 'success')
   }, [addToast, t])
+
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     fetchAllStates()

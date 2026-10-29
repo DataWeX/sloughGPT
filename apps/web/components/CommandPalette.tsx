@@ -250,10 +250,11 @@ export function CommandPalette() {
 
   const filtered = useMemo(() => {
     const local = query.trim()
-      ? actions.filter((a) => {
-          const q = query.toLowerCase()
-          return a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
-        })
+      ? actions.filter(
+          (a) =>
+            a.label.toLowerCase().includes(query.toLowerCase()) ||
+            a.description.toLowerCase().includes(query.toLowerCase()),
+        )
       : actions
     return [...local, ...dataActions]
   }, [actions, query, dataActions])

@@ -343,7 +343,9 @@ describe('AgentDetailPage', () => {
     await waitFor(() => {
       expect(mockExecute).toHaveBeenCalledWith('agent-1', 'What is 2+2?')
     })
-    expect(screen.getByText('Execution result')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Execution result')).toBeTruthy()
+    })
   })
 
   it('handles execution error', async () => {
