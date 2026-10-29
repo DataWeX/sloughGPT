@@ -1043,8 +1043,9 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
-- **2026-10-28 · `.wt-attn` on `feat/attn-scores-port` (from main `a88816c5d`,
-  all uncommitted).** Card 093 attention-side port that main never got:
+- **2026-10-28 · `feat/attn-scores-port` — PUSHED as `b0a681374` (from main
+  `a88816c5d`, PR-ready; slope gate window still pending).** Card 093
+  attention-side port that main never got:
   `d99421492` re-applied3-way (scores-buffer `_fused_attention_single/_multi`
   — kills the O(H·L·E²) pass-3 dot recompute, 194× microbench win; KV-cache
   numba quant/dequant; slonet fuse memo; +265 kernel tests) + hand-ported
