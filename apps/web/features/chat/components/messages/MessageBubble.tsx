@@ -50,18 +50,20 @@ export interface MessageBubbleProps {
   /** Position of this turn in the transcript (1-based). Renders in the gutter. */
   turnNumber?: number
   /** Per-turn stream metrics for the margin (tok/s, token count, latency, ETA while streaming). */
-  metrics?: { tokens?: number; elapsedMs?: number; maxTokens?: number }
+  metrics?: { tokens?: number; elapsedMs?: number; maxTokens?: number; thinking?: boolean }
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
 function formatMetrics(
-  m?: { tokens?: number; elapsedMs?: number; maxTokens?: number },
+  m?: { tokens?: number; elapsedMs?: number; maxTokens?: number; thinking?: boolean },
   streaming = false,
 ): string | null {
   if (!m || m.tokens == null || m.elapsedMs == null || m.elapsedMs <= 0) return null
-  const { tokens, elapsedMs, maxTokens } = m
-  const tps = tokens / (elapsedMs / 1000)
+  const { tokens, elapsedMs, maxTokens, thinking } = m
   const secs = (elapsedMs / 1000).toFixed(1)
+  // Pre-first-token reasoning phase: elapsed only — no rate until real tokens.
+  if (thinking && tokens === 0) return streaming ? `thinking · ${secs}s` : null
+  const tps = tokens / (elapsedMs / 1000)
   let eta = ''
   if (streaming && maxTokens != null) {
     const projected = computeGenerationEta({ tokens, elapsedMs, maxTokens })

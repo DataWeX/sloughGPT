@@ -12,6 +12,6 @@ export interface ChatMessage {
   isError?: boolean
   pinned?: boolean
   toolCalls?: Array<{ id?: string; name?: string; arguments?: string; status?: string }>
-  /** Per-turn stream metrics — live throttled ticks while streaming, final on completion. */
-  metrics?: { tokens?: number; elapsedMs?: number; maxTokens?: number }
+  /** Per-turn stream metrics — live throttled ticks while streaming, final on completion. `thinking` marks pre-first-token reasoning ticks. */
+  metrics?: { tokens?: number; elapsedMs?: number; maxTokens?: number; thinking?: boolean }
 }
