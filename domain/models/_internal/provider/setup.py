@@ -66,6 +66,8 @@ def setup_providers(
     personality_traits: dict[str, float] | None = None,
     slonet_path: str | None = None,
     native_slnc_path: str | None = None,
+    force_default: bool = False,
+    **kwargs,
 ) -> None:
     """Register providers and build the default processor pipeline.
 
@@ -279,7 +281,7 @@ def setup_providers(
     # failed to load (text_provider_name is None) and a working default router
     # already exists, keep it — otherwise the failed load would clobber the
     # active model's router with an empty one, breaking inference.
-    if not _is_slonet and (text_provider_name or existing is None):
+    if force_default or (not _is_slonet and (text_provider_name or existing is None)):
         router = ProviderRouter()
         vision_proc = VisionProcessor("multimodal")
         tool_proc = ToolUseProcessor()

@@ -63,9 +63,29 @@ async def train(request):
                 _finish_job(job_id, "cancelled", "Cancelled before start")
                 return
             safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
-            trainer.save(f"models/{safe_stem}_trained.soul")
+            soul_path = f"models/{safe_stem}_trained.soul"
+            trainer.save(soul_path)
+            try:
+                from domain.infrastructure._internal.soul_to_slnc import soul_to_slnc
+
+                soul_to_slnc(soul_path, soul_path.replace(".soul", ".slnc"))
+            except Exception:
+                pass
+            try:
+                from domain.inference._internal.slonet_provider import SloNetChatProvider
+                from domain.models._internal.provider import register_provider, setup_providers
+
+                prov = SloNetChatProvider.from_soul(soul_path, model_id=safe_stem)
+                register_provider("slonet-native", prov)
+                register_provider("default", prov)
+                try:
+                    setup_providers(force_default=True)
+                except Exception:
+                    pass
+            except Exception:
+                pass
             _finish_job(job_id, "completed")
-            training_jobs[job_id]["checkpoint"] = f"models/{safe_stem}_trained.soul"
+            training_jobs[job_id]["checkpoint"] = soul_path
         except Exception as e:
             logger.exception("Background /train failed: %s", e, extra={"tag": "TRAIN"})
             _finish_job(job_id, "failed", str(e))

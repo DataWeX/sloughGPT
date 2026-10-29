@@ -46,6 +46,9 @@ def _feed_spec(request: TrainingRequest) -> tuple[str, str, None, str] | None:
     )
     if not is_feed:
         return None
+    from .feeds import validate_feed_dataset
+
+    validate_feed_dataset(dataset_str)
     try:
         from urllib.parse import urlparse
 
@@ -416,13 +419,37 @@ async def start_training(
                 get_training_runtime().sync(jid)
                 get_training_controller().reset()
                 return
-            trainer.save(f"models/{safe_stem}_trained.soul")
+            soul_path = f"models/{safe_stem}_trained.soul"
+            trainer.save(soul_path)
+            slnc_path = None
+            try:
+                from domain.infrastructure._internal.soul_to_slnc import soul_to_slnc
+
+                slnc_path = soul_to_slnc(soul_path, soul_path.replace(".soul", ".slnc"))
+            except Exception as e:
+                logger.debug("Auto-compile soul->slnc failed: %s", e, extra={"tag": "TRAIN"})
+            try:
+                from domain.inference._internal.slonet_provider import SloNetChatProvider
+                from domain.models._internal.provider import register_provider, setup_providers
+
+                prov = SloNetChatProvider.from_soul(soul_path, model_id=safe_stem)
+                register_provider("slonet-native", prov)
+                register_provider("default", prov)
+                try:
+                    setup_providers(force_default=True)
+                except Exception:
+                    pass
+                logger.info("Activated trained soul as default: %s", soul_path, extra={"tag": "TRAIN"})
+            except Exception as e:
+                logger.debug("Auto-activate trained soul failed: %s", e, extra={"tag": "TRAIN"})
             _finish_job(jid, "completed")
             training_jobs[jid]["progress"] = 100
             training_jobs[jid]["current_epoch"] = int(req_snapshot.get("epochs") or 3)
             bel = result.get("best_eval_loss")
             training_jobs[jid]["loss"] = bel if bel is not None and bel < float("inf") else None
-            training_jobs[jid]["checkpoint"] = f"models/{safe_stem}_trained.soul"
+            training_jobs[jid]["checkpoint"] = soul_path
+            if slnc_path:
+                training_jobs[jid]["checkpoint_slnc"] = slnc_path
             get_training_runtime().sync(jid)
             get_training_controller().complete()
 
