@@ -37,6 +37,7 @@ class ModelInfo(BaseModel):
     vocab_size: int = 0
     loaded_at: str | None = None
     description: str = ""
+    profile: dict = Field(default_factory=dict)
 
 
 class ModelListResponse(BaseModel):

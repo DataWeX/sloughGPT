@@ -10,8 +10,9 @@ import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from controllers.models import get_models_controller
 from fastapi import APIRouter, Depends
@@ -78,6 +79,81 @@ class ExternalDownloadRequest(BaseModel):
 
     server: str = Field(..., min_length=1, max_length=100)
     model_id: str = Field(..., min_length=1, max_length=200)
+
+
+@dataclass(frozen=True)
+class ModelProfile:
+    """Structured model description — the prose in ``ModelInfo.description`` is a projection of this.
+
+    Follows the entity convention (see auth User / ServingProfile): data holds
+    structure, ``to_dict()`` serializes it, and rendered text is derived — never
+    the other way round.
+    """
+
+    size_tier: str | None  # "small" | "medium" | "large" | None (parameters unknown)
+    capability: str  # "conversations" | "code" | "text_generation"
+    speed_hint: str | None  # "fast_cpu" | None
+    loaded: bool
+
+    _SIZE_LABELS: ClassVar[dict[str | None, str]] = {
+        "small": "Small, fast model",
+        "medium": "Medium-sized model",
+        "large": "Large model",
+        None: "Model",
+    }
+    _CAPABILITY_LABELS: ClassVar[dict[str, str]] = {
+        "conversations": "good for conversations",
+        "code": "good for code",
+        "text_generation": "good for text generation",
+    }
+    _SPEED_LABELS: ClassVar[dict[str, str]] = {"fast_cpu": "runs fast on CPU"}
+
+    def as_description(self) -> str:
+        """Legacy-compatible prose projection (byte-identical to the old builder)."""
+        parts = [self._SIZE_LABELS[self.size_tier], self._CAPABILITY_LABELS[self.capability]]
+        if self.speed_hint:
+            parts.append(self._SPEED_LABELS[self.speed_hint])
+        if self.loaded:
+            parts.append("(currently loaded)")
+        return " — ".join(parts[:2]) + (f". {parts[2]}" if len(parts) > 2 else "") + "."
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "size_tier": self.size_tier,
+            "capability": self.capability,
+            "speed_hint": self.speed_hint,
+            "loaded": self.loaded,
+        }
+
+
+def build_model_profile(model_id: str, parameters: int, loaded: bool) -> ModelProfile:
+    """Pure heuristic profile of a model from its id and parameter count."""
+    try:
+        params = int(parameters or 0)
+    except (TypeError, ValueError):
+        params = 0
+
+    mid = model_id.lower()
+    if any(kw in mid for kw in ("instruct", "chat", "qwen")):
+        capability = "conversations"
+    elif any(kw in mid for kw in ("code", "starcoder")):
+        capability = "code"
+    else:
+        capability = "text_generation"
+
+    if not params:
+        size_tier = None
+    elif params < 150_000_000:
+        size_tier = "small"
+    elif params < 1_000_000_000:
+        size_tier = "medium"
+    else:
+        size_tier = "large"
+
+    speed_hint = "fast_cpu" if params and params < 500_000_000 else None
+    return ModelProfile(
+        size_tier=size_tier, capability=capability, speed_hint=speed_hint, loaded=loaded
+    )
 
 
 class ModelsRouter:
@@ -229,36 +305,12 @@ class ModelsRouter:
         )
 
     def _describe_model(self, model_id: str, parameters: int, loaded: bool) -> str:
-        """Generate a plain-language description of a model."""
-        parts = []
+        """Generate a plain-language description of a model.
 
-        # Size description
-        if parameters:
-            if parameters < 150_000_000:
-                parts.append("Small, fast model")
-            elif parameters < 1_000_000_000:
-                parts.append("Medium-sized model")
-            else:
-                parts.append("Large model")
-        else:
-            parts.append("Model")
-
-        # Chat capability
-        if any(kw in model_id.lower() for kw in ["instruct", "chat", "qwen"]):
-            parts.append("good for conversations")
-        elif any(kw in model_id.lower() for kw in ["code", "starcoder"]):
-            parts.append("good for code")
-        else:
-            parts.append("good for text generation")
-
-        # Speed hint
-        if parameters and parameters < 500_000_000:
-            parts.append("runs fast on CPU")
-
-        if loaded:
-            parts.append("(currently loaded)")
-
-        return " — ".join(parts[:2]) + (f". {parts[2]}" if len(parts) > 2 else "") + "."
+        A projection of :func:`build_model_profile` — the structured profile is
+        the source of truth, this string is derived from it.
+        """
+        return build_model_profile(model_id, parameters, loaded).as_description()
 
     def _model_display_name(self, model_id: str) -> str:
         """Generate a human-friendly display name from a HuggingFace model ID.
@@ -329,6 +381,7 @@ class ModelsRouter:
             if current:
                 params = int(current.get("parameters", 0) or 0)
                 vocab = int(current.get("vocab_size", 0) or 0)
+                prof = build_model_profile(current["model_id"], params, loaded=True)
                 models.append(
                     ModelInfo(
                         model_id=current["model_id"],
@@ -337,7 +390,8 @@ class ModelsRouter:
                         parameters=params,
                         vocab_size=vocab,
                         loaded_at=current.get("loaded_at"),
-                        description=self._describe_model(current["model_id"], params, loaded=True),
+                        description=prof.as_description(),
+                        profile=prof.to_dict(),
                     )
                 )
             loaded_ids = {m.model_id for m in models}
@@ -347,6 +401,7 @@ class ModelsRouter:
                 if model_id not in loaded_ids:
                     params = int(entry.get("parameters", 0) or 0)
                     vocab = int(entry.get("vocab_size", 0) or 0)
+                    prof = build_model_profile(model_id, params, loaded=False)
                     models.append(
                         ModelInfo(
                             model_id=model_id,
@@ -355,7 +410,8 @@ class ModelsRouter:
                             parameters=params,
                             vocab_size=vocab,
                             loaded_at=None,
-                            description=self._describe_model(model_id, params, loaded=False),
+                            description=prof.as_description(),
+                            profile=prof.to_dict(),
                         )
                     )
             return [m.model_dump() for m in models]

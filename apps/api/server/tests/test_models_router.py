@@ -18,7 +18,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from routers.models import ModelsRouter
+from routers.models import ModelsRouter, build_model_profile
 from routers.models import _instance as _models_instance
 from routers.models import router as models_router
 
@@ -164,6 +164,78 @@ class TestListModels:
         assert isinstance(m["parameters"], int)
         assert m["vocab_size"] == 50257
         assert len(m["description"]) > 5
+
+    def test_list_models_have_structured_profile(self, mock_controller):
+        resp = client.get("/models")
+        assert resp.status_code == 200
+        for m in _data(resp):
+            prof = m["profile"]
+            assert set(prof) == {"size_tier", "capability", "speed_hint", "loaded"}
+            assert prof["capability"] in ("conversations", "code", "text_generation")
+            assert prof["size_tier"] in ("small", "medium", "large", None)
+
+
+# ── ModelProfile (structured model description) ─────────────────────────────
+
+
+class TestModelProfile:
+    """The structured profile is the source of truth; description is a projection."""
+
+    def test_small_fast_projection_unchanged(self):
+        p = build_model_profile("gpt2", 124_000_000, loaded=False)
+        assert p.as_description() == (
+            "Small, fast model — good for text generation. runs fast on CPU."
+        )
+
+    def test_loaded_medium_projection_unchanged(self):
+        p = build_model_profile("Qwen/Qwen2.5-0.5B-Instruct", 500_000_000, loaded=True)
+        assert p.as_description() == (
+            "Medium-sized model — good for conversations. (currently loaded)."
+        )
+
+    def test_unknown_params_projection_unchanged(self):
+        p = build_model_profile("mystery-model", 0, loaded=False)
+        assert p.as_description() == "Model — good for text generation."
+
+    def test_large_code_loaded_projection_unchanged(self):
+        p = build_model_profile("bigcode/starcoder-15b", 1_500_000_000, loaded=True)
+        assert p.as_description() == "Large model — good for code. (currently loaded)."
+
+    def test_loaded_marker_dropped_when_fast(self):
+        """Byte-compat quirk of the legacy builder: the loaded marker only renders
+        when parts[2] is free (no speed hint). Preserve it."""
+        p = build_model_profile("gpt2", 124_000_000, loaded=True)
+        assert p.as_description() == (
+            "Small, fast model — good for text generation. runs fast on CPU."
+        )
+
+    def test_structured_fields(self):
+        p = build_model_profile("Qwen/Qwen2.5-0.5B-Instruct", 120_000_000, loaded=True)
+        assert p.size_tier == "small"
+        assert p.capability == "conversations"
+        assert p.speed_hint == "fast_cpu"
+        assert p.loaded is True
+
+    def test_structured_fields_large_code(self):
+        p = build_model_profile("starcoder2-15b", 1_500_000_000, loaded=False)
+        assert p.size_tier == "large"
+        assert p.capability == "code"
+        assert p.speed_hint is None
+        assert p.loaded is False
+
+    def test_string_parameters_do_not_crash(self):
+        p = build_model_profile("gpt2-xl", "1558000000", 0)
+        assert p.size_tier == "large"
+        assert p.speed_hint is None
+
+    def test_to_dict_keys(self):
+        d = build_model_profile("gpt2", 124_000_000, loaded=False).to_dict()
+        assert d == {
+            "size_tier": "small",
+            "capability": "text_generation",
+            "speed_hint": "fast_cpu",
+            "loaded": False,
+        }
 
 
 # ── GET /models/current ────────────────────────────────────────────────────
