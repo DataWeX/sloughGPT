@@ -526,6 +526,51 @@ describe('MessageBubble', () => {
       expect(container.textContent).not.toContain('left')
     })
 
+    it('shows thinking elapsed only while streaming the reasoning phase', () => {
+      const { container } = render(
+        <MessageBubble
+          content="Thinking..."
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          isStreaming
+          metrics={{ tokens: 0, elapsedMs: 3200, thinking: true }}
+        />,
+      )
+      expect(container.textContent).toContain('thinking · 3.2s')
+      expect(container.textContent).not.toContain('tok/s')
+      expect(container.textContent).not.toContain('left')
+    })
+
+    it('omits thinking metrics once the turn is no longer streaming', () => {
+      const { container } = render(
+        <MessageBubble
+          content="(response interrupted)"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          metrics={{ tokens: 0, elapsedMs: 3200, thinking: true }}
+        />,
+      )
+      expect(container.textContent).not.toContain('thinking ·')
+      expect(container.textContent).not.toContain('tok/s')
+    })
+
+    it('falls back to the rate line when tokens landed despite a thinking flag', () => {
+      const { container } = render(
+        <MessageBubble
+          content="The answer"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          isStreaming
+          metrics={{ tokens: 4, elapsedMs: 2000, thinking: true }}
+        />,
+      )
+      expect(container.textContent).toContain('2.0 tok/s · 4 tok · 2.0s')
+      expect(container.textContent).not.toContain('thinking ·')
+    })
+
     it('shows a pulsing primary StatusDot while streaming', () => {
       render(
         <MessageBubble

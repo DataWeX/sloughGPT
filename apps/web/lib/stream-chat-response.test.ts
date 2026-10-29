@@ -168,6 +168,111 @@ describe('streamChatResponse', () => {
     expect(onMeta.mock.calls[1][0].maxTokens).toBe(256)
   })
 
+  function openSSE() {
+    const encoder = new TextEncoder()
+    let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
+    const stream = new ReadableStream({
+      start(controller) {
+        ctrl = controller
+      },
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      body: stream,
+    } as Response)
+    return {
+      push: (line: string) => ctrl!.enqueue(encoder.encode(line + '\n')),
+      close: () => ctrl!.close(),
+    }
+  }
+
+  const THINKING_LINE =
+    'data: {"stream":"chat","phase":"STREAMING","status":"thinking","data":{},"message":"Thinking..."}'
+  const TOKEN_LINE =
+    'data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"hi"},"message":""}'
+  const COMPLETE_LINE =
+    'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}'
+
+  it('emits thinking-phase meta ticks before the first token and stops once tokens arrive', async () => {
+    vi.useFakeTimers()
+    try {
+      const onMeta = vi.fn()
+      const sse = openSSE()
+      const done = streamChatResponse({ ...mockParams, onMeta })
+
+      sse.push(THINKING_LINE)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onMeta).toHaveBeenCalledTimes(1)
+      expect(onMeta.mock.calls[0][0]).toMatchObject({ tokens: 0, thinking: true })
+      expect(onMeta.mock.calls[0][0].elapsedMs).toBeGreaterThanOrEqual(0)
+
+      await vi.advanceTimersByTimeAsync(400)
+      expect(onMeta).toHaveBeenCalledTimes(2)
+      expect(onMeta.mock.calls[1][0]).toMatchObject({ tokens: 0, thinking: true })
+
+      sse.push(TOKEN_LINE)
+      sse.push(COMPLETE_LINE)
+      sse.close()
+      await vi.advanceTimersByTimeAsync(0)
+      await done
+
+      const metas = onMeta.mock.calls.map((c) => c[0])
+      expect(metas).toHaveLength(4)
+      // first token always flips the margin off "thinking", even within the tick window
+      expect(metas[2]).toEqual({
+        tokens: 1,
+        elapsedMs: expect.any(Number),
+        maxTokens: 256,
+        thinking: undefined,
+      })
+      expect(metas[3]).toEqual({
+        tokens: 1,
+        elapsedMs: expect.any(Number),
+        maxTokens: 256,
+        thinking: undefined,
+      })
+
+      // ticker is dead after completion — no further thinking ticks
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(onMeta).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops thinking ticks when the stream fails after the reasoning phase started', async () => {
+    vi.useFakeTimers()
+    try {
+      const onMeta = vi.fn()
+      const sse = openSSE()
+      const done = streamChatResponse({ ...mockParams, onMeta })
+
+      sse.push(THINKING_LINE)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onMeta).toHaveBeenCalledTimes(1)
+
+      sse.push(
+        'data: {"stream":"chat","status":"error","data":{"http_status":400,"error":"bad request"},"message":"bad request"}',
+      )
+      sse.close()
+      await vi.advanceTimersByTimeAsync(0)
+      await done
+      expect(mockParams.onError).toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(onMeta).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips thinking ticks entirely when onMeta is not provided', async () => {
+    mockSSE([THINKING_LINE, COMPLETE_LINE])
+    await expect(streamChatResponse({ ...mockParams, onMeta: undefined })).resolves.toBeUndefined()
+    expect(mockParams.onThinking).toHaveBeenCalled()
+    expect(mockParams.onComplete).toHaveBeenCalled()
+  })
+
   it('does not call onMeta when it is not provided', async () => {
     mockSSE([
       'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}',

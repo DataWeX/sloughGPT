@@ -36,8 +36,14 @@ interface StreamChatParams {
   knowledge?: string[]
   onToken: (token: string) => void
   onComplete: () => void
-  /** Per-turn stream metrics — throttled live ticks while streaming; final fires just before onComplete. */
-  onMeta?: (meta: { tokens: number; elapsedMs: number; maxTokens: number }) => void
+  /** Per-turn stream metrics — throttled live ticks while streaming; final fires just before onComplete.
+   *  `thinking` marks pre-first-token reasoning-phase ticks (tokens 0, elapsed running). */
+  onMeta?: (meta: {
+    tokens: number
+    elapsedMs: number
+    maxTokens: number
+    thinking?: boolean
+  }) => void
   onError: (
     status: number,
     text?: string,
@@ -99,7 +105,38 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
   let lastEventId: string | undefined
   let tokenCount = 0
   let lastMetaAtMs = 0
+  let thinkingTimer: ReturnType<typeof setInterval> | null = null
   const startTime = Date.now()
+
+  const stopThinkingTicks = () => {
+    if (thinkingTimer != null) {
+      clearInterval(thinkingTimer)
+      thinkingTimer = null
+    }
+  }
+
+  const emitMeta = (thinking = false) => {
+    if (!params.onMeta) return
+    lastMetaAtMs = Date.now()
+    params.onMeta({
+      tokens: tokenCount,
+      elapsedMs: lastMetaAtMs - startTime,
+      maxTokens: params.maxTokens,
+      thinking: thinking || undefined,
+    })
+  }
+
+  const startThinkingTicks = () => {
+    if (thinkingTimer != null || !params.onMeta) return
+    emitMeta(true)
+    thinkingTimer = setInterval(() => {
+      if (tokenCount > 0) {
+        stopThinkingTicks()
+        return
+      }
+      emitMeta(true)
+    }, META_TICK_MS)
+  }
 
   _log.debug('streamChatResponse START', {
     msgCount: params.messages.length,
@@ -124,6 +161,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
 
         if (event.status === 'thinking') {
           params.onThinking?.()
+          startThinkingTicks()
           continue
         }
 
@@ -252,28 +290,23 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         if (token) {
           if (tokenCount === 0) {
             _log.debug('First token received', { elapsed: Date.now() - startTime })
+            stopThinkingTicks()
           }
           tokenCount++
           hasContent = true
           params.onToken(token)
-          if (params.onMeta && Date.now() - lastMetaAtMs >= META_TICK_MS) {
-            lastMetaAtMs = Date.now()
-            params.onMeta({
-              tokens: tokenCount,
-              elapsedMs: lastMetaAtMs - startTime,
-              maxTokens: params.maxTokens,
-            })
+          // The first token always ticks so the margin flips off "thinking"
+          // immediately, even when a thinking tick just fired within the window.
+          if (tokenCount === 1 || Date.now() - lastMetaAtMs >= META_TICK_MS) {
+            emitMeta()
           }
         }
 
         if (event.status === 'complete') {
           _log.debug('Stream complete', { tokens: tokenCount, elapsed: Date.now() - startTime })
           if (!hasContent) params.onToken('')
-          params.onMeta?.({
-            tokens: tokenCount,
-            elapsedMs: Date.now() - startTime,
-            maxTokens: params.maxTokens,
-          })
+          stopThinkingTicks()
+          emitMeta()
           params.onComplete()
           completed = true
           continue
@@ -302,6 +335,10 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
       })
       onError(0, message, undefined)
       return
+    } finally {
+      // Every exit from an attempt (loop end, retry break, error/abort return)
+      // drops the reasoning-phase ticker — no meta ticks after the stream.
+      stopThinkingTicks()
     }
 
     if (shouldRetry) {
