@@ -6,7 +6,6 @@ import { PageContainer } from '@/components/PageContainer'
 import { Skeleton, cn, Tabs, TabsList, TabsTrigger, TabsContent, StatusDot } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { TerminalPanel } from '@/components/shell/TerminalPanel'
-import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { filesController, type FileEntry } from '@/lib/files-controller'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
@@ -129,41 +128,11 @@ export default function DeveloperPage() {
 }
 
 function ShellTab() {
-  const [shellMode, setShellMode] = useState<'backend' | 'v86'>('backend')
-
+  // The Linux VM journey lives on /vm (VM Console) — no duplicate sub-tab here
+  // (Page Rule: a page is a journey projection, not a view of another page).
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-1 rounded-xl border border-border/20 bg-muted/20 p-1 w-fit">
-        <button
-          type="button"
-          onClick={() => setShellMode('backend')}
-          className={cn(
-            'rounded-lg px-4 py-1.5 text-[11px] font-medium transition-all duration-200',
-            shellMode === 'backend'
-              ? 'bg-muted/30 text-muted-foreground shadow-sm shadow-black/20'
-              : 'text-muted-foreground/60 hover:text-muted-foreground/80',
-          )}
-        >
-          Backend
-        </button>
-        <button
-          type="button"
-          onClick={() => setShellMode('v86')}
-          className={cn(
-            'rounded-lg px-4 py-1.5 text-[11px] font-medium transition-all duration-200',
-            shellMode === 'v86'
-              ? 'bg-muted/30 text-muted-foreground shadow-sm shadow-black/20'
-              : 'text-muted-foreground/60 hover:text-muted-foreground/80',
-          )}
-        >
-          Browser VM
-        </button>
-      </div>
-      {shellMode === 'backend' ? (
-        <TerminalPanel className="h-[calc(100vh-14rem)]" />
-      ) : (
-        <V86TerminalPanel className="h-[calc(100vh-14rem)]" />
-      )}
+      <TerminalPanel className="h-[calc(100vh-14rem)]" />
     </div>
   )
 }
