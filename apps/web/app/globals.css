@@ -76,6 +76,30 @@
   --chart-3: 236 145 95;
   --chart-4: 90 150 220;
   --chart-5: 220 80 90;
+  /*
+   * Session-group identity colours — deliberately THEME-CONSTANT (like the
+   * terminal ladder below): a group's identity must not change when the
+   * user flips light/dark. Slots keep the legacy picker's hue order
+   * (violet, blue, green, amber, red, rose, indigo, teal, orange, lime),
+   * re-tuned to the Noir Violet family.
+   */
+  --group-1: 124 82 196;
+  --group-2: 90 150 220;
+  --group-3: 52 176 125;
+  --group-4: 236 168 60;
+  --group-5: 220 80 90;
+  --group-6: 214 92 170;
+  --group-7: 108 102 228;
+  --group-8: 56 166 158;
+  --group-9: 236 145 95;
+  --group-10: 150 190 84;
+  /*
+   * Decoration ladder — theme-constant neutrals for elevation shadows,
+   * hairline borders and sheen highlights (dark canvases stay dark in both
+   * themes, so no html.dark override, same clause as the terminal ladder).
+   */
+  --elevation-rgb: 0 0 0;
+  --sheen-rgb: 255 255 255;
 }
 
 /*

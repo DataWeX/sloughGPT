@@ -76,13 +76,10 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
   className,
 }: PersonalityTrendChartProps) {
   const { rows, latest, sameDay } = useMemo(() => {
-    const sorted = [...history].sort(
-      (a, b) => Number(a.timestamp) - Number(b.timestamp),
-    )
+    const sorted = [...history].sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
     const dayOf = (p: HistoryPoint | undefined) =>
       p ? new Date(Number(p.timestamp) * 1000).toDateString() : ''
-    const isSameDay =
-      sorted.length === 0 || dayOf(sorted[0]) === dayOf(sorted[sorted.length - 1])
+    const isSameDay = sorted.length === 0 || dayOf(sorted[0]) === dayOf(sorted[sorted.length - 1])
     const plotted = sorted.map((p) => {
       const values = (p[field] ?? {}) as Record<string, number>
       return { time: formatWhen(Number(p.timestamp), isSameDay), ...values }
@@ -123,11 +120,7 @@ export const PersonalityTrendChart = memo(function PersonalityTrendChart({
 
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid
-            vertical={false}
-            strokeDasharray="3 3"
-            className="stroke-border/30"
-          />
+          <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/30" />
           <XAxis
             dataKey="time"
             tick={{ fontSize: 10 }}

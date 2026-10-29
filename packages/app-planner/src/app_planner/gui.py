@@ -323,11 +323,14 @@ class GuiHandler(BaseHTTPRequestHandler):
                 force=force,
             )
             if card is None:
-                # Distinguish "not found" from "illegal transition / WIP"
+                # Distinguish "card not found" / "column not found" (404)
+                # from "illegal transition / WIP" (409)
                 board = self.stores.kanban_store.load_board()
                 exists = any(c.id == card_id or c.id.startswith(card_id) for c in board.cards)
                 if not exists:
                     return self._error(404, f"card not found: {card_id}")
+                if column not in {c.name for c in board.columns}:
+                    return self._error(404, f"column not found: {column}")
                 return self._error(
                     409,
                     f"illegal transition or WIP limit: {card_id} → {column}",
@@ -402,7 +405,7 @@ class GuiHandler(BaseHTTPRequestHandler):
         if not body:
             return self._error(400, "empty body")
         with self.stores.lock:
-            self.stores.kanban_store._bk.save(Board.from_dict(body))
+            self.stores.kanban_store._bk.save(Board.from_dict(body), allow_wipe=True)
         self._send(200, {"total": len(Board.from_dict(body).cards)})
 
     def _handle_sync(self) -> None:

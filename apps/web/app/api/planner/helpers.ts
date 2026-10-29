@@ -632,19 +632,6 @@ export function removeNoteFromTree(tree: HashTreeData, noteId: string): boolean 
   return true
 }
 
-const COMMIT_COLORS = [
-  '#e74c3c',
-  '#e67e22',
-  '#f1c40f',
-  '#2ecc71',
-  '#1abc9c',
-  '#3498db',
-  '#9b59b6',
-  '#e91e63',
-  '#00bcd4',
-  '#8bc34a',
-]
-
 export function rehashTree(tree: HashTreeData): void {
   const now = new Date().toISOString()
   const parentHash =

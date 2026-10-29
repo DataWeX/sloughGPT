@@ -77,7 +77,7 @@
   "journeys": [
     {
       "path": "app/(app)/kanban/page.tsx",
-      "journeyId": "ux/manage-my-work"
+      "journeyId": "ux/kanban"
     }
   ]
 }

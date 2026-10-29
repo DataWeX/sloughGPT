@@ -529,3 +529,32 @@ unregistered heading is allowed; register it when the sweep exists.
 | Loss            | "Learning progress" (visual chart, not numbers) |
 | Epoch           | "Training round"                                |
 | Hyperparameters | "Advanced options" (hidden by default)          |
+
+### Planner Board — ux/kanban
+
+**Persona:** infra-workbench user (operator), not the mainstream training
+journey. The board is a work-tracking surface for everything running in the
+project: what's moving, what's blocked, what's next.
+
+**What the user sees:**
+
+- One board: columns by state, cards with a title, priority, and tags
+- Drag a card (or use the action bar) to move it between columns
+- Immediate feedback when a move is accepted — or a clear reason when the
+  engine rejects it ("blocked", "work in progress limit reached")
+- An optional 3D view toggle for spatial overview; same board, same moves
+- Refresh always re-reads the live board — no local ghost state
+
+**User flow:**
+
+1. **Open the board** (click 1) — see every card in its current column
+2. **Move a card** (click 2) — drag or action bar; the engine validates the
+   transition, then the card lands in its new column
+3. **Understand a rejection** (click 3) — a rejected move says why in plain
+   language, the card stays where it was
+
+**What they should NOT see:**
+
+- Raw transition codes, engine internals, or JSON payloads
+- Silent failures — every rejected move produces visible feedback
+- A different board state after refresh than the one they just acted on

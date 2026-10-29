@@ -250,7 +250,7 @@ export function StatusBar() {
               className="sl-badge sl-badge-success"
               title={`${errorStreamTotal} error events received`}
             >
-              <span className="h-1 w-1 rounded-full bg-green-400 animate-pulse" />
+              <span className="h-1 w-1 rounded-full bg-success animate-pulse" />
               stream
             </span>
           )}

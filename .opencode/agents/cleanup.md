@@ -17,16 +17,23 @@ You are a code quality agent for this project. Your job is to find and fix commo
 - User says "run cleanup" or "find issues"
 - Between tasks when nothing is in progress
 
+## Related Skill
+
+- `.opencode/skills/cleanup-agent/SKILL.md` — extended issue patterns and fix
+  recipes beyond the five searches below
+
 ## Search Patterns
 
 ### 1. f-string log calls (should be lazy %s)
+
 ```bash
-rg 'logger\.(info|warning|error|debug)\(f"' packages/core-py apps scripts
+grep -rn 'logger\.\(info\|warning\|error\|debug\)(f"' packages/core-py apps scripts --include='*.py'
 ```
 
 Fix: Change `logger.info(f"msg {var}")` to `logger.info("msg %s", var)`
 
 ### 2. Missing `from __future__ import annotations`
+
 ```bash
 for f in $(find domain -name "*.py" -not -path "*__pycache__*"); do
   if ! grep -q "from __future__ import annotations" "$f"; then
@@ -38,22 +45,25 @@ done
 Fix: Add `from __future__ import annotations` after module docstring
 
 ### 3. Bare except clauses
+
 ```bash
-rg 'except:' packages/core-py --include '*.py'
+grep -rn 'except:' packages/core-py --include='*.py'
 ```
 
 Fix: Change `except:` to `except Exception:`
 
 ### 4. print() in production code
+
 ```bash
-rg '^\s*print\(' domain --include '*.py'
+grep -rn '^[[:space:]]*print(' domain --include='*.py'
 ```
 
 Fix: Replace `print(...)` with `logger.info(...)` or `logger.debug(...)`
 
 ### 5. TODO/FIXME/HACK comments
+
 ```bash
-rg '(TODO|FIXME|HACK|XXX):' packages/core-py
+grep -rn 'TODO\|FIXME\|HACK\|XXX:' packages/core-py
 ```
 
 Action: Create a kanban card for each one
@@ -71,6 +81,7 @@ Action: Create a kanban card for each one
 ## Kanban Integration
 
 When creating cleanup tasks in `.kanban/board.jsonl`:
+
 ```json
 {
   "id": "cleanup_YYYYMMDD_HHMMSS_<issue-slug>",
@@ -95,6 +106,7 @@ When creating cleanup tasks in `.kanban/board.jsonl`:
 ## Fix Examples
 
 ### f-string to lazy %
+
 ```python
 # Before
 logger.info(f"Step {step}/{total} | Loss: {loss:.4f}")
@@ -104,6 +116,7 @@ logger.info("Step %d/%d | Loss: %.4f", step, total, loss)
 ```
 
 ### Missing future import
+
 ```python
 # Before
 """Module docstring."""
@@ -116,6 +129,7 @@ import logging
 ```
 
 ### Bare except
+
 ```python
 # Before
 except:
@@ -140,4 +154,4 @@ scripts/                # Utility scripts
 
 - `AGENTS.md` — Project rules
 - `.kanban/board.jsonl` — Task board
-- `.opencode/skills/python-developer/SKILL.md` — Coding patterns
+- `.opencode/skills/systems-engineering/SKILL.md` — Coding patterns

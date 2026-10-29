@@ -17,6 +17,7 @@ import {
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
+import { addGlobalError } from '@/lib/error-store'
 import { MolePluginPanel } from '@/components/mole/MolePluginPanel'
 
 interface CloudJob {
@@ -55,7 +56,7 @@ export default function PluginsCloudPage() {
       setCloudJobs(jobsResp.jobs || [])
       setPlugins(pluginsResp.plugins || [])
     } catch (err) {
-      console.error('Failed to load data:', err)
+      addGlobalError(err, 'PluginsCloud')
     } finally {
       setLoading(false)
     }
