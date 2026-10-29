@@ -247,7 +247,17 @@ html {
   }
 }
 
-/* Restarting banner */
+/* Global banner — one surface for every tone (card 87345605).
+   The tone lives in --banner-tone; every surface derives from it so all four
+   tones are distinct AND legible in both modes with one formula:
+     ink    = 35% tone + 65% foreground (the mode's own foreground anchors it)
+     border = 35% tone + 65% background (decorative hue identity)
+   The background stays the plain page surface — a tone-tinted background
+   collapses contrast for dark tones (info-on-light lands at 1.9:1), and
+   opacity-dimmed copy put light-mode warning text at 1.44:1.
+   NB: every token is an RGB TRIPLET (248 246 252), so each reference must
+   be wrapped rgb() — a bare var() substitutes the digits and invalidates the
+   whole declaration (transparent background, inherited ink). */
 .sl-app-banner {
   display: flex;
   align-items: center;
@@ -255,14 +265,27 @@ html {
   gap: 0.5rem;
   flex-shrink: 0;
   height: 1.75rem;
-  background-color: color-mix(in srgb, rgb(var(--warning)) 9%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, rgb(var(--warning)) 20%, transparent);
+  background: rgb(var(--background));
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--banner-tone)) 35%, rgb(var(--background)));
   font-size: 11px;
   font-weight: 500;
-  /* Faded warning ink: full-saturation amber read as a glowing strip. The
-     status dot still carries the pure tone; the copy sits at 65% warning over
-     the page background so it stays legible without flaring. */
-  color: color-mix(in srgb, rgb(var(--warning)) 65%, rgb(var(--background)));
+  color: color-mix(in srgb, rgb(var(--banner-tone)) 35%, rgb(var(--foreground)));
+}
+
+.sl-app-banner[data-tone='info'] {
+  --banner-tone: var(--primary);
+}
+
+.sl-app-banner[data-tone='success'] {
+  --banner-tone: var(--success);
+}
+
+.sl-app-banner[data-tone='warning'] {
+  --banner-tone: var(--warning);
+}
+
+.sl-app-banner[data-tone='destructive'] {
+  --banner-tone: var(--destructive);
 }
 
 /* Mobile drawer backdrop */
