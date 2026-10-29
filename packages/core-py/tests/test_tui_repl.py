@@ -25,7 +25,12 @@ class TestCompletePath:
         result = _complete_path("/nonexistent/path/xyz")
         assert result == []
 
-    def test_dot(self):
+    def test_dot(self, tmp_path, monkeypatch):
+        # Hermetic: "." completes CWD dotfiles. The old version depended on
+        # the suite's working directory happening to contain hidden entries
+        # (repo root passes; CI runs from packages/core-py, which has none).
+        (tmp_path / ".hidden").write_text("")
+        monkeypatch.chdir(tmp_path)
         result = _complete_path(".")
         assert isinstance(result, list)
         assert len(result) > 0

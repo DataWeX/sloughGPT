@@ -18,6 +18,7 @@ import {
 } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
+import { StatTileGrid, type StatTile } from '@/components/training/stat-tile'
 import { formatDuration } from '@/lib/formatDuration'
 import { trainingJobsController } from '@/lib/training-controller'
 import { experimentsController, type Experiment } from '@/lib/experiments-controller'
@@ -140,82 +141,54 @@ export const QuickTrainCard = memo(function QuickTrainCard({
     setConfig((prev) => ({ ...prev, [key]: clamped }))
   }
 
+  // Conditional live stats as data — absent values simply don't produce a tile,
+  // so the row fills without the grid-cols-4 hole the old markup left at 6 items.
+  const runningTiles: StatTile[] = []
+  if (session.turboTotalSteps > 0)
+    runningTiles.push({
+      key: 'step',
+      label: 'Step',
+      value: session.turboGlobalStep,
+      hint: `/${session.turboTotalSteps}`,
+    })
+  if (session.turboLoss != null)
+    runningTiles.push({ key: 'loss', label: 'Loss', value: session.turboLoss.toFixed(4) })
+  if (session.turboStepsPerSec != null)
+    runningTiles.push({
+      key: 'speed',
+      label: 'Speed',
+      value: session.turboStepsPerSec.toFixed(1),
+      hint: ' steps/s',
+    })
+  if (session.turboEta != null)
+    runningTiles.push({ key: 'eta', label: 'ETA', value: formatDuration(session.turboEta) })
+  runningTiles.push({
+    key: 'elapsed',
+    label: 'Elapsed',
+    value: formatDuration(session.turboElapsedSeconds),
+  })
+  if (session.avgQuality != null)
+    runningTiles.push({
+      key: 'quality',
+      label: 'Quality',
+      value: session.avgQuality.toFixed(1),
+      hint: '/5',
+    })
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Training — advanced options</CardTitle>
-        <p className="text-xs text-muted-foreground font-mono">epochs · lr · embed_dim · n_heads · n_layers · experiment_id</p>
+        <p className="text-xs text-muted-foreground font-mono">
+          epochs · lr · embed_dim · n_heads · n_layers · experiment_id
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {running ? (
           <div className="space-y-3" aria-live="polite" aria-atomic="true">
             <Progress value={turboProgressValue} max={100} />
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {session.turboTotalSteps > 0 && (
-                <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                    Step
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {session.turboGlobalStep}
-                    <span className="text-muted-foreground/40 font-normal">
-                      /{session.turboTotalSteps}
-                    </span>
-                  </p>
-                </div>
-              )}
-              {session.turboLoss != null && (
-                <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                    Loss
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {session.turboLoss.toFixed(4)}
-                  </p>
-                </div>
-              )}
-              {session.turboStepsPerSec != null && (
-                <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                    Speed
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {session.turboStepsPerSec.toFixed(1)}
-                    <span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span>
-                  </p>
-                </div>
-              )}
-              {session.turboEta != null && (
-                <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                    ETA
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {formatDuration(session.turboEta)}
-                  </p>
-                </div>
-              )}
-              <div className="rounded-lg bg-muted/30 px-3 py-2">
-                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                  Elapsed
-                </p>
-                <p className="text-sm font-semibold tabular-nums">
-                  {formatDuration(session.turboElapsedSeconds)}
-                </p>
-              </div>
-              {session.avgQuality != null && (
-                <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                    Quality
-                  </p>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {session.avgQuality.toFixed(1)}
-                    <span className="text-muted-foreground/40 font-normal text-xs">/5</span>
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
+            <StatTileGrid tiles={runningTiles} />
+            <div className="flex items-center gap-2 border-t border-border/60 pt-3">
               <Button variant="destructive" size="sm" onClick={session.stopTurboTrain}>
                 Stop
               </Button>
@@ -234,7 +207,7 @@ export const QuickTrainCard = memo(function QuickTrainCard({
           <div className="space-y-2 text-sm">
             <p className="text-success">Training complete!</p>
             {session.turboResult && (
-              <div className="space-y-1 text-xs text-muted-foreground">
+              <div className="space-y-1 rounded-lg bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <p>
                   Final loss:{' '}
                   {typeof session.turboResult.final_loss === 'number'
@@ -248,7 +221,7 @@ export const QuickTrainCard = memo(function QuickTrainCard({
                 )}
               </div>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 border-t border-border/60 pt-3">
               <Button size="sm" onClick={loadForChat} disabled={loadingModel}>
                 {loadingModel ? 'Loading…' : 'Load for chat'}
               </Button>
@@ -266,39 +239,96 @@ export const QuickTrainCard = memo(function QuickTrainCard({
           />
         ) : (
           <div className="space-y-4">
-            <DatasetSelector
-              datasets={datasets}
-              value={datasets.selectedDataset}
-              onChange={datasets.setSelectedDataset}
-              showImport
-            />
+            <div className="rounded-lg bg-muted/30 p-3">
+              <DatasetSelector
+                datasets={datasets}
+                value={datasets.selectedDataset}
+                onChange={datasets.setSelectedDataset}
+                showImport
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-epochs" variant="uppercase">Epochs</Label>
-                <Input id="turbo-epochs" type="number" min={1} max={500} value={config.epochs} onChange={setNum('epochs')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-epochs" variant="uppercase">
+                  Epochs
+                </Label>
+                <Input
+                  id="turbo-epochs"
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={config.epochs}
+                  onChange={setNum('epochs')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-lr" variant="uppercase">LR</Label>
-                <Input id="turbo-lr" type="text" inputMode="decimal" value={config.lr} onChange={setNum('lr')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-lr" variant="uppercase">
+                  LR
+                </Label>
+                <Input
+                  id="turbo-lr"
+                  type="text"
+                  inputMode="decimal"
+                  value={config.lr}
+                  onChange={setNum('lr')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-embed" variant="uppercase">Embed</Label>
-                <Input id="turbo-embed" type="number" min={16} max={1024} value={config.embed} onChange={setNum('embed')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-embed" variant="uppercase">
+                  Embed
+                </Label>
+                <Input
+                  id="turbo-embed"
+                  type="number"
+                  min={16}
+                  max={1024}
+                  value={config.embed}
+                  onChange={setNum('embed')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-heads" variant="uppercase">Heads</Label>
-                <Input id="turbo-heads" type="number" min={1} max={32} value={config.heads} onChange={setNum('heads')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-heads" variant="uppercase">
+                  Heads
+                </Label>
+                <Input
+                  id="turbo-heads"
+                  type="number"
+                  min={1}
+                  max={32}
+                  value={config.heads}
+                  onChange={setNum('heads')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-layers" variant="uppercase">Layers</Label>
-                <Input id="turbo-layers" type="number" min={1} max={64} value={config.layers} onChange={setNum('layers')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-layers" variant="uppercase">
+                  Layers
+                </Label>
+                <Input
+                  id="turbo-layers"
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={config.layers}
+                  onChange={setNum('layers')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
             </div>
             {experiments.length > 0 && (
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-experiment" variant="uppercase">Experiment</Label>
+                <Label htmlFor="turbo-experiment" variant="uppercase">
+                  Experiment
+                </Label>
                 <Select value={selectedExperimentId} onValueChange={setSelectedExperimentId}>
-                  <SelectTrigger id="turbo-experiment" className="h-8 text-xs font-mono" aria-label="Experiment">
+                  <SelectTrigger
+                    id="turbo-experiment"
+                    className="h-8 text-xs font-mono"
+                    aria-label="Experiment"
+                  >
                     <SelectValue placeholder="None" />
                   </SelectTrigger>
                   <SelectContent>
@@ -312,9 +342,16 @@ export const QuickTrainCard = memo(function QuickTrainCard({
                 </Select>
               </div>
             )}
-            <Button size="sm" onClick={start} disabled={!datasets.selectedDataset || starting} className="font-mono">
-              {starting ? 'Starting...' : 'Start turbo train'}
-            </Button>
+            <div className="flex items-center gap-2 border-t border-border/60 pt-3">
+              <Button
+                size="sm"
+                onClick={start}
+                disabled={!datasets.selectedDataset || starting}
+                className="font-mono"
+              >
+                {starting ? 'Starting...' : 'Start turbo train'}
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

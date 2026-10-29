@@ -3,6 +3,9 @@
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from domain.training._internal.pair_extractor import (
     count_pairs_in_corpus,
@@ -228,6 +231,24 @@ class TestExtractPairsFromSessions:
 
 
 class TestExtractPairsFromLogs:
+    @pytest.fixture(autouse=True)
+    def _isolate_mogdb_path(self, monkeypatch):
+        """These tests own the JSONL fallback only — neutralize the MogDB-first read.
+
+        extract_pairs_from_logs() queries the response tracker's MogDB
+        collection FIRST and falls back to _RESPONSE_LOGS_DIR. The tracker is
+        a process-wide singleton over the repo-local data/response_mogdb
+        store, which accumulates fixture docs written by other suites — so
+        without this stub these tests silently depend on store contents
+        (polluted locally, empty in CI; card 26fc83c4). _coll=None forces the
+        JSONL fallback each test already redirects via monkeypatch.
+        """
+        stub = SimpleNamespace(_coll=None)
+        monkeypatch.setattr(
+            "domain.feedback._internal.response_tracker.get_response_tracker",
+            lambda: stub,
+        )
+
     def test_basic_extraction(self, tmp_path, monkeypatch):
         """Extracts pairs from JSONL response logs."""
         monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)

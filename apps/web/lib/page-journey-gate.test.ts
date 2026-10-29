@@ -23,8 +23,16 @@ import baseline from './page-baseline.json'
 const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const APP_ROOT = join(WEB_ROOT, 'app')
 
-/** Measured on main 2026-10-17 (AGENTS.md Page Rule cites the same numbers). */
-const GRANDFATHERED_CEILING = 110
+/**
+ * Measured on main 2026-10-17 (AGENTS.md Page Rule cites the same numbers).
+ * 2026-10-21: 110 -> 109 — the `/images` page was absorbed into `/files`
+ * (route-map row `/files` <- `/files` + `/images`, card 7839a7c6), and the
+ * old path now 307s through `lib/redirects.ts`.
+ * 2026-10-24: 109 -> 73 — the 36 `knownShadowed` pages (a live `page.tsx`
+ * AND a redirect source, so unreachable) were deleted with their colocated
+ * tests and error/loading companions; `knownShadowed` is now empty.
+ */
+const GRANDFATHERED_CEILING = 72
 
 interface PageBaseline {
   grandfathered: string[]
@@ -44,7 +52,12 @@ function collectPages(dir: string, out: string[] = []): string[] {
 
 /** Paths relative to apps/web, forward slashes — the catalogue format. */
 const diskPages = collectPages(APP_ROOT)
-  .map((p) => p.slice(WEB_ROOT.length + 1).split('\\').join('/'))
+  .map((p) =>
+    p
+      .slice(WEB_ROOT.length + 1)
+      .split('\\')
+      .join('/'),
+  )
   .sort()
 
 describe('Page Rule — page baseline ratchet', () => {
@@ -75,9 +88,10 @@ describe('Page Rule — page baseline ratchet', () => {
   it('new pages cite a ux/ journey — they can never self-grandfather', () => {
     const grandfathered = new Set(catalog.grandfathered)
     for (const entry of catalog.journeys) {
-      expect(entry.journeyId, `${entry.path} must cite a docs/UX_FLOWS.md flow as ux/<flow>`).toMatch(
-        /^ux\/[a-z0-9][a-z0-9-]*$/,
-      )
+      expect(
+        entry.journeyId,
+        `${entry.path} must cite a docs/UX_FLOWS.md flow as ux/<flow>`,
+      ).toMatch(/^ux\/[a-z0-9][a-z0-9-]*$/)
       expect(grandfathered.has(entry.path), `${entry.path} is in both lists`).toBe(false)
     }
   })

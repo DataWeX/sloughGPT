@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useErrorStore } from '@/lib/error-store'
+import { authFetch } from '@/lib/http-client'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useErrorStream } from '@/hooks/useErrorStream'
 import { ErrorDiagnosticsPanel } from '@/components/ErrorDiagnosticsPanel'
@@ -74,9 +75,9 @@ function Sparkline({
 }
 
 function scoreBg(score: number): string {
-  if (score >= 80) return 'bg-success/10 border-green-400/20'
-  if (score >= 50) return 'bg-yellow-400/10 border-yellow-400/20'
-  return 'bg-red-400/10 border-red-400/20'
+  if (score >= 80) return 'bg-success/10 border-success/20'
+  if (score >= 50) return 'bg-warning/10 border-warning/20'
+  return 'bg-destructive/10 border-destructive/20'
 }
 
 export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
@@ -106,7 +107,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
     }
     const refresh = async () => {
       try {
-        const r = await fetch('/health/debug', { signal: AbortSignal.timeout(3000) })
+        const r = await authFetch('/health/debug', { signal: AbortSignal.timeout(3000) })
         if (r.ok) {
           const d = await r.json()
           setGpuBackend(d.gpu_backend || null)
@@ -228,7 +229,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
               <span
                 className={cn(
                   'inline-block h-1 w-1 rounded-full',
-                  debugApiStatus === 'error' ? 'bg-yellow-400' : 'bg-destructive',
+                  debugApiStatus === 'error' ? 'bg-warning' : 'bg-destructive',
                 )}
               />
               {debugApiStatus === 'error' ? 'api err' : 'api off'}
@@ -452,7 +453,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
               className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
               onClick={async () => {
                 try {
-                  const r = await fetch('/health', { signal: AbortSignal.timeout(3000) })
+                  const r = await authFetch('/health', { signal: AbortSignal.timeout(3000) })
                   const d = await r.json()
                   const status = d?.data?.model_loaded ? 'Model loaded' : 'No model'
                   window.dispatchEvent(

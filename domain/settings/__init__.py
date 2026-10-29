@@ -5,6 +5,8 @@ Public API:
     AppSettings, PersistentSettings, get_settings
 """
 
+from __future__ import annotations
+
 from domain.settings._internal.persistent import (
     AdaptiveSettings,
     AppSettings,

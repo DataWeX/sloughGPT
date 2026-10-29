@@ -12,6 +12,7 @@
 
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
+import { authFetch } from '@/lib/http-client'
 import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 
 export interface ErrorEvent {
@@ -70,7 +71,8 @@ let _fallbackTimer: ReturnType<typeof setInterval> | null = null
 function onEvent(envelope: SSEEnvelope) {
   if (envelope.stream !== 'errors') return
   const d = envelope.data
-  const ctx = d.context && typeof d.context === 'object' ? d.context as Record<string, unknown> : undefined
+  const ctx =
+    d.context && typeof d.context === 'object' ? (d.context as Record<string, unknown>) : undefined
 
   // Extract correlation ID from multiple possible key names
   const correlationId = ctx
@@ -91,10 +93,24 @@ function onEvent(envelope: SSEEnvelope) {
     fingerprint: d.fingerprint ? String(d.fingerprint) : undefined,
     count: typeof d.count === 'number' ? d.count : undefined,
     correlationId,
-    httpMethod: d.http_method ? String(d.http_method) : ctx?.method ? String(ctx.method) : undefined,
+    httpMethod: d.http_method
+      ? String(d.http_method)
+      : ctx?.method
+        ? String(ctx.method)
+        : undefined,
     httpPath: d.http_path ? String(d.http_path) : ctx?.path ? String(ctx.path) : undefined,
-    httpStatus: typeof d.http_status === 'number' ? d.http_status : typeof ctx?.status === 'number' ? Number(ctx.status) : undefined,
-    durationMs: typeof d.duration_ms === 'number' ? d.duration_ms : typeof ctx?.dur_ms === 'number' ? Number(ctx.dur_ms) : undefined,
+    httpStatus:
+      typeof d.http_status === 'number'
+        ? d.http_status
+        : typeof ctx?.status === 'number'
+          ? Number(ctx.status)
+          : undefined,
+    durationMs:
+      typeof d.duration_ms === 'number'
+        ? d.duration_ms
+        : typeof ctx?.dur_ms === 'number'
+          ? Number(ctx.dur_ms)
+          : undefined,
     timestamp: typeof d.ts === 'number' ? d.ts * 1000 : Date.now(),
     context: ctx,
   }
@@ -116,7 +132,7 @@ function onClose() {
 
 async function fallbackPoll() {
   try {
-    const res = await fetch('/errors/recent?limit=20', { signal: AbortSignal.timeout(5000) })
+    const res = await authFetch('/errors/recent?limit=20', { signal: AbortSignal.timeout(5000) })
     if (!res.ok) return
     const json = await res.json()
     const errors = json?.data?.errors || []

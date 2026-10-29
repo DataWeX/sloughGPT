@@ -120,7 +120,7 @@ export default function DailyGoal() {
         </div>
 
         {isComplete && (
-          <div className="p-3 rounded-lg bg-success/10 border border-green-500/20 text-sm text-green-700">
+          <div className="p-3 rounded-lg bg-success/10 border border-success/20 text-sm text-success">
             Great job! You&apos;ve reached your daily goal! Keep practicing or set a higher target.
           </div>
         )}

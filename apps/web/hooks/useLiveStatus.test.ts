@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { liveStatusStore, useLiveStatus, mapDetailedToSnapshot, initLiveStatus } from './useLiveStatus'
+import {
+  liveStatusStore,
+  useLiveStatus,
+  mapDetailedToSnapshot,
+  initLiveStatus,
+} from './useLiveStatus'
+import { useQueryStore } from '@/lib/cache/client'
 
 const mocks = vi.hoisted(() => ({
   createSSEStream: vi.fn(),
@@ -67,7 +73,9 @@ describe('liveStatusStore', () => {
       quantization: null,
       training_pool: null,
     } as any
-    act(() => { liveStatusStore.getState().setHealth(snap) })
+    act(() => {
+      liveStatusStore.getState().setHealth(snap)
+    })
     const state = liveStatusStore.getState()
     expect(state.health).toEqual(snap)
     expect(state.lastUpdate).toBeTypeOf('number')
@@ -75,13 +83,19 @@ describe('liveStatusStore', () => {
   })
 
   it('setConnectionStatus updates status', () => {
-    act(() => { liveStatusStore.getState().setConnectionStatus('connected') })
+    act(() => {
+      liveStatusStore.getState().setConnectionStatus('connected')
+    })
     expect(liveStatusStore.getState().connectionStatus).toBe('connected')
   })
 
   it('incrementFailures increments count', () => {
-    act(() => { liveStatusStore.getState().incrementFailures() })
-    act(() => { liveStatusStore.getState().incrementFailures() })
+    act(() => {
+      liveStatusStore.getState().incrementFailures()
+    })
+    act(() => {
+      liveStatusStore.getState().incrementFailures()
+    })
     expect(liveStatusStore.getState().failureCount).toBe(2)
   })
 
@@ -90,7 +104,9 @@ describe('liveStatusStore', () => {
       liveStatusStore.getState().setConnectionStatus('connected')
       liveStatusStore.getState().incrementFailures()
     })
-    act(() => { liveStatusStore.getState().reset() })
+    act(() => {
+      liveStatusStore.getState().reset()
+    })
     const state = liveStatusStore.getState()
     expect(state.connectionStatus).toBe('connecting')
     expect(state.health).toBeNull()
@@ -98,8 +114,17 @@ describe('liveStatusStore', () => {
   })
 
   it('setHealthLegacy updates legacy shape', () => {
-    const legacy = { status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'good', inference_count: 1, is_inferencing: false } as any
-    act(() => { liveStatusStore.getState().setHealthLegacy(legacy) })
+    const legacy = {
+      status: 'ok',
+      model_loaded: true,
+      model_type: 'gpt2',
+      summary: 'good',
+      inference_count: 1,
+      is_inferencing: false,
+    } as any
+    act(() => {
+      liveStatusStore.getState().setHealthLegacy(legacy)
+    })
     expect(liveStatusStore.getState().healthLegacy).toEqual(legacy)
   })
 })
@@ -115,14 +140,18 @@ describe('mapDetailedToSnapshot', () => {
       avg_latency_ms: 80,
       requests_per_minute: 4.5,
       path_latencies: [{ path: '/inference/generate', avg_ms: 80, count: 5, p95_ms: 120 }],
-      recent_errors: [{ path: '/chat', method: 'POST', status: 500, message: 'boom', error_type: 'Err', ts: 100 }],
+      recent_errors: [
+        { path: '/chat', method: 'POST', status: 500, message: 'boom', error_type: 'Err', ts: 100 },
+      ],
       inference_count: 8,
       total_tokens: 12000,
       tokens_per_sec: 12.5,
       avg_tokens_per_request: 160,
       health_score: { score: 90, status: 'healthy' },
       status_message: 'All good',
-      model_metrics: [{ model: 'gpt2', count: 3, total_tokens: 1000, tokens_per_sec: 5, avg_tokens: 333 }],
+      model_metrics: [
+        { model: 'gpt2', count: 3, total_tokens: 1000, tokens_per_sec: 5, avg_tokens: 333 },
+      ],
       model_events: [{ type: 'load', model: 'gpt2', detail: '', ts: 100 }],
       health_history: [{ score: 90, status: 'healthy', ts: 100 }],
       memory_history: [{ rss_mb: 300, virtual_mb: 400, system_percent: 55, ts: 100 }],
@@ -202,11 +231,26 @@ describe('useLiveStatus hook', () => {
     act(() => {
       liveStatusStore.getState().setConnectionStatus('connected')
       liveStatusStore.getState().setHealth({
-        model_loaded: true, model_loading: false, model_type: 'gpt2', soul: null,
-        is_inferencing: false, inference_count: 0, uptime_seconds: 0, request_count: 0,
-        error_count: 0, tokens_per_sec: 0, avg_latency_ms: 0, cpu_percent: null,
-        memory_percent: null, health_score: 80, health_status: 'ok', health_summary: '',
-        diagnoses: [], num_parameters: null, quantization: null, training_pool: null,
+        model_loaded: true,
+        model_loading: false,
+        model_type: 'gpt2',
+        soul: null,
+        is_inferencing: false,
+        inference_count: 0,
+        uptime_seconds: 0,
+        request_count: 0,
+        error_count: 0,
+        tokens_per_sec: 0,
+        avg_latency_ms: 0,
+        cpu_percent: null,
+        memory_percent: null,
+        health_score: 80,
+        health_status: 'ok',
+        health_summary: '',
+        diagnoses: [],
+        num_parameters: null,
+        quantization: null,
+        training_pool: null,
       } as any)
     })
     const { result } = renderHook(() => useLiveStatus())
@@ -216,7 +260,9 @@ describe('useLiveStatus hook', () => {
   })
 
   it('returns offline status', () => {
-    act(() => { liveStatusStore.getState().setHealthLegacy('offline') })
+    act(() => {
+      liveStatusStore.getState().setHealthLegacy('offline')
+    })
     const { result } = renderHook(() => useLiveStatus())
     expect(result.current.healthLegacy).toBe('offline')
   })
@@ -255,7 +301,10 @@ describe('initLiveStatus', () => {
 
   it('updates the store from SSE health events', () => {
     const cleanup = initLiveStatus()
-    streamConfig.onEvent({ stream: 'health', data: { model_loaded: true, model_type: 'qwen', soul: 'friendly', health_status: 'healthy' } })
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_loaded: true, model_type: 'qwen', soul: 'friendly', health_status: 'healthy' },
+    })
     const s = liveStatusStore.getState()
     expect(s.connectionStatus).toBe('connected')
     expect(s.health?.model_type).toBe('qwen')
@@ -265,14 +314,20 @@ describe('initLiveStatus', () => {
 
   it('resolves unknown SSE stage to background when the model is loaded', () => {
     const cleanup = initLiveStatus()
-    streamConfig.onEvent({ stream: 'health', data: { model_loaded: true, health_status: 'healthy' } })
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_loaded: true, health_status: 'healthy' },
+    })
     expect(liveStatusStore.getState().health?.startup_stage).toBe('background')
     cleanup()
   })
 
   it('keeps unknown SSE stage when no model is loaded', () => {
     const cleanup = initLiveStatus()
-    streamConfig.onEvent({ stream: 'health', data: { model_loaded: false, health_status: 'healthy' } })
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_loaded: false, health_status: 'healthy' },
+    })
     expect(liveStatusStore.getState().health?.startup_stage).toBe('unknown')
     cleanup()
   })
@@ -284,7 +339,13 @@ describe('initLiveStatus', () => {
       data: {
         model_loaded: true,
         health_status: 'healthy',
-        startup_progress: { stage: 'ready', stage_value: 2, elapsed_seconds: 5, model_progress: 1, hooks: {} },
+        startup_progress: {
+          stage: 'ready',
+          stage_value: 2,
+          elapsed_seconds: 5,
+          model_progress: 1,
+          hooks: {},
+        },
       },
     })
     expect(liveStatusStore.getState().health?.startup_stage).toBe('ready')
@@ -343,12 +404,34 @@ describe('initLiveStatus', () => {
     cleanup()
   })
 
+  it('revalidates the client cache instead of reloading at the failure threshold', () => {
+    const cleanup = initLiveStatus()
+    const versionBefore = useQueryStore.getState().refreshVersion
+
+    for (let i = 0; i < 6; i++) {
+      streamConfig.onError(new Error('stream failed'))
+    }
+
+    // Cache revalidated in place…
+    expect(useQueryStore.getState().refreshVersion).toBe(versionBefore + 1)
+    // …no document reload and no sessionStorage loop-guard left behind…
+    expect(liveStatusStore.getState().connectionStatus).not.toBe('reloading')
+    expect(sessionStorage.getItem('slo-reload-count')).toBeNull()
+    expect(sessionStorage.getItem('slo-reload-window-start')).toBeNull()
+    // …and the counter resets so it re-fires every N failures, not every poll.
+    expect(liveStatusStore.getState().failureCount).toBe(0)
+    cleanup()
+  })
+
   it('does not poll detailed health immediately when SSE delivers within the grace window', () => {
     vi.useFakeTimers()
     try {
       const cleanup = initLiveStatus()
       expect(mocks.getDetailedHealth).not.toHaveBeenCalled()
-      streamConfig.onEvent({ stream: 'health', data: { model_type: 'qwen', health_status: 'healthy' } })
+      streamConfig.onEvent({
+        stream: 'health',
+        data: { model_type: 'qwen', health_status: 'healthy' },
+      })
       vi.advanceTimersByTime(20000)
       expect(mocks.getDetailedHealth).not.toHaveBeenCalled()
       cleanup()
@@ -368,5 +451,114 @@ describe('initLiveStatus', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('offline escalation & drop honesty (card 87345605)', () => {
+  let streamConfig: any
+
+  beforeEach(() => {
+    streamConfig = null
+    mocks.createSSEStream.mockImplementation((cfg: any) => {
+      streamConfig = cfg
+      return { start: vi.fn(), stop: vi.fn() }
+    })
+    mocks.getDetailedHealth.mockResolvedValue(null)
+    liveStatusStore.setState({
+      connectionStatus: 'connecting',
+      health: null,
+      healthLegacy: null,
+      lastUpdate: null,
+      failureCount: 0,
+      lastError: null,
+    })
+  })
+
+  it('escalates to offline after two consecutive stream errors', () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onError(new Error('stream failed'))
+    expect(liveStatusStore.getState().connectionStatus).toBe('connecting')
+    streamConfig.onError(new Error('stream failed'))
+    // Second consecutive failure = a real drop, not a hiccup. The Retry UI
+    // (and its probe path) hangs off this state — before the fix nothing in
+    // production ever emitted 'offline', so the offline UI was unreachable.
+    expect(liveStatusStore.getState().connectionStatus).toBe('offline')
+    cleanup()
+  })
+
+  it('escalates to offline after repeated fallback-poll failures', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.getDetailedHealth.mockResolvedValue(null)
+      const cleanup = initLiveStatus()
+      streamConfig.onClose()
+      await vi.advanceTimersByTimeAsync(25_000)
+      expect(liveStatusStore.getState().failureCount).toBeGreaterThanOrEqual(2)
+      expect(liveStatusStore.getState().connectionStatus).toBe('offline')
+      cleanup()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers to connected when a poll succeeds after offline', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.getDetailedHealth.mockResolvedValue(null)
+      const cleanup = initLiveStatus()
+      streamConfig.onClose()
+      await vi.advanceTimersByTimeAsync(25_000)
+      expect(liveStatusStore.getState().connectionStatus).toBe('offline')
+
+      mocks.getDetailedHealth.mockResolvedValue({
+        model_loaded: true,
+        model_type: 'gpt2',
+        soul: 'friendly',
+        health_score: { score: 90, status: 'healthy' },
+        num_parameters: 124000000,
+        inference: { inference_count: 3, is_inferencing: false },
+        model_metrics: [],
+        path_latencies: [],
+        recent_errors: [],
+        model_events: [],
+        rate_violations: [],
+        health_history: [],
+        memory_history: [],
+      } as any)
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(liveStatusStore.getState().connectionStatus).toBe('connected')
+      cleanup()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps last known health across an SSE drop', async () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_type: 'qwen', health_status: 'healthy' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(liveStatusStore.getState().health).not.toBeNull()
+    streamConfig.onClose()
+    // The drop changes connection status only — the last snapshot must
+    // survive so the status bar can say "Reconnecting" WITH the model it
+    // lost instead of flashing an empty "No model".
+    expect(liveStatusStore.getState().health).not.toBeNull()
+    cleanup()
+  })
+
+  it('does not wipe health when the stream reopens', async () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_type: 'qwen', health_status: 'healthy' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    streamConfig.onOpen()
+    expect(liveStatusStore.getState().health).not.toBeNull()
+    expect(liveStatusStore.getState().connectionStatus).toBe('connected')
+    cleanup()
   })
 })

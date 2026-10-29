@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from '@/vite/next-compat/server'
 import { getStats } from '../helpers'
 
 export async function GET(request: Request) {
@@ -7,9 +7,6 @@ export async function GET(request: Request) {
     const stats = getStats(workspaceId)
     return NextResponse.json({ stats })
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to read stats' },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: 'Failed to read stats' }, { status: 500 })
   }
 }

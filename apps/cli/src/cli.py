@@ -341,15 +341,25 @@ def tui(ctx):
     "--tui/--no-tui", default=None, is_flag=True, help="Curses TUI mode (default when TTY)"
 )
 @click.option("--line", is_flag=True, help="Force line-mode REPL (no TUI)")
+@click.option(
+    "--remote",
+    is_flag=True,
+    help="Talk to an API server over HTTP instead of the in-process core",
+)
 @click.pass_context
-def shell(ctx, command, tui, line):
-    """Launch the SloughGPT interactive shell REPL."""
-    from utils.helpers import ensure_server
+def shell(ctx, command, tui, line, remote):
+    """Launch the SloughGPT interactive shell REPL.
 
-    actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
+    By default the shell runs the domain core in-process — no API server
+    needed (card ad4f5ec2). Pass ``--remote`` (or set ``MAN_API_URL``) to
+    dispatch every command to a running API server over HTTP instead.
+    """
     from domain.shell import DaitRuntime, ShellREPL
+    from domain.shell._internal.config import set_remote_mode
 
-    os = DaitRuntime(api_url=actual_url)
+    if remote:
+        set_remote_mode(True)
+    os = DaitRuntime()
     # Default to TUI when TTY, line mode when piped or --line
     use_tui = True
     if line:
@@ -473,7 +483,7 @@ def dev(ctx, model, web_port, watch_web, auto_download):
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
 @click.option(
-    "--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and opens browser"
+    "--web", is_flag=True, help="Start full FastAPI server + Vite web UI and opens browser"
 )
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
 @click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")

@@ -67,6 +67,15 @@ REGRESSION_THRESHOLDS = {
         "first_token_rag_s": (50.0, "rel"),
         "decode_tok_s": (30.0, "rel"),
     },
+    "bootstrap": {
+        # GET /bootstrap → landing first paint; frontend overlay watchdog = 8s
+        # rel limits are PERCENT (100.0 = 100%): load-tolerant but still
+        # catching fan-out storms (pre-fix cold envelope ~19.5s vs ~1.0s)
+        "first_s": (100.0, "rel"),
+        "warm_p95_s": (50.0, "rel"),
+        # a degraded member = partial landing page; zero tolerance
+        "member_errors": (0, "abs"),
+    },
 }
 
 
@@ -291,6 +300,11 @@ def do_record(args) -> int:
                 "[ERR] effects kind requires --json-file (from show_effects.py --json)",
                 file=sys.stderr,
             )
+        elif kind == "bootstrap":
+            print(
+                "[ERR] bootstrap kind requires --json-file (from benchmark_bootstrap.py)",
+                file=sys.stderr,
+            )
             return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
@@ -354,7 +368,7 @@ def do_history(args) -> int:
     for kind in (
         [args.kind]
         if args.kind
-        else ["stability", "latency", "startup", "execution", "training", "effects"]
+        else ["stability", "latency", "startup", "execution", "training", "effects", "bootstrap"]
     ):
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
@@ -393,6 +407,12 @@ def do_history(args) -> int:
                         f"attn1={str(c.get('attn_single_ms', '?')):<7} "
                         f"rag={str(c.get('rag_context_chars', '?')):<6} "
                         f"load={str(c.get('loadavg', '?')):<5}  {p.name}"
+                    )
+                elif kind == "bootstrap":
+                    print(
+                        f"  {stamp}  {model:<24} first={str(c.get('first_s', '?')):<7} "
+                        f"p95={str(c.get('warm_p95_s', '?')):<7} "
+                        f"errs={c.get('member_errors', '?')}  {p.name}"
                     )
                 else:  # latency and unknown kinds
                     print(
@@ -472,7 +492,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup", "effects"],
+        choices=["stability", "latency", "execution", "training", "startup", "effects", "bootstrap"]
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -485,7 +505,7 @@ def main() -> int:
     p_h.add_argument(
         "--kind",
         default=None,
-        choices=["stability", "latency", "execution", "training", "startup", "effects"],
+        choices=["stability", "latency", "execution", "training", "startup", "effects", "bootstrap"]
     )
     p_h.set_defaults(fn=do_history)
 
@@ -493,7 +513,7 @@ def main() -> int:
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup", "effects"],
+        choices=["stability", "latency", "execution", "training", "startup", "effects", "bootstrap"]
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)

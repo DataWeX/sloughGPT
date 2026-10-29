@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { authFetch } from '@/lib/http-client'
+import { useQuery } from '@/lib/cache'
 
 interface StartupRecord {
   timestamp: number
@@ -15,26 +16,33 @@ interface StartupHistoryChartProps {
   className?: string
 }
 
+async function fetchStartupHistory(): Promise<Record<string, unknown>> {
+  const res = await authFetch('/health/startup-history')
+  const json = await res.json()
+  return (json.data ?? {}) as Record<string, unknown>
+}
+
+/**
+ * Shared cache entry for `/health/startup-history`. The Startup tab's history
+ * panel and this chart read the same payload, so one key means one fetch — and
+ * one `revalidateAll()` re-reads both in place. Neither remounts.
+ *
+ * The key is a plain string (like `useQuery('models', …)`) so it is referentially
+ * stable: `useQuery`'s `refetch` is `useCallback([key])`, and a stable key keeps
+ * `refetch` stable, which keeps the Startup tab's 2s poll from being torn down
+ * and re-created on every render.
+ */
+export const STARTUP_HISTORY_KEY = 'developer-startup-history'
+
+export function useStartupHistory() {
+  return useQuery<Record<string, unknown>>(STARTUP_HISTORY_KEY, fetchStartupHistory)
+}
+
 export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
-  const [records, setRecords] = useState<StartupRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data, isLoading } = useStartupHistory()
+  const records = (data?.records as StartupRecord[] | undefined) ?? []
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const res = await fetch('/health/startup-history')
-        const json = await res.json()
-        setRecords(json.data?.records ?? [])
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchHistory()
-  }, [])
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className={cn('rounded-xl border border-white/[0.06] bg-term-surface p-4', className)}>
         <div className="h-9 -mx-4 -mt-4 mb-4 px-4 bg-term-header border-b border-white/[0.06] flex items-center">
@@ -60,11 +68,16 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
     )
   }
 
-  const maxDuration = Math.max(...records.map(r => r.total_duration))
+  const maxDuration = Math.max(...records.map((r) => r.total_duration))
   const avgDuration = records.reduce((sum, r) => sum + r.total_duration, 0) / records.length
 
   return (
-    <div className={cn('rounded-xl border border-white/[0.06] bg-term-surface overflow-hidden', className)}>
+    <div
+      className={cn(
+        'rounded-xl border border-white/[0.06] bg-term-surface overflow-hidden',
+        className,
+      )}
+    >
       <div className="h-9 px-4 bg-term-header border-b border-white/[0.06] flex items-center justify-between">
         <span className="text-[11px] font-medium text-term-text-muted">Startup History</span>
         <span className="text-[10px] text-term-text-dim font-mono">{records.length} runs</span>

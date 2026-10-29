@@ -84,6 +84,10 @@ class TurnResult:
     elapsed_ms: float | None = None
     finish_reason: str | None = None
     tokens: list[str] = field(default_factory=list)
+    consciousness: dict | None = None
+    """Reflection result to surface as a CONSCIOUSNESS SSE event, if any."""
+    memory: dict | None = None
+    """Auto-memory outcome (stored/fact/facts) to surface as MEMORY, if any."""
 
 
 @runtime_checkable

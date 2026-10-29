@@ -17,12 +17,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import time
 from typing import Any
 
+from domain.memory._internal import memory_card
 from domain.memory._internal.config import MemoryConfig
 from domain.memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
 
 logger = logging.getLogger(__name__)
+
+ACTIVE_CARD_ENV = "SLO_MEMORY_ACTIVE_CARD"
+_CARD_FETCH_LIMIT = 1_000_000
 
 
 class MemoryService:
@@ -42,6 +48,7 @@ class MemoryService:
         """
         self._provider: MemoryProvider = provider or KnowledgeMemoryProvider()
         self._config = config or MemoryConfig.get()
+        self._active_card_loaded = False
 
     @property
     def enabled(self) -> bool:
@@ -289,6 +296,208 @@ class MemoryService:
         if not self.enabled:
             return False
         return self._provider.update(item_id, content, topic=topic, importance=importance)
+
+    # ── loadable memory cards ───────────────────────────────────────────────
+
+    def save_card(
+        self, name: str | None = None, overwrite: bool = False, cards_dir: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Snapshot current long-term memory into a portable card file.
+
+        Args:
+            name: card name; ``None`` auto-generates a unique ``card-<ts>``.
+            overwrite: allow replacing an existing card of the same name.
+            cards_dir: override cards directory (default
+                ``SLO_MEMORY_CARDS_DIR`` or ``data/memory_cards``).
+
+        Returns:
+            dict: ``ok=True`` with ``name``/``facts_count``/``created_at``/
+            ``size_bytes``, or ``ok=False`` with ``error``/``error_code``
+            (``disabled``/``exists``/``invalid_name``).
+
+        Side effects:
+            - writes one atomic card file; memory store untouched.
+        """
+        if not self.enabled:
+            return {"ok": False, "error": "memory is disabled", "error_code": "disabled"}
+        facts = self._provider.list_all(limit=_CARD_FETCH_LIMIT)
+        try:
+            info = memory_card.save_card(facts, name, cards_dir=cards_dir, overwrite=overwrite)
+        except memory_card.MemoryCardError as e:
+            return {"ok": False, "error": str(e), "error_code": e.error_code}
+        return {
+            "ok": True,
+            "name": info.name,
+            "facts_count": info.facts_count,
+            "created_at": info.created_at,
+            "size_bytes": info.size_bytes,
+        }
+
+    def load_card(
+        self, name: str, mode: str = "replace", cards_dir: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Load a card back into long-term memory.
+
+        The card is fully read and checksum-verified BEFORE any store
+        mutation. ``mode="replace"`` first autosaves current memory to an
+        ``autosave-<ts>`` card and aborts (store untouched) if that backup
+        cannot be written; ``mode="merge"`` imports alongside existing facts
+        (content-hash dedup makes it idempotent).
+
+        Args:
+            name: card to load.
+            mode: ``"replace"`` (default) or ``"merge"``.
+            cards_dir: override cards directory.
+
+        Returns:
+            dict: ``ok=True`` with ``name``/``mode``/``facts_count``/
+            ``imported``/``skipped``/``backup`` (replace only) or ``ok=False``
+            with ``error``/``error_code`` (``disabled``/``not_found``/
+            ``corrupt``/``invalid_mode``/``backup_failed``).
+
+        Side effects:
+            - replace: autosave card written, store cleared, facts re-imported.
+            - merge: facts imported (duplicates skipped).
+        """
+        if not self.enabled:
+            return {"ok": False, "error": "memory is disabled", "error_code": "disabled"}
+        if mode not in ("replace", "merge"):
+            return {
+                "ok": False,
+                "error": f"invalid mode {mode!r} (expected replace|merge)",
+                "error_code": "invalid_mode",
+            }
+        try:
+            facts = memory_card.load_card(name, cards_dir=cards_dir)  # verify FIRST
+        except memory_card.MemoryCardError as e:
+            return {"ok": False, "error": str(e), "error_code": e.error_code}
+
+        backup: str | None = None
+        replaced = 0
+        if mode == "replace":
+            current = self._provider.list_all(limit=_CARD_FETCH_LIMIT)
+            if current:
+                try:
+                    autosave_name = (
+                        "autosave-"
+                        + time.strftime("%Y%m%d-%H%M%S", time.localtime())
+                        + f"-{time.time_ns() % 1_000_000:06d}"
+                    )
+                    backup_info = memory_card.save_card(current, autosave_name, cards_dir=cards_dir)
+                    backup = backup_info.name
+                except Exception as e:
+                    logger.warning("memory card load aborted, autosave failed: %s", e)
+                    return {
+                        "ok": False,
+                        "error": f"autosave backup failed, load aborted: {e}",
+                        "error_code": "backup_failed",
+                    }
+            replaced = self._provider.clear()
+
+        imported, skipped = self._provider.store_facts(facts)
+        logger.info(
+            "memory card loaded: %s mode=%s imported=%d skipped=%d backup=%s",
+            name,
+            mode,
+            imported,
+            skipped,
+            backup,
+        )
+        return {
+            "ok": True,
+            "name": name,
+            "mode": mode,
+            "facts_count": len(facts),
+            "imported": imported,
+            "skipped": skipped,
+            "replaced": replaced,
+            "backup": backup,
+        }
+
+    def list_cards(self, cards_dir: str | None = None) -> dict[str, Any]:
+        """
+        List saved memory cards, newest first.
+
+        Available even while memory is disabled (file management only).
+
+        Returns:
+            dict: ``ok=True`` with ``cards`` — list of CardInfo dicts
+            (``name``/``created_at``/``facts_count``/``size_bytes``/``valid``).
+
+        Side effects:
+            - none; read-only.
+        """
+        try:
+            infos = memory_card.list_cards(cards_dir=cards_dir)
+        except Exception as e:
+            logger.warning("memory card listing failed: %s", e)
+            return {"ok": False, "error": str(e), "error_code": "card_error"}
+        return {
+            "ok": True,
+            "cards": [
+                {
+                    "name": i.name,
+                    "created_at": i.created_at,
+                    "facts_count": i.facts_count,
+                    "size_bytes": i.size_bytes,
+                    "valid": i.valid,
+                }
+                for i in infos
+            ],
+        }
+
+    def delete_card(self, name: str, cards_dir: str | None = None) -> dict[str, Any]:
+        """
+        Delete a saved memory card (memory store untouched).
+
+        Args:
+            name: card to delete.
+            cards_dir: override cards directory.
+
+        Returns:
+            dict: ``ok=True`` with ``deleted`` (bool); ``ok=False`` with
+            ``error``/``error_code`` for invalid names.
+
+        Side effects:
+            - removes the card file when present.
+        """
+        try:
+            deleted = memory_card.delete_card(name, cards_dir=cards_dir)
+        except memory_card.MemoryCardError as e:
+            return {"ok": False, "error": str(e), "error_code": e.error_code}
+        return {"ok": True, "deleted": deleted}
+
+    def ensure_active_card(self) -> bool:
+        """
+        Load ``SLO_MEMORY_ACTIVE_CARD`` once per process — the model-load hook.
+
+        Called after a model loads so the model wakes up remembering. No-op
+        when the env var is unset, the card already loaded, memory is
+        disabled, or loading fails (fail-closed: a broken card never breaks
+        model load; failure is logged and retried on the next load).
+
+        Returns:
+            bool: True only when this call actually loaded the card.
+
+        Side effects:
+            - merge-loads the active card into long-term memory on success.
+        """
+        name = os.environ.get(ACTIVE_CARD_ENV, "").strip()
+        if not name or self._active_card_loaded:
+            return False
+        result = self.load_card(name, mode="merge")
+        if not result.get("ok"):
+            logger.warning("active memory card %r not loaded: %s", name, result.get("error"))
+            return False
+        self._active_card_loaded = True
+        logger.info(
+            "active memory card loaded: %s (%d imported)",
+            name,
+            result.get("imported", 0),
+        )
+        return True
 
 
 _service: MemoryService | None = None

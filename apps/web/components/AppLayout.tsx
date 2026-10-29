@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from '@/vite/next-compat/link'
+import { usePathname } from '@/vite/next-compat/navigation'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -24,9 +24,14 @@ import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
+import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 import { ConvSidebarProvider, useConvSidebar } from '@/features/chat/contexts/ConvSidebarContext'
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
 import { useLocale } from '@/hooks/useLocale'
+
+/** Hold-off before a non-connected status raises the global drop banner —
+ *  one failed poll is a blip, not an outage the user should be told about. */
+export const OFFLINE_BANNER_GRACE_MS = 5_000
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -121,19 +126,34 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const closeMobileNav = () => setMobileNavOpen(false)
 
   // Backend health lives on ONE banner surface (GlobalBanner + useBannerStore).
-  // The restarting notice shares the boot-stall key 'backend-connection' so the
-  // two states replace each other instead of stacking two rows for one failure.
-  // Cleanup dismisses it the moment the status leaves 'reloading' — a reconnect
-  // clears the banner on its own.
+  // A connection drop (offline/error, held past a short grace so a blip never
+  // flashes a banner) shares the boot-stall key 'backend-connection' so the
+  // states replace each other instead of stacking two rows for one failure.
+  // Recovery dismisses it via the effect cleanup. The old version keyed on
+  // 'reloading' — a status nothing produced anymore — so the banner was dead.
   useEffect(() => {
-    if (apiStatus !== 'reloading') return
-    const id = useBannerStore.getState().showBanner({
-      key: 'backend-connection',
-      tone: 'warning',
-      title: 'Backend restarting',
-      message: 'reconnecting…',
-    })
-    return () => useBannerStore.getState().dismissBanner(id)
+    if (apiStatus !== 'offline' && apiStatus !== 'error') return
+    let id: string | null = null
+    const timer = setTimeout(() => {
+      id = useBannerStore.getState().showBanner({
+        key: 'backend-connection',
+        tone: 'destructive',
+        title: 'Backend unreachable',
+        message: 'The connection dropped — retrying automatically.',
+        action: {
+          label: 'Retry',
+          onAction: () => {
+            void probeBackendAndRevalidate()
+          },
+        },
+      })
+    }, OFFLINE_BANNER_GRACE_MS)
+    return () => {
+      clearTimeout(timer)
+      // A superseded id is a no-op (single-slot store) — another producer's
+      // banner is left alone.
+      if (id) useBannerStore.getState().dismissBanner(id)
+    }
   }, [apiStatus])
 
   return (
@@ -181,17 +201,20 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           data-collapsed={navCollapsed ? 'true' : undefined}
         >
           <Sidebar variant="desktop" collapsed={navCollapsed} onToggleCollapse={toggleNav} />
-          {/* 3D bookmark tab — protrudes from sidebar edge */}
+          {/* 3D bookmark tab — protrudes from sidebar edge, floats OVER the
+              conversation panel like a sticker/tray. z-40 keeps it above the
+              panel (which reserves a matching gutter via --nav-tab-protrusion)
+              so it stays hoverable/clickable at any scroll position. */}
           <button
             type="button"
             onClick={toggleNav}
             aria-label={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className={cn(
-              'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
+              'group/tab absolute top-1/2 z-40 flex h-[4.5rem] w-[var(--nav-tab-protrusion)] -translate-y-1/2 items-center justify-center',
               'rounded-r-md cursor-pointer',
               'transition-all duration-300 ease-[cubic-bezier(0.222,0.133,0,1)]',
-              'hover:w-[1.4rem]',
+              'hover:w-[calc(var(--nav-tab-protrusion)_+_0.25rem)]',
               'right-0 translate-x-[calc(100%-1px)]',
               'bg-gradient-to-b from-primary/80 via-primary to-primary/90',
               'shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1)]',

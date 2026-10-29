@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 import { toIPA } from '@/lib/phoneme-controller'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -26,7 +30,7 @@ export default function PronunciationComparison() {
   const [word2, setWord2] = useState('')
   const [result, setResult] = useState<ComparisonResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const compare = async () => {
     if (!word1.trim() || !word2.trim()) return
@@ -88,13 +92,15 @@ export default function PronunciationComparison() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-2">
-          <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
+          <Select value={language} onValueChange={(v) => setLanguage(v as PhonemeLanguage)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PHONEME_LANGUAGES.map(lang => (
-                <SelectItem key={lang.value} value={lang.value}>{lang.label}</SelectItem>
+              {PHONEME_LANGUAGES.map((lang) => (
+                <SelectItem key={lang.value} value={lang.value}>
+                  {lang.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -104,18 +110,22 @@ export default function PronunciationComparison() {
           <Input
             placeholder="First word..."
             value={word1}
-            onChange={e => setWord1(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && compare()}
+            onChange={(e) => setWord1(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && compare()}
           />
           <Input
             placeholder="Second word..."
             value={word2}
-            onChange={e => setWord2(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && compare()}
+            onChange={(e) => setWord2(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && compare()}
           />
         </div>
 
-        <Button onClick={compare} disabled={!word1.trim() || !word2.trim() || loading} className="w-full">
+        <Button
+          onClick={compare}
+          disabled={!word1.trim() || !word2.trim() || loading}
+          className="w-full"
+        >
           {loading ? 'Comparing...' : 'Compare'}
         </Button>
 
@@ -124,7 +134,9 @@ export default function PronunciationComparison() {
             <div className="p-3 rounded-lg bg-muted/30">
               <p className="text-xs text-muted-foreground mb-2">Phoneme comparison:</p>
               <div className="flex flex-wrap gap-1">
-                {Array.from({ length: Math.max(result.phonemes1.length, result.phonemes2.length) }).map((_, i) => {
+                {Array.from({
+                  length: Math.max(result.phonemes1.length, result.phonemes2.length),
+                }).map((_, i) => {
                   const p1 = result.phonemes1[i] || '-'
                   const p2 = result.phonemes2[i] || '-'
                   const isMatch = result.matchPositions.includes(i)
@@ -136,7 +148,9 @@ export default function PronunciationComparison() {
                       }`}
                     >
                       <span className="text-xs font-mono">{p1}</span>
-                      <span className="text-[10px] text-muted-foreground">{isMatch ? '=' : '≠'}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {isMatch ? '=' : '≠'}
+                      </span>
                       <span className="text-xs font-mono">{p2}</span>
                     </div>
                   )
@@ -156,7 +170,7 @@ export default function PronunciationComparison() {
             </div>
 
             <div className="flex justify-center gap-4 text-xs text-muted-foreground">
-              <span className="text-green-600">{result.matchPositions.length} matches</span>
+              <span className="text-success">{result.matchPositions.length} matches</span>
               <span className="text-destructive">{result.diffPositions.length} differences</span>
             </div>
           </div>

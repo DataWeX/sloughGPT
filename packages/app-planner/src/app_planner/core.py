@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .ids import display_id
 
 logger = logging.getLogger("dev-notes")
 
@@ -59,11 +60,24 @@ class Note:
 
     @property
     def date_str(self) -> str:
-        return self.created_at[:10] if self.created_at else ""
+        """Local calendar day of creation.
+
+        ``created_at`` is stamped in UTC while stats/filters compare
+        against ``date.today()`` (local), so slicing the raw stamp made
+        ``today`` report 0 during the first hour after local midnight
+        (card 7e708a68). Convert aware stamps to local; naive or
+        malformed stamps keep the historical slice behaviour.
+        """
+        if not self.created_at:
+            return ""
+        try:
+            return datetime.fromisoformat(self.created_at).astimezone().date().isoformat()
+        except ValueError:
+            return self.created_at[:10]
 
     @property
     def short_id(self) -> str:
-        return self.id[:8] if self.id else ""
+        return display_id(self.id)
 
     @property
     def gh_url(self) -> str:

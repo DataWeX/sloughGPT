@@ -41,19 +41,21 @@
   - `scripts/benchmark_latency.py` — end-to-end request latency
   - `scripts/benchmark_results.py record/history/compare` — track results over time
   - If no benchmark exists for your change, create one in `scripts/` and document what it measures.
+- **Local `main` tracks `origin/main` — never let it drift.** Land on main via a PR (canonical) or commit on a lane branch and `git push origin HEAD:main`. Never build a stack of local-only commits on main (pre-commit/pre-push block **>5 ahead** via `scripts/check-main-sync.sh`; `SLO_MAIN_SYNC_SKIP=1` only when you mean it), and never `git reset` main onto a lane tip. Evidence: the 2026-10-27/28 fork — 149 local-only commits vs 35 pushed the other way = 8-file conflicts and a Next-era tree that would have reverted the Next removal if pushed.
 
 ## File Safety
 
 - **NEVER delete user data files (notes, configs, data stores) without explicit user approval first.** Ask before removing any file that contains user-created content. Propose the change, explain consequences, and wait for confirmation.
 - When consolidating or migrating data, always preserve the original as a backup before modifying.
 - If a file is not git-tracked, treat it as irreplaceable — ask twice.
+- **NEVER bulk-delete `~/.cache` directories by name pattern (`wt-*`, `slog-*`, …).** Many are live git worktrees — `git worktree list` is the source of truth for liveness. A heuristic glob over `~/.cache` once deleted 75 dirs including ~60 session worktrees (incident 2026-10-21). Disk-pressure recovery = package caches (`conda clean`, npm, pip), never sibling worktrees. Prevention + prune/recreate runbook: `docs/WORKTREE_RECOVERY.md`.
 
 ## Architecture
 
 - **Notes** (`~/.config/dev-notes/*.md`) are the user's journal — source of truth for task metadata (sprint, gh, status, body).
 - **Board** (`.kanban/board.jsonl`) is the kanban view derived from notes via sync.
 - Sync is bidirectional: note status ↔ card column.
-- **Agent sync** (`docs/AGENT_SYNC.md`) — read it first: what has landed across sessions, what is in flight, how to push your own changes; update it when you push.
+- **Agent sync** (`docs/AGENT_SYNC.md`) — read it first: what has landed across sessions, what is in flight, how to push your own changes; update it when you push. Local `main` must equal `origin/main` (enforced by `scripts/check-main-sync.sh`).
 - **Product docs** (`docs/PRODUCT_ENGINEERING.md`) are the source of truth for what to build. Reference before creating new features, routers, or pages. User flows in `docs/UX_FLOWS.md`, persona in `docs/USER_PERSONA.md`.
 
 ## Execution Philosophy (sync core, async seam)
@@ -128,3 +130,30 @@ The endpoint rule governs the API half of surface area; this governs the UI half
 2. **Intake owns the call** — the ruling happens at card time (SOP steps 1, 4-5) by the product side, not at build time by whoever writes the file. A brief that says "build a page for X" without a journey citation goes back for the citation before code; Gene bounces it at decomposition.
 3. **Enforcement is mechanical, not vibes** — `journeyId` on every `NavRoute` (`apps/web/lib/navigation.ts`) and the page baseline ratchet (`apps/web/lib/page-baseline.json`: every `page.tsx` on disk must be catalogued; new entries must cite a `ux/` journey; grandfathered and unmapped counts may only shrink) are enforced by `apps/web/lib/page-journey-gate.test.ts`. Policy lives here; the gate keeps sessions honest at 2am. (Persona matrix precedent: documentation alone did not hold the line.)
 4. **Grandfathered, same clause as routers** — the existing 110 are cleanup cards' business (freeze, consolidation, role gating), never a retroactive purge by this rule.
+5. **The surface ladder — a page is the most expensive rung.** Not every feature needs a page: before the 5-point test, rule out the cheaper surfaces in order — `global banner` (journey-blocking alert via `useBannerStore` + `<GlobalBanner />`) < `inline widget` (compose onto a page already in the journey) < `chat mode` (`/chat?mode=<mode>` deep-link; the 8 tool flows landed this way) < `plugin panel` (Plugins tab, gated on plugin enabled; Mole landed this way) < `operator page` (clause 1.3) < `journey page`. Precedent both directions: `/benchmark` is a headless API with no UI at all (persona rule — do not reintroduce a benchmark page), and the tools were pages once and moved _down_ the ladder.
+6. **A written flow is the Alex-side charter — not the only charter, but every page needs one.** Alex-facing journey pages cite a `ux/` journey (test 1). Operator surfaces instead carry `role: 'operator'` (test 3) **plus** a named non-Alex persona task from `docs/USER_PERSONA.md` (Maya/Jon — e.g. "Jon checks executor load"). A page with neither — "the engine exists", "we have an endpoint for it" — is the nav-orphan class this rule ratchets away; the exception is narrow and never re-opens the grandfathered set.
+
+## Command Rule (the shell CLI is descriptor-projected)
+
+**A command's flag vocabulary is declared once and checked mechanically — not written three times and reconciled by hand.**
+
+The endpoint rule governs the API half of surface area and the page rule the UI half; this governs the third — the shell command line. A command states its flags in a docstring, parses them in a hand-rolled loop, and draws them as RetroBIOS option rows: three writings of one fact. They drift, and this drift is the corruption class this repo already paid for — `train --merge` and `ln --symbolic` were parsed for months without ever being documented. Measured at the gate's introduction (2026-10-28): **127 commands registered**, 9 of them governed — the rest declare no long flags at all.
+
+1. **One declaration.** A command's flags are declared exactly once. Today that declaration is the command's docstring; the destination is a `CommandSpec` descriptor (`{name, flags, positionals, subcommands, handler}`) from which the parser, `help <cmd>`, shell completion and the `options <command>` rows are all derived — one declaration, four projections, no reconciliation. Until a command migrates (clause 5), its docstring is the declaration and the other three must match it.
+2. **Parity is mechanical, not editorial** — `packages/core-py/tests/test_command_parity.py` walks every registered command (explicit specs plus the auto-registered `LinuxCommandsMixin` set) and asserts _declared == parsed_, with option rows a subset of both. Commands with no flags on any side have nothing to compare and are never parametrized. Detection is static: the method source is read, never executed, because real parsers have side effects (`logs --clear` wipes the buffer, `train` starts jobs).
+3. **Conventions are not declarations** — `-h/--help` is implied for every command and is exempt on both sides; a `startswith("--x-")` prefix declares the _family_ `--x-*` and must appear in the declaration. Only `--long` flags are the vocabulary: a bare short flag with no long form is invisible to the gate, so add the long form the next time that command is touched.
+4. **Tier boundary** — a CLI flag declaration never enters the model-facing tool registry, `domain/tools`, or anything the model reasons over (the endpoint rule's two tool tiers). The shell describes itself to humans; that description is not an agent capability.
+5. **Grandfather clause** — no retroactive purge of the existing methods. A command migrates to `CommandSpec` only when it is next touched, and positionals/subcommands stay hand-written until that descriptor exists (deferral decided 2026-10-28). Migration means: delete the hand-written parser, keep behaviour byte-identical, and let this gate prove it.
+6. **The baseline may only shrink** — known documentation gaps live in `packages/core-py/tests/command_parity_baseline.json` as strict xfails: fix a gap and the node passes, strict-xfail turns that pass into a failure, and the entry must be deleted. Adding an entry is an explicit, reviewed edit — the same ratchet as `page-baseline.json`. Policy lives here; the gate keeps sessions honest at 2am.
+
+## Test Rule (change-scoped execution, owned-code coverage)
+
+**A test verifies code we own; a change runs the tests it affects; nothing is verified twice.**
+
+The endpoint rule governs the API surface, the page rule the UI surface, the command rule the CLI surface; this governs the test surface — the same recurring-cost problem in its third clothing. Measured at the rule's introduction (2026-10-28): the shell suites alone are 4312 tests (~70s), and one commit paid for all of them. Suites that re-verify dependencies test someone else's contract: their release breaks ours (false positives) while the real failure — _our_ code at the seam — goes unowned.
+
+1. **Owned-code only** — a test asserts on the behaviour of code we own (`domain/`, `apps/`, `packages/*`). Our adapter/wrapper around a dependency IS ours (the timeout we set, the fallback we wrote, the error we shape); the dependency's own behaviour is not — its suite owns it. Seam/contract tests with fakes stay: they test _our_ branching, not the fake.
+2. **No redundancy** — two tests are redundant when same input + same assertion + different name; keep one. Overlapping tests with different failure modes are not redundant and both stay.
+3. **Change-scoped locally, full suite in CI** — the local/PR loop runs only the affected closure via `scripts/run_affected.sh` (pytest-testmon dependency selection: which files each test actually read, mechanically recorded — no hand-maintained mapping). `RUN_ALL=1` forces a full run and re-records; unknown state (no `.testmondata`, fresh clone) is always a full run, never a guess. **Merge to main runs the full suite in CI — unchanged, the backstop.** A selective run never becomes the only line of defence.
+4. **Seam gates always run when their surface is touched** — contract/parity gates (`test_command_parity.py` and siblings) are cheap and assert the seam itself; they ride along with any change to the surface they govern, selective or not.
+5. **Trimming is a card, not a sweep** — tests that verify unowned internals or duplicate each other are removed per-suite behind green gates, tracked on the kanban (audit card `299d8d38`); no bulk deletion, no weakened assertions to make things pass.

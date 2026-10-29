@@ -139,7 +139,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const stableRouter = { push: vi.fn() }
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useParams: () => ({ id: 'gpt2' }),
   useRouter: () => stableRouter,
   useSearchParams: () => new URLSearchParams(),

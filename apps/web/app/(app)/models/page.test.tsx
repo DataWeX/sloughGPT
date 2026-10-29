@@ -3,7 +3,7 @@ import { render } from '@testing-library/react'
 
 const mockReplace = vi.fn()
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: mockReplace }),
 }))
 

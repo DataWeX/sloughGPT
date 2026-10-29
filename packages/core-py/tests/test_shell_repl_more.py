@@ -22,6 +22,17 @@ from domain.shell._internal.repl import ShellREPL, _CaptureOutput
 from domain.shell._internal.runtime import DaitRuntime
 
 
+@pytest.fixture(autouse=True)
+def _remote_transport(monkeypatch):
+    """Pin HTTP transport (remote mode, card ad4f5ec2).
+
+    Tests in this file pin pre-seam HTTP semantics (requests patched or a
+    dead server expected), so they declare remote mode via MAN_API_URL —
+    local in-process dispatch is the default since the shell-core seam.
+    """
+    monkeypatch.setenv("MAN_API_URL", "http://localhost:8000")
+
+
 @pytest.fixture
 def repl():
     import tempfile
@@ -810,7 +821,7 @@ class TestCmdAiLLMExecution:
 
     def test_ai_with_result(self, repl):
         mock_api = MagicMock()
-        mock_api.status.return_value = {"available": True}
+        mock_api.status.return_value = {"available": True, "model_loaded": True}
         mock_api.generate.return_value = {"text": "models"}
         repl.os._api = mock_api
         repl._cmd_ai("show models")
@@ -818,7 +829,7 @@ class TestCmdAiLLMExecution:
 
     def test_ai_with_pipeline_result(self, repl):
         mock_api = MagicMock()
-        mock_api.status.return_value = {"available": True}
+        mock_api.status.return_value = {"available": True, "model_loaded": True}
         mock_api.generate.return_value = {"text": "echo hello | grep hello"}
         repl.os._api = mock_api
         repl._cmd_ai("echo hello")
@@ -826,7 +837,7 @@ class TestCmdAiLLMExecution:
 
     def test_ai_with_background_result(self, repl):
         mock_api = MagicMock()
-        mock_api.status.return_value = {"available": True}
+        mock_api.status.return_value = {"available": True, "model_loaded": True}
         mock_api.generate.return_value = {"text": "sleep 60 &"}
         repl.os._api = mock_api
         repl._cmd_ai("run sleep in background")
@@ -834,7 +845,7 @@ class TestCmdAiLLMExecution:
 
     def test_ai_error_result(self, repl):
         mock_api = MagicMock()
-        mock_api.status.return_value = {"available": True}
+        mock_api.status.return_value = {"available": True, "model_loaded": True}
         mock_api.generate.return_value = {"error": "API error"}
         repl.os._api = mock_api
         repl._cmd_ai("do something")
@@ -842,11 +853,44 @@ class TestCmdAiLLMExecution:
 
     def test_ai_non_dict_result(self, repl):
         mock_api = MagicMock()
-        mock_api.status.return_value = {"available": True}
+        mock_api.status.return_value = {"available": True, "model_loaded": True}
         mock_api.generate.return_value = "unexpected"
         repl.os._api = mock_api
         repl._cmd_ai("do something")
         assert repl._last_exit_code == 0
+
+    def test_ai_fails_fast_without_model(self, repl):
+        """No model loaded -> never issue the generate call (card 20261026_123132).
+
+        Prints the load hint, records an ERROR in the shell log buffer (via
+        `logs`), and exits 1 — the 120s generate hang must not start.
+        """
+        mock_api = MagicMock()
+        mock_api.status.return_value = {"available": True, "model_loaded": False}
+        mock_api.generate.return_value = {"text": "models"}
+        repl.os._api = mock_api
+        before = len(repl._log_buffer.get(level="ERROR"))
+
+        out = capture_cmd(repl, repl._cmd_ai, "show models")
+
+        mock_api.generate.assert_not_called()
+        assert "No model loaded" in out
+        assert "models load" in out, "hint must name the load command"
+        assert repl._last_exit_code == 1
+        errs = repl._log_buffer.get(level="ERROR")
+        assert len(errs) > before, "no ERROR entry added to shell log buffer"
+        assert any("model" in e.message.lower() for e in errs[-3:])
+
+    def test_ai_runs_when_model_loaded(self, repl):
+        """The gate must not fire when model_loaded=True (regression pin)."""
+        mock_api = MagicMock()
+        mock_api.status.return_value = {"available": True, "model_loaded": True}
+        mock_api.generate.return_value = {"text": "models"}
+        repl.os._api = mock_api
+
+        capture_cmd(repl, repl._cmd_ai, "show models")
+
+        mock_api.generate.assert_called_once()
 
 
 def _add_log(repl, level="ERROR", source="kernel", message="boom"):
@@ -7233,7 +7277,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "models"})
             repl._cmd_ai("show models")
@@ -7243,7 +7290,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"error": "timeout"})
             repl._cmd_ai("show models")
@@ -7253,7 +7303,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value="just a string")
             repl._cmd_ai("show models")
@@ -7263,7 +7316,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "sleep 1 &"})
             repl._cmd_ai("background sleep")
@@ -7273,7 +7329,10 @@ class TestCmdAiV2:
         from unittest.mock import PropertyMock, patch
 
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "echo hello | wc"})
             repl._cmd_ai("count hello")
@@ -7614,7 +7673,10 @@ class TestCmdAiContext:
 
         repl._history = ["models", "health", "ls"]
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help me")
@@ -7631,7 +7693,10 @@ class TestCmdAiContext:
         ]
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help")
@@ -7643,7 +7708,10 @@ class TestCmdAiContext:
         repl._get_current_model = MagicMock(return_value="gpt2")
         repl._get_current_soul = MagicMock(return_value="friendly")
         with patch.object(
-            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model_loaded": True},
         ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help")
@@ -24939,7 +25007,14 @@ class TestCmdLoadDeeperV3:
 
 
 class TestCmdWhoamiShellDeeper:
-    def test_whoami_via_execute(self, repl):
+    # whoami routes to api.current_soul() — a live HTTP request; CI has no
+    # API server, so the unmocked call yields an error dict and whoami
+    # exits 1 instead of 0.
+    @patch(
+        "domain.shell._internal.commands.ShellCommands.current_soul",
+        return_value={"name": "test-soul"},
+    )
+    def test_whoami_via_execute(self, mock_soul, repl):
         with _CaptureOutput(repl):
             repl._execute_single("whoami")
         assert repl._last_exit_code == 0
@@ -26203,7 +26278,12 @@ class TestCmdLoadDeeperV4:
 
 
 class TestCmdWhoamiShellDeeperV2:
-    def test_whoami_via_execute(self, repl):
+    # Same live-API dependency as TestCmdWhoamiShellDeeper.
+    @patch(
+        "domain.shell._internal.commands.ShellCommands.current_soul",
+        return_value={"name": "test-soul"},
+    )
+    def test_whoami_via_execute(self, mock_soul, repl):
         with _CaptureOutput(repl):
             repl._execute_single("whoami")
         assert repl._last_exit_code == 0

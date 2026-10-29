@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@sloughgpt/strui', async () => {
   const actual = await vi.importActual<typeof import('@sloughgpt/strui')>('@sloughgpt/strui')
   return {
@@ -56,7 +56,9 @@ vi.mock('@sloughgpt/strui', async () => {
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
-vi.mock('@/lib/query/api-hooks', () => ({
+// ModelCatalogCard imports useLoadModel from lib/cache/api-hooks — pointing the
+// mock at the old (dead) lib/query/api-hooks copy made this a real network call.
+vi.mock('@/lib/cache/api-hooks', () => ({
   useLoadModel: () => ({ mutateAsync: vi.fn().mockResolvedValue({ model_id: 'test-model' }) }),
 }))
 vi.mock('@/lib/toast-store', () => ({

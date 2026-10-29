@@ -1,7 +1,7 @@
 """
 RAG Service — Production RAG with real embeddings and document persistence.
 
-Bridges the production-grade ``ProductionRAG`` from ``cognitive/rag.py`` into
+Bridges the production-grade ``ProductionRAG`` from ``cognition/_internal/rag.py`` into
 the chat pipeline by:
 
 1. Replacing simulated random embeddings with the project's n-gram TF-IDF
@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.cognition._internal.rag import ProductionRAG
+from domain.cognition._internal.rag import FINE_CHUNK_TARGET_CHARS, ProductionRAG
 from domain.inference._internal.vector_store import simple_embed
 from domain.shared import find_repo_root
 
@@ -97,11 +97,12 @@ class RAGService:
                     if not content:
                         continue
                     self._documents.append(doc)
+                    # Stored chunk params are intentionally ignored: raw content
+                    # re-chunks with the CURRENT fine defaults, which is the
+                    # store rebuild (older records were 512-token windows).
                     self.rag.add_document(
                         content=content,
                         metadata=doc.get("metadata", {}),
-                        chunk_size=doc.get("chunk_size", 512),
-                        overlap=doc.get("overlap", 50),
                         rebuild_index=False,
                     )
                     loaded += 1
@@ -134,11 +135,11 @@ class RAGService:
                     if not content:
                         continue
                     self._documents.append(doc)
+                    # As in the MogDB path: stored chunk params are ignored so
+                    # raw content re-chunks with the current fine defaults.
                     self.rag.add_document(
                         content=content,
                         metadata=doc.get("metadata", {}),
-                        chunk_size=doc.get("chunk_size", 512),
-                        overlap=doc.get("overlap", 50),
                         rebuild_index=False,
                     )
                     loaded += 1
@@ -200,8 +201,8 @@ class RAGService:
         self,
         content: str,
         metadata: dict[str, Any] | None = None,
-        chunk_size: int = 512,
-        overlap: int = 50,
+        chunk_size: int | None = None,
+        overlap: int | None = None,
         rebuild_index: bool = True,
     ) -> list[str]:
         """Ingest a document into the RAG index, persist it, and extract KG facts.
@@ -209,8 +210,11 @@ class RAGService:
         Args:
             content: Raw text to ingest.
             metadata: Optional metadata dict (source, topic, etc.).
-            chunk_size: Max tokens per chunk.
-            overlap: Overlap between adjacent chunks.
+            chunk_size: Legacy TOKENS-per-chunk (historic 512). ``None`` — the
+                default — uses the fine-grained char windows (~450 target,
+                max 600, ~100 overlap) so one retrieved rank fits the
+                injection budget whole.
+            overlap: Legacy token overlap; ignored unless ``chunk_size`` is set.
             rebuild_index: Set False for bulk loads, then call
                 ``self.rag.retriever.build_index()`` once at the end
                 (per-document rebuilds are O(n^2)).
@@ -337,7 +341,7 @@ class RAGService:
             return [
                 {
                     "metadata": doc.get("metadata", {}),
-                    "chunk_size": doc.get("chunk_size", 512),
+                    "chunk_size": doc.get("chunk_size") or FINE_CHUNK_TARGET_CHARS,
                     "num_chunks": len(doc.get("chunk_ids", [])),
                     "added_at": doc.get("added_at", 0),
                 }

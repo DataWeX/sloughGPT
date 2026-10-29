@@ -1,8 +1,14 @@
-import { logger } from '../web/lib/dev-log'
+import { _log } from './ports'
 import { HttpCache } from './resilience'
 import type { CacheOptions, RequestOptions } from './types'
 import { request } from './request'
-import { _globalCache, _globalThrottler, _inflight, _recentDedup, _cleanupRecentDedup } from './state'
+import {
+  _globalCache,
+  _globalThrottler,
+  _inflight,
+  _recentDedup,
+  _cleanupRecentDedup,
+} from './state'
 
 export async function apiGet<T>(
   url: string,
@@ -18,12 +24,12 @@ export async function apiGet<T>(
     const cacheKey = opts?.cacheKey ?? HttpCache.makeKey('GET', url, params)
     const cached = _globalCache.get(cacheKey)
     if (cached && !cached.stale) {
-      logger.debug(`cache HIT ${url}`, { cacheKey })
+      _log().debug(`cache HIT ${url}`, { cacheKey })
       return cached.data as T
     }
     if (cached?.stale) {
       // Serve stale, revalidate in background
-      logger.debug(`cache STALE ${url} — serving stale, revalidating`, { cacheKey })
+      _log().debug(`cache STALE ${url} — serving stale, revalidating`, { cacheKey })
       request<T>('GET', fullUrl, undefined, opts)
         .then((data) => {
           _globalCache.set(cacheKey, data, typeof cacheOpt === 'object' ? cacheOpt : undefined)

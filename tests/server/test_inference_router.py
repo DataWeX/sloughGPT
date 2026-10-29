@@ -625,6 +625,80 @@ class TestProviders:
         data = resp.json()
         assert "data" in data
 
+    @staticmethod
+    def _register_both_shapes():
+        """Register one provider of each metadata shape.
+
+        The Provider protocol declares ``metadata`` a ``@property``, but
+        ct_provider / slonet_provider / slonet_server implement it as a plain
+        method while api_provider / router / slo_transformer / multimodal use
+        ``@property``. The route read it property-style, so a method-shaped
+        provider put a bound method in the payload and 500'd with
+        E_SERIALIZATION — the live bug behind card 2460373b. Every other test
+        here registers no provider at all, which is why they passed while
+        production failed.
+        """
+        from domain.models._internal.provider import registry as _reg
+
+        class _Caps:
+            chat = streaming = embedding = vision = True
+
+        class MethodShaped:
+            model_id = "probe-method"
+
+            @property
+            def capabilities(self):
+                return _Caps()
+
+            def metadata(self):  # plain method, like slonet_provider
+                return {"n_layer": 4, "shaped": "method"}
+
+        class PropertyShaped:
+            model_id = "probe-property"
+
+            @property
+            def capabilities(self):
+                return _Caps()
+
+            @property
+            def metadata(self):  # @property, like api_provider
+                return {"n_layer": 8, "shaped": "property"}
+
+        saved = {n: _reg.get_provider(n) for n in _reg.list_providers()}
+        _reg.register_provider("probe-method", MethodShaped())
+        _reg.register_provider("probe-property", PropertyShaped())
+        return _reg, saved
+
+    @staticmethod
+    def _restore(_reg, saved):
+        _reg.clear_providers()
+        for name, provider in saved.items():
+            _reg.register_provider(name, provider)
+
+    def test_method_shaped_metadata_serialises(self, client):
+        """A plain-method `metadata` must come back as a dict, not 500."""
+        _reg, saved = self._register_both_shapes()
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, resp.text
+            meta = resp.json()["data"]["probe-method"]["metadata"]
+            assert meta == {"n_layer": 4, "shaped": "method"}
+            assert not callable(meta)
+        finally:
+            self._restore(_reg, saved)
+
+    def test_property_shaped_metadata_still_works(self, client):
+        """The @property half must not regress — both shapes are accepted."""
+        _reg, saved = self._register_both_shapes()
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, resp.text
+            payload = resp.json()["data"]
+            assert payload["probe-property"]["metadata"] == {"n_layer": 8, "shaped": "property"}
+            assert payload["probe-method"]["capabilities"]["chat"] is True
+        finally:
+            self._restore(_reg, saved)
+
 
 class TestCurrentSession:
     """GET /chat/sessions/current"""
@@ -743,3 +817,202 @@ class TestCachedReplayChunking:
                 if tok:
                     tokens.append(tok)
         assert "".join(tokens) == cached
+
+
+class TestChatPostGenTasks:
+    """POST /chat must run the post-generation task set on every turn.
+
+    Audit gap G2 (card db19c373): ``_run_post_gen_tasks`` was launched from
+    exactly one site, so half of all chat recorded no substrate episode —
+    consciousness, entity extraction, the continual learner and response
+    tracking all silently skipped. Stream-first (POST /chat is the one path;
+    it frames the engine's token stream) runs the task set in
+    ``stream_turn``; these tests pin that contract on the SSE path.
+    """
+
+    def _fake_provider(self) -> MagicMock:
+        mock_provider = MagicMock()
+
+        async def _chat_stream(messages, **kwargs):
+            for tok in ["Hello", " back"]:
+                yield tok
+
+        mock_provider.chat_stream = _chat_stream
+        return mock_provider
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_chat_runs_post_gen_tasks(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        """The gap itself: this call must fire on the SSE turn path."""
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+
+        assert resp.status_code == 200
+        assert "Hello" in resp.text
+        mock_post_gen.assert_called_once()
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_post_gen_receives_the_turn_it_belongs_to(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        """Post-gen work must be attributed to the response that produced it."""
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        client.post(
+            "/chat",
+            json={
+                "session_id": "sess-1",
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        )
+
+        args = mock_post_gen.call_args.args
+        assert args[0] == "Hello back", "full_response must be the generated text"
+        assert args[1] == "Hello", "user_msg must be the prompt"
+        assert args[2] == "sess-1", "session_id must follow the response"
+        assert args[3] is not None, "start_time drives the duration metric"
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch("apps.api.server.routers.inference.capture")
+    @patch("apps.api.server.routers.inference._run_post_gen_tasks")
+    def test_no_inline_capture_alongside_post_gen(
+        self, mock_post_gen, mock_capture, mock_get_provider, client
+    ):
+        """No double-run: post-gen already captures, so the turn must not too.
+
+        Post-gen is spied out here, so any capture reached directly by the
+        turn path would still fire — asserting it does not is the
+        anti-double-count guarantee.
+        """
+        mock_post_gen.return_value = {"narrative": "", "level": 0}
+
+        client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+
+        mock_capture.assert_not_called()
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider")
+    @patch(
+        "apps.api.server.routers.inference._run_post_gen_tasks",
+        side_effect=RuntimeError("post-gen exploded"),
+    )
+    def test_post_gen_failure_does_not_fail_the_turn(
+        self, mock_post_gen, mock_get_provider, mock_rag, mock_enrich, client
+    ):
+        """These tasks are best-effort: the reply must still reach the user."""
+        mock_get_provider.return_value = self._fake_provider()
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+
+        resp = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]})
+
+        assert resp.status_code == 200
+        assert "Hello" in resp.text
+        assert " back" in resp.text
+
+
+class TestModelStateReadiness:
+    """_get_model_status — a terminal autoload failure must name its cause.
+
+    Before MODEL_LOAD_STATE existed the function had three answers
+    (E_NO_MODEL / E_STARTING / E_MODEL_LOADING), so a load that had already
+    failed kept getting "Model still loading — please wait." forever.
+    """
+
+    @pytest.fixture
+    def no_materialized_model(self, monkeypatch):
+        import state as server_state
+        from startup_progress import MODEL_LOAD_STATE, STARTUP_PHASE
+
+        from domain.infrastructure.server_state import get_server_state
+
+        monkeypatch.setenv("SLO_AUTOLOAD_MODEL", "Qwen/Qwen2.5-0.5B-Instruct")
+
+        saved_state = dict(MODEL_LOAD_STATE)
+        saved_phase = STARTUP_PHASE["phase"]
+        saved_model = getattr(server_state, "model", None)
+        saved_provider = getattr(server_state, "provider", None)
+        core = get_server_state()
+        saved_core_model = core.model.get()
+
+        server_state.model = None
+        server_state.provider = None
+        core.model.set(None)
+        STARTUP_PHASE["phase"] = "ready"
+        MODEL_LOAD_STATE.update(status="pending", error=None)
+        try:
+            yield MODEL_LOAD_STATE
+        finally:
+            MODEL_LOAD_STATE.clear()
+            MODEL_LOAD_STATE.update(saved_state)
+            STARTUP_PHASE["phase"] = saved_phase
+            server_state.model = saved_model
+            server_state.provider = saved_provider
+            core.model.set(saved_core_model)
+
+    def test_failed_autoload_reports_the_real_cause(self, no_materialized_model):
+        from apps.api.server.routers.inference import _get_model_status
+
+        no_materialized_model.update(
+            status="failed",
+            error=(
+                "No local weights for Qwen/Qwen2.5-0.5B-Instruct (no .slnc/.soul/safetensors) "
+                "and SLO_BOOTSTRAP_HF is off — set SLO_BOOTSTRAP_HF=1 to download them, or "
+                "point SLO_AUTOLOAD_MODEL at a model you already have."
+            ),
+        )
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOAD_FAILED"
+        assert ms["status"] == 503
+        assert "SLO_BOOTSTRAP_HF" in ms["reason"]
+
+    def test_in_flight_load_still_reports_still_loading(self, no_materialized_model):
+        from apps.api.server.routers.inference import _get_model_status
+
+        no_materialized_model.update(status="loading", error=None)
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOADING"
+        assert ms["status"] == 503
+
+    def test_ready_phase_with_no_failure_keeps_the_waiting_answer(self, no_materialized_model):
+        """Pending (no load started) + phase ready stays E_MODEL_LOADING."""
+        from apps.api.server.routers.inference import _get_model_status
+
+        ms = _get_model_status()
+
+        assert ms["ready"] is False
+        assert ms["code"] == "E_MODEL_LOADING"

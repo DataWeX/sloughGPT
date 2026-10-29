@@ -46,6 +46,9 @@ def _feed_spec(request: TrainingRequest) -> tuple[str, str, None, str] | None:
     )
     if not is_feed:
         return None
+    from .feeds import validate_feed_dataset
+
+    validate_feed_dataset(dataset_str)
     try:
         from urllib.parse import urlparse
 

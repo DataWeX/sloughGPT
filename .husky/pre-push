@@ -1,3 +1,6 @@
-#!/bin/sh
-echo "main" | grep -q "$(git rev-parse --abbrev-ref HEAD)" && echo "⚠️  Direct commits to main are discouraged" && exit 0
+#!/usr/bin/env sh
+if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+  echo "⚠️  Direct commits to main are discouraged — land via PR, or push HEAD:main from a lane branch"
+  ./scripts/check-main-sync.sh || exit 1
+fi
 exit 0

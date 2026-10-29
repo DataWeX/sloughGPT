@@ -154,7 +154,7 @@ const { mockExportMetrics, mockModelStatus, mockPreview, mockAddToast, mockTrain
     mockTrainingJobs: { stop: vi.fn() },
   }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => ({
     get: (k: string) => (mockSearchParams as Record<string, string | null>)[k] ?? null,
@@ -208,6 +208,7 @@ vi.mock('@/components/training/StopTrainingButton', () => ({
     </button>
   ),
 }))
+vi.mock('@/components/training/LiveFeedStream', () => ({ LiveFeedStream: () => null }))
 
 import Page from './page'
 

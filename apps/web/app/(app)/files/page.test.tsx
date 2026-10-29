@@ -20,20 +20,57 @@ vi.mock('@/lib/files-controller', () => ({
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: vi.fn() }),
+  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+    selector({ addToast: vi.fn() }),
+}))
+
+// The Create Images journey was absorbed from the retired /images route
+// (card 7839a7c6) — /files is now its host page, so the page must render it.
+vi.mock('@/components/images/ImagesPanel', () => ({
+  ImagesPanel: () => <div data-testid="images-panel">Images</div>,
 }))
 
 import FilesPage from './page'
 
 const SAMPLE_FILES = [
-  { id: '1', filename: 'readme.md', size: 2048, content_type: 'text/markdown', uploaded_at: '2026-01-15T00:00:00Z', ingested: true, chunk_count: 10 },
-  { id: '2', filename: 'data.csv', size: 512, content_type: 'text/csv', uploaded_at: '2026-02-20T00:00:00Z', ingested: false, chunk_count: 0 },
-  { id: '3', filename: 'image.png', size: 1048576, content_type: 'image/png', uploaded_at: '2026-03-10T00:00:00Z', ingested: false, chunk_count: 0 },
+  {
+    id: '1',
+    filename: 'readme.md',
+    size: 2048,
+    content_type: 'text/markdown',
+    uploaded_at: '2026-01-15T00:00:00Z',
+    ingested: true,
+    chunk_count: 10,
+  },
+  {
+    id: '2',
+    filename: 'data.csv',
+    size: 512,
+    content_type: 'text/csv',
+    uploaded_at: '2026-02-20T00:00:00Z',
+    ingested: false,
+    chunk_count: 0,
+  },
+  {
+    id: '3',
+    filename: 'image.png',
+    size: 1048576,
+    content_type: 'image/png',
+    uploaded_at: '2026-03-10T00:00:00Z',
+    ingested: false,
+    chunk_count: 0,
+  },
 ]
 
 describe('FilesPage — initial load flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue([]); mockSearch.mockResolvedValue([]) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue([])
+    mockSearch.mockResolvedValue([])
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('renders page header', async () => {
     render(<FilesPage />)
@@ -78,8 +115,14 @@ describe('FilesPage — initial load flow', () => {
 })
 
 describe('FilesPage — file list display flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue(SAMPLE_FILES); mockSearch.mockResolvedValue([]) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue(SAMPLE_FILES)
+    mockSearch.mockResolvedValue([])
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('shows file count in subtitle', async () => {
     render(<FilesPage />)
@@ -116,7 +159,9 @@ describe('FilesPage — file list display flow', () => {
       expect(screen.getAllByText(/select all/i).length).toBeGreaterThanOrEqual(1)
     })
     const selectAll = screen.getAllByRole('checkbox')[0]
-    act(() => { fireEvent.click(selectAll) })
+    act(() => {
+      fireEvent.click(selectAll)
+    })
     await waitFor(() => {
       expect(screen.getAllByText(/3 selected/).length).toBeGreaterThanOrEqual(1)
     })
@@ -124,15 +169,25 @@ describe('FilesPage — file list display flow', () => {
 })
 
 describe('FilesPage — individual selection flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue(SAMPLE_FILES); mockSearch.mockResolvedValue([]) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue(SAMPLE_FILES)
+    mockSearch.mockResolvedValue([])
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('selects individual file', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     const checkboxes = screen.getAllByRole('checkbox')
     if (checkboxes.length > 1) {
-      act(() => { fireEvent.click(checkboxes[1]) })
+      act(() => {
+        fireEvent.click(checkboxes[1])
+      })
       await waitFor(() => {
         expect(screen.getAllByText(/1 selected/).length).toBeGreaterThanOrEqual(1)
       })
@@ -141,11 +196,17 @@ describe('FilesPage — individual selection flow', () => {
 
   it('deselects file on second click', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     const checkboxes = screen.getAllByRole('checkbox')
     if (checkboxes.length > 1) {
-      act(() => { fireEvent.click(checkboxes[1]) })
-      act(() => { fireEvent.click(checkboxes[1]) })
+      act(() => {
+        fireEvent.click(checkboxes[1])
+      })
+      act(() => {
+        fireEvent.click(checkboxes[1])
+      })
       await waitFor(() => {
         expect(screen.queryByText(/1 selected/)).toBeNull()
       })
@@ -154,26 +215,44 @@ describe('FilesPage — individual selection flow', () => {
 })
 
 describe('FilesPage — search flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue(SAMPLE_FILES); mockSearch.mockResolvedValue([SAMPLE_FILES[0]]) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue(SAMPLE_FILES)
+    mockSearch.mockResolvedValue([SAMPLE_FILES[0]])
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('search filters files', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     const searchInput = screen.getAllByPlaceholderText(/search/i)[0]
-    act(() => { fireEvent.change(searchInput, { target: { value: 'readme' } }) })
-    const searchBtn = screen.getAllByText(/search/i).find(b => b.tagName === 'BUTTON')
+    act(() => {
+      fireEvent.change(searchInput, { target: { value: 'readme' } })
+    })
+    const searchBtn = screen.getAllByText(/search/i).find((b) => b.tagName === 'BUTTON')
     if (searchBtn) {
-      await act(async () => { fireEvent.click(searchBtn) })
+      await act(async () => {
+        fireEvent.click(searchBtn)
+      })
     }
   })
 
   it('search with enter key', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     const searchInput = screen.getAllByPlaceholderText(/search/i)[0]
-    act(() => { fireEvent.change(searchInput, { target: { value: 'readme' } }) })
-    act(() => { fireEvent.keyDown(searchInput, { key: 'Enter' }) })
+    act(() => {
+      fireEvent.change(searchInput, { target: { value: 'readme' } })
+    })
+    act(() => {
+      fireEvent.keyDown(searchInput, { key: 'Enter' })
+    })
     await waitFor(() => {
       expect(mockSearch).toHaveBeenCalled()
     })
@@ -182,26 +261,42 @@ describe('FilesPage — search flow', () => {
   it('empty search returns to all files', async () => {
     mockSearch.mockResolvedValue([])
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     const searchInput = screen.getAllByPlaceholderText(/search/i)[0]
-    act(() => { fireEvent.change(searchInput, { target: { value: '' } }) })
-    const searchBtn = screen.getAllByText(/search/i).find(b => b.tagName === 'BUTTON')
+    act(() => {
+      fireEvent.change(searchInput, { target: { value: '' } })
+    })
+    const searchBtn = screen.getAllByText(/search/i).find((b) => b.tagName === 'BUTTON')
     if (searchBtn) {
-      await act(async () => { fireEvent.click(searchBtn) })
+      await act(async () => {
+        fireEvent.click(searchBtn)
+      })
     }
   })
 })
 
 describe('FilesPage — batch delete flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue(SAMPLE_FILES); mockDeleteBatch.mockResolvedValue(undefined) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue(SAMPLE_FILES)
+    mockDeleteBatch.mockResolvedValue(undefined)
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('shows batch delete bar when files selected', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     const checkboxes = screen.getAllByRole('checkbox')
     if (checkboxes.length > 1) {
-      act(() => { fireEvent.click(checkboxes[1]) })
+      act(() => {
+        fireEvent.click(checkboxes[1])
+      })
       await waitFor(() => {
         expect(screen.getAllByText(/delete selected/i).length).toBeGreaterThanOrEqual(1)
       })
@@ -210,26 +305,42 @@ describe('FilesPage — batch delete flow', () => {
 
   it('batch delete calls API', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     const checkboxes = screen.getAllByRole('checkbox')
     if (checkboxes.length > 1) {
-      act(() => { fireEvent.click(checkboxes[1]) })
-      await waitFor(() => { expect(screen.getAllByText(/delete selected/i).length).toBeGreaterThanOrEqual(1) })
+      act(() => {
+        fireEvent.click(checkboxes[1])
+      })
+      await waitFor(() => {
+        expect(screen.getAllByText(/delete selected/i).length).toBeGreaterThanOrEqual(1)
+      })
       const deleteBtn = screen.getAllByText(/delete selected/i)[0]
-      await act(async () => { fireEvent.click(deleteBtn) })
+      await act(async () => {
+        fireEvent.click(deleteBtn)
+      })
       expect(mockDeleteBatch).toHaveBeenCalled()
     }
   })
 
   it('clear selection resets', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     const checkboxes = screen.getAllByRole('checkbox')
     if (checkboxes.length > 1) {
-      act(() => { fireEvent.click(checkboxes[1]) })
-      await waitFor(() => { expect(screen.getAllByText(/1 selected/).length).toBeGreaterThanOrEqual(1) })
+      act(() => {
+        fireEvent.click(checkboxes[1])
+      })
+      await waitFor(() => {
+        expect(screen.getAllByText(/1 selected/).length).toBeGreaterThanOrEqual(1)
+      })
       const clearBtn = screen.getAllByText(/clear/i)[0]
-      act(() => { fireEvent.click(clearBtn) })
+      act(() => {
+        fireEvent.click(clearBtn)
+      })
       await waitFor(() => {
         expect(screen.queryByText(/1 selected/)).toBeNull()
       })
@@ -238,54 +349,86 @@ describe('FilesPage — batch delete flow', () => {
 })
 
 describe('FilesPage — delete individual file flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue(SAMPLE_FILES); mockDelete.mockResolvedValue(undefined) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue(SAMPLE_FILES)
+    mockDelete.mockResolvedValue(undefined)
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('delete button appears on hover', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     expect(screen.getAllByText(/delete/i).length).toBeGreaterThanOrEqual(1)
   })
 
   it('delete calls filesController.delete', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
-    const deleteButtons = screen.getAllByText(/delete/i).filter(b => b.tagName === 'BUTTON')
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
+    const deleteButtons = screen.getAllByText(/delete/i).filter((b) => b.tagName === 'BUTTON')
     if (deleteButtons.length > 0) {
-      await act(async () => { fireEvent.click(deleteButtons[0]) })
+      await act(async () => {
+        fireEvent.click(deleteButtons[0])
+      })
       expect(mockDelete).toHaveBeenCalled()
     }
   })
 })
 
 describe('FilesPage — ingest flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue(SAMPLE_FILES); mockIngest.mockResolvedValue(undefined) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue(SAMPLE_FILES)
+    mockIngest.mockResolvedValue(undefined)
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('index button shown for non-ingested files', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
     expect(screen.getAllByText(/index/i).length).toBeGreaterThanOrEqual(1)
   })
 
   it('index calls filesController.ingest', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
-    const indexButtons = screen.getAllByText(/index/i).filter(b => b.tagName === 'BUTTON')
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
+    const indexButtons = screen.getAllByText(/index/i).filter((b) => b.tagName === 'BUTTON')
     if (indexButtons.length > 0) {
-      await act(async () => { fireEvent.click(indexButtons[0]) })
+      await act(async () => {
+        fireEvent.click(indexButtons[0])
+      })
       expect(mockIngest).toHaveBeenCalled()
     }
   })
 })
 
 describe('FilesPage — upload flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue([]); mockUpload.mockResolvedValue({ filename: 'test.txt' }) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue([])
+    mockUpload.mockResolvedValue({ filename: 'test.txt' })
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('upload button triggers file input', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getAllByText(/upload/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText(/upload/i).length).toBeGreaterThanOrEqual(1)
+    })
     await waitFor(() => {
       const inputs = document.querySelectorAll('input[type="file"]')
       expect(inputs.length).toBeGreaterThanOrEqual(1)
@@ -294,7 +437,9 @@ describe('FilesPage — upload flow', () => {
 
   it('file input accepts correct extensions', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getAllByText(/upload/i).length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText(/upload/i).length).toBeGreaterThanOrEqual(1)
+    })
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
     expect(fileInput).toBeTruthy()
     expect(fileInput.accept).toContain('.txt')
@@ -304,23 +449,36 @@ describe('FilesPage — upload flow', () => {
 })
 
 describe('FilesPage — refresh flow', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue(SAMPLE_FILES) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue(SAMPLE_FILES)
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('refresh button reloads file list', async () => {
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
-    const refreshBtn = screen.getAllByRole('button').find(b => b.querySelector('svg'))
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
+    const refreshBtn = screen.getAllByRole('button').find((b) => b.querySelector('svg'))
     if (refreshBtn) {
-      await act(async () => { fireEvent.click(refreshBtn) })
+      await act(async () => {
+        fireEvent.click(refreshBtn)
+      })
       expect(mockList).toHaveBeenCalled()
     }
   })
 })
 
 describe('FilesPage — error handling', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('handles list failure gracefully', async () => {
     mockList.mockRejectedValue(new Error('Network error'))
@@ -334,24 +492,35 @@ describe('FilesPage — error handling', () => {
     mockList.mockResolvedValue(SAMPLE_FILES)
     mockSearch.mockRejectedValue(new Error('Search failed'))
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
   })
 
   it('handles delete failure gracefully', async () => {
     mockList.mockResolvedValue(SAMPLE_FILES)
     mockDelete.mockRejectedValue(new Error('Delete failed'))
     render(<FilesPage />)
-    await waitFor(() => { expect(screen.getByText('readme.md')).toBeTruthy() })
-    const deleteButtons = screen.getAllByText(/delete/i).filter(b => b.tagName === 'BUTTON')
+    await waitFor(() => {
+      expect(screen.getByText('readme.md')).toBeTruthy()
+    })
+    const deleteButtons = screen.getAllByText(/delete/i).filter((b) => b.tagName === 'BUTTON')
     if (deleteButtons.length > 0) {
-      await act(async () => { fireEvent.click(deleteButtons[0]) })
+      await act(async () => {
+        fireEvent.click(deleteButtons[0])
+      })
     }
   })
 })
 
 describe('FilesPage — file metadata display', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockList.mockResolvedValue(SAMPLE_FILES) })
-  afterEach(() => { cleanup() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue(SAMPLE_FILES)
+  })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('shows content type', async () => {
     render(<FilesPage />)
@@ -378,6 +547,30 @@ describe('FilesPage — file metadata display', () => {
     render(<FilesPage />)
     await waitFor(() => {
       expect(screen.getAllByText(/1\.0 MB/).length).toBeGreaterThanOrEqual(1)
+    })
+  })
+})
+
+/**
+ * Journey-level assertion (Page Rule point 4) — "Create Images" (UX_FLOWS
+ * journey 6) now runs through /files, since the /images page was absorbed into
+ * it by the route-map merge (card 7839a7c6). This pins that the journey is
+ * reachable on the host page rather than only asserting the page renders.
+ */
+describe('FilesPage — hosts the Create Images journey', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue([])
+    mockSearch.mockResolvedValue([])
+  })
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('renders the images panel on /files', async () => {
+    render(<FilesPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('images-panel')).toBeTruthy()
     })
   })
 })

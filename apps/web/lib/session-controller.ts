@@ -80,11 +80,28 @@ export interface Session {
   source?: string
 }
 
+/**
+ * Single source of truth for conversation display titles (frontend-owned
+ * derivation — POING walkthrough decision 2026-10-22): sanitize what the API
+ * returns and guarantee a non-empty title so sidebar rows never render blank.
+ * Idempotent; the search path and list() both go through here.
+ */
+export function deriveConversationTitle(name: unknown): string {
+  const cleaned = (typeof name === 'string' ? name : '')
+    // strip C0/C1 control chars (\p{Cc}), collapse all whitespace runs to one space
+    .replace(/\p{Cc}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60)
+  return cleaned || 'Untitled'
+}
+
 export const sessionController = {
   async list(archived?: boolean): Promise<Session[]> {
     const suffix = archived !== undefined ? `?archived=${archived}` : ''
     const data = await apiGet<Session[] | { sessions: Session[] }>(`/chat/sessions${suffix}`)
-    return Array.isArray(data) ? data : (data.sessions ?? [])
+    const sessions = Array.isArray(data) ? data : (data.sessions ?? [])
+    return sessions.map((s) => ({ ...s, name: deriveConversationTitle(s.name) }))
   },
 
   async listArchived(): Promise<Session[]> {
@@ -95,16 +112,26 @@ export const sessionController = {
     try {
       return await apiGet<Session>('/chat/sessions/current')
     } catch (err) {
-      _log.debug('Failed to get current session', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to get current session', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return null
     }
   },
 
-  async getSoul(): Promise<{ name: string; traits: string[]; personality?: Record<string, number> } | null> {
+  async getSoul(): Promise<{
+    name: string
+    traits: string[]
+    personality?: Record<string, number>
+  } | null> {
     try {
-      return await apiGet<{ name: string; traits: string[]; personality?: Record<string, number> }>('/souls/current')
+      return await apiGet<{ name: string; traits: string[]; personality?: Record<string, number> }>(
+        '/souls/current',
+      )
     } catch (err) {
-      _log.debug('Failed to get soul for session', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to get soul for session', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return null
     }
   },
@@ -113,7 +140,16 @@ export const sessionController = {
     return apiPost<Session>('/chat/sessions', { name, session_id: id })
   },
 
-  async update(id: string, data: { name?: string; starred?: boolean; pinned?: boolean; archived?: boolean; unread?: boolean }): Promise<void> {
+  async update(
+    id: string,
+    data: {
+      name?: string
+      starred?: boolean
+      pinned?: boolean
+      archived?: boolean
+      unread?: boolean
+    },
+  ): Promise<void> {
     if (!id) return
     await apiPut(`/chat/sessions/${encodeURIComponent(id)}`, data)
   },
@@ -124,18 +160,30 @@ export const sessionController = {
 
   async search(q: string, limit = 20): Promise<SearchResult[]> {
     if (!q.trim()) return []
-    const data = await apiGet<SearchResult[] | { results: SearchResult[] }>(`/chat/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}`)
-    return Array.isArray(data) ? data : (data.results ?? [])
+    const data = await apiGet<SearchResult[] | { results: SearchResult[] }>(
+      `/chat/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    )
+    const results = Array.isArray(data) ? data : (data.results ?? [])
+    return results.map((r) => ({ ...r, name: deriveConversationTitle(r.name) }))
   },
 
   async saveContext(id: string, messages: { role: string; content: string }[]): Promise<void> {
     await apiPost(`/session/${id}/context`, { messages })
   },
 
-  async fetchMessages(id: string, opts?: { signal?: AbortSignal; silent?: boolean }): Promise<Array<{ role: string; content: string }>> {
+  async fetchMessages(
+    id: string,
+    opts?: { signal?: AbortSignal; silent?: boolean },
+  ): Promise<Array<{ role: string; content: string }>> {
     const data = opts
-      ? await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`, undefined, { signal: opts.signal, silent: opts.silent })
-      : await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`)
+      ? await apiGet<{ messages: Array<{ role: string; content: string }> }>(
+          `/session/${id}/messages`,
+          undefined,
+          { signal: opts.signal, silent: opts.silent },
+        )
+      : await apiGet<{ messages: Array<{ role: string; content: string }> }>(
+          `/session/${id}/messages`,
+        )
     return data?.messages ?? []
   },
 
@@ -147,7 +195,11 @@ export const sessionController = {
     return apiPost<{ status: string }>(`/chat/${sessionId}/regenerate`)
   },
 
-  async forwardMessage(targetSessionId: string, content: string, role: string = 'user'): Promise<void> {
+  async forwardMessage(
+    targetSessionId: string,
+    content: string,
+    role: string = 'user',
+  ): Promise<void> {
     await apiPost(`/session/${targetSessionId}/context`, { messages: [{ role, content }] })
   },
 }

@@ -75,8 +75,7 @@ def _run(payloads: list[tuple[Any, ...]], workers: int) -> None:
 
 def _board_payloads(tmp_dir: Path, kind: str, workers: int, n: int) -> list[tuple[Any, ...]]:
     return [
-        (kind, str(tmp_dir / "board"), str(tmp_dir / "notes"), f"w{w}", n)
-        for w in range(workers)
+        (kind, str(tmp_dir / "board"), str(tmp_dir / "notes"), f"w{w}", n) for w in range(workers)
     ]
 
 
@@ -113,9 +112,7 @@ def test_sync_does_not_eat_concurrent_cards(tmp_dir: Path) -> None:
     for i in range(4):
         seeder.create_note(f"sync-note-{i}", status="todo")
 
-    adders = [
-        ("add", str(board), str(notes), f"add{w}", 5) for w in range(6)
-    ]
+    adders = [("add", str(board), str(notes), f"add{w}", 5) for w in range(6)]
     syncers = [("sync", str(board), str(notes), 3)]
     _run(adders + syncers, workers=7)
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, memo } from 'react'
+import { useState, useCallback, useRef, useEffect, memo } from 'react'
 import { Button, IconX, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { formatDurationCompact } from '@/lib/formatDuration'
@@ -41,14 +41,27 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
+  // The feedback timer must not outlive the component: a stray fire after
+  // unmount is what made vitest exit 1 with every test passing (timer
+  // delivered into a torn-down environment). Tracked so unmount clears it,
+  // and a fresh copy clears the previous window instead of stacking them.
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    },
+    [],
+  )
+
   const handleCopy = useCallback(async (code: string, id: string) => {
     await navigator.clipboard.writeText(code)
     setCopiedId(id)
-    setTimeout(() => setCopiedId(null), COPY_FEEDBACK_DURATION_MS)
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    copyTimerRef.current = setTimeout(() => setCopiedId(null), COPY_FEEDBACK_DURATION_MS)
   }, [])
 
   const handleToggle = useCallback((id: string) => {
-    setExpandedId(prev => prev === id ? null : id)
+    setExpandedId((prev) => (prev === id ? null : id))
   }, [])
 
   if (executions.length === 0) {
@@ -61,7 +74,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
 
   return (
     <div className={cn('space-y-2', className)}>
-      {executions.map(exec => (
+      {executions.map((exec) => (
         <div
           key={exec.id}
           className={cn(

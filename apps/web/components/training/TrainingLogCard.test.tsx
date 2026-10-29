@@ -98,10 +98,12 @@ describe('TrainingLogCard', () => {
     await waitFor(() => {
       expect(mockGetTrainingLog).toHaveBeenCalled()
     })
-    expect(screen.getByText('line 1')).toBeTruthy()
-    expect(screen.getByText('line 2')).toBeTruthy()
-    expect(screen.getByText('line 3')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Hide' })).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('line 1')).toBeTruthy()
+      expect(screen.getByText('line 2')).toBeTruthy()
+      expect(screen.getByText('line 3')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Hide' })).toBeTruthy()
+    })
     unmount()
   })
 
@@ -172,7 +174,9 @@ describe('TrainingLogCard', () => {
     await waitFor(() => {
       expect(mockGetTrainingLog).toHaveBeenCalled()
     })
-    expect(screen.queryByText('live')).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByText('live')).toBeNull()
+    })
     unmount()
   })
 

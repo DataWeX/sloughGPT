@@ -1,6 +1,7 @@
 """Tests for SloNetServer — concurrency, circuit breaker, warmup, metrics, pool."""
 
 import asyncio
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -1028,3 +1029,240 @@ class TestCrossTurnKV:
         await srv.generate("hello", session_id="unbound")
         _, kwargs = srv._model.generate_numpy.call_args
         assert kwargs["kv_state"] is None
+
+
+# ---------------------------------------------------------------------------
+# Stream teardown — the pump must never outlive its consumer
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateStreamTeardown:
+    """Teardown + outcome-recording contracts for generate_stream.
+
+    Regression (incident 2026-10-28): three timed-out chat streams leaked
+    pump threads that kept computing for 15+ minutes (4 native threads at
+    ~90% CPU each), starving the uvicorn event loop — and the finally-block
+    recorded every non-success outcome as a *success*, zeroing the circuit
+    breaker's failure signal so the breaker could never open.
+    """
+
+    @staticmethod
+    def _sync_gen_stand_in(
+        captured, *, honor_cancel=True, token_delay=0.05, raise_after=None, stop_event=None
+    ):
+        """Build a ``_generate_stream_sync`` stand-in running in the pump thread.
+
+        Records the pump thread in ``captured`` and its death time in
+        ``captured`` as ``(thread, died_at_or_None)`` via the shared list.
+        """
+
+        def gen(
+            prompt,
+            max_new_tokens,
+            temperature,
+            top_p,
+            top_k,
+            repetition_penalty,
+            cancel_event,
+            session_id,
+        ):
+            thread = threading.current_thread()
+            died_at = []
+            captured.append((thread, died_at))
+            try:
+                for i in range(100_000):
+                    if stop_event is not None and stop_event.is_set():
+                        return
+                    if honor_cancel and cancel_event is not None and cancel_event.is_set():
+                        return
+                    if raise_after is not None and i >= raise_after:
+                        raise RuntimeError("boom")
+                    time.sleep(token_delay)
+                    yield np.int64(i)
+            finally:
+                died_at.append(time.monotonic())
+
+        return gen
+
+    @pytest.mark.asyncio
+    async def test_timeout_joins_pump_before_raising(self, mock_model, mock_tokenizer):
+        """On timeout the consumer must wait for the pump to honour cancel.
+
+        The pump here dies ~one token-latency after cancel_event is set (like
+        the real per-token check). Currently the TimeoutError surfaces
+        immediately and the pump dies unnoticed afterwards — the leak's first
+        half. Fixed: the pump is dead by the time TimeoutError reaches the
+        caller.
+        """
+        captured = []
+        s = SloNetServer(
+            mock_model,
+            mock_tokenizer,
+            model_id="t",
+            enable_warmup=False,
+            enable_circuit_breaker=False,
+            generate_timeout=0.3,
+        )
+        s._generate_stream_sync = self._sync_gen_stand_in(captured)
+        with pytest.raises(TimeoutError):
+            async for _ in s.generate_stream("p"):
+                pass
+        t_raised = time.monotonic()
+        assert captured, "pump generator never ran"
+        pump_thread, died_at = captured[0]
+        pump_thread.join(timeout=2)
+        assert not pump_thread.is_alive(), "pump outlived its timed-out consumer"
+        assert died_at and died_at[0] <= t_raised, (
+            "pump died AFTER the TimeoutError surfaced — consumer did not join it"
+        )
+
+    @pytest.mark.asyncio
+    async def test_timeout_is_not_recorded_as_success(self, mock_model, mock_tokenizer):
+        """A timeout is a failure: never counted as completed, never reseting
+        the breaker's failure signal."""
+        captured = []
+        s = SloNetServer(
+            mock_model,
+            mock_tokenizer,
+            model_id="t",
+            enable_warmup=False,
+            enable_circuit_breaker=True,
+            generate_timeout=0.3,
+        )
+        s._generate_stream_sync = self._sync_gen_stand_in(captured)
+        with pytest.raises(TimeoutError):
+            async for _ in s.generate_stream("p"):
+                pass
+        m = s.get_metrics()
+        assert m["requests_timed_out"] == 1
+        assert m["requests_completed"] == 0, "timeout mis-recorded as success"
+        assert m["consecutive_failures"] == 1, "success record zeroed the streak"
+        assert s._circuit_breaker._failure_count == 1, (
+            "breaker success record cancelled the failure signal"
+        )
+
+    @pytest.mark.asyncio
+    async def test_timeout_with_stuck_pump_is_bounded_and_logged(
+        self, mock_model, mock_tokenizer, caplog
+    ):
+        """A pump stuck inside native compute (ignores cancel) must not hang
+        teardown forever, must not be recorded as success, and must log that
+        CPU will stay busy — the signal that process-tier enforcement is
+        needed."""
+        captured = []
+        stop = threading.Event()
+        s = SloNetServer(
+            mock_model,
+            mock_tokenizer,
+            model_id="t",
+            enable_warmup=False,
+            enable_circuit_breaker=True,
+            generate_timeout=0.3,
+        )
+        s._teardown_grace = 0.2
+        s._generate_stream_sync = self._sync_gen_stand_in(
+            captured, honor_cancel=False, stop_event=stop
+        )
+        try:
+            with caplog.at_level(logging.WARNING):
+                t0 = time.monotonic()
+                with pytest.raises(TimeoutError):
+                    async for _ in s.generate_stream("p"):
+                        pass
+                elapsed = time.monotonic() - t0
+            assert elapsed < 3.0, "teardown not bounded — joined a stuck pump forever"
+            assert any("pump still alive" in rec.getMessage() for rec in caplog.records), (
+                "stuck pump after grace must be logged"
+            )
+            m = s.get_metrics()
+            assert m["requests_completed"] == 0
+            assert m["requests_timed_out"] == 1
+            assert s._circuit_breaker._failure_count == 1
+        finally:
+            stop.set()
+
+    @pytest.mark.asyncio
+    async def test_clean_stream_still_records_success(self, mock_model, mock_tokenizer):
+        """Regression guard: clean completion keeps recording success."""
+        s = SloNetServer(
+            mock_model,
+            mock_tokenizer,
+            model_id="t",
+            enable_warmup=False,
+            enable_circuit_breaker=True,
+            generate_timeout=5.0,
+        )
+
+        def finite(
+            prompt,
+            max_new_tokens,
+            temperature,
+            top_p,
+            top_k,
+            repetition_penalty,
+            cancel_event,
+            session_id,
+        ):
+            yield np.int64(0)
+            yield np.int64(1)
+            yield np.int64(2)
+
+        s._generate_stream_sync = finite
+        tokens = [t async for t in s.generate_stream("p")]
+        assert len(tokens) == 3
+        m = s.get_metrics()
+        assert m["requests_completed"] == 1
+        assert m["requests_failed"] == 0
+        assert m["tokens_generated_total"] == 3
+        assert s._circuit_breaker._failure_count == 0
+        assert s._circuit_breaker.state.value == "closed"
+
+    @pytest.mark.asyncio
+    async def test_stream_error_is_failure_not_success(self, mock_model, mock_tokenizer):
+        """A model exception mid-stream is a server failure — currently the
+        finally-block records it as a success."""
+        captured = []
+        s = SloNetServer(
+            mock_model,
+            mock_tokenizer,
+            model_id="t",
+            enable_warmup=False,
+            enable_circuit_breaker=True,
+            generate_timeout=5.0,
+        )
+        s._generate_stream_sync = self._sync_gen_stand_in(captured, token_delay=0.01, raise_after=1)
+        with pytest.raises(RuntimeError, match="boom"):
+            async for _ in s.generate_stream("p"):
+                pass
+        m = s.get_metrics()
+        assert m["requests_failed"] == 1, "stream error not counted as failure"
+        assert m["requests_completed"] == 0, "stream error mis-recorded as success"
+        assert s._circuit_breaker._failure_count == 1
+
+    @pytest.mark.asyncio
+    async def test_abandoned_stream_tears_down_pump(self, mock_model, mock_tokenizer):
+        """Closing the generator early (client disconnect -> GeneratorExit)
+        must cancel + join the pump and must not record success."""
+        captured = []
+        s = SloNetServer(
+            mock_model,
+            mock_tokenizer,
+            model_id="t",
+            enable_warmup=False,
+            enable_circuit_breaker=True,
+            generate_timeout=5.0,
+        )
+        s._generate_stream_sync = self._sync_gen_stand_in(captured, token_delay=0.02)
+        agen = s.generate_stream("p")
+        first = await anext(agen)
+        assert first is not None
+        pump_thread, died_at = captured[0]
+        assert pump_thread.is_alive(), "pump should be mid-stream"
+        await agen.aclose()
+        pump_thread.join(timeout=2)
+        assert not pump_thread.is_alive(), (
+            "pump outlived an abandoned stream — leak on client disconnect"
+        )
+        assert died_at, "pump generator never finalized"
+        m = s.get_metrics()
+        assert m["requests_completed"] == 0, "abandoned stream mis-recorded as success"

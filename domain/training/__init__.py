@@ -11,6 +11,8 @@ Public API:
     LongRunRecorder (durable JSONL metrics for long unattended runs)
 """
 
+from __future__ import annotations
+
 from domain.training._internal.checkpoints import (
     find_checkpoint,
     load_lora_soul,

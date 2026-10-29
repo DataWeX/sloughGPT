@@ -1,4 +1,8 @@
-# Build from repository root: docker build -f apps/web/Dockerfile .
+# Vite static SPA image.
+# Build from repository root:
+#   docker build -f apps/web/Dockerfile -t sloughgpt/web .
+# Optional: --build-arg API_BASE=http://api:8000  (default for compose)
+
 FROM node:20-alpine AS base
 
 FROM base AS deps
@@ -17,23 +21,16 @@ COPY --from=deps /app/packages/strui/node_modules ./packages/strui/node_modules
 COPY apps/web ./apps/web
 COPY packages/strui ./packages/strui
 WORKDIR /app/apps/web
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN npm run build:vite \
+  && test -f dist-vite/index.html
 
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/apps/web/public ./public
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./.next/static
-
-USER nextjs
-
+FROM nginx:1.27-alpine AS runner
+ARG API_BASE=http://api:8000
+# nginx.conf proxies /api/ to localhost:8000 by default (host static serve);
+# in Docker the API is the compose service `api`.
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+RUN sed -i "s|http://localhost:8000|${API_BASE}|g" /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/apps/web/dist-vite /usr/share/nginx/html
 EXPOSE 3000
-ENV PORT=3000
-
-CMD ["node", "server.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1

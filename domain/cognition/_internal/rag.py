@@ -210,9 +210,14 @@ class HybridRetriever:
         if text in self.embedding_cache:
             return self.embedding_cache[text]
 
-        # Simulated embedding (use real embeddings in production)
-        np.random.seed(hash(text) % (2**32))
-        embedding = np.random.randn(384)
+        # Simulated embedding (use real embeddings in production).
+        # Seed from a stable hash — NOT builtin hash(), which Python randomizes
+        # per-process via PYTHONHASHSEED. With hash() the same text got a
+        # different vector on every run, making dense scores (and therefore
+        # retrieval results and test_add_and_retrieve) nondeterministic. A
+        # local Generator also avoids mutating the global numpy RNG.
+        seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
+        embedding = np.random.default_rng(seed).standard_normal(384)
         embedding = embedding / np.linalg.norm(embedding)
 
         self.embedding_cache[text] = embedding
@@ -298,9 +303,7 @@ class HybridRetriever:
         w_total = (w_dense + self.sparse_weight) or 1.0
         results = []
         for doc_id, scores in combined_scores.items():
-            combined = (
-                w_dense * scores["dense"] + self.sparse_weight * scores["sparse"]
-            ) / w_total
+            combined = (w_dense * scores["dense"] + self.sparse_weight * scores["sparse"]) / w_total
             results.append(
                 RetrievalResult(
                     chunk=self.chunks[doc_id],
@@ -601,6 +604,56 @@ class HallucinationDetector:
         }
 
 
+# Fine-grained retrieval windows (chars). Retrieved ranks share a fixed
+# injection budget (~2000 chars split across top-5 ≈ 400 each), so a chunk
+# must fit that slice whole — 512-token chunks (~3KB) showed ~13% per rank.
+FINE_CHUNK_TARGET_CHARS = 450
+FINE_CHUNK_MAX_CHARS = 600
+FINE_CHUNK_OVERLAP_CHARS = 100
+
+
+def _fine_char_windows(content: str) -> list[str]:
+    """Split content into word-boundary windows of ~450 chars (max 600).
+
+    Greedy: take words until the target (hard-stop at the max), then restart
+    ~100 chars of trailing words back so adjacent windows overlap. A single
+    word longer than the max is kept whole rather than cut mid-word (BM25
+    tokenizes on whitespace — a mid-word cut would corrupt both halves).
+    """
+    words = content.split()
+    if not words:
+        return []
+    windows: list[str] = []
+    start = 0
+    n = len(words)
+    while start < n:
+        end = start
+        total = 0
+        while end < n:
+            add = len(words[end]) + (1 if end > start else 0)
+            if total and total + add > FINE_CHUNK_MAX_CHARS:
+                break
+            total += add
+            end += 1
+            if total >= FINE_CHUNK_TARGET_CHARS:
+                break
+        windows.append(" ".join(words[start:end]))
+        if end >= n:
+            break
+        # Restart the next window ~overlap chars back (whole words only,
+        # always leaving at least one new word so the walk makes progress).
+        ns = end
+        occ = 0
+        while ns > start + 1:
+            prev = len(words[ns - 1]) + (1 if ns - 1 > start else 0)
+            if occ + prev > FINE_CHUNK_OVERLAP_CHARS:
+                break
+            occ += prev
+            ns -= 1
+        start = ns
+    return windows
+
+
 class ProductionRAG:
     """
     Production-grade RAG system.
@@ -623,12 +676,20 @@ class ProductionRAG:
         self,
         content: str,
         metadata: dict[str, Any] | None = None,
-        chunk_size: int = 512,
-        overlap: int = 50,
+        chunk_size: int | None = None,
+        overlap: int | None = None,
         rebuild_index: bool = True,
     ) -> list[str]:
         """
         Add a document with intelligent chunking.
+
+        Default (``chunk_size=None``): fine-grained char windows — ~450-char
+        targets (max 600, ~100 overlap) cut on word boundaries, sized so one
+        retrieved rank fits the injection budget (~400 chars/rank of the
+        2000-char cap) whole instead of showing ~13% of a 3KB chunk.
+
+        ``chunk_size``/``overlap`` given: legacy TOKEN windows (the historic
+        512/50 behaviour) — kept for callers and tests that count in tokens.
 
         Set ``rebuild_index=False`` when bulk-loading many documents, then
         call ``retriever.build_index()`` once at the end (rebuilding per
@@ -637,28 +698,40 @@ class ProductionRAG:
         metadata = metadata or {"source": "user"}
         chunk_ids = []
 
-        logger.debug(
-            "Document ingestion started: chunk_size=%d, overlap=%d",
-            chunk_size,
-            overlap,
-        )
-
-        # Tokenize and chunk with overlap
-        tokens = content.split()
-        stride = max(1, chunk_size - overlap)
-        for i in range(0, len(tokens), stride):
-            chunk_tokens = tokens[i : i + chunk_size]
-            chunk_content = " ".join(chunk_tokens)
-
-            chunk_id = hashlib.md5(chunk_content.encode()).hexdigest()[:12]
-            chunk = TextChunk(
-                id=chunk_id,
-                content=chunk_content,
-                metadata={**metadata, "position": i // chunk_size},
+        if chunk_size is None:
+            windows = _fine_char_windows(content)
+            logger.debug("Document ingestion started: mode=fine, windows=%d", len(windows))
+            for position, window in enumerate(windows):
+                chunk_id = hashlib.md5(window.encode()).hexdigest()[:12]
+                chunk = TextChunk(
+                    id=chunk_id,
+                    content=window,
+                    metadata={**metadata, "position": position},
+                )
+                self.retriever.add_chunk(chunk)
+                chunk_ids.append(chunk_id)
+        else:
+            logger.debug(
+                "Document ingestion started: chunk_size=%d, overlap=%d",
+                chunk_size,
+                overlap,
             )
+            # Tokenize and chunk with overlap
+            tokens = content.split()
+            stride = max(1, chunk_size - (overlap or 0))
+            for i in range(0, len(tokens), stride):
+                chunk_tokens = tokens[i : i + chunk_size]
+                chunk_content = " ".join(chunk_tokens)
 
-            self.retriever.add_chunk(chunk)
-            chunk_ids.append(chunk_id)
+                chunk_id = hashlib.md5(chunk_content.encode()).hexdigest()[:12]
+                chunk = TextChunk(
+                    id=chunk_id,
+                    content=chunk_content,
+                    metadata={**metadata, "position": i // chunk_size},
+                )
+
+                self.retriever.add_chunk(chunk)
+                chunk_ids.append(chunk_id)
 
         # Rebuild index (skipped for bulk loads — caller builds once)
         if rebuild_index:
@@ -667,7 +740,7 @@ class ProductionRAG:
         logger.debug(
             "Document ingestion complete: chunks=%d, total_tokens=%d",
             len(chunk_ids),
-            len(tokens),
+            len(content.split()),
         )
         return chunk_ids
 
@@ -685,11 +758,29 @@ class ProductionRAG:
         logger.debug("RAG query returned %d results", len(results))
 
         context = ""
+        parts: list[Any] = []
         if return_context:
             context_parts = []
             for r in results:
                 context_parts.append(r.chunk.content)
             context = "\n\n".join(context_parts)
+
+        # Context contract: structured parts carry score/rank/locator that
+        # the legacy "context" string above throws away. Producers rank,
+        # they never truncate — selection happens at the consumer seam.
+        from domain.inference._internal.context_contract import ContextPart
+
+        parts = [
+            ContextPart(
+                text=r.chunk.content,
+                source="rag",
+                layer="rag",
+                score=float(r.combined_score),
+                rank=int(r.rank),
+                locator=str(r.chunk.id),
+            )
+            for r in results
+        ]
 
         return {
             "question": question,
@@ -704,6 +795,7 @@ class ProductionRAG:
                 for r in results
             ],
             "context": context,
+            "parts": parts,
             "num_results": len(results),
         }
 

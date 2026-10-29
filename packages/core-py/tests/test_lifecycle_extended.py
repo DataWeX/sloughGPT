@@ -358,15 +358,24 @@ class TestStartup:
 
     @pytest.mark.asyncio
     async def test_startup_dependency_order(self):
+        # StartupHook.handler is Callable[[], Awaitable[Any]] — every invocation
+        # site does `await asyncio.wait_for(h.handler(), ...)`. A lambda returning
+        # a tuple `(append(...), asyncio.sleep(0))` raises TypeError (not
+        # awaitable), the critical hook fails, and its dependents never run
+        # (card b2136a14). Real async handlers, matching the production contract.
         order = []
+
+        def _order_hook(name, depends_on=None):
+            async def _handler():
+                order.append(name)
+                await asyncio.sleep(0)
+
+            return _hook(name, handler=_handler, depends_on=depends_on)
+
         mgr = LifecycleManager()
-        mgr.register_startup_hook(_hook("a", handler=lambda: (order.append("a"), asyncio.sleep(0))))
-        mgr.register_startup_hook(
-            _hook("b", handler=lambda: (order.append("b"), asyncio.sleep(0)), depends_on=["a"])
-        )
-        mgr.register_startup_hook(
-            _hook("c", handler=lambda: (order.append("c"), asyncio.sleep(0)), depends_on=["b"])
-        )
+        mgr.register_startup_hook(_order_hook("a"))
+        mgr.register_startup_hook(_order_hook("b", depends_on=["a"]))
+        mgr.register_startup_hook(_order_hook("c", depends_on=["b"]))
         await mgr.start()
         assert order.index("a") < order.index("b") < order.index("c")
 
@@ -479,9 +488,16 @@ class TestShutdown:
 
     @pytest.mark.asyncio
     async def test_shutdown_runs_hooks(self):
+        # Same contract as startup: a sync lambda returning None only "passes"
+        # because the side effect executes before wait_for raises TypeError —
+        # masking a failed hook (card b2136a14). Real async handler.
         ran = []
+
+        async def _cleanup():
+            ran.append(True)
+
         mgr = LifecycleManager()
-        mgr.register_shutdown_hook(_shutdown_hook("cleanup", handler=lambda: ran.append(True)))
+        mgr.register_shutdown_hook(_shutdown_hook("cleanup", handler=_cleanup))
         await mgr.start()
         await mgr.shutdown()
         assert ran == [True]

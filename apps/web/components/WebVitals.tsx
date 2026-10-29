@@ -16,7 +16,7 @@
  * Rendering: ``null`` (instrumentation only).
  */
 
-import { useReportWebVitals } from 'next/web-vitals'
+import { useReportWebVitals } from '@/vite/next-compat/web-vitals'
 import { logger } from '@/lib/dev-log'
 
 const _log = logger.child('web-vitals')

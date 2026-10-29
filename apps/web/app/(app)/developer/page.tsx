@@ -13,14 +13,14 @@ import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { authFetch } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
-import { useFileList } from '@/lib/cache'
+import { useFileList, useQuery, revalidateAll } from '@/lib/cache'
 import { useModels } from '@/lib/cache/api-hooks'
 import ModelCatalogCard from '@/components/models/ModelCatalogCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
 import DownloadsCard from '@/components/models/DownloadsCard'
 import EngineStatusCard from '@/components/models/EngineStatusCard'
 import { StartupTimeline } from '@/components/startup/StartupTimeline'
-import { StartupHistoryChart } from '@/components/startup/StartupHistoryChart'
+import { StartupHistoryChart, useStartupHistory } from '@/components/startup/StartupHistoryChart'
 
 const QUICK_ACTIONS = [
   {
@@ -58,9 +58,12 @@ const QUICK_ACTIONS = [
 
 export default function DeveloperPage() {
   const [tab, setTab] = useState<string>('shell')
-  useRefreshShortcut(() => {
-    window.location.reload()
-  })
+  // `r` refresh revalidates the shared query cache and nothing else. Every tab
+  // that fetches reads through that cache (files/models via their own hooks,
+  // voice/startup via the queries below), so cached data is re-read *in place*:
+  // no remounts, no `key` bumps — terminal scrollback, typed input and scroll
+  // positions all survive. Shell/api/quick fetch nothing at all.
+  useRefreshShortcut(() => revalidateAll())
   const { startupStage, startupElapsed } = useLiveStatus()
 
   return (
@@ -157,9 +160,9 @@ function ShellTab() {
         </button>
       </div>
       {shellMode === 'backend' ? (
-        <TerminalPanel className="h-[calc(100vh-12rem)]" />
+        <TerminalPanel className="h-[calc(100vh-14rem)]" />
       ) : (
-        <V86TerminalPanel className="h-[calc(100vh-12rem)]" />
+        <V86TerminalPanel className="h-[calc(100vh-14rem)]" />
       )}
     </div>
   )
@@ -261,22 +264,19 @@ function FilesTab() {
 }
 
 function VoiceTab() {
-  const [status, setStatus] = useState<VoiceStatus | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Genuine GET, now cache-backed: `r` re-reads /voice/status in place. The
+  // interaction state below (typed text, in-flight TTS, last result) is local
+  // component state and is deliberately untouched by a refresh.
+  const { data, isLoading: loading } = useQuery<VoiceStatus>('developer-voice', () =>
+    voiceController.getStatus(),
+  )
+  const status = data ?? null
   const [ttsText, setTtsText] = useState('')
   const [generating, setGenerating] = useState(false)
   const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string } | null>(
     null,
   )
   const [ttsError, setTtsError] = useState<string | null>(null)
-
-  useEffect(() => {
-    voiceController
-      .getStatus()
-      .then((d) => setStatus(d))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
 
   const handleGenerate = async () => {
     if (!ttsText.trim()) return
@@ -319,7 +319,9 @@ function VoiceTab() {
                   {status.server_tts ? 'TTS Available' : 'TTS Unavailable'}
                 </span>
               </div>
-              <p className="text-[11px] text-muted-foreground/60 font-mono">{status.model ?? 'no model'}</p>
+              <p className="text-[11px] text-muted-foreground/60 font-mono">
+                {status.model ?? 'no model'}
+              </p>
               {status.error && (
                 <div className="flex items-start gap-2 text-destructive bg-destructive/[0.08] rounded-lg px-3 py-2 text-[11px]">
                   <span className="shrink-0 text-[10px] font-bold">!</span>
@@ -609,7 +611,9 @@ function ApiTab() {
       {history.length > 0 && (
         <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
           <div className="flex items-center justify-between h-11 px-4 bg-muted/30 border-b border-border/20">
-            <span className="text-[11px] font-medium text-muted-foreground/80">Request History</span>
+            <span className="text-[11px] font-medium text-muted-foreground/80">
+              Request History
+            </span>
             <button
               type="button"
               onClick={clearHistory}
@@ -641,9 +645,15 @@ function ApiTab() {
                 >
                   {entry.status || 'ERR'}
                 </span>
-                <span className="font-mono text-muted-foreground/40 w-12 shrink-0">{entry.method}</span>
-                <span className="font-mono text-muted-foreground truncate flex-1">{entry.path}</span>
-                <span className="text-muted-foreground/60 shrink-0 font-mono">{entry.timeMs}ms</span>
+                <span className="font-mono text-muted-foreground/40 w-12 shrink-0">
+                  {entry.method}
+                </span>
+                <span className="font-mono text-muted-foreground truncate flex-1">
+                  {entry.path}
+                </span>
+                <span className="text-muted-foreground/60 shrink-0 font-mono">
+                  {entry.timeMs}ms
+                </span>
               </button>
             ))}
           </div>
@@ -711,7 +721,7 @@ function QuickActionsTab() {
                 : results[action.label]
                   ? results[action.label]!.status >= 200 && results[action.label]!.status < 300
                     ? 'border-success/20 bg-success/[0.03]'
-                    : 'border-red-500/20 bg-destructive/[0.03]'
+                    : 'border-destructive/20 bg-destructive/[0.03]'
                   : 'border-border/20 bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]',
             )}
           >
@@ -747,7 +757,9 @@ function QuickActionsTab() {
               )}
             </div>
             <span className="text-[11px] text-muted-foreground/80">{action.description}</span>
-            <span className="text-[10px] text-muted-foreground/40 font-mono mt-1.5">{action.endpoint}</span>
+            <span className="text-[10px] text-muted-foreground/40 font-mono mt-1.5">
+              {action.endpoint}
+            </span>
           </button>
         ))}
       </div>
@@ -755,10 +767,7 @@ function QuickActionsTab() {
       {Object.entries(results).map(
         ([label, result]) =>
           result && (
-            <div
-              key={label}
-              className="rounded-xl border border-border/20 bg-card overflow-hidden"
-            >
+            <div key={label} className="rounded-xl border border-border/20 bg-card overflow-hidden">
               <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b border-[#0.06]">
                 <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
                 <div className="flex items-center gap-2">
@@ -774,7 +783,9 @@ function QuickActionsTab() {
                   >
                     {result.status || 'ERR'}
                   </span>
-                  <span className="text-[10px] text-muted-foreground/60 font-mono">{result.timeMs}ms</span>
+                  <span className="text-[10px] text-muted-foreground/60 font-mono">
+                    {result.timeMs}ms
+                  </span>
                 </div>
               </div>
               <pre className="px-4 py-3 text-[11px] font-mono text-muted-foreground overflow-auto max-h-48 whitespace-pre-wrap leading-relaxed">
@@ -787,6 +798,12 @@ function QuickActionsTab() {
   )
 }
 
+async function fetchStartupProgress(): Promise<Record<string, unknown>> {
+  const res = await authFetch('/health/startup-progress')
+  const json = await res.json()
+  return (json.data ?? {}) as Record<string, unknown>
+}
+
 function StartupTab() {
   const {
     health,
@@ -795,31 +812,29 @@ function StartupTab() {
     startupModelProgress,
     startupModelProgressMessage,
   } = useLiveStatus()
-  const [startupData, setStartupData] = useState<Record<string, unknown> | null>(null)
-  const [historyData, setHistoryData] = useState<Record<string, unknown> | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Both GETs are cache-backed now, so `r` (revalidateAll) re-reads this tab in
+  // place. The history read shares its key with <StartupHistoryChart/>, which
+  // renders the same endpoint — one fetch, one revalidation, two views. Keys are
+  // plain strings so they are referentially stable: `refetch` is
+  // `useCallback([key])`, and stable `refetch` identities keep the poll below
+  // from being re-created on every render.
+  const { data: startupData, refetch: refetchStartupProgress } = useQuery<Record<string, unknown>>(
+    'developer-startup-progress',
+    fetchStartupProgress,
+  )
+  const { data: historyData, refetch: refetchStartupHistory } = useStartupHistory()
 
+  // The 2s poll stays a plain effect: it is a timer, i.e. a side effect, not a
+  // data read. The reads above are cached, so a refresh reaches this tab without
+  // the component ever remounting.
   useEffect(() => {
-    const fetchStartup = async () => {
-      try {
-        const [progressRes, historyRes] = await Promise.all([
-          fetch('/health/startup-progress'),
-          fetch('/health/startup-history'),
-        ])
-        const progressJson = await progressRes.json()
-        const historyJson = await historyRes.json()
-        setStartupData(progressJson.data)
-        setHistoryData(historyJson.data)
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false)
-      }
+    const poll = () => {
+      void refetchStartupProgress()
+      void refetchStartupHistory()
     }
-    fetchStartup()
-    const interval = setInterval(fetchStartup, 2000)
+    const interval = setInterval(poll, 2000)
     return () => clearInterval(interval)
-  }, [])
+  }, [refetchStartupProgress, refetchStartupHistory])
 
   const STAGE_COLORS: Record<string, string> = {
     init: 'text-muted-foreground/60',
@@ -906,8 +921,12 @@ function StartupTab() {
       {suggestions && suggestions.length > 0 && (
         <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
           <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
-            <span className="text-[11px] font-medium text-muted-foreground/80">Optimization Suggestions</span>
-            <span className="text-[9px] text-muted-foreground/60 ml-2">{suggestions.length} suggestions</span>
+            <span className="text-[11px] font-medium text-muted-foreground/80">
+              Optimization Suggestions
+            </span>
+            <span className="text-[9px] text-muted-foreground/60 ml-2">
+              {suggestions.length} suggestions
+            </span>
           </div>
           <div className="divide-y divide-white/[0.04]">
             {suggestions.map((suggestion, i) => (
@@ -960,7 +979,9 @@ function StartupTab() {
       {/* Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border border-border/20 bg-card p-4">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Stage</div>
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+            Stage
+          </div>
           <div
             className={cn(
               'text-[14px] font-medium font-mono',
@@ -971,19 +992,25 @@ function StartupTab() {
           </div>
         </div>
         <div className="rounded-xl border border-border/20 bg-card p-4">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Elapsed</div>
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+            Elapsed
+          </div>
           <div className="text-[14px] font-medium font-mono text-muted-foreground">
             {startupElapsed.toFixed(1)}s
           </div>
         </div>
         <div className="rounded-xl border border-border/20 bg-card p-4">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Model</div>
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+            Model
+          </div>
           <div className="text-[14px] font-medium font-mono text-muted-foreground">
             {Math.round(startupModelProgress * 100)}%
           </div>
         </div>
         <div className="rounded-xl border border-border/20 bg-card p-4">
-          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Status</div>
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+            Status
+          </div>
           <div
             className={cn(
               'text-[14px] font-medium',
@@ -1032,29 +1059,49 @@ function StartupTab() {
       {stats && stats.count > 0 && (
         <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
           <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
-            <span className="text-[11px] font-medium text-muted-foreground/80">Performance History</span>
-            <span className="text-[9px] text-muted-foreground/60 ml-2">{stats.count} startups recorded</span>
+            <span className="text-[11px] font-medium text-muted-foreground/80">
+              Performance History
+            </span>
+            <span className="text-[9px] text-muted-foreground/60 ml-2">
+              {stats.count} startups recorded
+            </span>
           </div>
           <div className="p-4">
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Avg</div>
-                <div className="text-[14px] font-mono text-muted-foreground">{stats.avg_duration}s</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                  Avg
+                </div>
+                <div className="text-[14px] font-mono text-muted-foreground">
+                  {stats.avg_duration}s
+                </div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">P50</div>
-                <div className="text-[14px] font-mono text-muted-foreground">{stats.p50_duration}s</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                  P50
+                </div>
+                <div className="text-[14px] font-mono text-muted-foreground">
+                  {stats.p50_duration}s
+                </div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">P95</div>
-                <div className="text-[14px] font-mono text-muted-foreground">{stats.p95_duration}s</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                  P95
+                </div>
+                <div className="text-[14px] font-mono text-muted-foreground">
+                  {stats.p95_duration}s
+                </div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Min</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                  Min
+                </div>
                 <div className="text-[14px] font-mono text-success">{stats.min_duration}s</div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Max</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                  Max
+                </div>
                 <div className="text-[14px] font-mono text-destructive">{stats.max_duration}s</div>
               </div>
             </div>
@@ -1069,7 +1116,9 @@ function StartupTab() {
                 >
                   {startupElapsed.toFixed(1)}s
                 </span>
-                <span className="text-[10px] text-muted-foreground/60">vs avg {stats.avg_duration}s</span>
+                <span className="text-[10px] text-muted-foreground/60">
+                  vs avg {stats.avg_duration}s
+                </span>
                 {startupElapsed < stats.avg_duration && (
                   <span className="text-[9px] text-success">
                     ({((1 - startupElapsed / stats.avg_duration) * 100).toFixed(0)}% faster)
@@ -1098,15 +1147,13 @@ function StartupTab() {
                 <div className="flex items-center gap-3">
                   <StatusDot
                     tone={
-                      stage === startupStage
-                        ? 'primary'
-                        : data.time !== null
-                          ? 'success'
-                          : 'muted'
+                      stage === startupStage ? 'primary' : data.time !== null ? 'success' : 'muted'
                     }
                     pulse={stage === startupStage}
                   />
-                  <span className="text-[12px] font-medium text-muted-foreground capitalize">{stage}</span>
+                  <span className="text-[12px] font-medium text-muted-foreground capitalize">
+                    {stage}
+                  </span>
                   <span className="text-[10px] text-muted-foreground/60 font-mono">
                     {data.hooks.length} hooks
                   </span>
@@ -1124,7 +1171,9 @@ function StartupTab() {
       {stageStats && Object.keys(stageStats).length > 0 && (
         <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
           <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
-            <span className="text-[11px] font-medium text-muted-foreground/80">Stage Performance</span>
+            <span className="text-[11px] font-medium text-muted-foreground/80">
+              Stage Performance
+            </span>
           </div>
           <div className="p-4">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1176,15 +1225,20 @@ function StartupTab() {
                 <div className="flex items-center gap-3">
                   <StatusDot
                     tone={
-                      hook.status === 'ok' ? 'success'
-                      : hook.status === 'running' ? 'warning'
-                      : hook.status === 'error' || hook.status === 'timeout' ? 'destructive'
-                      : 'muted'
+                      hook.status === 'ok'
+                        ? 'success'
+                        : hook.status === 'running'
+                          ? 'warning'
+                          : hook.status === 'error' || hook.status === 'timeout'
+                            ? 'destructive'
+                            : 'muted'
                     }
                     pulse={hook.status === 'running'}
                   />
                   <span className="text-[11px] font-mono text-muted-foreground">{hook.name}</span>
-                  <span className="text-[9px] text-muted-foreground/60 uppercase">{hook.stage}</span>
+                  <span className="text-[9px] text-muted-foreground/60 uppercase">
+                    {hook.stage}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   {hook.error && (
