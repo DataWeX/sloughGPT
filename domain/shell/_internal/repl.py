@@ -2566,7 +2566,7 @@ Examples:
           -l, --level LEVEL   filter by level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
           -s, --source SRC    filter by source substring
           -n, --lines N       show last N entries (default 30)
-          -f, --follow        follow new entries (Ctrl+C to stop)
+          -f, --follow        follow new entries (TTY only; Ctrl+C to stop)
           -c, --clear         clear the buffer
           -e, --export FILE   save entries to a text file
               --stats         show log level distribution
@@ -2740,6 +2740,11 @@ Examples:
         self._print(sep)
 
         if follow:
+            if not getattr(self.io, "_is_tty", False):
+                self._print(
+                    f"  {_C_DIM}Not a terminal — follow skipped, entries above shown once.{_C_RESET}"
+                )
+                return
             self._print(f"  {_C_DIM}Following — press Ctrl+C to stop{_C_RESET}")
             try:
                 offset = len(self._log_buffer)

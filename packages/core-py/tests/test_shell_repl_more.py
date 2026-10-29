@@ -6490,7 +6490,10 @@ class TestCmdLog:
         repl._cmd_logs(f"-e {export_file}")
         assert repl._last_exit_code == 0
 
-    @pytest.mark.skip(reason="follow loop blocks on stdin")
+    @pytest.mark.skip(
+        reason="environment-dependent (only non-TTY is safe) — deterministic coverage in "
+        "TestCmdLogsExplainV2::test_logs_follow_non_tty_skips_loop"
+    )
     def test_log_follow(self, repl):
         repl._log_buffer.clear()
         repl._cmd_logs("-f")
@@ -20388,6 +20391,12 @@ class TestCmdLogsExplainV2:
         finally:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, old_handler)
+        assert repl._last_exit_code == 0
+
+    def test_logs_follow_non_tty_skips_loop(self, repl):
+        repl._log_buffer.clear()
+        out = _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
+        assert "follow skipped" in out
         assert repl._last_exit_code == 0
 
 
