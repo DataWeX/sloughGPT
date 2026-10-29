@@ -10,7 +10,7 @@ commits on main (pre-commit/pre-push block >5 ahead via
 `reset`-to-lane on main. Land with a PR (canonical) or push `HEAD:main` from
 your lane branch — your AGENT_SYNC entry rides that push.
 
-**2026-10-29 — OPENCODE (voice flywheel link C, closes card `20261028_094717`'s build half): idle-time checkpoint generation swap (branch `feat/voice-flywheel-checkpoint-swap`).** `VoiceEngine` now re-stats its loaded checkpoint on every `_get_tts()` (one `st_mtime_ns` ~µs/request, only when `self._tts` is already live) and, on a changed mtime, builds a **fresh `TTSEngine` off-request inside a lock, then reference-swaps** — RCU-style: in-flight `synthesize()` calls hold the old reference and finish on old weights; nothing reloads mid-request. First load records the mtime **taken before `load()`** (rewrite-during-load window detected next request). Failure policy: reload attempts advance the recorded mtime — a half-written file retries at its completion mtime, a permanently corrupt file stops hot-looping, and old weights keep serving either way (never falls back to untrained once a checkpoint has served). TDD: 2 new tests RED-first — including a **load-spy tightening** so the corrupt-rewrite test fails for the *right* reason (rewrite actually attempted) instead of passing because no seam existed. **Gates:** `test_voice_engine_checkpoint.py` **6P**, run_affected closure **13P**, ruff clean. Flywheel = A (`--response-logs`, PR #235) + B (`--corpus-file`, PR #229) + C (this) — `train_tts_espeak.py --response-logs` → new generation npz → next live request picks it up.
+**2026-10-29 — OPENCODE (voice flywheel link C, closes card `20261028_094717`'s build half): idle-time checkpoint generation swap (branch `feat/voice-flywheel-checkpoint-swap`).** `VoiceEngine` now re-stats its loaded checkpoint on every `_get_tts()` (one `st_mtime_ns` ~µs/request, only when `self._tts` is already live) and, on a changed mtime, builds a **fresh `TTSEngine` off-request inside a lock, then reference-swaps** — RCU-style: in-flight `synthesize()` calls hold the old reference and finish on old weights; nothing reloads mid-request. First load records the mtime **taken before `load()`** (rewrite-during-load window detected next request). Failure policy: reload attempts advance the recorded mtime — a half-written file retries at its completion mtime, a permanently corrupt file stops hot-looping, and old weights keep serving either way (never falls back to untrained once a checkpoint has served). TDD: 2 new tests RED-first — including a **load-spy tightening** so the corrupt-rewrite test fails for the _right_ reason (rewrite actually attempted) instead of passing because no seam existed. **Gates:** `test_voice_engine_checkpoint.py` **6P**, run_affected closure **13P**, ruff clean. Flywheel = A (`--response-logs`, PR #235) + B (`--corpus-file`, PR #229) + C (this) — `train_tts_espeak.py --response-logs` → new generation npz → next live request picks it up.
 
 **2026-10-28 — OPENCODE (voice flywheel link A): card `20261028_094717` — the conversation sample log ALREADY existed; link A is a projection into link B's `--corpus-file` contract (branch `feat/voice-flywheel-response-logs`).** Port-don't-rebuild twice: (1) `ResponseTracker` logs every live chat turn (`user_message`+`assistant_response`+ts → `data/response_logs/responses_YYYYMMDD.jsonl`, wired at `inference.py:744`) — no new write path, no endpoint, no second log; (2) new `espeak_pairs.load_response_logs(dir)` projects both fields → flattened, deduped corpus lines (malformed JSONL skipped) + driver `--response-logs [DIR]` (bare flag = `data/response_logs`, `parser.error` on combo with `--corpus-file`). **Pre-existing bug fixed en route:** `render()` passed text positionally — any corpus line starting with `-` (real logs have them) died with `espeak: invalid option` — now text goes via `-f` temp file (also fixes quoting generally), RED-proven first. **Gates:** `test_voice_tts_training.py` **21P** (5 new, all RED-first: ImportError ×3, exclusivity message, leading-dash render), run_affected closure **21P** (testmon scoped — engine tests correctly deselected), ruff clean, **real-logs smoke** (root's `data/response_logs`): 80 steps train 41.8→31.4 / holdout 49.1→34.5 / **PASS** (a 10-step probe correctly FAILed the decrease gate — driver honesty works). Link C (idle checkpoint generation swap) = next on the card.
 
@@ -1541,6 +1541,37 @@ tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
 
 ## In flight
 
+- **2026-10-29 · root session on `feat/version-tracking` (PR opened; 3
+  commits, base `origin/main 18f848301`).** Version tracking so feature/UI
+  changes are auditable — **built on the registries that already existed**
+  (server `apps/api/server/version.py` FEATURE_VERSIONS, strui
+  `packages/strui/src/versions.ts` + Settings `VersionInspector`, flag
+  status/env system — audited first, none rebuilt). Gaps closed:
+  (1) `FeatureFlag` gains semver `version` + `since` (+`bump_version()`
+  with semver guard); (2) append-only change ledger `config/flag_history.jsonl`
+  — `set_status`/`bump_version`/`load_config` append `{kind, flag, from, to,
+version, source, at}`; out-of-band config divergence recorded **once**
+  (`_last_recorded_statuses` dedupe, no restart spam), `_append_history`
+  never raises; (3) `Card.rev` edit counter bumped in update/move/block/
+  unblock — excluded from the chain payload (`_UNHASHED_FIELDS`) and
+  omitted while 0, so **legacy board lines stay byte-identical** (1-line
+  diffs, not whole-file rewrites); (4) `LiveFeedStream` header shows the
+  `training v1.0.0` feature tag via `getComponentFeature('JobStatus')`
+  (strui registry, so it self-updates on feature bumps). **Board repair
+  (separate commit `0db7669de`)** — merge `5e5c8ce36` had union-merged two
+  board versions on main (975 dup lines, 972 ids double, chain broken at
+  all 1030 indices, schema line at EOF): deduped (newer `updated_at` wins,
+  main-side on tie; 951 identical / 19 main-wins / 2 other-wins), schema
+  restored to top, re-sealed → `verify_chain()==[]`, 1072 cards, none
+  lost; backup `.kanban/board.jsonl.pre-repair-5e5c8ce36.bak` kept local.
+  Cards: `f8d4c968` (work), `60917072` (**config/feature_flags.json never
+  loaded at boot** — `load_config()` has zero production callers; wiring it
+  would flip `hf_finetune` to enabled — needs user ruling), `20261029_023328`
+  (board corruption root cause + **missing `verify_chain` CI gate**),
+  `82b37db4` (gui move 500 — closed, fixed upstream post-rebase). Gates:
+  460 Python (app-planner+flags+shared), 9 LiveFeedStream, 32 strui
+  versions, tsc 0, eslint 0, ruff 0, feature-tags gate, board-write
+  benchmark no regression (integrity 100% every run).
 - **2026-10-24 · root session on `feat/error-funnel` (NOT on main; merge
   blocked).** Contents: browser error funnel (`error-store` fan-out →
   GlobalBanner / opt-in toast / `state_events` / backend batch, ~39 bare
