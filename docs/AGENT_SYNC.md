@@ -884,7 +884,21 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `8d1aa1ccf`)
+## Landed on main (origin/main = `138de93b1`)
+
+- **2026-10-29 14:45Z · PR #248 `fix/message-data-id-expectations` → MERGED (`138de93b1`)** —
+  unbreaks `test-core-py` on main (was red on every PR since the
+  stable-message-ids lane `f48247f6b`, whose CI was cancelled pre-merge and
+  left two stale field-set assertions): `test_dataclass_fields` now expects
+  `MessageData`'s `id`, `test_returns_stored_messages` sets explicit mock ids
+  and expects `SessionCore.get_messages` to include them, plus a new
+  `test_legacy_messages_omit_id_key` pinning the documented no-`id: null`-leak
+  promise. Test-expectation alignment only, zero production code.
+  **Validation:** ruff clean, both files **153 passed**. Note for later
+  sessions: the shared main tree is on a diverged Next-era branch — read code
+  from a worktree, not the main checkout (a `sed` of `message_feedback.py`
+  there showed the pre-id version and briefly misdiagnosed this as
+  not-reproducible).
 
 - **2026-10-29 14:27Z · PR #247 `feat/meta-trainer` → MERGED (`8d1aa1ccf`)** —
   StepStrategy seam + MetaTrainer strategy host: `SloughGPTTrainer.train_step`
