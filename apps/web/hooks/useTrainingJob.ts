@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useRouter } from '@/vite/next-compat/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
