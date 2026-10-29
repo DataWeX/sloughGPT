@@ -2,7 +2,7 @@
 
 import Link from '@/vite/next-compat/link'
 import { usePathname } from '@/vite/next-compat/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { cn, Button, IconChevronRight } from '@sloughgpt/strui'
@@ -32,6 +32,10 @@ import { useLocale } from '@/hooks/useLocale'
 /** Hold-off before a non-connected status raises the global drop banner —
  *  one failed poll is a blip, not an outage the user should be told about. */
 export const OFFLINE_BANNER_GRACE_MS = 5_000
+
+/** How long the green "Backend reconnected" confirmation stays up before it
+ *  retires itself — long enough to read, short enough to be gone. */
+export const RECOVERY_BANNER_HOLD_MS = 4_000
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -126,33 +130,69 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const closeMobileNav = () => setMobileNavOpen(false)
 
   // Backend health lives on ONE banner surface (GlobalBanner + useBannerStore).
-  // A connection drop (offline/error, held past a short grace so a blip never
-  // flashes a banner) shares the boot-stall key 'backend-connection' so the
-  // states replace each other instead of stacking two rows for one failure.
-  // Recovery dismisses it via the effect cleanup. The old version keyed on
-  // 'reloading' — a status nothing produced anymore — so the banner was dead.
+  // Lifecycle mirrors the CONNECTION, not the request:
+  //   offline/error → grace → red "unreachable" (held as long as the drop)
+  //   connected     → green "reconnected" confirmation → auto-dismiss
+  // The ref records that a drop was actually shown, so (a) booting online
+  // never flashes a green banner, and (b) recovery only confirms what the
+  // user saw. Same key 'backend-connection' throughout — red and green
+  // replace each other in the single slot instead of stacking two rows.
+  const connectionDropRef = useRef(false)
   useEffect(() => {
-    if (apiStatus !== 'offline' && apiStatus !== 'error') return
-    let id: string | null = null
-    const timer = setTimeout(() => {
-      id = useBannerStore.getState().showBanner({
-        key: 'backend-connection',
-        tone: 'destructive',
-        title: 'Backend unreachable',
-        message: 'The connection dropped — retrying automatically.',
-        action: {
-          label: 'Retry',
-          onAction: () => {
-            void probeBackendAndRevalidate()
+    const down = apiStatus === 'offline' || apiStatus === 'error'
+    if (down) {
+      let id: string | null = null
+      const timer = setTimeout(() => {
+        id = useBannerStore.getState().showBanner({
+          key: 'backend-connection',
+          tone: 'destructive',
+          title: 'Backend unreachable',
+          message: 'The connection dropped — retrying automatically.',
+          action: {
+            label: 'Retry',
+            onAction: () => {
+              void probeBackendAndRevalidate()
+            },
           },
-        },
-      })
-    }, OFFLINE_BANNER_GRACE_MS)
+        })
+        connectionDropRef.current = true
+      }, OFFLINE_BANNER_GRACE_MS)
+      return () => {
+        clearTimeout(timer)
+        // A superseded id is a no-op (single-slot store) — another producer's
+        // banner is left alone.
+        if (id) useBannerStore.getState().dismissBanner(id)
+      }
+    }
+
+    // Recovery confirmation: only after a drop the user actually saw, and only
+    // once the connection is genuinely back — 'connecting'/'reloading' keep
+    // waiting for 'connected' before confirming.
+    if (apiStatus !== 'connected' || !connectionDropRef.current) return
+    // Never displace an unrelated banner that took the slot meanwhile.
+    const current = useBannerStore.getState().banners[0]
+    if (current && current.key !== 'backend-connection') {
+      connectionDropRef.current = false
+      return
+    }
+    const greenId = useBannerStore.getState().showBanner({
+      key: 'backend-connection',
+      tone: 'success',
+      title: 'Backend reconnected',
+      message: 'The connection is stable again.',
+    })
+    // The drop ref clears only when the hold actually completes, so a
+    // StrictMode remount (cleanup clears the timer, ref still set) re-raises
+    // the banner and re-arms the hold instead of leaving it stuck on screen.
+    const timer = setTimeout(() => {
+      useBannerStore.getState().dismissBanner(greenId)
+      connectionDropRef.current = false
+    }, RECOVERY_BANNER_HOLD_MS)
     return () => {
       clearTimeout(timer)
-      // A superseded id is a no-op (single-slot store) — another producer's
-      // banner is left alone.
-      if (id) useBannerStore.getState().dismissBanner(id)
+      // Retire the green banner on re-run/unmount; the drop ref stays set so a
+      // StrictMode second pass re-shows it (single slot replaces, never stacks).
+      useBannerStore.getState().dismissBanner(greenId)
     }
   }, [apiStatus])
 
