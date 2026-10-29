@@ -196,9 +196,14 @@ class HybridRetriever:
         if text in self.embedding_cache:
             return self.embedding_cache[text]
 
-        # Simulated embedding (use real embeddings in production)
-        np.random.seed(hash(text) % (2**32))
-        embedding = np.random.randn(384)
+        # Simulated embedding (use real embeddings in production).
+        # Seed from a stable hash — NOT builtin hash(), which Python randomizes
+        # per-process via PYTHONHASHSEED. With hash() the same text got a
+        # different vector on every run, making dense scores (and therefore
+        # retrieval results and test_add_and_retrieve) nondeterministic. A
+        # local Generator also avoids mutating the global numpy RNG.
+        seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
+        embedding = np.random.default_rng(seed).standard_normal(384)
         embedding = embedding / np.linalg.norm(embedding)
 
         self.embedding_cache[text] = embedding

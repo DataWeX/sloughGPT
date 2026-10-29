@@ -24,6 +24,7 @@ from avion.ai.models import (
 )
 from avion.ai.tools import ToolExecutor, ToolRegistry, normalize_result
 from avion.ai.verifier import Verifier
+from avion.challenge import page_challenge
 from avion.interact.primitives import (
     Coordinate,
     Keyboard,
@@ -64,6 +65,11 @@ class AgentConfig:
     viewport_height: int = 720
     deadline_ms: float = 120_000
     no_progress_limit: int = 3  # identical actions in a row = stuck (0 disables)
+    # Challenge yield: a bot-challenge page stops the run with
+    # stop_reason="needs_human" (see avion.challenge) — the browser
+    # stays put, profile intact; the human takes over. Disable only
+    # against internal pages whose wording collides with a marker.
+    yield_on_challenge: bool = True
     output_dir: str = "arken_output/trajectories"
     # on_step callbacks failing this many times in a row are skipped
     # (degraded) for the rest of the run; totals stay visible.
@@ -76,12 +82,14 @@ class AgentResult:
 
     task: str
     trajectory: Trajectory
+    model_name: str = ""
     success: bool = False
     error: str = ""
     total_duration_ms: float = 0.0
     steps_taken: int = 0
     screenshots_captured: int = 0
-    stop_reason: str = ""  # done|fail|max_steps|deadline|no_progress|unverified|aborted
+    stop_reason: str = ""  # done|fail|max_steps|deadline|no_progress|unverified|needs_human|aborted
+    challenge: dict[str, Any] | None = None  # set when stop_reason == "needs_human"
     transcript_path: str = ""  # where this run's transcript landed ('' = not saved)
     transcript_failures: int = 0  # write/close errors counted, never fatal
 
@@ -97,12 +105,14 @@ class AgentResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "task": self.task,
+            "model_name": self.model_name,
             "success": self.success,
             "error": self.error,
             "steps_taken": self.steps_taken,
             "total_duration_ms": round(self.total_duration_ms, 1),
             "screenshots_captured": self.screenshots_captured,
             "stop_reason": self.stop_reason,
+            "challenge": self.challenge,
             "transcript_path": self.transcript_path,
             "transcript_failures": self.transcript_failures,
             "trajectory": self.trajectory.to_dict(),
@@ -266,6 +276,7 @@ class Agent:
         run_start = time.monotonic()
         start_time = time.perf_counter()
         recent_signatures: list[str] = []
+        challenge: dict[str, Any] | None = None
 
         transcript_path = ""
         transcript = None
@@ -291,6 +302,23 @@ class Agent:
                 a11y_tree = None
                 if self._config.screenshot_on_each_step or step_num == 0:
                     screenshot_b64, a11y_tree = await self._observe(run_start)
+
+                # 1b. CHALLENGE YIELD — checked before DECIDE, so the
+                #     model never gets to act on a challenge page. The
+                #     a11y dump already in hand is the text checked;
+                #     title/URL always are. The browser stays exactly
+                #     where it is — profile intact — for the human.
+                if self._config.yield_on_challenge:
+                    chal = await page_challenge(
+                        self._backend,
+                        a11y_text=json.dumps(a11y_tree) if a11y_tree else "",
+                    )
+                    if chal is not None:
+                        stop_reason = "needs_human"
+                        challenge = chal.to_dict()
+                        trajectory.metadata["challenge"] = challenge
+                        trajectory.metadata["error"] = f"needs a human: {chal.evidence}"
+                        break
 
                 # 2. DECIDE — bounded + retried (predict is a pure call,
                 #    so retrying it has no side effects)
@@ -452,12 +480,14 @@ class Agent:
         return AgentResult(
             task=task,
             trajectory=trajectory,
+            model_name=self._model.model_name,
             success=trajectory.success,
             error=trajectory.metadata.get("error", ""),
             total_duration_ms=total_ms,
             steps_taken=len(trajectory.steps),
             screenshots_captured=sum(1 for s in trajectory.steps if s.screenshot_b64),
             stop_reason=stop_reason,
+            challenge=challenge,
             transcript_path=transcript_path,
             transcript_failures=self._transcript_failures,
         )
@@ -543,9 +573,7 @@ class Agent:
         attempt fails does the loop see a FAIL action. An exhausted
         deadline always wins — retries never outlive the run's budget.
         """
-        attempts = 1 + (
-            max(0, self._config.max_retries) if self._config.retry_on_failure else 0
-        )
+        attempts = 1 + (max(0, self._config.max_retries) if self._config.retry_on_failure else 0)
         last_error = "no attempt made"
         for _ in range(attempts):
             try:
@@ -660,9 +688,7 @@ class Agent:
                     result["reward"] = 0.0
                 else:
                     try:
-                        raw = await self._executor.run(
-                            name, params.get("args") or {}
-                        )
+                        raw = await self._executor.run(name, params.get("args") or {})
                     except Exception as e:
                         result["observation"] = f"error: {e}"
                         result["reward"] = -0.5

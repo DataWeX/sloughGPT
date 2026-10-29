@@ -920,6 +920,7 @@ class TestLive:
 class TestSpinner:
     def test_spinner_enter_exit(self):
         c, io = _make_console()
+        io._is_tty = True  # animation is a TTY capability
         s = c.spinner("Loading", rate=0.01)
         with s:
             pass

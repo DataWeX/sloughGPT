@@ -286,11 +286,15 @@ class TestPriorityRequestQueue:
             return val
 
         async def run():
-            workers = [asyncio.create_task(q.worker()) for _ in range(1)]
-            # Submit low priority first, then high
+            # Enqueue both submissions BEFORE starting the worker: the queue
+            # is non-preemptive (a worker pops and starts an item immediately
+            # on wake), so with a running worker LOW — submitted 20 ms
+            # earlier — would already be executing when HIGH arrives. With
+            # both pending, the priority heap decides the order.
             f1 = asyncio.create_task(q.submit(make_task(1, Priority.LOW), Priority.LOW))
-            await asyncio.sleep(0.02)
             f2 = asyncio.create_task(q.submit(make_task(0, Priority.HIGH), Priority.HIGH))
+            await asyncio.sleep(0.02)  # let both submissions reach the heap
+            workers = [asyncio.create_task(q.worker()) for _ in range(1)]
             await asyncio.sleep(0.2)
             q.close()
             for w in workers:
@@ -303,7 +307,7 @@ class TestPriorityRequestQueue:
 
         await asyncio.wait_for(run(), timeout=5.0)
         # High priority should be served first
-        assert results[0] == 0
+        assert results == [0, 1]
 
     @pytest.mark.asyncio
     async def test_metrics_snapshot(self):

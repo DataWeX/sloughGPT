@@ -101,6 +101,13 @@ const MODES: { value: ChatMode; label: string; icon: ReactNode; color: string }[
 ]
 
 const TONES = ['Friendly', 'Professional', 'Funny', 'Short', 'Detailed'] as const
+
+/** Human-readable labels per mode — derived from MODES so the tabs and any
+ *  chip/badge outside ModeBar can never drift apart. */
+export const MODE_LABELS: Record<ChatMode, string> = Object.fromEntries(
+  MODES.map((m) => [m.value, m.label]),
+) as Record<ChatMode, string>
+
 const TYPES = ['Email', 'Social Post', 'Story', 'Poem', 'Letter', 'Note'] as const
 const DECIDE_STRUCTURES = ['Pros & Cons', 'Comparison', 'Simple Verdict', 'Deep Analysis'] as const
 const DIFFICULTIES = ['Simple', 'Moderate', 'Expert'] as const

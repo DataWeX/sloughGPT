@@ -5,7 +5,7 @@
  * via Next.js API routes.
  */
 
-import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
+import { apiGet, apiPost, apiPut, apiDelete, ApiError } from './http-client'
 import type { Card, Board, Note, TagCount, Stats, HashTree } from '@/components/planner/types'
 
 // ── Board ───────────────────────────────────────────────────────────────
@@ -174,10 +174,12 @@ export async function transitionCard(payload: {
   actor?: string
   force?: boolean
 }): Promise<TransitionResult> {
-  const res = await fetch('/api/planner/transition', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  return res.json()
+  try {
+    return await apiPost<TransitionResult>('/api/planner/transition', payload, { silent: true })
+  } catch (e) {
+    if (e instanceof ApiError && e.data?.raw) {
+      return JSON.parse(e.data.raw) as TransitionResult
+    }
+    throw e
+  }
 }

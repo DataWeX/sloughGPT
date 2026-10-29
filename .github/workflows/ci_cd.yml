@@ -63,7 +63,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests pillow
-          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist
+          python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist pytest-timeout
           # test_vfs_addon.py imports lz4 at module scope -> collection error
           python -m pip install lz4
 
@@ -168,7 +168,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests
-          python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist
+          python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist pytest-timeout
           python -m pip install -e packages/mogdb
 
       - name: Run root tests

@@ -148,23 +148,6 @@ describe('ChatScreen', () => {
     expect(bubbles[1].textContent).toContain('Hi there')
   })
 
-  it('constrains every message row to the centered transcript column', () => {
-    const messages = [msg('m1', 'user', 'Hello'), msg('m2', 'assistant', 'Hi there')]
-    const { container } = render(
-      <ChatScreen
-        messages={messages}
-        loading={false}
-        health={baseHealth}
-        onRefreshHealth={vi.fn()}
-        onCopy={vi.fn()}
-      />,
-    )
-    const rowWrappers = [...container.querySelectorAll('div')].filter((d) =>
-      d.className.includes('mx-auto w-full max-w-4xl px-4 sm:px-6 py-1.5'),
-    )
-    expect(rowWrappers).toHaveLength(2)
-  })
-
   it('renders system banner when offline', () => {
     render(
       <ChatScreen

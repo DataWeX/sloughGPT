@@ -289,12 +289,13 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
       })
     }
 
-    // Load existing session
-    setTimeout(() => {
-      chatDB.getKV<string>(CURRENT_SESSION_KEY).then((currentId) => {
-        if (currentId) get().loadSession(currentId)
-      })
-    }, 0)
+    // NOTE: Do not load the session here. The controller (useChatMessages) is the
+    // single source of truth for messages and loads the session on mount; the
+    // one-way bridge (useChatStoreBridge) mirrors controller → store. An
+    // independent store-side loadSession raced the bridge, resolving later with a
+    // stale/persisted read and clobbering live messages — blanking the pane while
+    // the toolbar (controller) still showed the real count. Session hydration is
+    // the controller's job, not the store's.
   },
 
   // ── Set Input ──

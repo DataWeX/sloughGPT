@@ -11,13 +11,34 @@ import { useSettings, useUpdateSettings } from '@/lib/store'
 import { NAV_SECTIONS } from '@/lib/navigation'
 import { chatDB } from '@/lib/db'
 import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
+import { revalidateAll } from '@/lib/cache'
+import { apiGet } from '@/lib/http-client'
+import { useAuthStore } from '@/lib/auth'
+import { SEARCH_STORES } from '@/lib/search-stores'
+
+interface SystemSearchHit {
+  id: string
+  store: string
+  title: string
+  detail: string
+  score: number
+  locator: string
+}
+
+// apiGet unwraps the {status,data} envelope — the type is the payload.
+interface SystemSearchResponse {
+  hits: SystemSearchHit[]
+  partial: string[]
+  skipped: string[]
+  query: string
+}
 
 interface CommandAction {
   id: string
   label: string
   description: string
   icon: string
-  category: 'navigation' | 'action' | 'conversation' | 'model' | 'soul'
+  category: 'navigation' | 'action' | 'conversation' | 'model' | 'soul' | 'data'
   run: () => void
 }
 
@@ -29,9 +50,12 @@ export function CommandPalette() {
   const [recentSessions, setRecentSessions] = useState<{ id: string; name: string }[]>([])
   const [models, setModels] = useState<{ id: string; name: string; loaded: boolean }[]>([])
   const [souls, setSouls] = useState<{ name: string; description?: string }[]>([])
+  const [dataHits, setDataHits] = useState<SystemSearchHit[]>([])
+  const [dataPartial, setDataPartial] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
+  const currentWorkspaceId = useAuthStore((s) => s.currentWorkspace?.id)
 
   // Sessions/models/souls for the palette come from the /bootstrap payload
   // (the same slices the landing consumes) — no mount prewarm fetches.
@@ -53,6 +77,30 @@ export function CommandPalette() {
     )
     setSouls((souls?.souls ?? []).map((s) => ({ name: s.name, description: s.description })))
   }, [bootstrap])
+
+  // System-wide data search: debounced, workspace-scoped, failure-silent
+  // (local results keep working when the core search is unavailable).
+  useEffect(() => {
+    if (!open || !query.trim()) {
+      setDataHits([])
+      setDataPartial([])
+      return
+    }
+    const q = query.trim()
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ q })
+      if (currentWorkspaceId) params.set('workspace_id', currentWorkspaceId)
+      apiGet<SystemSearchResponse>(`/search?${params.toString()}`)
+        .then((res) => {
+          if (res?.hits) {
+            setDataHits(res.hits)
+            setDataPartial(res.partial ?? [])
+          }
+        })
+        .catch(() => /* data search unavailable — local results remain */ {})
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [open, query, currentWorkspaceId])
 
   const actions: CommandAction[] = useMemo(() => {
     const nav: CommandAction[] = NAV_SECTIONS.flatMap((section) =>
@@ -134,7 +182,8 @@ export function CommandPalette() {
         category: 'action',
         run: () => {
           chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {})
-          window.location.reload()
+          window.dispatchEvent(new CustomEvent('new-chat'))
+          revalidateAll()
         },
       },
       {
@@ -178,13 +227,36 @@ export function CommandPalette() {
     return [...nav, ...modelActs, ...soulActs, ...acts, ...conv]
   }, [router, recentSessions, models, souls, settings, updateSettings])
 
+  const dataActions = useMemo<CommandAction[]>(() => {
+    const toAction = (h: SystemSearchHit): CommandAction => {
+      const meta = SEARCH_STORES[h.store]
+      const isFile = h.locator.startsWith('file:')
+      return {
+        id: `data-${h.store}-${h.id}`,
+        label: h.title,
+        description: `${meta?.label ?? h.store}${h.detail ? ` · ${h.detail}` : ''}`,
+        icon: meta?.icon ?? '🗂️',
+        category: 'data' as const,
+        // route: hits jump straight there; file-backed hits (no viewer yet)
+        // open in the search results page seeded with their title.
+        run: () =>
+          isFile
+            ? router.push(`/workspace/data/search?q=${encodeURIComponent(h.title)}`)
+            : router.push(h.locator.slice('route:'.length)),
+      }
+    }
+    return dataHits.slice(0, 10).map(toAction)
+  }, [dataHits, router])
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return actions
-    const q = query.toLowerCase()
-    return actions.filter(
-      (a) => a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q),
-    )
-  }, [actions, query])
+    const local = query.trim()
+      ? actions.filter((a) => {
+          const q = query.toLowerCase()
+          return a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
+        })
+      : actions
+    return [...local, ...dataActions]
+  }, [actions, query, dataActions])
 
   useEffect(() => {
     if (!open) {
@@ -295,6 +367,7 @@ export function CommandPalette() {
                   soul: 'Souls',
                   action: 'Actions',
                   conversation: 'Conversations',
+                  data: 'Data',
                 }[cat]
                 return (
                   <div key={action.id}>
@@ -327,6 +400,14 @@ export function CommandPalette() {
               })
             )}
           </div>
+          {dataPartial.length > 0 && (
+            <p
+              className="border-t border-border/30 px-4 py-1.5 text-[10px] text-warning"
+              role="status"
+            >
+              Partial results — some sources are unavailable: {dataPartial.join(', ')}
+            </p>
+          )}
         </div>
       </div>
     </>

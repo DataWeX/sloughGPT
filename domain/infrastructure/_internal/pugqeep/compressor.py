@@ -18,7 +18,7 @@ from collections import Counter
 import numpy as np
 
 from .config import CompressorConfig
-from .point import Point
+from .point import Point, accuracy_from_error
 
 
 class HuffmanTree:
@@ -350,7 +350,7 @@ class PointCompressor:
             reconstructed = centroids[assignments]
         mse = np.mean((flat - reconstructed) ** 2)
         var = np.var(flat)
-        accuracy = 1.0 - mse / (var + 1e-8)
+        accuracy = accuracy_from_error(mse, var)
 
         # Store residual if accuracy below threshold
         residual = None
@@ -403,7 +403,7 @@ class PointCompressor:
         ]
 
         best_type, (params, mse) = min(fits, key=lambda x: x[1][1])
-        accuracy = 1.0 - mse / (var + 1e-8)
+        accuracy = accuracy_from_error(mse, var)
 
         if accuracy < self.residual_threshold:
             i = np.arange(n, dtype=np.float32)
@@ -561,7 +561,7 @@ class PointCompressor:
         reconstructed = deq.ravel()[:n]
         mse = np.mean((flat[:n] - reconstructed) ** 2)
         var = np.var(flat[:n])
-        accuracy = 1.0 - mse / (var + 1e-8)
+        accuracy = accuracy_from_error(mse, var)
         return Point(
             identity=identity,
             function_type="block_q4",
@@ -612,7 +612,7 @@ class PointCompressor:
         reconstructed = deq.ravel()[:n]
         mse = np.mean((flat[:n] - reconstructed) ** 2)
         var = np.var(flat[:n])
-        accuracy = 1.0 - mse / (var + 1e-8)
+        accuracy = accuracy_from_error(mse, var)
         return Point(
             identity=identity,
             function_type="block_q8",

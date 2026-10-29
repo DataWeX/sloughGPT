@@ -232,3 +232,45 @@ describe('Dataset cards', () => {
     cy.get('button[aria-label^="Train with"]').should('have.length', 2)
   })
 })
+
+describe('Dataset import journey', () => {
+  beforeEach(() => {
+    cy.mockAll()
+    cy.intercept('POST', `${API}/datasets/import/huggingface`, {
+      statusCode: 200,
+      body: {
+        status: 'success',
+        data: {
+          success: true,
+          dataset_id: 'tinyshakespeare',
+          message: 'Downloaded 1 splits (143 chars)',
+          output_path: 'datasets/tinyshakespeare/corpus.jsonl',
+        },
+      },
+    }).as('hfImport')
+    cy.visit('/datasets')
+    cy.contains('button', /^Add file$/)
+      .first()
+      .click()
+  })
+
+  it('imports a dataset, then a source switch starts clean', () => {
+    cy.get('[role="radio"][aria-label^="HuggingFace:"]').click()
+    cy.get('#hf-id').type('HuggingFaceH4/tinyshakespeare')
+    cy.get('#name').should('have.value', '')
+    cy.contains('button', /^Import$/).click()
+    cy.wait('@hfImport')
+    cy.contains('Downloaded 1 splits (143 chars)').should('be.visible')
+
+    // Done replaces Cancel/Import after success (no double-import)
+    cy.contains('button', 'Done').should('be.visible')
+    cy.contains('button', /^Import$/).should('not.exist')
+
+    // State-leak regression: switching source clears the success banner,
+    // the dataset name, and the previous source's input.
+    cy.get('[role="radio"][aria-label^="Kaggle:"]').click()
+    cy.contains('Downloaded 1 splits (143 chars)').should('not.exist')
+    cy.get('#name').should('have.value', '')
+    cy.get('#kaggle-id').should('have.value', '')
+  })
+})

@@ -162,21 +162,30 @@ class TestShellCommands:
         assert ShellCommands.kill("j1") == {"stopped": True}
         assert calls["post"][0][0] == "/training/jobs/j1/stop"
 
+    # models() is the single projection point from the API payload shape
+    # {model_id, status, device, ...} to the shell's render shape
+    # {name, id, type, loaded, ...}. Original fields are preserved.
     def test_models_list(self, monkeypatch):
         _stub_api(monkeypatch, get_res=[{"id": "gpt2"}])
-        assert ShellCommands.models() == [{"id": "gpt2"}]
+        out = ShellCommands.models()
+        assert out[0]["id"] == "gpt2"
+        assert out[0]["name"] == "gpt2"
+        assert out[0]["loaded"] is False
 
     def test_models_data_dict(self, monkeypatch):
         _stub_api(monkeypatch, get_res={"data": [{"id": "gpt2"}]})
-        assert ShellCommands.models() == [{"id": "gpt2"}]
+        out = ShellCommands.models()
+        assert out[0]["name"] == "gpt2"
 
     def test_models_models_dict(self, monkeypatch):
         _stub_api(monkeypatch, get_res={"models": [{"id": "gpt2"}]})
-        assert ShellCommands.models() == [{"id": "gpt2"}]
+        out = ShellCommands.models()
+        assert out[0]["name"] == "gpt2"
 
     def test_models_available_dict(self, monkeypatch):
         _stub_api(monkeypatch, get_res={"available": [{"id": "gpt2"}]})
-        assert ShellCommands.models() == [{"id": "gpt2"}]
+        out = ShellCommands.models()
+        assert out[0]["name"] == "gpt2"
 
     def test_models_empty_dict(self, monkeypatch):
         _stub_api(monkeypatch, get_res={})
@@ -185,6 +194,43 @@ class TestShellCommands:
     def test_models_other_type(self, monkeypatch):
         _stub_api(monkeypatch, get_res="error")
         assert ShellCommands.models() == []
+
+    def test_models_live_api_shape_normalized(self, monkeypatch):
+        """Live GET /models returns model_id/status/device — never name/id."""
+        _stub_api(
+            monkeypatch,
+            get_res={
+                "data": [
+                    {
+                        "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+                        "status": "loaded",
+                        "device": "cpu",
+                    },
+                    {"model_id": "openai-community/gpt2", "status": "available", "device": "cpu"},
+                ]
+            },
+        )
+        out = ShellCommands.models()
+        assert out[0]["name"] == "Qwen/Qwen2.5-0.5B-Instruct"
+        assert out[0]["id"] == "Qwen/Qwen2.5-0.5B-Instruct"
+        assert out[0]["loaded"] is True
+        assert out[0]["type"] == "cpu"
+        assert out[0]["model_id"] == "Qwen/Qwen2.5-0.5B-Instruct"  # original preserved
+        assert out[1]["loaded"] is False
+        assert out[1]["name"] == "openai-community/gpt2"
+
+    def test_models_explicit_fields_win(self, monkeypatch):
+        _stub_api(monkeypatch, get_res=[{"name": "n", "type": "t", "loaded": True}])
+        out = ShellCommands.models()
+        assert out[0]["name"] == "n"
+        assert out[0]["type"] == "t"
+        assert out[0]["loaded"] is True
+
+    def test_models_skips_non_dicts(self, monkeypatch):
+        _stub_api(monkeypatch, get_res=["junk", {"model_id": "m"}])
+        out = ShellCommands.models()
+        assert len(out) == 1
+        assert out[0]["name"] == "m"
 
     def test_load_model_success(self, fake_requests):
         fake_requests.set_post(_FakeResponse(200, {"loaded": True}))

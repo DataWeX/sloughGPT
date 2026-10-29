@@ -1,5 +1,7 @@
 """Shim: re-exports from canonical old-style location."""
 
+from __future__ import annotations
+
 from domain.infrastructure._internal.ml_types import *  # noqa: F401,F403
 
 # Explicit re-exports: `import *` skips underscore names, but the API server

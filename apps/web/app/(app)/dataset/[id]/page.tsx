@@ -675,10 +675,7 @@ export default function DatasetDetailPage() {
         <DatasetImportDialog
           open={importOpen}
           onOpenChange={setImportOpen}
-          onImportComplete={() => {
-            setImportOpen(false)
-            fetchDataset()
-          }}
+          onImportComplete={() => fetchDataset()}
         />
       )}
     </PageContainer>

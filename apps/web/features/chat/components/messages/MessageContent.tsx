@@ -140,12 +140,15 @@ export const MessageContent = memo(function MessageContent({
             if (e.key === 'Escape') {
               setEditContent(content)
               onEditCancel?.()
+            } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault()
+              handleSave()
             }
           }}
           aria-describedby={`edit-hint-${id}`}
         />
         <p id={`edit-hint-${id}`} className="sr-only">
-          Press Enter to save, Escape to cancel
+          Press Ctrl+Enter to save, Escape to cancel
         </p>
         <div className="flex justify-end gap-2">
           <Button
@@ -159,7 +162,7 @@ export const MessageContent = memo(function MessageContent({
           >
             Cancel
           </Button>
-          <Button size="sm" aria-label="Save and resend message">
+          <Button type="submit" size="sm" aria-label="Save and resend message">
             Resend
           </Button>
         </div>

@@ -400,6 +400,8 @@ class StartupOrchestrator:
             if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
                 return
             # Wait up to 120s for model to load
+            from startup_progress import MODEL_LOAD_STATE
+
             for _ in range(240):
                 import state as server_state
 
@@ -407,6 +409,15 @@ class StartupOrchestrator:
                     return
                 # Lazy guard path: provider is set but model is None
                 if getattr(server_state, "provider", None) is not None:
+                    return
+                # Terminal failure — nothing is loading, so stop waiting
+                # instead of burning the remaining seconds and timing out.
+                if MODEL_LOAD_STATE.get("status") == "failed":
+                    logger.warning(
+                        "Model load already failed — skipping ready wait: %s",
+                        MODEL_LOAD_STATE.get("error"),
+                        extra={"tag": "START"},
+                    )
                     return
                 await asyncio.sleep(0.5)
             logger.warning("Model load timeout after 120s", extra={"tag": "START"})
@@ -455,7 +466,7 @@ class StartupOrchestrator:
             from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
 
             def _rag_sync():
-                from domain.cognition._internal.rag_service import get_rag_service
+                from domain.cognition import get_rag_service
 
                 rag = get_rag_service()
                 if hasattr(rag, "auto_ingest_repo_docs"):
@@ -590,6 +601,12 @@ class StartupOrchestrator:
         )
         logger.info("Phase 4: loading model %s (background)", raw, extra={"tag": "START"})
 
+        # A fresh attempt must clear a previous terminal outcome, or the
+        # readiness gate would keep reporting the old failure.
+        from startup_progress import MODEL_LOAD_STATE
+
+        MODEL_LOAD_STATE.update(status="loading", error=None)
+
         def _load_and_register():
             """Load model then register with registry/providers."""
             import state as server_state
@@ -646,6 +663,7 @@ class StartupOrchestrator:
                     cfg.autoload_model,
                     extra={"tag": "START"},
                 )
+                _mark_model_load_ready()
                 return
 
             # Lazy-guard fast path (default): with a ProcessGuard + .slnc
@@ -660,22 +678,21 @@ class StartupOrchestrator:
                     cfg.autoload_model,
                     extra={"tag": "START"},
                 )
+                _mark_model_load_ready()
                 return
 
             try:
                 loaded_provider = _autoload_model(cfg)
             except Exception as e:
                 logger.error("Model load failed: %s", e, exc_info=True, extra={"tag": "START"})
+                _record_model_load_failure(str(e))
                 return
 
-            # After model is loaded, register with registry + providers
-            try:
-                process_guard = _build_guard_for_model(cfg, server_state.model_type)
-                _register_loaded(cfg, process_guard, preloaded_provider=loaded_provider)
-            except Exception as e:
-                logger.error(
-                    "Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"}
-                )
+            # Register only when weights actually materialized. A load that
+            # produced nothing used to fall through to _register_loaded, which
+            # logged "Model loaded + providers registered: None" and left the
+            # readiness gate answering "Model still loading" forever.
+            _finish_autoload(cfg, loaded_provider)
 
         # Fire-and-forget: model loads in background while routers register
         from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
@@ -696,12 +713,23 @@ class StartupOrchestrator:
 
     def _on_pgq_model_load_done(self, proc):
         """Callback when model load PGQ process completes or fails."""
+        from startup_progress import MODEL_LOAD_STATE
+
         from domain.infrastructure._internal.pugqeep.engine import ProcessStatus
         from infrastructure.staged_loader import get_staged_loader
 
         loader = get_staged_loader()
 
         if proc.status == ProcessStatus.COMPLETED:
+            if MODEL_LOAD_STATE.get("status") == "failed":
+                # The worker returned without raising but produced nothing —
+                # the cause was recorded inside it. Reporting success here is
+                # what made the staged loader claim "Model loaded successfully"
+                # while every readiness check said otherwise.
+                err = MODEL_LOAD_STATE.get("error") or "unknown cause"
+                logger.error("Model load failed: %s", err, extra={"tag": "START"})
+                loader.set_model_progress(0.0, f"Model load failed: {err}")
+                return
             loader.set_model_progress(1.0, "Model loaded successfully")
         elif proc.status == ProcessStatus.CANCELLED:
             logger.debug("Model load cancelled (server shutting down)", extra={"tag": "START"})
@@ -709,6 +737,10 @@ class StartupOrchestrator:
             return
         else:
             logger.error("Model load failed: %s", proc.error, extra={"tag": "START"})
+            # A crashed PGQ worker records nothing of its own — without a
+            # terminal state the gate answers E_MODEL_LOADING forever for a
+            # load that already stopped (eternal 503, fix/model-readiness-verdict).
+            _record_model_load_failure(f"Model load process failed: {proc.error}")
             loader.set_model_progress(0.0, f"Model load failed: {proc.error}")
             return
 
@@ -919,6 +951,59 @@ class StartupOrchestrator:
 
                 warmup_proc = PgqProcess(fn=_warm_checkpoints, name="ckpt-warmup")
                 self._bg_tree.branch([warmup_proc])
+
+                # Background health-snapshot warmup. The FIRST
+                # get_detailed_health() call costs ~1.3s: it imports the
+                # controllers.health graph (284 modules) and, via
+                # domain.slolib.get_accelerator() -> _detect_best_backend() ->
+                # is_available(), reaches the GPU stack (cupy: 279ms self,
+                # 758ms cumulative). Nothing warmed it before, so that whole
+                # cost landed in-request on the first /health/stream
+                # subscriber — measured 1281ms vs 1.5ms warm.
+                #
+                # Run it here, where there is no traffic yet. Note this only
+                # works because PgqProcess executes IN-PROCESS: the warmed
+                # sys.modules are this process's. (Verified: a marker file and
+                # a deliberately-unrelated stdlib module both landed in the
+                # parent.) A forked child would warm nothing but the page
+                # cache.
+                def _warm_health():
+                    try:
+                        from controllers.health import get_health_controller
+
+                        get_health_controller().get_detailed_health()
+                    except Exception as e:
+                        logger.debug(
+                            "Health warmup failed (non-fatal): %s", e, extra={"tag": "START"}
+                        )
+
+                self._bg_tree.branch([PgqProcess(fn=_warm_health, name="health-warmup")])
+
+                # Background dashboard-snapshot warmup — the same defect, and
+                # NOT covered by the health warmup above. Measured in a fresh
+                # process: the first `_build_snapshot()` costs **1419ms** and
+                # pulls 654 modules, against 6.6ms warm, and neither
+                # `controllers.health` nor `cupy` is in sys.modules afterwards
+                # — dashboard reaches its own closure (`domain.infrastructure`,
+                # `training.jobs`, the event buffer), so warming health leaves
+                # this cold. First `/dashboard/stream` subscriber pays it.
+                #
+                # Two separate procs rather than one that does both: they run
+                # concurrently on the background tree, and a failure in either
+                # warmup stays isolated to itself.
+                def _warm_dashboard():
+                    try:
+                        from routers.dashboard import _build_snapshot
+
+                        _build_snapshot()
+                    except Exception as e:
+                        logger.debug(
+                            "Dashboard warmup failed (non-fatal): %s",
+                            e,
+                            extra={"tag": "START"},
+                        )
+
+                self._bg_tree.branch([PgqProcess(fn=_warm_dashboard, name="dashboard-warmup")])
 
                 return
             except Exception as e:
@@ -1625,6 +1710,90 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     )
 
 
+# ── Autoload outcome — the terminal state the readiness gate reports ──────────
+
+
+def _note_model_load_error(reason: str) -> None:
+    """Store why the autoload gave up (status stays ``loading`` for the caller)."""
+    from startup_progress import MODEL_LOAD_STATE
+
+    MODEL_LOAD_STATE["error"] = reason
+
+
+def _record_model_load_failure(reason: str | None = None) -> None:
+    """Record a terminal autoload failure for the readiness gate.
+
+    Without a terminal state the phase machine still reaches ``ready`` and
+    every check downstream answers "Model still loading" for a load that
+    already stopped — the failure has to be named, not implied.
+    """
+    from startup_progress import MODEL_LOAD_STATE
+
+    error = reason or MODEL_LOAD_STATE.get("error") or "Model load failed — no model is available."
+    MODEL_LOAD_STATE.update(status="failed", error=error)
+    logger.error("Model load failed: %s", error, extra={"tag": "START"})
+    try:
+        from infrastructure.staged_loader import get_staged_loader
+
+        get_staged_loader().set_model_progress(0.0, f"Model load failed: {error}")
+    except Exception as e:
+        logger.debug("Staged loader failure record skipped: %s", e, extra={"tag": "START"})
+
+
+def _mark_model_load_ready() -> None:
+    """Clear any recorded failure: something materialized and is registered."""
+    from startup_progress import MODEL_LOAD_STATE
+
+    MODEL_LOAD_STATE.update(status="ready", error=None)
+
+
+def _autoload_materialized() -> bool:
+    """True when the autoload actually produced something servable."""
+    import state as server_state
+
+    if server_state.model is not None or getattr(server_state, "provider", None) is not None:
+        return True
+    try:
+        from domain.infrastructure.server_state import get_server_state
+
+        return get_server_state().model.get() is not None
+    except Exception:
+        return False
+
+
+def _finish_autoload(cfg: ServerConfig, loaded_provider: Any) -> bool:
+    """Register a successful autoload — or record its terminal failure.
+
+    Returns True when the result is registered/usable. A load that produced
+    nothing must never reach ``_register_loaded``: that path logged
+    "Model loaded + providers registered: None" for a failed load, which is
+    what left ``GET /v1/models`` answering "still loading" forever.
+    """
+    import state as server_state
+
+    if not _autoload_materialized():
+        from startup_progress import MODEL_LOAD_STATE
+
+        _record_model_load_failure(
+            MODEL_LOAD_STATE.get("error")
+            or (
+                f"No model weights materialized for {cfg.autoload_model} — load weights "
+                "(POST /models/load) or set SLO_BOOTSTRAP_HF=1 to download them."
+            )
+        )
+        return False
+
+    try:
+        process_guard = _build_guard_for_model(cfg, server_state.model_type)
+        _register_loaded(cfg, process_guard, preloaded_provider=loaded_provider)
+    except Exception as e:
+        logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"})
+        _record_model_load_failure(f"Post-load registration failed: {e}")
+        return False
+    _mark_model_load_ready()
+    return True
+
+
 def _autoload_model(cfg: ServerConfig):
     """Load model weights into server_state. Registration handled by caller.
 
@@ -1728,6 +1897,11 @@ def _autoload_model(cfg: ServerConfig):
             model_id,
             extra={"tag": "START"},
         )
+        _note_model_load_error(
+            f"No local weights for {model_id} (no .slnc/.soul/safetensors) and "
+            "SLO_BOOTSTRAP_HF is off — set SLO_BOOTSTRAP_HF=1 to download them, or "
+            "point SLO_AUTOLOAD_MODEL at a model you already have."
+        )
         return None
 
     logger.info(
@@ -1745,6 +1919,7 @@ def _autoload_model(cfg: ServerConfig):
         logger.info("Download complete: %s", model_id, extra={"tag": "START"})
     except Exception as e:
         logger.warning("HuggingFace download failed: %s", e, extra={"tag": "START"})
+        _note_model_load_error(f"HuggingFace download failed for {model_id}: {e}")
         return None
 
     # 3) Retry load now that safetensors are cached (with retries)
@@ -1786,6 +1961,7 @@ def _autoload_model(cfg: ServerConfig):
             _time.sleep(delay)
 
     logger.error("Autoload failed after all attempts: %s", result.error, extra={"tag": "START"})
+    _note_model_load_error(f"Autoload failed after all attempts for {model_id}: {result.error}")
 
 
 # ── Standalone inference engine ───────────────────────────────────────

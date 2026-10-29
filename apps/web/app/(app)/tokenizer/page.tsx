@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from '@/vite/next-compat/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Card,
   CardHeader,
@@ -54,9 +54,9 @@ export default function TokenizerPage() {
   const [trainResult, setTrainResult] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
   const addToast = useToastStore((s) => s.addToast)
-  useRefreshShortcut(() => router.refresh())
-
-  useEffect(() => {
+  const loadStats = useCallback(() => {
+    setLoading(true)
+    setLoadError(null)
     tokenizerController
       .getStats()
       .then((s) => {
@@ -68,6 +68,13 @@ export default function TokenizerPage() {
         setLoading(false)
       })
   }, [])
+
+  // 'r' refreshes the page's own data — not the whole document.
+  useRefreshShortcut(loadStats)
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
 
   const handleTokenize = async () => {
     if (!inputText.trim()) return
@@ -150,7 +157,7 @@ export default function TokenizerPage() {
       }
       loading={loading}
       error={loadError}
-      onRetry={() => window.location.reload()}
+      onRetry={loadStats}
       toolbar={toolbar}
     >
       {stats && (
