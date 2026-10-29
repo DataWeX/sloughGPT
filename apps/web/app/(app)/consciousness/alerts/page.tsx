@@ -18,7 +18,6 @@ import {
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-import { addGlobalError } from '@/lib/error-store'
 
 interface HealthData {
   status: string
@@ -99,7 +98,7 @@ function saveHistory(history: Alert[]) {
   try {
     localStorage.setItem(ALERTS_HISTORY_KEY, JSON.stringify(history.slice(-MAX_HISTORY)))
   } catch (e) {
-    addGlobalError(e, 'ConsciousnessAlerts')
+    console.error('Failed to save alert history', e)
   }
 }
 
@@ -118,7 +117,7 @@ function saveSettings(settings: AlertSettings) {
   try {
     localStorage.setItem(ALERTS_SETTINGS_KEY, JSON.stringify(settings))
   } catch (e) {
-    addGlobalError(e, 'ConsciousnessAlerts')
+    console.error('Failed to save alert settings', e)
   }
 }
 
@@ -154,22 +153,18 @@ function playBeep() {
     osc.start()
     osc.stop(ctx.currentTime + 0.2)
   } catch (e) {
-    addGlobalError(e, 'ConsciousnessAlerts')
+    console.error('Failed to play alert beep', e)
   }
 }
 
 function sendNotification(title: string, body: string) {
-  if (
-    typeof window !== 'undefined' &&
-    'Notification' in window &&
-    Notification.permission === 'granted'
-  ) {
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
     new Notification(title, { body })
   }
 }
 
 export default function ConsciousnessAlertsPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = useToastStore(state => state.addToast)
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [health, setHealth] = useState<HealthData | null>(null)
@@ -209,12 +204,7 @@ export default function ConsciousnessAlertsPage() {
   }, [fetchHealth])
 
   useEffect(() => {
-    if (
-      settings.notifications &&
-      typeof window !== 'undefined' &&
-      'Notification' in window &&
-      Notification.permission === 'default'
-    ) {
+    if (settings.notifications && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
     }
   }, [settings.notifications])
@@ -223,7 +213,7 @@ export default function ConsciousnessAlertsPage() {
     const newAlerts: Alert[] = []
     const now = Date.now() / 1000
 
-    const findRule = (id: string) => settings.rules.find((r) => r.id === id)
+    const findRule = (id: string) => settings.rules.find(r => r.id === id)
 
     if (health) {
       const healthRule = findRule('health_score')
@@ -263,9 +253,7 @@ export default function ConsciousnessAlertsPage() {
     if (episodesData?.episodes && episodesData.episodes.length > 0) {
       const epRule = findRule('no_episodes')
       if (epRule?.enabled) {
-        const latestTs = Math.max(
-          ...episodesData.episodes.map((e) => (typeof e.timestamp === 'number' ? e.timestamp : 0)),
-        )
+        const latestTs = Math.max(...episodesData.episodes.map(e => typeof e.timestamp === 'number' ? e.timestamp : 0))
         const hoursSinceLast = (now - latestTs) / 3600
         if (hoursSinceLast > epRule.threshold) {
           newAlerts.push({
@@ -282,9 +270,7 @@ export default function ConsciousnessAlertsPage() {
     const beliefsRule = findRule('beliefs_unstable')
     if (beliefsRule?.enabled && health?.qualia) {
       const beliefs = health.qualia
-      const unstable = Object.entries(beliefs).filter(
-        ([, v]) => v < beliefsRule.threshold || v > 1 - beliefsRule.threshold + 0.05,
-      )
+      const unstable = Object.entries(beliefs).filter(([, v]) => v < beliefsRule.threshold || v > (1 - beliefsRule.threshold + 0.05))
       if (unstable.length > 0) {
         newAlerts.push({
           id: `beliefs_unstable_${now}`,
@@ -297,18 +283,18 @@ export default function ConsciousnessAlertsPage() {
     }
 
     if (newAlerts.length > 0) {
-      setActiveAlerts((prev) => {
-        const existing = new Set(prev.filter((a) => !a.dismissed).map((a) => a.message))
-        const fresh = newAlerts.filter((a) => !existing.has(a.message))
+      setActiveAlerts(prev => {
+        const existing = new Set(prev.filter(a => !a.dismissed).map(a => a.message))
+        const fresh = newAlerts.filter(a => !existing.has(a.message))
         if (fresh.length > 0) {
-          setAlertHistory((prevH) => {
+          setAlertHistory(prevH => {
             const next = [...prevH, ...fresh].slice(-MAX_HISTORY)
             saveHistory(next)
             return next
           })
           if (settings.sound) playBeep()
           if (settings.notifications) {
-            fresh.forEach((a) => sendNotification(`Consciousness Alert [${a.severity}]`, a.message))
+            fresh.forEach(a => sendNotification(`Consciousness Alert [${a.severity}]`, a.message))
           }
           return [...prev, ...fresh]
         }
@@ -329,15 +315,15 @@ export default function ConsciousnessAlertsPage() {
   }, [fetchHealth])
 
   const dismissAlert = (id: string) => {
-    setActiveAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, dismissed: true } : a)))
+    setActiveAlerts(prev => prev.map(a => a.id === id ? { ...a, dismissed: true } : a))
   }
 
   const clearAllAlerts = () => {
-    setActiveAlerts((prev) => prev.map((a) => ({ ...a, dismissed: true })))
+    setActiveAlerts(prev => prev.map(a => ({ ...a, dismissed: true })))
   }
 
   const updateSettings = (partial: Partial<AlertSettings>) => {
-    setSettings((prev) => {
+    setSettings(prev => {
       const next = { ...prev, ...partial }
       saveSettings(next)
       return next
@@ -345,10 +331,10 @@ export default function ConsciousnessAlertsPage() {
   }
 
   const updateRule = (ruleId: string, partial: Partial<AlertRule>) => {
-    setSettings((prev) => {
+    setSettings(prev => {
       const next = {
         ...prev,
-        rules: prev.rules.map((r) => (r.id === ruleId ? { ...r, ...partial } : r)),
+        rules: prev.rules.map(r => r.id === ruleId ? { ...r, ...partial } : r),
       }
       saveSettings(next)
       return next
@@ -360,12 +346,11 @@ export default function ConsciousnessAlertsPage() {
     saveHistory([])
   }
 
-  const unfilteredActive = activeAlerts.filter((a) => !a.dismissed)
+  const unfilteredActive = activeAlerts.filter(a => !a.dismissed)
   const activeCount = unfilteredActive.length
-  const filteredHistory =
-    historyFilter === 'all'
-      ? alertHistory
-      : alertHistory.filter((a) => a.severity === historyFilter)
+  const filteredHistory = historyFilter === 'all'
+    ? alertHistory
+    : alertHistory.filter(a => a.severity === historyFilter)
 
   if (loading) {
     return (
@@ -390,37 +375,27 @@ export default function ConsciousnessAlertsPage() {
         <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">
-                {t('consciousness_alerts.health_score')}
-              </CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_alerts.health_score')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div
-                className={`text-xl font-bold ${health && health.health_score > 70 ? 'text-success' : health && health.health_score > 40 ? 'text-warning' : 'text-destructive'}`}
-              >
+              <div className={`text-xl font-bold ${health && health.health_score > 70 ? 'text-success' : health && health.health_score > 40 ? 'text-warning' : 'text-destructive'}`}>
                 {health?.health_score?.toFixed(0) ?? '—'}
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">
-                {t('consciousness_alerts.active_alerts')}
-              </CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_alerts.active_alerts')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div
-                className={`text-xl font-bold ${activeCount > 0 ? 'text-destructive' : 'text-success'}`}
-              >
+              <div className={`text-xl font-bold ${activeCount > 0 ? 'text-destructive' : 'text-success'}`}>
                 {activeCount}
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">
-                {t('consciousness_alerts.last_check')}
-              </CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_alerts.last_check')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xs text-muted-foreground font-mono">
@@ -433,9 +408,7 @@ export default function ConsciousnessAlertsPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
-                {t('consciousness_alerts.active_alerts_title')}
-              </CardTitle>
+              <CardTitle className="text-base">{t('consciousness_alerts.active_alerts_title')}</CardTitle>
               {unfilteredActive.length > 0 && (
                 <Button variant="ghost" size="sm" onClick={clearAllAlerts}>
                   {t('consciousness_alerts.clear_all')}
@@ -445,42 +418,24 @@ export default function ConsciousnessAlertsPage() {
           </CardHeader>
           <CardContent>
             {unfilteredActive.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                {t('consciousness_alerts.no_active')}
-              </p>
+              <p className="text-sm text-muted-foreground py-4 text-center">{t('consciousness_alerts.no_active')}</p>
             ) : (
               <div className="space-y-2">
-                {unfilteredActive.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`flex items-start gap-3 rounded-md p-3 ${severityColor(alert.severity)}`}
-                  >
-                    <span
-                      className={`inline-block w-2 h-2 rounded-full mt-1 shrink-0 ${severityBadgeColor(alert.severity)}`}
-                    />
+                {unfilteredActive.map(alert => (
+                  <div key={alert.id} className={`flex items-start gap-3 rounded-md p-3 ${severityColor(alert.severity)}`}>
+                    <span className={`inline-block w-2 h-2 rounded-full mt-1 shrink-0 ${severityBadgeColor(alert.severity)}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium">{alert.message}</p>
                       <p className="text-xs opacity-70 mt-0.5">{formatTimeAgo(alert.timestamp)}</p>
                     </div>
-                    <Badge variant="outline" className="shrink-0 text-[10px] capitalize">
-                      {alert.severity}
-                    </Badge>
+                    <Badge variant="outline" className="shrink-0 text-[10px] capitalize">{alert.severity}</Badge>
                     <button
                       onClick={() => dismissAlert(alert.id)}
                       className="shrink-0 p-1 rounded hover:bg-foreground/5 transition-colors"
                       aria-label="Dismiss alert"
                     >
-                      <svg
-                        className="w-3.5 h-3.5"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                       </svg>
                     </button>
                   </div>
@@ -497,9 +452,7 @@ export default function ConsciousnessAlertsPage() {
               <div className="flex items-center gap-2">
                 <select
                   value={historyFilter}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                    setHistoryFilter(e.target.value as AlertSeverity | 'all')
-                  }
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setHistoryFilter(e.target.value as AlertSeverity | 'all')}
                   className="text-xs bg-transparent border border-border rounded px-2 py-1"
                 >
                   <option value="all">{t('consciousness_alerts.filter_all')}</option>
@@ -515,28 +468,16 @@ export default function ConsciousnessAlertsPage() {
           </CardHeader>
           <CardContent>
             {filteredHistory.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                {t('consciousness_alerts.no_history')}
-              </p>
+              <p className="text-sm text-muted-foreground py-4 text-center">{t('consciousness_alerts.no_history')}</p>
             ) : (
               <div className="space-y-1 max-h-96 overflow-y-auto">
-                {filteredHistory
-                  .slice()
-                  .reverse()
-                  .map((alert) => (
-                    <div
-                      key={alert.id}
-                      className="flex items-center gap-3 py-2 px-2 rounded text-xs border border-border/30"
-                    >
-                      <span
-                        className={`inline-block w-2 h-2 rounded-full shrink-0 ${severityBadgeColor(alert.severity)}`}
-                      />
-                      <span className="flex-1 truncate">{alert.message}</span>
-                      <span className="text-muted-foreground shrink-0">
-                        {formatTimeAgo(alert.timestamp)}
-                      </span>
-                    </div>
-                  ))}
+                {filteredHistory.slice().reverse().map(alert => (
+                  <div key={alert.id} className="flex items-center gap-3 py-2 px-2 rounded text-xs border border-border/30">
+                    <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${severityBadgeColor(alert.severity)}`} />
+                    <span className="flex-1 truncate">{alert.message}</span>
+                    <span className="text-muted-foreground shrink-0">{formatTimeAgo(alert.timestamp)}</span>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -549,12 +490,8 @@ export default function ConsciousnessAlertsPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
-                  {t('consciousness_alerts.notifications_label')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_alerts.notifications_desc')}
-                </p>
+                <p className="text-sm font-medium">{t('consciousness_alerts.notifications_label')}</p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_alerts.notifications_desc')}</p>
               </div>
               <Switch
                 checked={settings.notifications}
@@ -565,9 +502,7 @@ export default function ConsciousnessAlertsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">{t('consciousness_alerts.sound_label')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_alerts.sound_desc')}
-                </p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_alerts.sound_desc')}</p>
               </div>
               <Switch
                 checked={settings.sound}
@@ -579,7 +514,7 @@ export default function ConsciousnessAlertsPage() {
             <div>
               <p className="text-sm font-medium mb-3">{t('consciousness_alerts.rules_title')}</p>
               <div className="space-y-3">
-                {settings.rules.map((rule) => (
+                {settings.rules.map(rule => (
                   <div key={rule.id} className="flex items-center gap-3">
                     <Switch
                       checked={rule.enabled}
@@ -591,13 +526,9 @@ export default function ConsciousnessAlertsPage() {
                     </div>
                     <Input
                       type="number"
-                      step={
-                        rule.id === 'avg_growth' ? 0.01 : rule.id === 'positive_ratio' ? 0.1 : 1
-                      }
+                      step={rule.id === 'avg_growth' ? 0.01 : rule.id === 'positive_ratio' ? 0.1 : 1}
                       value={rule.threshold}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        updateRule(rule.id, { threshold: parseFloat(e.target.value) || 0 })
-                      }
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRule(rule.id, { threshold: parseFloat(e.target.value) || 0 })}
                       className="w-20 h-7 text-xs text-right"
                       aria-label={`Threshold for ${rule.label}`}
                     />

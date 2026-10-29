@@ -8,16 +8,9 @@ vi.mock('@/lib/shell-controller', () => ({
   shellExecStream: vi.fn(),
 }))
 
-vi.mock('@/lib/dev-log', () => ({
-  trackEvent: vi.fn(),
-}))
-
 import { shellExecStream } from '@/lib/shell-controller'
-import { trackEvent } from '@/lib/dev-log'
 
-beforeEach(() => {
-  vi.clearAllMocks()
-})
+beforeEach(() => { vi.clearAllMocks() })
 
 function mockStream(events: Array<Record<string, unknown>>) {
   vi.mocked(shellExecStream).mockImplementation(
@@ -49,7 +42,6 @@ describe('useShell', () => {
   it('initial state has empty lines and not running', () => {
     const { result } = renderHook(() => useShell())
     expect(result.current.state.lines).toEqual([])
-    expect(result.current.state.rows).toEqual([])
     expect(result.current.state.isRunning).toBe(false)
     expect(result.current.state.exitCode).toBeNull()
     expect(result.current.state.error).toBeNull()
@@ -57,28 +49,9 @@ describe('useShell', () => {
 
   it('execute processes stream events', async () => {
     mockStream([
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'working',
-        data: { line: 'hello', index: 0 },
-        message: '',
-      },
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'working',
-        data: { line: 'world', index: 1 },
-        message: '',
-      },
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'complete',
-        data: { exit_code: 0, lines: 2 },
-        meta: { elapsed_ms: 1.2 },
-        message: '',
-      },
+      { stream: 'shell', phase: 'STREAMING', status: 'working', data: { line: 'hello', index: 0 }, message: '' },
+      { stream: 'shell', phase: 'STREAMING', status: 'working', data: { line: 'world', index: 1 }, message: '' },
+      { stream: 'shell', phase: 'STREAMING', status: 'complete', data: { exit_code: 0, lines: 2 }, meta: { elapsed_ms: 1.2 }, message: '' },
     ])
 
     const { result } = renderHook(() => useShell())
@@ -92,127 +65,6 @@ describe('useShell', () => {
     expect(result.current.state.lines[1].text).toBe('world')
     expect(result.current.state.isRunning).toBe(false)
     expect(result.current.state.exitCode).toBe(0)
-
-    // engine-interpreted screen: one committed row per line event
-    expect(result.current.state.rows).toHaveLength(2)
-    expect(result.current.state.rows[0].spans.map((s) => s.text).join('')).toBe('hello')
-    expect(result.current.state.rows[1].spans.map((s) => s.text).join('')).toBe('world')
-  })
-
-  it('streams with raw:true so the engine receives escape sequences', async () => {
-    mockStream([
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'complete',
-        data: { exit_code: 0, lines: 0 },
-        meta: { elapsed_ms: 1 },
-        message: '',
-      },
-    ])
-
-    const { result } = renderHook(() => useShell())
-
-    await act(async () => {
-      await result.current.execute('watch')
-    })
-
-    expect(shellExecStream).toHaveBeenCalledWith(
-      'watch',
-      expect.any(Object),
-      expect.anything(),
-      expect.objectContaining({ raw: true }),
-    )
-  })
-
-  it('cancel(reason) appends a visible cancelled row + tracks the event (60s timeout path)', async () => {
-    let resolveStream: (() => void) | null = null
-    vi.mocked(shellExecStream).mockImplementation(
-      async () => new Promise<void>(r => { resolveStream = r }),
-    )
-
-    const { result } = renderHook(() => useShell())
-
-    act(() => { result.current.execute('long command') })
-    expect(result.current.state.isRunning).toBe(true)
-
-    act(() => { result.current.cancel('after 60s timeout') })
-
-    expect(result.current.state.isRunning).toBe(false)
-    const visible = result.current.state.rows
-      .map(r => r.spans.map(s => s.text).join(''))
-      .join('\n')
-    expect(visible).toContain('cancelled')
-    expect(visible).toContain('60s')
-    expect(vi.mocked(trackEvent)).toHaveBeenCalledWith(
-      'shell_command_cancelled',
-      expect.objectContaining({ reason: 'after 60s timeout' }),
-    )
-    expect(resolveStream).toBeTruthy()
-  })
-
-  it('user cancel without a reason stays silent — no cancelled row (timeout-only scope)', async () => {
-    vi.mocked(shellExecStream).mockImplementation(
-      async () => new Promise<void>(() => {}),
-    )
-
-    const { result } = renderHook(() => useShell())
-
-    act(() => { result.current.execute('long command') })
-    act(() => { result.current.cancel() })
-
-    expect(result.current.state.isRunning).toBe(false)
-    const visible = result.current.state.rows
-      .map(r => r.spans.map(s => s.text).join(''))
-      .join('\n')
-    expect(visible).not.toContain('cancelled')
-    expect(vi.mocked(trackEvent)).not.toHaveBeenCalledWith(
-      'shell_command_cancelled',
-      expect.anything(),
-    )
-  })
-
-  it('rows are interpreted by the terminal engine, not copied', async () => {
-    mockStream([
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'working',
-        data: { line: 'total free space\r  42%', index: 0 },
-        message: '',
-      },
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'working',
-        data: { line: 'ok\x1b[31mred', index: 1 },
-        message: '',
-      },
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'complete',
-        data: { exit_code: 0, lines: 2 },
-        meta: { elapsed_ms: 1 },
-        message: '',
-      },
-    ])
-
-    const { result } = renderHook(() => useShell())
-
-    await act(async () => {
-      await result.current.execute('df')
-    })
-
-    const rows = result.current.state.rows
-    expect(rows).toHaveLength(2)
-    // CR overwrite semantics applied by the engine
-    expect(rows[0].spans.map((s) => s.text).join('')).toBe('  42% free space')
-    // SGR parsed into design-token classNames, raw line untouched
-    expect(result.current.state.lines[1].text).toBe('ok\x1b[31mred')
-    expect(rows[1].spans).toHaveLength(2)
-    expect(rows[1].spans[1].text).toBe('red')
-    expect(rows[1].spans[1].className).toContain('text-term-close')
   })
 
   it('execute with empty command does nothing', async () => {
@@ -234,21 +86,8 @@ describe('useShell', () => {
 
   it('clear resets state', async () => {
     mockStream([
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'working',
-        data: { line: 'data', index: 0 },
-        message: '',
-      },
-      {
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'complete',
-        data: { exit_code: 0, lines: 1 },
-        meta: { elapsed_ms: 0.5 },
-        message: '',
-      },
+      { stream: 'shell', phase: 'STREAMING', status: 'working', data: { line: 'data', index: 0 }, message: '' },
+      { stream: 'shell', phase: 'STREAMING', status: 'complete', data: { exit_code: 0, lines: 1 }, meta: { elapsed_ms: 0.5 }, message: '' },
     ])
 
     const { result } = renderHook(() => useShell())
@@ -258,12 +97,9 @@ describe('useShell', () => {
     })
     expect(result.current.state.lines.length).toBeGreaterThan(0)
 
-    act(() => {
-      result.current.clear()
-    })
+    act(() => { result.current.clear() })
 
     expect(result.current.state.lines).toEqual([])
-    expect(result.current.state.rows).toEqual([])
     expect(result.current.state.exitCode).toBeNull()
     expect(result.current.state.error).toBeNull()
     expect(result.current.state.isRunning).toBe(false)
@@ -272,27 +108,22 @@ describe('useShell', () => {
   it('cancel stops running', async () => {
     let resolveStream: (() => void) | null = null
     vi.mocked(shellExecStream).mockImplementation(
-      async () =>
-        new Promise<void>((r) => {
-          resolveStream = r
-        }),
+      async () => new Promise<void>(r => { resolveStream = r }),
     )
 
     const { result } = renderHook(() => useShell())
 
-    act(() => {
-      result.current.execute('long command')
-    })
+    act(() => { result.current.execute('long command') })
     expect(result.current.state.isRunning).toBe(true)
 
-    act(() => {
-      result.current.cancel()
-    })
+    act(() => { result.current.cancel() })
     expect(result.current.state.isRunning).toBe(false)
   })
 
   it('onError sets error state', async () => {
-    mockStream([{ status: 'error', message: 'Connection refused' }])
+    mockStream([
+      { status: 'error', message: 'Connection refused' },
+    ])
 
     const { result } = renderHook(() => useShell())
 
@@ -307,22 +138,9 @@ describe('useShell', () => {
   it('maxLines caps the line count', async () => {
     const events: Array<Record<string, unknown>> = []
     for (let i = 0; i < 10; i++) {
-      events.push({
-        stream: 'shell',
-        phase: 'STREAMING',
-        status: 'working',
-        data: { line: `line-${i}`, index: i },
-        message: '',
-      })
+      events.push({ stream: 'shell', phase: 'STREAMING', status: 'working', data: { line: `line-${i}`, index: i }, message: '' })
     }
-    events.push({
-      stream: 'shell',
-      phase: 'STREAMING',
-      status: 'complete',
-      data: { exit_code: 0, lines: 10 },
-      meta: { elapsed_ms: 1 },
-      message: '',
-    })
+    events.push({ stream: 'shell', phase: 'STREAMING', status: 'complete', data: { exit_code: 0, lines: 10 }, meta: { elapsed_ms: 1 }, message: '' })
     mockStream(events)
 
     const { result } = renderHook(() => useShell(5))
@@ -332,6 +150,5 @@ describe('useShell', () => {
     })
 
     expect(result.current.state.lines.length).toBeLessThanOrEqual(5)
-    expect(result.current.state.rows.length).toBeLessThanOrEqual(5)
   })
 })

@@ -15,11 +15,10 @@ export interface Session {
   title: string
 }
 
-/**
- * Group identity uses the theme-constant `--group-N` slots (globals.css) —
- * markup never pins a hue, so the picker and dots follow the token table.
- */
-export const COLORS = Array.from({ length: 10 }, (_, i) => `var(--group-${i + 1})`)
+export const COLORS = [
+  '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+  '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#84cc16',
+]
 
 const STORAGE_KEY = 'chat-session-groups'
 
@@ -27,10 +26,7 @@ function loadGroups(): SessionGroup[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed
+    return raw ? JSON.parse(raw) : []
   } catch {
     return []
   }
@@ -62,7 +58,7 @@ export interface UseSessionGroupsReturn {
 
 export function useSessionGroups(
   sessions: Session[],
-  onAssignGroup: (sessionId: string, groupId: string | null) => void,
+  onAssignGroup: (sessionId: string, groupId: string | null) => void
 ): UseSessionGroupsReturn {
   const [groups, setGroups] = useState<SessionGroup[]>([])
   const [creating, setCreating] = useState(false)
@@ -84,7 +80,7 @@ export function useSessionGroups(
     const ungrouped: Session[] = []
 
     for (const session of sessions) {
-      const group = groups.find((g) => g.sessionIds.includes(session.id))
+      const group = groups.find(g => g.sessionIds.includes(session.id))
       if (group) {
         if (!map[group.id]) map[group.id] = []
         map[group.id].push(session)
@@ -114,58 +110,37 @@ export function useSessionGroups(
     setCreating(false)
   }, [newName, newColor, groups])
 
-  const handleDelete = useCallback(
-    (id: string) => {
-      const next = groups.filter((g) => g.id !== id)
-      setGroups(next)
-    },
-    [groups],
-  )
+  const handleDelete = useCallback((id: string) => {
+    const next = groups.filter(g => g.id !== id)
+    setGroups(next)
+  }, [groups])
 
-  const handleAssign = useCallback(
-    (sessionId: string, groupId: string) => {
-      const next = groups.map((g) => {
-        if (g.id === groupId) {
-          return { ...g, sessionIds: [...g.sessionIds, sessionId] }
-        }
-        return { ...g, sessionIds: g.sessionIds.filter((id) => id !== sessionId) }
-      })
-      setGroups(next)
-      onAssignGroup(sessionId, groupId)
-      setAssigningTo(null)
-    },
-    [groups, onAssignGroup],
-  )
+  const handleAssign = useCallback((sessionId: string, groupId: string) => {
+    const next = groups.map(g => {
+      if (g.id === groupId) {
+        return { ...g, sessionIds: [...g.sessionIds, sessionId] }
+      }
+      return { ...g, sessionIds: g.sessionIds.filter(id => id !== sessionId) }
+    })
+    setGroups(next)
+    onAssignGroup(sessionId, groupId)
+    setAssigningTo(null)
+  }, [groups, onAssignGroup])
 
-  const handleUnassign = useCallback(
-    (sessionId: string) => {
-      const next = groups.map((g) => ({
-        ...g,
-        sessionIds: g.sessionIds.filter((id) => id !== sessionId),
-      }))
-      setGroups(next)
-      onAssignGroup(sessionId, null)
-      setAssigningTo(null)
-    },
-    [groups, onAssignGroup],
-  )
+  const handleUnassign = useCallback((sessionId: string) => {
+    const next = groups.map(g => ({
+      ...g,
+      sessionIds: g.sessionIds.filter(id => id !== sessionId),
+    }))
+    setGroups(next)
+    onAssignGroup(sessionId, null)
+    setAssigningTo(null)
+  }, [groups, onAssignGroup])
 
   return {
-    groups,
-    creating,
-    newName,
-    newColor,
-    selectedColor,
-    assigningTo,
+    groups, creating, newName, newColor, selectedColor, assigningTo,
     sessionsByGroup,
-    setCreating,
-    setNewName,
-    setNewColor,
-    setSelectedColor,
-    setAssigningTo,
-    handleCreate,
-    handleDelete,
-    handleAssign,
-    handleUnassign,
+    setCreating, setNewName, setNewColor, setSelectedColor, setAssigningTo,
+    handleCreate, handleDelete, handleAssign, handleUnassign,
   }
 }

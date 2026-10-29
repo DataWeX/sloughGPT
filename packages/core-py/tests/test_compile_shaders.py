@@ -498,11 +498,7 @@ class TestMain:
         monkeypatch.setattr(
             "domain.infrastructure._internal.gpu.compile_shaders.OUTPUT_DIR", shaders_dir
         )
-        # --spirv-only confines the loop to the mocked compile_spirv; the
-        # default argv would continue to the unmocked compile_hlsl, which
-        # invokes the real (absent) naga binary -> FileNotFoundError instead
-        # of the expected exit-on-failure.
-        monkeypatch.setattr(sys, "argv", ["compile_shaders.py", "--spirv-only"])
+        monkeypatch.setattr(sys, "argv", ["compile_shaders.py"])
 
         with pytest.raises(SystemExit, match="1"):
             main()

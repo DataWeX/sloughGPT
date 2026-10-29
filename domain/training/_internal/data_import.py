@@ -7,21 +7,14 @@ from __future__ import annotations
 
 import json
 import logging
-import mimetypes
 import os
 import re
-import shutil
 import subprocess
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger("slo.data_import")
-
-# Initialize the MIME database once at import — not once per file
-# (previously `mimetypes.init()` ran inside `_detect_language`, i.e. once
-# per imported file).
-mimetypes.init()
 
 
 def _retry(
@@ -66,11 +59,6 @@ DEFAULT_IGNORES: set[str] = {
     ".tox",
 }
 
-# Partial-clone filter: skip blobs bigger than export_to_corpus's default
-# max_bytes (200_000) — those files get truncated on export anyway, so
-# downloading them is pure waste.
-_BLOB_LIMIT_FILTER = "blob:limit=200000"
-
 
 @dataclass
 class ImportResult:
@@ -97,117 +85,43 @@ class RepoImporter:
         url: str,
         branch: str | None = None,
         depth: int | None = 1,
-        timeout: int = 600,
     ) -> Path:
-        """Clone a git repository.
-
-        Clones are cached under ``cache_dir/<owner>__<repo>`` and validated
-        against a ``.slough-source-url`` marker so two different repos that
-        share a name never collide, and a cached clone of a different source
-        URL is never silently reused. ``timeout`` (seconds) bounds the clone
-        so a hung ``git`` cannot hold an import lock forever.
-        """
+        """Clone a git repository."""
         # Validate URL protocol — reject file:// and other local protocols
         _allowed_protocols = ("https://", "git://", "git@", "ssh://", "http://")
         if not any(url.startswith(p) for p in _allowed_protocols):
             raise ValueError(f"URL must use one of {_allowed_protocols}, got: {url[:60]}")
 
+        repo_name = url.split("/")[-1].replace(".git", "")
+        # Sanitize repo_name — reject path traversal
+        repo_name = re.sub(r"[^\w\-]", "_", repo_name).strip("_") or "repo"
+        target = self.cache_dir / repo_name
+
+        if target.exists():
+            logger.info(
+                "Repo already exists: %s",
+                target,
+                extra={"tag": "TRAIN"},
+            )
+            return target
+
         if branch and not re.match(r"^[a-zA-Z0-9_\-/.]+$", branch):
             raise ValueError(f"Invalid branch name: {branch}")
 
-        target = self.cache_dir / self._repo_cache_key(url)
-        marker = target / ".slough-source-url"
-
-        if target.exists():
-            if marker.exists() and marker.read_text().strip() == url:
-                logger.info(
-                    "Repo already cached: %s",
-                    target,
-                    extra={"tag": "TRAIN"},
-                )
-                return target
-            logger.info(
-                "Cached clone %s does not match %s — re-cloning",
-                target,
-                url,
-                extra={"tag": "TRAIN"},
-            )
-            shutil.rmtree(target, ignore_errors=True)
-
-        base_cmd = ["git", "clone", "--single-branch"]
+        cmd = ["git", "clone", url, str(target)]
         if branch:
-            base_cmd.extend(["-b", branch])
+            cmd.extend(["-b", branch])
         if depth:
-            base_cmd.extend(["--depth", str(depth)])
+            cmd.extend(["--depth", str(depth)])
 
         logger.info(
             "Cloning %s...",
             url,
             extra={"tag": "TRAIN"},
         )
-        try:
-            # Partial clone: skip blobs larger than export_to_corpus's
-            # max_bytes (200 KB) — they would be truncated anyway.
-            self._run_clone(
-                [*base_cmd, f"--filter={_BLOB_LIMIT_FILTER}", url, str(target)], url, timeout
-            )
-        except RuntimeError as e:
-            if "filter" not in str(e).lower():
-                raise
-            logger.info(
-                "Server rejected partial-clone filter; retrying plain clone of %s",
-                url,
-                extra={"tag": "TRAIN"},
-            )
-            shutil.rmtree(target, ignore_errors=True)
-            self._run_clone([*base_cmd, url, str(target)], url, timeout)
+        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        marker.write_text(url)
         return target
-
-    @staticmethod
-    def _repo_cache_key(url: str) -> str:
-        """Derive a collision-free cache key (``owner__repo``) from a URL.
-
-        Falls back to the repo name alone only when the URL has no owner
-        segment (e.g. ``ssh://git@host/repo``).
-        """
-        cleaned = url.rstrip("/")
-        if cleaned.endswith(".git"):
-            cleaned = cleaned[:-4]
-
-        # ssh forms: git@host:owner/repo or ssh://git@host/owner/repo
-        m = re.match(r"^(?:ssh://)?[^@]+@[^:/]+[:/](.+)$", cleaned)
-        if m:
-            path = m.group(1)
-        else:
-            path = cleaned.split("://", 1)[-1]
-
-        parts = [p for p in path.split("/") if p]
-        if len(parts) >= 2:
-            key = f"{parts[-2]}__{parts[-1]}"
-        else:
-            key = parts[-1] if parts else "repo"
-
-        # Sanitize — reject path traversal
-        return re.sub(r"[^\w\-]", "_", key).strip("_") or "repo"
-
-    @staticmethod
-    def _run_clone(cmd: list[str], url: str, timeout: int) -> None:
-        """Run a git clone command with timeout and stderr surfaced."""
-        target = cmd[-1]
-        try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            shutil.rmtree(target, ignore_errors=True)
-            raise RuntimeError(
-                f"git clone timed out after {timeout}s for {url} — "
-                "the repository may be too large or the network too slow"
-            ) from None
-        if proc.returncode != 0:
-            shutil.rmtree(target, ignore_errors=True)
-            tail = (proc.stderr or "").strip()[-400:]
-            raise RuntimeError(f"git clone failed for {url}: {tail or 'unknown git error'}")
 
     def export_to_corpus(
         self,
@@ -217,19 +131,12 @@ class RepoImporter:
         max_files: int | None = None,
         max_bytes: int = 200_000,
         extensions: list[str] | None = None,
-        stats: dict | None = None,
     ) -> int:
-        """Export repository files to JSONL corpus.
-
-        When ``stats`` is provided it is filled with ``{"files": int,
-        "total_chars": int}`` — accumulated while writing, so callers no
-        longer need to re-read and re-parse the corpus to total it.
-        """
+        """Export repository files to JSONL corpus."""
         ignores = ignores or DEFAULT_IGNORES
         extensions = extensions or [".py", ".js", ".ts", ".md", ".txt", ".json", ".yaml", ".yml"]
 
         count = 0
-        total_chars = 0
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -254,11 +161,6 @@ class RepoImporter:
                 }
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 count += 1
-                total_chars += len(content)
-
-        if stats is not None:
-            stats["files"] = count
-            stats["total_chars"] = total_chars
 
         return count
 
@@ -281,6 +183,10 @@ class RepoImporter:
 
     def _detect_language(self, path: Path, content: str = "") -> str:
         """Detect programming language using MIME type, extension, and content analysis."""
+        import mimetypes
+
+        # Initialize mimetypes
+        mimetypes.init()
 
         # Step 1: MIME type detection
         mime_type, _ = mimetypes.guess_type(str(path))
@@ -677,23 +583,29 @@ class RepoImporter:
         output_dir: str = "datasets",
         extensions: list[str] | None = None,
         max_files: int | None = None,
-        clone_timeout: int = 600,
     ) -> ImportResult:
         """Import dataset from GitHub repository."""
         try:
-            repo_path = self.clone_repo(url, timeout=clone_timeout)
+            repo_path = self.clone_repo(url)
 
             output_path = f"{output_dir}/{dataset_name}/corpus.jsonl"
-            stats: dict = {}
-            self.export_to_corpus(
+            count = self.export_to_corpus(
                 repo_path,
                 output_path,
                 extensions=extensions,
                 max_files=max_files,
-                stats=stats,
             )
-            count = stats.get("files", 0)
-            total_chars = stats.get("total_chars", 0)
+
+            total_chars = 0
+            if Path(output_path).exists():
+                with open(output_path) as f:
+                    for line_num, line in enumerate(f, 1):
+                        try:
+                            data = json.loads(line)
+                        except (json.JSONDecodeError, ValueError):
+                            logger.warning("Skipping malformed JSONL line %d", line_num)
+                            continue
+                        total_chars += data.get("size", 0)
 
             return ImportResult(
                 success=True,
@@ -1116,11 +1028,6 @@ class GitHubSearch:
             req = urllib.request.Request(url)
             req.add_header("Accept", "application/vnd.github.v3+json")
             req.add_header("User-Agent", "SloughGPT")
-            # Authenticated search: 30 req/min instead of 10 (rate-limit
-            # errors here surface as an empty result set in the UI).
-            token = os.environ.get("GITHUB_TOKEN", "").strip()
-            if token:
-                req.add_header("Authorization", f"Bearer {token}")
 
             data = _retry(
                 lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode())

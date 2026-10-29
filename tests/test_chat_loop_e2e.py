@@ -72,62 +72,35 @@ def mock_chat_deps():
     model_ctrl._hf_model = MagicMock()
     model_ctrl._tokenizer = MagicMock()
 
-    # ChatManager is a process-global singleton that CACHES its resolved
-    # provider (manager._active_provider); app startup resolves it before
-    # this fixture's patches install, so the POST /chat route read the
-    # stale cached provider and emitted zero tokens (2 reds, card
-    # c59d5be7). Reset on entry so resolution happens under the patch,
-    # and again on exit so the mock-cached manager cannot leak into other
-    # test modules in this process.
-    from domain.chat import reset_chat_manager
-
-    reset_chat_manager()
-    try:
-        with (
-            patch("domain.models._internal.provider.get_provider", return_value=provider),
-            # The chat router owns POST /chat and reaches the engine through its
-            # port; the engine's implementation (stream_turn) lives in
-            # routers/inference.py and calls get_provider via a TOP-LEVEL import
-            # (inference.py:45), so the _internal-level patch above never reaches
-            # it (real registry resolves to None in the test env -> zero tokens,
-            # card c59d5be7). Patch the consumer module attr per 2368d4aa3; the
-            # chat-manager path still resolves through the _internal patch
-            # (function-local import there).
-            patch("routers.inference.get_provider", return_value=provider),
-            patch(
-                "routers.inference._enrich_knowledge",
-                return_value={"source": "none", "facts": [], "topics": []},
-            ),
-            patch(
-                "domain.infrastructure._internal.session_core.SessionCore.store_context",
-                side_effect=fake_store_context,
-            ),
-            patch(
-                "domain.infrastructure._internal.session_core.SessionCore.get_messages",
-                side_effect=fake_get_messages,
-            ),
-            patch("controllers.feedback.get_feedback_controller") as mock_fb_ctrl,
-            patch("controllers.models.get_models_controller", return_value=model_ctrl),
-            # Consumer read point (2368d4aa3): the learner router does
-            # `from domain.learner import get_learner` INSIDE each handler
-            # body, and domain/learner/_internal is a namespace package
-            # with no such attribute — patching the _internal path raised
-            # AttributeError at fixture setup (6x ERROR, card c59d5be7).
-            patch("domain.learner.get_learner"),
-            patch("state.model", new_callable=MagicMock),
-        ):
-            mock_fb = MagicMock()
-            mock_fb.record_feedback = MagicMock(
-                return_value={"status": "recorded", "feedback_id": "mock-fb-1"}
-            )
-            mock_fb_ctrl.return_value = mock_fb
-            yield {
-                "provider": provider,
-                "sessions": in_memory_sessions,
-                "model_ctrl": model_ctrl,
-            }
-    finally:
-        reset_chat_manager()
+    with (
+        patch("domain.models._internal.provider.get_provider", return_value=provider),
+        patch(
+            "routers.inference._enrich_knowledge",
+            return_value={"source": "none", "facts": [], "topics": []},
+        ),
+        patch(
+            "domain.infrastructure._internal.session_core.SessionCore.store_context",
+            side_effect=fake_store_context,
+        ),
+        patch(
+            "domain.infrastructure._internal.session_core.SessionCore.get_messages",
+            side_effect=fake_get_messages,
+        ),
+        patch("controllers.feedback.get_feedback_controller") as mock_fb_ctrl,
+        patch("controllers.models.get_models_controller", return_value=model_ctrl),
+        patch("domain.learner._internal.get_learner"),
+        patch("state.model", new_callable=MagicMock),
+    ):
+        mock_fb = MagicMock()
+        mock_fb.record_feedback = MagicMock(
+            return_value={"status": "recorded", "feedback_id": "mock-fb-1"}
+        )
+        mock_fb_ctrl.return_value = mock_fb
+        yield {
+            "provider": provider,
+            "sessions": in_memory_sessions,
+            "model_ctrl": model_ctrl,
+        }
 
 
 class TestChatLoopE2E:
@@ -141,9 +114,9 @@ class TestChatLoopE2E:
         assert body.get("status") == "success" or "session_id" in body.get("data", {})
 
     def test_chat_stream_returns_sse(self, client, mock_chat_deps):
-        """Send a message via POST /chat and collect its SSE events."""
+        """Send a message via /chat/stream and collect SSE events."""
         resp = client.post(
-            "/chat",
+            "/chat/stream",
             json={
                 "messages": [{"role": "user", "content": "Hi there"}],
                 "max_tokens": 50,
@@ -222,7 +195,7 @@ class TestChatLoopE2E:
         session_id = "full-cycle-test"
 
         resp = client.post(
-            "/chat",
+            "/chat/stream",
             json={
                 "session_id": session_id,
                 "messages": [{"role": "user", "content": "Hello world"}],

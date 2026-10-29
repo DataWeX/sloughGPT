@@ -6,22 +6,10 @@ import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarConte
 
 export function ChatSearchBar() {
   const ctx = useChatToolbarContext()
-  const {
-    query: searchQuery,
-    onChange: onSearchChange,
-    onClear,
-    matchIndex,
-    matchCount,
-    onPrevMatch,
-    onNextMatch,
-    searchInputRef,
-  } = ctx.search
+  const { query: searchQuery, onChange: onSearchChange, onClear, matchIndex, matchCount, onPrevMatch, onNextMatch, searchInputRef } = ctx.search
   return (
     <div className="relative w-36 sm:w-44">
-      <IconSearch
-        className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60 pointer-events-none"
-        aria-hidden
-      />
+      <IconSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60 pointer-events-none" aria-hidden />
       <input
         ref={searchInputRef as React.Ref<HTMLInputElement> | undefined}
         type="text"
@@ -34,19 +22,14 @@ export function ChatSearchBar() {
       {searchQuery && (
         <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
           {matchCount > 0 && (
-            <span
-              className="hidden sm:inline text-[10px] text-muted-foreground whitespace-nowrap mr-0.5"
-              aria-live="polite"
-              role="status"
-              aria-atomic="true"
-            >
+            <span className="hidden sm:inline text-[10px] text-muted-foreground whitespace-nowrap mr-0.5" aria-live="polite" role="status" aria-atomic="true">
               {matchIndex + 1}/{matchCount}
             </span>
           )}
           <button
             type="button"
             onClick={onPrevMatch}
-            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
+            className="text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             disabled={matchCount === 0}
             aria-label="Previous match"
           >
@@ -55,7 +38,7 @@ export function ChatSearchBar() {
           <button
             type="button"
             onClick={onNextMatch}
-            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
+            className="text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             disabled={matchCount === 0}
             aria-label="Next match"
           >
@@ -64,7 +47,7 @@ export function ChatSearchBar() {
           <button
             type="button"
             onClick={onClear}
-            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-muted-foreground hover:text-foreground transition-colors h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
+            className="text-muted-foreground hover:text-foreground transition-colors h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             aria-label="Clear search"
           >
             <IconX className="h-3 w-3" />

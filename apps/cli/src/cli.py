@@ -256,7 +256,7 @@ SloughGPT — getting started
        python3 -m pip install -e ".[dev]"
 
   2. Verify environment:
-       sloughgpt system mole
+       sloughgpt system doctor
 
   3. First training run:
        sloughgpt train quick
@@ -279,7 +279,7 @@ Version: {format_version_display()}
 
 
 from commands.logs import logs as _logs_cmd
-from commands.logs import monitor as _monitor_cmd
+from commands.monitor import monitor as _monitor_cmd
 
 
 # Wrap Click commands so our framework can dispatch to them
@@ -290,12 +290,9 @@ class _ClickCommandWrapper:
         self.click_cmd = click_cmd
         self.name = click_cmd.name
         self.help = click_cmd.help or ""
-        # Propagate click's hidden flag so migration aliases (e.g. `monitor`,
-        # merged into `logs --dashboard` — card 8182563a) dispatch but never
-        # appear in help listings.
-        self.hidden = getattr(click_cmd, "hidden", False)
         self.options = []
         self.arguments = []
+        self.hidden = False
         # Extract params from Click command for display
         for param in click_cmd.params:
             if hasattr(param, "opts"):
@@ -473,7 +470,7 @@ def dev(ctx, model, web_port, watch_web, auto_download):
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
 @click.option(
-    "--web", is_flag=True, help="Start full FastAPI server + Vite web UI and opens browser"
+    "--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and opens browser"
 )
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
 @click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")

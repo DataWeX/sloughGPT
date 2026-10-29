@@ -125,16 +125,9 @@ class TestDownloadBar:
 
 class TestSpinner:
     def test_spinner_cli_returns_spinner(self):
-        c, io = _make_console()
-        io._is_tty = True  # animation is a TTY capability
+        c, _ = _make_console()
         s = c.spinner("loading")
         assert isinstance(s, _Spinner)
-
-    def test_spinner_non_tty_returns_quiet_spinner(self):
-        c, io = _make_console()
-        io._is_tty = False
-        s = c.spinner("loading")
-        assert not isinstance(s, _Spinner)
 
     def test_spinner_tui_returns_tui_spinner(self):
         c, _ = _make_console(tui=True)

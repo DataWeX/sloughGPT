@@ -1,4 +1,4 @@
-import {getApiUrl} from './api-client';
+import {getApiUrl, getAuthHeaders} from './api-client';
 
 export interface SSEEvent {
   stream?: string;
@@ -24,6 +24,17 @@ const BASE_RECONNECT_MS = 1000;
 const MAX_RECONNECT_MS = 16000;
 const MAX_RECONNECTS = 5;
 
+/**
+ * A permanent (non-retryable) SSE failure — the connection will never succeed
+ * on retry, so `streamSSE` rethrows it instead of entering the backoff loop.
+ */
+export class SSEPermanentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SSEPermanentError';
+  }
+}
+
 async function _connectSSE(
   path: string,
   body: unknown,
@@ -36,6 +47,7 @@ async function _connectSSE(
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
+      ...(await getAuthHeaders()),
     },
     body: JSON.stringify(body),
     signal,
@@ -47,7 +59,9 @@ async function _connectSSE(
   }
 
   const reader = res.body?.getReader();
-  if (!reader) throw new Error('No response body');
+  // A 200 with no body stream is a permanent condition (bad proxy / bad
+  // content negotiation) — retrying cannot produce a body.
+  if (!reader) throw new SSEPermanentError('No response body');
   return reader;
 }
 
@@ -108,8 +122,9 @@ export async function* streamSSE(
     } catch (err: any) {
       if (signal?.aborted) return;
 
-      // Don't retry HTTP errors (4xx/5xx are permanent)
-      if (err instanceof SSEHttpError) {
+      // Don't retry HTTP errors (4xx/5xx are permanent) or other
+      // conditions that a reconnect can never fix (missing response body).
+      if (err instanceof SSEHttpError || err instanceof SSEPermanentError) {
         throw err;
       }
 

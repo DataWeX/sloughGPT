@@ -339,7 +339,7 @@ export default function PronunciationGame() {
                   <span className="font-mono min-w-[60px]">{r.word}</span>
                   <span className="text-muted-foreground truncate flex-1">{r.userInput}</span>
                   <span className="text-muted-foreground">{(r.timeMs / 1000).toFixed(1)}s</span>
-                  <span className={r.isCorrect ? 'text-success' : 'text-destructive'}>
+                  <span className={r.isCorrect ? 'text-green-600' : 'text-destructive'}>
                     {r.isCorrect ? `+${r.score}` : 'Miss'}
                   </span>
                 </div>

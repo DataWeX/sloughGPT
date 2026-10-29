@@ -5,18 +5,10 @@ import type { Soul } from '@/lib/souls-controller'
 import type { AgentDef } from '@/lib/agents'
 import type { Conversation } from '@/lib/session-controller'
 import type { FineTunedModel } from '@/lib/training-controller'
-import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
 type DownloadProgressInfo = {
-  percentage: number
-  status: string
-  speed_mb_per_sec?: number
-  eta_seconds?: number
-  bytes_downloaded?: number
-  total_bytes?: number
-  current_file?: string
-  files_completed?: number
-  files_total?: number
+  percentage: number; status: string; speed_mb_per_sec?: number; eta_seconds?: number;
+  bytes_downloaded?: number; total_bytes?: number; current_file?: string; files_completed?: number; files_total?: number;
 }
 
 interface ConversationsGroup {
@@ -112,11 +104,6 @@ interface HealthGroup {
   modelType: string
 }
 
-interface ModeGroup {
-  /** Active behavior-protocol mode (chat/write/rewrite/…). */
-  current: ChatMode
-}
-
 export interface ChatToolbarContextValue {
   conversations: ConversationsGroup
   search: SearchGroup
@@ -128,8 +115,6 @@ export interface ChatToolbarContextValue {
   actions: ActionsGroup
   health: HealthGroup
   sidebar: SidebarGroup
-  /** Optional — test fixtures and older callers may not supply it. */
-  mode?: ModeGroup
 }
 
 const ChatToolbarContext = createContext<ChatToolbarContextValue | null>(null)
@@ -146,5 +131,9 @@ interface ChatToolbarProviderProps {
 }
 
 export function ChatToolbarProvider({ children, value }: ChatToolbarProviderProps) {
-  return <ChatToolbarContext.Provider value={value}>{children}</ChatToolbarContext.Provider>
+  return (
+    <ChatToolbarContext.Provider value={value}>
+      {children}
+    </ChatToolbarContext.Provider>
+  )
 }

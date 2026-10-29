@@ -1,13 +1,13 @@
-"""Mole — the always-on monitor: dig the running system for change deltas.
+"""Mole — the always-on watcher: dig the running system for change deltas.
 
-Mole reuses the probe contract wholesale (``run_mole``,
-``MoleReport``, the ``PROBES`` registry) and adds *time*: a cadence, a
+Mole reuses the site-doctor contract wholesale (``run_doctor``,
+``DoctorReport``, the ``PROBES`` registry) and adds *time*: a cadence, a
 findings fingerprint, an append-only journal, and change-only events so
 the same finding never alerts twice. No AI anywhere — the probes are
 deterministic read-only observers and the loop is plain stdlib, runnable
 standalone (CLI in ``__main__``, scripts, tests — no event loop, no
 model). Traversal follows contracts, not code: ``PROBES`` → report →
-journal lines; a new mole probe is picked up on the next tick.
+journal lines; a new doctor probe is picked up on the next tick.
 
 Scope guardrails (per the Mole card): suggest, never apply — Mole only
 observes and journals; load context is recorded alongside every tick so
@@ -20,12 +20,10 @@ import hashlib
 import json
 import os
 import time
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
-# Annotations only: this module must never import the package at module
-# scope — ``domain.core._internal.mole`` imports *this* module (cycle).
-if TYPE_CHECKING:
-    from domain.core._internal.mole.report import MoleReport
+from domain.core._internal.doctor import run_doctor as _default_run
+from domain.core._internal.doctor.report import DoctorReport
 
 __all__ = ["default_journal_path", "fingerprint", "load_context", "run_watch"]
 
@@ -39,7 +37,7 @@ def default_journal_path() -> str:
     )
 
 
-def fingerprint(report: MoleReport) -> str:
+def fingerprint(report: DoctorReport) -> str:
     """Stable hash of the findings' *identity* set — noise-insensitive.
 
     Identity = (source, check, severity, component): structural, not the
@@ -50,7 +48,8 @@ def fingerprint(report: MoleReport) -> str:
     reordering between sweeps cannot flip it either.
     """
     identities = sorted(
-        json.dumps([f.source, f.check, str(f.severity), f.component]) for f in report.findings
+        json.dumps([f.source, f.check, str(f.severity), f.component])
+        for f in report.findings
     )
     blob = "\n".join(identities).encode("utf-8", "replace")
     return hashlib.sha1(blob).hexdigest()[:16]
@@ -79,9 +78,9 @@ def run_watch(
     max_ticks: int | None = None,
     skip: tuple[str, ...] = (),
     journal_path: str | None = None,
-    run: Callable[..., MoleReport] | None = None,
+    run: Callable[..., DoctorReport] | None = None,
     sleep: Callable[[float], None] = time.sleep,
-    on_event: Callable[[dict, MoleReport | None], None] | None = None,
+    on_event: Callable[[dict, DoctorReport | None], None] | None = None,
     context: Callable[[], dict] | None = None,
     strict: bool = False,
 ) -> int:
@@ -89,17 +88,14 @@ def run_watch(
 
     Sleeps happen *between* ticks (``max_ticks`` runs cost
     ``max_ticks - 1`` sleeps). Tick 1 is always a change (it establishes
-    the baseline). A failing tick is journaled and contained — the loop
-    never dies mid-run — and yields exit code ``2``; otherwise the exit
-    code is the last report's (mole convention, ``strict`` aware).
+    the baseline). A failing tick is journaled and contained — a watcher
+    never dies mid-watch — and yields exit code ``2``; otherwise the exit
+    code is the last report's (doctor convention, ``strict`` aware).
 
     All seams (``run``, ``sleep``, ``on_event``, ``context``) are
     injectable so the loop is fully testable without network or time.
     """
-    if run is None:  # late import: the package imports this module first
-        from domain.core._internal.mole import run_mole
-
-        run = run_mole
+    run = run or _default_run
     context = context or load_context
     path = journal_path or default_journal_path()
 
@@ -125,7 +121,7 @@ def run_watch(
                 "exit": exit_code,
                 "summary": report.summary,
             }
-            payload: MoleReport | None = report
+            payload: DoctorReport | None = report
         except Exception as exc:  # noqa: BLE001 — containment is the point
             exit_code = _ERROR_EXIT
             line = {

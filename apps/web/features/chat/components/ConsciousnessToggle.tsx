@@ -11,10 +11,7 @@ interface ConsciousnessToggleProps {
   onToggle: () => void
 }
 
-export const ConsciousnessToggle = memo(function ConsciousnessToggle({
-  open,
-  onToggle,
-}: ConsciousnessToggleProps) {
+export const ConsciousnessToggle = memo(function ConsciousnessToggle({ open, onToggle }: ConsciousnessToggleProps) {
   const { t } = useLocale()
   const [level, setLevel] = useState<number | null>(null)
 
@@ -34,7 +31,6 @@ export const ConsciousnessToggle = memo(function ConsciousnessToggle({
         open
           ? 'bg-primary/15 text-primary'
           : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
       )}
       aria-label={t('consciousness_chat.toggle')}
       title={t('consciousness_chat.toggle')}

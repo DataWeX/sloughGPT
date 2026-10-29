@@ -6,7 +6,6 @@ import {
   useSearchParams as useReactRouterSearchParams,
 } from 'react-router-dom'
 import { useCallback, useMemo } from 'react'
-import { revalidateAll } from '../../lib/cache/client'
 
 export function usePathname(): string {
   return useLocation().pathname
@@ -49,11 +48,7 @@ export function useRouter(): NextRouter {
   )
   const back = useCallback(() => navigate(-1), [navigate])
   const forward = useCallback(() => navigate(1), [navigate])
-  // next's router.refresh() re-renders the current route in place with the
-  // client cache revalidated — never a document reload (state survives).
-  const refresh = useCallback(() => {
-    revalidateAll()
-  }, [])
+  const refresh = useCallback(() => window.location.reload(), [])
   const prefetch = useCallback(async () => {}, [])
 
   const search = location.search

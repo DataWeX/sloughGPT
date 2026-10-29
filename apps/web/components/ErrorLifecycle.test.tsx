@@ -135,14 +135,8 @@ describe('ErrorLifecycle', () => {
     act(() => {
       window.dispatchEvent(event)
     })
-    // The addError funnel owns presentation for fatal errors (global banner).
-    // ErrorLifecycle must not raise a duplicate fatal toast.
-    const fatalCalls = mockAddToast.mock.calls.filter((c) => c[0] === 'Something went wrong.')
-    expect(fatalCalls).toHaveLength(0)
-    expect(mockAddError).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ title: 'Runtime Error', surface: 'global' }),
-    )
+    expect(mockAddToast).toHaveBeenCalledWith('Something went wrong.', 'error', undefined)
+    expect(mockAddError).toHaveBeenCalled()
   })
 
   it('classifies #423 and #425 minified hydration codes', () => {

@@ -82,13 +82,7 @@ Documentation = "https://github.com/iamtowbee/sloughGPT#readme"
 Repository = "https://github.com/iamtowbee/sloughGPT"
 
 [tool.setuptools]
-# Dual-tree consolidation moved `domain` from packages/core-py/domains to the
-# repo root (cards 20260924_047..058), but package-dir still mapped the whole
-# tree under packages/core-py — discovery found `domain` via the "." root and
-# the map pointed it at the deleted packages/core-py/domain, hard-failing
-# `python setup.py egg_info` (card 56cf354c). Single source root: package-dir
-# and packages.find must agree, and setup.py is a thin shim over this file.
-package-dir = {"" = "."}
+package-dir = {"" = "packages/core-py", "apps" = "apps"}
 include-package-data = true
 
 [tool.setuptools.package-data]
@@ -96,9 +90,9 @@ domain = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 apps = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["packages/core-py", "packages", "."]
 include = ["domain*", "utils*", "apps*", "memory*"]
-exclude = ["tests*", "*.tests*", "apps.web*"]
+exclude = ["tests*", "apps.web*"]
 
 [tool.black]
 line-length = 100
@@ -111,13 +105,6 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
 ignore = ["E501", "N802", "N803", "N806", "N812", "N814", "N818", "N999", "E402", "E701", "E702", "E741", "B008", "N801", "N804", "N805", "N807", "N815", "N817", "B007", "B904", "E721", "B023", "B017", "B005", "B018", "B905", "B002", "B039", "E731", "F601", "C408", "C416", "C401", "UP031", "UP042", "E722", "UP007", "UP035"]
-
-# domain.* is first-party by identity, not by filesystem resolution: the
-# domain/shell/_internal/{cmds,addons} entries are machine-local symlinks,
-# so probe-based classification diverged between environments and CI flagged
-# 11 I001s that pass locally (card ca647de2).
-[tool.ruff.lint.isort]
-known-first-party = ["domain"]
 
 [tool.ruff.lint.flake8-bugbear]
 

@@ -12,63 +12,25 @@ const mockController = vi.hoisted(() => ({
   },
 }))
 
-const bootstrapState = vi.hoisted(() => ({ payload: null as any }))
-
 vi.mock('@/lib/model-controller', () => mockController)
-vi.mock('@/contexts/BootstrapContext', () => ({
-  useBootstrap: () => ({
-    data: bootstrapState.payload,
-    loading: bootstrapState.payload === null,
-    error: null,
-    refresh: vi.fn(),
-  }),
-}))
 
-import {
-  ModelProvider,
-  useModels,
-  useCurrentModel,
-  useModelById,
-  useLocalModels,
-  useHuggingFaceModels,
-} from './ModelContext'
+import { ModelProvider, useModels, useCurrentModel, useModelById, useLocalModels, useHuggingFaceModels } from './ModelContext'
 import { liveStatusStore } from '@/hooks/useLiveStatus'
 
 const mockModels = [
-  {
-    id: 'm1',
-    name: 'GPT-2',
-    type: 'huggingface',
-    loaded: true,
-    size_mb: 512,
-    params: '124M',
-    description: 'base',
-    tags: ['gen'],
-  },
+  { id: 'm1', name: 'GPT-2', type: 'huggingface', loaded: true, size_mb: 512, params: '124M', description: 'base', tags: ['gen'] },
   { id: 'm2', name: 'Local Net', type: 'local', loaded: false, size_mb: 8 },
   { id: 'm3', name: 'No Type' },
 ]
 
-const healthyHealth = {
-  status: 'healthy',
-  model_loaded: true,
-  model_type: 'gpt2',
-  summary: 'ok',
-  inference_count: 3,
-  is_inferencing: false,
-}
+const healthyHealth = { status: 'healthy', model_loaded: true, model_type: 'gpt2', summary: 'ok', inference_count: 3, is_inferencing: false }
 
 function wrapper({ children }: { children: React.ReactNode }) {
   return <ModelProvider>{children}</ModelProvider>
 }
 
-function payloadWithModels(models: any) {
-  return { members: { models }, errors: {} }
-}
-
 beforeEach(() => {
   liveStatusStore.getState().reset()
-  bootstrapState.payload = null
   vi.clearAllMocks()
 })
 
@@ -76,18 +38,12 @@ afterEach(() => cleanup())
 
 describe('ModelContext', () => {
   it('renders children inside the provider', () => {
-    render(
-      <ModelProvider>
-        <div>model child</div>
-      </ModelProvider>,
-    )
+    render(<ModelProvider><div>model child</div></ModelProvider>)
     expect(screen.getByText('model child')).toBeDefined()
   })
 
   it('useModels throws outside provider', () => {
-    expect(() => renderHook(() => useModels())).toThrow(
-      'useModels must be used within a ModelProvider',
-    )
+    expect(() => renderHook(() => useModels())).toThrow('useModels must be used within a ModelProvider')
   })
 
   it('starts with empty models, no loading, no error', () => {
@@ -100,57 +56,29 @@ describe('ModelContext', () => {
     expect(result.current.isModelLoaded).toBe(false)
   })
 
-  it('does not fetch models on mount — the bootstrap payload seeds the initial list', async () => {
+  it('does not refresh models until the API is ready', async () => {
     renderHook(() => useModels(), { wrapper })
     await act(async () => {})
     expect(mockController.modelController.list).not.toHaveBeenCalled()
   })
 
-  it('seeds models from the bootstrap payload and maps fields', async () => {
-    bootstrapState.payload = payloadWithModels(mockModels)
+  it('refreshes models once the API is ready and maps fields', async () => {
+    mockController.modelController.list.mockResolvedValue(mockModels)
     const { result } = renderHook(() => useModels(), { wrapper })
+    act(() => liveStatusStore.getState().setReady(true))
     await act(async () => {})
-    expect(mockController.modelController.list).not.toHaveBeenCalled()
+    expect(mockController.modelController.list).toHaveBeenCalled()
     expect(result.current.models).toEqual([
-      {
-        id: 'm1',
-        name: 'GPT-2',
-        type: 'huggingface',
-        loaded: true,
-        size_mb: 512,
-        size_gb: undefined,
-        params: '124M',
-        description: 'base',
-        tags: ['gen'],
-      },
-      {
-        id: 'm2',
-        name: 'Local Net',
-        type: 'local',
-        loaded: false,
-        size_mb: 8,
-        size_gb: undefined,
-        params: undefined,
-        description: undefined,
-        tags: undefined,
-      },
-      {
-        id: 'm3',
-        name: 'No Type',
-        type: 'huggingface',
-        loaded: false,
-        size_mb: undefined,
-        size_gb: undefined,
-        params: undefined,
-        description: undefined,
-        tags: undefined,
-      },
+      { id: 'm1', name: 'GPT-2', type: 'huggingface', loaded: true, size_mb: 512, size_gb: undefined, params: '124M', description: 'base', tags: ['gen'] },
+      { id: 'm2', name: 'Local Net', type: 'local', loaded: false, size_mb: 8, size_gb: undefined, params: undefined, description: undefined, tags: undefined },
+      { id: 'm3', name: 'No Type', type: 'huggingface', loaded: false, size_mb: undefined, size_gb: undefined, params: undefined, description: undefined, tags: undefined },
     ])
   })
 
-  it('keeps models empty while the bootstrap models member is absent', async () => {
-    bootstrapState.payload = payloadWithModels(null)
+  it('keeps models empty when list fails', async () => {
+    mockController.modelController.list.mockRejectedValue(new Error('network'))
     const { result } = renderHook(() => useModels(), { wrapper })
+    act(() => liveStatusStore.getState().setReady(true))
     await act(async () => {})
     expect(result.current.models).toEqual([])
     expect(result.current.error).toBeNull()
@@ -185,10 +113,7 @@ describe('ModelContext', () => {
   })
 
   it('loadModel reports backend error status instead of false success', async () => {
-    mockController.modelController.load.mockResolvedValue({
-      status: 'error',
-      error: 'No .slnc file for gpt2',
-    })
+    mockController.modelController.load.mockResolvedValue({ status: 'error', error: 'No .slnc file for gpt2' })
     const { result } = renderHook(() => useModels(), { wrapper })
     let res: { success: boolean; error?: string } | undefined
     await act(async () => {
@@ -215,10 +140,7 @@ describe('ModelContext', () => {
   })
 
   it('loadModelPath reports backend error field', async () => {
-    mockController.modelController.loadModelPath.mockResolvedValue({
-      status: 'error',
-      error: 'bad path',
-    })
+    mockController.modelController.loadModelPath.mockResolvedValue({ status: 'error', error: 'bad path' })
     const { result } = renderHook(() => useModels(), { wrapper })
     let res: { success: boolean; error?: string } | undefined
     await act(async () => {
@@ -254,9 +176,7 @@ describe('ModelContext', () => {
   it('clearError resets the error', async () => {
     mockController.modelController.load.mockRejectedValue(new Error('boom'))
     const { result } = renderHook(() => useModels(), { wrapper })
-    await act(async () => {
-      await result.current.loadModel('m1')
-    })
+    await act(async () => { await result.current.loadModel('m1') })
     expect(result.current.error).toBe('boom')
     act(() => result.current.clearError())
     expect(result.current.error).toBeNull()
@@ -291,8 +211,9 @@ describe('ModelContext', () => {
   })
 
   it('useCurrentModel reflects model id and loaded state', async () => {
-    bootstrapState.payload = payloadWithModels(mockModels)
+    mockController.modelController.list.mockResolvedValue(mockModels)
     const { result } = renderHook(() => useCurrentModel(), { wrapper })
+    act(() => liveStatusStore.getState().setReady(true))
     await act(async () => {})
     act(() => {
       liveStatusStore.getState().setHealth({ model_loaded: true, model_type: 'gpt2' } as never)
@@ -303,25 +224,28 @@ describe('ModelContext', () => {
   })
 
   it('useModelById finds a model', async () => {
-    bootstrapState.payload = payloadWithModels(mockModels)
+    mockController.modelController.list.mockResolvedValue(mockModels)
     const { result } = renderHook(() => useModelById('m2'), { wrapper })
+    act(() => liveStatusStore.getState().setReady(true))
     await act(async () => {})
     expect(result.current?.name).toBe('Local Net')
   })
 
   it('useModelById returns undefined for missing id', async () => {
-    bootstrapState.payload = payloadWithModels(mockModels)
+    mockController.modelController.list.mockResolvedValue(mockModels)
     const { result } = renderHook(() => useModelById('nope'), { wrapper })
+    act(() => liveStatusStore.getState().setReady(true))
     await act(async () => {})
     expect(result.current).toBeUndefined()
   })
 
   it('useLocalModels and useHuggingFaceModels filter by type', async () => {
-    bootstrapState.payload = payloadWithModels(mockModels)
+    mockController.modelController.list.mockResolvedValue(mockModels)
     const local = renderHook(() => useLocalModels(), { wrapper })
     const hf = renderHook(() => useHuggingFaceModels(), { wrapper })
+    act(() => liveStatusStore.getState().setReady(true))
     await act(async () => {})
-    expect(local.result.current.map((m) => m.id)).toEqual(['m2'])
-    expect(hf.result.current.map((m) => m.id)).toEqual(['m1', 'm3'])
+    expect(local.result.current.map(m => m.id)).toEqual(['m2'])
+    expect(hf.result.current.map(m => m.id)).toEqual(['m1', 'm3'])
   })
 })

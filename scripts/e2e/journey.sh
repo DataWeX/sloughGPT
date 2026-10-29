@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# E2E journey: slo dev --web-port N must bind N (Vite takes --port/--host argv)
+# E2E journey: slo dev --web-port N must bind N (Next=PORT env, Vite=--port argv)
 # and clean up on SIGINT. Self-contained: kills everything before exit.
 set -u
-LABEL="$1"; WEB_PORT="$2"; MODE="${3:-vite}"   # MODE: vite (the only channel)
+LABEL="$1"; WEB_PORT="$2"; MODE="$3"   # MODE: next | vite
 BASE="$(cd "$(dirname "$0")" && pwd)"
 WT="${JOURNEY_WT:-$(cd "$BASE/../.." && pwd)}"
 LOG_DIR="$WT/logs/e2e"; mkdir -p "$LOG_DIR"
@@ -15,12 +15,9 @@ ok()  { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; FAIL=1; }
 
 cd "$WT" || exit 1
-if [ "$MODE" != "vite" ]; then
-  echo "journey.sh: MODE '$MODE' retired — apps/web's dev script is vite and the CLI's Next channel is gone" >&2
-  exit 2
+if [ "$MODE" = "vite" ]; then
+  sed -i 's/"dev": "next dev"/"dev": "vite"/' apps/web/package.json
 fi
-# Safety net for a stale tree whose dev script is still the old Next one.
-sed -i 's/"dev": "next dev"/"dev": "vite"/' apps/web/package.json
 grep -o '"dev": "[^"]*"' apps/web/package.json
 
 rm -f "$LOG" "$NPMLOG"
@@ -57,6 +54,12 @@ if [ -f "$NPMLOG" ]; then
     vite)
       if echo "$ARGV" | grep -q -- "--port $WEB_PORT --host 0.0.0.0"; then ok "vite argv carries --port/--host"
       else bad "vite argv missing flags: $ARGV"; fi
+      ;;
+    next)
+      if [ "$ARGV" = "argv: run dev" ]; then ok "next argv is plain npm run dev"
+      else bad "next argv polluted: $ARGV"; fi
+      if echo "$PENV" | grep -q "PORT_ENV: $WEB_PORT"; then ok "PORT env set for next"
+      else bad "PORT env wrong: $PENV"; fi
       ;;
   esac
   if [ "$BOUND" = "BOUND_PORT: $WEB_PORT" ]; then ok "shim bound $WEB_PORT"
@@ -96,6 +99,8 @@ STILL=$(pgrep -f "cli.py --port 8177 dev --web-port $WEB_PORT" | head -1 || true
 if [ -z "$STILL" ]; then ok "no leftover cli"
 else kill -9 "$STILL" 2>/dev/null; bad "had to SIGKILL leftover"; fi
 
-git checkout -- apps/web/package.json
+if [ "$MODE" = "vite" ]; then
+  git checkout -- apps/web/package.json
+fi
 echo "RESULT[$LABEL]: $([ $FAIL -eq 0 ] && echo ALL PASS || echo FAILURES)"
 exit $FAIL

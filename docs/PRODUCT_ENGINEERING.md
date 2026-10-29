@@ -108,7 +108,7 @@ only through the same stable interfaces:
 | #   | Feature              | Status           | Domain module          | Notes                                                              |
 | --- | -------------------- | ---------------- | ---------------------- | ------------------------------------------------------------------ |
 | 15  | **Consciousness**    | Wired           | `consciousness`        | Level-gated post-gen wiring (SloEngine hook + router `_run_post_gen_tasks`); narrative via reasoning_chain + `CONSCIOUSNESS` SSE; 27 sub-pages still need flow review |
-| 16  | **Voice**            | Partial          | `voice`                | TTS works, phoneme encode works; router imports the `domain.voice` facade |
+| 16  | **Voice**            | Partial          | `voice`                | TTS works, phoneme encode works, but router bypasses domain        |
 | 17  | **Phoneme Learning** | Over-built       | `voice` (phoneme)      | 47 components, 12 tabs — needs flow restructure                    |
 | 18  | **Tokenizer**        | Over-built       | `training` (tokenizer) | 9 tabs, 12 sub-cards — needs consolidation                         |
 | 19  | **Companion**        | Built            | `companion`            | AI companion with personality                                      |
@@ -251,29 +251,8 @@ method — the symbol the router actually looks up — never router-module
 symbols: renaming a router import breaks `mock.patch("training.router.x")`
 fixtures with `AttributeError` at setup (see `test_training_recovery_router.py`).
 
-**9. Controllers proxy; they never reach `_internal`.** The seam is
-router → controller → engine → domain. `apps/api/server/controllers/*`
-carry a router's import rule: public `domain.<feature>` facades only
-(`from domain.training import get_training_executor`), never
-`domain.*._internal.*` — orchestration shared between routers lives in a
-controller, but its imports are governed exactly like a router's. Both
-layers are checked by an AST import scan in
-`tests/test_layer_conformance.py` (routers allow `shell`/`vm`/
-`world_render`/`api_keys` as agreed zones; controllers allow none).
-
-**Facade binding rule.** Names the API layer reads must resolve LAZILY
-from a facade (`_LAZY_IMPORTS` + `__getattr__`), never eagerly at facade
-import: eager binding freezes the pre-patch object and silently defeats
-tests that patch `domain.<feature>._internal.<module>..<name>`, while a
-lazy lookup re-reads the attribute at call time so BOTH patch styles
-(`domain.training.get_state` and
-`domain.training._internal.service.get_state`) keep working. When a name
-has more than one historical read point (e.g. `get_state`, re-exported by
-`_internal.service` from `_internal.state`), map the facade to the module
-the tests actually patch.
-
-**Checklist:** conformance green (`pytest tests/test_layer_conformance.py`)
-→ registered → ruff → router's tests green.
+**Checklist:** `grep -c _internal <router>` = 0 → registered → ruff → router's
+tests green.
 
 ---
 
@@ -291,7 +270,7 @@ the tests actually patch.
 
 ## Route Map (what exists vs what should exist)
 
-### Current: 73 frontend pages, 58 routers
+### Current: 85+ frontend pages, 58 routers
 
 ### Target: ~20 frontend pages, ~15 routers
 
@@ -312,7 +291,7 @@ the tests actually patch.
 | `/shell`      | `/shell` + `/vm` + `/developer`                                                            | `shell.py` + `vm.py`                                                          | ⏳                                                                                      |
 | `/voice`      | `/voice` + `/phoneme` + `/tokenizer` + `/token-tree`                                       | `voice.py` + `tokenizer.py` + `token_tree.py`                                 | 🔧 `/voice` page removed → `/chat?mode=talk`; phoneme left alone per directive          |
 | `/memory`     | `/memory` (already clean)                                                                  | `memory.py`                                                                   | ✅                                                                                      |
-| `/files`      | `/files` + `/images`                                                                       | `files.py` + `images.py`                                                      | 🔧 frontend done: images page absorbed into `/files` (307 for `/images`, card 7839a7c6); routers still pending |
+| `/files`      | `/files` + `/images`                                                                       | `files.py` + `images.py`                                                      | ⏳                                                                                      |
 | `/monitoring` | `/monitoring` + `/errors` + `/session`                                                     | `system.py` + `errors.py` + `session.py`                                      | ⏳                                                                                      |
 
 > **Persona rule for benchmarking (from USER_PERSONA.md):** `/benchmark` is hidden from Alex (he gets an inline training verdict) and there is no dedicated benchmark UI — `POST /benchmark/score` + `config/bench_weights.yaml` is the headless API for Maya/Jon CI gating. Do not reintroduce a benchmark page into the sidebar.
@@ -339,7 +318,7 @@ the tests actually patch.
 1. **Write this doc** ✅ (you're reading it)
 2. **Quick cleanup** ✅ — dead routers removed (metrics, collections, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), `/tools` grid removed
 3. **Feature engines** ✅ — VoiceEngine, KnowledgeEngine, TrainingEngine (ToolsEngine pattern) + `get_*_engine` facade exports, routers wired
-4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across all 58 router files — enforced by `tests/test_layer_conformance.py`, shell/vm/world_render/api_keys excluded as agreed zones; facade lazy exports added for heavy symbols; tests may patch facade or `_internal` paths — lazy binding keeps both visible)
+4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across 22 router files; facade lazy exports added for heavy symbols; tests patch facade paths)
 5. **UI flows** — restructure phoneme, knowledge, training pages to follow UX_FLOWS.md
 6. **Consciousness** ✅ — wire cognitive engine to inference pipeline (SloEngine post-gen hook + router single process, level-gated via `ConsciousnessConfig.level`; narrative surfaced through `reasoning_chain` and `CONSCIOUSNESS complete` SSE)
 7. **Test** — verify all user journeys pass

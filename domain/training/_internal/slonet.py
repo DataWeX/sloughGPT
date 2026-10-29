@@ -4178,59 +4178,26 @@ class SloNet:
         return result
 
     def _rebuild_from_state_dict(self, sd: dict[str, np.ndarray]) -> None:
-        """Rebuild architecture from PyTorch state dict keys, then load weights.
-
-        Structure comes from metadata first, then from the keys themselves —
-        both key families: native (``blocks.{i}.attn_norm`` / ``blocks.{i}.ff.w1``,
-        what ``SloTransformer.state_dict()`` emits) and legacy
-        (``blocks.{i}.norm1`` / ``blocks.{i}.mlp.w1``). Head counts stay
-        metadata-or-probe: under GQA a square ``q_proj`` admits many
-        (n_heads, head_dim) splits, so shapes alone cannot decide them.
-        """
+        """Rebuild architecture from PyTorch state dict keys, then load weights."""
         self._sd = sd
         self.layers = []
-        md = self.metadata or {}
-
-        def _shape(key: str, idx: int = 0):
-            w = sd.get(key)
-            if w is None:
-                return None
-            if hasattr(w, "shape"):
-                return w.shape[idx]
-            # v1/v2 JSON weight blocks arrive as nested Python lists,
-            # not ndarrays (import_from_sou tok_emb-only files).
-            return len(w) if idx == 0 else (len(w[0]) if w else None)
 
         # Count transformer blocks
         block_keys = [k for k in sd if k.startswith("blocks.")]
         num_blocks = len({k.split(".")[1] for k in block_keys})
 
-        # Hidden dim: metadata -> tok_emb (vocab, hidden) by definition ->
-        # either norm probe (native or legacy) -> documented fallback.
-        hidden_dim = (
-            md.get("n_embed")
-            or md.get("hidden_size")
-            or _shape("tok_emb.weight", 1)
-            or _shape("blocks.0.attn_norm.weight")
-            or _shape("blocks.0.norm1.weight")
-            or 384
-        )
+        # Determine dims from first block
+        norm1_w = sd.get("blocks.0.norm1.weight")
+        hidden_dim = norm1_w.shape[0] if norm1_w is not None else 384
 
-        n_heads = md.get("n_head") or md.get("num_attention_heads")
-        if not n_heads:
-            q_w = sd.get("blocks.0.attn.q_proj.weight")
-            n_heads = 4  # default
-            if q_w is not None:
-                head_dim = q_w.shape[0]
-                n_heads = hidden_dim // head_dim
+        q_w = sd.get("blocks.0.attn.q_proj.weight")
+        n_heads = 4  # default
+        if q_w is not None:
+            head_dim = q_w.shape[0]
+            n_heads = hidden_dim // head_dim
 
-        ff_dim = (
-            md.get("intermediate_size")
-            or _shape("blocks.0.ff.w1.weight")
-            or _shape("blocks.0.mlp.w1.weight")
-            or _shape("blocks.0.w1.weight")
-            or hidden_dim * 4
-        )
+        ff_w1 = sd.get("blocks.0.mlp.w1.weight")
+        ff_dim = ff_w1.shape[0] if ff_w1 is not None else hidden_dim * 4
 
         for i in range(num_blocks):
             block = _SoulTransformerBlockSoulLib(hidden_dim, n_heads, ff_dim, name=f"block{i}")
@@ -4334,32 +4301,14 @@ class SloNet:
 
     def _forward_state_dict(self, x: Tensor) -> Tensor:
         sd = self._sd
-        md = self.metadata or {}
         vocab = sd["tok_emb.weight"].shape[0]
         hidden = sd["tok_emb.weight"].shape[1]
 
         def _sd_get(key):
-            # Try the requested name, the flat name (legacy HF-style dumps),
-            # then the native family aliases — over BOTH bases, so
-            # blocks.{i}.norm1 <-> blocks.{i}.attn_norm,
-            # blocks.{i}.norm2 <-> blocks.{i}.ff_norm, and
-            # blocks.{i}.mlp.wN <-> blocks.{i}.ff.wN all resolve.
+            if key in sd:
+                return sd[key]
             key2 = key.replace("attn.", "").replace("mlp.", "")
-            key_native = (
-                key.replace("norm1.weight", "attn_norm.weight")
-                .replace("norm2.weight", "ff_norm.weight")
-                .replace("mlp.", "ff.")
-            )
-            key_native2 = (
-                key2.replace("norm1.weight", "attn_norm.weight")
-                .replace("norm2.weight", "ff_norm.weight")
-                .replace("mlp.", "ff.")
-            )
-            for k in (key, key2, key_native, key_native2):
-                w = sd.get(k)
-                if w is not None:
-                    return w
-            return None
+            return sd.get(key2)
 
         indices = x.data.astype(int).clip(0, vocab - 1)
         B, N = indices.shape
@@ -4376,16 +4325,10 @@ class SloNet:
             k_w = _sd_get(f"blocks.{i}.attn.k_proj.weight")
             v_w = _sd_get(f"blocks.{i}.attn.v_proj.weight")
 
-            md_heads = md.get("n_head") or md.get("num_attention_heads")
             H = 4
             E = hidden // H
             C = hidden
-            if md_heads and hidden % md_heads == 0:
-                # Metadata first: under GQA a square q_proj cannot pin the
-                # (n_heads, head_dim) split — only metadata can.
-                H = int(md_heads)
-                E = hidden // H
-            elif q_w is not None:
+            if q_w is not None:
                 q_out_dim = q_w.shape[0]
                 head_dim = q_out_dim // 8
                 if head_dim > 0 and q_out_dim % 8 == 0:
@@ -4401,20 +4344,8 @@ class SloNet:
             v = np.clip(v, -50, 50)
 
             Q = q.reshape(B, N, H, E).transpose(0, 2, 1, 3)
-            if k.shape[-1] != H * E and k.shape[-1] % E == 0:
-                # GQA: k/v carry fewer features than q (n_kv_head < n_heads).
-                # Reshape with their own head count, then repeat each kv head
-                # over its group of query heads — never fold the seq axis.
-                kv_H = k.shape[-1] // E
-                K = k.reshape(B, N, kv_H, E).transpose(0, 2, 1, 3)
-                V = v.reshape(B, N, kv_H, E).transpose(0, 2, 1, 3)
-                if kv_H != H and H % kv_H == 0:
-                    rep = H // kv_H
-                    K = np.repeat(K, rep, axis=1)
-                    V = np.repeat(V, rep, axis=1)
-            else:
-                K = k.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
-                V = v.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
+            K = k.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
+            V = v.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
             scale = 1.0 / (E**0.5)
             scores = np.einsum("bhnd,bhkd->bhnk", Q, K) * scale
             attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
@@ -4469,10 +4400,6 @@ def _matmul_state_dict(a: Tensor, b: np.ndarray) -> Tensor:
 
 
 def _layernorm_state_dict(x: Tensor, weight: np.ndarray, eps: float = 1e-5) -> Tensor:
-    if weight is None:
-        # A missing norm degrades to identity instead of TypeError
-        # ('float * None') — only changes calls that used to crash.
-        return x
     acc = _get_accelerator()
     if acc is not None and acc.name != "cpu":
         try:
@@ -7973,13 +7900,7 @@ class WarmupCosineScheduler(SloLRScheduler):
 
     def get_lr(self):
         if self.last_epoch < self.warmup_steps:
-            # Warmup starts at 0.0 (SloLRScheduler.__init__ steps to
-            # last_epoch=0 before any lr is read) and reaches base_lr exactly
-            # at warmup_steps. The "+1" drift in 68c427af5 ("startup
-            # optimization suggestions" — a drive-by) started warmup at
-            # 0.1x base and hit base a step early; test_warmup_linear_then_
-            # cosine pins the original contract.
-            warmup_factor = float(self.last_epoch) / float(max(1, self.warmup_steps))
+            warmup_factor = float(self.last_epoch + 1) / float(max(1, self.warmup_steps))
             return [base_lr * warmup_factor for base_lr in self.base_lrs]
         progress = float(self.last_epoch - self.warmup_steps) / float(
             max(1, self.total_steps - self.warmup_steps)

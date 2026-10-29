@@ -154,13 +154,14 @@ describe('SettingsScreen', () => {
     expect(view.getByText('Qwen2.5-0.5B-Instruct')).toBeTruthy();
   });
 
-  it('shows Offline when API returns error', async () => {
-    mockHealthData = {status: 'error', model_name: ''};
+  it('shows Error badge when the health API rejects', async () => {
+    // Screen deliberately distinguishes "API errored" (Error + reason text)
+    // from "no data and no error" (Offline) — added by d7d468f91.
     const view = await render(<SettingsScreen />);
-    // API call rejects by default, healthData stays null → shows Offline
     await waitFor(() => {
-      expect(view.getByText('Offline')).toBeTruthy();
+      expect(view.getByText('Error')).toBeTruthy();
     });
+    expect(view.getByText('test')).toBeTruthy();
   });
 
   it('saves server URL on Save press', async () => {
@@ -353,9 +354,9 @@ describe('SettingsScreen', () => {
   it('renders Top-P selector and taps a value', async () => {
     const view = await render(<SettingsScreen />);
     expect(view.getByText('Top-P')).toBeTruthy();
-    // Use 0.85 — unique to Top-P (temperature now also offers 0.7)
-    fireEvent.press(view.getByText('0.85'));
-    expect(mockUpdate).toHaveBeenCalledWith({topP: 0.85});
+    // Use 0.7 not 0.8 to avoid conflict with temperature's 0.8
+    fireEvent.press(view.getByText('0.7'));
+    expect(mockUpdate).toHaveBeenCalledWith({topP: 0.7});
   });
 
   it('renders Top-K selector and taps a value', async () => {

@@ -66,6 +66,7 @@ _SERVER_START = time.monotonic()
 _INFERENCE_PATHS = frozenset(
     {
         "/chat",
+        "/chat/stream",
         "/inference/generate",
         "/inference/generate/stream",
         "/infer",

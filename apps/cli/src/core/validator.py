@@ -1,5 +1,5 @@
 """
-Validator - environment and project validation.
+Validator (Doctor) - Environment and project validation.
 
 Checks for common issues before running commands.
 """
@@ -60,7 +60,7 @@ class ValidationResult:
         )
 
 
-class Validator:
+class Doctor:
     """Environment and project validator."""
 
     def __init__(self, root_dir: Path | None = None):

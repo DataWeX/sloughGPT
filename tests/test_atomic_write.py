@@ -160,7 +160,9 @@ class TestDurable:
 
         assert calls == [], "the atomic (default) path must not flush"
 
-    def test_durable_flushes_file_then_rename_then_directory(self, tmp_path, monkeypatch):
+    def test_durable_flushes_file_then_rename_then_directory(
+        self, tmp_path, monkeypatch
+    ):
         events = self._trace_fs(monkeypatch)
         target = tmp_path / "out.txt"
 
@@ -184,7 +186,9 @@ class TestDurable:
         labels = [e[1] if e[0] == "fsync" else e[0] for e in events]
         assert labels == ["file", "replace", "dir"], labels
 
-    def test_durable_file_fsync_happens_while_the_handle_is_still_open(self, tmp_path, monkeypatch):
+    def test_durable_file_fsync_happens_while_the_handle_is_still_open(
+        self, tmp_path, monkeypatch
+    ):
         """fsync after `with` closes the handle would flush nothing at all."""
         seen: list[bool] = []
         real_fsync = os.fsync
@@ -251,7 +255,9 @@ class TestDurable:
         assert target.read_text(encoding="utf-8") == "original"
         assert [p.name for p in tmp_path.iterdir() if is_temp_name(p.name)] == []
 
-    def test_dir_fsync_failure_propagates_rather_than_pretending(self, tmp_path, monkeypatch):
+    def test_dir_fsync_failure_propagates_rather_than_pretending(
+        self, tmp_path, monkeypatch
+    ):
         """A swallowed dir-fsync error is a false guarantee — worse than none."""
 
         def boom(fd):

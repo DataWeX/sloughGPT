@@ -50,7 +50,7 @@ const FEATURES: Feature[] = [
     icon: '🎨',
     title: 'Image Generation',
     description: 'Create images from text descriptions with multiple styles.',
-    link: '/files',
+    link: '/images',
     color: 'bg-destructive/10 text-destructive',
   },
   {

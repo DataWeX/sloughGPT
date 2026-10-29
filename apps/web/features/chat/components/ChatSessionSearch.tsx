@@ -42,7 +42,9 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
 
     if (query.trim()) {
       const lower = query.toLowerCase()
-      result = result.filter((s) => s.title.toLowerCase().includes(lower))
+      result = result.filter(s =>
+        s.title.toLowerCase().includes(lower)
+      )
     }
 
     result = [...result].sort((a, b) => {
@@ -71,17 +73,14 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
     onFiltered(filtered)
   }, [filtered, onFiltered])
 
-  const handleSort = useCallback(
-    (option: SortOption) => {
-      if (option === sort) {
-        setDirection((d) => (d === 'desc' ? 'asc' : 'desc'))
-      } else {
-        setSort(option)
-        setDirection('desc')
-      }
-    },
-    [sort],
-  )
+  const handleSort = useCallback((option: SortOption) => {
+    if (option === sort) {
+      setDirection(d => d === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSort(option)
+      setDirection('desc')
+    }
+  }, [sort])
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -94,8 +93,6 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
             activeTab === 'search'
               ? 'border-b-2 border-primary text-primary'
               : 'text-muted-foreground hover:text-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-            'active:bg-muted',
           )}
         >
           Search
@@ -108,8 +105,6 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
             activeTab === 'sort'
               ? 'border-b-2 border-primary text-primary'
               : 'text-muted-foreground hover:text-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-            'active:bg-muted',
           )}
         >
           Sort
@@ -122,8 +117,7 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search sessions..."
-            aria-label="Search sessions"
+            placeholder="Search sessions..." aria-label="Search sessions"
             className="w-full text-xs bg-transparent border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
           {query && (
@@ -134,7 +128,7 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
         </div>
       ) : (
         <div className="p-2 space-y-1">
-          {SORT_OPTIONS.map((option) => (
+          {SORT_OPTIONS.map(option => (
             <button
               key={option.value}
               type="button"
@@ -144,12 +138,13 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
                 sort === option.value
                   ? 'bg-primary/10 text-primary'
                   : 'hover:bg-muted/50 text-muted-foreground',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
               )}
             >
               <span>{option.label}</span>
               {sort === option.value && (
-                <span className="text-[10px]">{direction === 'desc' ? '↓' : '↑'}</span>
+                <span className="text-[10px]">
+                  {direction === 'desc' ? '↓' : '↑'}
+                </span>
               )}
             </button>
           ))}

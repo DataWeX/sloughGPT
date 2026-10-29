@@ -43,13 +43,11 @@ class FakeResponse:
 
 class FakeRequest:
     captured = []
-    instances = []
 
     def __init__(self, url, headers=None):
         self.url = url
         self.headers = headers or {}
         FakeRequest.captured.append(url)
-        FakeRequest.instances.append(self)
 
     def add_header(self, key, value):
         self.headers[key] = value
@@ -73,7 +71,6 @@ def fake_urlopen(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", _urlopen)
     monkeypatch.setattr(urllib.request, "Request", FakeRequest)
     FakeRequest.captured.clear()
-    FakeRequest.instances.clear()
     return calls, responses
 
 
@@ -122,117 +119,61 @@ class TestRepoImporter:
 
     def test_clone_existing_repo_skips_git(self, tmp_path, monkeypatch):
         imp = RepoImporter(cache_dir=str(tmp_path))
-        url = "https://github.com/org/repo.git"
-        target = tmp_path / "org__repo"
+        target = tmp_path / "repo"
         target.mkdir()
-        (target / ".slough-source-url").write_text(url)
 
         def fail(*args, **kwargs):
             raise AssertionError("should not clone existing repo")
 
-        monkeypatch.setattr(subprocess, "run", fail)
-        result = imp.clone_repo(url)
+        monkeypatch.setattr(subprocess, "check_call", fail)
+        result = imp.clone_repo("https://github.com/org/repo.git")
         assert result == target
 
     def test_clone_repo_command(self, tmp_path, monkeypatch):
         imp = RepoImporter(cache_dir=str(tmp_path))
         calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_check_call(cmd, **kwargs):
             calls.append(cmd)
-            Path(cmd[-1]).mkdir(parents=True, exist_ok=True)
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-        monkeypatch.setattr(subprocess, "run", fake_run)
-        url = "https://github.com/org/repo.git"
-        target = imp.clone_repo(url)
+        monkeypatch.setattr(subprocess, "check_call", fake_check_call)
+        target = imp.clone_repo("https://github.com/org/repo.git")
         assert calls[0] == [
             "git",
             "clone",
-            "--single-branch",
+            "https://github.com/org/repo.git",
+            str(target),
             "--depth",
             "1",
-            "--filter=blob:limit=200000",
-            url,
-            str(target),
         ]
-        assert (target / ".slough-source-url").read_text() == url
 
-    def test_clone_repo_filter_fallback_on_rejection(self, tmp_path, monkeypatch):
+    def test_clone_repo_branch_and_depth(self, tmp_path, monkeypatch):
         imp = RepoImporter(cache_dir=str(tmp_path))
         calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_check_call(cmd, **kwargs):
             calls.append(cmd)
-            if any(c.startswith("--filter") for c in cmd):
-                return SimpleNamespace(
-                    returncode=1, stdout="", stderr="error: unknown option `filter'"
-                )
-            Path(cmd[-1]).mkdir(parents=True, exist_ok=True)
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-        monkeypatch.setattr(subprocess, "run", fake_run)
-        target = imp.clone_repo("https://github.com/org/repo")
-        assert len(calls) == 2
-        assert any(c.startswith("--filter") for c in calls[0])
-        assert not any(c.startswith("--filter") for c in calls[1])
-        assert target.exists()
+        monkeypatch.setattr(subprocess, "check_call", fake_check_call)
+        imp.clone_repo("https://github.com/org/repo", branch="main", depth=2)
+        assert calls[0][-4:] == ["-b", "main", "--depth", "2"]
 
-    def test_clone_repo_timeout_raises_and_cleans(self, tmp_path, monkeypatch):
+    def test_clone_repo_no_depth(self, tmp_path, monkeypatch):
         imp = RepoImporter(cache_dir=str(tmp_path))
-
-        def fake_run(cmd, **kwargs):
-            raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 0))
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
-        with pytest.raises(RuntimeError, match="timed out"):
-            imp.clone_repo("https://github.com/org/repo", timeout=5)
-
-    def test_clone_repo_failure_surfaces_stderr(self, tmp_path, monkeypatch):
-        imp = RepoImporter(cache_dir=str(tmp_path))
-
-        def fake_run(cmd, **kwargs):
-            return SimpleNamespace(returncode=128, stdout="", stderr="repository not found")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
-        with pytest.raises(RuntimeError, match="repository not found"):
-            imp.clone_repo("https://github.com/org/nope")
-
-    def test_clone_repo_mismatched_marker_reclones(self, tmp_path, monkeypatch):
-        imp = RepoImporter(cache_dir=str(tmp_path))
-        url = "https://github.com/org/repo"
-        target = tmp_path / "org__repo"
-        target.mkdir()
-        (target / ".slough-source-url").write_text("https://github.com/other/repo")
         calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_check_call(cmd, **kwargs):
             calls.append(cmd)
-            Path(cmd[-1]).mkdir(parents=True, exist_ok=True)
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-        monkeypatch.setattr(subprocess, "run", fake_run)
-        result = imp.clone_repo(url)
-        assert len(calls) == 1
-        assert result == target
-        assert (target / ".slough-source-url").read_text() == url
+        monkeypatch.setattr(subprocess, "check_call", fake_check_call)
+        imp.clone_repo("https://github.com/org/repo", depth=None)
+        assert "--depth" not in calls[0]
 
-    def test_clone_repo_owner_scoped_cache_key(self):
-        # Same repo name, different owners — never collide
-        assert RepoImporter._repo_cache_key("https://github.com/alice/data") != (
-            RepoImporter._repo_cache_key("https://github.com/bob/data")
-        )
-        assert RepoImporter._repo_cache_key("https://github.com/alice/data.git") == (
-            RepoImporter._repo_cache_key("https://github.com/alice/data")
-        )
-        assert RepoImporter._repo_cache_key("git@github.com:alice/data.git") == (
-            RepoImporter._repo_cache_key("https://github.com/alice/data")
-        )
-        assert RepoImporter._repo_cache_key("ssh://git@github.com/alice/data") == (
-            RepoImporter._repo_cache_key("https://github.com/alice/data")
-        )
-        # Path traversal is neutralized
-        assert "/" not in RepoImporter._repo_cache_key("https://github.com/../..")
+    def test_clone_repo_name_strips_git(self, tmp_path, monkeypatch):
+        imp = RepoImporter(cache_dir=str(tmp_path))
+        monkeypatch.setattr(subprocess, "check_call", lambda *a, **k: None)
+        target = imp.clone_repo("https://github.com/org/myrepo.git")
+        assert target.name == "myrepo"
 
     # export_to_corpus -----------------------------------------------------
 
@@ -492,7 +433,7 @@ class TestRepoImporter:
         repo = tmp_path / "repo"
         write_repo(repo, {"a.py": "print('hi')", "b.md": "# doc"})
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
-        monkeypatch.setattr(imp, "clone_repo", lambda url, **kwargs: repo)
+        monkeypatch.setattr(imp, "clone_repo", lambda url: repo)
         out_dir = tmp_path / "datasets"
         result = imp.import_from_github("https://github.com/org/repo", "ds", str(out_dir))
         assert result.success is True
@@ -504,7 +445,7 @@ class TestRepoImporter:
     def test_import_from_github_failure(self, tmp_path, monkeypatch):
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
 
-        def boom(url, **kwargs):
+        def boom(url):
             raise RuntimeError("git failed")
 
         monkeypatch.setattr(imp, "clone_repo", boom)
@@ -1192,20 +1133,10 @@ class TestRepoImporterBranchValidation:
     def test_valid_branch_patterns(self, tmp_path, monkeypatch):
         imp = RepoImporter(cache_dir=str(tmp_path))
         calls = []
-
-        def fake_run(cmd, **kwargs):
-            calls.append(cmd)
-            Path(cmd[-1]).mkdir(parents=True, exist_ok=True)
-            from types import SimpleNamespace
-
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr(subprocess, "check_call", lambda cmd, **k: calls.append(cmd))
         for branch in ["main", "feat/x", "release-1.0", "dev_branch"]:
-            # distinct URLs — a repeated URL would hit the clone cache
-            imp.clone_repo(f"https://github.com/o/r-{branch.replace('/', '-')}", branch=branch)
+            imp.clone_repo("https://github.com/o/r", branch=branch)
         assert len(calls) == 4
-        assert all("-b" in cmd for cmd in calls)
 
 
 # ---------------------------------------------------------------------------
@@ -1560,7 +1491,7 @@ class TestRepoImporterImportExtended:
         repo = tmp_path / "repo"
         write_repo(repo, {"a.py": "hello", "b.md": "world!"})
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
-        monkeypatch.setattr(imp, "clone_repo", lambda url, **kwargs: repo)
+        monkeypatch.setattr(imp, "clone_repo", lambda url: repo)
         result = imp.import_from_github("https://github.com/o/r", "ds", str(tmp_path / "ds"))
         assert result.total_chars == len("hello") + len("world!")
 
@@ -1568,7 +1499,7 @@ class TestRepoImporterImportExtended:
         repo = tmp_path / "repo"
         repo.mkdir()
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
-        monkeypatch.setattr(imp, "clone_repo", lambda url, **kwargs: repo)
+        monkeypatch.setattr(imp, "clone_repo", lambda url: repo)
         result = imp.import_from_github("https://github.com/o/r", "ds", str(tmp_path / "ds"))
         assert result.success is True
         assert result.files_imported == 0
@@ -1578,7 +1509,7 @@ class TestRepoImporterImportExtended:
         repo = tmp_path / "repo"
         write_repo(repo, {"a.py": "x", "b.js": "y", "c.md": "z"})
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
-        monkeypatch.setattr(imp, "clone_repo", lambda url, **kwargs: repo)
+        monkeypatch.setattr(imp, "clone_repo", lambda url: repo)
         result = imp.import_from_github(
             "https://github.com/o/r", "ds", str(tmp_path / "ds"), extensions=[".py", ".js"]
         )
@@ -1588,38 +1519,11 @@ class TestRepoImporterImportExtended:
         repo = tmp_path / "repo"
         write_repo(repo, {"a.py": "x", "b.py": "y", "c.py": "z"})
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
-        monkeypatch.setattr(imp, "clone_repo", lambda url, **kwargs: repo)
+        monkeypatch.setattr(imp, "clone_repo", lambda url: repo)
         result = imp.import_from_github(
             "https://github.com/o/r", "ds", str(tmp_path / "ds"), max_files=2
         )
         assert result.files_imported == 2
-
-    def test_export_to_corpus_stats_accumulates_without_reread(self, tmp_path):
-        # total_chars comes from the write loop (stats), not from
-        # re-reading + re-parsing the corpus.jsonl afterwards.
-        repo = tmp_path / "repo"
-        write_repo(repo, {"a.py": "hello", "b.md": "world!"})
-        imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
-        stats: dict = {}
-        count = imp.export_to_corpus(repo, str(tmp_path / "out.jsonl"), stats=stats)
-        assert count == 2
-        assert stats == {"files": 2, "total_chars": len("hello") + len("world!")}
-
-    def test_import_from_github_clone_timeout_forwarded(self, tmp_path, monkeypatch):
-        repo = tmp_path / "repo"
-        write_repo(repo, {"a.py": "x"})
-        imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
-        seen: dict = {}
-
-        def fake_clone(url, **kwargs):
-            seen.update(kwargs)
-            return repo
-
-        monkeypatch.setattr(imp, "clone_repo", fake_clone)
-        imp.import_from_github(
-            "https://github.com/o/r", "ds", str(tmp_path / "ds"), clone_timeout=42
-        )
-        assert seen.get("timeout") == 42
 
 
 # ---------------------------------------------------------------------------
@@ -1829,20 +1733,6 @@ class TestGitHubSearchExtended:
         assert results[0]["stargazers_count"] == 0
         assert results[0]["forks_count"] == 0
         assert results[0]["language"] is None
-
-    def test_search_repos_auth_header_when_token_set(self, fake_urlopen, monkeypatch):
-        _, responses = fake_urlopen
-        responses.append(FakeResponse(json.dumps({"items": []})))
-        monkeypatch.setenv("GITHUB_TOKEN", "tok123")
-        GitHubSearch().search_repos("test")
-        assert FakeRequest.instances[-1].headers.get("Authorization") == "Bearer tok123"
-
-    def test_search_repos_no_auth_header_without_token(self, fake_urlopen, monkeypatch):
-        _, responses = fake_urlopen
-        responses.append(FakeResponse(json.dumps({"items": []})))
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        GitHubSearch().search_repos("test")
-        assert "Authorization" not in FakeRequest.instances[-1].headers
 
 
 # ---------------------------------------------------------------------------

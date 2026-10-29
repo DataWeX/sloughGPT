@@ -29,8 +29,7 @@ from .cycles import (
     create_plane,
     create_sphere,
 )
-from .device_ops import OpTable
-from .vm import Device
+from .vm import Device, DeviceFault
 
 
 class CyclesDevice(Device):
@@ -45,7 +44,7 @@ class CyclesDevice(Device):
         self._last_image: np.ndarray | None = None
         self._last_state: dict[str, np.ndarray] | None = None
 
-        self._ops = OpTable("CyclesDevice", {
+        self._ops = {
             "render": self._render,
             "state_tensors": self._state_tensors,
             "add_sphere": self._add_sphere,
@@ -59,7 +58,13 @@ class CyclesDevice(Device):
             "clear": self._clear,
             "set_samples": self._set_samples,
             "set_resolution": self._set_resolution,
-        })
+        }
+
+    def call(self, method, *args):
+        fn = self._ops.get(method)
+        if fn is None:
+            raise DeviceFault(f"CyclesDevice: unknown op: {method}")
+        return fn(*args)
 
     def info(self):
         return {

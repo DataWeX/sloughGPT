@@ -29,11 +29,7 @@ beforeEach(() => {
 describe('rag-controller', () => {
   describe('ingestDocument', () => {
     it('calls POST /knowledge/rag/ingest with correct params', async () => {
-      mockApiPost.mockResolvedValue({
-        chunk_ids: ['c1', 'c2'],
-        num_chunks: 2,
-        stats: { total_documents: 1, total_chunks: 2, index_size: 10 },
-      })
+      mockApiPost.mockResolvedValue({ chunk_ids: ['c1', 'c2'], num_chunks: 2, stats: { total_documents: 1, total_chunks: 2, index_size: 10 } })
       const result = await ingestDocument('test content', 'test-source', 'test-topic', 256)
       expect(mockApiPost).toHaveBeenCalledWith('/knowledge/rag/ingest', {
         content: 'test content',
@@ -47,11 +43,11 @@ describe('rag-controller', () => {
     it('uses defaults when optional params omitted', async () => {
       mockApiPost.mockResolvedValue({ chunk_ids: ['c1'], num_chunks: 1, stats: {} })
       await ingestDocument('hello')
-      // No chunk_size in the body → backend fine-grained char windows.
       expect(mockApiPost).toHaveBeenCalledWith('/knowledge/rag/ingest', {
         content: 'hello',
         source: 'user',
         topic: 'general',
+        chunk_size: 512,
       })
     })
   })
@@ -60,10 +56,7 @@ describe('rag-controller', () => {
     it('calls POST /knowledge/rag/query', async () => {
       mockApiPost.mockResolvedValue({ question: 'test', results: [], context: '', num_results: 0 })
       const result = await queryRAG('What is Python?', 3)
-      expect(mockApiPost).toHaveBeenCalledWith('/knowledge/rag/query', {
-        question: 'What is Python?',
-        top_k: 3,
-      })
+      expect(mockApiPost).toHaveBeenCalledWith('/knowledge/rag/query', { question: 'What is Python?', top_k: 3 })
       expect(result.num_results).toBe(0)
     })
   })
@@ -89,6 +82,19 @@ describe('rag-controller', () => {
       const result = await listRAGDocuments()
       expect(mockApiGet).toHaveBeenCalledWith('/knowledge/rag/documents')
       expect(result.documents).toHaveLength(1)
+    })
+
+    it('passes limit and offset as query params', async () => {
+      mockApiGet.mockResolvedValue({
+        documents: [],
+        stats: { total_documents: 0, total_chunks: 0, index_size: 0 },
+        ready: true,
+        total: 0,
+        limit: 2,
+        offset: 4,
+      })
+      await listRAGDocuments(2, 4)
+      expect(mockApiGet).toHaveBeenCalledWith('/knowledge/rag/documents?limit=2&offset=4')
     })
   })
 

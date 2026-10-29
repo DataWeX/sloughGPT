@@ -88,7 +88,7 @@ impl PathPolicy {
     }
 }
 
-/// Prefix match on path boundaries: `/chat` allows `/chat` and `/chat/voice`,
+/// Prefix match on path boundaries: `/chat` allows `/chat` and `/chat/stream`,
 /// but not `/chatterbox`.
 fn path_starts_with(path: &str, prefix: &str) -> bool {
     path == prefix
@@ -132,7 +132,7 @@ mod tests {
         let p = policy(true, &[]);
         for ok in [
             "/chat",
-            "/chat/voice",
+            "/chat/stream",
             "/inference/generate",
             "/models",
             "/session/list",
@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn path_starts_with_helpers() {
         assert!(path_starts_with("/chat", "/chat"));
-        assert!(path_starts_with("/chat/voice", "/chat"));
+        assert!(path_starts_with("/chat/stream", "/chat"));
         assert!(!path_starts_with("/chatter", "/chat"));
         assert!(!path_starts_with("/a/chat", "/chat"));
     }

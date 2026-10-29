@@ -182,7 +182,7 @@ show_endpoints() {
     echo ""
     echo "  Web UI:      http://localhost"
     echo "  API:         http://localhost/v1/health"
-    echo "  Grafana:     internal only (sloughgpt-grafana :3000 in-network; not routed by nginx)"
+    echo "  Grafana:     http://localhost:3000 (via nginx if routed)"
     echo "  Prometheus:  http://localhost:9090 (internal)"
     echo ""
     echo "  Logs:        $0 --logs [service]"

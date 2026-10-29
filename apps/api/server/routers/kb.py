@@ -97,9 +97,7 @@ class RAGIngestRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=100000)
     source: str = Field(default="user", max_length=200)
     topic: str = Field(default="general", max_length=100)
-    # None → service default: fine-grained char windows sized to the
-    # retrieval injection budget; a value = legacy token chunking.
-    chunk_size: int | None = Field(default=None, ge=64, le=4096)
+    chunk_size: int = Field(default=512, ge=64, le=4096)
 
 
 class RAGQueryRequest(BaseModel):
@@ -378,7 +376,7 @@ class KBRouter:
 
             if is_new:
                 try:
-                    from domain.cognition import get_rag_service
+                    from domain.core import get_rag_service
 
                     rag_svc = get_rag_service()
                     rag_svc.add_document(
@@ -542,7 +540,7 @@ class KBRouter:
 
             if result.get("new_facts", 0) > 0:
                 try:
-                    from domain.cognition import get_rag_service
+                    from domain.core import get_rag_service
 
                     rag_svc = get_rag_service()
                     memory = self._engine.get_memory()
@@ -788,7 +786,7 @@ class KBRouter:
         stored = await asyncio.to_thread(_store_chunks)
 
         try:
-            from domain.cognition import get_rag_service
+            from domain.core import get_rag_service
 
             rag_svc = get_rag_service()
 
@@ -1079,7 +1077,7 @@ class KBRouter:
         try:
             import time as _time
 
-            from domain.cognition import get_rag_service
+            from domain.core import get_rag_service
 
             _t0 = _time.monotonic()
             rag_svc = get_rag_service()
@@ -1110,7 +1108,7 @@ class KBRouter:
         try:
             import time as _time
 
-            from domain.cognition import get_rag_service
+            from domain.core import get_rag_service
 
             _t0 = _time.monotonic()
             rag_svc = get_rag_service()
@@ -1127,7 +1125,7 @@ class KBRouter:
         try:
             import time as _time
 
-            from domain.cognition import get_rag_service
+            from domain.core import get_rag_service
 
             _t0 = _time.monotonic()
             rag_svc = get_rag_service()
@@ -1138,18 +1136,44 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.rag_verify")
 
-    async def rag_list_documents(self) -> dict:
+    async def rag_list_documents(
+        self,
+        limit: int = Query(200, ge=0, le=10000),
+        offset: int = Query(0, ge=0),
+        full: bool = Query(False, alias="all"),
+    ) -> dict:
+        """One page of RAG documents (default 200); ``?all=1`` returns every document."""
         try:
-            from domain.cognition import get_rag_service, is_rag_service_ready
+            from domain.core import get_rag_service, is_rag_service_ready
 
             if not is_rag_service_ready():
-                return success_response(data={"documents": [], "stats": {}, "ready": False})
+                return success_response(
+                    data={
+                        "documents": [],
+                        "stats": {},
+                        "ready": False,
+                        "total": 0,
+                        "limit": None if full else limit,
+                        "offset": 0 if full else offset,
+                    }
+                )
             rag_svc = get_rag_service()
+            if full:
+                documents = rag_svc.list_documents()
+                page_limit: int | None = None
+                page_offset = 0
+            else:
+                documents = rag_svc.list_documents(limit=limit, offset=offset)
+                page_limit, page_offset = limit, offset
+            stats = rag_svc.stats()
             return success_response(
                 data={
-                    "documents": rag_svc.list_documents(),
-                    "stats": rag_svc.stats(),
+                    "documents": documents,
+                    "stats": stats,
                     "ready": True,
+                    "total": stats.get("total_documents", 0),
+                    "limit": page_limit,
+                    "offset": page_offset,
                 }
             )
         except Exception as e:
@@ -1157,7 +1181,7 @@ class KBRouter:
 
     def rag_clear(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
-            from domain.cognition import get_rag_service
+            from domain.core import get_rag_service
 
             rag_svc = get_rag_service()
             _t0 = time.monotonic()
@@ -1174,7 +1198,7 @@ class KBRouter:
 
     async def rag_stats(self) -> dict:
         try:
-            from domain.cognition import get_rag_service, is_rag_service_ready
+            from domain.core import get_rag_service, is_rag_service_ready
 
             if not is_rag_service_ready():
                 return success_response(
@@ -1187,7 +1211,7 @@ class KBRouter:
 
     def kg_sync_to_rag(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
-            from domain.cognition import KGTrainingPipeline, get_rag_service
+            from domain.core import KGTrainingPipeline, get_rag_service
 
             rag_svc = get_rag_service()
             pipeline = KGTrainingPipeline(rag_service=rag_svc)
@@ -1198,7 +1222,7 @@ class KBRouter:
 
     def kg_pipeline_stats(self) -> dict:
         try:
-            from domain.cognition import KGTrainingPipeline
+            from domain.core import KGTrainingPipeline
 
             pipeline = KGTrainingPipeline()
             return success_response(data=pipeline.stats())

@@ -54,8 +54,7 @@ PAGES = [
     ("rate-limit", "/rate-limit"),
     ("benchmark", "/benchmark"),
     ("feedback", "/feedback"),
-    # /images was absorbed into /files (card 7839a7c6) — it now 307s to /files,
-    # which has its own row, so screenshotting it would only duplicate that shot.
+    ("images", "/images"),
     ("files", "/files"),
     ("docstore", "/docstore"),
     ("kb", "/kb"),

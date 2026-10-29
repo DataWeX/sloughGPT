@@ -1,4 +1,4 @@
-import { _getBaseUrl } from './ports'
+import { PUBLIC_API_URL } from '../web/lib/config'
 
 export function _isDocstoreUrl(url: string): boolean {
   return url.includes('/docstore/')
@@ -15,5 +15,5 @@ const SAME_ORIGIN_RE = /^\/api\/(planner|calendar)(\/|$)/
 export function _resolveUrl(url: string): string {
   if (/^https?:\/\//.test(url)) return url // already absolute
   if (SAME_ORIGIN_RE.test(url)) return url // served by the web origin
-  return `${_getBaseUrl()}${url}`
+  return `${PUBLIC_API_URL}${url}`
 }

@@ -121,7 +121,7 @@ def _bench_tiers(tmp: Path) -> list[dict]:
             fn()
             return time.perf_counter() - t0
 
-        atomic_write(target, payload)  # warm both paths
+        atomic_write(target, payload)                      # warm both paths
         atomic_write(target, payload, durable=True)
         for rep in range(REPS):
             pair = (

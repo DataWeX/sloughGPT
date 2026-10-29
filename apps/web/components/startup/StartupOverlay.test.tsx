@@ -81,9 +81,9 @@ describe('StartupOverlay', () => {
     useLiveStatusMock.mockReturnValue(status({ startupStage: 'critical' }))
     const { container } = render(<StartupOverlay />)
     const dots = Array.from(container.querySelectorAll('[role="img"]'))
-    expect(dots[0].className).toContain('bg-term-zoom')
+    expect(dots[0].className).toContain('bg-[#28c840]')
     expect(dots[1].className).toContain('sl-dot-pulse')
-    expect(dots[2].className).toContain('bg-term-chip')
+    expect(dots[2].className).toContain('bg-[#2c2c2e]')
     expect(screen.getByRole('status').textContent).toBe('Stage 2 of 4: Starting core services')
   })
 
@@ -223,7 +223,7 @@ describe('StartupOverlay', () => {
     // The layer informs but does not gate: translucent, pass-through, up.
     const layer = container.firstChild as HTMLElement
     expect(layer.className).toContain('pointer-events-none')
-    expect(layer.className).toContain('bg-term-surface/80')
+    expect(layer.className).toContain('bg-[#0a0a0a]/80')
     expect(layer.className).not.toContain('opacity-0')
 
     // The overlay's own controls opt back in — pass-through never eats them.
@@ -236,5 +236,24 @@ describe('StartupOverlay', () => {
     expect(screen.getByRole('button', { name: 'Retry' }).className).toContain(
       'pointer-events-auto',
     )
+  })
+
+  it('reads Ready, not Almost ready, once the model is loaded at 100%', () => {
+    useLiveStatusMock.mockReturnValue(
+      status({
+        startupStage: 'background',
+        startupModelProgress: 1,
+        startupModelProgressMessage: 'Model loaded successfully',
+      }),
+    )
+    render(<StartupOverlay />)
+    // headline, bar and detail row must tell one story
+    expect(screen.getByRole('heading')).toHaveTextContent('Ready')
+    expect(screen.getByRole('progressbar', { name: 'Startup progress' })).toHaveAttribute(
+      'aria-valuenow',
+      '100',
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Ready')
+    expect(screen.getByText('Model loaded successfully')).toBeTruthy()
   })
 })

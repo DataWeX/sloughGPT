@@ -61,7 +61,7 @@ def cmd_dataset_import(args, source: str):
             result = repo.import_from_github(
                 url=url,
                 dataset_name=name,
-                output_dir="datasets",
+                output_path=f"datasets/{name}",
             )
 
             if result.success:

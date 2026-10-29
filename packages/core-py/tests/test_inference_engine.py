@@ -210,9 +210,8 @@ class TestInferenceClient:
         client = InferenceClient(host="127.0.0.1", port=9999)
         assert client.model_id == "unknown"
         assert client._meta["loaded"] is False
-        # Session-KV config moved server-side (SessionKVManager) in the
-        # kv-routing refactor — the client no longer carries
-        # _kv_max_sessions/_kv_ttl.
+        assert client._kv_max_sessions == 64
+        assert client._kv_ttl == 3600.0
 
     def test_client_capabilities(self):
         from domain.infrastructure._internal.inference_client import InferenceClient

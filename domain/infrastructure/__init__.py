@@ -6,7 +6,6 @@ Public API:
     LifecycleManager, LifecyclePhase
     AppError, ErrorCode
 """
-
 from __future__ import annotations
 
 from domain.infrastructure._internal import artifact_registry
@@ -33,18 +32,20 @@ from domain.infrastructure._internal.event_bus import (
 from domain.infrastructure._internal.lifecycle import (
     LifecycleManager,
     LifecyclePhase,
+    get_lifecycle_manager,
 )
 from domain.infrastructure._internal.output_buffer import get_server_buffer
 
 _LAZY_IMPORTS = {
     "get_event_buffer": ("._internal.event_buffer", "get_event_buffer"),
     "get_server_buffer": ("._internal.output_buffer", "get_server_buffer"),
-    "get_lifecycle_manager": ("._internal.lifecycle", "get_lifecycle_manager"),
-    "try_register": ("._internal.artifact_registry", "try_register"),
-    "SLNCCompiler": ("._internal.slnc.compiler", "SLNCCompiler"),
     "DatasetRepository": ("._internal.entity_repositories", "DatasetRepository"),
     "KnowledgeRepository": ("._internal.entity_repositories", "KnowledgeRepository"),
     "artifact_registry": ("._internal.artifact_registry", None),
+    # Lazy: hf_hub imports `requests` + `downcraft` at module scope, so it is
+    # kept off the cold-start path (peer manifest serving is a rare call).
+    "build_model_manifest": ("._internal.hf_hub", "build_model_manifest"),
+    "resolve_cached_path": ("._internal.hf_hub", "resolve_cached_path"),
 }
 
 
@@ -74,12 +75,12 @@ __all__ = [
     "AppError",
     "ErrorCode",
     "artifact_registry",
+    "build_model_manifest",
     "classify_exception",
+    "resolve_cached_path",
     "emit_error_event",
     "get_event_buffer",
     "get_server_buffer",
-    "try_register",
-    "SLNCCompiler",
     "DatasetRepository",
     "KnowledgeRepository",
 ]

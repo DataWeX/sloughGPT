@@ -12,13 +12,6 @@ from aml.mime import detect_mime, is_aml, register_mime
 from aml.parser import parse, parse_file
 from aml.schema import AmlBlock, AmlDocument, AmlValue
 from aml.serializer import dict_to_aml, serialize, serialize_file
-from aml.stream import (
-    MODALITIES,
-    STREAM_TAG,
-    ModalitySequence,
-    aml_to_sequences,
-    sequences_to_aml,
-)
 
 __version__ = "0.1.0"
 __all__ = [
@@ -33,9 +26,4 @@ __all__ = [
     "register_mime",
     "detect_mime",
     "is_aml",
-    "MODALITIES",
-    "STREAM_TAG",
-    "ModalitySequence",
-    "aml_to_sequences",
-    "sequences_to_aml",
 ]

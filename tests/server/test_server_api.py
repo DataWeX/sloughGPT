@@ -184,16 +184,7 @@ class TestStatsEndpoints:
 class TestAutoTrainEndpoints:
     @pytest.mark.slow
     def test_list_checkpoints(self):
-        # /auto-train/checkpoints was removed by c02788ca4 (109-file
-        # training+shell cleanup); the successor is GET
-        # /training/checkpoints (training/router.py, committed) — but the
-        # training router is NOT in origin/main's boot manifest
-        # (routers/_manifest.py), so only in-flight lanes that mount it
-        # serve it. Retarget + skip-on-404 rather than race those lanes
-        # (card c59d5be7).
-        response = client.get("/training/checkpoints")
-        if response.status_code == 404:
-            pytest.skip("/training router unmounted in origin/main manifest (in-flight)")
+        response = client.get("/auto-train/checkpoints")
         assert response.status_code == 200
         data = response.json()
         payload = data.get("data", data)

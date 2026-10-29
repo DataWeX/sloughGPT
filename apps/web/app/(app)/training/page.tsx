@@ -16,7 +16,6 @@ import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { useTestDialog } from '@/hooks/useTestDialog'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
-import { LiveFeedStream } from '@/components/training/LiveFeedStream'
 import { QuickTrainCard } from '@/components/training/QuickTrainCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -239,10 +238,6 @@ export default function TrainingPage() {
       <FoldSection heading="Fast train alternative">
         <QuickTrainCard datasets={datasets} session={session} addToast={addToast} />
       </FoldSection>
-
-      {/* Live feed + job activity stream */}
-      <SectionHeader title="Live stream" description="Feed arrivals and job activity, as they happen." />
-      <LiveFeedStream />
 
       <TestModelDialog
         open={test.testDialogOpen}

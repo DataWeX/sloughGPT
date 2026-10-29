@@ -14,7 +14,7 @@
  *   RMSNorm → LM_head → logits
  */
 
-import {getApiUrl} from './api-client';
+import {getApiUrl, getAuthHeaders} from './api-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   MobileExportResponse,
@@ -451,7 +451,10 @@ export async function loadCheckpoint(name: string): Promise<void> {
 
   // Download from server
   const baseUrl = await getApiUrl();
-  const res = await fetch(`${baseUrl}/training/checkpoints/${encodeURIComponent(name)}/export-mobile`);
+  const res = await fetch(
+    `${baseUrl}/training/checkpoints/${encodeURIComponent(name)}/export-mobile`,
+    {headers: await getAuthHeaders()},
+  );
   if (!res.ok) throw new Error(`Failed to load checkpoint: ${res.status}`);
   const data: MobileExportResponse = await res.json();
 
@@ -491,9 +494,9 @@ export function loadFlatWeights(
 export async function generate(
   prompt: string,
   maxNewTokens = 64,
-  temperature = 0.7,
+  temperature = 0.8,
   topK = 40,
-  topP = 0.85,
+  topP = 0.9,
   eosToken = 0,
   onToken?: OnTokenCallback,
   signal?: AbortSignal,

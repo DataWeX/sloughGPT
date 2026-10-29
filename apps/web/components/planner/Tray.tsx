@@ -11,15 +11,16 @@ interface TrayProps {
   onDragStart: (e: React.DragEvent, cardId: string, column: string) => void
   onDragEnd: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
-  onDrop: (e: React.DragEvent) => void
+  onDrop: (e: React.DragEvent, column: string) => void
   onCardClick: (card: Card) => void
   draggingId: string | null
-  isFocused: boolean
-  focusCard: number
-  dropAllowed: boolean
-  overWip: boolean
 }
 
+/**
+ * Ledger column — the log-entry board's section header + entry list.
+ * WIP health is a StatusDot instrument, not a sticker: it pulses
+ * destructive when the column is over its limit.
+ */
 export function Tray({
   column,
   cards,
@@ -29,115 +30,53 @@ export function Tray({
   onDrop,
   onCardClick,
   draggingId,
-  isFocused,
-  focusCard,
-  dropAllowed,
-  overWip,
 }: TrayProps) {
-  const count = cards.length
-  const wipFull = column.wip_limit > 0 && count >= column.wip_limit
-  const showOverWip = overWip && !wipFull
+  const isOverWip = column.wip_limit > 0 && cards.length > column.wip_limit
 
   return (
     <div
       className={cn(
-        'flex flex-col rounded-lg relative overflow-hidden',
-        'transition-all duration-200',
-        isFocused && 'ring-1 ring-zinc-600/50',
+        'flex flex-col min-h-[200px] rounded-xl p-3',
+        'bg-muted/40 border border-border shadow-sm',
+        'relative overflow-hidden',
+        isOverWip && 'border-destructive/40',
       )}
-      style={{
-        background: dropAllowed
-          ? 'linear-gradient(180deg, rgb(var(--elevation-rgb) / 0.18) 0%, rgb(var(--elevation-rgb) / 0.08) 100%)'
-          : 'linear-gradient(180deg, rgb(var(--elevation-rgb) / 0.28) 0%, rgb(var(--elevation-rgb) / 0.18) 100%)',
-        boxShadow: dropAllowed
-          ? 'inset 0 1px 6px rgb(var(--elevation-rgb) / 0.3), inset 0 -1px 0 rgb(var(--sheen-rgb) / 0.03), 0 1px 0 rgb(var(--sheen-rgb) / 0.04)'
-          : 'inset 0 1px 6px rgb(var(--elevation-rgb) / 0.4)',
-        border: showOverWip
-          ? '1px solid rgb(var(--destructive) / 0.25)'
-          : wipFull
-            ? '1px solid rgb(var(--warning) / 0.2)'
-            : '1px solid rgb(var(--sheen-rgb) / 0.05)',
-        opacity: dropAllowed ? 1 : 0.45,
-        minHeight: 320,
-      }}
       onDragOver={onDragOver}
-      onDrop={onDrop}
-      role="listitem"
-      aria-label={`${COLUMN_LABELS[column.name] || column.name}, ${count} cards`}
+      onDrop={(e) => onDrop(e, column.name)}
     >
-      {/* Sticky header */}
-      <div
-        className="flex items-center justify-between px-3 py-2.5 shrink-0"
-        style={{
-          background:
-            'linear-gradient(180deg, rgb(var(--elevation-rgb) / 0.25) 0%, rgb(var(--elevation-rgb) / 0.15) 100%)',
-          borderBottom: '1px solid rgb(var(--sheen-rgb) / 0.05)',
-        }}
-      >
-        <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+      {/* Column header — running head of the ledger section */}
+      <div className="relative flex items-center justify-between mb-3">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {COLUMN_LABELS[column.name] || column.name}
         </h3>
         <span
           className={cn(
-            'inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded',
-            'transition-colors duration-200',
-            showOverWip
-              ? 'bg-[rgb(var(--destructive)/0.15)] text-destructive border border-[rgb(var(--destructive)/0.3)]'
-              : wipFull
-                ? 'bg-[rgb(var(--warning)/0.15)] text-warning border border-[rgb(var(--warning)/0.3)]'
-                : 'bg-zinc-900 text-zinc-600 border border-zinc-800',
+            'inline-flex items-center gap-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded',
+            'bg-card text-muted-foreground border border-border',
+            isOverWip && 'bg-destructive/15 text-destructive border-destructive/30',
           )}
         >
-          {(wipFull || showOverWip) && (
-            <StatusDot tone={showOverWip ? 'destructive' : 'warning'} pulse aria-hidden />
-          )}
-          {count}
+          {isOverWip && <StatusDot tone="destructive" pulse aria-hidden />}
+          {cards.length}
           {column.wip_limit > 0 && ` / ${column.wip_limit}`}
         </span>
       </div>
 
-      {/* Scrollable cards area */}
-      <div
-        className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-1.5 min-h-0"
-        style={{
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgb(var(--sheen-rgb) / 0.08) transparent',
-        }}
-      >
+      {/* Entries area */}
+      <div className="relative space-y-1.5 flex-1">
         {cards.length === 0 ? (
-          <div
-            className={cn(
-              'rounded-md border border-dashed p-5 text-center transition-colors duration-200 h-20 flex items-center justify-center',
-              dropAllowed ? 'border-zinc-800' : 'border-[rgb(var(--destructive)/0.25)]',
-            )}
-          >
-            <p
-              className={cn(
-                'text-[10px] font-mono',
-                dropAllowed ? 'text-zinc-700' : 'text-destructive',
-              )}
-            >
-              {dropAllowed ? 'drop here' : 'WIP full'}
-            </p>
+          <div className="rounded-lg border-2 border-dashed border-border p-4 text-center">
+            <p className="text-xs text-muted-foreground/70">Drop cards here</p>
           </div>
         ) : (
-          cards.map((card, idx) => (
-            <div
+          cards.map((card) => (
+            <CardItem
               key={card.id}
-              className={cn(
-                'transition-[transform,opacity] duration-200',
-                '[transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]',
-                idx === focusCard && 'ring-1 ring-zinc-500/50 rounded-md',
-                draggingId === card.id && 'opacity-20',
-              )}
-            >
-              <CardItem
-                card={card}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                onClick={onCardClick}
-              />
-            </div>
+              card={card}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onClick={onCardClick}
+            />
           ))
         )}
       </div>

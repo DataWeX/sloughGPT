@@ -10,8 +10,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import queue
-import re
 import threading
 import time as _time
 
@@ -56,14 +54,6 @@ class ShellExecRequest(BaseModel):
         ..., min_length=1, max_length=10000, description="Shell command to execute"
     )
     timeout_ms: int = Field(30000, ge=100, le=120000, description="Execution timeout in ms")
-    raw: bool = Field(
-        False,
-        description=(
-            "Pass output through un-sanitized: ANSI/OSC escape sequences and "
-            "control bytes are preserved for consumers that interpret them "
-            "(the terminal engine). Default false = terminal-hygienic wire."
-        ),
-    )
 
 
 class ShellExecResponse(BaseModel):
@@ -89,144 +79,6 @@ def _sse_line(
     return "data: " + json.dumps(envelope, default=str) + "\n\n"
 
 
-# ── Wire hygiene + singleton serialization ───────────────────────────────────
-
-_ANSI_RE = re.compile(
-    r"\x1b\[[0-9;?]*[ -/]*[@-~]"  # CSI … final byte
-    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC … BEL / ST
-    r"|\x1b[@-Z\\-_]"  # other 2-byte escapes
-)
-
-
-def _sanitize_line(line: str) -> str:
-    """Terminal-hygienic single line for HTTP/SSE bodies.
-
-    Strips ANSI escape sequences, applies carriage-return overwrite
-    (text before the last ``\\r`` is replaced — column-0 semantics, so a
-    spinner frame's residue collapses away and the content written after
-    the final ``\\r`` survives), and drops remaining C0 control chars
-    except tab.  Raw bytes stay server-side; the wire carries
-    display-safe text.
-    """
-    line = _ANSI_RE.sub("", line)
-    if "\r" in line:
-        line = line.split("\r")[-1]
-    return "".join(ch for ch in line if ch >= " " or ch == "\t")
-
-
-def _sanitize_output(output: str) -> str:
-    """Sanitize every line of a completed command output."""
-    return "\n".join(_sanitize_line(line) for line in output.split("\n"))
-
-
-# The singleton REPL is shared process-wide; serialize executions so two
-# concurrent requests cannot interleave writes into one MemoryIO.
-_exec_lock = threading.Lock()
-
-
-def _execute_locked(repl, command: str) -> tuple[str, int]:
-    with _exec_lock:
-        return repl.execute(command)
-
-
-def _stream_events(repl, command: str, t0: float, raw: bool = False):
-    """Yield SSE frames for *command* while it runs (POST /exec/stream).
-
-    A worker thread executes against a queue-fed MemoryIO; this generator
-    reassembles complete lines from the raw chunks, sanitizes each, and
-    yields — so slow commands stream their output instead of dumping it
-    post-hoc.  Serialized on ``_exec_lock`` like the sync endpoint.
-    ``raw=True`` skips the per-line sanitize pass (escape sequences reach
-    the terminal engine intact); line reassembly itself is unchanged.
-    """
-    clean = (lambda s: s) if raw else _sanitize_line
-    q: queue.Queue = queue.Queue()
-    result: dict = {}
-
-    def worker() -> None:
-        try:
-            with _exec_lock:
-                out, code = repl.execute(command, on_write=q.put)
-            result["output"] = out
-            result["exit_code"] = code
-        except Exception as e:
-            logger.warning("Shell stream exec error: %s", e, extra={"tag": "SHELL"})
-            result["error"] = e
-        finally:
-            q.put(None)
-
-    threading.Thread(target=worker, daemon=True).start()
-
-    buf = ""
-    index = 0
-    received = 0
-    while True:
-        item = q.get()
-        if item is None:
-            break
-        received += 1
-        buf += item
-        while "\n" in buf:
-            line, buf = buf.split("\n", 1)
-            yield _sse_line("shell", "STREAMING", "working", {"line": clean(line), "index": index})
-            index += 1
-
-    if received == 0 and result.get("output"):
-        # repl produced output without streaming through on_write
-        # (mock/legacy path) — fall back to post-hoc line emission
-        lines = result["output"].split("\n")
-        for i, line in enumerate(lines):
-            if line or i < len(lines) - 1:  # skip trailing empty
-                yield _sse_line(
-                    "shell", "STREAMING", "working", {"line": clean(line), "index": index}
-                )
-                index += 1
-    else:
-        tail = clean(buf)
-        if tail:  # final line without trailing newline
-            yield _sse_line("shell", "STREAMING", "working", {"line": tail, "index": index})
-            index += 1
-
-    err = result.get("error")
-    if err is not None:
-        error_type = type(err).__name__
-        is_conn = isinstance(err, (ConnectionError, OSError)) and "connect" in str(err).lower()
-        is_timeout = isinstance(err, TimeoutError)
-        hint = ""
-        if is_conn:
-            hint = " Is the API server running? Use 'api start'."
-        elif is_timeout:
-            hint = " Request timed out."
-        yield _sse_line(
-            "shell",
-            "STREAMING",
-            "error",
-            {
-                "error": f"{error_type}: {err}{hint}",
-                "error_type": error_type,
-            },
-        )
-        return
-
-    exit_code = result.get("exit_code", 1)
-    elapsed = (_time.monotonic() - t0) * 1000
-    safe_audit_log(
-        "shell.exec_stream",
-        resource=command[:80],
-        detail=f"exit={exit_code} elapsed={elapsed:.0f}ms lines={index}",
-    )
-    yield _sse_line(
-        "shell",
-        "STREAMING",
-        "complete",
-        {
-            "exit_code": exit_code,
-            "lines": index,
-        },
-        meta={"elapsed_ms": round(elapsed, 2)},
-    )
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
@@ -247,9 +99,7 @@ async def exec_command(req: ShellExecRequest, auth_user: dict = Depends(require_
     t0 = _time.monotonic()
 
     try:
-        output, exit_code = await asyncio.to_thread(_execute_locked, repl, req.command)
-        if not req.raw:
-            output = _sanitize_output(output)
+        output, exit_code = await asyncio.to_thread(repl.execute, req.command)
     except Exception as e:
         logger.warning("Shell exec error: %s", e, extra={"tag": "SHELL"})
         classify_and_raise(e, source="shell.exec")
@@ -286,7 +136,53 @@ async def exec_command_stream(
     t0 = _time.monotonic()
 
     def generate():
-        """Emit line events WHILE the command runs (see _stream_events)."""
-        yield from _stream_events(repl, req.command, t0, raw=req.raw)
+        output_lines: list[str] = []
+        exit_code = 1
+
+        try:
+            output, exit_code = repl.execute(req.command)
+            output_lines = output.split("\n") if output else []
+        except Exception as e:
+            logger.warning("Shell stream exec error: %s", e, extra={"tag": "SHELL"})
+            error_type = type(e).__name__
+            is_conn = isinstance(e, (ConnectionError, OSError)) and "connect" in str(e).lower()
+            is_timeout = isinstance(e, TimeoutError)
+            hint = ""
+            if is_conn:
+                hint = " Is the API server running? Use 'api start'."
+            elif is_timeout:
+                hint = " Request timed out."
+            yield _sse_line(
+                "shell",
+                "STREAMING",
+                "error",
+                {
+                    "error": f"{error_type}: {e}{hint}",
+                    "error_type": error_type,
+                },
+            )
+            return
+
+        # Yield output lines
+        for i, line in enumerate(output_lines):
+            if line or i < len(output_lines) - 1:  # skip trailing empty
+                yield _sse_line("shell", "STREAMING", "working", {"line": line, "index": i})
+
+        elapsed = (_time.monotonic() - t0) * 1000
+        safe_audit_log(
+            "shell.exec_stream",
+            resource=req.command[:80],
+            detail=f"exit={exit_code} elapsed={elapsed:.0f}ms lines={len(output_lines)}",
+        )
+        yield _sse_line(
+            "shell",
+            "STREAMING",
+            "complete",
+            {
+                "exit_code": exit_code,
+                "lines": len(output_lines),
+            },
+            meta={"elapsed_ms": round(elapsed, 2)},
+        )
 
     return StreamingResponse(generate(), media_type="text/event-stream")

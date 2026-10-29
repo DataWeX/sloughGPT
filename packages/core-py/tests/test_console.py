@@ -9,8 +9,11 @@ No mocks — uses MemoryIO for all output capture.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
+
+os.environ["NO_COLOR"] = "1"
 
 from domain.shell._internal.console import (
     SPINNER_FRAMES,
@@ -920,7 +923,6 @@ class TestLive:
 class TestSpinner:
     def test_spinner_enter_exit(self):
         c, io = _make_console()
-        io._is_tty = True  # animation is a TTY capability
         s = c.spinner("Loading", rate=0.01)
         with s:
             pass

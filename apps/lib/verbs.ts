@@ -1,4 +1,4 @@
-import { _log } from './ports'
+import { logger } from '../web/lib/dev-log'
 import { HttpCache } from './resilience'
 import type { CacheOptions, RequestOptions } from './types'
 import { request } from './request'
@@ -18,12 +18,12 @@ export async function apiGet<T>(
     const cacheKey = opts?.cacheKey ?? HttpCache.makeKey('GET', url, params)
     const cached = _globalCache.get(cacheKey)
     if (cached && !cached.stale) {
-      _log().debug(`cache HIT ${url}`, { cacheKey })
+      logger.debug(`cache HIT ${url}`, { cacheKey })
       return cached.data as T
     }
     if (cached?.stale) {
       // Serve stale, revalidate in background
-      _log().debug(`cache STALE ${url} — serving stale, revalidating`, { cacheKey })
+      logger.debug(`cache STALE ${url} — serving stale, revalidating`, { cacheKey })
       request<T>('GET', fullUrl, undefined, opts)
         .then((data) => {
           _globalCache.set(cacheKey, data, typeof cacheOpt === 'object' ? cacheOpt : undefined)

@@ -696,6 +696,7 @@ _CATEGORIES = {
             "docstore",
             "feeds",
             "logs",
+            "monitor",
         ],
         "desc": "Environment, diagnostics, and storage",
     },

@@ -14,8 +14,9 @@ describe('globToRoutePath', () => {
 })
 
 describe('discoveredRoutes', () => {
-  it('finds real pages including /monitoring', () => {
+  it('finds real pages including /errors and /monitoring', () => {
     expect(routePathList.length).toBeGreaterThan(50)
+    expect(routePathList).toContain('/errors')
     expect(routePathList).toContain('/monitoring')
     expect(routePathList).toContain('/')
     expect(routePathList).toContain('/model/:id')

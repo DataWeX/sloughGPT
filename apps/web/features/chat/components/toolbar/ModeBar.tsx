@@ -101,13 +101,6 @@ const MODES: { value: ChatMode; label: string; icon: ReactNode; color: string }[
 ]
 
 const TONES = ['Friendly', 'Professional', 'Funny', 'Short', 'Detailed'] as const
-
-/** Human-readable labels per mode — derived from MODES so the tabs and any
- *  chip/badge outside ModeBar can never drift apart. */
-export const MODE_LABELS: Record<ChatMode, string> = Object.fromEntries(
-  MODES.map((m) => [m.value, m.label]),
-) as Record<ChatMode, string>
-
 const TYPES = ['Email', 'Social Post', 'Story', 'Poem', 'Letter', 'Note'] as const
 const DECIDE_STRUCTURES = ['Pros & Cons', 'Comparison', 'Simple Verdict', 'Deep Analysis'] as const
 const DIFFICULTIES = ['Simple', 'Moderate', 'Expert'] as const
@@ -170,8 +163,6 @@ function SubOptionPill({
         active
           ? 'bg-foreground/10 text-foreground font-medium shadow-sm'
           : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-        'active:bg-muted',
       )}
       aria-pressed={active}
     >
@@ -363,8 +354,6 @@ export const ModeBar = memo(function ModeBar({
               m.value === mode
                 ? cn('shadow-sm border', m.color)
                 : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30 border border-transparent',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-              'active:bg-muted',
             )}
           >
             <span className="shrink-0">{m.icon}</span>

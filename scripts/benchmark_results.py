@@ -52,14 +52,13 @@ REGRESSION_THRESHOLDS = {
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
     },
-    "bootstrap": {
-        # GET /bootstrap → landing first paint; frontend overlay watchdog = 8s
-        # rel limits are PERCENT (100.0 = 100%): load-tolerant but still
-        # catching fan-out storms (pre-fix cold envelope ~19.5s vs ~1.0s)
-        "first_s": (100.0, "rel"),
-        "warm_p95_s": (50.0, "rel"),
-        # a degraded member = partial landing page; zero tolerance
-        "member_errors": (0, "abs"),
+    "vm_life": {
+        # scripts/benchmark_vm_life.py — step counts are deterministic, wall
+        # time carries machine-load noise (hence the wider rel limit)
+        "batch_wall_ms": (50.0, "rel"),
+        "step_frame_steps": (10.0, "rel"),
+        "first_seed_steps.600": (25.0, "rel"),
+        "reseed_steps.600": (25.0, "rel"),
     },
 }
 
@@ -280,12 +279,6 @@ def do_record(args) -> int:
                 file=sys.stderr,
             )
             return 1
-        elif kind == "bootstrap":
-            print(
-                "[ERR] bootstrap kind requires --json-file (from benchmark_bootstrap.py)",
-                file=sys.stderr,
-            )
-            return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
             return 1
@@ -327,29 +320,9 @@ def do_record(args) -> int:
     return 0
 
 
-def _metric_entries(record: dict) -> list[dict]:
-    """Normalize a record's metrics into a list of dicts (never crashes).
-
-    ``benchmark_slonet_training --results`` merges per-config results into a
-    LIST; metric kinds store a single dict. The renderer must handle both —
-    an un-normalized list used to kill history with
-    ``'list' object has no attribute 'get'``.
-    """
-    ms = record.get("metrics", {})
-    if isinstance(ms, dict):
-        return [ms]
-    if isinstance(ms, list):
-        return [m for m in ms if isinstance(m, dict)]
-    return []
-
-
 def do_history(args) -> int:
-    """List stored runs (all kinds unless --kind narrows it)."""
-    for kind in (
-        [args.kind]
-        if args.kind
-        else ["stability", "latency", "startup", "execution", "training", "bootstrap"]
-    ):
+    """List stored runs."""
+    for kind in [args.kind] if args.kind else ["stability", "latency"]:
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
         for p in runs:
@@ -362,36 +335,23 @@ def do_history(args) -> int:
                     f"  {stamp}  {model:<24} overall={sc.get('overall', '?'):<4} "
                     f"passed={'✓' if r.get('passed') else '✗'}  {p.name}"
                 )
-                continue
-            for c in _metric_entries(r) or [{}]:
-                if kind == "training":
-                    conf = str(c.get("config", "?"))[:10]
-                    gate = c.get("gate_converged")
-                    final = c.get("final_loss")
+            elif kind == "training":
+                ms = r.get("metrics", {})
+                if isinstance(ms, dict):
+                    ms = [ms]
+                for c in ms:
+                    conf = c.get("config") if isinstance(c, dict) else "?"
+                    gate = c.get("gate_converged") if isinstance(c, dict) else None
+                    final = c.get("final_loss") if isinstance(c, dict) else None
                     print(
                         f"  {stamp}  {conf:<10} gate={'✓' if gate else '✗'} final={final}  {p.name}"
                     )
-                elif kind == "startup":
-                    print(
-                        f"  {stamp}  {model:<24} health={str(c.get('time_to_health_s', '?')):<7} "
-                        f"ready={str(c.get('time_to_ready_s', '?')):<7}  {p.name}"
-                    )
-                elif kind == "execution":
-                    print(
-                        f"  {stamp}  {model:<24} dispatch_us={str(c.get('dispatch_us', '?')):<9} "
-                        f"threads={str(c.get('peak_threads', '?')):<7}  {p.name}"
-                    )
-                elif kind == "bootstrap":
-                    print(
-                        f"  {stamp}  {model:<24} first={str(c.get('first_s', '?')):<7} "
-                        f"p95={str(c.get('warm_p95_s', '?')):<7} "
-                        f"errs={c.get('member_errors', '?')}  {p.name}"
-                    )
-                else:  # latency and unknown kinds
-                    print(
-                        f"  {stamp}  {model:<24} mean={str(c.get('mean_ms', '?')):<7} "
-                        f"p95={str(c.get('p95_ms', '?')):<7}  {p.name}"
-                    )
+            else:
+                m = r.get("metrics", {})
+                print(
+                    f"  {stamp}  {model:<24} mean={m.get('mean_ms', '?'):<7} "
+                    f"p95={m.get('p95_ms', '?'):<7}  {p.name}"
+                )
     return 0
 
 
@@ -465,7 +425,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
+        choices=["stability", "latency", "execution", "training", "startup"],
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -476,9 +436,7 @@ def main() -> int:
 
     p_h = sub.add_parser("history", help="list stored runs")
     p_h.add_argument(
-        "--kind",
-        default=None,
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
+        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup"]
     )
     p_h.set_defaults(fn=do_history)
 
@@ -486,7 +444,7 @@ def main() -> int:
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup", "bootstrap"],
+        choices=["stability", "latency", "execution", "training", "startup"],
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)

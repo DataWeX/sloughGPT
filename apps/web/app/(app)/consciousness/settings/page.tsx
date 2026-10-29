@@ -30,7 +30,6 @@ import {
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-import { addGlobalError } from '@/lib/error-store'
 
 const LEVEL_LABELS = ['Off', 'Basic', 'Full', 'Deep']
 const LEVEL_DESCRIPTIONS = [
@@ -73,9 +72,7 @@ function loadPrefs(): ConsciousnessPrefs {
 function savePrefs(prefs: ConsciousnessPrefs) {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(prefs))
-  } catch {
-    /* ignored */
-  }
+  } catch { /* ignored */ }
 }
 
 interface ConfigStatus {
@@ -95,7 +92,7 @@ interface FullStatus {
 }
 
 export default function ConsciousnessSettingsPage() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = useToastStore(s => s.addToast)
   const { t } = useLocale()
   const { executeBatch, loading: batchLoading } = useConsciousnessBatch()
   const [config, setConfig] = useState<ConfigStatus | null>(null)
@@ -109,12 +106,9 @@ export default function ConsciousnessSettingsPage() {
     try {
       const data = await consciousnessController.getStatus()
       setStatus(data as FullStatus)
-      setConfig({
-        level: (data as FullStatus).level ?? 0,
-        enabled: (data as FullStatus).enabled ?? false,
-      })
+      setConfig({ level: (data as FullStatus).level ?? 0, enabled: (data as FullStatus).enabled ?? false })
     } catch (e) {
-      addGlobalError(e, 'ConsciousnessSettings')
+      console.error('Failed to fetch consciousness status', e)
     }
   }, [])
 
@@ -124,7 +118,7 @@ export default function ConsciousnessSettingsPage() {
   }, [fetchStatus])
 
   const updatePrefs = (partial: Partial<ConsciousnessPrefs>) => {
-    setPrefs((prev) => {
+    setPrefs(prev => {
       const next = { ...prev, ...partial }
       savePrefs(next)
       return next
@@ -134,7 +128,7 @@ export default function ConsciousnessSettingsPage() {
   const updateLevel = async (newLevel: number) => {
     try {
       await consciousnessController.updateConfig({ level: newLevel })
-      setConfig((prev) => (prev ? { ...prev, level: newLevel, enabled: newLevel > 0 } : prev))
+      setConfig(prev => prev ? { ...prev, level: newLevel, enabled: newLevel > 0 } : prev)
       addToast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, 'success')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
@@ -193,7 +187,7 @@ export default function ConsciousnessSettingsPage() {
     return (
       <PageContainer title={t('consciousness_settings.page_title')}>
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
+          {[1, 2, 3].map(i => (
             <Card key={i}>
               <CardHeader>
                 <Skeleton className="h-5 w-40" />
@@ -217,9 +211,7 @@ export default function ConsciousnessSettingsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">
-                  {t('consciousness_settings.config_title')}
-                </CardTitle>
+                <CardTitle className="text-base">{t('consciousness_settings.config_title')}</CardTitle>
                 <CardDescription>{t('consciousness_settings.config_desc')}</CardDescription>
               </div>
               {config && (
@@ -231,9 +223,7 @@ export default function ConsciousnessSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {t('consciousness_settings.level_label')}
-              </label>
+              <label className="text-sm font-medium">{t('consciousness_settings.level_label')}</label>
               <div className="flex items-center gap-4">
                 <span className="text-sm text-muted-foreground w-12">{LEVEL_LABELS[0]}</span>
                 <Slider
@@ -253,9 +243,7 @@ export default function ConsciousnessSettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">{t('consciousness_settings.enabled_label')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.enabled_desc')}
-                </p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.enabled_desc')}</p>
               </div>
               <Switch
                 checked={(config?.level ?? 0) > 0}
@@ -265,12 +253,8 @@ export default function ConsciousnessSettingsPage() {
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
-                  {t('consciousness_settings.auto_reflect_label')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.auto_reflect_desc')}
-                </p>
+                <p className="text-sm font-medium">{t('consciousness_settings.auto_reflect_label')}</p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.auto_reflect_desc')}</p>
               </div>
               <Switch
                 checked={prefs.autoReflect}
@@ -280,12 +264,8 @@ export default function ConsciousnessSettingsPage() {
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
-                  {t('consciousness_settings.auto_evolve_label')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.auto_evolve_desc')}
-                </p>
+                <p className="text-sm font-medium">{t('consciousness_settings.auto_evolve_label')}</p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.auto_evolve_desc')}</p>
               </div>
               <Switch
                 checked={prefs.autoEvolve}
@@ -307,9 +287,7 @@ export default function ConsciousnessSettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">{t('consciousness_settings.seed_label')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.seed_desc')}
-                </p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.seed_desc')}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Input
@@ -317,124 +295,75 @@ export default function ConsciousnessSettingsPage() {
                   min={1}
                   max={100}
                   value={seedCount}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSeedCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 10)))
-                  }
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSeedCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 10)))}
                   className="w-20 h-8 text-xs text-right"
                   aria-label="Seed count"
                 />
                 <Button size="sm" variant="secondary" onClick={handleSeed} disabled={seeding}>
-                  {seeding
-                    ? t('consciousness_settings.seeding')
-                    : t('consciousness_settings.seed_button')}
+                  {seeding ? t('consciousness_settings.seeding') : t('consciousness_settings.seed_button')}
                 </Button>
               </div>
             </div>
             <div className="border-t border-border/30" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
-                  {t('consciousness_settings.clear_episodes_label')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.clear_episodes_desc')}
-                </p>
+                <p className="text-sm font-medium">{t('consciousness_settings.clear_episodes_label')}</p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.clear_episodes_desc')}</p>
               </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button type="button" variant="destructive" size="sm">
-                    {t('consciousness_settings.clear_button')}
-                  </Button>
+                  <Button type="button" variant="destructive" size="sm">{t('consciousness_settings.clear_button')}</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t('consciousness_settings.clear_episodes_confirm_title')}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t('consciousness_settings.clear_episodes_confirm_desc')}
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>{t('consciousness_settings.clear_episodes_confirm_title')}</AlertDialogTitle>
+                    <AlertDialogDescription>{t('consciousness_settings.clear_episodes_confirm_desc')}</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>{t('consciousness_settings.cancel')}</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleClearEpisodes}
-                      className="bg-destructive text-destructive-foreground"
-                    >
-                      {t('consciousness_settings.clear_button')}
-                    </AlertDialogAction>
+                    <AlertDialogAction onClick={handleClearEpisodes} className="bg-destructive text-destructive-foreground">{t('consciousness_settings.clear_button')}</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
-                  {t('consciousness_settings.clear_beliefs_label')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.clear_beliefs_desc')}
-                </p>
+                <p className="text-sm font-medium">{t('consciousness_settings.clear_beliefs_label')}</p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.clear_beliefs_desc')}</p>
               </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button type="button" variant="destructive" size="sm">
-                    {t('consciousness_settings.clear_button')}
-                  </Button>
+                  <Button type="button" variant="destructive" size="sm">{t('consciousness_settings.clear_button')}</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t('consciousness_settings.clear_beliefs_confirm_title')}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t('consciousness_settings.clear_beliefs_confirm_desc')}
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>{t('consciousness_settings.clear_beliefs_confirm_title')}</AlertDialogTitle>
+                    <AlertDialogDescription>{t('consciousness_settings.clear_beliefs_confirm_desc')}</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>{t('consciousness_settings.cancel')}</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleClearBeliefs}
-                      className="bg-destructive text-destructive-foreground"
-                    >
-                      {t('consciousness_settings.clear_button')}
-                    </AlertDialogAction>
+                    <AlertDialogAction onClick={handleClearBeliefs} className="bg-destructive text-destructive-foreground">{t('consciousness_settings.clear_button')}</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
-                  {t('consciousness_settings.reset_personality_label')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.reset_personality_desc')}
-                </p>
+                <p className="text-sm font-medium">{t('consciousness_settings.reset_personality_label')}</p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.reset_personality_desc')}</p>
               </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button type="button" variant="destructive" size="sm">
-                    {t('consciousness_settings.reset_button')}
-                  </Button>
+                  <Button type="button" variant="destructive" size="sm">{t('consciousness_settings.reset_button')}</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t('consciousness_settings.reset_personality_confirm_title')}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t('consciousness_settings.reset_personality_confirm_desc')}
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>{t('consciousness_settings.reset_personality_confirm_title')}</AlertDialogTitle>
+                    <AlertDialogDescription>{t('consciousness_settings.reset_personality_confirm_desc')}</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>{t('consciousness_settings.cancel')}</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleResetPersonality}
-                      className="bg-destructive text-destructive-foreground"
-                    >
-                      {t('consciousness_settings.reset_button')}
-                    </AlertDialogAction>
+                    <AlertDialogAction onClick={handleResetPersonality} className="bg-destructive text-destructive-foreground">{t('consciousness_settings.reset_button')}</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -490,21 +419,15 @@ export default function ConsciousnessSettingsPage() {
         <Card>
           <CardHeader>
             <div>
-              <CardTitle className="text-base">
-                {t('consciousness_settings.display_title')}
-              </CardTitle>
+              <CardTitle className="text-base">{t('consciousness_settings.display_title')}</CardTitle>
               <CardDescription>{t('consciousness_settings.display_desc')}</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
-                  {t('consciousness_settings.show_in_chat_label')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.show_in_chat_desc')}
-                </p>
+                <p className="text-sm font-medium">{t('consciousness_settings.show_in_chat_label')}</p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.show_in_chat_desc')}</p>
               </div>
               <Switch
                 checked={prefs.showInChat}
@@ -514,12 +437,8 @@ export default function ConsciousnessSettingsPage() {
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
-                  {t('consciousness_settings.show_in_statusbar_label')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.show_in_statusbar_desc')}
-                </p>
+                <p className="text-sm font-medium">{t('consciousness_settings.show_in_statusbar_label')}</p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.show_in_statusbar_desc')}</p>
               </div>
               <Switch
                 checked={prefs.showInStatusBar}
@@ -530,9 +449,7 @@ export default function ConsciousnessSettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">{t('consciousness_settings.realtime_label')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t('consciousness_settings.realtime_desc')}
-                </p>
+                <p className="text-xs text-muted-foreground">{t('consciousness_settings.realtime_desc')}</p>
               </div>
               <Switch
                 checked={prefs.realTimeUpdates}
@@ -553,37 +470,23 @@ export default function ConsciousnessSettingsPage() {
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                  {t('consciousness_settings.version')}
-                </p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{t('consciousness_settings.version')}</p>
                 <p className="text-sm font-medium mt-0.5 font-mono">3.0.0</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                  {t('consciousness_settings.status')}
-                </p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{t('consciousness_settings.status')}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full ${status?.enabled ? 'bg-success' : 'bg-muted-foreground/50'}`}
-                  />
-                  <span className="text-sm font-medium">
-                    {status?.enabled ? 'Active' : 'Disabled'}
-                  </span>
+                  <span className={`inline-block w-2 h-2 rounded-full ${status?.enabled ? 'bg-success' : 'bg-muted-foreground/50'}`} />
+                  <span className="text-sm font-medium">{status?.enabled ? 'Active' : 'Disabled'}</span>
                 </div>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                  {t('consciousness_settings.episodes')}
-                </p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{t('consciousness_settings.episodes')}</p>
                 <p className="text-sm font-medium mt-0.5 font-mono">{status?.episodes ?? 0}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                  {t('consciousness_settings.beliefs_count')}
-                </p>
-                <p className="text-sm font-medium mt-0.5 font-mono">
-                  {Object.keys(status?.beliefs ?? {}).length}
-                </p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{t('consciousness_settings.beliefs_count')}</p>
+                <p className="text-sm font-medium mt-0.5 font-mono">{Object.keys(status?.beliefs ?? {}).length}</p>
               </div>
             </div>
             <div className="border-t border-border/30 pt-3">

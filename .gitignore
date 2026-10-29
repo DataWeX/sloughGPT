@@ -65,14 +65,6 @@ checkpoints/
 # Compiled model cache (SLNC weights, 2.5GB+)
 packages/models/
 
-# Build artifacts / installers — too big to keep in the tree (one 45MB APK
-# checked out across every worktree costs ~934MB). Build outputs, not source.
-*.apk
-*.aab
-*.ipa
-*.xap
-index.android.bundle
-
 # Jupyter Notebook
 .ipynb_checkpoints
 sloughgpt_colab.executed.ipynb
@@ -217,10 +209,6 @@ models/unified-trained/
 # User data and backups
 .git-corrupted-backup/
 data/
-# …but not app source: the bare `data/` above shadows this Next.js route
-# dir (its files are tracked yet un-addable without -f, and lint-staged's
-# apply step fails on every commit that touches it).
-!apps/web/app/(app)/workspace/data/
 /models/
 /datasets/
 
@@ -277,4 +265,3 @@ y
 
 # avion journey-engine test artifacts
 arken_output/
-.resilient-state/

@@ -110,13 +110,7 @@ def deps():
     trainer_inst.train.return_value = {"success": True, "global_step": 7}
 
     with (
-        # Part 2 (c48aaaad): the executor import moved into the engine — patch
-        # the defining module attribute (the engine's lazy import reads it at
-        # call time), same style as the SloughGPTTrainer patch below.
-        patch(
-            "domain.training._internal.executor.get_training_executor",
-            return_value=executor,
-        ),
+        patch.object(router_mod, "get_training_executor", return_value=executor),
         patch.object(router_mod, "get_training_controller", return_value=_FakeController()),
         patch.object(router_mod, "notify_training_event", new=MagicMock()),
         # Patch the defining submodule, not the lazy package attribute: a

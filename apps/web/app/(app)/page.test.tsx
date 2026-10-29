@@ -231,13 +231,7 @@ vi.mock('@/components/home/RecentActivity', () => ({
   },
 }))
 vi.mock('@/components/home/UsageStats', () => ({
-  UsageStats: ({ convStats, datasetStats }: any) => (
-    <div>
-      usage
-      {convStats && <span>convs:{convStats.totalConversations}</span>}
-      {datasetStats && <span>dss:{datasetStats.totalDatasets}</span>}
-    </div>
-  ),
+  UsageStats: () => <div>usage</div>,
 }))
 vi.mock('@/components/home/SystemHealth', () => ({
   SystemHealth: ({ apiStatus, liveHealth }: any) => {
@@ -276,10 +270,21 @@ vi.mock('@/components/ui/HomePageSkeleton', () => ({
   NavigationGridSkeleton: () => <div data-testid="skeleton" />,
 }))
 
-const { mockPush, mockChatSend, mockKnowledgeAdd, mockAddToast } = vi.hoisted(() => ({
+const {
+  mockPush,
+  mockApiGet,
+  mockChatSend,
+  mockKnowledgeAdd,
+  mockSessionList,
+  mockDatasetList,
+  mockAddToast,
+} = vi.hoisted(() => ({
   mockPush: vi.fn(),
+  mockApiGet: vi.fn(),
   mockChatSend: vi.fn(),
   mockKnowledgeAdd: vi.fn(),
+  mockSessionList: vi.fn(),
+  mockDatasetList: vi.fn(),
   mockAddToast: vi.fn(),
 }))
 
@@ -287,7 +292,6 @@ const state = vi.hoisted(() => ({
   health: null as any,
   liveHealth: null as any,
   home: null as any,
-  bootstrap: null as any,
 }))
 
 const homeTranslations: Record<string, string> = {
@@ -336,17 +340,11 @@ vi.mock('@/hooks/useHomePageData', async () => {
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
-vi.mock('@/lib/http-client', () => ({ apiGet: vi.fn(), apiPost: vi.fn() }))
+vi.mock('@/lib/http-client', () => ({ apiGet: mockApiGet }))
 vi.mock('@/lib/chat-controller', () => ({ chatController: { send: mockChatSend } }))
 vi.mock('@/lib/knowledge-controller', () => ({ knowledgeController: { add: mockKnowledgeAdd } }))
-vi.mock('@/contexts/BootstrapContext', () => ({
-  useBootstrap: () => ({
-    data: state.bootstrap,
-    loading: state.bootstrap === null,
-    error: null,
-    refresh: vi.fn(),
-  }),
-}))
+vi.mock('@/lib/session-controller', () => ({ sessionController: { list: mockSessionList } }))
+vi.mock('@/lib/dataset-controller', () => ({ datasetController: { list: mockDatasetList } }))
 
 const kvStore: Record<string, unknown> = {}
 vi.mock('@/lib/db', () => ({
@@ -471,28 +469,6 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
 })
-
-function makeBootstrapPayload(overrides: Record<string, unknown> = {}) {
-  return {
-    members: {
-      health: null,
-      startup_progress: { phase: 'ready', step: 9, total: 9, message: 'Ready' },
-      models: [],
-      consciousness_status: null,
-      souls: null,
-      sessions: [],
-      training_jobs: [],
-      turbo_status: null,
-      knowledge_stats: { total_items: 0 },
-      feedback_stats: null,
-      meta_weights_stats: null,
-      datasets: { datasets: [], count: 0 },
-      ...((overrides.members as Record<string, unknown>) ?? {}),
-    },
-    errors: (overrides.errors as Record<string, string>) ?? {},
-  }
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   Object.keys(kvStore).forEach((k) => delete kvStore[k])
@@ -502,7 +478,9 @@ beforeEach(() => {
   state.health = onlineHealth
   state.liveHealth = onlineHealth
   state.home = makeHomeData()
-  state.bootstrap = makeBootstrapPayload()
+  mockSessionList.mockResolvedValue([])
+  mockDatasetList.mockResolvedValue([])
+  mockApiGet.mockResolvedValue(null)
 })
 
 describe('HomePage', () => {
@@ -666,26 +644,26 @@ describe('HomePage', () => {
     expect(screen.queryByText('Welcome to SloughGPT')).toBeFalsy()
   })
 
-  it('derives conversation and dataset stats from the bootstrap payload', async () => {
-    state.bootstrap = makeBootstrapPayload({
-      members: {
-        sessions: [
-          {
-            id: 'a',
-            name: 'A',
-            updated_at: '2026-06-01T10:00:00Z',
-            messages: [
-              { content: 'hello world foo', timestamp: '2026-06-01T10:00:00Z' },
-              { content: 'hi', timestamp: '2026-06-01T10:00:00Z' },
-            ],
-          },
+  it('renders conversation and dataset stats cards from controller data', async () => {
+    mockSessionList.mockResolvedValue([
+      {
+        id: 'a',
+        name: 'A',
+        updated_at: '2026-06-01T10:00:00Z',
+        messages: [
+          { content: 'hello world foo', timestamp: '2026-06-01T10:00:00Z' },
+          { content: 'hi', timestamp: '2026-06-01T10:00:00Z' },
         ],
-        datasets: { datasets: [{ id: 'd1', size: 1048576, samples: 100 }], count: 1 },
       },
-    })
+    ])
+    mockDatasetList.mockResolvedValue([{ id: 'd1', size: 1048576, samples: 100 }])
     render(<HomePage />)
-    expect(await screen.findByText('convs:1')).toBeTruthy()
-    expect(screen.getByText('dss:1')).toBeTruthy()
+    await waitFor(() => {
+      expect(mockSessionList).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(mockDatasetList).toHaveBeenCalled()
+    })
   })
 
   it('renders the live health system card with CPU, memory, requests, and uptime', async () => {

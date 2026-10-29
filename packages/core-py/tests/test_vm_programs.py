@@ -232,10 +232,8 @@ class TestAsmProgramExecution:
         from domain.shell._internal.vm import VMRunner
 
         r = VMRunner()
-        # Soft contract: a VM without NPU neither crashes nor fakes success —
-        # every device op reports the failure on the output list.
-        out = r.assemble_and_run(NPU_PROGRAM_ASM)
-        assert "[VM] DEV_OPEN: no such device: npu" in out
+        with pytest.raises(Exception):
+            r.assemble_and_run(NPU_PROGRAM_ASM)
 
     def test_boot_asm(self):
         from domain.shell._internal.vm import VMRunner

@@ -3,11 +3,10 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockApiGet = vi.fn()
-const mockSearchParams = new URLSearchParams()
 
 vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
-  useSearchParams: () => mockSearchParams,
+  useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/workspace/data/search',
 }))
 
@@ -91,7 +90,6 @@ vi.mock('@sloughgpt/strui', () => {
 })
 
 vi.mock('lucide-react', () => ({
-  Search: () => <span data-testid="icon-search" />,
   Users: () => <span data-testid="icon-users" />,
   Brain: () => <span data-testid="icon-brain" />,
   Database: () => <span data-testid="icon-database" />,
@@ -103,14 +101,21 @@ import WorkspaceSearchPage from './page'
 
 describe('WorkspaceSearchPage', () => {
   const mockSearchResults = {
-    hits: [
-      { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
-      { id: 't1', store: 'training_jobs', title: 'Fine-tune LLaMA', detail: 'Status: completed', score: 1.0, locator: 'route:/training/queue' },
-      { id: 'd1', store: 'datasets', title: 'training-data', detail: '1000 rows', score: 0.6, locator: 'route:/datasets' },
-    ],
-    partial: [],
-    skipped: [],
-    query: 'a',
+    data: {
+      results: {
+        members: [
+          { id: 'u1', type: 'member', title: 'alice', detail: 'alice@test.com' },
+        ],
+        training_jobs: [
+          { id: 't1', type: 'training', title: 'Fine-tune LLaMA', detail: 'completed' },
+        ],
+        datasets: [
+          { id: 'd1', type: 'dataset', title: 'training-data', detail: '1000 rows' },
+        ],
+        knowledge: [],
+      },
+      total: 3,
+    },
   }
 
   beforeEach(() => {
@@ -151,33 +156,12 @@ describe('WorkspaceSearchPage', () => {
 
     await screen.findByText(/result/i)
     expect(mockApiGet).toHaveBeenCalled()
-    expect(mockApiGet.mock.calls[0][0]).toContain('/search?q=alice&workspace_id=ws-1')
-  })
-
-  it('renders server results as-is — no client-side filtering', async () => {
-    // Server already filtered; this item does NOT contain the typed query,
-    // and the UI must still render what the server returned.
-    mockApiGet.mockResolvedValue({
-      hits: [
-        { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
-      ],
-      partial: ['datasets'],
-      skipped: [],
-      query: 'alice',
-    })
-    const user = userEvent.setup()
-    render(<WorkspaceSearchPage />)
-    await screen.findAllByText('Workspace Search')
-
-    await user.type(screen.getByPlaceholderText(/search/i), 'alice')
-
-    await screen.findByText(/1 result/i)
-    expect(screen.getByText('alice')).toBeTruthy()
-    expect(screen.getByText(/partial results/i)).toBeTruthy()
   })
 
   it('shows empty state when no results', async () => {
-    mockApiGet.mockResolvedValue({ hits: [], partial: [], skipped: [], query: 'zzznonexistent' })
+    mockApiGet.mockResolvedValue({
+      data: { results: { members: [], training_jobs: [], datasets: [], knowledge: [] }, total: 0 },
+    })
     const user = userEvent.setup()
     render(<WorkspaceSearchPage />)
     await screen.findAllByText('Workspace Search')
@@ -186,24 +170,5 @@ describe('WorkspaceSearchPage', () => {
     await user.type(searchInput, 'zzznonexistent')
 
     await screen.findByText(/no results/i)
-  })
-
-  it('seeds the query from ?q= (deep link from the palette)', async () => {
-    mockSearchParams.set('q', 'alice')
-    try {
-      mockApiGet.mockResolvedValue({
-        hits: [
-          { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
-        ],
-        partial: [],
-        skipped: [],
-        query: 'alice',
-      })
-      render(<WorkspaceSearchPage />)
-      await screen.findByText(/1 result/i)
-      expect(mockApiGet.mock.calls[0][0]).toContain('/search?q=alice&workspace_id=ws-1')
-    } finally {
-      mockSearchParams.delete('q')
-    }
   })
 })

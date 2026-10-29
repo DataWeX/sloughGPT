@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from typing import Any
 
 from domain.chat._internal.domain import ChatDomain, ChatRequest, ChatResponse
@@ -178,14 +178,13 @@ class ChatManager:
         messages: list[dict[str, str]],
         model: str = "gpt2",
         system_prompt: str = "",
-        temperature: float = 0.7,
+        temperature: float = 0.8,
         max_tokens: int = 256,
         session_id: str = "default",
         user_id: str = "default",
     ) -> ChatResponse:
         """Non-streaming reply. Single path via ``ChatDomain.respond``."""
         op_id, _stop = self._track(session_id, f"chat:{session_id}")
-        error: str | None = None
         try:
             resp = await self._domain.respond(
                 messages=messages,
@@ -200,95 +199,10 @@ class ChatManager:
             return resp
         except Exception as exc:
             logger.error("ChatManager.respond failed: %s", exc, exc_info=True)
-            error = str(exc)
+            self._untrack(session_id, op_id, error=str(exc))
             raise
-        finally:
-            # finally, not else: a `return` inside `try` skips the `else` clause,
-            # so the old else-branch never ran and every successful reply left
-            # its op_id in _session_ops forever (cancel_session walks that set).
-            self._untrack(session_id, op_id, error=error)
-
-    async def generate_tracked(
-        self,
-        session_id: str,
-        messages: list[dict[str, str]],
-        generate: Callable[[threading.Event], Awaitable[Any]],
-        text_of: Callable[[Any], str],
-    ) -> Any:
-        """Own chat's per-session state around an EXTERNAL generation callable.
-
-        Lets the chat router keep history persistence and the cancellation
-        registry while generation runs wherever the caller chooses — here, the
-        inference kernel's public facade. The router never reaches into
-        _track/_store/_untrack; this is the seam that lets chat own its state
-        without owning generation.
-
-        ``generate`` is called WITH the session's stop event. That is the whole
-        point of taking the callable here rather than running it directly: this
-        method both registers the cancel op and hands the other end of the same
-        ``threading.Event`` to the caller, so ``cancel_session`` → ``stop.set()``
-        is actually observed by the token loop instead of landing on a flag
-        nobody reads.
-
-        ``generate`` returns whatever the caller's backend returns, and
-        ``text_of`` projects that down to the assistant text worth persisting,
-        so the original object (e.g. a full ChatResponse) is passed through
-        untouched.
-
-        Mirrors ``respond``'s tracking contract, including the finally-guarded
-        untrack (see the note there for why not ``else``).
-        """
-        op_id, stop = self._track(session_id, f"chat:{session_id}")
-        error: str | None = None
-        try:
-            result = await generate(stop)
-            self._store(session_id, messages, text_of(result))
-            return result
-        except Exception as exc:
-            logger.error("ChatManager.generate_tracked failed: %s", exc, exc_info=True)
-            error = str(exc)
-            raise
-        finally:
-            self._untrack(session_id, op_id, error=error)
-
-    async def generate_stream_tracked(
-        self,
-        session_id: str,
-        messages: list[dict[str, str]],
-        stream: Callable[[threading.Event], AsyncIterator[Any]],
-        text_of: Callable[[Any], str],
-    ) -> AsyncIterator[Any]:
-        """Own chat's per-session state around an EXTERNAL token stream.
-
-        The streaming twin of ``generate_tracked``: chat owns the cancellation
-        registry and conversation history while the engine streams tokens. It
-        yields the caller's items untouched (raw tokens, then the final result)
-        and stores history once the stream completes.
-
-        ``stream`` is called WITH the session's stop event (see the note on
-        ``generate_tracked``): registering the op and delivering its flag are
-        one transaction, so a cancel fired mid-stream reaches the token loop.
-
-        ``stream`` yields the caller's own items — typically raw ``str`` tokens
-        followed by a final result object; ``text_of`` projects the assistant
-        text off that final object for persistence.
-        """
-        op_id, stop = self._track(session_id, f"chat-stream:{session_id}")
-        error: str | None = None
-        result: Any = None
-        try:
-            async for item in stream(stop):
-                if not isinstance(item, str):
-                    result = item
-                yield item
-            if result is not None:
-                self._store(session_id, messages, text_of(result))
-        except Exception as exc:
-            logger.error("ChatManager.generate_stream_tracked failed: %s", exc, exc_info=True)
-            error = str(exc)
-            raise
-        finally:
-            self._untrack(session_id, op_id, error=error)
+        else:
+            self._untrack(session_id, op_id)
 
     async def stream(
         self,

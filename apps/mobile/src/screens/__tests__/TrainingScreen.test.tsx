@@ -27,6 +27,7 @@ const mockLoadFinetunedModel = jest.fn();
 const mockDeleteFinetunedModel = jest.fn();
 const mockImportDataset = jest.fn();
 const mockClearError = jest.fn();
+const mockRehydrate = jest.fn();
 
 const defaultTrainState: any = {
   phase: 'idle',
@@ -63,6 +64,7 @@ const defaultTrainState: any = {
   deleteFinetunedModel: mockDeleteFinetunedModel,
   importDataset: mockImportDataset,
   clearError: mockClearError,
+  rehydrate: mockRehydrate,
 };
 
 let mockTrainState = {...defaultTrainState};

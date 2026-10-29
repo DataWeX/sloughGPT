@@ -186,9 +186,9 @@ export const useHybridStore = create<HybridStoreState>((set, get) => ({
     if (route.target !== 'local') return null;
 
     const maxTokens = opts?.maxTokens ?? 64;
-    const temperature = opts?.temperature ?? 0.7;
+    const temperature = opts?.temperature ?? 0.8;
     const topK = opts?.topK ?? 40;
-    const topP = opts?.topP ?? 0.85;
+    const topP = opts?.topP ?? 0.9;
 
     try {
       if (route.engine === 'slonet') {

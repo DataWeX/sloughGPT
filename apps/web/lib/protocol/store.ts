@@ -39,7 +39,11 @@ export interface FetchOptions {
 
 interface ProtocolStore {
   reads: Record<string, ReadSlice>
-  fetchRead: (name: ContractName, params?: EndpointParams, opts?: FetchOptions) => Promise<void>
+  fetchRead: (
+    name: ContractName,
+    params?: EndpointParams,
+    opts?: FetchOptions,
+  ) => Promise<void>
   /** Drop cached reads — all of them, or only one capability's. */
   invalidate: (name?: ContractName) => void
 }

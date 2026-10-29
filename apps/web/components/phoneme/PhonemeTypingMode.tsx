@@ -189,7 +189,7 @@ export default function PhonemeTypingMode() {
               className={`p-4 rounded-lg text-center ${
                 userInput.toUpperCase().replace(/[^A-Z0-9]/g, '') ===
                 challenge.phonemes.join('').toUpperCase()
-                  ? 'bg-success/10 border border-success/20'
+                  ? 'bg-success/10 border border-green-500/20'
                   : 'bg-destructive/10 border border-destructive/20'
               }`}
             >

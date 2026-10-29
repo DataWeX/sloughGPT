@@ -32,7 +32,6 @@ import {
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-import { addGlobalError } from '@/lib/error-store'
 
 const LEVEL_LABELS = ['Off', 'Basic', 'Full', 'Deep']
 const LEVEL_DESCRIPTIONS = [
@@ -124,9 +123,7 @@ function loadAllPrefs(): AllPrefs {
 function saveAllPrefs(prefs: AllPrefs) {
   try {
     localStorage.setItem(ALL_PREFS_KEY, JSON.stringify(prefs))
-  } catch {
-    /* ignored */
-  }
+  } catch { /* ignored */ }
 }
 
 function loadPersonality(): PersonalityPrefs {
@@ -143,62 +140,20 @@ function loadPersonality(): PersonalityPrefs {
 function savePersonality(prefs: PersonalityPrefs) {
   try {
     localStorage.setItem(PERSONALITY_KEY, JSON.stringify(prefs))
-  } catch {
-    /* ignored */
-  }
+  } catch { /* ignored */ }
 }
 
 const PRESETS: Record<string, Partial<PersonalityPrefs>> = {
   default: DEFAULT_PERSONALITY,
-  formal: {
-    warmth: 30,
-    confidence: 70,
-    humor: 10,
-    empathy: 40,
-    openness: 40,
-    agreeableness: 60,
-    conscientiousness: 80,
-  },
-  creative: {
-    warmth: 60,
-    confidence: 50,
-    humor: 70,
-    empathy: 50,
-    openness: 90,
-    agreeableness: 50,
-    conscientiousness: 30,
-  },
-  analyst: {
-    warmth: 20,
-    confidence: 80,
-    humor: 20,
-    empathy: 30,
-    openness: 60,
-    agreeableness: 40,
-    conscientiousness: 90,
-  },
-  empathetic: {
-    warmth: 90,
-    confidence: 40,
-    humor: 30,
-    empathy: 90,
-    openness: 70,
-    agreeableness: 80,
-    conscientiousness: 50,
-  },
-  minimal: {
-    warmth: 20,
-    confidence: 60,
-    humor: 10,
-    empathy: 20,
-    openness: 30,
-    agreeableness: 40,
-    conscientiousness: 60,
-  },
+  formal: { warmth: 30, confidence: 70, humor: 10, empathy: 40, openness: 40, agreeableness: 60, conscientiousness: 80 },
+  creative: { warmth: 60, confidence: 50, humor: 70, empathy: 50, openness: 90, agreeableness: 50, conscientiousness: 30 },
+  analyst: { warmth: 20, confidence: 80, humor: 20, empathy: 30, openness: 60, agreeableness: 40, conscientiousness: 90 },
+  empathetic: { warmth: 90, confidence: 40, humor: 30, empathy: 90, openness: 70, agreeableness: 80, conscientiousness: 50 },
+  minimal: { warmth: 20, confidence: 60, humor: 10, empathy: 20, openness: 30, agreeableness: 40, conscientiousness: 60 },
 }
 
 export default function AllSettingsPage() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = useToastStore(s => s.addToast)
   const { t } = useLocale()
   const [config, setConfig] = useState<ConfigStatus | null>(null)
   const [status, setStatus] = useState<FullStatus | null>(null)
@@ -214,12 +169,9 @@ export default function AllSettingsPage() {
     try {
       const data = await consciousnessController.getStatus()
       setStatus(data as FullStatus)
-      setConfig({
-        level: (data as FullStatus).level ?? 0,
-        enabled: (data as FullStatus).enabled ?? false,
-      })
+      setConfig({ level: (data as FullStatus).level ?? 0, enabled: (data as FullStatus).enabled ?? false })
     } catch (e) {
-      addGlobalError(e, 'ConsciousnessAllSettings')
+      console.error('Failed to fetch consciousness status', e)
     }
   }, [])
 
@@ -230,7 +182,7 @@ export default function AllSettingsPage() {
   }, [fetchStatus])
 
   const updatePrefs = (partial: Partial<AllPrefs>) => {
-    setPrefs((prev) => {
+    setPrefs(prev => {
       const next = { ...prev, ...partial }
       saveAllPrefs(next)
       return next
@@ -238,7 +190,7 @@ export default function AllSettingsPage() {
   }
 
   const updatePersonality = (partial: Partial<PersonalityPrefs>) => {
-    setPersonality((prev) => {
+    setPersonality(prev => {
       const next = { ...prev, ...partial }
       savePersonality(next)
       return next
@@ -248,7 +200,7 @@ export default function AllSettingsPage() {
   const applyPreset = (presetName: string) => {
     const preset = PRESETS[presetName]
     if (preset) {
-      setPersonality((prev) => {
+      setPersonality(prev => {
         const next = { ...prev, ...preset }
         savePersonality(next)
         return next
@@ -260,7 +212,7 @@ export default function AllSettingsPage() {
   const updateLevel = async (newLevel: number) => {
     try {
       await consciousnessController.updateConfig({ level: newLevel })
-      setConfig((prev) => (prev ? { ...prev, level: newLevel, enabled: newLevel > 0 } : prev))
+      setConfig(prev => prev ? { ...prev, level: newLevel, enabled: newLevel > 0 } : prev)
       addToast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, 'success')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
@@ -369,7 +321,7 @@ export default function AllSettingsPage() {
     return (
       <PageContainer title={t('consciousness_all_settings.page_title')}>
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
+          {[1, 2, 3].map(i => (
             <Card key={i}>
               <CardHeader>
                 <Skeleton className="h-5 w-40" />
@@ -393,13 +345,9 @@ export default function AllSettingsPage() {
           <TabsList>
             <TabsTrigger value="core">{t('consciousness_all_settings.tab_core')}</TabsTrigger>
             <TabsTrigger value="display">{t('consciousness_all_settings.tab_display')}</TabsTrigger>
-            <TabsTrigger value="personality">
-              {t('consciousness_all_settings.tab_personality')}
-            </TabsTrigger>
+            <TabsTrigger value="personality">{t('consciousness_all_settings.tab_personality')}</TabsTrigger>
             <TabsTrigger value="data">{t('consciousness_all_settings.tab_data')}</TabsTrigger>
-            <TabsTrigger value="notifications">
-              {t('consciousness_all_settings.tab_notifications')}
-            </TabsTrigger>
+            <TabsTrigger value="notifications">{t('consciousness_all_settings.tab_notifications')}</TabsTrigger>
             <TabsTrigger value="export">{t('consciousness_all_settings.tab_export')}</TabsTrigger>
           </TabsList>
 
@@ -408,9 +356,7 @@ export default function AllSettingsPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-base">
-                      {t('consciousness_all_settings.core_title')}
-                    </CardTitle>
+                    <CardTitle className="text-base">{t('consciousness_all_settings.core_title')}</CardTitle>
                     <CardDescription>{t('consciousness_all_settings.core_desc')}</CardDescription>
                   </div>
                   {config && (
@@ -422,9 +368,7 @@ export default function AllSettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {t('consciousness_all_settings.level_label')}
-                  </label>
+                  <label className="text-sm font-medium">{t('consciousness_all_settings.level_label')}</label>
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-muted-foreground w-12">{LEVEL_LABELS[0]}</span>
                     <Slider
@@ -443,12 +387,8 @@ export default function AllSettingsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.enabled_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.enabled_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.enabled_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.enabled_desc')}</p>
                   </div>
                   <Switch
                     checked={(config?.level ?? 0) > 0}
@@ -458,12 +398,8 @@ export default function AllSettingsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.auto_reflect_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.auto_reflect_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.auto_reflect_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.auto_reflect_desc')}</p>
                   </div>
                   <Switch
                     checked={prefs.autoReflect}
@@ -473,12 +409,8 @@ export default function AllSettingsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.auto_evolve_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.auto_evolve_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.auto_evolve_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.auto_evolve_desc')}</p>
                   </div>
                   <Switch
                     checked={prefs.autoEvolve}
@@ -494,21 +426,15 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.display_title')}
-                  </CardTitle>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.display_title')}</CardTitle>
                   <CardDescription>{t('consciousness_all_settings.display_desc')}</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.show_in_chat_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.show_in_chat_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.show_in_chat_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.show_in_chat_desc')}</p>
                   </div>
                   <Switch
                     checked={prefs.showInChat}
@@ -518,12 +444,8 @@ export default function AllSettingsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.show_in_statusbar_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.show_in_statusbar_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.show_in_statusbar_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.show_in_statusbar_desc')}</p>
                   </div>
                   <Switch
                     checked={prefs.showInStatusBar}
@@ -533,12 +455,8 @@ export default function AllSettingsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.realtime_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.realtime_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.realtime_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.realtime_desc')}</p>
                   </div>
                   <Switch
                     checked={prefs.realTimeUpdates}
@@ -548,12 +466,8 @@ export default function AllSettingsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.auto_refresh_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.auto_refresh_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.auto_refresh_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.auto_refresh_desc')}</p>
                   </div>
                   <Switch
                     checked={prefs.autoRefresh}
@@ -569,12 +483,8 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.personality_summary_title')}
-                  </CardTitle>
-                  <CardDescription>
-                    {t('consciousness_all_settings.personality_summary_desc')}
-                  </CardDescription>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.personality_summary_title')}</CardTitle>
+                  <CardDescription>{t('consciousness_all_settings.personality_summary_desc')}</CardDescription>
                 </div>
               </CardHeader>
               <CardContent>
@@ -585,9 +495,7 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.voice_title')}
-                  </CardTitle>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.voice_title')}</CardTitle>
                   <CardDescription>{t('consciousness_all_settings.voice_desc')}</CardDescription>
                 </div>
               </CardHeader>
@@ -595,12 +503,8 @@ export default function AllSettingsPage() {
                 {(['warmth', 'confidence', 'humor', 'empathy'] as const).map((key) => (
                   <div key={key} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium capitalize">
-                        {t(`consciousness_all_settings.voice_${key}`)}
-                      </label>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {personality[key]}
-                      </span>
+                      <label className="text-sm font-medium capitalize">{t(`consciousness_all_settings.voice_${key}`)}</label>
+                      <span className="text-xs text-muted-foreground font-mono">{personality[key]}</span>
                     </div>
                     <Slider
                       value={[personality[key]]}
@@ -617,9 +521,7 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.traits_title')}
-                  </CardTitle>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.traits_title')}</CardTitle>
                   <CardDescription>{t('consciousness_all_settings.traits_desc')}</CardDescription>
                 </div>
               </CardHeader>
@@ -627,12 +529,8 @@ export default function AllSettingsPage() {
                 {(['openness', 'agreeableness', 'conscientiousness'] as const).map((key) => (
                   <div key={key} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium capitalize">
-                        {t(`consciousness_all_settings.trait_${key}`)}
-                      </label>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {personality[key]}
-                      </span>
+                      <label className="text-sm font-medium capitalize">{t(`consciousness_all_settings.trait_${key}`)}</label>
+                      <span className="text-xs text-muted-foreground font-mono">{personality[key]}</span>
                     </div>
                     <Slider
                       value={[personality[key]]}
@@ -649,9 +547,7 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.presets_title')}
-                  </CardTitle>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.presets_title')}</CardTitle>
                   <CardDescription>{t('consciousness_all_settings.presets_desc')}</CardDescription>
                 </div>
               </CardHeader>
@@ -664,9 +560,7 @@ export default function AllSettingsPage() {
                       variant="secondary"
                       onClick={() => applyPreset(preset)}
                     >
-                      <span className="capitalize">
-                        {t(`consciousness_all_settings.preset_${preset}`)}
-                      </span>
+                      <span className="capitalize">{t(`consciousness_all_settings.preset_${preset}`)}</span>
                     </Button>
                   ))}
                 </div>
@@ -678,9 +572,7 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.seed_title')}
-                  </CardTitle>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.seed_title')}</CardTitle>
                   <CardDescription>{t('consciousness_all_settings.seed_desc')}</CardDescription>
                 </div>
               </CardHeader>
@@ -691,16 +583,12 @@ export default function AllSettingsPage() {
                     min={1}
                     max={100}
                     value={seedCount}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setSeedCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 10)))
-                    }
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSeedCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 10)))}
                     className="w-20 h-8 text-xs text-right"
                     aria-label="Seed count"
                   />
                   <Button size="sm" variant="secondary" onClick={handleSeed} disabled={seeding}>
-                    {seeding
-                      ? t('consciousness_all_settings.seeding')
-                      : t('consciousness_all_settings.seed_button')}
+                    {seeding ? t('consciousness_all_settings.seeding') : t('consciousness_all_settings.seed_button')}
                   </Button>
                 </div>
               </CardContent>
@@ -709,123 +597,70 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.clear_title')}
-                  </CardTitle>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.clear_title')}</CardTitle>
                   <CardDescription>{t('consciousness_all_settings.clear_desc')}</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.clear_episodes_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.clear_episodes_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.clear_episodes_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.clear_episodes_desc')}</p>
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button type="button" variant="destructive" size="sm">
-                        {t('consciousness_all_settings.clear_button')}
-                      </Button>
+                      <Button type="button" variant="destructive" size="sm">{t('consciousness_all_settings.clear_button')}</Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {t('consciousness_all_settings.clear_episodes_confirm_title')}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {t('consciousness_all_settings.clear_episodes_confirm_desc')}
-                        </AlertDialogDescription>
+                        <AlertDialogTitle>{t('consciousness_all_settings.clear_episodes_confirm_title')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('consciousness_all_settings.clear_episodes_confirm_desc')}</AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>
-                          {t('consciousness_all_settings.cancel')}
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleClearEpisodes}
-                          className="bg-destructive text-destructive-foreground"
-                        >
-                          {t('consciousness_all_settings.clear_button')}
-                        </AlertDialogAction>
+                        <AlertDialogCancel>{t('consciousness_all_settings.cancel')}</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearEpisodes} className="bg-destructive text-destructive-foreground">{t('consciousness_all_settings.clear_button')}</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.clear_beliefs_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.clear_beliefs_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.clear_beliefs_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.clear_beliefs_desc')}</p>
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button type="button" variant="destructive" size="sm">
-                        {t('consciousness_all_settings.clear_button')}
-                      </Button>
+                      <Button type="button" variant="destructive" size="sm">{t('consciousness_all_settings.clear_button')}</Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {t('consciousness_all_settings.clear_beliefs_confirm_title')}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {t('consciousness_all_settings.clear_beliefs_confirm_desc')}
-                        </AlertDialogDescription>
+                        <AlertDialogTitle>{t('consciousness_all_settings.clear_beliefs_confirm_title')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('consciousness_all_settings.clear_beliefs_confirm_desc')}</AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>
-                          {t('consciousness_all_settings.cancel')}
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleClearBeliefs}
-                          className="bg-destructive text-destructive-foreground"
-                        >
-                          {t('consciousness_all_settings.clear_button')}
-                        </AlertDialogAction>
+                        <AlertDialogCancel>{t('consciousness_all_settings.cancel')}</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearBeliefs} className="bg-destructive text-destructive-foreground">{t('consciousness_all_settings.clear_button')}</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.reset_personality_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.reset_personality_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.reset_personality_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.reset_personality_desc')}</p>
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button type="button" variant="destructive" size="sm">
-                        {t('consciousness_all_settings.reset_button')}
-                      </Button>
+                      <Button type="button" variant="destructive" size="sm">{t('consciousness_all_settings.reset_button')}</Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {t('consciousness_all_settings.reset_personality_confirm_title')}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {t('consciousness_all_settings.reset_personality_confirm_desc')}
-                        </AlertDialogDescription>
+                        <AlertDialogTitle>{t('consciousness_all_settings.reset_personality_confirm_title')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('consciousness_all_settings.reset_personality_confirm_desc')}</AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>
-                          {t('consciousness_all_settings.cancel')}
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleResetPersonality}
-                          className="bg-destructive text-destructive-foreground"
-                        >
-                          {t('consciousness_all_settings.reset_button')}
-                        </AlertDialogAction>
+                        <AlertDialogCancel>{t('consciousness_all_settings.cancel')}</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleResetPersonality} className="bg-destructive text-destructive-foreground">{t('consciousness_all_settings.reset_button')}</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -838,23 +673,15 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.notifications_title')}
-                  </CardTitle>
-                  <CardDescription>
-                    {t('consciousness_all_settings.notifications_desc')}
-                  </CardDescription>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.notifications_title')}</CardTitle>
+                  <CardDescription>{t('consciousness_all_settings.notifications_desc')}</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.browser_notifications_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.browser_notifications_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.browser_notifications_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.browser_notifications_desc')}</p>
                   </div>
                   <Switch
                     checked={prefs.browserNotifications}
@@ -864,12 +691,8 @@ export default function AllSettingsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.sound_notifications_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.sound_notifications_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.sound_notifications_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.sound_notifications_desc')}</p>
                   </div>
                   <Switch
                     checked={prefs.soundNotifications}
@@ -883,23 +706,15 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.alert_thresholds_title')}
-                  </CardTitle>
-                  <CardDescription>
-                    {t('consciousness_all_settings.alert_thresholds_desc')}
-                  </CardDescription>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.alert_thresholds_title')}</CardTitle>
+                  <CardDescription>{t('consciousness_all_settings.alert_thresholds_desc')}</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {t('consciousness_all_settings.threshold_low')}
-                    </label>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {prefs.alertThresholdLow}
-                    </span>
+                    <label className="text-sm font-medium">{t('consciousness_all_settings.threshold_low')}</label>
+                    <span className="text-xs text-muted-foreground font-mono">{prefs.alertThresholdLow}</span>
                   </div>
                   <Slider
                     value={[prefs.alertThresholdLow]}
@@ -911,12 +726,8 @@ export default function AllSettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {t('consciousness_all_settings.threshold_high')}
-                    </label>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {prefs.alertThresholdHigh}
-                    </span>
+                    <label className="text-sm font-medium">{t('consciousness_all_settings.threshold_high')}</label>
+                    <span className="text-xs text-muted-foreground font-mono">{prefs.alertThresholdHigh}</span>
                   </div>
                   <Slider
                     value={[prefs.alertThresholdHigh]}
@@ -934,23 +745,15 @@ export default function AllSettingsPage() {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle className="text-base">
-                    {t('consciousness_all_settings.export_import_title')}
-                  </CardTitle>
-                  <CardDescription>
-                    {t('consciousness_all_settings.export_import_desc')}
-                  </CardDescription>
+                  <CardTitle className="text-base">{t('consciousness_all_settings.export_import_title')}</CardTitle>
+                  <CardDescription>{t('consciousness_all_settings.export_import_desc')}</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.export_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.export_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.export_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.export_desc')}</p>
                   </div>
                   <Button size="sm" variant="secondary" onClick={handleExport}>
                     {t('consciousness_all_settings.export_button')}
@@ -959,12 +762,8 @@ export default function AllSettingsPage() {
                 <div className="border-t border-border/30" />
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t('consciousness_all_settings.import_label')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t('consciousness_all_settings.import_desc')}
-                    </p>
+                    <p className="text-sm font-medium">{t('consciousness_all_settings.import_label')}</p>
+                    <p className="text-xs text-muted-foreground">{t('consciousness_all_settings.import_desc')}</p>
                   </div>
                   <div>
                     <input
@@ -975,11 +774,7 @@ export default function AllSettingsPage() {
                       className="hidden"
                       aria-label="Import settings file"
                     />
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
+                    <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()}>
                       {t('consciousness_all_settings.import_button')}
                     </Button>
                   </div>

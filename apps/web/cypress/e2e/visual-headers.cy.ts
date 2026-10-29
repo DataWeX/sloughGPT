@@ -32,8 +32,7 @@ const PAGES = [
   { path: '/rate-limit', name: 'rate-limit' },
   { path: '/benchmark', name: 'benchmark' },
   { path: '/feedback', name: 'feedback' },
-  // /images was absorbed into /files (card 7839a7c6) — it now 307s to /files,
-  // which has its own row below, so a separate screenshot would only duplicate it.
+  { path: '/images', name: 'images' },
   { path: '/files', name: 'files' },
   { path: '/docstore', name: 'docstore' },
   { path: '/kb', name: 'kb' },
@@ -88,10 +87,7 @@ describe('Visual — Header responsive breakpoints', () => {
 
   it('header at desktop (1280px)', () => {
     cy.viewport(1280, 800)
-    // At desktop width the mobile nav collapses to zero height and matches
-    // first in DOM order — skip hidden candidates.
     cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
-      .filter(':visible')
       .first()
       .screenshot('headers/responsive-desktop')
   })

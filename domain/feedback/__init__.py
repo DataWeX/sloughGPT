@@ -8,7 +8,6 @@ Public API:
     get_per_user_lora, create_training_pipeline
     get_health_monitor, get_message_feedback, HFDPOTrainer
 """
-
 from __future__ import annotations
 
 from domain.feedback._internal.database import (
@@ -18,6 +17,7 @@ from domain.feedback._internal.database import (
     SimilarPattern,
     get_feedback_db,
 )
+from domain.feedback._internal.hf_dpo import HFDPOTrainer
 from domain.feedback._internal.message_feedback import get_message_feedback
 from domain.feedback._internal.meta_weights import (
     MetaWeightManager,
@@ -31,7 +31,7 @@ from domain.feedback._internal.response_tracker import (
     get_response_tracker,
 )
 from domain.feedback._internal.training import create_training_pipeline
-from domain.feedback._internal.workflow import WorkflowConfig
+from domain.feedback._internal.workflow import WorkflowConfig, get_feedback_workflow
 
 
 def __getattr__(name):
@@ -63,14 +63,10 @@ __all__ = [
     "get_health_monitor",
     "get_message_feedback",
     "HFDPOTrainer",
-    "get_online_lora_updater",
 ]
 
 _LAZY_IMPORTS = {
     "get_lora_evaluator": ("._internal.lora_eval", "get_lora_evaluator"),
-    "HFDPOTrainer": ("._internal.hf_dpo", "HFDPOTrainer"),
-    "get_feedback_workflow": ("._internal.workflow", "get_feedback_workflow"),
-    "get_online_lora_updater": ("._internal.online_train", "get_online_lora_updater"),
 }
 
 

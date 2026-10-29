@@ -68,9 +68,11 @@ def _load_presets() -> list[dict]:
 
 
 def _seed_default_presets() -> None:
-    """Seed default presets if missing (idempotent)."""
+    """Seed default presets if collection is empty."""
     db = _get_db()
     col = db.collection("presets")
+    if col.count() > 0:
+        return
     defaults = [
         {
             "id": "warm",
@@ -102,8 +104,7 @@ def _seed_default_presets() -> None:
         },
     ]
     for p in defaults:
-        if not col.find_one({"id": p["id"]}):
-            col.insert_one(p)
+        col.insert_one(p)
 
 
 class ChatRequest(BaseModel):
@@ -225,9 +226,6 @@ class CompanionRouter:
         self, preset_id: str = Body(...), auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Apply a preset personality."""
-        # Defaults are guaranteed by seed-on-empty, same convention as
-        # list_presets — otherwise the first use on a fresh store 404s.
-        _seed_default_presets()
         db = _get_db()
         col = db.collection("presets")
         preset = col.find_one({"id": preset_id})

@@ -22,7 +22,6 @@ Usage:
 from __future__ import annotations
     unprotect_model("gpt2")
 """
-
 from __future__ import annotations
 
 import json

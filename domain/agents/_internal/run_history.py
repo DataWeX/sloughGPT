@@ -179,12 +179,6 @@ class AgentRunStore:
                     }
                 },
             )
-        # Substrate record AFTER the lock: consciousness.process is unbounded
-        # and must not serialize the store's other writers. One recording
-        # seam for every runner — domain.cognition.record_experience.
-        from domain.cognition import record_experience
-
-        record_experience(existing.get("goal", ""), response, source="agent.run")
 
     def fail(self, run_id: str, error: str) -> None:
         """Mark a run as failed with an error message."""
@@ -205,9 +199,6 @@ class AgentRunStore:
                     }
                 },
             )
-        from domain.cognition import record_experience
-
-        record_experience(existing.get("goal", ""), f"Run failed: {error}", source="agent.run")
 
     # ── Queries ──────────────────────────────────────────────────────────
 

@@ -84,7 +84,7 @@ export function DatasetImportDialog({
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto overflow-x-hidden py-4 flex-1 min-h-0">
-          <fieldset className="sticky top-0 z-10 -mx-1 px-1 -mt-4 pt-3 pb-2 mb-1 bg-background">
+          <fieldset>
             <legend className="sr-only">Import source</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {SOURCE_OPTIONS.map((option) => (
@@ -92,7 +92,14 @@ export function DatasetImportDialog({
                   <TooltipTrigger asChild>
                     <Button
                       variant={di.source === option.value ? 'secondary' : 'outline'}
-                      onClick={() => di.selectSource(option.value)}
+                      onClick={() => {
+                        di.setSource(option.value)
+                        di.clearError()
+                        di.setSearchResults([])
+                        di.setBookResults([])
+                        di.setSelectedBook(null)
+                        di.setSelectedRepo(null)
+                      }}
                       className={cn(
                         'h-auto flex-col items-start whitespace-normal min-w-0 p-3',
                         di.source === option.value ? 'border-primary' : '',
@@ -474,16 +481,6 @@ export function DatasetImportDialog({
 
           {di.error && <StatusBanner variant="error" message={di.error} dismissible={false} />}
 
-          {di.notice && (
-            <div
-              className="rounded-md bg-muted/50 px-4 py-3 text-sm text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              {di.notice}
-            </div>
-          )}
-
           {di.success && (
             <div
               className="rounded-md bg-success/10 px-4 py-3 text-sm text-success"
@@ -499,26 +496,18 @@ export function DatasetImportDialog({
         </div>
 
         <DialogFooter>
-          {di.success ? (
-            <Button type="button" onClick={() => di.handleOpenChange(false)}>
-              Done
+          {di.loading ? (
+            <Button type="button" variant="outline" onClick={() => di.abortRef.current?.abort()}>
+              Cancel Import
             </Button>
           ) : (
-            <>
-              {di.loading ? (
-                <Button type="button" variant="outline" onClick={() => di.abortRef.current?.abort()}>
-                  Cancel Import
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" onClick={() => di.handleOpenChange(false)}>
-                  Cancel
-                </Button>
-              )}
-              <Button type="button" onClick={di.handleImport} disabled={di.loading}>
-                {di.loading ? 'Importing...' : 'Import'}
-              </Button>
-            </>
+            <Button type="button" variant="outline" onClick={() => di.handleOpenChange(false)}>
+              Cancel
+            </Button>
           )}
+          <Button type="button" onClick={di.handleImport} disabled={di.loading}>
+            {di.loading ? 'Importing...' : 'Import'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

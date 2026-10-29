@@ -13,7 +13,7 @@
  */
 
 import {Platform, NativeModules} from 'react-native';
-import {getApiUrl} from './api-client';
+import {getApiUrl, getAuthHeaders} from './api-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const {LlamaContext} = NativeModules;
@@ -93,11 +93,15 @@ export async function downloadModel(
   // Try server endpoint first
   const serverUrl = `${baseUrl}/models/download/qwen-gguf`;
   try {
-    const serverRes = await fetch(serverUrl, {method: 'HEAD'});
+    const serverRes = await fetch(serverUrl, {
+      method: 'HEAD',
+      headers: await getAuthHeaders(),
+    });
     if (serverRes.ok) {
       const download = RNFS.downloadFile({
         fromUrl: serverUrl,
         toFile: localPath,
+        headers: await getAuthHeaders(),
         progress: (res: {contentLength: number; bytesWritten: number}) => {
           if (res.contentLength > 0 && onProgress) {
             onProgress(res.bytesWritten / res.contentLength);

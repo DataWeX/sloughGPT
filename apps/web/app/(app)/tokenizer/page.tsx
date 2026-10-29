@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, StatCard, KpiGrid, cn, FoldSection } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -36,27 +36,11 @@ export default function TokenizerPage() {
   const [trainResult, setTrainResult] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
   const addToast = useToastStore(s => s.addToast)
-  const loadStats = useCallback(() => {
-    setLoading(true)
-    setLoadError(null)
-    tokenizerController
-      .getStats()
-      .then((s) => {
-        setStats(s)
-        setLoading(false)
-      })
-      .catch(() => {
-        setLoadError('Could not load tokenizer data. Please try again.')
-        setLoading(false)
-      })
-  }, [])
-
-  // 'r' refreshes the page's own data — not the whole document.
-  useRefreshShortcut(loadStats)
+  useRefreshShortcut(() => router.refresh())
 
   useEffect(() => {
-    loadStats()
-  }, [loadStats])
+    tokenizerController.getStats().then(s => { setStats(s); setLoading(false) }).catch(() => { setLoadError('Could not load tokenizer data. Please try again.'); setLoading(false) })
+  }, [])
 
   const handleTokenize = async () => {
     if (!inputText.trim()) return
@@ -90,7 +74,7 @@ export default function TokenizerPage() {
   )
 
   return (
-    <PageContainer title="Tokenizer" subtitle={stats ? `Vocab: ${stats.vocab_size} · Merges: ${stats.total_merges}` : 'BPE tokenizer — try it, peek under hood, train your own'} loading={loading} error={loadError} onRetry={loadStats} toolbar={toolbar}>
+    <PageContainer title="Tokenizer" subtitle={stats ? `Vocab: ${stats.vocab_size} · Merges: ${stats.total_merges}` : 'BPE tokenizer — try it, peek under hood, train your own'} loading={loading} error={loadError} onRetry={() => window.location.reload()} toolbar={toolbar}>
       {stats && <KpiGrid><StatCard label="Vocab Size" value={String(stats.vocab_size)} /><StatCard label="Base Chars" value={String(stats.base_chars)} /><StatCard label="Merges" value={String(stats.total_merges)} /><StatCard label="Special Tokens" value={String(stats.special_tokens)} /></KpiGrid>}
       {!loading && !loadError && !stats && <div className="text-center py-8 text-xs text-muted-foreground">No tokenizer data. Train below or go to Training.<div className="mt-2"><Button size="sm" variant="outline" onClick={() => router.push('/training')}>Go to Training</Button></div></div>}
 

@@ -295,10 +295,7 @@ class TestDevices:
         k = Kernel()
         k.boot()
         handle = k.open_device("null")
-        # DeviceManager.open returns the raw int fd (-> int), and
-        # close_device accepts it natively ("Accepts DeviceHandle or int fd").
-        assert isinstance(handle, int)
-        assert k.close_device(handle) is True
+        assert k.close_device(handle.fd) is True
 
     def test_interrupts_property(self):
         k = Kernel()

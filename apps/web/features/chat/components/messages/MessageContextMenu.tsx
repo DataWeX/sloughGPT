@@ -2,17 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { cn } from '@sloughgpt/strui'
-import {
-  IconCopy,
-  IconCheck,
-  IconRefresh,
-  IconEdit,
-  IconStar,
-  IconTrash,
-  IconPin,
-  IconMessage,
-  IconChat,
-} from '@sloughgpt/strui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconPin, IconMessage, IconChat } from '@sloughgpt/strui'
 
 interface MessageContextMenuProps {
   messageId: string
@@ -90,12 +80,6 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [copied, setCopied] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  // Auto-close timer from handleCopy — tracked so the [open] effect's
-  // cleanup can cancel it. Otherwise it survives unmount and fires
-  // setState after the component is gone (production: setState-after-
-  // unmount leak; vitest: post-teardown "window is not defined" once
-  // jsdom is destroyed).
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -110,26 +94,15 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   useEffect(() => {
     if (!open) return
     const close = () => setOpen(false)
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
     document.addEventListener('keydown', handleKey)
     document.addEventListener('click', close)
     // Auto-focus first menu item
-    const focusTimer = setTimeout(() => {
-      const firstItem = menuRef.current?.querySelector(
-        '[role="menuitem"]:not([disabled])',
-      ) as HTMLElement
+    setTimeout(() => {
+      const firstItem = menuRef.current?.querySelector('[role="menuitem"]:not([disabled])') as HTMLElement
       firstItem?.focus()
     }, 0)
     return () => {
-      // Runs on every open-change AND on unmount: cancels the pending
-      // auto-close (stale cycle) and the focus timer (leak past cleanup).
-      if (closeTimerRef.current !== null) {
-        clearTimeout(closeTimerRef.current)
-        closeTimerRef.current = null
-      }
-      clearTimeout(focusTimer)
       document.removeEventListener('keydown', handleKey)
       document.removeEventListener('click', close)
     }
@@ -140,157 +113,69 @@ export const MessageContextMenu = memo(function MessageContextMenu({
       await navigator.clipboard.writeText(content)
       setCopied(true)
       onCopy?.(content)
-      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current)
-      closeTimerRef.current = setTimeout(() => setOpen(false), 400)
-    } catch {
-      /* clipboard unavailable */
-    }
+      setTimeout(() => setOpen(false), 400)
+    } catch { /* clipboard unavailable */ }
   }, [content, onCopy])
 
-  const items: MenuItem[] = useMemo(
-    () => [
-      {
-        label: copied ? 'Copied!' : 'Copy',
-        icon: copied ? <IconCheck className="h-3.5 w-3.5" /> : <IconCopy className="h-3.5 w-3.5" />,
-        onClick: handleCopy,
+  const items: MenuItem[] = useMemo(() => [
+    {
+      label: copied ? 'Copied!' : 'Copy',
+      icon: copied ? <IconCheck className="h-3.5 w-3.5" /> : <IconCopy className="h-3.5 w-3.5" />,
+      onClick: handleCopy,
+    },
+    ...(role === 'assistant' ? [{
+      label: 'Copy as HTML',
+      icon: <IconCopy className="h-3.5 w-3.5" />,
+      onClick: async () => {
+        try {
+          const html = simpleMarkdownToHtml(content)
+          await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })])
+          setOpen(false)
+        } catch { /* clipboard unavailable */ }
       },
-      ...(role === 'assistant'
-        ? [
-            {
-              label: 'Copy as HTML',
-              icon: <IconCopy className="h-3.5 w-3.5" />,
-              onClick: async () => {
-                try {
-                  const html = simpleMarkdownToHtml(content)
-                  await navigator.clipboard.write([
-                    new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) }),
-                  ])
-                  setOpen(false)
-                } catch {
-                  /* clipboard unavailable */
-                }
-              },
-            },
-          ]
-        : []),
-      ...(role === 'user' && onEdit
-        ? [
-            {
-              label: 'Edit',
-              icon: <IconEdit className="h-3.5 w-3.5" />,
-              onClick: () => {
-                onEdit(messageId)
-                setOpen(false)
-              },
-            },
-          ]
-        : []),
-      ...(onBookmark
-        ? [
-            {
-              label: isBookmarked ? 'Remove bookmark' : 'Bookmark',
-              icon: <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />,
-              onClick: () => {
-                onBookmark(messageId)
-                setOpen(false)
-              },
-            },
-          ]
-        : []),
-      ...(onPin
-        ? [
-            {
-              label: isPinned ? 'Unpin message' : 'Pin message',
-              icon: <IconPin className={cn('h-3.5 w-3.5', isPinned && 'fill-current')} />,
-              onClick: () => {
-                onPin(messageId)
-                setOpen(false)
-              },
-            },
-          ]
-        : []),
-      ...(role === 'assistant' && onRegenerate
-        ? [
-            {
-              label: 'Regenerate',
-              icon: <IconRefresh className="h-3.5 w-3.5" />,
-              onClick: () => {
-                onRegenerate(messageId)
-                setOpen(false)
-              },
-            },
-          ]
-        : []),
-      ...(onSaveToKnowledge
-        ? [
-            {
-              label: 'Save to knowledge',
-              icon: <IconPin className="h-3.5 w-3.5" />,
-              onClick: () => {
-                onSaveToKnowledge(messageId, content)
-                setOpen(false)
-              },
-            },
-          ]
-        : []),
-      ...(onAddNote
-        ? [
-            {
-              label: hasNote ? 'Edit note' : 'Add note',
-              icon: <IconMessage className="h-3.5 w-3.5" />,
-              onClick: () => {
-                onAddNote(messageId)
-                setOpen(false)
-              },
-            },
-          ]
-        : []),
-      ...(onThread
-        ? [
-            {
-              label: hasThread ? 'Open thread' : 'Reply in thread',
-              icon: <IconChat className="h-3.5 w-3.5" />,
-              onClick: () => {
-                onThread(messageId)
-                setOpen(false)
-              },
-            },
-          ]
-        : []),
-      ...(onDelete
-        ? [
-            {
-              label: 'Delete',
-              icon: <IconTrash className="h-3.5 w-3.5" />,
-              onClick: () => {
-                onDelete(messageId)
-                setOpen(false)
-              },
-              variant: 'destructive' as const,
-            },
-          ]
-        : []),
-    ],
-    [
-      copied,
-      handleCopy,
-      content,
-      messageId,
-      role,
-      onEdit,
-      onBookmark,
-      isBookmarked,
-      onPin,
-      isPinned,
-      onRegenerate,
-      onSaveToKnowledge,
-      onAddNote,
-      hasNote,
-      onThread,
-      hasThread,
-      onDelete,
-    ],
-  )
+    }] : []),
+    ...(role === 'user' && onEdit ? [{
+      label: 'Edit',
+      icon: <IconEdit className="h-3.5 w-3.5" />,
+      onClick: () => { onEdit(messageId); setOpen(false) },
+    }] : []),
+    ...(onBookmark ? [{
+      label: isBookmarked ? 'Remove bookmark' : 'Bookmark',
+      icon: <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />,
+      onClick: () => { onBookmark(messageId); setOpen(false) },
+    }] : []),
+    ...(onPin ? [{
+      label: isPinned ? 'Unpin message' : 'Pin message',
+      icon: <IconPin className={cn('h-3.5 w-3.5', isPinned && 'fill-current')} />,
+      onClick: () => { onPin(messageId); setOpen(false) },
+    }] : []),
+    ...(role === 'assistant' && onRegenerate ? [{
+      label: 'Regenerate',
+      icon: <IconRefresh className="h-3.5 w-3.5" />,
+      onClick: () => { onRegenerate(messageId); setOpen(false) },
+    }] : []),
+    ...(onSaveToKnowledge ? [{
+      label: 'Save to knowledge',
+      icon: <IconPin className="h-3.5 w-3.5" />,
+      onClick: () => { onSaveToKnowledge(messageId, content); setOpen(false) },
+    }] : []),
+    ...(onAddNote ? [{
+      label: hasNote ? 'Edit note' : 'Add note',
+      icon: <IconMessage className="h-3.5 w-3.5" />,
+      onClick: () => { onAddNote(messageId); setOpen(false) },
+    }] : []),
+    ...(onThread ? [{
+      label: hasThread ? 'Open thread' : 'Reply in thread',
+      icon: <IconChat className="h-3.5 w-3.5" />,
+      onClick: () => { onThread(messageId); setOpen(false) },
+    }] : []),
+    ...(onDelete ? [{
+      label: 'Delete',
+      icon: <IconTrash className="h-3.5 w-3.5" />,
+      onClick: () => { onDelete(messageId); setOpen(false) },
+      variant: 'destructive' as const,
+    }] : []),
+  ], [copied, handleCopy, content, messageId, role, onEdit, onBookmark, isBookmarked, onPin, isPinned, onRegenerate, onSaveToKnowledge, onAddNote, hasNote, onThread, hasThread, onDelete])
 
   return (
     <>
@@ -335,11 +220,9 @@ export const MessageContextMenu = memo(function MessageContextMenu({
               disabled={item.disabled}
               onClick={item.onClick}
               className={cn(
-                'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors',
-                'hover:bg-muted/50 focus:bg-muted/50 focus:outline-none disabled:opacity-40 disabled:pointer-events-none',
-                item.variant === 'destructive' &&
-                  'text-destructive hover:bg-destructive/10 focus:bg-destructive/10',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors",
+                "hover:bg-muted/50 focus:bg-muted/50 focus:outline-none disabled:opacity-40 disabled:pointer-events-none",
+                item.variant === 'destructive' && "text-destructive hover:bg-destructive/10 focus:bg-destructive/10"
               )}
             >
               {item.icon}

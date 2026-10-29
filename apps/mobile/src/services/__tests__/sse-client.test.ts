@@ -53,7 +53,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const tokens: string[] = [];
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['Hel', 'lo']);
@@ -67,7 +67,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const statuses: string[] = [];
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       if (event.status === 'complete') statuses.push('complete');
     }
     expect(statuses).toEqual(['complete']);
@@ -80,7 +80,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const errors: Array<{status: string; message?: string}> = [];
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       if (event.status === 'error') {
         errors.push({status: event.status, message: event.message});
       }
@@ -94,7 +94,7 @@ describe('streamSSE', () => {
     ];
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       expect(event.meta).toEqual({tokens: 5, elapsed_ms: 100});
     }
   });
@@ -111,7 +111,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const tokens: string[] = [];
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['hi']);
@@ -126,7 +126,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const tokens: string[] = [];
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['ok']);
@@ -154,7 +154,7 @@ describe('streamSSE', () => {
     } as unknown as Response);
 
     const tokens: string[] = [];
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       if (event.data?.token) tokens.push(event.data.token as string);
     }
     expect(tokens).toEqual(['Hello']);
@@ -203,7 +203,7 @@ describe('streamSSE', () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
     const envelopes: unknown[] = [];
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       envelopes.push(event);
     }
     expect(envelopes).toHaveLength(2);
@@ -219,7 +219,7 @@ describe('streamSSE', () => {
     ];
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse(events));
 
-    for await (const event of streamSSE('/chat', {messages: []})) {
+    for await (const event of streamSSE('/chat/stream', {messages: []})) {
       expect(event.status).toBe('error');
       expect(event.data?.error).toBe('Token limit exceeded');
     }
@@ -228,7 +228,7 @@ describe('streamSSE', () => {
   it('passes Accept and Cache-Control headers', async () => {
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
 
-    for await (const _ of streamSSE('/chat', {messages: []})) {}
+    for await (const _ of streamSSE('/chat/stream', {messages: []})) {}
 
     const [, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(init.headers).toMatchObject({
@@ -236,5 +236,47 @@ describe('streamSSE', () => {
       'Cache-Control': 'no-cache',
       'Content-Type': 'application/json',
     });
+  });
+});
+
+describe('streamSSE Authorization header', () => {
+  it('attaches Bearer token when a token is stored', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) =>
+      Promise.resolve(key === '@sloughgpt/auth_token' ? 'jwt-abc' : null),
+    );
+    (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
+
+    for await (const _ of streamSSE('/chat/stream', {messages: []})) {}
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(init.headers).toMatchObject({
+      Authorization: 'Bearer jwt-abc',
+      Accept: 'text/event-stream',
+    });
+  });
+
+  it('omits Authorization when no token is stored', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+    (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
+
+    for await (const _ of streamSSE('/chat/stream', {messages: []})) {}
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(init.headers.Authorization).toBeUndefined();
+  });
+});
+
+describe('streamSSE permanent failures', () => {
+  it('does not reconnect when the response has no body', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+    } as unknown as Response);
+
+    const gen = streamSSE('/empty', {});
+    await expect(gen.next()).rejects.toThrow('No response body');
+    // A permanent condition must not enter the 5-attempt backoff loop.
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(1);
   });
 });

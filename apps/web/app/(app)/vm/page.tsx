@@ -534,48 +534,27 @@ HLT`,
 
 export default function VMPage() {
   const [vmMode, setVmMode] = useState<'assembly' | 'browser'>('assembly')
-  const [source, setSourceRaw] = useState(DEFAULT_PROGRAMS.hello)
+  const [source, setSource] = useState(DEFAULT_PROGRAMS.hello)
   const [result, setResult] = useState<VMRunResult | null>(null)
   const [running, setRunning] = useState(false)
-  const [maxSteps, setMaxStepsRaw] = useState(DEFAULT_MAX_STEPS)
+  const [maxSteps, setMaxSteps] = useState(DEFAULT_MAX_STEPS)
   const [debug, setDebug] = useState(false)
   const [keyboardInput, setKeyboardInput] = useState('')
-  const [role, setRoleRaw] = useState('user')
+  const [role, setRole] = useState('user')
   const [hydrated, setHydrated] = useState(false)
   const [showRef, setShowRef] = useState(false)
   const [copied, setCopied] = useState(false)
   const [trainingJob, setTrainingJob] = useState<VMTrainingJob | null>(null)
-  const [trainConfig, setTrainConfigRaw] = useState<TrainConfig>(DEFAULT_TRAIN_CONFIG)
+  const [trainConfig, setTrainConfig] = useState<TrainConfig>(DEFAULT_TRAIN_CONFIG)
   const [datasetNames, setDatasetNames] = useState<string[]>([])
   const [customDataset, setCustomDataset] = useState(false)
   const [launchedJob, setLaunchedJob] = useState<number | null>(null)
-
-  // loadState() hydrates from chatDB asynchronously. Edits made before it
-  // completes must not be clobbered by it: the user-facing setters below mark
-  // the field as touched, and loadState skips touched fields.
-  const sourceTouched = useRef(false)
-  const stepsTouched = useRef(false)
-  const roleTouched = useRef(false)
-  const trainTouched = useRef(false)
-  const setSource = useCallback<React.Dispatch<React.SetStateAction<string>>>((v) => {
-    sourceTouched.current = true
-    setSourceRaw(v)
-  }, [])
-  const setMaxSteps = useCallback<React.Dispatch<React.SetStateAction<number>>>((v) => {
-    stepsTouched.current = true
-    setMaxStepsRaw(v)
-  }, [])
-  const setRole = useCallback<React.Dispatch<React.SetStateAction<string>>>((v) => {
-    roleTouched.current = true
-    setRoleRaw(v)
-  }, [])
-  const setTrainConfig = useCallback<React.Dispatch<React.SetStateAction<TrainConfig>>>((v) => {
-    trainTouched.current = true
-    setTrainConfigRaw(v)
-  }, [])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trainingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useRefreshShortcut(() => {
+    window.location.reload()
+  })
 
   useEffect(() => {
     return () => {
@@ -671,84 +650,59 @@ export default function VMPage() {
     }
   }, [trainingJobId, pollTrainingJob])
 
-  // The three GET-backed fields, loaded from their own controllers. Guarded by
-  // the *Touched refs, so a refresh can never overwrite a field the user has
-  // edited — untouched fields simply pick up the fresh server value. Shared by
-  // the mount effect and the 'r' shortcut: refresh re-runs these GETs instead
-  // of reloading the document, which used to destroy the training timer and
-  // every form field. Training timers, *Touched refs and form state are never
-  // touched here.
-  const loadVmData = useCallback(async () => {
-    const [role, maxSteps, trainConfigData] = await Promise.all([
-      loadRole(),
-      loadMaxSteps(),
-      loadTrainConfig(),
-    ])
-    if (!roleTouched.current) setRoleRaw(role)
-    if (!stepsTouched.current) setMaxStepsRaw(maxSteps)
-    if (!trainTouched.current) setTrainConfigRaw(trainConfigData)
-    setHydrated(true)
-  }, [])
-
-  // Load from URL hash (#code=base64) or persisted state after hydration.
-  // Mount-only: the hash is a one-shot deep-link, not something to re-read on
-  // every refresh.
+  // Load from URL hash (#code=base64) or persisted state after hydration
   useEffect(() => {
     let sourceLoaded = false
     try {
       const hash = window.location.hash
       if (hash.startsWith('#code=')) {
         const decoded = atob(hash.slice(6))
-        setSourceRaw(decoded)
+        setSource(decoded)
         sourceLoaded = true
       }
     } catch {
       /* malformed hash — fall through to chatDB */
     }
 
-    const loadSource = async () => {
-      if (!sourceLoaded && !sourceTouched.current) {
+    const loadState = async () => {
+      if (!sourceLoaded) {
         const saved = await chatDB.getKV<string>('vm-source')
-        if (saved) setSourceRaw(saved)
+        if (saved) setSource(saved)
       }
+      const [role, maxSteps, trainConfigData] = await Promise.all([
+        loadRole(),
+        loadMaxSteps(),
+        loadTrainConfig(),
+      ])
+      setRole(role)
+      setMaxSteps(maxSteps)
+      setTrainConfig(trainConfigData)
+      setHydrated(true)
     }
 
-    // A rejected KV read must not leave the page stuck on the loading
-    // skeleton (hydrated gates both rendering and the save effects).
-    Promise.allSettled([loadVmData(), loadSource()]).then((results) => {
-      if (results.some((r) => r.status === 'rejected')) setHydrated(true)
-    })
-  }, [loadVmData])
+    loadState()
+  }, [])
 
-  // 'r' re-runs this page's own idempotent GET loads — never the document
-  // (which destroyed the training timer and every form field).
-  useRefreshShortcut(() => {
-    loadVmData().catch(() => setHydrated(true))
-  })
-
-  // Save source to chatDB on change.
-  // Touched fields save immediately even before hydration (the hydration load
-  // skips touched fields, so writing early is safe); untouched fields wait so
-  // a default value can never overwrite the stored one on mount.
+  // Save source to chatDB on change
   useEffect(() => {
-    if (!hydrated && !sourceTouched.current) return
+    if (!hydrated) return
     chatDB.setKV('vm-source', source).catch(() => {})
   }, [source, hydrated])
 
   // Save role and steps to chatDB on change
   useEffect(() => {
-    if (!hydrated && !roleTouched.current) return
+    if (!hydrated) return
     chatDB.setKV('vm-role', role).catch(() => {})
   }, [role, hydrated])
 
   useEffect(() => {
-    if (!hydrated && !stepsTouched.current) return
+    if (!hydrated) return
     chatDB.setKV('vm-max-steps', maxSteps).catch(() => {})
   }, [maxSteps, hydrated])
 
   // Save the training launch config to chatDB on change
   useEffect(() => {
-    if (!hydrated && !trainTouched.current) return
+    if (!hydrated) return
     chatDB.setKV('vm-train-config', clampTrainConfig(trainConfig)).catch(() => {})
   }, [trainConfig, hydrated])
 
@@ -793,7 +747,7 @@ export default function VMPage() {
     const res = await handleRun(false, src)
     const eax = res?.registers.find((r) => r.name === 'EAX')?.value
     setLaunchedJob(eax != null && eax >= 1 ? eax : null)
-  }, [trainConfig, handleRun, setSource])
+  }, [trainConfig, handleRun])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

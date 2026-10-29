@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
-import { authFetch } from '@/lib/http-client'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@sloughgpt/strui'
@@ -552,7 +551,7 @@ export default function ConsciousnessDocsPage() {
       if (ep.requestBody && ep.method !== 'GET') {
         init.body = ep.requestBody
       }
-      const res = await authFetch(ep.path, init)
+      const res = await fetch(`${PUBLIC_API_URL}${ep.path}`, init)
       const elapsed = Date.now() - start
       const text = await res.text()
       let formatted = text

@@ -110,27 +110,6 @@ export interface BookResult {
   cover: number | null
 }
 
-/**
- * Normalize a GitHub reference into a cloneable URL.
- *
- * The repo-search flow stores a repo's `full_name` (e.g. "qt/qt") in the url
- * field, but the backend `GitHubImportRequest.url` schema requires a value
- * matching `^https?://`. Expand bare `owner/repo` slugs to a full GitHub URL;
- * pass anything already protocol-prefixed (https://, git@, ssh://) through
- * untouched so a real URL a user typed is never clobbered.
- */
-export function toGitHubCloneUrl(ref: string): string {
-  const trimmed = ref.trim()
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) || trimmed.startsWith('git@')) {
-    return trimmed
-  }
-  const slug = trimmed.replace(/\.git$/, '')
-  if (/^[\w.-]+\/[\w.-]+$/.test(slug)) {
-    return `https://github.com/${slug}`
-  }
-  return trimmed
-}
-
 export const datasetController = {
   async list(): Promise<Dataset[]> {
     const data = await apiGet<{ datasets: Dataset[] }>('/datasets')
@@ -202,11 +181,7 @@ export const datasetController = {
     request: { url: string; name: string; extensions?: string[]; max_files?: number },
     opts?: { signal?: AbortSignal },
   ): Promise<ImportResponse> {
-    return apiPost<ImportResponse>(
-      '/datasets/import/github',
-      { ...request, url: toGitHubCloneUrl(request.url) },
-      { signal: opts?.signal },
-    )
+    return apiPost<ImportResponse>('/datasets/import/github', request, { signal: opts?.signal })
   },
 
   async importFromHuggingFace(

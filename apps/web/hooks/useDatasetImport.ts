@@ -24,7 +24,6 @@ interface UseDatasetImportReturn {
   loading: boolean
   error: string | null
   clearError: () => void
-  notice: string | null
   success: { message: string } | null
   searchResults: GitHubRepo[]
   bookResults: BookResult[]
@@ -36,7 +35,6 @@ interface UseDatasetImportReturn {
   setSearchResults: (r: GitHubRepo[]) => void
   setBookResults: (r: BookResult[]) => void
   abortRef: React.RefObject<AbortController | null>
-  selectSource: (s: ImportSource) => void
   handleSearch: () => Promise<void>
   handleImport: () => Promise<void>
   handleOpenChange: (open: boolean) => void
@@ -58,7 +56,6 @@ export function useDatasetImport(
   const [extensions, setExtensions] = useState<string[]>(DEFAULT_EXTENSIONS)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [success, setSuccess] = useState<{ message: string } | null>(null)
   const [searchResults, setSearchResults] = useState<GitHubRepo[]>([])
   const [bookResults, setBookResults] = useState<BookResult[]>([])
@@ -77,23 +74,11 @@ export function useDatasetImport(
     setPath('')
     setExtensions(DEFAULT_EXTENSIONS)
     setError(null)
-    setNotice(null)
     setSuccess(null)
     setSearchResults([])
     setBookResults([])
     setSelectedBook(null)
     setSelectedRepo(null)
-  }
-
-  /**
-   * Switch import source. Every source starts from a clean slate: values,
-   * selections, and result banners never leak across sources (fixes ISBN
-   * search text / dataset name / success banner surviving into the GitHub
-   * and Kaggle forms).
-   */
-  const selectSource = (s: ImportSource) => {
-    setSource(s)
-    resetForm()
   }
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -108,6 +93,13 @@ export function useDatasetImport(
     setExtensions(prev =>
       prev.includes(ext) ? prev.filter(e => e !== ext) : [...prev, ext]
     )
+  }
+
+  const selectRepo = (repo: GitHubRepo) => {
+    setSelectedRepo(repo)
+    setUrl(repo.full_name)
+    setName(repo.name)
+    setSearchResults([])
   }
 
   const handleSearch = async () => {
@@ -135,7 +127,6 @@ export function useDatasetImport(
     abortRef.current = ac
     setLoading(true)
     setError(null)
-    setNotice(null)
     setSuccess(null)
 
     try {
@@ -242,15 +233,7 @@ export function useDatasetImport(
       trackEvent('dataset_imported', { source })
       onImportComplete(result.dataset_id)
     } catch (err) {
-      if (ac.signal.aborted) {
-        // AbortController only cancels the HTTP request — the server-side
-        // import (e.g. git clone) may already be running and will keep its
-        // per-name lock until it finishes.
-        setNotice(
-          'Import cancelled. If the server had already started, it may still finish in the background.',
-        )
-        return
-      }
+      if (ac.signal.aborted) return
       const message = extractErrorMessage(err, 'Could not import')
       setError(message)
     } finally {
@@ -266,14 +249,13 @@ export function useDatasetImport(
     kaggleDataset, setKaggleDataset,
     path, setPath,
     extensions, toggleExtension,
-    loading, error, notice, success, clearError: () => setError(null),
+    loading, error, success, clearError: () => setError(null),
     searchResults, bookResults,
     searching,
     selectedBook, selectedRepo,
     setSelectedRepo, setSelectedBook,
     setSearchResults, setBookResults,
     abortRef,
-    selectSource,
     handleSearch, handleImport,
     handleOpenChange, resetForm,
   }

@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 
 describe('training-service', () => {
-  it('startTraining calls POST /auto-train/start', async () => {
+  it('startTraining calls POST /training/start', async () => {
     const result = await training.startTraining({
       epochs: 5,
       learning_rate: 0.001,
@@ -33,40 +33,40 @@ describe('training-service', () => {
       soul_name: 'test',
       algo: 'lstm',
     });
-    expect(mockApi.post).toHaveBeenCalledWith('/auto-train/start', expect.objectContaining({
+    expect(mockApi.post).toHaveBeenCalledWith('/training/start', expect.objectContaining({
       epochs: 5,
       algo: 'lstm',
     }));
     expect(result).toEqual({status: 'ok'});
   });
 
-  it('stopTraining calls POST /auto-train/stop', async () => {
+  it('stopTraining calls POST /training/stop', async () => {
     await training.stopTraining();
-    expect(mockApi.post).toHaveBeenCalledWith('/auto-train/stop');
+    expect(mockApi.post).toHaveBeenCalledWith('/training/stop');
   });
 
-  it('getTrainingStatus calls GET /auto-train/status', async () => {
+  it('getTrainingStatus calls GET /training/status', async () => {
     mockApi.get.mockResolvedValueOnce({running: false, config: {}});
     const result = await training.getTrainingStatus();
-    expect(mockApi.get).toHaveBeenCalledWith('/auto-train/status');
+    expect(mockApi.get).toHaveBeenCalledWith('/training/status');
     expect(result.running).toBe(false);
   });
 
-  it('listCheckpoints calls GET /auto-train/checkpoints', async () => {
+  it('listCheckpoints calls GET /training/checkpoints', async () => {
     mockApi.get.mockResolvedValueOnce([{name: 'cp1', loss: 0.5}]);
     const result = await training.listCheckpoints();
-    expect(mockApi.get).toHaveBeenCalledWith('/auto-train/checkpoints');
+    expect(mockApi.get).toHaveBeenCalledWith('/training/checkpoints');
     expect(result.length).toBe(1);
   });
 
   it('deleteCheckpoint calls DELETE', async () => {
     await training.deleteCheckpoint('cp1');
-    expect(mockApi.delete).toHaveBeenCalledWith('/auto-train/checkpoints/cp1');
+    expect(mockApi.delete).toHaveBeenCalledWith('/training/checkpoints/cp1');
   });
 
   it('loadCheckpoint calls POST', async () => {
     await training.loadCheckpoint('cp1');
-    expect(mockApi.post).toHaveBeenCalledWith('/auto-train/checkpoints/cp1/load');
+    expect(mockApi.post).toHaveBeenCalledWith('/training/checkpoints/cp1/load');
   });
 
   it('listDatasets calls GET /datasets', async () => {

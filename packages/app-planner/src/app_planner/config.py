@@ -8,9 +8,8 @@ Resolution order (first match wins):
     2. Environment variable (``APP_PLANNER_NOTES_DIR``, ``APP_PLANNER_BOARD_DIR``,
        ``APP_PLANNER_BACKEND``).
     3. Repository detection: walking up from the current directory, the
-       first ancestor containing ``.kanban/board.jsonl`` (canonical) or the
-       legacy ``.kanban/board.json`` is treated as the project root, giving
-       ``<root>/.dev-notes`` and ``<root>/.kanban``.
+       first ancestor containing ``.kanban/board.json`` is treated as the
+       project root, giving ``<root>/.dev-notes`` and ``<root>/.kanban``.
     4. User config fallback (``~/.config/dev-notes`` and
        ``~/.config/kanban``).
 """
@@ -55,12 +54,10 @@ STATUS_ICONS = {
 
 
 def _walk_for_board(start: Path) -> Path | None:
-    """Return the nearest ancestor of *start* containing a kanban board —
-    ``.kanban/board.jsonl`` (canonical) or the legacy ``.kanban/board.json``."""
+    """Return the nearest ancestor of *start* containing ``.kanban/board.json``."""
     cur = start.resolve()
     for candidate in (cur, *cur.parents):
-        kanban = candidate / ".kanban"
-        if (kanban / "board.jsonl").is_file() or (kanban / "board.json").is_file():
+        if (candidate / ".kanban" / "board.json").is_file():
             return candidate
     return None
 

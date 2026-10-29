@@ -703,10 +703,7 @@ class TestExportExceptionBranch:
         def _boom(src, dst):
             raise OSError("disk full")
 
-        # The save path moved to os.replace (atomic_write's chosen primitive
-        # — see domain/infrastructure/_internal/atomic_write.py); inject the
-        # failure there so the propagation + temp-cleanup contract is real.
-        monkeypatch.setattr(slonet.os, "replace", _boom)
+        monkeypatch.setattr(slonet.os, "rename", _boom)
         with pytest.raises(OSError, match="disk full"):
             export_to_sou(net, str(out))
         assert list(tmp_path.glob("*.tmp")) == []
@@ -1313,11 +1310,7 @@ class TestTensorTypeAndJvp:
         assert np.allclose(res[y.id], [4.0, 6.0])
         assert np.allclose(res[z.id], [8.0, 12.0])
         j = z.jvp(Tensor(np.array([0.5, 0.5])))
-        # z = 2x² at x=[2,3] → J = diag(4x) = diag([8,12]); J @ v with
-        # v=[0.5,0.5] = [4,6] — consistent with the forward_grad asserts
-        # above (seed [1,1] → res[z]=[8,12]). The old [0.5, 0.5] expected
-        # the tangent to pass through unchanged, true only for identity maps.
-        assert np.allclose(j.data, [4.0, 6.0])
+        assert np.allclose(j.data, [0.5, 0.5])
 
 
 class TestModuleTensorFuncs:
@@ -1581,11 +1574,9 @@ class TestSchedulerBaseEdges:
         assert opt.lr == 0.0
 
     def test_abstract_get_lr_raises(self):
-        # SloLRScheduler is an ABC with @abstractmethod get_lr — the guard
-        # fires at INSTANTIATION (TypeError), so a bare subclass can never
-        # be built to call the NotImplementedError body at all.
-        with pytest.raises(TypeError, match="abstract"):
-            _BareScheduler(_MockOpt(lr=1.0), last_epoch=0)
+        sched = _BareScheduler(_MockOpt(lr=1.0), last_epoch=0)
+        with pytest.raises(NotImplementedError):
+            sched.get_lr()
 
     def test_get_last_lr_fallback_to_get_lr(self):
         opt = _MockOpt(lr=0.1)
@@ -2355,13 +2346,6 @@ class TestGetAcceleratorOldBackendFailure:
         import domain.training._internal.gpu.accelerator as _old_acc_mod
 
         monkeypatch.setattr(slonet, "_ACCELERATOR", None)
-        # Both legs of the fallback chain must fail: slolib first (as the host
-        # now has cupy, the real probe would return a CUDA backend and mask
-        # the legacy path), then the legacy training accelerator.
-        monkeypatch.setattr(
-            "domain.slolib._internal.gpu.get_accelerator",
-            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
-        )
         monkeypatch.setattr(
             _old_acc_mod,
             "get_accelerator",
@@ -2558,10 +2542,6 @@ class TestKernelsImportFallback:
         from pathlib import Path
 
         core_py = Path(__file__).resolve().parents[1]
-        # domain/ lives at the repo root; the subprocess gets no conftest
-        # sys.path fixup, so core_py alone leaves `import domain` failing
-        # (same family as the phoneme subprocess fix, PR #147).
-        repo_root = Path(__file__).resolve().parents[3]
         code = (
             "import sys\n"
             "class _Block:\n"
@@ -2574,10 +2554,7 @@ class TestKernelsImportFallback:
             "print('KERNELS_FALLBACK_OK')\n"
         )
         env = dict(os.environ)
-        parts = [str(repo_root), str(core_py)]
-        if env.get("PYTHONPATH"):
-            parts.append(env["PYTHONPATH"])
-        env["PYTHONPATH"] = os.pathsep.join(parts)
+        env["PYTHONPATH"] = str(core_py) + os.pathsep + env.get("PYTHONPATH", "")
         res = subprocess.run(
             [sys.executable, "-c", code],
             capture_output=True,

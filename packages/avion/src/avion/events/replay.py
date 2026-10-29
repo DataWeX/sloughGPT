@@ -11,7 +11,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from avion.challenge import page_challenge
 from avion.core.element import ElementLocator
 from avion.events.models import Event, EventType
 
@@ -40,10 +39,6 @@ class ReplayConfig:
 
     stop_on_error: bool = True
     dry_run: bool = False  # resolve locators, skip actions
-    # Challenge yield: a bot-challenge page stops the replay (the human
-    # takes over); disable only against internal pages whose wording
-    # collides with a marker.
-    yield_on_challenge: bool = True
 
 
 @dataclass
@@ -70,14 +65,6 @@ class ReplayResult:
 
     steps: list[ReplayStep] = field(default_factory=list)
     success: bool = True
-    # Set when the replay yielded to a human (challenge page): the dict
-    # form of avion.challenge.Challenge, None on a clean run.
-    challenge: dict[str, str] | None = None
-
-    @property
-    def needs_human(self) -> bool:
-        """The replay stopped on a challenge page, not on a step outcome."""
-        return self.challenge is not None
 
     @property
     def passed(self) -> int:
@@ -92,7 +79,6 @@ class ReplayResult:
             "success": self.success,
             "passed": self.passed,
             "failed": self.failed,
-            "challenge": self.challenge,
             "steps": [s.to_dict() for s in self.steps],
         }
 
@@ -113,14 +99,6 @@ class EventReplay:
     async def replay(self, events: list[Event]) -> ReplayResult:
         result = ReplayResult()
         for event in events:
-            # Challenge yield, checked before the next step acts on a
-            # page automation must not touch: halt with the evidence.
-            if self._config.yield_on_challenge and not self._config.dry_run:
-                challenge = await page_challenge(getattr(self._session, "backend", None))
-                if challenge is not None:
-                    result.challenge = challenge.to_dict()
-                    result.success = False
-                    break
             step = await self._replay_one(event)
             if step is None:
                 continue  # event carries no action (e.g. session markers)
@@ -134,19 +112,8 @@ class EventReplay:
     async def _replay_one(self, event: Event) -> ReplayStep | None:
         try:
             if event.type == EventType.NAVIGATE:
-                return await self._do_goto(event)
-            if event.type == EventType.ELEMENT_FOUND:
-                # Recorded evidence replays as a BARRIER: the recorder saw
-                # this element before it proceeded — the post-submit wait
-                # that closes the form-submit race at record time. Skipping
-                # it would drop the proof; replaying it re-creates the
-                # settle point, so a login lands before the next goto races
-                # it (seen: fresh-profile replay parked on /login).
-                locator = parse_locator(event.name)
-                if locator is None:
-                    return None  # unreversible evidence — treat as noise
                 return await self._do(
-                    event, f"wait {event.name}", lambda: self._session.find(locator)
+                    event, f"goto {event.name}", lambda: self._session.goto(event.name)
                 )
             if event.type in (EventType.CLICK, EventType.FILL):
                 locator = parse_locator(event.name)
@@ -171,21 +138,6 @@ class EventReplay:
         try:
             if not self._config.dry_run:
                 await run()
-            return ReplayStep(event.seq, action)
-        except Exception as e:
-            return ReplayStep(event.seq, action, False, str(e))
-
-    async def _do_goto(self, event: Event) -> ReplayStep:
-        """``session.goto`` reports failure by RETURN, not by raising — a
-        passed step for a page that never moved is a lie the flow report
-        must not tell (seen: an attach replay counted ``goto /`` as done
-        while the browser sat on the results page)."""
-        action = f"goto {event.name}"
-        try:
-            if not self._config.dry_run:
-                ok = await self._session.goto(event.name)
-                if ok is False:
-                    return ReplayStep(event.seq, action, False, "navigation did not land")
             return ReplayStep(event.seq, action)
         except Exception as e:
             return ReplayStep(event.seq, action, False, str(e))

@@ -581,7 +581,7 @@ class TestConsoleLogger:
         output = stream.getvalue().strip()
         data = json.loads(output)
         assert data["msg"] == "structured"
-        assert data["lvl"] == "INFO"
+        assert data["level"] == "INFO"
 
     def test_json_includes_tag(self):
         import json
@@ -591,7 +591,7 @@ class TestConsoleLogger:
         log.tag("REQ").info("handled")
         output = stream.getvalue().strip()
         data = json.loads(output)
-        assert data["op"] == "REQ"
+        assert data["tag"] == "REQ"
 
     def test_json_includes_error_code(self):
         import json
@@ -621,7 +621,7 @@ class TestConsoleLogger:
         log.error("fail", exception="RuntimeError: oops")
         output = stream.getvalue().strip()
         data = json.loads(output)
-        assert data["exception"] == "RuntimeError: oops"
+        assert data["err"] == "RuntimeError: oops"
 
     def test_human_format_with_context(self):
         stream = io.StringIO()
@@ -825,8 +825,7 @@ class TestShellLogger:
         log = ShellLogger("slo.shell", stream=stream, colors=False)
         log.warning("warn")
         output = stream.getvalue()
-        # Human format renders a compact 3-char token plus an icon: WRN⚠.
-        assert "WRN⚠" in output
+        assert "WARNING" in output
 
     def test_context_shown(self):
         stream = io.StringIO()
@@ -855,7 +854,7 @@ class TestShellLogger:
         log.info("with color")
         output = stream.getvalue()
         assert "with color" in output
-        assert "INF" in output
+        assert "INFO" in output
 
 
 # ---------------------------------------------------------------------------
@@ -1065,9 +1064,7 @@ class TestThreadSafety:
             t.join()
         assert errors == []
         lines = stream.getvalue().strip().split("\n")
-        # Human format renders each record as a message line plus an indented
-        # logger line, so count the records themselves rather than raw lines.
-        assert len([ln for ln in lines if "msg-" in ln]) == 50
+        assert len(lines) == 50
 
 
 # ---------------------------------------------------------------------------
@@ -1303,7 +1300,7 @@ class TestConsoleLoggerExtended:
         log = ConsoleLogger("slo.test", stream=stream, colors=False, format="human")
         log.error("fail", exception="RuntimeError: oops")
         output = stream.getvalue()
-        assert "[RuntimeError: oops]" in output
+        assert "[RuntimeError]" in output
         assert "oops" in output
 
     def test_json_level_mapping(self):
@@ -1313,7 +1310,7 @@ class TestConsoleLoggerExtended:
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.warning("warn")
         data = json.loads(stream.getvalue().strip())
-        assert data["lvl"] == "WARNING"
+        assert data["level"] == "WARN"
 
     def test_json_critical_level(self):
         import json
@@ -1322,7 +1319,7 @@ class TestConsoleLoggerExtended:
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.critical("crit")
         data = json.loads(stream.getvalue().strip())
-        assert data["lvl"] == "CRITICAL"
+        assert data["level"] == "CRIT"
 
     def test_human_format_multiple_context(self):
         stream = io.StringIO()

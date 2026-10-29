@@ -67,7 +67,13 @@ def _make_weights(arch):
 
 
 @pytest.fixture
-def vector_be():
+def vector_be(monkeypatch):
+    # Pin the suite's live pools to forkserver regardless of the
+    # SLO_VECTOR_START_METHOD hatch: a live fork Pool inside the suite can
+    # fork into leftover server threads and deadlock (class docstring of
+    # TestPoolStartMethod, run-3 evidence), and default-assertions below
+    # must not depend on the hatch being unset.
+    monkeypatch.delenv("SLO_VECTOR_START_METHOD", raising=False)
     arch = _make_arch()
     weights = _make_weights(arch)
     be = VectorBE.from_weights(weights, arch)
@@ -209,9 +215,12 @@ class TestPoolStartMethod:
     forkserver default instead.
     """
 
-    def test_helper_defaults_to_forkserver(self):
+    def test_helper_defaults_to_forkserver(self, monkeypatch):
         from domain.infrastructure._internal.vector_backend import _pool_start_method
 
+        # A default is only a default with the hatch unset — prove it
+        # regardless of the ambient SLO_VECTOR_START_METHOD.
+        monkeypatch.delenv("SLO_VECTOR_START_METHOD", raising=False)
         assert _pool_start_method() == "forkserver"
 
     def test_helper_fork_escape_env(self, monkeypatch):

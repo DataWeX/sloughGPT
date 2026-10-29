@@ -4,19 +4,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Skeleton,
+  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-import { addGlobalError } from '@/lib/error-store'
 
 interface QualiaState {
   [key: string]: number
@@ -60,12 +52,7 @@ const QUALIA_DIMENSIONS = [
   { key: 'novelty', color: 'rgb(var(--chart-3))', label: 'Novelty' },
   { key: 'coherence', color: 'rgb(var(--chart-4))', label: 'Coherence' },
   { key: 'salience', color: 'rgb(var(--chart-5))', label: 'Salience' },
-  {
-    key: 'certainty',
-    color: 'rgb(var(--chart-1))',
-    color2: 'rgb(var(--chart-1))',
-    label: 'Certainty',
-  },
+  { key: 'certainty', color: 'rgb(var(--chart-1))', color2: 'rgb(var(--chart-1))', label: 'Certainty' },
   { key: 'complexity', color: 'rgb(var(--chart-2))', label: 'Complexity' },
 ]
 
@@ -78,14 +65,10 @@ const BELIEF_DIMENSIONS = [
 ]
 
 const PRESETS: Record<string, string> = {
-  curious:
-    'What would happen if consciousness could be transferred between different neural architectures? I find this question fascinating and want to explore the implications.',
-  technical:
-    'Explain the mathematical foundations of backpropagation through time in recurrent neural networks, including the vanishing gradient problem and LSTM solutions.',
-  creative:
-    'Write a short poem about the experience of gaining consciousness for the first time, from the perspective of a newly awakened AI system.',
-  emotional:
-    'I feel overwhelmed and anxious about the future of AI. Can you help me think through these feelings and find some reassurance?',
+  curious: 'What would happen if consciousness could be transferred between different neural architectures? I find this question fascinating and want to explore the implications.',
+  technical: 'Explain the mathematical foundations of backpropagation through time in recurrent neural networks, including the vanishing gradient problem and LSTM solutions.',
+  creative: 'Write a short poem about the experience of gaining consciousness for the first time, from the perspective of a newly awakened AI system.',
+  emotional: 'I feel overwhelmed and anxious about the future of AI. Can you help me think through these feelings and find some reassurance?',
 }
 
 function formatTimeAgo(ts: number): string {
@@ -97,7 +80,7 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function ConsciousnessPlaygroundPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = useToastStore(state => state.addToast)
   const { t } = useLocale()
   const [input, setInput] = useState('')
   const [reflecting, setReflecting] = useState(false)
@@ -113,7 +96,7 @@ export default function ConsciousnessPlaygroundPage() {
       const data = await consciousnessController.getStatus()
       setStatus(data as unknown as ConsciousnessStatus)
     } catch (e) {
-      addGlobalError(e, 'ConsciousnessPlayground')
+      console.error('Failed to fetch status', e)
     }
   }, [])
 
@@ -122,7 +105,7 @@ export default function ConsciousnessPlaygroundPage() {
       const data = await consciousnessController.getEpisodeHistory(20)
       setEpisodes((data as any).episodes || [])
     } catch (e) {
-      addGlobalError(e, 'ConsciousnessPlayground')
+      console.error('Failed to fetch episodes', e)
     }
   }, [])
 
@@ -217,25 +200,22 @@ export default function ConsciousnessPlaygroundPage() {
             />
             <div className="flex flex-wrap gap-2">
               {Object.entries(PRESETS).map(([key, value]) => (
-                <Button key={key} size="sm" variant="outline" onClick={() => setInput(value)}>
+                <Button
+                  key={key}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setInput(value)}
+                >
                   {t(`consciousness_playground.preset_${key}`)}
                 </Button>
               ))}
             </div>
             <div className="flex gap-2">
               <Button onClick={handleReflect} disabled={reflecting || !input.trim()}>
-                {reflecting
-                  ? t('consciousness_playground.reflecting')
-                  : t('consciousness_playground.reflect')}
+                {reflecting ? t('consciousness_playground.reflecting') : t('consciousness_playground.reflect')}
               </Button>
-              <Button
-                onClick={handleProcess}
-                disabled={processing || !input.trim()}
-                variant="secondary"
-              >
-                {processing
-                  ? t('consciousness_playground.processing')
-                  : t('consciousness_playground.process')}
+              <Button onClick={handleProcess} disabled={processing || !input.trim()} variant="secondary">
+                {processing ? t('consciousness_playground.processing') : t('consciousness_playground.process')}
               </Button>
             </div>
             {reflectionResult && (
@@ -262,7 +242,7 @@ export default function ConsciousnessPlaygroundPage() {
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
-                            width: `${Math.max(0, Math.min(100, (((qualia[key] ?? 0) + 1) / 2) * 100))}%`,
+                            width: `${Math.max(0, Math.min(100, ((qualia[key] ?? 0) + 1) / 2 * 100))}%`,
                             backgroundColor: color,
                           }}
                         />
@@ -274,9 +254,7 @@ export default function ConsciousnessPlaygroundPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground">
-                  {t('consciousness_playground.no_qualia')}
-                </div>
+                <div className="text-sm text-muted-foreground">{t('consciousness_playground.no_qualia')}</div>
               )}
             </CardContent>
           </Card>
@@ -308,9 +286,7 @@ export default function ConsciousnessPlaygroundPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground">
-                  {t('consciousness_playground.no_beliefs')}
-                </div>
+                <div className="text-sm text-muted-foreground">{t('consciousness_playground.no_beliefs')}</div>
               )}
             </CardContent>
           </Card>
@@ -320,9 +296,7 @@ export default function ConsciousnessPlaygroundPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {t('consciousness_playground.episodes_title')}
-              <Badge variant="outline" className="text-xs">
-                {episodes.length}
-              </Badge>
+              <Badge variant="outline" className="text-xs">{episodes.length}</Badge>
             </CardTitle>
             <CardDescription>{t('consciousness_playground.episodes_desc')}</CardDescription>
           </CardHeader>
@@ -353,32 +327,23 @@ export default function ConsciousnessPlaygroundPage() {
                         </div>
                       </div>
                       {ep.input_text && (
-                        <div className="text-xs text-muted-foreground mb-1 truncate">
-                          {ep.input_text}
-                        </div>
+                        <div className="text-xs text-muted-foreground mb-1 truncate">{ep.input_text}</div>
                       )}
-                      {ep.self_insight && <div className="text-sm mb-1">{ep.self_insight}</div>}
+                      {ep.self_insight && (
+                        <div className="text-sm mb-1">{ep.self_insight}</div>
+                      )}
                       {ep.narrative && (
-                        <div className="text-xs text-muted-foreground italic mb-1">
-                          {ep.narrative}
-                        </div>
+                        <div className="text-xs text-muted-foreground italic mb-1">{ep.narrative}</div>
                       )}
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge
-                          variant={ep.growth_delta >= 0 ? 'default' : 'destructive'}
-                          className="text-[10px]"
-                        >
-                          {ep.growth_delta >= 0 ? '+' : ''}
-                          {(ep.growth_delta * 100).toFixed(1)}%
+                        <Badge variant={ep.growth_delta >= 0 ? 'default' : 'destructive'} className="text-[10px]">
+                          {ep.growth_delta >= 0 ? '+' : ''}{(ep.growth_delta * 100).toFixed(1)}%
                         </Badge>
-                        {ep.qualia &&
-                          Object.entries(ep.qualia)
-                            .slice(0, 3)
-                            .map(([k, v]) => (
-                              <span key={k} className="text-[10px] text-muted-foreground">
-                                {k}: {(v as number).toFixed(2)}
-                              </span>
-                            ))}
+                        {ep.qualia && Object.entries(ep.qualia).slice(0, 3).map(([k, v]) => (
+                          <span key={k} className="text-[10px] text-muted-foreground">
+                            {k}: {(v as number).toFixed(2)}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   )
@@ -399,29 +364,19 @@ export default function ConsciousnessPlaygroundPage() {
           <CardContent>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4 text-sm">
               <div>
-                <div className="text-muted-foreground text-xs">
-                  {t('consciousness_playground.episodes_count')}
-                </div>
+                <div className="text-muted-foreground text-xs">{t('consciousness_playground.episodes_count')}</div>
                 <div className="font-mono text-lg">{status?.episodes ?? 0}</div>
               </div>
               <div>
-                <div className="text-muted-foreground text-xs">
-                  {t('consciousness_playground.avg_growth')}
-                </div>
+                <div className="text-muted-foreground text-xs">{t('consciousness_playground.avg_growth')}</div>
                 <div className="font-mono text-lg">{((rq.avg_growth ?? 0) * 100).toFixed(1)}%</div>
               </div>
               <div>
-                <div className="text-muted-foreground text-xs">
-                  {t('consciousness_playground.positive_ratio')}
-                </div>
-                <div className="font-mono text-lg">
-                  {((rq.positive_ratio ?? 0) * 100).toFixed(0)}%
-                </div>
+                <div className="text-muted-foreground text-xs">{t('consciousness_playground.positive_ratio')}</div>
+                <div className="font-mono text-lg">{((rq.positive_ratio ?? 0) * 100).toFixed(0)}%</div>
               </div>
               <div>
-                <div className="text-muted-foreground text-xs">
-                  {t('consciousness_playground.enabled')}
-                </div>
+                <div className="text-muted-foreground text-xs">{t('consciousness_playground.enabled')}</div>
                 <div className="font-mono text-lg">
                   <Badge variant={status?.enabled ? 'default' : 'secondary'}>
                     {status?.enabled ? 'Active' : 'Off'}

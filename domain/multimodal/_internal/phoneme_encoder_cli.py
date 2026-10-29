@@ -9,7 +9,6 @@ Usage:
     python -m domain.multimodal._internal.phoneme_encoder_cli --lang pt "ola mundo"
     python -m domain.multimodal._internal.phoneme_encoder_cli --detect "hello world"
 """
-
 from __future__ import annotations
 
 import os
@@ -27,12 +26,8 @@ from domain.multimodal._internal.unified_phoneme_encoder import (
 def main():
     if len(sys.argv) < 2:
         print("Usage: python -m domain.multimodal._internal.phoneme_encoder_cli <text>")
-        print(
-            "       python -m domain.multimodal._internal.phoneme_encoder_cli --batch <text1> <text2> ..."
-        )
-        print(
-            "       python -m domain.multimodal._internal.phoneme_encoder_cli --lang <lang> <text>"
-        )
+        print("       python -m domain.multimodal._internal.phoneme_encoder_cli --batch <text1> <text2> ...")
+        print("       python -m domain.multimodal._internal.phoneme_encoder_cli --lang <lang> <text>")
         print("       python -m domain.multimodal._internal.phoneme_encoder_cli --detect <text>")
         print()
         print("Languages: en, de, fr, es, it, pt")

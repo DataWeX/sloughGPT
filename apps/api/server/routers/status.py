@@ -57,24 +57,14 @@ class StatusRouter:
             _log.warning("Readiness check: database unavailable: %s", exc)
             checks["database"] = False
 
-        # Check generation — the product's one language-API contract
-        # (domain.inference.generation: hosted / soul / engine transports).
-        #
-        # Deliberately NOT `domain.inference.get_engine`: that dlopen()s the
-        # platform-native .so/.dylib, which is outside this contract and has
-        # no production consumer other than this probe. Gating readiness on it
-        # reported not-ready on any host lacking the compiled lib — and the
-        # Linux .so is gitignored, so a fresh clone never has it, making
-        # /ready permanently false on Linux while generation itself was fine.
+        # Check inference engine
         try:
-            from domain.inference import generation as generation_entry
+            from domain.inference import get_engine
 
-            checks["inference"] = all(
-                callable(getattr(generation_entry, name, None))
-                for name in ("hosted", "soul", "engine")
-            )
+            engine = get_engine()
+            checks["inference"] = engine is not None
         except Exception as exc:
-            _log.warning("Readiness check: generation unavailable: %s", exc)
+            _log.warning("Readiness check: inference engine unavailable: %s", exc)
             checks["inference"] = False
 
         ready = all(checks.values()) if checks else True

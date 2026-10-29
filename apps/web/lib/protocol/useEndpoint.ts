@@ -17,7 +17,10 @@ export interface EndpointResult<T> {
   refetch: () => void
 }
 
-export function useEndpoint<T>(name: ContractName, params?: EndpointParams): EndpointResult<T> {
+export function useEndpoint<T>(
+  name: ContractName,
+  params?: EndpointParams,
+): EndpointResult<T> {
   const key = readKey(name, params)
   const slice = useProtocolStore((s) => s.reads[key] ?? IDLE_SLICE)
   const fetchRead = useProtocolStore((s) => s.fetchRead)

@@ -1,35 +1,27 @@
 /**
- * Compare journey — side-by-side model comparison.
- *
- * The legacy /compare page is redirect-shadowed (→ /benchmark): the compare
- * components moved into the benchmark page's "Compare" tab. This spec follows
- * the journey to its live home.
+ * Compare page - side-by-side model comparison
  */
 
-describe('Compare (benchmark page)', () => {
+describe('Compare page', () => {
   beforeEach(() => {
     cy.mockAll()
-    cy.visit('/benchmark')
+    cy.visit('/compare')
   })
 
-  it('displays the benchmark page title', () => {
-    cy.contains('h1', 'Benchmark').should('be.visible')
+  it('displays the compare page title', () => {
+    cy.contains('h1', 'Model Comparison').should('be.visible')
   })
 
-  it('shows the compare empty state', () => {
-    cy.contains('button', 'Compare').click()
+  it('shows model comparison table or empty state', () => {
     cy.get('.sl-app-content').within(() => {
       cy.contains('No models available').should('be.visible')
-      cy.contains('Select models above and click Run to compare them side by side.').should(
-        'be.visible',
-      )
+      cy.contains('No benchmark results yet.').should('be.visible')
     })
   })
 
-  it('shows the Run compare button', () => {
-    cy.contains('button', 'Compare').click()
+  it('shows Refresh button', () => {
     cy.get('.sl-app-content').within(() => {
-      cy.contains('button', /Run on \d+ model/).should('exist')
+      cy.contains('button', /Benchmark all/).should('exist')
     })
   })
 })

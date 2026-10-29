@@ -1,4 +1,5 @@
-import { _getToken, _log } from './ports'
+import { logger } from '../web/lib/dev-log'
+import { useAuthStore } from '../web/lib/auth'
 import { ApiError } from './errors'
 import type { RequestConfig, ResponseEnvelope, RequestOptions } from './types'
 import { _corrId, _trackCorrId } from './corr-id'
@@ -28,7 +29,7 @@ export async function request<T>(
   if (!opts?.raw) headers['Content-Type'] = 'application/json'
   if (opts?.headers) Object.assign(headers, opts.headers)
   if (!opts?.noAuth) {
-    const token = _getToken()
+    const token = useAuthStore.getState().token
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
   headers['X-Correlation-ID'] = corrId
@@ -50,7 +51,7 @@ export async function request<T>(
   // Run request interceptors
   const finalConfig = await _globalInterceptors.request.run(config)
 
-  _log().debug(`>>> ${method} ${url} corr=${corrId}`, { corrId, method, url })
+  logger.debug(`>>> ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
   const timeoutMs = opts?.timeout ?? httpDefaults.timeout
   const isDocstore = _isDocstoreUrl(url)
@@ -150,7 +151,7 @@ export async function request<T>(
 
       if (timer) clearTimeout(timer)
 
-      _log().debug(`<<< ${method} ${url} ${res.status} corr=${corrId}`, {
+      logger.debug(`<<< ${method} ${url} ${res.status} corr=${corrId}`, {
         corrId,
         method,
         url,
@@ -185,7 +186,7 @@ export async function request<T>(
           retries++
           const retryAfter = Number(finalEnvelope.headers.get('Retry-After')) || 0
           const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelay * Math.pow(2, retries - 1)
-          _log().warning(
+          logger.warning(
             `retry ${retries}/${maxRetries} ${method} ${url} ${status} delay=${delay}ms corr=${corrId}`,
             { corrId, method, url, status, retries, maxRetries, delay },
           )
@@ -281,7 +282,7 @@ export async function request<T>(
       if (retries < maxRetries) {
         retries++
         const delay = baseDelay * Math.pow(2, retries - 1)
-        _log().warning(
+        logger.warning(
           `retry ${retries}/${maxRetries} ${method} ${url} ${kind} delay=${delay}ms corr=${corrId}`,
           { corrId, method, url, kind, retries, maxRetries, delay },
         )

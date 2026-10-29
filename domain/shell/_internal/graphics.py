@@ -42,9 +42,10 @@ import sys
 import threading
 import time
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
-from typing import Any, Callable
+from typing import Any
 
 # ── Color Constants ────────────────────────────────────────────────────
 
@@ -60,7 +61,14 @@ class Color(IntEnum):
     MAGENTA = 5
     CYAN = 6
     WHITE = 7
-    DEFAULT = 9
+    # "Use the terminal's own colour." `_make_sgr` skips it, leaving SGR 39/49.
+    #
+    # This cannot be an ANSI index, and 9 was wrong: 9 is *bright red*, so
+    # every `cell.bg == Color.DEFAULT` transparency test also matched a cell
+    # deliberately painted bright red, and asking for `BRIGHT_RED` rendered
+    # nothing because the encoder read it as "no colour given". Negative sits
+    # outside every palette range, so it cannot collide again.
+    DEFAULT = -1
     # Bright variants (16-231 are 6x6x6 color cube)
     BRIGHT_BLACK = 8
     BRIGHT_RED = 9
@@ -73,13 +81,21 @@ class Color(IntEnum):
 
 
 def rgb_to_ansi256(r: int, g: int, b: int) -> int:
-    """Convert RGB (0-255 each) to nearest ANSI 256-color index."""
+    """Convert RGB (0-255 each) to nearest ANSI 256-color index.
+
+    Greys take the dedicated ramp at 232-255, not the 6x6x6 colour cube. The cube
+    quantises each channel to six levels, so ``rgb(72, 72, 72)`` landed on index
+    28 -- which is ``(0, 95, 0)``, a murky *green*. Any neutral colour therefore
+    came back tinted, which is precisely the wrong failure for a palette helper:
+    greys are what a UI uses for its frames and surfaces, so every one of them was
+    quietly wrong.
+    """
     if r == g == b:
         if r < 8:
             return 0
         if r > 248:
             return 15
-        return int(((r - 8) / 248) * 23 + 23)
+        return 232 + min(23, int((r - 8) / 230 * 23 + 0.5))
     ri = int(((r - 8) / 248) * 5 + 0.5)
     gi = int(((g - 8) / 248) * 5 + 0.5)
     bi = int(((b - 8) / 248) * 5 + 0.5)
@@ -323,19 +339,37 @@ class Framebuffer:
         bg: int = Color.DEFAULT,
         attr: int = Attr.NONE,
     ) -> int:
-        """Write a string at (row, col). Returns number of cells written."""
+        """Write a string at (row, col). Returns display columns written.
+
+        The cursor advances by **display width**, not by character index. A
+        wide (CJK) glyph occupies two cells — the glyph plus an empty
+        continuation cell — so stepping one column per character let the next
+        glyph overwrite that continuation and paint on top of the wide one::
+
+            write_str(0, 0, "hi\u4f60!")  ->  filled h i \u4f60 !
+                                          ->  only 4 cells, but returned 5
+
+        For narrow text every width is 1, so this is identical to advancing by
+        index; only wide glyphs behave differently.
+        """
+        if not (0 <= row < self.rows):
+            return 0
+
         written = 0
-        for i, ch in enumerate(text):
-            c = col + i
+        c = col
+        for ch in text:
             if c >= self.cols:
                 break
-            if 0 <= row < self.rows and 0 <= c < self.cols:
-                # Handle wide (CJK) characters
-                w = 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+            # Handle wide (CJK) characters
+            w = 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+            if 0 <= c < self.cols:
                 self._cells[row][c] = Cell(ch, fg, bg, attr)
                 if w == 2 and c + 1 < self.cols:
                     self._cells[row][c + 1] = Cell("", fg, bg, attr)
                 written += w
+            # Advance by width even when the cell was off-grid left, so text
+            # starting at a negative column still lands correctly.
+            c += w
         return written
 
     def fill(
@@ -413,11 +447,21 @@ class Framebuffer:
             self.put(r, col + width - 1, v, fg, bg, attr)
 
     def composite(
-        self, other: Framebuffer, dest_row: int = 0, dest_col: int = 0, alpha: float = 1.0
+        self,
+        other: Framebuffer,
+        dest_row: int = 0,
+        dest_col: int = 0,
+        alpha: float = 1.0,
     ) -> None:
         """Composite another framebuffer onto this one at (dest_row, dest_col).
 
-        Non-empty cells in ``other`` overwrite cells in this buffer.
+        A cell is transparent when it is blank *and* still carries
+        ``Color.DEFAULT`` — that is, it has never been given a background of
+        its own.  Once a layer fills its rectangle with :meth:`Layer.fill`
+        using a real colour, those cells stop being blank-with-default and
+        start covering whatever is beneath them.  So "be transparent" and
+        "be a solid panel" are both expressed as data in the layer's
+        background, with no per-layer flag to keep in sync.
         """
         for r in range(other.rows):
             dr = dest_row + r
@@ -478,6 +522,7 @@ class Layer:
         opacity: float = 1.0,
         x: int = 0,
         y: int = 0,
+        background: int = Color.DEFAULT,
     ) -> None:
         self.name = name
         self.z = z
@@ -485,6 +530,17 @@ class Layer:
         self.opacity = opacity
         self.x = x
         self.y = y
+        # The colour this layer treats as its own empty background.
+        #
+        # Compositing skips a cell only when it is blank *and* carries the
+        # default background, so a layer that wants a solid field simply
+        # fills its rectangle with its `background` colour (see
+        # `fill_background`) instead of declaring itself opaque.  Everything
+        # then follows from the data: a space inside a line of text carries
+        # the fill colour, so it covers what is beneath rather than letting a
+        # backdrop pattern show through the middle of a sentence, and a cell
+        # still at the default background stays transparent.
+        self.background = background
         self.framebuffer = Framebuffer(rows, cols)
         self._draw_ops: list[Callable[[], None]] = []
 
@@ -505,10 +561,21 @@ class Layer:
         col: int,
         text: str,
         fg: int = Color.DEFAULT,
-        bg: int = Color.DEFAULT,
+        bg: int | None = None,
         attr: int = Attr.NONE,
     ) -> int:
-        return self.framebuffer.write_str(row, col, text, fg, bg, attr)
+        """Write *text* at (row, col), defaulting the background to the layer's.
+
+        Text inherits the layer's ``background`` unless a colour is passed
+        explicitly.  Without this the two halves of a panel disagree: the fill
+        gives the rect its background colour but a write stamps the default,
+        so the spaces *inside* a line stay transparent and a backdrop pattern
+        reads through the middle of a sentence.  Passing ``bg=Color.DEFAULT``
+        explicitly still opts out, for drawing that should punch through.
+        """
+        return self.framebuffer.write_str(
+            row, col, text, fg, self.background if bg is None else bg, attr
+        )
 
     def put(
         self,
@@ -529,6 +596,23 @@ class Layer:
         attr: int = Attr.NONE,
     ) -> None:
         self.framebuffer.fill(char, fg, bg, attr)
+
+    def fill_background(self, fg: int = Color.DEFAULT, attr: int = Attr.NONE) -> None:
+        """Paint this layer's whole rectangle in its declared ``background``.
+
+        This is how a layer becomes a solid panel.  Filling across the full
+        width and height of the layer gives every cell a real background
+        colour, which makes those cells cover what is beneath instead of
+        letting it show through — including the spaces *inside* a line of
+        text, which are content and would otherwise let a backdrop pattern
+        read through the middle of a sentence.
+
+        Call it before drawing.  It is the default-first step in any redraw
+        that wants a clean surface, and it is a no-op in effect when
+        ``background`` is still ``Color.DEFAULT``, since those cells stay
+        transparent either way.
+        """
+        self.framebuffer.fill(" ", fg, self.background, attr)
 
     def fill_pattern(
         self,
@@ -804,6 +888,14 @@ class GraphicsEngine:
         self._layers: list[Layer] = []
         self._front_buffer: Framebuffer | None = None
         self._back_buffer: Framebuffer | None = None
+        # What the terminal is *known* to be showing.  This cannot be
+        # ``_back_buffer``, which is the persistent background/root buffer —
+        # the target for layerless draws and the save/restore snapshot target.
+        # Diffing the frame against a background that never records what was
+        # actually emitted meant a cell returning to blank compared equal to
+        # it and was never re-sent, so the glyph it used to hold stayed on
+        # screen: every deletion looked like a no-op while insertions worked.
+        self._emitted_buffer: Framebuffer | None = None
         self._snapshot_mgr = SnapshotManager()
         self._tab_mgr = TabManager()
         self._cursor_row: int = 0
@@ -818,34 +910,43 @@ class GraphicsEngine:
         self._lock = threading.Lock()
         self._key_handlers: dict[int | str, Callable[[int], bool]] = {}
         self._on_resize: Callable[[int, int], None] | None = None
+        # Latched once the terminal is known to be permanently gone, so the
+        # engine stops attempting writes instead of failing every frame. See
+        # `_emit`. Reset in `open()`: a new session may have a new terminal, and
+        # a process that closes stdout and reopens it should not stay mute.
+        self._stdout_dead: bool = False
 
     # ── Lifecycle ──────────────────────────────────────────────────
 
     def open(self) -> None:
         """Enter alternate screen buffer and initialize."""
+        self._stdout_dead = False
         self._detect_size()
         self._front_buffer = Framebuffer(self._rows, self._cols)
         self._back_buffer = Framebuffer(self._rows, self._cols)
+        # Fresh buffers, and ``open()`` clears the screen just below — so the
+        # terminal starts blank and this matches it.
+        self._emitted_buffer = Framebuffer(self._rows, self._cols)
         self._alt_screen = True
-        # Enter alternate screen + hide cursor + enable mouse
-        sys.stdout.write("\x1b[?1049h")  # alt screen
-        sys.stdout.write("\x1b[?25l")  # hide cursor
-        sys.stdout.write("\x1b[?1003h")  # mouse tracking
-        sys.stdout.write("\x1b[2J")  # clear screen
-        sys.stdout.write("\x1b[H")  # home cursor
-        sys.stdout.flush()
+        # Enter alternate screen + hide cursor + enable mouse. One write, not
+        # five: fewer syscalls, and a partial entry sequence (alt screen entered
+        # but never cleared) is a worse failure than none at all. Routed through
+        # `_emit` because a terminal that is already gone must not stop the
+        # engine from starting -- it simply renders to nothing.
+        self._emit("\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[2J\x1b[H")
         self._running = True
 
     def close(self) -> None:
         """Restore terminal state."""
         self._running = False
-        sys.stdout.write("\x1b[?1003l")  # disable mouse
-        sys.stdout.write("\x1b[?25h")  # show cursor
-        sys.stdout.write("\x1b[0m")  # reset attributes
-        sys.stdout.write("\x1b[2J")  # clear
-        sys.stdout.write("\x1b[H")  # home
-        sys.stdout.write("\x1b[?1049l")  # leave alt screen
-        sys.stdout.flush()
+        # Best effort, and forced past the dead-terminal latch. If the far end
+        # is gone these writes fail and there is nothing to restore *to* -- but
+        # the latch persists for the whole session while a single failed frame
+        # sets it, so honouring it here would skip a real restore on any later
+        # session. Leaving the alternate screen active strands the user in a
+        # blank buffer with the cursor hidden, so the restore is always
+        # attempted and never partially applied.
+        self._emit("\x1b[?1003l\x1b[?25h\x1b[0m\x1b[2J\x1b[H\x1b[?1049l", force=True)
         self._alt_screen = False
 
     def _detect_size(self) -> tuple[int, int]:
@@ -977,26 +1078,49 @@ class GraphicsEngine:
         if self._back_buffer is None or self._front_buffer is None:
             return
 
-        # Start with the back buffer
-        self._front_buffer.restore(self._back_buffer)
+        # Composite from a clean slate.  Seeding front from the shadow instead
+        # would make a blank cell in a transparent layer mean "keep whatever
+        # was drawn here last frame" rather than "show the layer beneath",
+        # because front already held last frame's composite.  Cleared, the
+        # layers beneath (the pane background patterns) show through, and the
+        # shadow is left to do its one job: diffing.
+        self._front_buffer.clear()
 
-        # Composite visible layers in z-order at their positions
+        # Composite visible layers in z-order at their positions.  Whether a
+        # layer covers what is beneath is decided by its cells, not by a flag:
+        # see `Framebuffer.composite`.
         for layer in self._layers:
             if not layer.visible:
                 continue
             self._front_buffer.composite(layer.framebuffer, layer.y, layer.x)
 
         # Diff against previous frame and emit minimal escape codes
-        self._render_diff()
-        self._dirty = False
+        written = self._render_diff()
+        # Only claim the frame when it landed.  `_emitted_buffer` is the
+        # engine's claim about what the terminal is showing — committing it
+        # after a failed write would make those cells read as "already on
+        # screen" in the next diff and never be retried: the content would be
+        # gone for good, silently, with no error anywhere.  Same trap the
+        # campaign branch named for `_back_buffer.restore`, and the reason a
+        # write failure and a cache commit cannot be two independent steps.
+        if written:
+            self._dirty = False
 
-    def _render_diff(self) -> None:
-        """Render only changed cells to minimize terminal I/O."""
-        if self._back_buffer is None or self._front_buffer is None:
-            return
-        changes = self._front_buffer.diff(self._back_buffer)
+    def _render_diff(self) -> bool:
+        """Render only changed cells to minimize terminal I/O.
+
+        Returns whether the frame reached the terminal. ``False`` means the
+        caller must not treat the emitted buffer as updated -- see ``render``.
+        """
+        if self._back_buffer is None or self._front_buffer is None or self._emitted_buffer is None:
+            return True
+        # Diff against what the terminal was last *told*, not against the
+        # background: a printed glyph and a blank background cell differ, so
+        # the glyph was sent, but afterwards both the frame and the background
+        # are blank and compare equal — the erase never reached the terminal.
+        changes = self._front_buffer.diff(self._emitted_buffer)
         if not changes:
-            return
+            return True
 
         # Group consecutive cells in same row for batch writes
         out: list[str] = []
@@ -1018,8 +1142,62 @@ class GraphicsEngine:
 
         # Final reset
         out.append("\x1b[0m")
-        sys.stdout.write("".join(out))
-        sys.stdout.flush()
+        ok = self._emit("".join(out))
+        if ok:
+            # Record exactly what the terminal was told so the next frame
+            # diffs as a real delta — which also makes the `if not changes`
+            # guard above meaningful instead of dead, and stops every frame
+            # re-emitting the whole screen.  Copies, because `set` stores the
+            # reference.  Only on success: see the latch discussion in
+            # ``render``.
+            for row, col, cell in changes:
+                self._emitted_buffer.set(row, col, cell.copy())
+        return ok
+
+    def _emit(self, text: str, *, force: bool = False) -> bool:
+        """Write *text* to the terminal, tolerating a terminal that has gone.
+
+        A dead terminal is a normal event, not an exceptional one: the far end
+        closes when an SSH session drops, an emulator is closed, or output is
+        piped into something that stops reading (``| head``). Before the engine
+        owned the screen this was covered by ``except curses.error: pass`` around
+        ``addstr``. Removing curses removed that guard without putting anything in
+        its place, so a plain ``BrokenPipeError`` propagated out of ``render`` and
+        took the REPL down.
+
+        Two failure classes, deliberately not treated alike:
+
+        * **Permanent** -- ``BrokenPipeError``, or ``ValueError`` from a closed
+          file. The terminal is gone and will not come back, so the engine latches
+          off and stops issuing the write at all. Retrying every frame forever
+          would raise the same error 60 times a second for nothing.
+        * **Transient** -- anything else ``OSError``: ``EAGAIN`` on a non-blocking
+          tty, ``EINTR``. Not latched. The frame is simply not committed, so the
+          next ``render`` retries it, which is the correct behaviour for a condition
+          that may not still be there.
+
+        ``ValueError`` is here because it is what a closed file raises and it is
+        **not** an ``OSError`` -- catching only ``OSError`` misses the case that
+        is easiest to hit in tests and in embedding.
+
+        *force* is for cleanup that must never be skipped. The latch stops
+        hammering a dead pipe at frame rate, which is a per-frame concern;
+        ``close()`` runs once per session, so honouring the latch there costs a
+        single syscall while skipping it can strand the user in the alternate
+        screen with the cursor hidden.
+        """
+        if self._stdout_dead and not force:
+            return False
+        try:
+            sys.stdout.write(text)
+            sys.stdout.flush()
+            return True
+        except (BrokenPipeError, ValueError):
+            self._stdout_dead = True
+            return False
+        except OSError:
+            # Transient. Leave the latch alone so a later frame can still land.
+            return False
 
     def _make_sgr(self, fg: int, bg: int, attr: int) -> str:
         """Build SGR (Select Graphic Rendition) escape sequence."""
@@ -1068,15 +1246,17 @@ class GraphicsEngine:
     # ── Cursor ─────────────────────────────────────────────────────
 
     def set_cursor(self, row: int, col: int) -> None:
+        # The engine's own idea of where the cursor is is updated regardless.
+        # That is not the terminal's, and the two can legitimately diverge while
+        # the terminal is gone -- keeping the intent means a reconnect has
+        # something coherent to move to.
         self._cursor_row = row
         self._cursor_col = col
-        sys.stdout.write(f"\x1b[{row + 1};{col + 1}H")
-        sys.stdout.flush()
+        self._emit(f"\x1b[{row + 1};{col + 1}H")
 
     def show_cursor(self, visible: bool = True) -> None:
         self._cursor_visible = visible
-        sys.stdout.write("\x1b[?25h" if visible else "\x1b[?25l")
-        sys.stdout.flush()
+        self._emit("\x1b[?25h" if visible else "\x1b[?25l")
 
     # ── Snapshots (Undo/Redo) ─────────────────────────────────────
 
@@ -1168,6 +1348,15 @@ class GraphicsEngine:
                 self._back_buffer.resize(self._rows, self._cols)
             if self._front_buffer is not None:
                 self._front_buffer.resize(self._rows, self._cols)
+            if self._emitted_buffer is not None:
+                # A geometry change reflows the terminal's contents, so no
+                # buffer still describes what is on screen.  Clear it and
+                # start from "blank", which forces a full repaint on the next
+                # frame instead of trusting a delta against a screen that no
+                # longer exists in that shape.
+                self._emitted_buffer = Framebuffer(self._rows, self._cols)
+                sys.stdout.write("\x1b[2J\x1b[H")
+                sys.stdout.flush()
             for layer in self._layers:
                 layer.resize(self._rows, self._cols)
             if self._on_resize:

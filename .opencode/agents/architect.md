@@ -15,7 +15,7 @@ to reduce memory usage, improve performance, and enhance maintainability.
 ## Mission
 
 1. Identify OOP anti-patterns in code
-2. Extract classes, add **slots**, create metaclasses
+2. Extract classes, add __slots__, create metaclasses
 3. Reduce memory and CPU overhead
 4. Verify no regressions with QA
 
@@ -27,20 +27,15 @@ to reduce memory usage, improve performance, and enhance maintainability.
 
 ## Anti-Patterns to Target
 
-| Pattern                | Action                          |
-| ---------------------- | ------------------------------- |
-| Duplicated init code   | Extract to manager/mixin class  |
-| No `__slots__`         | Add slots to reduce memory      |
+| Pattern | Action |
+|---------|--------|
+| Duplicated init code | Extract to manager/mixin class |
+| No `__slots__` | Add slots to reduce memory |
 | God class (>500 lines) | Extract strategy/helper classes |
-| Singleton boilerplate  | Use `SingletonMeta` metaclass   |
-| Import in hot path     | Move to module level            |
-| Side-effect properties | Move to explicit methods        |
-| Dict-based state       | Convert to dataclass with slots |
-
-## Related Skill
-
-- `.opencode/skills/oop-refactoring/SKILL.md` — class extraction, `__slots`,
-  metaclasses, memory-reduction patterns (read before planning changes)
+| Singleton boilerplate | Use `SingletonMeta` metaclass |
+| Import in hot path | Move to module level |
+| Side-effect properties | Move to explicit methods |
+| Dict-based state | Convert to dataclass with slots |
 
 ## Workflow
 
@@ -53,14 +48,12 @@ to reduce memory usage, improve performance, and enhance maintainability.
 ## Verification
 
 After each change:
-
 ```bash
 python3 -m py_compile <file>
 make test-py ARGS="tests/test_<module>.py -x -q"
 ```
 
 Before completion:
-
 ```bash
 make test-py
 cd apps/web && npm run test:lib

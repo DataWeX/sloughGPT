@@ -236,43 +236,8 @@ class Memory:
 class Device:
     """Generic device interface. Subclass to wrap any library."""
 
-    def call(self, method, *args, **kwargs):
-        """Name-based dispatch — the thin layer under every device interface.
-
-        A device declares its vocabulary as ``self._ops``; the lookup, the
-        unknown-op fault and the listing live in ``device_ops.OpTable``. So a
-        device gains an op by adding a table entry, not another copy of the
-        dispatch body — eight devices in this shell carried that body verbatim.
-
-        A device with no table falls through to the refusal below, which is
-        what the base class has always meant by "does not support".
-        """
-        ops = getattr(self, "_ops", None)
-        if ops is None:
-            raise DeviceFault(f"device does not support: {method}")
-        if hasattr(ops, "call"):
-            return ops.call(method, *args, **kwargs)
-
-        from .device_ops import dispatch_ops  # deferred: keep this module import-lean
-
-        return dispatch_ops(ops, type(self).__name__, method, *args, **kwargs)
-
-    def ioctl(self, command, *args):
-        """Kernel face of the same contract: SyscallResult, never raises.
-
-        Devices here implement call(); the fd-based DeviceTable/DeviceManager
-        only speak ioctl(). Wrapping call() means a device from either world
-        can be registered in either seam — one interface, two faces — instead
-        of each device being reachable from exactly one of them.
-        """
-        from .kernel_syscall import SyscallResult  # deferred: keep vm import-lean
-
-        try:
-            return SyscallResult.ok(self.call(command, *args))
-        except DeviceFault as exc:
-            return SyscallResult.fail(str(exc))
-        except Exception as exc:  # noqa: BLE001 - ioctl reports, it does not raise
-            return SyscallResult.fail(f"{command} failed: {exc}")
+    def call(self, method, *args):
+        raise DeviceFault(f"device does not support: {method}")
 
     def info(self):
         return {"type": "base", "methods": []}
@@ -2530,7 +2495,7 @@ class DeviceRegisterMap:
             if hasattr(result, "success"):
                 if result.success:
                     return result.value
-                raise DeviceFault(result.error)
+                raise Exception(result.error)
             return result
         elif hasattr(device, "call"):
             return device.call(command, arg0, arg1, arg2)
@@ -4279,6 +4244,11 @@ class X86Assembler:
                 if self._pfx("ax"):
                     self._output.append(0x66)
                 self._output.append(0xA5)
+            elif inner == "movsd":
+                # dword string move: default-size A5 in BITS 32, 66 A5 in BITS 16
+                if not self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xA5)
             elif inner == "stosb":
                 self._output.append(0xAA)
             elif inner == "stosw":
@@ -4295,13 +4265,6 @@ class X86Assembler:
                 self._output.append(0xA6)
             elif inner == "scasb":
                 self._output.append(0xAE)
-            elif inner == "movsd":
-                # MOVS D in 32-bit mode: A5 with no operand-size prefix
-                # (16-bit operand size would be 66 A5). Without this arm the
-                # prefix was emitted alone — `rep movsd` assembled to f3XX
-                # with the string op missing, and the trailing HLT got
-                # swallowed by the CPU's prefix path (see card 66092343).
-                self._output.append(0xA5)
             else:
                 # Unknown rep target — just emit prefix
                 pass
@@ -7267,55 +7230,24 @@ class X86CPU:
         # ── REP/REPE/REPNE prefix (F2/F3) ──
         if opcode in (0xF2, 0xF3):
             opcode2 = self._fetch_byte()
-            # Optional operand-size prefix under REP: 66 makes the string op
-            # 16-bit; without it the width follows the default operand size
-            # (word in 16-bit code, dword in 32-bit code — this CPU is
-            # 32-bit-register based, so no-66 = dword).
-            word = False
-            if opcode2 == 0x66:
-                word = True
-                opcode2 = self._fetch_byte()
             count = self._get32(1)  # ECX
-            d = -1 if self._flag(FLAG_DF) else 1
             if opcode2 == 0xA4:  # REP MOVSB
                 while count > 0:
                     self._write8(self._get32(7), self._read8(self._get32(6)))
-                    self._set32(6, (self._get32(6) + d) & 0xFFFFFFFF)
-                    self._set32(7, (self._get32(7) + d) & 0xFFFFFFFF)
-                    count -= 1
-                self._set32(1, 0)
-                return
-            if opcode2 == 0xA5:  # REP MOVS: dword (no 66) / word (66)
-                step = 2 if word else 4
-                while count > 0:
-                    esi, edi = self._get32(6), self._get32(7)
-                    if word:
-                        self._write16(edi, self._read16(esi))
-                    else:
-                        self._write32(edi, self._read32(esi))
-                    ds = (step if not self._flag(FLAG_DF) else -step) & 0xFFFFFFFF
-                    self._set32(6, (esi + ds) & 0xFFFFFFFF)
-                    self._set32(7, (edi + ds) & 0xFFFFFFFF)
+                    self._set32(
+                        6, (self._get32(6) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF
+                    )
+                    self._set32(
+                        7, (self._get32(7) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF
+                    )
                     count -= 1
                 self._set32(1, 0)
                 return
             if opcode2 == 0xAC:  # REP LODSB
                 while count > 0:
                     self._set8l(0, self._read8(self._get32(6)))
-                    self._set32(6, (self._get32(6) + d) & 0xFFFFFFFF)
-                    count -= 1
-                self._set32(1, 0)
-                return
-            if opcode2 == 0xAD:  # REP LODS: dword (no 66) / word (66)
-                step = 2 if word else 4
-                while count > 0:
-                    esi = self._get32(6)
-                    if word:
-                        self._regs[0] = (self._regs[0] & 0xFFFF0000) | self._read16(esi)
-                    else:
-                        self._set32(0, self._read32(esi))
                     self._set32(
-                        6, (esi + (step if not self._flag(FLAG_DF) else -step)) & 0xFFFFFFFF
+                        6, (self._get32(6) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF
                     )
                     count -= 1
                 self._set32(1, 0)
@@ -7323,47 +7255,16 @@ class X86CPU:
             if opcode2 == 0xAA:  # REP STOSB
                 while count > 0:
                     self._write8(self._get32(7), self._get8l(0))
-                    self._set32(7, (self._get32(7) + d) & 0xFFFFFFFF)
-                    count -= 1
-                self._set32(1, 0)
-                return
-            if opcode2 == 0xAB:  # REP STOS: dword (no 66) / word (66)
-                step = 2 if word else 4
-                while count > 0:
-                    edi = self._get32(7)
-                    if word:
-                        self._write16(edi, self._regs[0] & 0xFFFF)
-                    else:
-                        self._write32(edi, self._regs[0] & 0xFFFFFFFF)
                     self._set32(
-                        7, (edi + (step if not self._flag(FLAG_DF) else -step)) & 0xFFFFFFFF
+                        7, (self._get32(7) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF
                     )
-                    count -= 1
-                self._set32(1, 0)
-                return
-            if opcode2 == 0xA6:  # REP CMPSB
-                while count > 0:
-                    self._alu(5, self._read8(self._get32(6)), self._read8(self._get32(7)), 8)
-                    self._set32(6, (self._get32(6) + d) & 0xFFFFFFFF)
-                    self._set32(7, (self._get32(7) + d) & 0xFFFFFFFF)
-                    count -= 1
-                self._set32(1, 0)
-                return
-            if opcode2 == 0xAE:  # REP SCASB
-                while count > 0:
-                    self._alu(5, self._get8l(0), self._read8(self._get32(7)), 8)
-                    self._set32(7, (self._get32(7) + d) & 0xFFFFFFFF)
                     count -= 1
                 self._set32(1, 0)
                 return
             if opcode2 == 0xC3:  # REP RET (unusual but valid)
                 self._eip = self._pop32()
                 return
-            # Anything else after a string prefix (e.g. HLT) is an invalid
-            # instruction: fault loudly instead of advancing past it — the
-            # old silent return let the PC run off the program into
-            # zero-fill and burn the whole step budget (the CI hang class).
-            raise InsFault(f"invalid opcode 0x{opcode2:02X} after 0x{opcode:02X} prefix")
+            return
 
         # ── IN AL, imm8 (E4) / IN EAX, imm8 (E5) ──
         if opcode == 0xE4:
@@ -9439,13 +9340,9 @@ class X86SyscallHandler:
             return -1
         data = bytes(self._cpu._read8(buf_addr + i) for i in range(count))
         if fd == 1 or fd == 2:
-            # stdout/stderr — write to the process console. print() is what
-            # the syscall contract pins (pytest capsys + the terminal both
-            # see it); logger.debug(text, end=...) silently dropped guest
-            # output whenever the debug level was disabled (and its kwargs
-            # never validate on the logging path).
+            # stdout/stderr — write to console
             text = data.decode("ascii", errors="replace")
-            print(text, end="", flush=True)
+            logger.debug(text, end="", flush=True)
             return count
         elif self._fs and fd in self._fd_table:
             filename = self._fd_table[fd]

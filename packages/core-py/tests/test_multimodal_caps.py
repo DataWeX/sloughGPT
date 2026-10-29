@@ -281,15 +281,13 @@ class TestMultimodalCapabilitiesEdgeCases:
         assert mc.speech_model == mc2.speech_model
 
     def test_field_types(self):
-        import typing
+        import dataclasses
 
-        # field.type is a string under `from __future__ import annotations`
-        # — resolve through get_type_hints to keep the check strict.
-        hints = typing.get_type_hints(MultimodalCapabilities)
-        assert hints["speech_to_text"] is bool
-        assert hints["image_caption"] is bool
-        assert hints["object_detection"] is bool
-        assert hints["vqa"] is bool
+        fields = {f.name: f.type for f in dataclasses.fields(MultimodalCapabilities)}
+        assert fields["speech_to_text"] is bool
+        assert fields["image_caption"] is bool
+        assert fields["object_detection"] is bool
+        assert fields["vqa"] is bool
 
     def test_construct_with_all_none(self):
         mc = MultimodalCapabilities(

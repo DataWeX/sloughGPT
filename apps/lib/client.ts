@@ -1,4 +1,4 @@
-import { _getToken } from './ports'
+import { useAuthStore } from '../web/lib/auth'
 import { InterceptorManager } from './interceptors'
 import { HttpCache, CircuitBreaker, Throttler } from './resilience'
 import type { HttpClientOptions, RequestConfig, ResponseEnvelope, RequestOptions } from './types'
@@ -101,7 +101,7 @@ function _createHttpClient(opts?: HttpClientOptions): HttpClient {
       if (!reqOpts?.raw) headers['Content-Type'] = 'application/json'
       if (reqOpts?.headers) Object.assign(headers, reqOpts.headers)
       if (!reqOpts?.noAuth) {
-        const token = _getToken()
+        const token = useAuthStore.getState().token
         if (token) headers['Authorization'] = `Bearer ${token}`
       }
       headers['X-Correlation-ID'] = corrId

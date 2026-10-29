@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import io
+import sys
+
+import pytest
+
 from domain.shell._internal.graphics import (
     Attr,
     BoxModel,
@@ -11,6 +16,7 @@ from domain.shell._internal.graphics import (
     DisplayMode,
     FontConfig,
     Framebuffer,
+    GraphicsEngine,
     HardwareOutput,
     HardwareState,
     Layer,
@@ -75,10 +81,43 @@ class TestColor:
         assert rgb_to_ansi256(255, 255, 255) == 15
 
     def test_rgb_to_ansi256_gray(self):
+        # A neutral input must produce a neutral index. This used to assert 34,
+        # which is cube entry (0,0,95) -- blue -- for a grey request. The comment
+        # on the old assertion acknowledged the confusion and encoded it anyway.
         idx = rgb_to_ansi256(128, 128, 128)
-        assert (
-            idx == 34
-        )  # gray(128) in 256-color grayscale ramp (232-255 for 8-238, but 128 maps to 34 via cube)
+        assert 232 <= idx <= 255, f"grey must use the grey ramp, got {idx}"
+
+    @pytest.mark.parametrize(
+        "level,expect",
+        [
+            (0, 0),  # below the ramp's floor of 8
+            (72, 238),  # mid grey
+            (238, 255),  # the ramp's last entry is rgb 238
+            (248, 255),  # past the ramp's top, clamps to its last entry
+            (255, 15),  # white
+        ],
+    )
+    def test_rgb_to_ansi256_greys_are_neutral(self, level, expect):
+        """Every grey maps to the ramp (or the plain black/white ends), never into
+        the tinted cube.
+
+        Regression guard: the cube branch quantises each channel to six steps, so
+        an earlier version sent rgb(72,72,72) to index 28 == (0,95,0), a green.
+        Frames and surfaces are drawn in greys, so that failure tinted the whole UI.
+        """
+        assert rgb_to_ansi256(level, level, level) == expect
+
+    @pytest.mark.parametrize("n", range(24))
+    def test_rgb_to_ansi256_grey_ramp_round_trips(self, n):
+        """Every entry of the grey ramp (232-255) is reachable and exact.
+
+        The ramp spans rgb 8..238 in steps of 10. An earlier scale divided by 247
+        instead of 230, which compressed the mapping so indices 254 and 255 could
+        never be produced -- a value like rgb(238) is a perfectly ordinary frame
+        colour and had no correct answer.
+        """
+        level = 8 + 10 * n
+        assert rgb_to_ansi256(level, level, level) == 232 + n
 
     def test_rgb_to_ansi256_red(self):
         idx = rgb_to_ansi256(255, 0, 0)
@@ -492,7 +531,10 @@ class TestHardwareState:
         hs = HardwareState(
             rows=2,
             cols=3,
-            cells=[[Cell("a"), Cell("b"), Cell("c")], [Cell("d"), Cell("e"), Cell("f")]],
+            cells=[
+                [Cell("a"), Cell("b"), Cell("c")],
+                [Cell("d"), Cell("e"), Cell("f")],
+            ],
         )
         assert hs.get_cell(0, 0).char == "a"
         assert hs.get_cell(1, 2).char == "f"
@@ -503,7 +545,9 @@ class TestHardwareState:
 
     def test_text_at(self):
         hs = HardwareState(
-            rows=1, cols=5, cells=[[Cell("H"), Cell("e"), Cell("l"), Cell("l"), Cell("o")]]
+            rows=1,
+            cols=5,
+            cells=[[Cell("H"), Cell("e"), Cell("l"), Cell("l"), Cell("o")]],
         )
         assert hs.text_at(0, 1, 3) == "ell"
 
@@ -616,3 +660,165 @@ class TestCompareHardwareOutputs:
         b = HardwareOutput()
         result = compare_hardware_outputs(a, b)
         assert result["identical"]
+
+
+# ── terminal writes ─────────────────────────────────────────────────
+
+
+class _BrokenTerminal(io.TextIOBase):
+    """A pty whose far end has gone away."""
+
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def write(self, s: str) -> int:
+        self.attempts += 1
+        raise BrokenPipeError(32, "Broken pipe")
+
+    def flush(self) -> None:
+        raise BrokenPipeError(32, "Broken pipe")
+
+
+class _TransientTerminal(io.TextIOBase):
+    """Fails the first write with EAGAIN, then succeeds."""
+
+    def __init__(self) -> None:
+        self.seen: list[str] = []
+        self.fail_next = True
+
+    def write(self, s: str) -> int:
+        if self.fail_next:
+            self.fail_next = False
+            raise OSError(11, "Resource temporarily unavailable")
+        self.seen.append(s)
+        return len(s)
+
+    def flush(self) -> None:
+        return
+
+
+class _ClosedTerminal(io.TextIOBase):
+    """A closed file. Raises ValueError, which is deliberately *not* an OSError."""
+
+    def write(self, s: str) -> int:
+        raise ValueError("I/O operation on closed file")
+
+    def flush(self) -> None:
+        raise ValueError("I/O operation on closed file")
+
+
+def _with_terminal(term: io.TextIOBase, call) -> object:
+    """Run *call* with *term* as stdout, always restoring pytest's own.
+
+    Exceptions propagate -- a test that wants "did not raise" simply succeeds
+    by returning. What matters is that the restore runs regardless, because a
+    leaked stdout would poison every subsequent test in the session.
+    """
+    real = sys.stdout
+    sys.stdout = term
+    try:
+        return call()
+    finally:
+        sys.stdout = real
+
+
+def _engine_with(text: str) -> tuple[GraphicsEngine, Layer]:
+    eng = GraphicsEngine()
+    _with_terminal(_TransientTerminal(), eng.open)
+    layer = eng.create_layer("test", z=0)
+    layer.write(0, 0, text)
+    return eng, layer
+
+
+class TestTerminalWrite:
+    """The engine must survive a terminal that has gone away.
+
+    Removing curses from the screen-writer deleted the ``except
+    curses.error: pass`` that used to wrap ``addstr``, and nothing replaced it
+    -- a plain ``BrokenPipeError`` propagated out of ``render()`` and killed the
+    caller. That is not a hypothetical: a pty vanishes when an SSH session
+    drops, an emulator is closed, or output is piped into something that stops
+    reading early (``| head``).
+
+    Three properties, and they are independent -- losing any one loses content
+    silently rather than loudly:
+
+    1. a write failure must not raise;
+    2. a *transient* failure must not latch the engine off, or one ``EAGAIN``
+       would mute it permanently;
+    3. a failed write must not commit the shadow, or the cells are marked as
+       already on screen and are never emitted again.
+
+    Property 3 is the same cache-coherence invariant ncurses violated: a
+    single-writer model where the writer's memory of the screen advances
+    independently of what actually reached the screen.
+    """
+
+    def test_dead_terminal_does_not_raise(self):
+        eng, layer = _engine_with("hello")
+        term = _BrokenTerminal()
+        # Simply reaching the end is the assertion.
+        _with_terminal(term, eng.render)
+        _with_terminal(term, lambda: eng.set_cursor(1, 1))
+        _with_terminal(term, lambda: eng.show_cursor(True))
+        assert layer is not None
+        assert term.attempts >= 1, "nothing was even attempted"
+
+    def test_dead_terminal_latches_off(self):
+        eng, _layer = _engine_with("hello")
+        _with_terminal(_BrokenTerminal(), eng.render)
+        assert eng._stdout_dead is True
+        # Latched: no further syscalls, so a dead pipe is not hammered at
+        # frame rate for the life of the process.
+        term = _BrokenTerminal()
+        _with_terminal(term, eng.render)
+        assert term.attempts == 0, "the engine kept writing to a dead terminal"
+
+    def test_open_resets_the_latch(self):
+        # A new session may have a new terminal. Staying mute across open()
+        # would render a perfectly good screen into nothing.
+        eng, _layer = _engine_with("hello")
+        _with_terminal(_BrokenTerminal(), eng.render)
+        assert eng._stdout_dead is True
+        _with_terminal(_TransientTerminal(), eng.open)
+        assert eng._stdout_dead is False
+
+    def test_transient_eagain_does_not_latch_and_retries(self):
+        eng, _layer = _engine_with("retry-me")
+        term = _TransientTerminal()
+        _with_terminal(term, eng.render)  # EAGAIN on the first frame
+        first = eng._stdout_dead
+        _with_terminal(term, eng.render)  # must land this time
+
+        assert first is False, "one EAGAIN muted the engine for good"
+        assert any("retry-me" in s for s in term.seen), (
+            "content never reached the terminal on retry"
+        )
+
+    def test_failed_write_does_not_commit_the_shadow(self):
+        eng, _layer = _engine_with("shadow-test")
+        term = _TransientTerminal()
+        _with_terminal(term, eng.render)  # fails, so the shadow must not advance
+        _with_terminal(term, eng.render)  # must re-emit the same content
+        emitted = [s for s in term.seen if "shadow-test" in s]
+        assert emitted, (
+            "a failed write committed the shadow: the content is now marked "
+            "on-screen and will never be emitted again"
+        )
+
+    def test_closed_file_is_caught(self):
+        # ValueError is what a closed file raises and it is not an OSError.
+        # Catching only OSError misses the easiest failure to hit in tests.
+        eng, _layer = _engine_with("closed")
+        _with_terminal(_ClosedTerminal(), eng.render)
+        assert eng._stdout_dead is True
+
+    def test_close_restores_the_terminal_even_after_a_failure(self):
+        eng, _layer = _engine_with("x")
+        _with_terminal(_BrokenTerminal(), eng.render)
+        # close() must still *attempt* the restore: on a live terminal a
+        # skipped restore strands the user in the alternate screen.
+        term = _BrokenTerminal()
+        _with_terminal(term, eng.close)
+        assert term.attempts == 1, "restore was skipped"
+        assert eng._alt_screen is False

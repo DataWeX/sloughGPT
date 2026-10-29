@@ -18,7 +18,7 @@ Single source of truth for navigation. Read this first.
 
 | Doc | Purpose |
 |-----|---------|
-| **STRUCTURE.md** | Repo layout, domain/ map, branch lanes |
+| **STRUCTURE.md** | Repo layout |
 | **RAG_ARCHITECTURE.md** | RAG system design |
 | **RAG_PATTERNS.md** | RAG implementation patterns |
 | **TRAINING_REFACTOR_PLAN.md** | Consolidating training loops |
@@ -26,7 +26,6 @@ Single source of truth for navigation. Read this first.
 | **PRODUCER_CONSUMER_QUEUE.md** | Queue pattern |
 | **PUGQEEP.md** | PGQ: points, pools, Pipe |
 | **TRANSPORT_PROJECTIONS.md** | Capability → contract → route |
-| **DOMAIN_CONSOLIDATION.md** | Record of `packages/core-py/domains/` → `domain/` consolidation |
 
 ## Features
 
@@ -39,7 +38,7 @@ Single source of truth for navigation. Read this first.
 | **VM_CONSOLE.md** | VM console |
 | **vm-devices-spec.md** | VM device spec |
 | **WORLD_REALM.md** | World rendering |
-| **CACHING.md** | LLM response cache: keys + invalidation |
+| **LLM_RESPONSE_CACHE.md** | LLM response cache: keys + invalidation |
 
 ## Design
 
@@ -61,8 +60,6 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 | **ENVIRONMENT.md** | Environment setup |
 | **DEPLOYMENT.md** | Deployment guide |
 | **DEPLOYMENT_CHECKLIST.md** | Pre-deploy checks |
-| **WORKTREE_RECOVERY.md** | Worktree wipe prevention + prune/recreate recovery runbook |
-| **scripts/systemd/** | systemd --user unit for the shared API (:8000) + install.sh |
 
 ## Integration
 
@@ -80,7 +77,7 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 | Doc | Purpose |
 |-----|---------|
 | **TESTING.md** | Test guide |
-| **Mole** (in TESTING.md) | The one monitoring app — watches the running stack, heals by proposing fixes (suggest-only); `/mole` surface |
+| **Mole** (in TESTING.md) | The one monitoring app — watches the running stack, heals by proposing fixes (suggest-only); legacy `/doctor` surface |
 | **USER_PERSONA.md** | Who we build for |
 | **USER_JOURNEYS.md** | User flows |
 | **UX_FLOWS.md** | UX patterns |

@@ -50,7 +50,7 @@ npm run dev
 
 Before pushing changes, run the same checks as CI: **`npm ci && npm run ci`** (from this directory — lint, typecheck, Vitest, then **`npm run build:clean`**, i.e. remove **`.next`** and **`next build`**; same as job **`test-web`**).
 
-**Talking to models:** set **`NEXT_PUBLIC_API_URL`** to your FastAPI base (default `http://localhost:8000`). Use **Models** to **`POST /models/load`** (`model_id` in JSON), then **Chat** sends message history to **`POST /chat`** (SSE — the endpoint's only state; a caller wanting a complete reply folds the stream itself). Older single-prompt paths **`/inference/generate/stream`** / **`/inference/generate`** remain available for other clients. The client **`api.loadModel`** matches that contract (not `/models/{id}/load`).
+**Talking to models:** set **`NEXT_PUBLIC_API_URL`** to your FastAPI base (default `http://localhost:8000`). Use **Models** to **`POST /models/load`** (`model_id` in JSON), then **Chat** sends message history to **`POST /chat/stream`** (SSE) with fallback to **`POST /chat`**. Older single-prompt paths **`/inference/generate/stream`** / **`/inference/generate`** remain available for other clients. The client **`api.loadModel`** matches that contract (not `/models/{id}/load`).
 
 **UI vs core engine:** this app is **only** HTML/CSS/TS and `fetch` to the API. It does **not** bundle or import Python (`packages/core-py`, trainers, or inference kernels). Deploy the Next build on any static/hosted frontend; run the FastAPI process separately — the only link is **`NEXT_PUBLIC_API_URL`** and the JSON contracts in **`lib/api.ts`** (see also **`docs/STRUCTURE.md`**).
 
@@ -93,20 +93,20 @@ To change the API URL, copy **`.env.example`** to **`.env.local`** (or edit **`.
 
 ## Available Scripts
 
-| Script                     | Description                                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run dev`              | Start the **Vite** dev server on **:5173** — matches **`slough-web.service`** (the live stack)                                                         |
-| `npm run build`            | **Vite** production build → **`dist-vite/`** (same-origin assets; `MAN_STATIC_DIR` defaults there)                                                     |
-| `npm run build:clean`      | **`rm -rf .next .next-dev`** then `next build` — **Next path**, final step of **`npm run ci:e2e`**                                                     |
-| `npm run start`            | **`vite preview`** — serve the production build                                                                                                        |
-| `npm run lint`             | ESLint over the app (**`eslint .`**; build dirs excluded via **`.eslintignore`**)                                                                      |
-| `npm run typecheck`        | TypeScript `tsc --noEmit`                                                                                                                              |
-| `npm run test`             | Vitest unit tests (**`vitest run`**)                                                                                                                   |
-| `npm run ci`               | Lint + typecheck + Vitest + **Vite `build`** — local gate (CI's web job runs eslint/tsc/vitest then **`next build --webpack`**)                        |
-| `npm run e2e` / `e2e:open` | Cypress E2E (browser) against a running app; default baseUrl `http://localhost:5173`                                                                   |
-| `npm run e2e:ci`           | `next dev -p 3010` + headless Cypress with mocked FastAPI — complements Vitest, not a substitute                                                       |
-| `npm run ci:e2e`           | **`build:clean`** then `e2e:ci` (full UI smoke with mocked backend)                                                                                    |
-| `npm run clean`            | Deletes **`.next`** / **`.next-dev`** (Next-path caches; use if the **Next** dev/e2e server shows missing-chunk 404s like `/_next/static/chunks/*.js`) |
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server (Next.js) |
+| `npm run build` | Production build (may reuse **`.next`**) |
+| `npm run build:clean` | **`rm -rf .next`** then **`next build`** — final step of **`npm run ci`** / CI **`test-web`** |
+| `npm run start` | Run production server after `build` |
+| `npm run lint` | Run ESLint (`next lint`) |
+| `npm run typecheck` | TypeScript `tsc --noEmit` |
+| `npm run test` | Vitest unit tests (`lib/**/*.test.ts`, `hooks/**/*.test.ts`) — fast API/UX helpers |
+| `npm run ci` | Lint + typecheck + Vitest + **`build:clean`** (parity with CI **`test-web`**) |
+| `npm run e2e` / `e2e:open` | Cypress E2E (browser) against a running app; default baseUrl `http://localhost:5173` |
+| `npm run e2e:ci` | `next dev -p 3010` + headless Cypress with mocked FastAPI — complements Vitest, not a substitute |
+| `npm run ci:e2e` | **`build:clean`** then `e2e:ci` (full UI smoke with mocked backend) |
+| `npm run clean` | Deletes **`.next`** (use if dev server shows missing chunk errors like `Cannot find module './NNN.js'` or `/_next/static/chunks/*.js` **404**) |
 
 ## Project Structure
 
@@ -138,13 +138,13 @@ python3 apps/api/server/main.py
 
 1. **Node 20+** — match **`.nvmrc`**; run `node -v`.
 2. **Install & build** — from `apps/web`: `npm ci` (or `npm install`), then `npm run dev` or `npm run ci` to match CI.
-3. **Environment** — copy **`.env.example`** → **`.env.local`**. The live stack (vite on `:5173`, same-origin in production) authenticates via FastAPI **`/auth/login`** — it does not serve `/api/auth/*` and ignores the `NEXTAUTH_*` vars. Those matter **only** for the Next alternate path (`npm run dev:e2e` on `:3010`, `npm run build:export`): if you run that path, set **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`) and point **`NEXTAUTH_URL`** at `http://localhost:3010`; otherwise the template values can stay untouched.
+3. **Environment** — copy **`.env.example`** → **`.env.local`**. Set **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`) so NextAuth can issue sessions. **`NEXTAUTH_URL`** should match where you open the app (e.g. `http://localhost:5173`).
 4. **API must be up** — the UI calls **`NEXT_PUBLIC_API_URL`** (default `http://localhost:8000`). Login and most actions use the FastAPI backend; if the API is down, the home page shows **offline** and login will fail.
-5. **GitHub OAuth** — optional, **Next-path only**. Under vite, `next-auth/react` is a compatibility stub (`vite/next-compat/next-auth.tsx`, always unauthenticated) and vite serves only `planner`/`calendar` API routes — use the **`/login`** form (FastAPI `/auth/login`) for username/password. On the Next alternate (`dev:e2e`), if **`GITHUB_ID`** / **`GITHUB_SECRET`** are unset, NextAuth falls back to a placeholder provider.
+5. **GitHub OAuth** — optional. If **`GITHUB_ID`** / **`GITHUB_SECRET`** are unset, NextAuth still runs with a placeholder provider; use the **`/login`** form (FastAPI `/auth/login`) for username/password.
 
 ## Training console
 
-The **Training** page calls `POST /training/start`. Native trainer `.soul` files on the API host embed `stoi` / `itos` / `chars` for fair `cli.py eval`; formats and caveats are in [docs/policies/CONTRIBUTING.md](../../docs/policies/CONTRIBUTING.md) (_Checkpoint vocabulary_).
+The **Training** page calls `POST /training/start`. Native trainer `.soul` files on the API host embed `stoi` / `itos` / `chars` for fair `cli.py eval`; formats and caveats are in [docs/policies/CONTRIBUTING.md](../../docs/policies/CONTRIBUTING.md) (*Checkpoint vocabulary*).
 
 ## License
 

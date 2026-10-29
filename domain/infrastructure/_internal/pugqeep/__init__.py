@@ -33,6 +33,7 @@ from domain.infrastructure._internal.producer_consumer import (
 
 from .cache import MemoryStore as CacheMemoryStore
 from .cache import Tier, TieredCache
+from .codecs import BlockQ4Codec, BlockQ8Codec, CodecRegistry, PointCodec, codec_registry
 from .compressor import PointCompressor
 from .config import CompressorConfig, LibraryConfig, PointConfig, QueueConfig, TreeConfig
 from .dedup import PointDeduplicator, PointLibrarySync
@@ -124,6 +125,12 @@ __all__ = [
     "LibraryConfig",
     "TreeConfig",
     "QueueConfig",
+    # Codec registry (per-function-type dispatch for Point)
+    "PointCodec",
+    "CodecRegistry",
+    "codec_registry",
+    "BlockQ4Codec",
+    "BlockQ8Codec",
     # Sync/dedup
     "PointDeduplicator",
     "PointLibrarySync",

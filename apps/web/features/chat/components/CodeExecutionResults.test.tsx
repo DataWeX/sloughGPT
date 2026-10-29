@@ -142,21 +142,6 @@ describe('CodeExecutionResults', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('print("Hello")')
   })
 
-  it('clears the copy-feedback timer on unmount (no teardown strays)', async () => {
-    vi.useFakeTimers()
-    try {
-      const { unmount } = render(<CodeExecutionResults executions={[mockExecutions[0]]} />)
-      fireEvent.click(screen.getByText('python'))
-      fireEvent.click(screen.getAllByRole('button')[0])
-      await Promise.resolve() // let the async clipboard await schedule the timer
-      expect(vi.getTimerCount()).toBe(1)
-      unmount()
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('collapses expanded execution', () => {
     render(<CodeExecutionResults executions={[mockExecutions[0]]} />)
     fireEvent.click(screen.getByText('python'))

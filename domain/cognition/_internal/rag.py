@@ -65,6 +65,10 @@ class BM25Indexer:
         self.doc_freq: dict[str, int] = Counter()
         self.num_docs: int = 0
         self.inverted_index: dict[str, list[tuple[int, int]]] = {}
+        # Running total of doc_lengths. Kept so append() can recompute
+        # avg_doc_length in O(1) instead of summing every length on each
+        # insert (which is O(corpus) and would defeat incremental indexing).
+        self._total_doc_length: int = 0
 
     def index(self, chunks: list[TextChunk]):
         """Build BM25 index (idempotent: resets before rebuilding)."""
@@ -92,6 +96,7 @@ class BM25Indexer:
                 self.inverted_index[token].append((doc_id, pos))
 
         self.avg_doc_length = sum(self.doc_lengths) / max(len(self.doc_lengths), 1)
+        self._total_doc_length = sum(self.doc_lengths)
         logger.debug(
             "BM25 indexing complete: avg_doc_length=%.1f, unique_terms=%d",
             self.avg_doc_length,
@@ -107,6 +112,70 @@ class BM25Indexer:
         assert all(df <= len(chunks) for df in self.doc_freq.values()), (
             "BM25 index corrupt: term frequency exceeds chunk count"
         )
+
+    def append(self, chunks: list[TextChunk]):
+        """Incrementally add chunks to an existing index.
+
+        Same result as :meth:`index` over ``existing + chunks`` but costs
+        O(chunks) rather than O(corpus). Per-document ingestion used to call
+        ``index()`` every time, making a single insert O(corpus) and a whole
+        ingest O(corpus^2) — with the retriever living in a process-lifetime
+        singleton, insert latency grew without bound.
+
+        Publication order matters for concurrent readers: the length bookkeeping
+        is published *before* any new postings, so a concurrent ``score()`` can
+        never index a doc_id beyond ``num_docs`` (it would raise IndexError on
+        its scores array). At worst a reader momentarily misses the newest docs.
+
+        The ``index()`` path remains the repair mechanism for callers that
+        mutate the chunk list out of band.
+        """
+        if not chunks:
+            return
+
+        start_doc_id = self.num_docs
+
+        # Tokenize the batch first: pure work, nothing published yet.
+        token_lists = [self._tokenize(chunk.content) for chunk in chunks]
+        new_lengths = [len(tokens) for tokens in token_lists]
+
+        # 1. Lengths first — score() sizes its array from num_docs.
+        doc_lengths = self.doc_lengths
+        doc_lengths.extend(new_lengths)
+        num_docs = len(doc_lengths)
+        self.num_docs = num_docs
+        self._total_doc_length += sum(new_lengths)
+        self.avg_doc_length = self._total_doc_length / max(num_docs, 1)
+
+        # 2. Postings now that the array is guaranteed large enough.
+        inverted_index = self.inverted_index
+        doc_freq = self.doc_freq
+        for offset, tokens in enumerate(token_lists):
+            doc_id = start_doc_id + offset
+            for token in set(tokens):
+                doc_freq[token] += 1
+            for pos, token in enumerate(tokens):
+                inverted_index.setdefault(token, []).append((doc_id, pos))
+
+        # Same invariant as index(), but only over the terms this batch
+        # touched: an untouched term's df cannot grow, and num_docs only
+        # grows, so re-checking the whole vocabulary would be O(corpus).
+        assert len(doc_lengths) == num_docs, (
+            f"BM25 index corrupt: {len(doc_lengths)} lengths for {num_docs} chunks"
+        )
+        for token in {t for tokens in token_lists for t in tokens}:
+            assert doc_freq[token] <= num_docs, (
+                "BM25 index corrupt: term frequency exceeds chunk count"
+            )
+
+    def clear(self):
+        """Drop every index structure (full reset, e.g. on purge)."""
+        self.doc_lengths = []
+        self.avg_doc_length = 0.0
+        self.doc_freq = Counter()
+        self.num_docs = 0
+        self.inverted_index = {}
+        self._total_doc_length = 0
 
     def _tokenize(self, text: str) -> list[str]:
         """Tokenize text."""
@@ -177,12 +246,40 @@ class HybridRetriever:
         self._embedding_fn = embedding_fn or self._default_embedding
 
     def add_chunk(self, chunk: TextChunk):
-        """Add a chunk to the retriever."""
+        """Add a chunk to the retriever and index it incrementally.
+
+        Costs O(chunk) — previously the index was rebuilt from the full chunk
+        list on every insert, which is O(corpus) per document.
+        """
         self.chunks.append(chunk)
+        self.bm25.append([chunk])
+
+    def add_chunks(self, chunks: list[TextChunk]):
+        """Add several chunks with one incremental index update."""
+        if not chunks:
+            return
+        self.chunks.extend(chunks)
+        self.bm25.append(chunks)
 
     def build_index(self):
-        """Build retrieval indexes."""
+        """Rebuild retrieval indexes from scratch (idempotent).
+
+        ``add_chunk`` keeps the index current on its own, so this is only
+        needed after mutating ``self.chunks`` out of band, or as an explicit
+        repair. Bulk loaders may still call it once at the end of a load.
+        """
         self.bm25.index(self.chunks)
+
+    def clear(self):
+        """Drop every chunk, index and cached embedding.
+
+        Needed because the retriever lives behind a process-lifetime
+        singleton: without a reset, ``chunks`` only ever grew, so both memory
+        and per-insert latency grew with it for the life of the process.
+        """
+        self.chunks.clear()
+        self.embedding_cache.clear()
+        self.bm25.clear()
 
     def _get_embedding(self, text: str) -> np.ndarray:
         """Public entry point — delegates to the configured embedding function."""
@@ -196,14 +293,9 @@ class HybridRetriever:
         if text in self.embedding_cache:
             return self.embedding_cache[text]
 
-        # Simulated embedding (use real embeddings in production).
-        # Seed from a stable hash — NOT builtin hash(), which Python randomizes
-        # per-process via PYTHONHASHSEED. With hash() the same text got a
-        # different vector on every run, making dense scores (and therefore
-        # retrieval results and test_add_and_retrieve) nondeterministic. A
-        # local Generator also avoids mutating the global numpy RNG.
-        seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
-        embedding = np.random.default_rng(seed).standard_normal(384)
+        # Simulated embedding (use real embeddings in production)
+        np.random.seed(hash(text) % (2**32))
+        embedding = np.random.randn(384)
         embedding = embedding / np.linalg.norm(embedding)
 
         self.embedding_cache[text] = embedding
@@ -289,7 +381,9 @@ class HybridRetriever:
         w_total = (w_dense + self.sparse_weight) or 1.0
         results = []
         for doc_id, scores in combined_scores.items():
-            combined = (w_dense * scores["dense"] + self.sparse_weight * scores["sparse"]) / w_total
+            combined = (
+                w_dense * scores["dense"] + self.sparse_weight * scores["sparse"]
+            ) / w_total
             results.append(
                 RetrievalResult(
                     chunk=self.chunks[doc_id],
@@ -590,56 +684,6 @@ class HallucinationDetector:
         }
 
 
-# Fine-grained retrieval windows (chars). Retrieved ranks share a fixed
-# injection budget (~2000 chars split across top-5 ≈ 400 each), so a chunk
-# must fit that slice whole — 512-token chunks (~3KB) showed ~13% per rank.
-FINE_CHUNK_TARGET_CHARS = 450
-FINE_CHUNK_MAX_CHARS = 600
-FINE_CHUNK_OVERLAP_CHARS = 100
-
-
-def _fine_char_windows(content: str) -> list[str]:
-    """Split content into word-boundary windows of ~450 chars (max 600).
-
-    Greedy: take words until the target (hard-stop at the max), then restart
-    ~100 chars of trailing words back so adjacent windows overlap. A single
-    word longer than the max is kept whole rather than cut mid-word (BM25
-    tokenizes on whitespace — a mid-word cut would corrupt both halves).
-    """
-    words = content.split()
-    if not words:
-        return []
-    windows: list[str] = []
-    start = 0
-    n = len(words)
-    while start < n:
-        end = start
-        total = 0
-        while end < n:
-            add = len(words[end]) + (1 if end > start else 0)
-            if total and total + add > FINE_CHUNK_MAX_CHARS:
-                break
-            total += add
-            end += 1
-            if total >= FINE_CHUNK_TARGET_CHARS:
-                break
-        windows.append(" ".join(words[start:end]))
-        if end >= n:
-            break
-        # Restart the next window ~overlap chars back (whole words only,
-        # always leaving at least one new word so the walk makes progress).
-        ns = end
-        occ = 0
-        while ns > start + 1:
-            prev = len(words[ns - 1]) + (1 if ns - 1 > start else 0)
-            if occ + prev > FINE_CHUNK_OVERLAP_CHARS:
-                break
-            occ += prev
-            ns -= 1
-        start = ns
-    return windows
-
-
 class ProductionRAG:
     """
     Production-grade RAG system.
@@ -662,71 +706,56 @@ class ProductionRAG:
         self,
         content: str,
         metadata: dict[str, Any] | None = None,
-        chunk_size: int | None = None,
-        overlap: int | None = None,
+        chunk_size: int = 512,
+        overlap: int = 50,
         rebuild_index: bool = True,
     ) -> list[str]:
         """
         Add a document with intelligent chunking.
 
-        Default (``chunk_size=None``): fine-grained char windows — ~450-char
-        targets (max 600, ~100 overlap) cut on word boundaries, sized so one
-        retrieved rank fits the injection budget (~400 chars/rank of the
-        2000-char cap) whole instead of showing ~13% of a 3KB chunk.
-
-        ``chunk_size``/``overlap`` given: legacy TOKEN windows (the historic
-        512/50 behaviour) — kept for callers and tests that count in tokens.
-
-        Set ``rebuild_index=False`` when bulk-loading many documents, then
-        call ``retriever.build_index()`` once at the end (rebuilding per
-        document is O(n^2)).
+        Indexing is incremental: each chunk is indexed as it is created, in
+        O(chunk) rather than O(corpus). ``rebuild_index`` is retained for API
+        compatibility and no longer triggers a per-document rebuild — the bulk
+        pattern (pass False, then call ``retriever.build_index()`` once at the
+        end) still works, since ``build_index()`` is an idempotent full rebuild.
         """
         metadata = metadata or {"source": "user"}
         chunk_ids = []
 
-        if chunk_size is None:
-            windows = _fine_char_windows(content)
-            logger.debug("Document ingestion started: mode=fine, windows=%d", len(windows))
-            for position, window in enumerate(windows):
-                chunk_id = hashlib.md5(window.encode()).hexdigest()[:12]
-                chunk = TextChunk(
-                    id=chunk_id,
-                    content=window,
-                    metadata={**metadata, "position": position},
-                )
-                self.retriever.add_chunk(chunk)
-                chunk_ids.append(chunk_id)
-        else:
-            logger.debug(
-                "Document ingestion started: chunk_size=%d, overlap=%d",
-                chunk_size,
-                overlap,
+        logger.debug(
+            "Document ingestion started: chunk_size=%d, overlap=%d",
+            chunk_size,
+            overlap,
+        )
+
+        # Tokenize and chunk with overlap
+        tokens = content.split()
+        stride = max(1, chunk_size - overlap)
+        for i in range(0, len(tokens), stride):
+            chunk_tokens = tokens[i : i + chunk_size]
+            chunk_content = " ".join(chunk_tokens)
+
+            chunk_id = hashlib.md5(chunk_content.encode()).hexdigest()[:12]
+            chunk = TextChunk(
+                id=chunk_id,
+                content=chunk_content,
+                metadata={**metadata, "position": i // chunk_size},
             )
-            # Tokenize and chunk with overlap
-            tokens = content.split()
-            stride = max(1, chunk_size - (overlap or 0))
-            for i in range(0, len(tokens), stride):
-                chunk_tokens = tokens[i : i + chunk_size]
-                chunk_content = " ".join(chunk_tokens)
 
-                chunk_id = hashlib.md5(chunk_content.encode()).hexdigest()[:12]
-                chunk = TextChunk(
-                    id=chunk_id,
-                    content=chunk_content,
-                    metadata={**metadata, "position": i // chunk_size},
-                )
+            self.retriever.add_chunk(chunk)
+            chunk_ids.append(chunk_id)
 
-                self.retriever.add_chunk(chunk)
-                chunk_ids.append(chunk_id)
-
-        # Rebuild index (skipped for bulk loads — caller builds once)
-        if rebuild_index:
-            self.retriever.build_index()
+        # No rebuild needed: add_chunk() indexed each chunk incrementally, so
+        # the index is already current. Rebuilding here was the O(corpus) cost
+        # that made every single-document insert slower as the corpus grew.
+        # ``rebuild_index`` is retained for API compatibility; bulk loaders that
+        # pass False and call build_index() once at the end still work, since
+        # build_index() is an idempotent full rebuild.
 
         logger.debug(
             "Document ingestion complete: chunks=%d, total_tokens=%d",
             len(chunk_ids),
-            len(content.split()),
+            len(tokens),
         )
         return chunk_ids
 

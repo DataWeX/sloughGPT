@@ -97,7 +97,6 @@ export const ModelDropdown = memo(function ModelDropdown({
                     isLoaded(m)
                       ? 'bg-primary/[0.08] text-primary font-medium'
                       : 'hover:bg-muted/80',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                   )}
                   title={`${m}${sl ? ` — ${sl}` : ''}`}
                 >
@@ -150,9 +149,9 @@ export const ModelDropdown = memo(function ModelDropdown({
               className={cn(
                 'inline-block h-1.5 w-1.5 rounded-full shrink-0',
                 loadingModel && dlProgress?.status === 'downloading'
-                  ? 'bg-warning animate-pulse motion-reduce:animate-none'
+                  ? 'bg-warning animate-pulse'
                   : loadingModel
-                    ? 'bg-warning animate-pulse motion-reduce:animate-none'
+                    ? 'bg-warning animate-pulse'
                     : currentModel
                       ? 'bg-success'
                       : 'bg-muted-foreground/30',

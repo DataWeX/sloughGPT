@@ -19,6 +19,7 @@ from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .control import router as control_router
 from .controller import get_training_controller
@@ -46,11 +47,6 @@ router.include_router(feeds_router)
 from .feeds import router as feeds_router
 
 router.include_router(feeds_router)
-
-# Include the live feed/job observability stream (SSE)
-from .live_stream import router as live_stream_router
-
-router.include_router(live_stream_router)
 
 
 def _finetuned_dir() -> Path:
@@ -264,23 +260,44 @@ async def recover_job(job_id: str):
     job_name = job.get("name", "recovered_job")
 
     # Resolve the checkpoint to resume from. A job's recorded path is loaded
-    # exactly once, here in the request handler (via the engine, card c48aaaad).
-    # The job explicitly points at it, so a recorded path that is missing,
-    # unsupported, or unreadable fails the recovery request loudly (422) —
-    # resuming from a different checkpoint would silently change what is being
-    # resumed. Only when the job recorded NO checkpoint path do we fall back to
-    # the newest file that actually loads (skipping partial/corrupt checkpoints
-    # — a crash mid-write can leave the newest file unreadable). The loaded
-    # bundle is handed to train() so no second load happens in the worker
-    # thread.
-    from domain.training.engine import get_training_engine
+    # exactly once, here in the request handler. The job explicitly points at
+    # it, so a recorded path that is missing, unsupported, or unreadable fails
+    # the recovery request loudly (422) — resuming from a different checkpoint
+    # would silently change what is being resumed. Only when the job recorded
+    # NO checkpoint path do we fall back to the newest file that actually loads
+    # (skipping partial/corrupt checkpoints — a crash mid-write can leave the
+    # newest file unreadable). The loaded bundle is handed to train() so no
+    # second load happens in the worker thread.
+    from domain.training._internal.train_pipeline import CheckpointManager
 
-    try:
-        checkpoint_path, resume_bundle = get_training_engine().resolve_resume_checkpoint(
-            checkpoint_path, checkpoint_dir
-        )
-    except ValueError as exc:
-        raise_error(str(exc), "E_VAL_REQUEST", status_code=422)
+    manager = CheckpointManager(checkpoint_dir)
+    resume_bundle = None
+    if checkpoint_path:
+        if not CheckpointManager.is_resumable(checkpoint_path):
+            raise_error(
+                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                "unsupported (use a .soul or .npz file)",
+                "E_VAL_REQUEST",
+                status_code=422,
+            )
+        try:
+            resume_bundle = CheckpointManager.load_from_path(checkpoint_path)
+        except Exception as exc:
+            raise_error(
+                f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})",
+                "E_VAL_REQUEST",
+                status_code=422,
+            )
+        if resume_bundle is None:
+            raise_error(
+                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                "unsupported (use a .soul or .npz file)",
+                "E_VAL_REQUEST",
+                status_code=422,
+            )
+    else:
+        checkpoint_path, resume_bundle = manager.load_latest_with_path()
+        checkpoint_path = checkpoint_path or ""
 
     # Create recovery job in training_jobs. config is spread first so the
     # explicit control fields (id, status, checkpoint_*) always win over any
@@ -336,7 +353,7 @@ async def recover_job(job_id: str):
 
     def run_recovery(job_id_: str = jid):
         try:
-            from domain.training.engine import get_training_engine
+            from domain.training._internal.train_pipeline import SloughGPTTrainer
 
             # Reuse the SAME trainer configuration builder as /training/start so
             # the recovered run continues with the original job's hyperparameters
@@ -382,14 +399,16 @@ async def recover_job(job_id: str):
                     job_id, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
                 )
 
+            trainer = SloughGPTTrainer(**trainer_config)
+
             # Resume from checkpoint if available (bundle pre-loaded once in the
-            # request handler — no disk load happens in this thread; the engine
-            # builds the trainer, trains, and hands it back — card c48aaaad)
-            trainer = get_training_engine().run_recovery_training(
-                config=trainer_config,
+            # request handler — no disk load happens in this thread)
+            trainer.train(
                 on_progress=on_progress,
-                resume=resume_bundle,
-                events={"cancel_event": cancel_event, "pause_event": pause_event},
+                resume=True,
+                resume_checkpoint=resume_bundle,
+                cancel_event=cancel_event,
+                pause_event=pause_event,
             )
 
             # Mark as completed. The recovery job lives in-memory only; the
@@ -439,7 +458,8 @@ async def recover_job(job_id: str):
             store.mark_failed(job_id, str(e))
             controller.fail()
 
-    get_training_engine().executor_submit(run_recovery, jid)
+    executor = get_training_executor()
+    executor.submit(run_recovery, jid)
 
     return {
         "status": "recovered",
@@ -483,9 +503,7 @@ async def get_recovery_stats():
 
 
 # ── Unified /training/* → core service + infrastructure wrapping ──────────────
-# Business logic: the training service layer (domain.training.engine's
-# raw-passthrough methods reach the _internal service/state/advisor/outcome/
-# monitor modules; this file never imports them directly).
+# Business logic: domain.training._internal.service (pure, no HTTP)
 # HTTP wrapping: success_response, error classification, audit logging (this file)
 
 
@@ -493,9 +511,9 @@ async def get_recovery_stats():
 async def training_log():
     from schemas.common import success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.service import get_log
 
-    lines = await get_training_engine().get_log()
+    lines = await get_log()
     return success_response(data={"lines": lines, "total": len(lines)})
 
 
@@ -514,9 +532,9 @@ async def training_stop():
 async def training_list_checkpoints():
     from schemas.common import success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.service import list_checkpoints
 
-    checkpoints = await get_training_engine().list_stored_checkpoints()
+    checkpoints = await list_checkpoints()
     return success_response(data=checkpoints)
 
 
@@ -524,12 +542,12 @@ async def training_list_checkpoints():
 async def training_delete_checkpoint(name: str):
     from schemas.common import safe_audit_log, success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.service import delete_checkpoint
+    from domain.training._internal.state import VALID_CKPT_NAME
 
-    engine = get_training_engine()
-    if not engine.is_valid_ckpt_name(name):
+    if not VALID_CKPT_NAME.match(name):
         raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
-    deleted = await engine.delete_checkpoint(name)
+    deleted = await delete_checkpoint(name)
     if deleted:
         safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
     return success_response(data={"deleted": deleted, "name": name})
@@ -539,10 +557,10 @@ async def training_delete_checkpoint(name: str):
 async def training_load_checkpoint(name: str):
     from schemas.common import classify_and_raise, success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.service import load_checkpoint
 
     try:
-        result = await get_training_engine().load_stored_checkpoint(name)
+        result = await load_checkpoint(name)
         return success_response(data=result, message="loaded")
     except Exception as e:
         classify_and_raise(e, source="training.load_checkpoint")
@@ -553,9 +571,9 @@ async def training_download_checkpoint(name: str):
     from fastapi.responses import FileResponse
     from schemas.common import raise_error
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.service import download_checkpoint_path
 
-    fp = await get_training_engine().download_checkpoint_path(name)
+    fp = await download_checkpoint_path(name)
     if fp:
         return FileResponse(fp, media_type="application/octet-stream", filename=name)
     raise_error("Checkpoint not found", "E_NOT_FOUND", status_code=404)
@@ -565,10 +583,10 @@ async def training_download_checkpoint(name: str):
 async def training_checkpoint_info(name: str):
     from schemas.common import classify_and_raise, success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.service import checkpoint_info
 
     try:
-        info = await get_training_engine().checkpoint_info(name)
+        info = await checkpoint_info(name)
         return success_response(data=info)
     except Exception as e:
         classify_and_raise(e, source="training.checkpoint_info")
@@ -580,9 +598,9 @@ async def training_metrics_export():
 
     from fastapi.responses import Response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.service import get_all_checkpoint_data
 
-    checkpoints = await get_training_engine().get_all_checkpoint_data()
+    checkpoints = await get_all_checkpoint_data()
     export = {
         "exported_at": time.time(),
         "total_checkpoints": len(checkpoints),
@@ -616,9 +634,9 @@ async def training_stream(request: Request):
 
     # Get training state for config
     try:
-        from domain.training.engine import get_training_engine
+        from domain.training._internal.service import get_state
 
-        config = get_training_engine().get_state().config or {}
+        config = get_state().config or {}
         if not config:
             from schemas.common import success_response
 
@@ -661,9 +679,9 @@ async def training_from_sessions_stream(request: Request):
     from .sse_stream import build_training_sse_response
 
     try:
-        from domain.training.engine import get_training_engine
+        from domain.training._internal.service import get_state
 
-        config = get_training_engine().get_state().config or {}
+        config = get_state().config or {}
         if not config or config.get("method") != "from-sessions":
             from schemas.common import success_response
 
@@ -718,9 +736,10 @@ async def get_training_recommendation(
     try:
         from pathlib import Path as _P
 
-        from domain.training.engine import get_training_engine
-
-        engine = get_training_engine()
+        from domain.training._internal.training_advisor import (
+            get_training_tips,
+            recommend_training_config,
+        )
 
         dataset_size = 0
         avg_quality = None
@@ -747,14 +766,14 @@ async def get_training_recommendation(
                         dataset_size = len(data_files)
 
         # Get recommendation
-        recommendation = engine.recommend_training_config(
+        recommendation = recommend_training_config(
             dataset_size=dataset_size,
             method=method,
             avg_quality=avg_quality,
         )
 
         # Get tips
-        tips = engine.get_training_tips(dataset_size=dataset_size)
+        tips = get_training_tips(dataset_size=dataset_size)
 
         return success_response(
             data={
@@ -808,9 +827,10 @@ async def get_training_trends(
     from schemas.common import success_response
 
     try:
-        from domain.training.engine import get_training_engine
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
-        outcomes = get_training_engine().load_outcomes()
+        tracker = TrainingOutcomeTracker()
+        outcomes = tracker.load_outcomes()
 
         # Filter
         if model:
@@ -947,9 +967,9 @@ async def training_monitor_status():
     """
     from schemas.common import success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.monitor import get_training_monitor
 
-    monitor = get_training_engine().get_training_monitor()
+    monitor = get_training_monitor()
     return success_response(data=monitor.get_status())
 
 
@@ -963,11 +983,10 @@ async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
     """
     from schemas.common import success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.monitor import AlertSeverity, get_training_monitor
 
-    engine = get_training_engine()
-    monitor = engine.get_training_monitor()
-    severity_filter = engine.alert_severity(severity) if severity else None
+    monitor = get_training_monitor()
+    severity_filter = AlertSeverity(severity) if severity else None
     alerts = monitor.get_alerts(severity=severity_filter, limit=limit)
     return success_response(
         data={
@@ -986,9 +1005,9 @@ async def training_monitor_metrics(limit: int = 100):
     """
     from schemas.common import success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.monitor import get_training_monitor
 
-    monitor = get_training_engine().get_training_monitor()
+    monitor = get_training_monitor()
     metrics = monitor.get_metrics_history(limit=limit)
     return success_response(
         data={
@@ -1003,9 +1022,9 @@ async def training_monitor_reset():
     """Reset training monitor state."""
     from schemas.common import success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.monitor import get_training_monitor
 
-    monitor = get_training_engine().get_training_monitor()
+    monitor = get_training_monitor()
     monitor.reset()
     return success_response(data={"message": "Monitor reset"})
 
@@ -1018,8 +1037,8 @@ async def training_monitor_resources():
     """
     from schemas.common import success_response
 
-    from domain.training.engine import get_training_engine
+    from domain.training._internal.monitor import get_training_monitor
 
-    monitor = get_training_engine().get_training_monitor()
+    monitor = get_training_monitor()
     resources = monitor.check_resources()
     return success_response(data=resources)

@@ -28,18 +28,6 @@ def test_find_project_root_finds_nearest_ancestor(tmp_path):
     assert config.find_project_root(nested) == root
 
 
-def test_find_project_root_finds_jsonl_only(tmp_path):
-    """The canonical board.jsonl alone is enough to claim a project root."""
-    root = tmp_path
-    (root / ".kanban").mkdir()
-    (root / ".kanban" / "board.jsonl").write_text(
-        '{"schema": "planner/1", "name": "b", "columns": []}\n'
-    )
-    nested = root / "x" / "y"
-    nested.mkdir(parents=True)
-    assert config.find_project_root(nested) == root
-
-
 def test_find_project_root_returns_none_without_board(tmp_path):
     assert config.find_project_root(tmp_path) is None
 

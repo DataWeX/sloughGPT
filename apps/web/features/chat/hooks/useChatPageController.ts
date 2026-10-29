@@ -405,7 +405,6 @@ export function useChatPageController(
     onSystemPrompt: () => setSystemPromptOpen(true),
     onSearchConversations: () => ui.setShowConversationSearch(true),
     bookmarkCount: bookmarks.length,
-    chatMode,
   })
 
   const healthValue = useChatHealthValue({ health, refreshHealth })

@@ -4,16 +4,11 @@ import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { inferStateKind, type StateEventKind } from '@/lib/event-kinds'
-import { useBannerStore } from '@/lib/banner-store'
-import { useToastStore } from '@/lib/toast-store'
 
 export type { StateEventKind }
 export { inferStateKind, isStateEventKind } from '@/lib/event-kinds'
 
 export type ErrorSeverity = 'error' | 'warning' | 'info'
-
-/** Where the error came from — drives fan-out policy (banner vs silent). */
-export type ErrorSurface = 'global' | 'page' | 'section' | 'component' | 'api' | 'chat'
 
 export interface AppError {
   id: string
@@ -24,8 +19,6 @@ export interface AppError {
   timestamp: number
   dismissible?: boolean
   requestId?: string
-  surface?: ErrorSurface
-  journeyId?: string
   /** How many times this exact error occurred (deduped within 30s window) */
   count: number
 }
@@ -105,61 +98,6 @@ function getSeverity(err: unknown, explicitSev?: ErrorSeverity): ErrorSeverity {
   return 'error'
 }
 
-/**
- * Single funnel fan-out. Runs once per NEW error (deduped repeats skip it):
- *   1. structured state event (`error_reported`) — breadcrumbs/diagnostics
- *   2. global banner — journey blockers only (page/global surfaces)
- *   3. optional toast — transient, only when the producer asks
- *   4. backend batch — dynamic import keeps `db`/indexedDB out of the static
- *      graph (error-store is imported by node-env tests and lib code).
- */
-function fanOut(error: AppError, fp: string, opts: { banner?: boolean; toast?: boolean }): void {
-  errorStore.getState().logStateEvent('error_reported', {
-    kind: 'system',
-    message: error.title,
-    data: {
-      surface: error.surface,
-      journeyId: error.journeyId,
-      severity: error.severity,
-      source: error.source,
-      requestId: error.requestId,
-    },
-  })
-
-  const wantsBanner =
-    opts.banner ??
-    (error.severity === 'error' && (error.surface === 'page' || error.surface === 'global'))
-  if (wantsBanner) {
-    useBannerStore.getState().showBanner({
-      tone: 'destructive',
-      title: error.title,
-      message: error.source ? `via ${error.source}` : undefined,
-      key: `err_${fp}`,
-    })
-  }
-
-  if (opts.toast) {
-    useToastStore.getState().addToast(error.title, 'error')
-  }
-
-  if (typeof window !== 'undefined') {
-    import('@/lib/error-reporter')
-      .then((m) =>
-        m.reportError(error.message, error.source ?? 'web', {
-          metadata: {
-            surface: error.surface,
-            journeyId: error.journeyId,
-            severity: error.severity,
-            requestId: error.requestId,
-          },
-        }),
-      )
-      .catch(() => {
-        /* reporter is best-effort — never break the caller */
-      })
-  }
-}
-
 interface ErrorStore {
   errors: AppError[]
   recentActivity: ActivityEntry[]
@@ -175,12 +113,6 @@ interface ErrorStore {
       severity?: ErrorSeverity
       dismissible?: boolean
       requestId?: string
-      surface?: ErrorSurface
-      journeyId?: string
-      /** Force the global banner on/off; default: on for page/global errors. */
-      banner?: boolean
-      /** Also raise a transient toast (defaults to off — banner covers blockers). */
-      toast?: boolean
     },
   ) => string
   dismissError: (id: string) => void
@@ -208,7 +140,7 @@ const errorStore = createStore<ErrorStore>((set, get) => ({
   stateEvents: [],
 
   addError: (err, opts = {}) => {
-    const { source, severity: sev, dismissible = true, requestId, surface, journeyId } = opts
+    const { source, severity: sev, dismissible = true, requestId } = opts
     const title = opts.title || extractErrorTitle(err)
     const message = extractErrorMessage(err)
     const severity = getSeverity(err, sev)
@@ -241,8 +173,6 @@ const errorStore = createStore<ErrorStore>((set, get) => ({
       timestamp: now,
       dismissible,
       requestId,
-      surface,
-      journeyId,
       count: 1,
     }
 
@@ -260,8 +190,6 @@ const errorStore = createStore<ErrorStore>((set, get) => ({
       recentActivity: [activity, ...prev.recentActivity].slice(0, MAX_ACTIVITY),
       totalErrorCount: prev.totalErrorCount + 1,
     }))
-
-    fanOut(error, fp, opts)
     return id
   },
 
@@ -328,18 +256,6 @@ export const useErrorStore = Object.assign(
   { getState: errorStore.getState },
 )
 
-export function addGlobalError(
-  err: unknown,
-  source?: string,
-  requestId?: string,
-  opts?: {
-    title?: string
-    severity?: ErrorSeverity
-    surface?: ErrorSurface
-    journeyId?: string
-    banner?: boolean
-    toast?: boolean
-  },
-) {
-  return useErrorStore.getState().addError(err, { source, requestId, ...opts })
+export function addGlobalError(err: unknown, source?: string, requestId?: string) {
+  return useErrorStore.getState().addError(err, { source, requestId })
 }

@@ -60,21 +60,4 @@ describe('MessageImages', () => {
     const { container } = render(<MessageImages images={images} role="assistant" />)
     expect(container.querySelector('.flex-row-reverse')).toBeNull()
   })
-
-  it('replaces a failed thumbnail with a named fallback (no bare broken-image glyph)', () => {
-    render(<MessageImages images={images} role="user" />)
-    // First thumbnail fails to decode...
-    fireEvent.error(screen.getAllByRole('img')[0])
-    // ...and becomes a labeled fallback instead of the button+img pair.
-    expect(screen.getByLabelText('Image unavailable: photo1.png')).toBeTruthy()
-    expect(screen.queryByLabelText('View photo1.png full size')).toBeNull()
-    // The healthy thumbnail is untouched.
-    expect(screen.getByLabelText('View photo2.jpg full size')).toBeTruthy()
-  })
-
-  it('failed fallback shows the filename', () => {
-    render(<MessageImages images={[images[0]]} role="user" />)
-    fireEvent.error(screen.getByRole('img'))
-    expect(screen.getByText('photo1.png')).toBeTruthy()
-  })
 })

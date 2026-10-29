@@ -24,9 +24,7 @@ class TestJobStatus:
             assert isinstance(s.value, str)
 
     def test_str_enum(self):
-        # JobStatus is a StrEnum (py3.11+): str() yields the VALUE — the
-        # pre-StrEnum Enum repr "JobStatus.QUEUED" is gone by design.
-        assert str(JobStatus.QUEUED) == "queued"
+        assert str(JobStatus.QUEUED) == "JobStatus.QUEUED"
 
     def test_equality(self):
         assert JobStatus.QUEUED == JobStatus.QUEUED

@@ -98,18 +98,15 @@ class TestShellCommands:
 
     def test_models_list(self, monkeypatch):
         monkeypatch.setattr(commands, "_api_get", lambda p: [{"id": "gpt2"}])
-        out = ShellCommands.models()
-        assert out[0]["id"] == "gpt2"
-        assert out[0]["name"] == "gpt2"
-        assert out[0]["loaded"] is False
+        assert ShellCommands.models() == [{"id": "gpt2"}]
 
     def test_models_dict(self, monkeypatch):
-        monkeypatch.setattr(commands, "_api_get", lambda p: {"models": [{"model_id": "a"}]})
-        assert ShellCommands.models()[0]["name"] == "a"
-        monkeypatch.setattr(commands, "_api_get", lambda p: {"data": [{"model_id": "b"}]})
-        assert ShellCommands.models()[0]["name"] == "b"
-        monkeypatch.setattr(commands, "_api_get", lambda p: {"available": [{"model_id": "c"}]})
-        assert ShellCommands.models()[0]["name"] == "c"
+        monkeypatch.setattr(commands, "_api_get", lambda p: {"models": ["a"]})
+        assert ShellCommands.models() == ["a"]
+        monkeypatch.setattr(commands, "_api_get", lambda p: {"data": ["b"]})
+        assert ShellCommands.models() == ["b"]
+        monkeypatch.setattr(commands, "_api_get", lambda p: {"available": ["c"]})
+        assert ShellCommands.models() == ["c"]
 
     def test_models_other(self, monkeypatch):
         monkeypatch.setattr(commands, "_api_get", lambda p: 42)

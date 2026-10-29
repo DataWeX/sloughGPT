@@ -11,6 +11,7 @@ the Cholesky solvers and the power-iteration dominant_eigen.
 """
 
 import importlib.util
+import sys
 
 import numpy as np
 import pytest
@@ -439,17 +440,19 @@ class TestMetalAccelerator:
 
 
 class TestCUDAFallbackAccelerator:
-    def setup_method(self):
+    @pytest.fixture(autouse=True)
+    def _no_real_cupy(self, monkeypatch):
+        """Pin cupy as absent so the fallback branches under test are the
+        active path in both environments (the shared env now carries the real
+        cupy). Construction happens here because ``__init__`` runs
+        ``_check_cuda()`` which would otherwise bind the real cupy."""
+        monkeypatch.setitem(sys.modules, "cupy", None)
         self.cuda = acc._CUDAAccelerator()
 
-    @pytest.mark.skipif(
-        _CUPY_AVAILABLE, reason="cupy installed; no-cupy fallback path not exercised"
-    )
     def test_is_available_false_without_cupy(self):
         assert self.cuda._cp is None
         assert self.cuda.is_available() is False
 
-    @pytest.mark.skipif(_CUPY_AVAILABLE, reason="cupy installed; env detection bypassed")
     def test_check_cuda_env_true_branch(self, monkeypatch):
         monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
         cuda = acc._CUDAAccelerator()
@@ -457,7 +460,6 @@ class TestCUDAFallbackAccelerator:
         assert cuda._cp is None
         assert cuda.is_available() is False
 
-    @pytest.mark.skipif(_CUPY_AVAILABLE, reason="cupy installed; env detection bypassed")
     def test_check_cuda_env_false_branches(self, monkeypatch):
         for value in ("", "-1"):
             monkeypatch.setenv("CUDA_VISIBLE_DEVICES", value)
@@ -465,9 +467,6 @@ class TestCUDAFallbackAccelerator:
         monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
         assert acc._CUDAAccelerator()._available is False
 
-    @pytest.mark.skipif(
-        _CUPY_AVAILABLE, reason="cupy installed; no-cupy fallback path not exercised"
-    )
     def test_device_transfer_fallback(self):
         arr = np.random.rand(3, 3)
         gpu = self.cuda.to_device(arr)
@@ -475,9 +474,6 @@ class TestCUDAFallbackAccelerator:
         np.testing.assert_allclose(gpu, arr)
         np.testing.assert_allclose(self.cuda.from_device(gpu), arr)
 
-    @pytest.mark.skipif(
-        _CUPY_AVAILABLE, reason="cupy installed; no-cupy fallback path not exercised"
-    )
     def test_matmul_and_add_fallback(self):
         a = np.random.rand(2, 3)
         b = np.random.rand(3, 4)

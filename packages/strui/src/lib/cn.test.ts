@@ -8,10 +8,6 @@ describe('cn', () => {
   })
 
   it('handles conditional classes', () => {
-    // Boolean() wrappers keep the operands dynamically falsy/truthy — eslint 9's
-    // no-constant-binary-expression flags literal `false && x` / `true && x`.
-    const hidden = Boolean(0)
-    const shown = Boolean(1)
-    expect(cn('base', hidden && 'hidden', shown && 'block')).toBe('base block')
+    expect(cn('base', false && 'hidden', true && 'block')).toBe('base block')
   })
 })

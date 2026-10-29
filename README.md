@@ -1,18 +1,6 @@
 # SloughGPT
 
-Self-hosted LLM infrastructure with local model training, inference, and a web UI. Training and inference run on SloNet, an in-repository pure-NumPy autograd engine (reverse-mode and forward-mode differentiation) — PyTorch and HuggingFace Transformers are not required.
-
-## Features
-
-- **SloNet engine** — pure-NumPy training and inference with KV-cache streaming; removes approximately 4 GB of framework dependencies
-- **Soul checkpoints** — `.sou` files carry personality metadata (traits, system prompt) alongside weights; system prompts hot-reload without a model restart
-- **`.slnc` weight format** — memory-mapped zero-copy loading, measured 2.2× faster than safetensors on GPT-2
-- **Interactive shell** — 40+ commands, pipelines, aliases, tab completion (`sloughgpt shell`; see [docs/SHELL.md](docs/SHELL.md))
-- **Rust gateway** — Axum HTTP/SSE gateway in `apps/gateway`
-- **Export and quantization** — GGUF (llama.rn mobile), ONNX, safetensors; FP16, INT8, INT4, Q4_K_M, Q5_K_M
-- **Dataset pipelines** — import from GitHub, HuggingFace, Kaggle, URL, or CSV; combine, preview, and version datasets
-- **Feedback-driven adaptation** — thumbs feedback trains per-user LoRA adapters, aggregated and evaluated automatically
-- **Interfaces** — Next.js web UI (`@sloughgpt/strui` component library), React Native mobile client, Python and TypeScript SDKs
+Self-hosted LLM infrastructure with local model training, inference, and a web UI.
 
 ## Prerequisites
 
@@ -39,10 +27,6 @@ cd apps/web && npm install && npm run dev
 
 # Or both in one command
 ./scripts/dev-stack.sh
-
-# Or as a systemd --user unit — survives session/opencode restarts
-./scripts/systemd/install.sh           # install + enable + start slough-api
-journalctl --user -u slough-api -f     # logs
 
 # Or the PGQ-supervised Python launcher — one entry point, waits for both
 # ports, prints the one URL (this is what the notebook's Serve section uses)
@@ -95,8 +79,8 @@ sloughGPT/
 │   ├── web/                   # Next.js frontend
 │   ├── cli/                   # CLI implementation
 │   ├── mobile/                # React Native app
-│   ├── gateway/               # Rust Axum gateway
-│   └── lib/                   # Shared frontend/backend helpers
+│   ├── gateway/               # API gateway
+│   └── data/                  # Data utilities
 ├── domain/                   # Core Python logic (training, inference, feedback, shell, infrastructure)
 ├── packages/
 │   ├── core-py/               # Python core (tests, utils)
@@ -134,7 +118,8 @@ Core endpoints:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/chat` | Chat with a loaded model (SSE streaming — the endpoint's only state) |
+| `POST` | `/chat` | Chat with a loaded model |
+| `POST` | `/chat/stream` | Streaming chat (SSE) |
 | `POST` | `/inference/generate` | Text generation |
 | `POST` | `/inference/generate/stream` | Streaming generation (SSE) |
 | `POST` | `/training/start` | Start training (SSE progress) |
@@ -165,16 +150,12 @@ cd apps/web && npm run lint
 
 ## GPU Support
 
-SloNet dispatches large tensor operations to the first available backend in `domain/slolib/_internal/gpu.py`; everything else falls back to NumPy.
-
-| Backend | Hardware | Notes |
-|---------|----------|-------|
-| Metal | Apple Silicon | Disabled on Intel Macs (`x86_64` — false-positive MPS detection crashed the process); those machines run CPU |
-| CUDA | NVIDIA | Requires `pip install cupy-cuda12x` |
-| OpenCL | Various | Requires an OpenCL runtime |
-| CPU (NumPy) | Any | Always available |
-
-Accelerator use is forward-only — the backward pass stays in NumPy — and small operations (under 4096 elements) stay on CPU to avoid dispatch overhead.
+| Hardware | Status | Notes |
+|----------|--------|-------|
+| NVIDIA (CUDA) | Supported | Fastest |
+| Apple Silicon (MPS) | Supported | M1/M2/M3/M4 |
+| AMD (ROCm) | Supported | Linux only |
+| Intel Mac | CPU only | Stable, slower |
 
 ## Documentation
 

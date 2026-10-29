@@ -110,17 +110,11 @@ class TensorDevice:
         }
 
     def call(self, method: str, *args: Any) -> Any:
-        """VM Device interface — delegates to ioctl.
-
-        Failures raise DeviceFault, the type the VM reports as a device error,
-        rather than a bare Exception that DEV_CALL classifies as a crash.
-        """
-        from .vm import DeviceFault  # deferred: vm.py is the heavy module
-
+        """VM Device interface — delegates to ioctl."""
         result = self.ioctl(method, *args)
         if result.success:
             return result.value
-        raise DeviceFault(result.error)
+        raise Exception(result.error)
 
     # ── ioctl interface ───────────────────────────────────────────────────
 

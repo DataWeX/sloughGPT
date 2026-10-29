@@ -33,13 +33,6 @@ class TestHelpers:
         assert "url" in out
 
     def test_color_disabled_branch(self, monkeypatch):
-        # importlib.reload re-executes the module INTO the same module
-        # object's __dict__, replacing every class binding. Consumers that
-        # bound classes at collection time (e.g. test_shell_console's
-        # `from ... import _Spinner`) would then isinstance-check their
-        # old-class instances against the rebuilt classes and split-brain.
-        # Snapshot the module world and restore it after the reloads.
-        saved = dict(console_mod.__dict__)
         monkeypatch.setenv("NO_COLOR", "1")
         importlib.reload(console_mod)
         assert console_mod._COLOR_ENABLED is False
@@ -47,8 +40,6 @@ class TestHelpers:
         monkeypatch.delenv("NO_COLOR")
         importlib.reload(console_mod)
         assert console_mod._COLOR_ENABLED is True
-        console_mod.__dict__.clear()
-        console_mod.__dict__.update(saved)
 
 
 class TestBlocks:
@@ -561,7 +552,6 @@ class TestMisc:
 class TestSpinnerLive:
     def test_spinner_enter_exit(self):
         io, c = _mk()
-        io._is_tty = True  # animation is a TTY capability
         with c.spinner("working", rate=0.01):
             pass
         assert "working" in io.get_output()

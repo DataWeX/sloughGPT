@@ -85,11 +85,6 @@ Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full 
 # or: make dev-stack
 # or: npm install && npm run dev:stack   # repo root; same shell script
 
-# Or as a systemd --user unit — outlives the launching session
-# (dev-stack children die with the agent shell's cgroup)
-./scripts/systemd/install.sh            # install + enable + start slough-api
-journalctl --user -u slough-api -f
-
 # Contract tests for repo root package.json (after npm install at repo root)
 npm run test:repo-root
 # or: make test-repo-root
@@ -254,6 +249,14 @@ python3 -m pytest tests/ --cov=domain --cov-report=html
 # Run integration-focused tests
 python3 -m pytest tests/test_integration.py -v
 ````
+
+### Stale bytecode guard
+
+`tests/conftest.py` registers a `pytest_sessionstart` hook that purges orphaned
+and stale `.pyc` under `tests/` before each session (repo-restructures leave
+caches whose `co_filename` cites dead paths, so tracebacks cite files that no
+longer exist). The logic lives in `scripts/purge_stale_pyc.py`; dry-run by
+default, `--apply` to delete outside pytest.
 
 ## 📊 Monitoring & Debugging
 

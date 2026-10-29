@@ -155,10 +155,7 @@ class TestTrainerConfig:
         assert cfg.batch_size == 32
         assert cfg.epochs == 10
         assert cfg.max_steps is None
-        # 3e-4 is the TrainerConfig default, corroborated by five production
-        # call sites (turbo, sessions, rlhf, presets, comprehensive_trainer).
-        # The old 1e-3 matched no production default and never existed in code.
-        assert cfg.learning_rate == 3e-4
+        assert cfg.learning_rate == 1e-3
         assert cfg.weight_decay == 0.01
         assert cfg.max_grad_norm == 1.0
         assert cfg.scheduler_type == "cosine"
@@ -192,11 +189,7 @@ class TestTrainerConfig:
 
     def test_early_stopping_default(self):
         cfg = TrainerConfig()
-        # 5 is the default (early-stopping ON), matching training_queue.py's
-        # payload.get(..., 5) and the advisor's max(3, epochs//5). The train
-        # loop gates on patience > 0, so 0 would mean early-stopping OFF —
-        # contradicting every production default.
-        assert cfg.early_stopping_patience == 5
+        assert cfg.early_stopping_patience == 0
 
     def test_gradient_accumulation_default(self):
         cfg = TrainerConfig()

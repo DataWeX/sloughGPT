@@ -56,9 +56,7 @@ vi.mock('@sloughgpt/strui', async () => {
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
-// ModelCatalogCard imports useLoadModel from lib/cache/api-hooks — pointing the
-// mock at the old (dead) lib/query/api-hooks copy made this a real network call.
-vi.mock('@/lib/cache/api-hooks', () => ({
+vi.mock('@/lib/query/api-hooks', () => ({
   useLoadModel: () => ({ mutateAsync: vi.fn().mockResolvedValue({ model_id: 'test-model' }) }),
 }))
 vi.mock('@/lib/toast-store', () => ({

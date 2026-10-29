@@ -17,11 +17,6 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip(
-    "playwright.sync_api",
-    reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
-)
-
 # vite :5173 (card e47e19ee retired the stale :3000 default); SLO_WEB_URL overrides.
 BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
 API = "http://localhost:8000"
@@ -48,14 +43,10 @@ def _wait_for_api(timeout: int = 60) -> bool:
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_servers_ready():
-    # Live-stack journey tests: skip (don't error) when no server is up —
-    # CI runs core-py as a pure unit job with no ./sloughgpt serve process.
-    timeout = 5 if os.environ.get("CI") else 90
-    if not _wait_for_api(timeout=timeout):
-        pytest.skip(
-            f"API at {API} not ready — journey tests need a live stack "
-            "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
-        )
+    assert _wait_for_api(timeout=90), (
+        f"API at {API} not ready after 90s. "
+        "Start the server with: FORCE_COLOR=1 ./sloughgpt serve --web"
+    )
     time.sleep(3)
 
 
@@ -107,41 +98,16 @@ class TestE2ETrainingTrigger:
         assert all(checks.values())
 
     async def test_training_page_has_config_elements(self, agent):
-        """Check that training page has configuration elements.
-
-        The page was redesigned into a guided 4-step wizard (Data ->
-        Configure -> Train -> Results); the config fields now live behind
-        step 2 instead of on the page surface, so walk there first.
-        """
+        """Check that training page has configuration elements."""
         await agent.navigate("/training")
-        # Hydrate poll (same pattern as the navigate test): a fixed sleep
-        # lands while the route chunk is still suspending under load.
-        body = ""
-        for _ in range(30):
-            body = await agent.get_body_text()
-            if "guided setup" in body.lower():
-                break
-            await asyncio.sleep(0.5)
-
-        step = await agent.click_button("Configure")
-        assert step.found, "guided-wizard Configure step chip not found"
-        for _ in range(30):
-            body = await agent.get_body_text()
-            if "epoch" in body.lower() or "iterations" in body.lower():
-                break
-            await asyncio.sleep(0.5)
-        low = body.lower()
+        time.sleep(2)
+        body = await agent.get_body_text()
 
         config_elements = {
-            # Step 2 exposes the method CHOICES as presets (Quick test,
-            # Fine-tune LoRA, ...); the "Method" label itself only appears
-            # in the step-3 summary, which needs a dataset selected first.
-            "has_method": any(
-                w in low for w in ["method", "sft", "finetune", "fine-tune", "preset"]
-            ),
-            "has_epochs": any(w in low for w in ["epoch", "iterations"]),
-            "has_lr": any(w in low for w in ["learning rate", "lr"]),
-            "has_batch": any(w in low for w in ["batch"]),
+            "has_method": any(w in body.lower() for w in ["method", "sft", "finetune"]),
+            "has_epochs": any(w in body.lower() for w in ["epoch", "iterations"]),
+            "has_lr": any(w in body.lower() for w in ["learning rate", "lr"]),
+            "has_batch": any(w in body.lower() for w in ["batch"]),
         }
 
         ok(
@@ -174,17 +140,7 @@ class TestE2ETrainingTrigger:
     async def test_datasets_page_import_flow(self, agent):
         """Test the datasets import flow."""
         await agent.navigate("/datasets")
-        # Wait for the page (not just the route) before clicking: a fixed
-        # sleep lands while the route chunk suspends, and force=True then
-        # dispatches the click before the handler is wired, so the
-        # import dialog never opens. Verified: once "Add file" is on
-        # screen, click -> role=dialog opens deterministically.
-        body = ""
-        for _ in range(30):
-            body = await agent.get_body_text()
-            if "add file" in body.lower():
-                break
-            await asyncio.sleep(0.5)
+        time.sleep(1)
 
         import_btn = await agent.click_button("Add file")
         ok("e2e_datasets_import_button", import_btn.found)

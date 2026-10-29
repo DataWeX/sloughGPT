@@ -101,35 +101,13 @@ class ShellCommands:
 
     @staticmethod
     def models() -> list[dict[str, Any]]:
-        """List available models.
-
-        Single projection point between the API payload shape
-        (``{model_id, status, device, ...}``) and the shell's render shape
-        (``{name, id, type, loaded, ...}``). Original fields are preserved;
-        normalized keys are additive. Contract pinned in
-        ``tests/test_shell_commands.py``.
-        """
+        """List available models."""
         result = _api_get("/models")
+        if isinstance(result, list):
+            return result
         if isinstance(result, dict):
-            result = result.get("data", result.get("models", result.get("available", [])))
-        if not isinstance(result, list):
-            return []
-        out: list[dict[str, Any]] = []
-        for item in result:
-            if not isinstance(item, dict):
-                continue
-            mid = item.get("model_id") or item.get("name") or item.get("id") or "?"
-            status = str(item.get("status", "")).lower()
-            out.append(
-                {
-                    **item,
-                    "name": item.get("name") or mid,
-                    "id": item.get("id") or mid,
-                    "type": item.get("type") or item.get("backend") or item.get("device") or "",
-                    "loaded": bool(item.get("loaded", status == "loaded")),
-                }
-            )
-        return out
+            return result.get("data", result.get("models", result.get("available", [])))
+        return []
 
     @staticmethod
     def load_model(model_name: str) -> dict[str, Any]:

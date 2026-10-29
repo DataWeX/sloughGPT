@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { authFetch } from '@/lib/http-client'
+import { PUBLIC_API_URL } from '@/lib/config'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -103,7 +103,7 @@ export default function ConsciousnessDebugPage() {
       } else if (endpoint === '/consciousness/train/status') {
         data = await consciousnessController.getTrainingStatus()
       } else {
-        const res = await authFetch(endpoint)
+        const res = await fetch(endpoint)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = await res.json()
         data = json.data ?? json
@@ -186,7 +186,7 @@ export default function ConsciousnessDebugPage() {
         const parts = input.split(' ')
         const method = parts[0]
         const path = parts.slice(1).join(' ')
-        const res = await authFetch(path, {
+        const res = await fetch(`${PUBLIC_API_URL}${path}`, {
           method,
           headers: { 'Content-Type': 'application/json' },
           ...(method !== 'GET' && parts.length > 2 ? { body: parts.slice(2).join(' ') } : {}),
@@ -196,12 +196,12 @@ export default function ConsciousnessDebugPage() {
         setConnected(true)
       } else if (input.startsWith('fetch ') || input.startsWith('http')) {
         const url = input.startsWith('fetch ') ? input.slice(6) : input
-        const res = await authFetch(url, { noAuth: true })
+        const res = await fetch(url)
         const json = await res.json()
         output.push(JSON.stringify(json, null, 2))
         setConnected(true)
       } else {
-        const res = await authFetch('/consciousness/process', {
+        const res = await fetch(`${PUBLIC_API_URL}/consciousness/process`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: input }),
@@ -224,7 +224,7 @@ export default function ConsciousnessDebugPage() {
     setConsoleLoading(true)
     const output: string[] = [`> GET ${endpoint}`]
     try {
-      const res = await authFetch(endpoint)
+      const res = await fetch(`${PUBLIC_API_URL}${endpoint}`)
       const json = await res.json()
       output.push(JSON.stringify(json.data ?? json, null, 2))
       setConnected(true)
@@ -239,7 +239,7 @@ export default function ConsciousnessDebugPage() {
 
   const handleReset = useCallback(async () => {
     try {
-      const res = await authFetch('/consciousness/reset', { method: 'POST' })
+      const res = await fetch(`${PUBLIC_API_URL}/consciousness/reset`, { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       addToast(t('consciousness_debug.toast_reset'), 'success')
       fetchAllStates()

@@ -4,21 +4,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Skeleton,
+  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
   Input,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { useLiveTraining } from '@/hooks/useLiveTraining'
-import { addGlobalError } from '@/lib/error-store'
 
 interface TrainStatus {
   pairs_collected: number
@@ -59,7 +51,7 @@ interface EvalReport {
 }
 
 export default function ConsciousnessTrainingPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = useToastStore(state => state.addToast)
   const { t } = useLocale()
   const { isTraining: liveTraining, connected: trainingConnected } = useLiveTraining()
   const [loading, setLoading] = useState(true)
@@ -73,7 +65,7 @@ export default function ConsciousnessTrainingPage() {
       const data = await consciousnessController.getTrainingStatus()
       setTrainStatus(data as unknown as TrainStatus)
     } catch (e) {
-      addGlobalError(e, 'ConsciousnessTraining')
+      console.error('Failed to fetch train status', e)
     }
   }, [])
 
@@ -82,7 +74,7 @@ export default function ConsciousnessTrainingPage() {
       const data = await consciousnessController.evaluate()
       setEvalReport(data as unknown as EvalReport)
     } catch (e) {
-      addGlobalError(e, 'ConsciousnessTraining')
+      console.error('Failed to fetch eval report', e)
     }
   }, [])
 
@@ -103,8 +95,7 @@ export default function ConsciousnessTrainingPage() {
     }
   }
 
-  const canTrain =
-    trainStatus && !trainStatus.is_training && trainStatus.pairs_collected >= trainStatus.min_pairs
+  const canTrain = trainStatus && !trainStatus.is_training && trainStatus.pairs_collected >= trainStatus.min_pairs
 
   const getScoreColor = (score: number) => {
     if (score > 70) return 'text-success'
@@ -128,27 +119,19 @@ export default function ConsciousnessTrainingPage() {
     return (
       <PageContainer title={t('consciousness_training.page_title')}>
         <div className="space-y-4">
-          <Card>
-            <CardContent className="p-4 space-y-3">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-1.5 w-full rounded-full" />
-              <Skeleton className="h-4 w-48" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 space-y-3">
-              <Skeleton className="h-4 w-40" />
-              <Skeleton className="h-1.5 w-full rounded-full" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 space-y-2">
-              <Skeleton className="h-4 w-36" />
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-3 w-full" />
-              ))}
-            </CardContent>
-          </Card>
+          <Card><CardContent className="p-4 space-y-3">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-1.5 w-full rounded-full" />
+            <Skeleton className="h-4 w-48" />
+          </CardContent></Card>
+          <Card><CardContent className="p-4 space-y-3">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </CardContent></Card>
+          <Card><CardContent className="p-4 space-y-2">
+            <Skeleton className="h-4 w-36" />
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+          </CardContent></Card>
         </div>
       </PageContainer>
     )
@@ -158,17 +141,15 @@ export default function ConsciousnessTrainingPage() {
     ? Math.min(100, (trainStatus.pairs_collected / Math.max(1, trainStatus.min_pairs)) * 100)
     : 0
 
-  const evalMetrics = evalReport
-    ? [
-        { key: 'narrative_coherence', value: evalReport.narrative_coherence },
-        { key: 'qualia_richness', value: evalReport.qualia_richness },
-        { key: 'belief_stability', value: evalReport.belief_stability },
-        { key: 'self_reflection_depth', value: evalReport.self_reflection_depth },
-        { key: 'growth_trajectory', value: evalReport.growth_trajectory },
-        { key: 'curiosity_engagement', value: evalReport.curiosity_engagement },
-        { key: 'feedback_alignment', value: evalReport.feedback_alignment },
-      ]
-    : []
+  const evalMetrics = evalReport ? [
+    { key: 'narrative_coherence', value: evalReport.narrative_coherence },
+    { key: 'qualia_richness', value: evalReport.qualia_richness },
+    { key: 'belief_stability', value: evalReport.belief_stability },
+    { key: 'self_reflection_depth', value: evalReport.self_reflection_depth },
+    { key: 'growth_trajectory', value: evalReport.growth_trajectory },
+    { key: 'curiosity_engagement', value: evalReport.curiosity_engagement },
+    { key: 'feedback_alignment', value: evalReport.feedback_alignment },
+  ] : []
 
   return (
     <PageContainer title={t('consciousness_training.page_title')}>
@@ -181,9 +162,7 @@ export default function ConsciousnessTrainingPage() {
                 <Badge variant="default">{t('consciousness_training.training_active')}</Badge>
               )}
               {trainingConnected && (
-                <Badge variant="secondary" className="text-xs">
-                  LIVE
-                </Badge>
+                <Badge variant="secondary" className="text-xs">LIVE</Badge>
               )}
             </CardTitle>
             <CardDescription>{t('consciousness_training.status_desc')}</CardDescription>
@@ -191,9 +170,7 @@ export default function ConsciousnessTrainingPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {t('consciousness_training.pairs_collected')}
-                </span>
+                <span className="text-muted-foreground">{t('consciousness_training.pairs_collected')}</span>
                 <span className="font-mono">
                   {trainStatus?.pairs_collected ?? 0} / {trainStatus?.min_pairs ?? 0}
                 </span>
@@ -208,15 +185,11 @@ export default function ConsciousnessTrainingPage() {
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-muted-foreground">
-                  {t('consciousness_training.training_runs')}:{' '}
-                </span>
+                <span className="text-muted-foreground">{t('consciousness_training.training_runs')}: </span>
                 <span className="font-mono">{trainStatus?.training_runs?.length ?? 0}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">
-                  {t('consciousness_training.episodes')}:{' '}
-                </span>
+                <span className="text-muted-foreground">{t('consciousness_training.episodes')}: </span>
                 <span className="font-mono">{evalReport?.episode_count ?? 0}</span>
               </div>
             </div>
@@ -225,50 +198,34 @@ export default function ConsciousnessTrainingPage() {
               <div className="rounded-md bg-muted p-3 text-sm space-y-1">
                 <div className="font-medium">{t('consciousness_training.last_result')}</div>
                 <div className="flex gap-4">
-                  <span className="text-muted-foreground">
-                    {t('consciousness_training.status')}:{' '}
-                  </span>
-                  <Badge
-                    variant={trainStatus.last_result.status === 'success' ? 'default' : 'secondary'}
-                  >
+                  <span className="text-muted-foreground">{t('consciousness_training.status')}: </span>
+                  <Badge variant={trainStatus.last_result.status === 'success' ? 'default' : 'secondary'}>
                     {trainStatus.last_result.status}
                   </Badge>
                 </div>
                 {trainStatus.last_result.loss > 0 && (
                   <div>
-                    <span className="text-muted-foreground">
-                      {t('consciousness_training.loss')}:{' '}
-                    </span>
+                    <span className="text-muted-foreground">{t('consciousness_training.loss')}: </span>
                     <span className="font-mono">{trainStatus.last_result.loss.toFixed(4)}</span>
                   </div>
                 )}
                 {trainStatus.last_result.adapter_path && (
                   <div>
-                    <span className="text-muted-foreground">
-                      {t('consciousness_training.adapter')}:{' '}
-                    </span>
-                    <span className="font-mono text-xs">
-                      {trainStatus.last_result.adapter_path}
-                    </span>
+                    <span className="text-muted-foreground">{t('consciousness_training.adapter')}: </span>
+                    <span className="font-mono text-xs">{trainStatus.last_result.adapter_path}</span>
                   </div>
                 )}
                 {trainStatus.last_result.elapsed_seconds > 0 && (
                   <div>
-                    <span className="text-muted-foreground">
-                      {t('consciousness_training.elapsed')}:{' '}
-                    </span>
-                    <span className="font-mono">
-                      {trainStatus.last_result.elapsed_seconds.toFixed(1)}s
-                    </span>
+                    <span className="text-muted-foreground">{t('consciousness_training.elapsed')}: </span>
+                    <span className="font-mono">{trainStatus.last_result.elapsed_seconds.toFixed(1)}s</span>
                   </div>
                 )}
               </div>
             )}
 
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">
-                {t('consciousness_training.model_path')}
-              </label>
+              <label className="text-sm text-muted-foreground">{t('consciousness_training.model_path')}</label>
               <Input
                 value={modelPath}
                 onChange={(e) => setModelPath(e.target.value)}
@@ -282,9 +239,7 @@ export default function ConsciousnessTrainingPage() {
               disabled={!canTrain || training}
               className="w-full"
             >
-              {training
-                ? t('consciousness_training.training_in_progress')
-                : t('consciousness_training.start_training')}
+              {training ? t('consciousness_training.training_in_progress') : t('consciousness_training.start_training')}
             </Button>
           </CardContent>
         </Card>
@@ -306,12 +261,8 @@ export default function ConsciousnessTrainingPage() {
               <>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {t('consciousness_training.overall_score')}
-                    </span>
-                    <span
-                      className={`font-mono font-bold ${getScoreColor(evalReport.overall_score)}`}
-                    >
+                    <span className="text-muted-foreground">{t('consciousness_training.overall_score')}</span>
+                    <span className={`font-mono font-bold ${getScoreColor(evalReport.overall_score)}`}>
                       {evalReport.overall_score.toFixed(0)}/100
                     </span>
                   </div>
@@ -327,9 +278,7 @@ export default function ConsciousnessTrainingPage() {
                   {evalMetrics.map(({ key, value }) => (
                     <div key={key} className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground capitalize">
-                          {key.replace(/_/g, ' ')}
-                        </span>
+                        <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
                         <span className="font-mono text-xs">{value.toFixed(0)}</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -344,17 +293,10 @@ export default function ConsciousnessTrainingPage() {
 
                 {evalReport.diagnostics && evalReport.diagnostics.length > 0 && (
                   <div className="space-y-2">
-                    <div className="text-sm font-medium">
-                      {t('consciousness_training.diagnostics')}
-                    </div>
+                    <div className="text-sm font-medium">{t('consciousness_training.diagnostics')}</div>
                     <div className="space-y-1">
                       {evalReport.diagnostics.map((d: string, i: number) => (
-                        <div
-                          key={i}
-                          className="text-xs text-muted-foreground rounded-md bg-muted p-2"
-                        >
-                          {d}
-                        </div>
+                        <div key={i} className="text-xs text-muted-foreground rounded-md bg-muted p-2">{d}</div>
                       ))}
                     </div>
                   </div>
@@ -368,6 +310,7 @@ export default function ConsciousnessTrainingPage() {
             </Button>
           </CardContent>
         </Card>
+
       </div>
     </PageContainer>
   )

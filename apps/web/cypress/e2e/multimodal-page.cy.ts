@@ -10,10 +10,8 @@ describe('Multimodal page', () => {
   })
 
   it('shows capability and training cards', () => {
-    // Scope to main content: sidebar nav links (collapsed, not visible) also
-    // contain these words and would match cy.contains first.
-    cy.get('.sl-app-content').contains('Capabilities').should('be.visible')
-    cy.get('.sl-app-content').contains('Training').scrollIntoView().should('be.visible')
+    cy.contains('Capabilities').should('be.visible')
+    cy.contains('Training').scrollIntoView().should('be.visible')
   })
 
   it('shows image training and batch training cards', () => {

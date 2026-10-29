@@ -186,9 +186,9 @@ class SloughGPTClient:
         self,
         prompt: str,
         max_new_tokens: int = 100,
-        temperature: float = 0.7,
-        top_k: int = 40,
-        top_p: float = 0.85,
+        temperature: float = 0.8,
+        top_k: int = 50,
+        top_p: float = 0.9,
         **kwargs,
     ) -> GenerationResult:
         """
@@ -222,7 +222,7 @@ class SloughGPTClient:
         return result
 
     def generate_stream(
-        self, prompt: str, max_new_tokens: int = 100, temperature: float = 0.7, **kwargs
+        self, prompt: str, max_new_tokens: int = 100, temperature: float = 0.8, **kwargs
     ) -> Iterator[str]:
         """
         Generate text with streaming response.
@@ -261,7 +261,7 @@ class SloughGPTClient:
         self,
         messages: list[ChatMessage] | list[dict[str, str]],
         model: str | None = None,
-        temperature: float = 0.7,
+        temperature: float = 0.8,
         max_new_tokens: int = 100,
         **kwargs,
     ) -> ChatResult:
@@ -303,7 +303,7 @@ class SloughGPTClient:
                     ChatMessage(role=m.get("role", "user"), content=m.get("content", ""))
                 )
         request = ChatRequest(messages=chat_messages, **kwargs)
-        response = self._request("POST", "/chat", json=request.to_dict(), stream=True)
+        response = self._request("POST", "/chat/stream", json=request.to_dict(), stream=True)
         for line in response.iter_lines(decode_unicode=True):
             if not line:
                 continue

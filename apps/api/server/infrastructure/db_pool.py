@@ -44,31 +44,13 @@ def _get_legacy_root() -> Path:
     return _LEGACY_ROOT
 
 
-# Per-pair adoption decision memo. The legacy/new dir states only change
-# through this adoption itself (a one-time copytree), yet the check ran on
-# EVERY get_db() call — legacy `iterdir()` stats plus a repeated
-# "Both ... contain data" warning per miss (measured 11 lines/10s).
-_ADOPT_MEMO: dict[tuple[str, str], str] = {}
-
-
 def _adopt_legacy_dir(new_dir: str | Path, legacy_dir: str | Path) -> str:
     """Copy pre-fix data from *legacy_dir* into *new_dir* once.
 
     Never overwrites: adoption happens only when the destination is missing
     or empty. Returns the path to use — the legacy directory if adoption was
     required but failed, so the app keeps working on the old location.
-    The per-pair decision is memoized for the process lifetime.
     """
-    key = (str(new_dir), str(legacy_dir))
-    cached = _ADOPT_MEMO.get(key)
-    if cached is not None:
-        return cached
-    result = _adopt_legacy_dir_uncached(new_dir, legacy_dir)
-    _ADOPT_MEMO[key] = result
-    return result
-
-
-def _adopt_legacy_dir_uncached(new_dir: str | Path, legacy_dir: str | Path) -> str:
     new, legacy = Path(new_dir), Path(legacy_dir)
     try:
         if legacy.resolve() == new.resolve():

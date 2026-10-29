@@ -6,19 +6,17 @@ automation, verifying each phase with Playwright interactions and capturing
 DevTools telemetry (console logs, network requests, errors, performance).
 
 Usage:
-    python -m pytest packages/core-py/tests/test_comprehensive_training_journeys.py -v
+    .venv/bin/python -m pytest tests/test_comprehensive_training_journeys.py -x -v
 
 Requirements:
-    playwright chromium
-    Web server at localhost:5173  (scripts/dev-stack.sh; SLO_WEB_URL overrides)
-    API server at localhost:8000  (SLO_API_URL overrides)
-    Skips itself when the stack is not running (serverless gate stays green).
+    .venv/bin/playwright install chromium
+    API server at localhost:8000
+    Web server at localhost:3000
 """
 
 from __future__ import annotations
 
 import json
-import os
 import time
 import urllib.request
 from pathlib import Path
@@ -29,60 +27,13 @@ if TYPE_CHECKING:
 
 import pytest
 
-pytest.importorskip(
-    "playwright.sync_api",
-    reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
-)
-
-# Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
-# stale :3000 default). Override with SLO_WEB_URL / SLO_API_URL for
-# non-standard setups.
-BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
-API = os.environ.get("SLO_API_URL") or "http://localhost:8000"
-API_NETLOC = API.split("://", 1)[-1]
+BASE = "http://localhost:3000"
+API = "http://localhost:8000"
 RESULTS: list[dict[str, Any]] = []
 DEVTOOLS_LOG: list[dict[str, Any]] = []
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-
-
-# ── Readiness helpers ─────────────────────────────────────────────────
-
-
-def _web_is_ready() -> bool:
-    """Check if the web app answers without an HTTP client error."""
-    try:
-        req = urllib.request.Request(BASE)
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return 200 <= resp.status < 400
-    except Exception:
-        return False
-
-
-def _api_is_ready() -> bool:
-    """Check if the API is responding to health checks."""
-    try:
-        req = urllib.request.Request(f"{API}/health")
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
-
-
-# These journeys drive a real browser against a live stack, so skip the whole
-# module when one isn't running instead of failing every test — that keeps the
-# default offline suite green. The module docstring already lists the web
-# server as a Requirement; this turns that requirement into a skip
-# instead of 58 × net::ERR_CONNECTION_REFUSED. Start a stack first to enable:
-#   scripts/dev-stack.sh   (web :5173, api :8000)  or  ./sloughgpt serve --web
-pytestmark = pytest.mark.skipif(
-    not (_web_is_ready() and _api_is_ready()),
-    reason=(
-        f"training journeys need a live stack "
-        f"({BASE} + {API} — scripts/dev-stack.sh or sloughgpt serve --web)"
-    ),
-)
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -101,24 +52,6 @@ def _wait_for_api(timeout: int = 60) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if _api_is_ready():
-            return True
-        time.sleep(1)
-    return False
-
-
-def _web_is_ready() -> bool:
-    try:
-        req = urllib.request.Request(BASE)
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return 200 <= resp.status < 400
-    except Exception:
-        return False
-
-
-def _wait_for_web(timeout: int = 60) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if _web_is_ready():
             return True
         time.sleep(1)
     return False
@@ -164,22 +97,10 @@ def api_get_json(path: str, retries: int = 3) -> dict[str, Any]:
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_servers_ready():
-    # Live-stack journey tests: skip (don't error) when no server is up —
-    # CI runs core-py as a pure unit job with no ./sloughgpt serve process.
-    timeout = 5 if os.environ.get("CI") else 90
-    if not _wait_for_api(timeout=timeout):
-        pytest.skip(
-            f"API at {API} not ready — journey tests need a live stack "
-            "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
-        )
-    # API alone is not enough: every test below drives the web UI at BASE,
-    # and a partial stack (API up, frontend down) yields mass goto failures
-    # instead of a clean skip.
-    if not _wait_for_web(timeout=timeout):
-        pytest.skip(
-            f"Web UI at {BASE} not ready — journey tests need the full stack "
-            "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
-        )
+    assert _wait_for_api(timeout=90), (
+        f"API at {API} not ready after 90s. "
+        "Start the server with: FORCE_COLOR=1 ./sloughgpt serve --web"
+    )
     time.sleep(3)
 
 
@@ -309,26 +230,6 @@ def go(page: Page, path: str, collector: DevToolsCollector | None = None) -> str
         except Exception:
             pass
     return body
-
-
-def _open_training_configure(page: Page) -> None:
-    """Walk the guided-setup pipeline to the Configure step (card 675bb16d).
-
-    The method selector, hyperparameters and LoRA toggle live in
-    ConfigureStep — step 2 of the guided pipeline — not on initial load:
-    /training opens on step 1 "Pick your data" (training pipeline redesign,
-    bb13e2a22). The config tests must click through like a user instead of
-    asserting config text on first paint.
-    """
-    try:
-        page.get_by_role("button", name="Next: Configure").click(timeout=10000)
-    except Exception:
-        # Step-indicator fallback: "Go to Configure step" (StepIndicator nav)
-        try:
-            page.get_by_role("button", name="Go to Configure step").click(timeout=5000)
-        except Exception:
-            pass
-    time.sleep(1)
 
 
 @pytest.fixture(scope="module")
@@ -512,10 +413,7 @@ class TestDatasetToTrainingFlow:
     def test_datasets_import_button(self, page, collector):
         go(page, "/datasets", collector)
         time.sleep(1)
-        # Entry renamed Import -> Add file in 1fb486f16 (Read My Files flow).
-        # The old substring match silently targeted "Train with Imported
-        # Dataset" instead (card 675bb16d) — hence the explicit new label.
-        btn = page.get_by_role("button", name="Add file").first
+        btn = page.get_by_role("button", name="Import").first
         dt = record_devtools(
             "datasets_import_btn",
             collector.console_messages,
@@ -528,7 +426,7 @@ class TestDatasetToTrainingFlow:
     def test_datasets_import_dialog(self, page, collector):
         go(page, "/datasets", collector)
         time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
         dialog = page.get_by_role("dialog")
         dt = record_devtools(
@@ -543,7 +441,7 @@ class TestDatasetToTrainingFlow:
     def test_datasets_kaggle_option(self, page, collector):
         go(page, "/datasets", collector)
         time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
         kaggle = page.get_by_role("radio", name="Kaggle: Download from Kaggle")
         dt = record_devtools(
@@ -558,7 +456,7 @@ class TestDatasetToTrainingFlow:
     def test_datasets_file_upload_option(self, page, collector):
         go(page, "/datasets", collector)
         time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
         body = page.inner_text("body")
         has_upload = any(w in body.lower() for w in ["upload", "file", "csv", "jsonl", "json"])
@@ -839,17 +737,7 @@ class TestDevToolsTelemetry:
     def test_api_requests_reach_backend(self, page, collector):
         go(page, "/training", collector)
         time.sleep(2)
-        # The client targets the edge gateway by design (apps/web/.env.local:
-        # NEXT_PUBLIC_API_URL=http://localhost:8080 — vite.config.ts "points the
-        # client at the edge"), and the gateway proxies to this API. Count both
-        # origins, mirroring test_computer_use_training_integration.py:298 —
-        # the direct :8000-only filter reported zero while ~40 requests reached
-        # the backend through :8080, all 200 (card 675bb16d).
-        api_reqs = [
-            r
-            for r in collector.network_requests
-            if API_NETLOC in r.get("url", "") or "localhost:8080" in r.get("url", "")
-        ]
+        api_reqs = [r for r in collector.network_requests if "localhost:8000" in r.get("url", "")]
         dt = record_devtools(
             "telemetry_api_requests",
             collector.console_messages,
@@ -899,7 +787,6 @@ class TestTrainingConfigInteraction:
     def test_method_selector_exists(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
-        _open_training_configure(page)
         body = page.inner_text("body")
         has_method = any(
             w in body.lower() for w in ["method", "sft", "rlhf", "dpo", "lora", "finetune"]
@@ -916,7 +803,6 @@ class TestTrainingConfigInteraction:
     def test_hyperparameter_inputs_exist(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
-        _open_training_configure(page)
         body = page.inner_text("body")
         has_hyper = any(
             w in body.lower() for w in ["learning rate", "batch", "epoch", "dropout", "rank"]
@@ -933,7 +819,6 @@ class TestTrainingConfigInteraction:
     def test_lora_toggle_exists(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
-        _open_training_configure(page)
         body = page.inner_text("body")
         has_lora = "lora" in body.lower()
         dt = record_devtools(
@@ -945,29 +830,15 @@ class TestTrainingConfigInteraction:
     def test_checkpoint_name_input(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
-        _open_training_configure(page)
-        # The guided Configure step (bb13e2a22 redesign) exposes no free-text
-        # checkpoint-name field; the checkpoint control it does expose is the
-        # resume picker. Assert on that real control instead of the old
-        # generic-word body scan (["checkpoint","save","name","output"]),
-        # which matched almost any page text and masked the redesign
-        # (card 675bb16d). Fallback requires BOTH keywords, not any one.
-        try:
-            page.get_by_label("Resume from checkpoint").first.wait_for(
-                state="visible", timeout=5000
-            )
-            has_checkpoint, detail = True, "aria-label='Resume from checkpoint'"
-        except Exception:
-            body = page.inner_text("body").lower()
-            has_checkpoint = "resume" in body and "checkpoint" in body
-            detail = f"body_snippet={body[:200]}"
+        body = page.inner_text("body")
+        has_checkpoint = any(w in body.lower() for w in ["checkpoint", "save", "name", "output"])
         dt = record_devtools(
             "config_checkpoint",
             collector.console_messages,
             collector.network_requests,
             collector.errors,
         )
-        ok("config_checkpoint_name", has_checkpoint, detail, dt)
+        ok("config_checkpoint_name", has_checkpoint, f"body_snippet={body[:200]}", dt)
         assert has_checkpoint
 
 

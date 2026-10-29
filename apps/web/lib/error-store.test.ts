@@ -1,14 +1,10 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { useErrorStore, addGlobalError } from './error-store'
-import { useBannerStore } from './banner-store'
-import { useToastStore } from './toast-store'
 
 describe('error-store', () => {
   beforeEach(() => {
     useErrorStore.getState().clearErrors()
     useErrorStore.getState().clearStateEvents()
-    useBannerStore.getState().clearBanners()
-    useToastStore.getState().clearToasts()
   })
   afterEach(() => {
     useErrorStore.getState().clearErrors()
@@ -222,76 +218,5 @@ describe('error-store', () => {
   it('explicit kind wins over inference', () => {
     useErrorStore.getState().logStateEvent('training_started', { kind: 'ui' })
     expect(useErrorStore.getState().getStateEvents()[0].kind).toBe('ui')
-  })
-
-  describe('funnel fan-out', () => {
-    it('logs an error_reported state event with taxonomy', () => {
-      useErrorStore.getState().addError(new Error('boom'), {
-        source: 'Test',
-        surface: 'page',
-        journeyId: 'ux/kanban',
-      })
-      const evt = useErrorStore.getState().getStateEvents()[0]
-      expect(evt.event).toBe('error_reported')
-      expect(evt.kind).toBe('system')
-      expect(evt.data).toMatchObject({ surface: 'page', journeyId: 'ux/kanban' })
-    })
-
-    it('raises the global banner for page-surface errors', () => {
-      useErrorStore.getState().addError(new Error('board load failed'), {
-        source: 'Board',
-        surface: 'page',
-        title: 'Board failed to load',
-      })
-      const banner = useBannerStore.getState().banners[0]
-      expect(banner).toBeTruthy()
-      expect(banner.tone).toBe('destructive')
-      expect(banner.title).toBe('Board failed to load')
-      expect(banner.key).toMatch(/^err_/)
-    })
-
-    it('raises the banner for global-surface errors (unhandled runtime)', () => {
-      useErrorStore.getState().addError(new Error('unhandled'), {
-        surface: 'global',
-        title: 'Runtime Error',
-      })
-      expect(useBannerStore.getState().banners[0]?.title).toBe('Runtime Error')
-    })
-
-    it('does NOT banner for component-surface errors', () => {
-      useErrorStore.getState().addError(new Error('widget'), { surface: 'component' })
-      expect(useBannerStore.getState().banners).toHaveLength(0)
-    })
-
-    it('toasts only when the producer asks', () => {
-      useErrorStore.getState().addError(new Error('copied? no'), {
-        surface: 'component',
-        toast: true,
-        title: 'Copy failed',
-      })
-      expect(useToastStore.getState().toasts[0]?.message).toBe('Copy failed')
-      expect(useBannerStore.getState().banners).toHaveLength(0)
-    })
-
-    it('banner opt-out overrides the page-surface default', () => {
-      useErrorStore.getState().addError(new Error('quiet'), {
-        surface: 'page',
-        banner: false,
-        title: 'Quiet page error',
-      })
-      expect(useBannerStore.getState().banners).toHaveLength(0)
-    })
-
-    it('deduped repeats do not re-fan-out (one banner per fingerprint window)', () => {
-      const opts = { source: 'Board', surface: 'page' as const }
-      useErrorStore.getState().addError(new Error('same failure'), opts)
-      useErrorStore.getState().addError(new Error('same failure'), opts)
-      expect(useBannerStore.getState().banners).toHaveLength(1)
-      const reportEvents = useErrorStore
-        .getState()
-        .getStateEvents()
-        .filter((e) => e.event === 'error_reported')
-      expect(reportEvents).toHaveLength(1)
-    })
   })
 })

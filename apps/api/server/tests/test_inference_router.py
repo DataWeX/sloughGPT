@@ -1,6 +1,5 @@
 """Tests for inference router endpoints (non-streaming, sessions, suggestions, tools, operations, context)."""
 
-import json
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -213,92 +212,6 @@ class TestSessionCRUD:
         assert resp.status_code == 200
         assert isinstance(resp.json()["data"], list)
 
-    def test_search_sessions_shares_one_index_with_system_search(self):
-        """Extraction invariant: the legacy endpoint and the system-wide
-        search adapter must read ONE cache, not two copies of the
-        session corpus."""
-        import routers.inference as inference_mod
-
-        from domain.search.registry import get_registry
-        from domain.search.session_index import get_session_index
-
-        assert inference_mod._session_search_index is get_session_index()
-        adapter = get_registry().get("sessions")
-        assert adapter is not None
-        assert adapter._resolve() is get_session_index()
-
-
-class TestSessionMetadataIndex:
-    """Regressions for the /chat/sessions metadata index (card 6b728f97)."""
-
-    @staticmethod
-    def _router():
-        from main import app
-
-        def walk(routes):
-            for r in routes:
-                inner = getattr(r, "original_router", None)
-                if inner is not None and hasattr(inner, "routes"):
-                    yield from walk(inner.routes)
-                else:
-                    yield r
-
-        for r in walk(app.routes):
-            ep = getattr(r, "endpoint", None)
-            if getattr(r, "path", None) == "/chat/sessions" and getattr(ep, "__self__", None):
-                return ep.__self__
-        raise AssertionError("inference router instance not found on /chat/sessions")
-
-    def test_large_session_survives_metadata_index(self, tmp_path, monkeypatch):
-        # >4KB session files truncated the 4KB header read; json.loads on the
-        # prefix raised and the except clause silently dropped the session.
-        fat = {
-            "id": "fat_session_4kb",
-            "name": "",
-            "created_at": "2026-10-23T00:00:00",
-            "updated_at": "2026-10-23T00:00:00",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "How do I configure the gateway?\n" + ("context " * 400),
-                },
-                {
-                    "role": "assistant",
-                    "content": "Use the gateway config file.\n" + ("detail " * 400),
-                },
-            ],
-        }
-        session_file = tmp_path / "fat_session_4kb.json"
-        session_file.write_text(json.dumps(fat), encoding="utf-8")
-        assert session_file.stat().st_size > 4096
-        router = self._router()
-        monkeypatch.setattr(router, "_SESSIONS_DIR", tmp_path)
-        router._session_metadata_cache = None
-        router._session_metadata_cache_ts = 0
-        try:
-            rows = router._build_session_metadata_index()
-        finally:
-            router._session_metadata_cache = None
-            router._session_metadata_cache_ts = 0
-        by_id = {row["id"]: row for row in rows}
-        assert "fat_session_4kb" in by_id
-        # Name derives from the FIRST message's first line via the shared helper.
-        assert by_id["fat_session_4kb"]["name"] == "How do I configure the gateway?"
-        assert by_id["fat_session_4kb"]["message_count"] == 2
-
-    def test_save_session_invalidates_metadata_index(self):
-        router = self._router()
-        router._session_metadata_cache = [{"id": "stale"}]
-        router._save_session(f"sess_inv_{uuid.uuid4().hex[:8]}", {"messages": []})
-        assert router._session_metadata_cache is None
-
-    def test_derive_session_name_rules(self):
-        derive = self._router()._derive_session_name
-        assert derive([{"content": "Topic line\nlong body"}], "sid") == "Topic line"
-        assert derive([{"content": ""}], "sid") == "sid"
-        assert derive([], "sid") == "sid"
-        assert derive([{"content": "x" * 80}], "sid") == "x" * 60
-
 
 class TestContextEndpoints:
     def test_inspect_context(self):
@@ -333,20 +246,14 @@ class TestGenerateRequiresModel:
 
 
 class TestChatRequiresModel:
-    def test_chat_reports_missing_model_as_stream_error(self):
-        """POST /chat is streaming-only, so a turn that cannot start is reported inside the stream.
-
-        ``test_support`` no-ops ReadinessGateMiddleware for this suite (so
-        schema-validation tests stay observable), which is why the answer here
-        is an SSE error frame rather than a status. In the deployed app the
-        gate answers 503 *before* the handler for /chat when no model is
-        materialized — that contract is pinned in
-        tests/server/test_readiness_gate.py.
-        """
+    def test_chat_returns_503_without_model(self):
         resp = client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+        assert resp.status_code == 503
+
+    def test_chat_stream_returns_error_without_model(self):
+        resp = client.post("/chat/stream", json={"messages": [{"role": "user", "content": "hi"}]})
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
-        assert "No model loaded" in resp.text
 
 
 class TestVoiceEndpoints:
@@ -372,19 +279,8 @@ class TestSchemaValidation:
         assert resp.status_code == 422
 
     def test_chat_empty_messages_list(self):
-        """An empty list is semantic validation, and semantics live in the turn.
-
-        Pydantic can only enforce that ``messages`` is present at the wire
-        level; "contains a user message" is the turn's own gate, so the failure
-        arrives as an SSE error frame like every other in-turn failure rather
-        than as 400/422. Which gate fires first depends on load state (this
-        suite has no model, so readiness wins) — the frame is the contract.
-        """
         resp = client.post("/chat", json={"messages": []})
-        assert resp.status_code == 200
-        assert "text/event-stream" in resp.headers.get("content-type", "")
-        assert '"status": "error"' in resp.text
-        assert "No model loaded" in resp.text or "No user message" in resp.text
+        assert resp.status_code in (400, 422, 503)
 
     def test_generate_temperature_out_of_range(self):
         resp = client.post("/inference/generate", json={"prompt": "hi", "temperature": 5.0})

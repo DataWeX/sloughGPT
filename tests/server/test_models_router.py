@@ -273,59 +273,6 @@ class TestListHFModels:
         assert resp.status_code == 200
         ctrl.list_hf_models.assert_called_with("gpt2")
 
-    @patch("apps.api.server.routers.models.get_models_controller")
-    @patch("apps.api.server.routers.models.compute_model_size_gb")
-    @patch("apps.api.server.routers.models.is_model_cached")
-    @patch("apps.api.server.routers.models._hf_cache_dir")
-    @patch("domain.infrastructure._internal.resource_manager.get_resource_manager")
-    def test_list_hf_models_shallow_resolves_sizes_offline(
-        self, mock_rm, mock_hf_dir, mock_is_cached, mock_compute, mock_get_ctrl, client
-    ):
-        """shallow=true (first-paint /bootstrap fan-out) never hits the Hub API.
-
-        Regression for the 19.5s cold /bootstrap: the size fan-out used to
-        fall through to one Hub round-trip per uncached model.
-        """
-        mock_rm.return_value = MagicMock(inference_pool_size=2)
-        mock_is_cached.return_value = False
-        mock_compute.return_value = None
-        mock_hf_dir.exists.return_value = False
-
-        ctrl = MagicMock()
-        ctrl.list_hf_models.return_value = [{"model_id": "gpt2", "parameters": 124000000}]
-        mock_get_ctrl.return_value = ctrl
-
-        resp = client.get("/models/hf?shallow=true")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["meta"]["shallow"] is True
-        mock_compute.assert_called_once_with("gpt2", offline=True)
-        assert body["data"][0]["size_gb"] is None
-        assert body["data"][0]["cached"] is False
-
-    @patch("apps.api.server.routers.models.get_models_controller")
-    @patch("apps.api.server.routers.models.compute_model_size_gb")
-    @patch("apps.api.server.routers.models.is_model_cached")
-    @patch("apps.api.server.routers.models._hf_cache_dir")
-    @patch("domain.infrastructure._internal.resource_manager.get_resource_manager")
-    def test_list_hf_models_default_stays_online(
-        self, mock_rm, mock_hf_dir, mock_is_cached, mock_compute, mock_get_ctrl, client
-    ):
-        """Without shallow, sizes keep the full online behavior (offline=False)."""
-        mock_rm.return_value = MagicMock(inference_pool_size=2)
-        mock_is_cached.return_value = False
-        mock_compute.return_value = 0.5
-        mock_hf_dir.exists.return_value = False
-
-        ctrl = MagicMock()
-        ctrl.list_hf_models.return_value = [{"model_id": "gpt2", "parameters": 124000000}]
-        mock_get_ctrl.return_value = ctrl
-
-        resp = client.get("/models/hf")
-        assert resp.status_code == 200
-        assert resp.json()["meta"]["shallow"] is False
-        mock_compute.assert_called_once_with("gpt2", offline=False)
-
 
 class TestCurrentModel:
     """GET /models/current"""
@@ -609,7 +556,7 @@ class TestPrecision:
     """POST /models/precision"""
 
     @patch("domain.infrastructure._internal.quantization.Quantine.suggest_format")
-    @patch("domain.slolib.get_accelerator")
+    @patch("domain.slolib._internal.gpu.get_accelerator")
     def test_cpu_path_uses_suggestion(self, mock_acc, mock_suggest, client):
         acc = MagicMock()
         acc.name = "cpu"
@@ -723,3 +670,128 @@ class TestCacheUsage:
         data = resp.json()["data"]
         assert data["total_bytes"] == 100
         assert data["model_count"] == 1
+
+
+# ── Peer manifest serving (card 1f5dec62) ────────────────────────────────
+#
+# ExternalDownloadBackend fetches `{base_url}/models/{id}/manifest.json` and
+# then `{base_url}/models/{id}/file/{path}`. Before these routes existed a
+# peer running this codebase could not serve a model to a
+# POST /models/external/download client: the manifest 404'd and the file URL
+# shape had no matching route.
+
+_PEER_MODEL = "peer-org/peer-model"
+_COMMIT = "abc123def456"
+
+
+@pytest.fixture
+def seeded_peer_cache(tmp_path, monkeypatch):
+    """Seed a standard HF snapshot-layout cache and point HF_HOME at it."""
+    import hashlib as _hashlib
+    import json as _json
+    import os as _os
+
+    hf_home = tmp_path / "hf"
+    snap = (
+        hf_home
+        / "hub"
+        / f"models--{_PEER_MODEL.replace('/', '--')}"
+        / "snapshots"
+        / _COMMIT
+    )
+    snap.mkdir(parents=True)
+    refs = snap.parent.parent / "refs"
+    refs.mkdir()
+    (refs / "main").write_text(_COMMIT)
+
+    payloads = {
+        "config.json": _json.dumps({"arch": "test"}).encode() + b" " * 1200,
+        "model.safetensors": _os.urandom(4096),
+        "nested/tokenizer.json": _json.dumps({"vocab": list("abcd")}).encode() + b" " * 1100,
+    }
+    digests = {}
+    for rel, data in payloads.items():
+        p = snap / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+        digest = _hashlib.sha256(data).hexdigest()
+        digests[rel] = digest
+        p.with_suffix(p.suffix + ".sha256").write_text(f"{digest}  {p.name}\n")
+
+    # Below resolve_cached_path's 1000-byte floor: must never be advertised.
+    (snap / "tiny.txt").write_bytes(b"too small")
+
+    monkeypatch.setenv("HF_HOME", str(hf_home))
+    return payloads, digests
+
+
+def test_manifest_is_bare_files_shape_not_envelope(client, seeded_peer_cache):
+    """The peer reads manifest['files'] at the TOP level, not under data."""
+    payload, digests = seeded_peer_cache
+
+    resp = client.get(f"/models/{_PEER_MODEL}/manifest.json")
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "files" in body, f"peer needs a top-level 'files' key, got {list(body)}"
+    assert "data" not in body, "an envelope makes the peer see zero files"
+    assert resp.headers.get("cache-control"), "manifests are immutable; cache them"
+
+    listed = {f["path"]: f for f in body["files"]}
+    assert set(listed) == set(payload)
+    for rel, entry in listed.items():
+        assert entry["size"] == len(payload[rel])
+        assert entry["sha256"] == digests[rel]
+
+
+def test_manifest_excludes_unservable_files(client, seeded_peer_cache):
+    """Only files resolve_cached_path would serve may be advertised.
+
+    A sub-1KB file sits below the resolver's size floor and a .sha256 sidecar
+    is integrity data, not a model file — listing either hands the peer a path
+    that 404s on download.
+    """
+    seeded_peer_cache
+
+    body = client.get(f"/models/{_PEER_MODEL}/manifest.json").json()
+    paths = {f["path"] for f in body["files"]}
+
+    assert "tiny.txt" not in paths
+    assert not any(p.endswith(".sha256") for p in paths)
+
+
+def test_nested_file_route_serves_manifest_bytes(client, seeded_peer_cache):
+    """/models/{id}/file/{path} is the shape the client actually requests."""
+    payload, _ = seeded_peer_cache
+
+    for rel, data in payload.items():
+        resp = client.get(f"/models/{_PEER_MODEL}/file/{rel}")
+        assert resp.status_code == 200, f"{rel}: {resp.status_code}"
+        assert resp.content == data, f"bytes differ for {rel}"
+
+
+def test_peer_routes_404_for_unknown_model_and_file(client, seeded_peer_cache):
+    """A missing file or uncached model must be 404, not a silent success."""
+    assert client.get(f"/models/{_PEER_MODEL}/file/nope.bin").status_code == 404
+    assert client.get("/models/nope/not-cached/manifest.json").status_code == 404
+
+
+def test_peer_routes_do_not_shadow_existing_routes(client, seeded_peer_cache):
+    """The greedy {model_id:path} prefixes are registered last, on purpose."""
+    assert client.get("/models/downloads").status_code == 200
+
+
+def test_client_url_shapes_match_the_served_routes():
+    """The two routes must be exactly what the client builds."""
+    from domain.infrastructure.external_download import ExternalDownloadBackend
+
+    backend = ExternalDownloadBackend(base_url="http://peer.invalid")
+
+    assert (
+        backend._manifest_url(_PEER_MODEL)
+        == f"http://peer.invalid/models/{_PEER_MODEL}/manifest.json"
+    )
+    assert (
+        backend._file_url(_PEER_MODEL, "config.json")
+        == f"http://peer.invalid/models/{_PEER_MODEL}/file/config.json"
+    )

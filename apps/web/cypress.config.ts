@@ -1,6 +1,3 @@
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { defineConfig } from 'cypress'
 import { loadEnv } from 'vite'
 
@@ -25,14 +22,8 @@ export default defineConfig({
     pageLoadTimeout: 120000,
     experimentalMemoryManagement: true,
     numTestsKeptInMemory: 1,
-    setupNodeEvents(on) {
-      // zz-hydration-diag.cy.ts dumps post-hydration head/body for debugging.
-      on('task', {
-        writeHydrationDump(contents: string) {
-          writeFileSync(join(envDir, '.hydration-dump.json'), contents)
-          return null
-        },
-      })
+    setupNodeEvents() {
+      // extend plugins here if needed
     },
   },
 })

@@ -3,42 +3,24 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => {
-    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
-    C.displayName = `Icon${name}`
-    return C
-  }
+  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
   return {
     IconSearch: iconMock('search'),
     IconMenu: iconMock('menu'),
     IconPlus: iconMock('plus'),
     IconChat: iconMock('chat'),
-    IconEdit: iconMock('edit'),
-    IconBrain: iconMock('brain'),
-    IconVision: iconMock('vision'),
-    IconBolt: iconMock('bolt'),
-    IconDocument: iconMock('document'),
-    IconMic: iconMock('mic'),
-    IconSparkle: iconMock('sparkle'),
     cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
-
-    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => (
-      <div data-testid="action-card">
-        <h3>{title}</h3>
-        {children}
-      </div>
-    ),
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => (
-      <textarea value={value} onChange={onChange} {...props} />
-    ),
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -65,7 +47,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  }
+}
 })
 
 vi.mock('./ChatSearchBar', () => ({
@@ -88,9 +70,7 @@ import { ChatToolbar } from './ChatToolbar'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
 import type { ChatToolbarContextValue } from '@/features/chat/contexts/ChatToolbarContext'
 
-const createContextValue = (
-  overrides: Partial<ChatToolbarContextValue> = {},
-): ChatToolbarContextValue => ({
+const createContextValue = (overrides: Partial<ChatToolbarContextValue> = {}): ChatToolbarContextValue => ({
   conversations: {
     conversations: [],
     sessionIdRef: { current: 's1' },
@@ -175,14 +155,12 @@ function renderToolbar(ctxValue?: ChatToolbarContextValue) {
   return render(
     <ChatToolbarProvider value={ctxValue || createContextValue()}>
       <ChatToolbar />
-    </ChatToolbarProvider>,
+    </ChatToolbarProvider>
   )
 }
 
 describe('ChatToolbar', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+  beforeEach(() => { vi.clearAllMocks() })
   afterEach(cleanup)
 
   it('renders all core subcomponents', () => {
@@ -218,45 +196,17 @@ describe('ChatToolbar', () => {
   })
 
   it('renders with different sidebar states', () => {
-    renderToolbar(
-      createContextValue({ sidebar: { open: true, onToggle: vi.fn(), onClose: vi.fn() } }),
-    )
+    renderToolbar(createContextValue({ sidebar: { open: true, onToggle: vi.fn(), onClose: vi.fn() } }))
     expect(screen.getByTestId('chat-more-menu')).toBeDefined()
   })
 
   it('renders with health status ok', () => {
-    renderToolbar(
-      createContextValue({
-        health: { status: 'ok', summary: 'Ready', modelLoaded: true, modelType: 'gpt2' },
-      }),
-    )
+    renderToolbar(createContextValue({ health: { status: 'ok', summary: 'Ready', modelLoaded: true, modelType: 'gpt2' } }))
     expect(screen.getByTestId('model-dropdown')).toBeDefined()
   })
 
   it('passes knowledge context to toolbar', () => {
-    renderToolbar(
-      createContextValue({
-        knowledge: { showing: true, count: 5, context: 'test', onToggle: vi.fn() },
-      }),
-    )
+    renderToolbar(createContextValue({ knowledge: { showing: true, count: 5, context: 'test', onToggle: vi.fn() } }))
     expect(screen.getByTestId('chat-more-menu')).toBeDefined()
-  })
-
-  it('shows the active behavior-protocol chip from ctx.mode', () => {
-    renderToolbar(createContextValue({ mode: { current: 'rewrite' } }))
-    const chip = screen.getByLabelText('Active mode: Rewrite')
-    expect(chip).toBeDefined()
-    expect(chip.textContent).toBe('Rewrite')
-  })
-
-  it('chip tracks the current mode (decide, not the stale session title)', () => {
-    renderToolbar(createContextValue({ mode: { current: 'decide' } }))
-    expect(screen.getByLabelText('Active mode: Decide')).toBeDefined()
-    expect(screen.queryByLabelText('Active mode: Rewrite')).toBeNull()
-  })
-
-  it('renders no chip when mode is absent (legacy context)', () => {
-    renderToolbar()
-    expect(screen.queryByLabelText(/^Active mode/)).toBeNull()
   })
 })

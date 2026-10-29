@@ -21,7 +21,7 @@ apps/web (VM Console)           apps/api /vm/run              packages/core-py X
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/vm/run` | POST | Assemble + execute source. Body: `source`, `max_steps`, `role` (`user`/`admin`/`kernel`), `debug`, `keyboard_input`. Returns `VMRunResponse` (status, exit_code, registers, output, vga, memory_dump, `training_job_id`, `training_result`). |
-| `/vm/builtins` | GET | Program catalog (hello, count, fib, sort, rainbow, primes, calculator, factorial, guess, train, train-status). |
+| `/vm/builtins` | GET | Program catalog (hello, count, fib, sort, rainbow, primes, calculator, factorial, guess, train, train-status, life). |
 | `/vm/info` | GET | VM capabilities (ISA, register set, memory limits, features). |
 | `/vm/training/jobs/{id}` | GET | Bridge-tracked training job status (`job_id`, `api_job_id`, `status`, `progress`, `error`). Completed jobs also return the result JSON (`result`). |
 | `/vm/training/jobs/{id}/stop` | POST | Ask the API to stop a running job (proxies `POST /training/jobs/{api_job_id}/stop`). Returns `{status, job_id}`. |
@@ -72,6 +72,7 @@ Config keys: `dataset` (name under `datasets/`), `epochs`, `lr`, `batch_size`,
 | `guess` | Number-guessing with keyboard + VGA prompt |
 | `train` | `SYS_TRAIN_START` (EAX=28) launching a Shakespeare training job |
 | `train-status` | `SYS_TRAIN_STATUS` (29) then `SYS_TRAIN_GET_RESULT` (30), results stored to guest memory |
+| `life` | Conway's Game of Life — 60x20 toroidal B3/S23 board, validated `Enter number of lifes(max=1200): ` prompt (re-prompts on out-of-range/non-digit input), space/s/r/q controls, BIOS-key poll + raw VGA pokes with zero syscalls; batch mode auto-halts after 4 generations |
 
 `train` and `train-status` require the `admin` role. After a successful `train` run the
 console's Training card polls `/vm/training/jobs/{id}` until the job reaches a terminal

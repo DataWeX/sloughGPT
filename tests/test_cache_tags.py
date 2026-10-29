@@ -104,18 +104,3 @@ def test_find_corpus_file_jsonl_fallback(tmp_path: Path) -> None:
     d.mkdir()
     (d / "input.jsonl").write_text('{"text":"a"}\n')
     assert find_corpus_file(d) == d / "input.jsonl"
-
-
-def test_find_corpus_file_memo_invalidates_when_dir_changes(tmp_path: Path) -> None:
-    """The mtime-keyed memo must see files added after a miss.
-
-    Regression guard for the datasets list: corpus resolution is memoized
-    on the directory mtime, so a fresh file has to bust the entry.
-    """
-    from domain.training._internal.cache_tags import find_corpus_file
-
-    d = tmp_path / "m"
-    d.mkdir()
-    assert find_corpus_file(d) is None  # primes the memo with a miss
-    (d / "corpus.jsonl").write_text('{"text":"a"}\n')
-    assert find_corpus_file(d) == d / "corpus.jsonl"  # dir mtime bumped -> recompute

@@ -53,26 +53,27 @@ Registered pre-lifespan in `main.py`.
 
 ## Inference Router (`/inference`, `/chat`, `/context`, `/session`)
 
-| Method   | Path                                | Description                            |
-| -------- | ----------------------------------- | -------------------------------------- |
-| `POST`   | `/inference/generate`               | Non-streaming text generation.         |
-| `POST`   | `/inference/generate/stream`        | Streaming text generation (SSE).       |
-| `POST`   | `/chat`                             | Chat — SSE streaming (its only state). |
-| `GET`    | `/context/inspect`                  | Inspect context layers.                |
-| `POST`   | `/context/store-fact`               | Store a fact in context.               |
-| `GET`    | `/context/facts`                    | List context facts.                    |
-| `POST`   | `/context/reset`                    | Reset context state.                   |
-| `GET`    | `/session/list`                     | List all sessions.                     |
-| `POST`   | `/session/create`                   | Create a new session.                  |
-| `GET`    | `/session/{session_id}`             | Get session details.                   |
-| `DELETE` | `/session/{session_id}`             | Delete a session.                      |
-| `POST`   | `/session/{session_id}/regenerate`  | Regenerate the last response.          |
-| `GET`    | `/session/{session_id}/suggestions` | Chat suggestions for a session.        |
-| `GET`    | `/providers`                        | List model providers.                  |
-| `GET`    | `/operations`                       | List active operations.                |
-| `POST`   | `/operations/{op_id}/cancel`        | Cancel an operation.                   |
-| `POST`   | `/operations/cancel-all`            | Cancel all operations.                 |
-| `POST`   | `/operations/purge`                 | Purge completed operations.            |
+| Method   | Path                                | Description                      |
+| -------- | ----------------------------------- | -------------------------------- |
+| `POST`   | `/inference/generate`               | Non-streaming text generation.   |
+| `POST`   | `/inference/generate/stream`        | Streaming text generation (SSE). |
+| `POST`   | `/chat`                             | Chat (non-streaming).            |
+| `POST`   | `/chat/stream`                      | Chat (SSE streaming).            |
+| `GET`    | `/context/inspect`                  | Inspect context layers.          |
+| `POST`   | `/context/store-fact`               | Store a fact in context.         |
+| `GET`    | `/context/facts`                    | List context facts.              |
+| `POST`   | `/context/reset`                    | Reset context state.             |
+| `GET`    | `/session/list`                     | List all sessions.               |
+| `POST`   | `/session/create`                   | Create a new session.            |
+| `GET`    | `/session/{session_id}`             | Get session details.             |
+| `DELETE` | `/session/{session_id}`             | Delete a session.                |
+| `POST`   | `/session/{session_id}/regenerate`  | Regenerate the last response.    |
+| `GET`    | `/session/{session_id}/suggestions` | Chat suggestions for a session.  |
+| `GET`    | `/providers`                        | List model providers.            |
+| `GET`    | `/operations`                       | List active operations.          |
+| `POST`   | `/operations/{op_id}/cancel`        | Cancel an operation.             |
+| `POST`   | `/operations/cancel-all`            | Cancel all operations.           |
+| `POST`   | `/operations/purge`                 | Purge completed operations.      |
 
 ## Infer Router (`/infer`)
 
@@ -214,33 +215,24 @@ Separate inference endpoint backed by the direct model server.
 
 ## Memory Router (`/memory`)
 
-| Method   | Path                    | Description                                                          |
-| -------- | ----------------------- | -------------------------------------------------------------------- |
-| `GET`    | `/memory/stats`         | Memory service stats (enabled, total facts, topic buckets).          |
-| `GET`    | `/memory/list`          | List stored facts (limit 1..1000, default 100).                      |
-| `GET`    | `/memory/search`        | Search facts by relevance (requires `q`).                            |
-| `POST`   | `/memory/store`         | Store a fact directly. Body: `{content, source?}`.                   |
-| `POST`   | `/memory/remember`      | Extract and store facts from a message. Body: `{message, source?}`.  |
-| `POST`   | `/memory/update`        | Update a fact.                                                       |
-| `DELETE` | `/memory/delete`        | Delete a fact.                                                       |
-| `POST`   | `/memory/set-config`    | Update runtime memory settings.                                      |
-| `GET`    | `/memory/get-config`    | Get current memory settings.                                         |
-| `POST`   | `/memory/clear`         | Clear all stored facts.                                              |
-| `POST`   | `/memory/consolidate`   | Trigger memory consolidation.                                        |
-| `POST`   | `/memory/archive`       | Archive old facts.                                                   |
-| `GET`    | `/memory/archive/stats` | Archive statistics.                                                  |
-| `POST`   | `/memory/archive/prune` | Prune archived facts.                                                |
-| `GET`    | `/memory/cards`         | List saved memory cards (newest first; `valid` = checksum verified). |
-| `POST`   | `/memory/cards/save`    | Save memory to a portable card. Body: `{name?, overwrite?}`.         |
-| `POST`   | `/memory/cards/load`    | Load a card. Body: `{name, mode?}` — `replace` (default, autosaves   |
-|          |                         | current memory first) or `merge` (idempotent, content-hash dedup).   |
-| `DELETE` | `/memory/cards/{name}`  | Delete a saved card.                                                 |
+| Method   | Path                    | Description                                                         |
+| -------- | ----------------------- | ------------------------------------------------------------------- |
+| `GET`    | `/memory/stats`         | Memory service stats (enabled, total facts, topic buckets).         |
+| `GET`    | `/memory/list`          | List stored facts (limit 1..1000, default 100).                     |
+| `GET`    | `/memory/search`        | Search facts by relevance (requires `q`).                           |
+| `POST`   | `/memory/store`         | Store a fact directly. Body: `{content, source?}`.                  |
+| `POST`   | `/memory/remember`      | Extract and store facts from a message. Body: `{message, source?}`. |
+| `POST`   | `/memory/update`        | Update a fact.                                                      |
+| `DELETE` | `/memory/delete`        | Delete a fact.                                                      |
+| `POST`   | `/memory/set-config`    | Update runtime memory settings.                                     |
+| `GET`    | `/memory/get-config`    | Get current memory settings.                                        |
+| `POST`   | `/memory/clear`         | Clear all stored facts.                                             |
+| `POST`   | `/memory/consolidate`   | Trigger memory consolidation.                                       |
+| `POST`   | `/memory/archive`       | Archive old facts.                                                  |
+| `GET`    | `/memory/archive/stats` | Archive statistics.                                                 |
+| `POST`   | `/memory/archive/prune` | Prune archived facts.                                               |
 
-Fail-closed when `SLO_MEMORY_ENABLED=false`. Cards live in
-`data/memory_cards/` (override: `SLO_MEMORY_CARDS_DIR`); setting
-`SLO_MEMORY_ACTIVE_CARD=<name>` merge-loads that card automatically after a
-successful model load (`.card.json` files are checksummed — corrupt cards are
-rejected before any store mutation).
+Fail-closed when `SLO_MEMORY_ENABLED=false`.
 
 ## Datasets Router (`/datasets`)
 

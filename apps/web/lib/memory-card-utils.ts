@@ -3,86 +3,38 @@ export interface MemoryImportEntry {
   topic: string
 }
 
-/**
- * Canonical memory-import parser (was duplicated in
- * components/knowledge/memory-card-utils.ts — merged here 2026-10-24).
- *
- * JSON: tolerant of malformed input (returns []), accepts top-level arrays
- * plus `{items|facts|records}` wrappers, string or object entries
- * (`content`/`text`/`fact` aliases), trims and defaults topic to `manual`.
- * CSV: a header row is detected by content/text/fact/topic column names and
- * indexed by position; without one every line is data.
- * Anything else (txt): one entry per line, `fact [topic]` bracket syntax.
- */
 export function parseMemoryImport(text: string, filename: string): MemoryImportEntry[] {
   const entries: MemoryImportEntry[] = []
   const ext = filename.split('.').pop()?.toLowerCase() || ''
-  const stripQuotes = (v: string) => v.trim().replace(/^"|"$/g, '')
 
   if (ext === 'json') {
     try {
       const data = JSON.parse(text)
       const items = Array.isArray(data) ? data : data.items || data.facts || data.records || []
       for (const item of items) {
-        if (typeof item === 'string') {
-          const content = item.trim()
-          if (content) entries.push({ content, topic: 'manual' })
-          continue
-        }
-        if (item && typeof item === 'object') {
-          const content = (item.content || item.text || item.fact) ?? ''
-          if (typeof content === 'string' && content.trim()) {
-            entries.push({
-              content: content.trim(),
-              topic:
-                typeof item.topic === 'string' && item.topic.trim() ? item.topic.trim() : 'manual',
-            })
-          }
+        if (item.content || item.text || item.fact) {
+          entries.push({
+            content: item.content || item.text || item.fact,
+            topic: item.topic || 'manual',
+          })
         }
       }
     } catch {
       return []
     }
   } else if (ext === 'csv') {
-    const lines = text.split('\n').filter((l) => l.trim())
+    const lines = text.split('\n').filter(l => l.trim())
     if (lines.length === 0) return []
     const header = lines[0].toLowerCase()
-    const hasHeader =
-      header.includes('content') ||
-      header.includes('text') ||
-      header.includes('fact') ||
-      header.includes('topic')
-    if (hasHeader) {
-      const cols = lines[0].split(',').map((h) => h.toLowerCase())
-      const contentIdx = cols.findIndex(
-        (h) => h.includes('content') || h.includes('text') || h.includes('fact'),
-      )
-      const topicIdx = cols.findIndex((h) => h.includes('topic'))
-      for (const line of lines.slice(1)) {
-        const parts = line.split(',').map(stripQuotes)
-        const content = contentIdx >= 0 ? parts[contentIdx] : parts[0]
-        if (content && content.trim()) {
-          entries.push({
-            content: content.trim(),
-            topic: (topicIdx >= 0 && parts[topicIdx]) || 'manual',
-          })
-        }
+    const hasHeader = header.includes('content') || header.includes('text') || header.includes('fact')
+    const start = hasHeader ? 1 : 0
+    for (let i = start; i < lines.length; i++) {
+      const parts = lines[i].split(',')
+      if (parts.length >= 1 && parts[0].trim()) {
+        const content = parts[0].trim().replace(/^"(.*)"$/, '$1')
+        const topic = parts.length >= 2 && parts[1].trim() ? parts[1].trim().replace(/^"(.*)"$/, '$1') : 'manual'
+        entries.push({ content, topic })
       }
-    } else {
-      for (const line of lines) {
-        const parts = line.split(',').map(stripQuotes)
-        if (parts[0]?.trim()) {
-          entries.push({ content: parts[0].trim(), topic: parts[1]?.trim() || 'manual' })
-        }
-      }
-    }
-  } else {
-    for (const line of text.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      const match = trimmed.match(/^(.*?)\s*\[([^\]]+)\]$/)
-      if (match) entries.push({ content: match[1].trim(), topic: match[2].trim() })
-      else entries.push({ content: trimmed, topic: 'manual' })
     }
   }
 
@@ -100,9 +52,9 @@ export function archiveTypeLabel(taskType: string): string {
 
 export function archiveBadgeClass(taskType: string): string {
   const classes: Record<string, string> = {
-    'memory.store': 'bg-success/15 text-success',
-    'memory.remember': 'bg-primary/10 text-primary',
-    'memory.consolidate': 'bg-warning/15 text-warning',
+    'memory.store': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    'memory.remember': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    'memory.consolidate': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
   }
   return classes[taskType] || 'bg-muted text-muted-foreground'
 }

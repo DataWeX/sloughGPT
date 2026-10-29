@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error, safe_audit_log, success_response
@@ -126,15 +126,6 @@ class WorkspacesRouter:
 
         # ─── List workspaces ───────────────────────────────────
         async def list_workspaces(auth_user: dict = auth_dep) -> dict:
-            if auth_user is None:
-                # Auth disabled (documented anonymous mode): no identity
-                # to filter memberships by — open deployment, list all
-                # so the UI still has a current workspace.
-                workspaces = [
-                    self._to_response(ws, len(self._ws_repo.list_members(ws.id))).model_dump()
-                    for ws in self._ws_repo.list_all()
-                ]
-                return success_response(data=workspaces, meta={"total": len(workspaces)})
             user = self._get_user(auth_user)
             # List workspaces the user is a member of
             memberships = self._ws_repo.list_user_workspaces(user.id)
@@ -1237,52 +1228,25 @@ class WorkspacesRouter:
             )
 
         # ─── Workspace search ─────────────────────────────────
-        async def search_workspace(
-            workspace_id: str,
-            q: str = Query(..., min_length=1, max_length=500, description="Search query"),
-            limit: int = Query(50, ge=1, le=200, description="Max results per category"),
-            auth_user: dict = auth_dep,
-        ) -> dict:
-            """Search workspace members, training jobs, datasets and knowledge.
-
-            Query semantics live here (server-side), not in the UI: the
-            endpoint returns only matches for ``q``, capped at ``limit``
-            per category, plus a ``partial`` list of categories that
-            failed to load so a truncated result set is never silent.
-            """
-            user = self._get_user(auth_user) if auth_user is not None else None
+        async def search_workspace(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            user = self._get_user(auth_user)
             ws = self._ws_repo.get(workspace_id)
             if not ws:
                 raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
-            if user is not None:
-                # Identity present => membership gate. Anonymous (auth
-                # disabled) => open deployment, existence check only.
-                member = self._ws_repo.get_member(workspace_id, user.id)
-                if not member and not user.is_admin:
-                    raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
 
-            needle = q.casefold()
-
-            results: dict[str, list[dict]] = {
-                "members": [],
-                "training_jobs": [],
-                "datasets": [],
-                "knowledge": [],
-            }
-            partial: list[str] = []
-
-            def _matches(title: str, detail: str) -> bool:
-                return needle in (title or "").casefold() or needle in (detail or "").casefold()
-
-            def _collect(category: str, entries: list[dict]) -> None:
-                matched = [e for e in entries if _matches(e["title"], e["detail"])]
-                results[category] = matched[:limit]
+            # Get query from query params
+            # We need to access query params differently since this is a inner function
+            # Use a simpler approach - search everything
+            results = {"members": [], "training_jobs": [], "datasets": [], "knowledge": []}
 
             # Search members
-            member_entries = []
-            for m in self._ws_repo.list_members(workspace_id):
+            members = self._ws_repo.list_members(workspace_id)
+            for m in members:
                 u = self._user_repo.get(m.user_id)
-                member_entries.append(
+                results["members"].append(
                     {
                         "id": m.id,
                         "type": "member",
@@ -1290,42 +1254,33 @@ class WorkspacesRouter:
                         "detail": f"Role: {m.role.value}",
                     }
                 )
-            _collect("members", member_entries)
 
             # Search training jobs
-            job_entries = []
             try:
-                from training.job_store import JobStore
+                from training.job_store import get_job_store
 
-                repo = JobStore()
-                for job in repo.list_by_workspace(workspace_id):
-                    # JobStore rows are plain dicts (store_row_to_job).
-                    jid = str(job.get("id") or job.get("_id") or "")
-                    if not jid:
-                        continue
-                    job_entries.append(
+                repo = get_job_store()
+                jobs = repo.list_by_workspace(workspace_id)
+                for job in jobs:
+                    results["training_jobs"].append(
                         {
-                            "id": jid,
+                            "id": job.get("id"),
                             "type": "training",
-                            "title": str(job.get("name") or jid),
+                            "title": job.get("name") or job.get("id"),
                             "detail": f"Status: {job.get('status', 'unknown')}",
                         }
                     )
             except Exception as e:
                 logger.debug("Training job search unavailable: %s", e)
-                partial.append("training_jobs")
-            _collect("training_jobs", job_entries)
 
-            # Search datasets (dataset entities carry no workspace field —
-            # see card "un-dead workspace search" — so this stays global)
-            dataset_entries = []
+            # Search datasets
             try:
                 from domain.infrastructure import DatasetRepository
 
                 ds_repo = DatasetRepository()
                 datasets = ds_repo.list_by_workspace(workspace_id)
                 for ds in datasets:
-                    dataset_entries.append(
+                    results["datasets"].append(
                         {
                             "id": ds.id,
                             "type": "dataset",
@@ -1335,18 +1290,15 @@ class WorkspacesRouter:
                     )
             except Exception as e:
                 logger.debug("Dataset search unavailable: %s", e)
-                partial.append("datasets")
-            _collect("datasets", dataset_entries)
 
             # Search knowledge
-            knowledge_entries = []
             try:
                 from domain.infrastructure import KnowledgeRepository
 
                 k_repo = KnowledgeRepository()
                 facts = k_repo.list_by_workspace(workspace_id)
                 for fact in facts:
-                    knowledge_entries.append(
+                    results["knowledge"].append(
                         {
                             "id": fact.id,
                             "type": "knowledge",
@@ -1356,13 +1308,9 @@ class WorkspacesRouter:
                     )
             except Exception as e:
                 logger.debug("Knowledge search unavailable: %s", e)
-                partial.append("knowledge")
-            _collect("knowledge", knowledge_entries)
 
             total = sum(len(v) for v in results.values())
-            return success_response(
-                data={"results": results, "total": total, "query": q, "partial": partial}
-            )
+            return success_response(data={"results": results, "total": total})
 
         # ─── Permissions matrix ───────────────────────────────
         async def get_workspace_permissions(workspace_id: str, auth_user: dict = auth_dep) -> dict:

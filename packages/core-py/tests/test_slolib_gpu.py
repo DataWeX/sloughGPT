@@ -24,27 +24,6 @@ from domain.slolib._internal import gpu as slib
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
-def _fixed_meminfo_open(total_kb: int = 16777216):
-    """A builtins.open stand-in that serves a fixed /proc/meminfo.
-
-    vram_gb()'s psutil-absent fallback halves the HOST's MemTotal, so
-    pinning ``== 8.0`` only ever held on a 16GB machine (the author's box);
-    on the 15.6GiB CI host the fallback returns 7.807. 16777216 kB = 16 GiB
-    -> exactly 8.0 everywhere. Non-meminfo opens pass through untouched.
-    """
-    import builtins
-    import io
-
-    real_open = builtins.open
-
-    def _open(path, *args, **kwargs):
-        if str(path) == "/proc/meminfo":
-            return io.StringIO(f"MemTotal:       {total_kb} kB\n")
-        return real_open(path, *args, **kwargs)
-
-    return _open
-
-
 # =============================================================================
 # Independent numpy references
 # =============================================================================
@@ -229,23 +208,6 @@ class TestBufferPool:
 # =============================================================================
 
 
-@pytest.fixture
-def cpu_only(monkeypatch):
-    """Force the GPU availability probes off so detection tests are hermetic.
-
-    This file documents a cupy-less environment, but cupy landed in the shared
-    conda env (2026-10-08) on a box with a real NVIDIA GPU — host state must
-    not leak into backend-selection expectations. Tests that patch the probes
-    themselves stack on top of these defaults (monkeypatch is LIFO).
-    """
-    monkeypatch.setattr(slib._CUDABackend, "is_available", lambda self: False)
-    monkeypatch.setattr(slib._OpenCLBackend, "is_available", lambda self: False)
-    slib.reset_accelerator()
-    yield
-    slib.reset_accelerator()
-
-
-@pytest.mark.usefixtures("cpu_only")
 class TestBackendSelection:
     def test_default_detection_returns_cpu(self):
         acc = slib.get_accelerator()
@@ -473,9 +435,6 @@ class TestDeviceBasics:
                 raise RuntimeError("no memory info")
 
         monkeypatch.setitem(sys.modules, "psutil", _Boom())
-        # Same host-RAM pitfall as test_vram_gb_psutil_fallback: the
-        # meminfo fallback is exercised here, so pin it with a fixed value.
-        monkeypatch.setattr("builtins.open", _fixed_meminfo_open())
         assert cpu.vram_gb() == 8.0
 
 
@@ -1040,19 +999,12 @@ class TestCPUBackend:
         cpu._openblas_threads_cache = None
         monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
         monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
-        # The impl imports domain.infrastructure._internal.resource_manager —
-        # patching the pre-move non-internal name had no effect, so
-        # get_resource_manager() resolved and returned its allocation (2)
-        # instead of exercising the cpu_count-1 fallback below.
-        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.resource_manager", None)
+        monkeypatch.setitem(sys.modules, "domain.infrastructure.resource_manager", None)
         n = cpu.openblas_threads()
         assert n == max(1, (os.cpu_count() or 1) - 1)
 
     def test_vram_gb_psutil_fallback(self, cpu, monkeypatch):
         monkeypatch.setitem(sys.modules, "psutil", None)
-        # The /proc/meminfo fallback halves the HOST's RAM — inject a fixed
-        # 16GiB MemTotal so ==8.0 holds on every machine.
-        monkeypatch.setattr("builtins.open", _fixed_meminfo_open())
         assert cpu.vram_gb() == 8.0
 
     def test_compute_tier_full(self, cpu, monkeypatch):
@@ -1108,10 +1060,7 @@ class TestGpuBackends:
         backend = slib._MetalBackend()
         assert backend.sync() is None
 
-    def test_cuda_not_available(self, monkeypatch):
-        # Hermetic: remove cupy from the import path entirely so the probe's
-        # False branch is exercised regardless of what the host has installed.
-        monkeypatch.setitem(sys.modules, "cupy", None)
+    def test_cuda_not_available(self):
         assert slib._CUDABackend().is_available() is False
 
     def test_cuda_fallback_matmul(self):
@@ -1388,7 +1337,10 @@ class TestCudaWithFakeCupy:
         b = np.random.randn(4, 5).astype(np.float32)
         assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-5)
         backend._fp16_mode = True
-        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-4)
+        # Genuine fp16 compute (inputs actually downcast now — the old
+        # hasattr(x, "device") passthrough silently kept fp32): fp16 matmul
+        # error on randn(3,4)@randn(4,5) measures max ~5e-3, so 1e-2.
+        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-2)
 
     def test_cuda_scaled_dot_causal_with_fake_cupy(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "cupy", self._fake_cupy())
@@ -1730,7 +1682,7 @@ class TestModuleFunctions:
         arr = np.arange(6, dtype=np.float64)
         assert np.array_equal(slib.from_gpu(slib.to_gpu(arr)), arr)
 
-    def test_gelu_module(self, cpu_only):
+    def test_gelu_module(self):
         x = np.linspace(-2, 2, 9).astype(np.float32)
         assert np.allclose(slib.gelu(x), _ref_gelu(x), atol=1e-5)
 
@@ -1744,7 +1696,7 @@ class TestModuleFunctions:
 
 
 class TestBenchmarkAccelerators:
-    def test_benchmark_cpu_ok(self, cpu_only):
+    def test_benchmark_cpu_ok(self):
         results = slib.benchmark_accelerators()
         assert set(results) == {"cpu", "metal", "cuda", "opencl"}
         assert results["cpu"]["status"] == "ok"

@@ -5,7 +5,6 @@ Thanks for helping improve SloughGPT.
 ## Quick start
 
 1. **Branch** from `main` with a descriptive name.
-   - **Working in a git worktree?** Link the shared model cache first: `scripts/worktree-link-model-cache.sh` — `/models/` is gitignored, so a fresh worktree starts with an empty cache and autoload fails ("no local weights, SLO_BOOTSTRAP_HF off"). Never copy weights per worktree; the script symlinks the main checkout's cache.
 2. **Install** from the repo root: `python3 -m pip install -e ".[dev]"` (see **QUICKSTART.md**). For JS packages: `npm install` at repo root (installs all workspaces via Turborepo).
 3. **Validate**:
    - **All JS packages**: `npx turbo run lint typecheck test` from repo root.

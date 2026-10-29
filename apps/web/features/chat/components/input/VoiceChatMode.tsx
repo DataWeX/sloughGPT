@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useVoiceChat, VoiceExchange, VoiceSettings } from '@/features/chat/hooks/useVoiceChat'
-import { VoiceOrb, voiceStateTone } from '@/features/chat/components/input/VoiceWaveform'
+import {
+  VoiceWaveform,
+  VoiceOrb,
+  ListeningIndicator,
+  ListeningBars,
+} from '@/features/chat/components/input/VoiceWaveform'
 import { cn, Spinner } from '@sloughgpt/strui'
 import { IconX, IconSettings, IconSpeaker, IconMicFilled } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -23,7 +28,6 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
     errorMessage,
     conversation,
     micLevel,
-    micLevelRef,
     settings,
     availableVoices,
     updateSettings,
@@ -49,7 +53,6 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
   const isProcessing = state === 'processing'
   const isSpeaking = state === 'speaking'
   const hasConversation = conversation.length > 0 || responseText.length > 0
-  const tone = voiceStateTone(state)
 
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col min-h-0">
@@ -57,7 +60,16 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
           <div
-            className={cn('w-2 h-2 rounded-full', tone.dot, tone.pulse && 'animate-pulse motion-reduce:animate-none')}
+            className={cn(
+              'w-2 h-2 rounded-full',
+              isListening
+                ? 'bg-primary animate-pulse'
+                : isSpeaking
+                  ? 'bg-success animate-pulse'
+                  : isProcessing
+                    ? 'bg-warning animate-pulse'
+                    : 'bg-muted-foreground/30',
+            )}
           />
           <span className="text-sm font-medium" aria-live="polite">
             {isListening
@@ -78,7 +90,6 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               showTranscript
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label={showTranscript ? 'Hide transcript' : 'Show transcript'}
           >
@@ -92,7 +103,6 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               showSettings
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:text-foreground',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label="Voice settings"
           >
@@ -101,7 +111,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           <button
             type="button"
             onClick={onClose}
-            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset p-2 rounded-lg text-muted-foreground hover:text-foreground"
+            className="p-2 rounded-lg text-muted-foreground hover:text-foreground"
             aria-label="Exit voice mode"
           >
             <IconX className="h-4 w-4" />
@@ -120,6 +130,8 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 overflow-hidden relative">
+        <ListeningIndicator micLevel={micLevel} active={isListening} />
+
         {showTranscript && hasConversation && (
           <VoiceTranscript
             ref={scrollRef}
@@ -129,34 +141,41 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           />
         )}
 
-        {/* Hero orb — one visual surface for the whole voice state machine.
-            Level arrives per-frame through micLevelRef (written to --mic-level
-            on the orb's own rAF loop), so this tree only re-renders on
-            discrete state changes. */}
-        <VoiceOrb state={state} micLevel={micLevel} levelRef={micLevelRef}>
+        <div className="mb-4">
+          <VoiceWaveform
+            level={micLevel}
+            bars={32}
+            variant={isListening ? 'mic' : isSpeaking ? 'speaker' : 'idle'}
+            width={280}
+            height={80}
+          />
+        </div>
+
+        <div className="mb-4">
+          <ListeningBars micLevel={micLevel} active={isListening} />
+        </div>
+
+        <VoiceOrb state={state} micLevel={micLevel}>
           <button
             type="button"
             onClick={handleToggle}
             disabled={isProcessing}
             className={cn(
-              'relative z-10 w-full h-full rounded-full flex items-center justify-center transition-all duration-200',
-              'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              'active:scale-[0.98]',
+              'w-full h-full rounded-full flex items-center justify-center transition-all duration-200',
               isListening
-                ? 'bg-primary text-primary-foreground hover:opacity-90'
+                ? 'bg-primary text-primary-foreground'
                 : isProcessing
                   ? 'bg-muted text-muted-foreground cursor-wait'
                   : 'bg-primary/10 text-primary hover:bg-primary/20',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
             aria-label={isListening ? 'Tap to stop listening' : 'Tap to start listening'}
           >
             {isProcessing ? (
-              <Spinner className="h-10 w-10" />
+              <Spinner className="h-8 w-8" />
             ) : isSpeaking ? (
-              <IconSpeaker className="h-12 w-12" />
+              <IconSpeaker className="h-10 w-10" />
             ) : (
-              <IconMicFilled className="h-12 w-12" />
+              <IconMicFilled className="h-10 w-10" />
             )}
           </button>
         </VoiceOrb>

@@ -1,14 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogPortal,
-  DialogOverlay,
-} from '@sloughgpt/strui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconTrash, IconPlus } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
@@ -38,33 +31,13 @@ async function savePresets(presets: Preset[]) {
 }
 
 const DEFAULTS: Preset[] = [
-  {
-    name: 'Helpful Assistant',
-    prompt: 'You are a helpful, harmless, and honest assistant. Answer concisely and accurately.',
-  },
-  {
-    name: 'Code Expert',
-    prompt:
-      'You are an expert software engineer. Provide clean, well-documented code solutions. Explain your reasoning.',
-  },
-  {
-    name: 'Creative Writer',
-    prompt:
-      'You are a creative writing partner. Use vivid language and imaginative descriptions. Be expressive and engaging.',
-  },
-  {
-    name: 'Tutor',
-    prompt:
-      'You are a patient tutor. Explain concepts step by step. Use analogies and examples. Ask questions to check understanding.',
-  },
+  { name: 'Helpful Assistant', prompt: 'You are a helpful, harmless, and honest assistant. Answer concisely and accurately.' },
+  { name: 'Code Expert', prompt: 'You are an expert software engineer. Provide clean, well-documented code solutions. Explain your reasoning.' },
+  { name: 'Creative Writer', prompt: 'You are a creative writing partner. Use vivid language and imaginative descriptions. Be expressive and engaging.' },
+  { name: 'Tutor', prompt: 'You are a patient tutor. Explain concepts step by step. Use analogies and examples. Ask questions to check understanding.' },
 ]
 
-export const SystemPromptDialog = memo(function SystemPromptDialog({
-  open,
-  onOpenChange,
-  value,
-  onSave,
-}: SystemPromptDialogProps) {
+export const SystemPromptDialog = memo(function SystemPromptDialog({ open, onOpenChange, value, onSave }: SystemPromptDialogProps) {
   const [draft, setDraft] = useState(value)
   const [presets, setPresets] = useState<Preset[]>([])
   const [presetName, setPresetName] = useState('')
@@ -72,7 +45,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
 
   useEffect(() => {
     let active = true
-    loadPresets().then((stored) => {
+    loadPresets().then(stored => {
       if (active) {
         if (stored.length === 0) {
           savePresets(DEFAULTS)
@@ -82,9 +55,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
         }
       }
     })
-    return () => {
-      active = false
-    }
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
@@ -108,7 +79,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
   const handleSaveAsPreset = async () => {
     const name = presetName.trim()
     if (!name || !draft.trim()) return
-    const updated = [...presets.filter((p) => p.name !== name), { name, prompt: draft }]
+    const updated = [...presets.filter(p => p.name !== name), { name, prompt: draft }]
     setPresets(updated)
     await savePresets(updated)
     setPresetName('')
@@ -116,7 +87,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
   }
 
   const handleDeletePreset = async (name: string) => {
-    const updated = presets.filter((p) => p.name !== name)
+    const updated = presets.filter(p => p.name !== name)
     setPresets(updated)
     await savePresets(updated)
   }
@@ -138,19 +109,14 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
 
             {presets.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Presets
-                </p>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Presets</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {presets.map((p) => (
-                    <div
-                      key={p.name}
-                      className="group flex items-center gap-1 rounded-md border border-border/50 bg-muted/20 px-2 py-1"
-                    >
+                  {presets.map(p => (
+                    <div key={p.name} className="group flex items-center gap-1 rounded-md border border-border/50 bg-muted/20 px-2 py-1">
                       <button
                         type="button"
                         onClick={() => applyPreset(p)}
-                        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset text-[11px] text-foreground/80 hover:text-foreground whitespace-nowrap"
+                        className="text-[11px] text-foreground/80 hover:text-foreground whitespace-nowrap"
                         title={p.prompt}
                       >
                         {p.name}
@@ -158,7 +124,7 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
                       <button
                         type="button"
                         onClick={() => handleDeletePreset(p.name)}
-                        className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                        className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive transition-all"
                         title="Delete preset"
                         aria-label="Delete preset"
                       >
@@ -185,54 +151,27 @@ export const SystemPromptDialog = memo(function SystemPromptDialog({
                     <Input
                       aria-label="Preset name"
                       value={presetName}
-                      onChange={(e) => setPresetName(e.target.value)}
+                      onChange={e => setPresetName(e.target.value)}
                       placeholder="Preset name..."
                       className="h-7 text-[11px] w-32"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSaveAsPreset()
-                      }}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveAsPreset() }}
                     />
-                    <Button
-                      size="sm"
-                      className="h-7 text-[10px] px-2"
-                      onClick={handleSaveAsPreset}
-                      disabled={!presetName.trim() || !draft.trim()}
-                    >
+                    <Button size="sm" className="h-7 text-[10px] px-2" onClick={handleSaveAsPreset} disabled={!presetName.trim() || !draft.trim()}>
                       Save
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-[10px] px-1"
-                      onClick={() => {
-                        setShowSaveInput(false)
-                        setPresetName('')
-                      }}
-                    >
+                    <Button size="sm" variant="ghost" className="h-7 text-[10px] px-1" onClick={() => { setShowSaveInput(false); setPresetName('') }}>
                       Cancel
                     </Button>
                   </div>
                 ) : (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-[11px]"
-                    onClick={() => setShowSaveInput(true)}
-                    disabled={!draft.trim()}
-                  >
+                  <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setShowSaveInput(true)} disabled={!draft.trim()}>
                     <IconPlus className="h-3 w-3 mr-1" /> Save as preset
                   </Button>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => handleOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={!hasUnsavedDraft && draft === value}
-                >
+                <Button variant="ghost" size="sm" onClick={() => handleOpenChange(false)}>Cancel</Button>
+                <Button size="sm" onClick={handleSave} disabled={!hasUnsavedDraft && draft === value}>
                   {hasUnsavedDraft ? 'Save changes' : 'Saved'}
                 </Button>
               </div>

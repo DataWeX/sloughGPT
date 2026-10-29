@@ -54,7 +54,7 @@ export function useTestDialog(): UseTestDialogReturn {
         {
           prompt: testPrompt,
           max_new_tokens: 256,
-          temperature: 0.7,
+          temperature: 0.8,
           response_format: responseFormat,
         },
         (token) => {

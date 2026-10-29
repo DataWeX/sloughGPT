@@ -126,7 +126,7 @@ class TestResetSettings:
         assert "reset" in resp.json()["data"]["status"]
         # Verify defaults restored
         resp = client.get("/settings/generation")
-        assert resp.json()["data"]["temperature"] == 0.7
+        assert resp.json()["data"]["temperature"] == 0.8
 
 
 class TestValidation:

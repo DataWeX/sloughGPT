@@ -1,4 +1,4 @@
-import { _getBaseUrl } from './ports'
+import { PUBLIC_API_URL } from '../web/lib/config'
 import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from './verbs'
 
 interface ApiClientConfig {
@@ -10,18 +10,11 @@ interface ApiClientConfig {
 }
 
 function createApiClient(baseURL?: string) {
-  // Read the port at CALL time — apiClient is built at module load, before
-  // the host wires the transport, so a captured prefix would freeze the
-  // pre-wiring default for the whole app lifetime.
-  const resolveBase = (): string => baseURL ?? _getBaseUrl()
+  const prefix = baseURL ?? PUBLIC_API_URL
   return {
-    defaults: {
-      get baseURL(): string {
-        return resolveBase()
-      },
-    },
+    defaults: { baseURL: prefix },
     get: <T>(url: string, config?: ApiClientConfig): Promise<T> => {
-      const u = url.startsWith('/') ? `${resolveBase()}${url}` : url
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
       return apiGet<T>(u, config?.params, {
         signal: config?.signal,
         silent: config?._silent,
@@ -29,7 +22,7 @@ function createApiClient(baseURL?: string) {
       })
     },
     post: <T>(url: string, body?: unknown, config?: ApiClientConfig): Promise<T> => {
-      const u = url.startsWith('/') ? `${resolveBase()}${url}` : url
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
       return apiPost<T>(u, body, {
         signal: config?.signal,
         silent: config?._silent,
@@ -38,7 +31,7 @@ function createApiClient(baseURL?: string) {
       })
     },
     put: <T>(url: string, body?: unknown, config?: ApiClientConfig): Promise<T> => {
-      const u = url.startsWith('/') ? `${resolveBase()}${url}` : url
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
       return apiPut<T>(u, body, {
         signal: config?.signal,
         silent: config?._silent,
@@ -46,7 +39,7 @@ function createApiClient(baseURL?: string) {
       })
     },
     delete: <T>(url: string, config?: ApiClientConfig): Promise<T> => {
-      const u = url.startsWith('/') ? `${resolveBase()}${url}` : url
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
       return apiDelete<T>(u, {
         signal: config?.signal,
         silent: config?._silent,
@@ -54,7 +47,7 @@ function createApiClient(baseURL?: string) {
       })
     },
     patch: <T>(url: string, body?: unknown, config?: ApiClientConfig): Promise<T> => {
-      const u = url.startsWith('/') ? `${resolveBase()}${url}` : url
+      const u = url.startsWith('/') ? `${prefix}${url}` : url
       return apiPatch<T>(u, body, {
         signal: config?.signal,
         silent: config?._silent,

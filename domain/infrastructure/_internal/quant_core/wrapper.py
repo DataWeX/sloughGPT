@@ -21,7 +21,6 @@ import logging
 import os
 import subprocess
 import sys
-import time
 
 import numpy as np
 
@@ -79,11 +78,7 @@ def _target_flags() -> list[str]:
     feats = _cpu_features()
     flags: list[str] = []
     if "avx2" in feats:
-        # -fno-tree-vectorize is part of the decode-lane GEMV config: keeps
-        # gcc from auto-vectorizing outside the explicitly-gated intrinsics
-        # (matmul_int8.c build note); stamp machinery recompiles on change.
         flags.append("-mavx2")
-        flags.append("-fno-tree-vectorize")
     if {"avx512f", "avx512bw", "avx512vnni"} <= feats:
         flags += ["-mavx512f", "-mavx512bw", "-mavx512vnni", "-fno-tree-vectorize"]
     return flags
@@ -206,7 +201,6 @@ def _build_all(force: bool = False) -> bool:
 # ── Native library loading ─────────────────────────────────────────
 
 _LIB = None
-_HAS_SWIGLU = False
 
 
 def _load_lib():
@@ -258,30 +252,19 @@ def _load_lib():
         HAS_AVX512 = False
 
     # Expose per-call kernel selection (smart per-shape dispatch).
-    _LIB.matmul_int8_select_kernel = getattr(_LIB, "matmul_int8_select_kernel", None)
-    _LIB.matmul_int8_kernel = getattr(_LIB, "matmul_int8_kernel", None)
-    if _LIB.matmul_int8_select_kernel is not None:
-        _LIB.matmul_int8_select_kernel.argtypes = [ctypes.c_int]
-        _LIB.matmul_int8_select_kernel.restype = None
-    if _LIB.matmul_int8_kernel is not None:
-        _LIB.matmul_int8_kernel.argtypes = []
-        _LIB.matmul_int8_kernel.restype = ctypes.c_int
-
-    # Vectorized SwiGLU kernel (present only on freshly built .so files).
-    global _HAS_SWIGLU
-    _HAS_SWIGLU = False
-    try:
-        if has_int8 and hasattr(_LIB, "swiglu_f32"):
-            _LIB.swiglu_f32.argtypes = [
-                ctypes.c_void_p,  # h1 (float32)
-                ctypes.c_void_p,  # h3 (float32)
-                ctypes.c_void_p,  # out (float32)
-                ctypes.c_int,  # n
-            ]
-            _LIB.swiglu_f32.restype = None
-            _HAS_SWIGLU = True
-    except Exception:
-        _HAS_SWIGLU = False
+    # Guard on ``has_int8``: when the build/load failed ``_LIB`` is still
+    # ``None``, and dereferencing it here raises at *import* time — turning
+    # an ordinary numpy-fallback situation (missing .c source, no gcc) into
+    # a collection error for every importer of this module.
+    if has_int8 and _LIB is not None:
+        _LIB.matmul_int8_select_kernel = getattr(_LIB, "matmul_int8_select_kernel", None)
+        _LIB.matmul_int8_kernel = getattr(_LIB, "matmul_int8_kernel", None)
+        if _LIB.matmul_int8_select_kernel is not None:
+            _LIB.matmul_int8_select_kernel.argtypes = [ctypes.c_int]
+            _LIB.matmul_int8_select_kernel.restype = None
+        if _LIB.matmul_int8_kernel is not None:
+            _LIB.matmul_int8_kernel.argtypes = []
+            _LIB.matmul_int8_kernel.restype = ctypes.c_int
 
     # Load int4 library (separate dylib)
     has_int4 = False
@@ -376,13 +359,11 @@ def matmul_int8_f32_c(
 
     A = np.ascontiguousarray(A, dtype=np.float32)
     B = np.ascontiguousarray(B, dtype=np.int8)
-    if not isinstance(B_scale, np.ndarray):
+    if np.isscalar(B_scale):
         b_scale_arr = np.asarray([float(B_scale)], dtype=np.float32)
         b_scale_per_row = 0
     else:
-        # ravel() view only — C reads B_scale const, so the defensive .copy()
-        # here was a per-call N-float alloc+memcpy (~1.8MB/token in decode).
-        b_scale_arr = np.asarray(B_scale, dtype=np.float32).ravel()
+        b_scale_arr = np.asarray(B_scale, dtype=np.float32).ravel().copy()
         assert b_scale_arr.shape[0] == N, f"B_scale has {b_scale_arr.shape[0]} rows, expected {N}"
         b_scale_per_row = 1
     bias_ptr = None
@@ -404,42 +385,6 @@ def matmul_int8_f32_c(
         ctypes.c_int(b_scale_per_row),
     )
     return C
-
-
-def swiglu_f32_c(h1: np.ndarray, h3: np.ndarray) -> np.ndarray | None:
-    """SiLU(h1) * h3 through the vectorized C kernel.
-
-    ~10x faster than the numba/libm fallback (which calls scalar expf per
-    element): AVX2 lanes through a degree-5 exp polynomial with max relative
-    error ~2e-7.
-
-    Args:
-        h1: float32 gate input, C-contiguous (decode's ``(1, N)`` slices
-            qualify; strided prefill slices do not).
-        h3: float32 up projection, same shape/contiguity as ``h1``.
-
-    Returns:
-        float32 result with ``h1``'s shape, or None when the library or the
-        input layout is unsupported so the caller falls back to numba/numpy.
-    """
-    if not _load_lib() or not _HAS_SWIGLU:
-        return None
-    if (
-        h1.dtype != np.float32
-        or h3.dtype != np.float32
-        or h1.shape != h3.shape
-        or not h1.flags.c_contiguous
-        or not h3.flags.c_contiguous
-    ):
-        return None
-    out = np.empty(h1.shape, dtype=np.float32)
-    _LIB.swiglu_f32(
-        h1.ctypes.data,
-        h3.ctypes.data,
-        out.ctypes.data,
-        ctypes.c_int(h1.size),
-    )
-    return out
 
 
 def matmul_int4_c(A: np.ndarray, B_packed: np.ndarray, K: int) -> np.ndarray:
@@ -526,20 +471,6 @@ else:
 _K_AVX2 = 1
 _K_AVX512 = 2
 
-# Last kernel actually pushed to C — avoids a ctypes call (≈5µs) on every
-# matmul when the policy hasn't changed (decode is ~100 GEMMs/token, all M=1).
-_last_kernel_pushed: int | None = None
-
-# os.environ.get() costs ~1µs each and the dispatch policy reads two keys per
-# GEMM (~200 reads/token in decode) — cache them behind a short TTL. The A/B
-# harness and benchmark scripts pin these at process start, so a 50ms TTL is
-# invisible to every real caller while staying responsive to interactive
-# toggles.
-_ENV_TTL = 0.05
-_env_cache_t = -1e9
-_env_pin: str | None = None
-_env_mode = "1"
-
 
 def _decode_only(m: int) -> bool:
     """True for single-token decode, where AVX2 beats AVX-512 on this host."""
@@ -558,23 +489,13 @@ def policy_kernel(m: int) -> int:
 
 
 def _set_kernel_for_shape(m: int) -> None:
-    """Set the C kernel for the next GEMM of batch size ``m`` (no-op when the
-    previous call already selected the same kernel)."""
-    global _last_kernel_pushed, _env_cache_t, _env_pin, _env_mode
+    """Set the C kernel for the next GEMM of batch size ``m``."""
     if not HAS_AVX2 or _LIB.matmul_int8_select_kernel is None:
         return
-    now = time.monotonic()
-    if now - _env_cache_t > _ENV_TTL:
-        _env_cache_t = now
-        _env_pin = os.environ.get("MAN_QUANT_KERNEL")
-        _env_mode = os.environ.get("MAN_SMART_DISPATCH", "1")
-    if _env_pin:
+    if os.environ.get("MAN_QUANT_KERNEL"):
         return  # explicit pin already handled in C
-    if _env_mode == "0":
-        want = 0
-    else:
-        want = policy_kernel(m)
-    if want == _last_kernel_pushed:
+    mode = os.environ.get("MAN_SMART_DISPATCH", "1")
+    if mode == "0":
+        _LIB.matmul_int8_select_kernel(0)
         return
-    _LIB.matmul_int8_select_kernel(want)
-    _last_kernel_pushed = want
+    _LIB.matmul_int8_select_kernel(policy_kernel(m))
