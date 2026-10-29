@@ -42,12 +42,12 @@ freed: 8829 MB
 /dev/mapper/data-root  113G   98G  9.2G  92% /
 ```
 
-and the peer's own reasoning: *"Freed **8.8G** — disk now at **92% with 9.2G
+and the peer's own reasoning: _"Freed **8.8G** — disk now at **92% with 9.2G
 free** (was 612M / 100%) … I deleted only orphaned worktree caches (75 dirs) —
-pure build/test cache for nonexistent worktrees. Not user data."*
+pure build/test cache for nonexistent worktrees. Not user data."_
 
 **Why the guard failed.** The script's check `if [ ! -d ".${base}" ]` assumes
-worktrees live *in-repo* as `.wt-*` and that `~/.cache/wt-*` are disposable
+worktrees live _in-repo_ as `.wt-*` and that `~/.cache/wt-*` are disposable
 copies. In reality many sessions register their worktrees **at**
 `~/.cache/wt-*` (they appear in `git worktree list`). Exactly the two dirs with
 in-repo twins — `.wt-g7` and `.wt-iso` exist — survived; everything else under
@@ -58,11 +58,11 @@ which is why the survivor set looks arbitrary.
 **Timeline — the "restart GC" attribution was a misattribution**
 (discovery-after-restart; all timestamps UTC, local ≈ UTC+1):
 
-| Time (UTC) | Event |
-|---|---|
-| 10:38:49 | **The wipe** (script above, run=49607630) |
+| Time (UTC)        | Event                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| 10:38:49          | **The wipe** (script above, run=49607630)                                                               |
 | 10:50:32–10:53:48 | opencode restart burst (`cli starting` runs eab02700, da8d3527, d959eef8, 46de8efa, 9e68f7f5, 7a071dd3) |
-| ~12:15 | Incident reported ("opencode restart GC'd ~60 worktrees") |
+| ~12:15            | Incident reported ("opencode restart GC'd ~60 worktrees")                                               |
 
 The restart came **12+ minutes after** the deletion was already recorded, and
 the restart window contains no destructive processes (only git snapshot
@@ -75,7 +75,7 @@ bookkeeping: `update-index`, `diff-files`, `ls-files`, `write-tree`).
   perms); zero journal entries for tmpfiles/`.cache` in 10:00–13:00Z.
 - **opencode** — the serving binary is the desktop app's bundled CLI
   (`~/.config/ai.opencode.desktop/cli/2.1.2-x64/opencode-cli`); strings show
-  only *explicit* worktree operations (`worktree_remove`, "Remove worktree",
+  only _explicit_ worktree operations (`worktree_remove`, "Remove worktree",
   "Removed worktree"), no restart-time GC. opencode's own worktrees live under
   `~/.local/share/opencode/worktree/` (e.g. `brave-canyon`, `swift-lagoon`) and
   were not affected.
@@ -89,7 +89,7 @@ bookkeeping: `update-index`, `diff-files`, `ls-files`, `write-tree`).
    truth for what is alive.
 2. **Staleness is defined by git, not by sibling-directory existence**: a
    checkout dir is only disposable when it is absent from
-   `git worktree list --porcelain` *after* `git worktree prune` — and even
+   `git worktree list --porcelain` _after_ `git worktree prune` — and even
    then, deleting files is a File-Safety action requiring user approval.
 3. **ENOSPC recovery order:** reclaim package/tool caches first —
    `conda clean -a`, `npm cache clean --force`, `pip cache purge`, old

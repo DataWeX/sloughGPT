@@ -178,7 +178,10 @@ export function VoiceOrb({
           <span
             aria-hidden="true"
             className="absolute inset-0 rounded-full border-2 border-primary/25"
-            style={{ transform: `scale(calc(1.25 + ${level} * 0.55 * ${motion}))`, opacity: `calc(0.25 + ${level} * 0.4)` }}
+            style={{
+              transform: `scale(calc(1.25 + ${level} * 0.55 * ${motion}))`,
+              opacity: `calc(0.25 + ${level} * 0.4)`,
+            }}
           />
           <span
             aria-hidden="true"
@@ -188,7 +191,10 @@ export function VoiceOrb({
           <span
             aria-hidden="true"
             className="absolute inset-0 rounded-full bg-primary/10 blur-xl"
-            style={{ transform: `scale(calc(1 + ${level} * 0.6 * ${motion}))`, opacity: `calc(0.25 + ${level} * 0.45)` }}
+            style={{
+              transform: `scale(calc(1 + ${level} * 0.6 * ${motion}))`,
+              opacity: `calc(0.25 + ${level} * 0.45)`,
+            }}
           />
         </>
       )}

@@ -221,7 +221,10 @@ export const LiveFeedStream = memo(function LiveFeedStream() {
                     : 'size-1.5 shrink-0 translate-y-[-1px] rounded-full bg-[rgb(var(--accent))]'
                 }
               />
-              <time className="w-14 shrink-0 tabular-nums text-muted-foreground" dateTime={entry.at}>
+              <time
+                className="w-14 shrink-0 tabular-nums text-muted-foreground"
+                dateTime={entry.at}
+              >
                 {relTime(entry.at)}
               </time>
               <span className="min-w-0 break-words">{entry.text}</span>

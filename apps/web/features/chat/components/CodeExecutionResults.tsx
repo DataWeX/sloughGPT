@@ -46,9 +46,12 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
   // delivered into a torn-down environment). Tracked so unmount clears it,
   // and a fresh copy clears the previous window instead of stacking them.
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => {
-    if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    },
+    [],
+  )
 
   const handleCopy = useCallback(async (code: string, id: string) => {
     await navigator.clipboard.writeText(code)
@@ -58,7 +61,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
   }, [])
 
   const handleToggle = useCallback((id: string) => {
-    setExpandedId(prev => prev === id ? null : id)
+    setExpandedId((prev) => (prev === id ? null : id))
   }, [])
 
   if (executions.length === 0) {
@@ -71,7 +74,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
 
   return (
     <div className={cn('space-y-2', className)}>
-      {executions.map(exec => (
+      {executions.map((exec) => (
         <div
           key={exec.id}
           className={cn(

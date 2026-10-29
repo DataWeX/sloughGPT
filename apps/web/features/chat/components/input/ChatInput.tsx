@@ -285,13 +285,12 @@ export const ChatInput = memo(function ChatInput({
       className="shrink-0 bg-background/95 backdrop-blur-sm px-4 sm:px-6 pb-2 pt-1"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
-      <div className="w-full">
-        {/* Only tool_call/error show here — generating/thinking dots already render inline
-            in the streaming turn (MessageContent empty-state); a second band would
-            duplicate the indicator and break the transcript grid alignment. */}
-        {loading && (streamingStatus === 'tool_call' || streamingStatus === 'error') && (
+      <div className="mx-auto">
+        {loading && (
           <div className="flex justify-center pb-1">
-            <StreamingIndicator status={streamingStatus} toolName={streamingToolName} />
+            {(streamingStatus === 'tool_call' || streamingStatus === 'error') && (
+              <StreamingIndicator status={streamingStatus} toolName={streamingToolName} />
+            )}
           </div>
         )}
 

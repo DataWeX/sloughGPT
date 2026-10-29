@@ -73,7 +73,13 @@ export class ErrorReporter {
 
   private _getLogger(): { warning: (msg: string, ctx?: unknown) => void } | null {
     if (!this._logger) {
-      import('@/lib/dev-log').then(m => { this._logger = m.logger as unknown as { warning: (msg: string, ctx?: unknown) => void } }).catch(() => { /* fallback: no-op */ })
+      import('@/lib/dev-log')
+        .then((m) => {
+          this._logger = m.logger as unknown as { warning: (msg: string, ctx?: unknown) => void }
+        })
+        .catch(() => {
+          /* fallback: no-op */
+        })
     }
     return this._logger
   }
@@ -128,7 +134,9 @@ export class ErrorReporter {
       const msg = report.message
       if (!msg.toLowerCase().includes('hydrat') && !msg.includes('did not match')) {
         this._persist(msg.slice(0, 500), 'unhandled').catch((e: unknown) => {
-          this._getLogger()?.warning('error-reporter: failed to persist error to IndexedDB', { error: e })
+          this._getLogger()?.warning('error-reporter: failed to persist error to IndexedDB', {
+            error: e,
+          })
         })
       }
     }
@@ -148,8 +156,7 @@ export class ErrorReporter {
 
   private _handleRejection = (event: PromiseRejectionEvent): void => {
     const reason = event.reason
-    const message =
-      reason?.message || reason?.toString?.() || 'Unhandled promise rejection'
+    const message = reason?.message || reason?.toString?.() || 'Unhandled promise rejection'
     this._push({
       message,
       source: 'unhandledrejection',

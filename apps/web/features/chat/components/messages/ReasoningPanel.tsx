@@ -52,7 +52,6 @@ export const ReasoningPanel = memo(function ReasoningPanel({
           isThinking
             ? 'border-primary/20 bg-primary/[0.04] hover:bg-primary/[0.06]'
             : 'border-border/30 bg-muted/15 hover:bg-muted/25 hover:border-border/40 text-muted-foreground',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
         )}
         aria-expanded={expanded}
         aria-label={expanded ? 'Hide reasoning' : 'Show reasoning'}

@@ -33,7 +33,9 @@ describe('ObjectDetectionSection', () => {
     const button = screen.getByRole('button', { name: 'Detect' })
     expect(button).toHaveProperty('disabled', true)
 
-    fireEvent.change(screen.getByLabelText('Object detection image'), { target: { files: [makeImageFile()] } })
+    fireEvent.change(screen.getByLabelText('Object detection image'), {
+      target: { files: [makeImageFile()] },
+    })
     expect(button).toHaveProperty('disabled', false)
   })
 
@@ -53,7 +55,9 @@ describe('ObjectDetectionSection', () => {
     expect(screen.getByTestId('detection-list').textContent).toContain('cat')
     expect(screen.getByTestId('detection-list').textContent).toContain('72%')
 
-    fireEvent.change(screen.getByLabelText('Object detection image'), { target: { files: [makeImageFile()] } })
+    fireEvent.change(screen.getByLabelText('Object detection image'), {
+      target: { files: [makeImageFile()] },
+    })
     expect(screen.getAllByTestId('detection-box')).toHaveLength(2)
   })
 

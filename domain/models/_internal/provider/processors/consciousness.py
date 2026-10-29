@@ -22,4 +22,6 @@ class ConsciousnessProcessor:
     async def process(self, messages: list) -> list:
         if not self._narrative:
             return messages
-        return [{"role": "system", "content": f"Self-reflection context:\n{self._narrative}"}] + messages
+        return [
+            {"role": "system", "content": f"Self-reflection context:\n{self._narrative}"}
+        ] + messages

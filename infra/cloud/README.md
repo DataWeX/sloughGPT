@@ -1,24 +1,28 @@
 # Free cloud deployment targets
 
 ## Frontend — Cloudflare Pages
+
 - Cost: free
 - Pros: unlimited bandwidth, global CDN, Next.js supported
 - Cons: no long-running backend; only static/SSR output
 - Config: `infra/cloud/cloudflare-pages.toml`
 
 ## Backend — Render.com
+
 - Cost: free web service
 - Pros: Docker support, public URL, HTTPS
 - Cons: 512MB RAM limit; spin-down after inactivity
 - Config: `infra/cloud/render.yaml`
 
 ## Backend — Fly.io
+
 - Cost: free tier (3 shared VMs)
 - Pros: real VM, Docker, persistent IP option
 - Cons: 256MB RAM per VM; model must be very small/quantized
 - Config: `infra/cloud/fly.toml`
 
 ## Git-sync CD — GitHub Actions + Tailscale + Cloudflare Tunnel
+
 - Cost: Tailscale (free for 100 devices) + Cloudflare (free)
 - Pros: zero-downtime deploys on every git push; no open firewall ports;
   Cloudflare CDN + SSL termination at the edge; full control of the server
@@ -69,16 +73,17 @@ sudo systemctl enable --now cloudflared
 
 ### GitHub secrets / variables
 
-| Name | Scope | Required | Description |
-|---|---|---|---|
-| `TS_AUTHKEY` | secret | yes | Tailscale pre-auth key with tag `tag:ci` |
-| `DEPLOY_HOST` | secret | yes | Tailscale IP of the server (e.g. `100.x.x.x`) |
-| `DEPLOY_SSH_KEY` | secret | yes | SSH private key (public key in server `authorized_keys`) |
-| `DEPLOY_USER` | secret | no | SSH user (default: `root`) |
-| `CLOUDFLARE_API_TOKEN` | secret | no | Token with Zone:Cache:Edit scope |
-| `CF_ZONE_ID` | variable | no | Cloudflare zone ID (for cache purge) |
+| Name                   | Scope    | Required | Description                                              |
+| ---------------------- | -------- | -------- | -------------------------------------------------------- |
+| `TS_AUTHKEY`           | secret   | yes      | Tailscale pre-auth key with tag `tag:ci`                 |
+| `DEPLOY_HOST`          | secret   | yes      | Tailscale IP of the server (e.g. `100.x.x.x`)            |
+| `DEPLOY_SSH_KEY`       | secret   | yes      | SSH private key (public key in server `authorized_keys`) |
+| `DEPLOY_USER`          | secret   | no       | SSH user (default: `root`)                               |
+| `CLOUDFLARE_API_TOKEN` | secret   | no       | Token with Zone:Cache:Edit scope                         |
+| `CF_ZONE_ID`           | variable | no       | Cloudflare zone ID (for cache purge)                     |
 
 ## Notes
+
 - The default model is ~2.5GB unquantized. Free tiers cannot hold that.
 - Use a smaller model or 4-bit quantization for free hosting.
 - API and Web must be on the same domain to avoid CORS.
