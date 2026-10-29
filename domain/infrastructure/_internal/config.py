@@ -163,6 +163,9 @@ _SKIP_ENV_KEYS: frozenset[str] = frozenset(
         "SLO_WATCHDOG",
         "SLO_WEB",
         "SLO_AUTO_WORKFLOW",
+        # Accelerator probe bound — read directly by domain/slolib gpu.py
+        # (get_accelerator's per-epoch wait), not by the AppConfig schema.
+        "SLO_ACCEL_PROBE_TIMEOUT",
     }
 )
 
