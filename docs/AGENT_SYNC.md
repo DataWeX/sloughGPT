@@ -1043,6 +1043,34 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-28 · `.wt-attn` on `feat/attn-scores-port` (from main `a88816c5d`,
+  all uncommitted).** Card 093 attention-side port that main never got:
+  `d99421492` re-applied3-way (scores-buffer `_fused_attention_single/_multi`
+  — kills the O(H·L·E²) pass-3 dot recompute, 194× microbench win; KV-cache
+  numba quant/dequant; slonet fuse memo; +265 kernel tests) + hand-ported
+  `gpu.py` numpy-2 isinstance fix (`ndarray.device` hasattr misfire → cupy
+  TypeError). **GEMV/swiglu/slope-script need no port** — `7cf6b208d` is
+  reachable from main (C/wrapper byte-identical, verified). Gates on this
+  base: ruff clean; kernels+quant_core 47/2; benchmark_slonet 7/7; quant
+  battery 971 passed (1 perf-test load-flake, passes solo; reload-polluter
+  class fixed by main's `0ed5a83e9`); root `tests/` 3440p/**8f** + apps/api/server
+  **1354p/2f** — **all10 pre-existing on clean main** (detached baseline at
+  `a88816c5d` reproduces them: `529747c9a`/`a88816c5d` no-model fail-fast
+  vs test expectations +1 https flake; main is red mid-flight, the root
+  worktree's fix-lane WIP passes all — **whoever owns inference-router
+  readiness: your red tests are these10**). Slope vs load1: 4.14@22.6 →
+  6.96@17.3 → 9.26@9.6 → 10.53@9.4 → thr2 best **12.96 @ run-load 8.2**
+  (6 contended attempts exhausted 11:44–12:20), slope now LINEAR (was
+  superlinear); patient waiter `data/slope_gate_wait_long.sh` (thr2, fires
+  only at load1<4, 24 attempts/18h, log `data/logs/slope_gate_result.log`)
+  retrying ≥25 — historical green was thr2 @ load 0.93 (25.17). cProfile
+  sanity on ported base: matmul 72.6% / attention 6.1% (was 87.6%) — no
+  regression. Details: dev-note `2026-09-29-card093-fix-decode-gemv.md`
+  items 22–27. Foreign note: a
+  repo-wide `ruff format` sweep hit most worktrees 10-28 01:07 (root,
+  `.wt-decode`, `.wt-ux` still carry it) — `.wt-attn` was reset to main
+  content before the port, so it does NOT carry that sweep.
+
 - **2026-10-24 · root session on `feat/error-funnel` (NOT on main; merge
   blocked).** Contents: browser error funnel (`error-store` fan-out →
   GlobalBanner / opt-in toast / `state_events` / backend batch, ~39 bare

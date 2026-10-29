@@ -987,13 +987,19 @@ class _CUDABackend(_Accelerator):
         if self._cp and not self._fp16_mode:
             return self._cp.asnumpy(
                 self._cp.matmul(
-                    self._cp.asarray(a) if not hasattr(a, "device") else a,
-                    self._cp.asarray(b) if not hasattr(b, "device") else b,
+                    a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a),
+                    b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b),
                 )
             )
         if self._cp:
-            a_arr = self._cp.asarray(a, dtype=self._dtype()) if not hasattr(a, "device") else a
-            b_arr = self._cp.asarray(b, dtype=self._dtype()) if not hasattr(b, "device") else b
+            if isinstance(a, self._cp.ndarray):
+                a_arr = a
+            else:
+                a_arr = self._cp.asarray(a, dtype=self._dtype())
+            if isinstance(b, self._cp.ndarray):
+                b_arr = b
+            else:
+                b_arr = self._cp.asarray(b, dtype=self._dtype())
             return self._cp.asnumpy(self._cp.matmul(a_arr, b_arr)).astype(np.float32)
         return np.matmul(np.asarray(a), np.asarray(b))
 
