@@ -29,6 +29,8 @@ fi
 
 changed_py=0
 board_failed=0
+chain_tmp=$(mktemp -d "${TMPDIR:-/tmp}/board-chain.XXXXXX")
+trap 'rm -rf "$chain_tmp"' EXIT
 # stdin lines: <local ref> <local sha> <remote ref> <remote sha>
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
@@ -46,6 +48,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
   if git diff --name-only "$base" "$local_sha" -- .kanban/board.jsonl 2>/dev/null | grep -q .; then
     "$py" "$repo_root/scripts/check_board_reopen.py" "$base" "$local_sha" || board_failed=1
+    # GUARD 3 — chain/schema/uniqueness of the PUSHED board blob (not the
+    # worktree — what lands on the remote is what must verify). Card 20261029.
+    if git show "$local_sha:.kanban/board.jsonl" > "$chain_tmp/board.jsonl" 2>/dev/null; then
+      "$py" "$repo_root/scripts/check_board_chain.py" "$chain_tmp/board.jsonl" || board_failed=1
+    fi
   fi
 done
 

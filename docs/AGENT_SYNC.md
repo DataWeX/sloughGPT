@@ -1571,7 +1571,26 @@ version, source, at}`; out-of-band config divergence recorded **once**
   `82b37db4` (gui move 500 — closed, fixed upstream post-rebase). Gates:
   460 Python (app-planner+flags+shared), 9 LiveFeedStream, 32 strui
   versions, tsc 0, eslint 0, ruff 0, feature-tags gate, board-write
-  benchmark no regression (integrity 100% every run).
+  benchmark no regression (integrity 100% every run). **Follow-ups landed
+  on the same lane:** (a) PR-check flake killed — "Frontend unit tests"
+  went red on 2 unhandled TypeErrors while all 817 files passed; root
+  cause = 5 test files mocked `@/lib/error-utils` with an
+  `(e, fallback: string) => …` signature lacking a default, so
+  `error-store`'s single-arg call returned `undefined` →
+  `.toLowerCase()` threw in a deferred
+  `apps/lib/request.ts` → `error-store` dynamic import (outside the
+  vitest root = shared module graph) firing post-test; fixed the 5 mock
+  signatures + made the funnel total (`safeMessage()` `?? ''` guard at
+  getSeverity/extractErrorTitle/addError — an error handler must never
+  throw). (b) **Board-integrity gate** (card 20261029 prevention half):
+  `scripts/check_board_chain.py` (schema-first + unique ids +
+  `verify_chain()==[]`, reusing app-planner's verifier — no logic
+  duplication), wired as an always-on CI job `Board integrity` (no paths
+  filter: corruption must redden EVERY PR) + `githooks/pre-push` GUARD 3
+  (checks the PUSHED blob when the range touches the board) + 15 tests
+  `tests/test_board_chain_gate.py` incl. a union-merge replay; proven to
+  FAIL exit-1 on the real corrupted blobs (backup + origin/main) and pass
+  on the repaired board.
 - **2026-10-24 · root session on `feat/error-funnel` (NOT on main; merge
   blocked).** Contents: browser error funnel (`error-store` fan-out →
   GlobalBanner / opt-in toast / `state_events` / backend batch, ~39 bare
