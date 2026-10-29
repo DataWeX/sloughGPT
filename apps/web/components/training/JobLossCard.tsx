@@ -1,7 +1,7 @@
 'use client'
 
 import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
-import dynamicNext from '@/vite/next-compat/dynamic'
+import dynamicNext from 'next/dynamic'
 import type { LossPoint, RewardPoint } from '@/components/training/LossChart'
 import type { TrainingJob } from '@/lib/training-controller'
 

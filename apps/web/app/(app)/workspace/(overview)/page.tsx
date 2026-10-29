@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useRouter } from '@/vite/next-compat/navigation'
+import { useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton, Button, StatusDot } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
