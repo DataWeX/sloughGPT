@@ -244,7 +244,7 @@ show_next_steps() {
     echo -e "   🌐 docs/API.md - API documentation"
     echo -e "   🚀 QUICKSTART.md - Quick start guide"
     echo -e "   🔧 docs/INSTALL.md - Installation details"
-    echo -e "   📋 docs/TODO.md - Roadmap / backlog"
+    echo -e "   📋 docs/ROADMAP.md - Roadmap / backlog"
     echo
     echo -e "${YELLOW}🌟 SloughGPT Enterprise AI Framework - Ready to Use!${NC}"
 }

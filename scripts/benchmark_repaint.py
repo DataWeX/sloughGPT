@@ -18,7 +18,7 @@ tens of bytes of escape.
 
 Screen correctness — that a prompt leaves no copy of itself behind — is not
 this benchmark's job. It is asserted exactly by
-`tests/test_interactive.py::TestRepaintLeavesNothingBehind`, which drives real
+`packages/core-py/tests/test_interactive.py::TestRepaintLeavesNothingBehind`, which drives real
 prompts through a terminal grid and requires the screen to come back empty.
 
     PYTHONPATH="$PWD/packages/core-py:$PWD" python scripts/benchmark_repaint.py
@@ -130,7 +130,7 @@ def main() -> int:
   frame rather than cached.
 
   Correctness of the result — one frame on screen, not N — is asserted in
-  tests/test_interactive.py::TestRepaintLeavesNothingBehind."""
+  packages/core-py/tests/test_interactive.py::TestRepaintLeavesNothingBehind."""
     )
     print("=" * 74)
     return 0

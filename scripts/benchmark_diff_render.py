@@ -18,7 +18,7 @@ so the fix can be shown not to have traded width for time.
 
 Screen geometry — one divider column for every row, and no row wider than
 the terminal showing it — is not this benchmark's job. It is asserted by
-`tests/test_interactive.py::TestDiffFitsTheTerminal`, which drives the real
+`packages/core-py/tests/test_interactive.py::TestDiffFitsTheTerminal`, which drives the real
 method through a terminal grid.
 
     PYTHONPATH="$PWD/packages/core-py:$PWD" python scripts/benchmark_diff_render.py
@@ -236,7 +236,7 @@ def main() -> int:
   that path is benchmark_repaint.py, which measures the _rewind the picker now
   pays on every key.
 
-  Geometry itself is asserted, not timed: tests/test_interactive.py::
+  Geometry itself is asserted, not timed: packages/core-py/tests/test_interactive.py::
   TestDiffFitsTheTerminal requires every row to fit the terminal and every
   divider to land in the same column."""
     )

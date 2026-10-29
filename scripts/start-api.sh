@@ -19,7 +19,7 @@ send_log() {
 }
 
 # Run the API server with log streaming
-/usr/bin/python3 apps/api/server/simple_server.py 2>&1 | while IFS= read -r line; do
+/usr/bin/python3 apps/api/server/main.py 2>&1 | while IFS= read -r line; do
     send_log "INFO" "$line"
     echo "$line"
 done

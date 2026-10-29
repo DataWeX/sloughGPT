@@ -140,4 +140,4 @@ scripts/                # Utility scripts
 
 - `AGENTS.md` — Project rules
 - `.kanban/board.jsonl` — Task board
-- `.opencode/skills/python-developer/SKILL.md` — Coding patterns
+- `.opencode/skills/systems-engineering/SKILL.md` — Coding patterns

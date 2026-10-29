@@ -16,8 +16,8 @@ Given a task, identify which area(s) it touches:
 
 | Area | Path pattern | Relevant docs |
 |------|-------------|---------------|
-| **Frontend** | `apps/web/` | `docs/UI_INTEGRATION_README.md`, `docs/API.md`, `docs/OPENWEBUI_INTEGRATION.md` |
-| **Backend API** | `apps/api/` | `docs/routers.md`, `docs/API.md`, `docs/DATA_STRUCTURE.md`, `docs/DEPLOYMENT.md` |
+| **Frontend** | `apps/web/` | `docs/UX_FLOWS.md`, `docs/API.md`, `docs/OPENWEBUI_INTEGRATION.md` |
+| **Backend API** | `apps/api/` | `docs/routers.md`, `docs/API.md`, `docs/STRUCTURE.md`, `docs/DEPLOYMENT.md` |
 | **Core Python** | `domain/` | `docs/DEVELOPER_GUIDE.md`, `docs/AI_SOFTWARE_ENGINEERING.md`, `docs/RAG_ARCHITECTURE.md`, `docs/RAG_PATTERNS.md`, `AGENTS.md` |
 | **Training** | `domain/training/_internal/` | `docs/DEVELOPER_GUIDE.md`, `AGENTS.md` (Training Architecture section) |
 | **Infrastructure** | `infra/`, `docker-compose*`, `Dockerfile*` | `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_CHECKLIST.md`, `docs/ENVIRONMENT.md` |

@@ -133,8 +133,25 @@ def test_no_fstring_logger_calls():
 
 
 def test_no_bare_except():
-    """Bare except: swallows SystemExit/KeyboardInterrupt — catch types."""
-    found = line_hits(BARE_EXCEPT, PY)
+    """Bare except: swallows SystemExit/KeyboardInterrupt — catch types.
+
+    AST-based on purpose: a line regex also matches prose *describing* the
+    anti-pattern (``atomic_write.py`` documents ``except: unlink``), and a
+    guard that fires on documentation gets ignored. Parsing finds only real
+    ``ExceptHandler`` nodes with no type, and it catches multi-line
+    ``except :`` forms a per-line scan misses.
+    """
+    found = []
+    for path in iter_files(PY):
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError as exc:
+            found.append(f"{rel}: syntax error: {exc}")
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler) and node.type is None:
+                found.append(f"{rel}:{node.lineno}: bare except: — catch a type")
     assert not found, "bare except clauses (catch explicit types):\n" + fmt(found)
 
 

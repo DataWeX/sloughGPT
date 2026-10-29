@@ -30,7 +30,7 @@ Before any UI work, read these files in the main repo:
 | File | What it covers |
 |------|----------------|
 | `docs/design/DESIGN_SYSTEM.md` | **LOCKED** — Full Noir Violet spec: colors, typography, spacing, components, forbidden patterns |
-| `apps/cli/opencode/skills/frontend-design/SKILL.md` | Design lead instructions: anti-patterns, visual hierarchy, motion, personality |
+| `.opencode/skills/frontend-design/SKILL.md` | Design lead instructions: anti-patterns, visual hierarchy, motion, personality |
 | `docs/UX_FLOWS.md` | User experience flows — plain-English feature specs, persona, navigation |
 | `apps/web/README.md` | Web app setup, tech stack, build commands, project structure |
 | `AGENTS.md` | Repo conventions, commands, frontend rules |

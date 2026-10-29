@@ -15,7 +15,8 @@ Tier 1 — codec (in-process, downcraft's own stream functions):
     ``scripts/benchmark_gateway_compression.py``)
 
 Tier 2 — end-to-end through ``downcraft.download.http.download_file``
-against a local Range server (``tests/helpers.RangeHandler`` — the same
+against a local Range server (``packages/downcraft/tests/helpers.py``'s
+``RangeHandler`` — the same
 SLZ4-protocol server the test-suite uses, reused rather than copied):
   * identity one-shot (baseline wall time / throughput)
   * SLZ4 one-shot (``application/x-lz4``, streamed decode to identity)

@@ -427,7 +427,7 @@ The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
 1. Create `domain/shell/_internal/addons<name>.py`
 2. Implement the `Addon` protocol from `base.py`
 3. Register via `kernel.install_addon(<name>)` in `runtime.py`
-4. Add test in `tests/test_shell_runtime.py`
+4. Add test in `packages/core-py/tests/test_shell_runtime.py`
 
 #### Dynamic Module Loading
 
