@@ -34,7 +34,7 @@ from schemas.chat import ChatRequest
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
-from domain.inference.engine import get_chat_engine
+from domain.inference.engine import EnginePhase, TurnResult, get_chat_engine
 
 logger = logging.getLogger(__name__)
 
@@ -110,24 +110,46 @@ class ChatRouter:
         async def generate():
             _start = time.time()
             _token_count = 0
+            _closing: TurnResult | None = None
+            _stop: threading.Event | None = None
+
+            def _factory(stop: threading.Event):
+                # Capture the registry's stop flag off the same transaction
+                # that registers it: the terminal frame reports cancelled vs
+                # finalized truthfully, and cancel stays chat's state.
+                nonlocal _stop
+                _stop = stop
+                return self._stream_tokens(request, stop)
+
             try:
                 async for item in manager.generate_stream_tracked(
                     session_id,
                     messages,
-                    lambda stop: self._stream_tokens(request, stop),
+                    _factory,
                     text_of=lambda resp: resp.text,
                 ):
                     if await http_request.is_disconnected():
                         return
-                    if isinstance(item, str):
+                    if isinstance(item, EnginePhase):
+                        # Engine stage boundary → lifecycle frame, phase and
+                        # status straight from the envelope contract.
+                        yield self._sse_event(
+                            "chat",
+                            item.phase,
+                            item.status,
+                            data=item.data,
+                            message=item.message,
+                        )
+                    elif isinstance(item, str):
                         if item:
                             _token_count += 1
-                            yield self._sse_token("chat", item)
+                            yield self._sse_token("chat", item, status="streaming")
                     else:
-                        # Final TurnResult: close the stream. The engine computes
-                        # usage/timing/finish on it, so surface them here — that
-                        # detail is the point of the port, and folding callers
-                        # read it off this frame.
+                        # Final TurnResult: detail frames now (they belong to
+                        # the finalizing wrap-up); the terminal rides after
+                        # the loop — the manager stores history when it
+                        # resumes, and finalized must be last on the wire.
+                        _closing = item
                         if item.consciousness:
                             yield self._sse_event(
                                 "chat",
@@ -144,17 +166,21 @@ class ChatRouter:
                                 data=item.memory,
                                 message="New fact remembered",
                             )
-                        yield self._sse_token(
-                            "chat",
-                            "",
-                            done=True,
-                            meta={
-                                "usage_tokens": item.usage,
-                                "model": item.model,
-                                "finish_reason": item.finish_reason,
-                                "elapsed_ms": item.elapsed_ms,
-                            },
-                        )
+                if _closing is not None:
+                    _cancelled = _stop is not None and _stop.is_set()
+                    yield self._sse_event(
+                        "chat",
+                        "CANCELLED" if _cancelled else "FINALIZED",
+                        "cancelled" if _cancelled else "finalized",
+                        data={},
+                        meta={
+                            "usage_tokens": _closing.usage,
+                            "model": _closing.model,
+                            "finish_reason": _closing.finish_reason,
+                            "elapsed_ms": _closing.elapsed_ms,
+                        },
+                        message="",
+                    )
                 _elapsed_ms = round((time.time() - _start) * 1000)
                 safe_audit_log(
                     "chat.stream",
@@ -211,7 +237,7 @@ class ChatRouter:
                         return
 
                     yield self._sse_event(
-                        "chat", "REGENERATE", "thinking", data={}, message="Regenerating..."
+                        "chat", "REGENERATE", "generating", data={}, message="Regenerating..."
                     )
 
                     async for token in manager.stream(
@@ -222,9 +248,14 @@ class ChatRouter:
                             return
                         if token:
                             _token_count += 1
-                            yield self._sse_token("chat", token)
-                    yield self._sse_token(
-                        "chat", "", done=True, meta={"usage_tokens": manager.last_usage()}
+                            yield self._sse_token("chat", token, status="streaming")
+                    yield self._sse_event(
+                        "chat",
+                        "FINALIZED",
+                        "finalized",
+                        data={},
+                        meta={"usage_tokens": manager.last_usage()},
+                        message="",
                     )
                     _elapsed_ms = round((time.time() - _start) * 1000)
                     safe_audit_log(

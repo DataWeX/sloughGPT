@@ -131,7 +131,7 @@ class TestChatStreaming:
         )
         assert len(tokens) > 0
 
-    def test_chat_stream_has_complete_event(self, client, model_loaded):
+    def test_chat_stream_has_finalized_event(self, client, model_loaded):
         resp = client.post(
             "/chat",
             json={
@@ -140,8 +140,9 @@ class TestChatStreaming:
             },
         )
         events = _sse_events(resp)
-        complete = [e for e in events if e.get("status") == "complete"]
-        assert len(complete) >= 1
+        finalized = [e for e in events if e.get("status") == "finalized"]
+        assert len(finalized) >= 1
+        assert events[-1].get("status") == "finalized", "finalized must be the last frame"
 
     def test_chat_stream_has_token_in_standard_envelope(self, client, model_loaded):
         resp = client.post(
@@ -381,12 +382,13 @@ class TestRegenerate:
         )
         assert len(tokens) > 0
 
-    def test_regen_has_complete_event(self, client, model_loaded):
-        """Regenerate SSE stream ends with complete status."""
+    def test_regen_has_finalized_event(self, client, model_loaded):
+        """Regenerate SSE stream ends with a finalized status."""
         resp = client.post(f"/chat/{self.REGEN_SESSION}/regenerate")
         events = _sse_events(resp)
-        complete = [e for e in events if e.get("status") == "complete"]
-        assert len(complete) >= 1
+        finalized = [e for e in events if e.get("status") == "finalized"]
+        assert len(finalized) >= 1
+        assert events[-1].get("status") == "finalized", "finalized must be the last frame"
 
     def test_regen_missing_session_returns_error(self, client, model_loaded):
         """Regenerate for a session with no context returns error event."""
@@ -418,7 +420,7 @@ class TestFullCycle:
         )
         assert resp.status_code == 200
         events = _sse_events(resp)
-        assert any(e.get("status") == "complete" for e in events)
+        assert any(e.get("status") == "finalized" for e in events)
 
     def test_cycle_save_context(self, client, model_loaded):
         """Step 2: Save the conversation context."""
@@ -444,7 +446,7 @@ class TestFullCycle:
             e.get("data", {}).get("token", "") for e in events if e.get("data", {}).get("token")
         )
         assert len(tokens) > 0
-        assert any(e.get("status") == "complete" for e in events)
+        assert any(e.get("status") == "finalized" for e in events)
 
     def test_cycle_feedback(self, client, model_loaded):
         """Step 4: Record feedback on the regenerated response."""

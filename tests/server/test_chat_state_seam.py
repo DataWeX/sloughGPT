@@ -350,11 +350,107 @@ def test_post_chat_renders_turn_result_sideband_before_close(client, manager):
     assert '"reflection": "ok"' in body, "payload data rides the rendered frame"
     assert '"phase": "MEMORY"' in body, "the MEMORY frame must reach the wire"
     assert '"stored": true' in body, "payload data rides the rendered frame"
-    closing = body.index('"phase": "STREAMING", "status": "complete"')
+    closing = body.index('"phase": "FINALIZED", "status": "finalized"')
     assert body.index('"phase": "CONSCIOUSNESS"') < closing, (
-        "stage frames must precede the closing frame"
+        "stage frames must precede the terminal frame"
     )
-    assert body.index('"phase": "MEMORY"') < closing, "stage frames must precede the closing frame"
+    assert body.index('"phase": "MEMORY"') < closing, "stage frames must precede the terminal frame"
+    assert body.rindex('"phase": "') == closing, (
+        "FINALIZED is the terminal: no chat frame may follow it"
+    )
+
+
+def test_post_chat_renders_engine_phase_lifecycle(client, manager):
+    """Engine lifecycle items must frame as SSE PROCESSING stages on the wire.
+
+    ``EnginePhase`` is the engine's progress signal (preparation → generation
+    → wrap-up); the chat edge renders each as a CHAT_SEQUENCE frame at the
+    port, tokens between them stream under status=streaming, and the stream
+    closes with FINALIZED/finalized — last on the wire, after history is
+    stored.
+    """
+    from domain.inference.engine import EnginePhase
+
+    turn = TurnResult(text="answer", session_id="s1")
+    fake_engine = _engine_yielding(
+        EnginePhase("PROCESSING", "working", message="Preparing"),
+        EnginePhase("PROCESSING", "generating", message="Generating"),
+        "answer",
+        EnginePhase("PROCESSING", "finalizing", message="Finalizing"),
+        turn,
+    )
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+        patch.object(ChatManager, "_store"),
+        patch.object(ChatManager, "_track", return_value=("op-7", None)),
+        patch.object(ChatManager, "_untrack"),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": "s1", "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert resp.status_code == 200
+    body = resp.text
+    working = body.index('"phase": "PROCESSING", "status": "working"')
+    generating = body.index('"phase": "PROCESSING", "status": "generating"')
+    streaming = body.index('"phase": "STREAMING", "status": "streaming"')
+    finalizing = body.index('"phase": "PROCESSING", "status": "finalizing"')
+    closing = body.index('"phase": "FINALIZED", "status": "finalized"')
+    assert working < generating < streaming < finalizing < closing, (
+        "stage frames must lead the wire in engine order: working → generating → "
+        "tokens → finalizing → finalized terminal"
+    )
+    assert '"token": "answer"' in body
+    assert body.rindex('"phase": "') == closing
+
+
+def test_post_chat_cancel_emits_cancelled_terminal_and_still_stores(client, manager):
+    """A cancel mid-turn must close on CANCELLED — and history still persists.
+
+    The stop flag is captured off the same transaction that registers it (the
+    ``_factory`` seam), so the terminal can tell cancelled from finalized
+    truthfully. Post-gen wrap-up runs to completion either way, so the manager
+    still stores the reply: cancel stops the wire, not the state machine.
+    """
+    import threading
+
+    from domain.inference.engine import EnginePhase
+
+    stop = threading.Event()
+    stop.set()  # cancelled before the terminal renders
+    turn = TurnResult(text="half", session_id="s1")
+    fake_engine = _engine_yielding(
+        EnginePhase("PROCESSING", "working"),
+        "half",
+        turn,
+    )
+    stored: list[str] = []
+
+    with (
+        patch("domain.chat.get_chat_manager", return_value=manager),
+        patch("apps.api.server.routers.chat.get_chat_engine", return_value=fake_engine),
+        patch.object(
+            ChatManager,
+            "_store",
+            side_effect=lambda sid, msgs, reply: stored.append(reply),
+        ),
+        patch.object(ChatManager, "_track", return_value=("op-8", stop)),
+        patch.object(ChatManager, "_untrack"),
+    ):
+        resp = client.post(
+            "/chat",
+            json={"session_id": "s1", "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert resp.status_code == 200
+    body = resp.text
+    cancelled = body.index('"phase": "CANCELLED", "status": "cancelled"')
+    assert '"phase": "FINALIZED"' not in body, "a cancelled turn must not claim finalized"
+    assert body.rindex('"phase": "') == cancelled, "CANCELLED is the terminal frame"
+    assert stored == ["half"], "cancel stops the wire, not history persistence"
 
 
 def test_chat_router_does_not_import_inference_router():

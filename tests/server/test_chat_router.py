@@ -146,7 +146,7 @@ class TestRegenerateChat:
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
     @patch("domain.models._internal.provider.get_provider")
     @patch("domain.models.get_provider")
-    def test_regenerate_emits_thinking_event(self, mock_facade, mock_internal, mock_get, client):
+    def test_regenerate_emits_generating_event(self, mock_facade, mock_internal, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_prov = MagicMock()
 
@@ -158,8 +158,9 @@ class TestRegenerateChat:
         mock_internal.return_value = mock_prov
         resp = client.post("/chat/sess-1/regenerate")
         assert resp.status_code == 200
-        assert "thinking" in resp.text
+        assert '"phase": "REGENERATE", "status": "generating"' in resp.text
         assert "Token" in resp.text
+        assert '"phase": "FINALIZED", "status": "finalized"' in resp.text
 
     def test_regenerate_get_405(self, client):
         resp = client.get("/chat/sess-1/regenerate")

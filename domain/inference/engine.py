@@ -20,11 +20,11 @@ FastAPI — the wire contracts live in ``schemas`` and the transport (SSE
 framing) lives at the edge; both translate at the boundary, never into the core.
 
 The contract is stream-only. ``stream`` is *the* engine method — it yields
-raw tokens, then a final ``TurnResult`` carrying the details. There is no
-separate non-streaming backend and no ``stream: bool`` mode: streaming is not a
-choice, it is how the model emits tokens. A non-streaming surface is simply a
-fold of this stream performed at the edge (collect the tokens, return the last
-``TurnResult``).
+lifecycle signals (``EnginePhase``), then raw tokens, then a final
+``TurnResult`` carrying the details. There is no separate non-streaming
+backend and no ``stream: bool`` mode: streaming is not a choice, it is how the
+model emits tokens. A non-streaming surface is simply a fold of this stream
+performed at the edge (collect the tokens, return the last ``TurnResult``).
 """
 
 from __future__ import annotations
@@ -90,23 +90,50 @@ class TurnResult:
     """Auto-memory outcome (stored/fact/facts) to surface as MEMORY, if any."""
 
 
+@dataclass(slots=True)
+class EnginePhase:
+    """A lifecycle signal from inside a turn — neither a token nor the result.
+
+    The engine yields these at stage boundaries (preparation, generation,
+    wrap-up) so the chat edge can frame progress without reaching into the
+    engine's internals. ``phase``/``status`` are drawn straight from the SSE
+    envelope contract (``domain.api._internal.sse_envelope`` — CHAT_SEQUENCE
+    and CHAT_STATUSES): PROCESSING/working, PROCESSING/generating,
+    PROCESSING/finalizing today. The chat router renders each as an SSE
+    frame; ``fold`` skips them (it collects the final ``TurnResult`` only).
+
+    Contract: lifecycle items may appear anywhere before the final
+    ``TurnResult``, which is always the stream's last non-token item — the
+    tracked wrapper persists history off that assumption (the last non-token
+    item is the result ``text_of`` projects).
+    """
+
+    phase: str
+    status: str
+    message: str = ""
+    data: dict = field(default_factory=dict)
+
+
 @runtime_checkable
 class ChatEngine(Protocol):
     """The generate engine's public seam.
 
-    ``stream`` is the single engine method: it yields raw tokens, then a
-    final ``TurnResult``. Non-streaming surfaces fold this stream at the edge.
+    ``stream`` is the single engine method: it yields lifecycle signals
+    (``EnginePhase``), then raw tokens, then a final ``TurnResult``.
+    Non-streaming surfaces fold this stream at the edge.
     """
 
-    def stream(self, req: TurnRequest) -> AsyncIterator[TurnResult | str]: ...
+    def stream(self, req: TurnRequest) -> AsyncIterator[TurnResult | str | EnginePhase]: ...
 
 
-def fold(stream: AsyncIterator[TurnResult | str]) -> Awaitable[TurnResult]:
+def fold(stream: AsyncIterator[TurnResult | str | EnginePhase]) -> Awaitable[TurnResult]:
     """Collect a token stream into its final ``TurnResult``.
 
     This is *the* non-streaming path — not a second backend, just a fold of
     ``stream``. Edges that need a complete response (e.g. the mobile BFF's
     offline sync) call this; nothing here runs the model independently.
+    ``EnginePhase`` lifecycle items pass through unexamined — only the final
+    ``TurnResult`` is collected.
     """
 
     async def _collect() -> TurnResult:

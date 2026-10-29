@@ -15,10 +15,30 @@ Every SSE endpoint emits events with this shape:
 Phases (TrainingSequence):
     IDLE → GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE | FAILED | EARLY_STOP
 
-Phases (Chat / token streams):
-    IDLE → STREAMING → COMPLETE | ERROR
+Phases (Chat sequence — CHAT_SEQUENCE):
+    IDLE → PROCESSING → STREAMING → FINALIZED | ERROR | CANCELLED
 
-Status:
+    PROCESSING is the core: work running in the inference event loop (engine
+    logic — context assembly, tool calls, the provider request) and its
+    sub-events. STREAMING is token delivery only — tokens are not processing.
+    FINALIZED is terminal and is emitted LAST, after the post-gen work
+    (memory persist, session store, reflection) has finished. PROCESSING may
+    reappear as per-frame labels after STREAMING (finalizing); the sequence is
+    a vocabulary of per-frame labels, not a strictly linear wire order.
+    CANCELLED and ERROR are terminals reachable from any non-terminal — cancel
+    works from any phase.
+
+Chat statuses (CHAT_STATUSES):
+    working    — engine logic tasks in flight (context, tool calls, request)
+    generating — reasoning / decode — this is what "thinking" used to be called
+    streaming  — a token frame (phase=STREAMING, data={"token": ...})
+    finalizing — post-gen wrap-up (memory persist, session save, reflection)
+    finalized  — terminal: stream done, nothing follows
+    cancelled  — terminal: stopped by the turn's cancel flag
+    error      — terminal: something went wrong
+
+Status (grandfathered streams — auto-train, generate, ...; CHAT_STATUSES
+excludes these except where noted):
     working  — intermediate event, keep consuming
     success  — phase/stage succeeded (maps to previous 'done=True')
     error    — something went wrong
@@ -26,7 +46,10 @@ Status:
 
 Token streaming shortcut:
     When phase=STREAMING and data={}, the client appends data.token to the output.
-    An event with status=complete signals end of stream.
+    On the chat sequence every token frame carries status=streaming (never
+    working); the chat terminal is a separate FINALIZED/finalized event.
+    On grandfathered streams an event with status=complete still signals end
+    of stream.
 
 Usage in routers:
     from domain.api._internal.sse_envelope import sse_event, SSEEnvelope
@@ -40,11 +63,14 @@ Usage in routers:
         message="loss=1.2340",
     )
 
-    yield sse_event(stream="chat", phase="STREAMING", status="working",
+    yield sse_event(stream="chat", phase="PROCESSING", status="generating",
+                    data={}, message="Generating")
+
+    yield sse_event(stream="chat", phase="STREAMING", status="streaming",
                     data={"token": "Hello"}, message="")
 
-    yield sse_event(stream="chat", phase="STREAMING", status="complete",
-                    data={}, meta={"elapsed_ms": 890}, message="done")
+    yield sse_event(stream="chat", phase="FINALIZED", status="finalized",
+                    data={}, meta={"elapsed_ms": 890}, message="")
 """
 
 from __future__ import annotations
@@ -67,9 +93,21 @@ TRAINING_SEQUENCE = [
 
 CHAT_SEQUENCE = [
     "IDLE",
+    "PROCESSING",
     "STREAMING",
-    "COMPLETE",
+    "FINALIZED",
     "ERROR",
+    "CANCELLED",
+]
+
+CHAT_STATUSES = [
+    "working",
+    "generating",
+    "streaming",
+    "finalizing",
+    "finalized",
+    "cancelled",
+    "error",
 ]
 
 
@@ -85,6 +123,9 @@ class StreamPhase(Enum):
     EARLY_STOP = "EARLY_STOP"
     STREAMING = "STREAMING"
     ERROR = "ERROR"
+    PROCESSING = "PROCESSING"
+    FINALIZED = "FINALIZED"
+    CANCELLED = "CANCELLED"
 
 
 class StreamStatus(Enum):
@@ -92,6 +133,11 @@ class StreamStatus(Enum):
     SUCCESS = "success"
     ERROR = "error"
     COMPLETE = "complete"
+    GENERATING = "generating"
+    STREAMING = "streaming"
+    FINALIZING = "finalizing"
+    FINALIZED = "finalized"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -133,8 +179,10 @@ def sse_event(
 
     Args:
         stream:   "auto-train" | "chat" | "regenerate" | "eval" | ...
-        phase:    current phase name
-        status:   "working" | "success" | "error" | "complete"
+        phase:    current phase name (chat sequence: see CHAT_SEQUENCE)
+        status:   frame status — "working" | "success" | "error" | "complete"
+                  for grandfathered streams, or a CHAT_STATUSES value on the
+                  chat sequence
         data:     structured payload (token, loss, step, etc.)
         meta:     diagnostic info (step, epoch, elapsed_ms, etc.)
         message:  human-readable one-liner
@@ -223,26 +271,30 @@ def sse_token(
     done: bool = False,
     meta: dict[str, Any] | None = None,
     elapsed_ms: float | None = None,
+    status: str | None = None,
 ) -> str:
     """
-    Token streaming shortcut. phase=STREAMING, status=complete when done.
+    Token streaming shortcut. phase=STREAMING.
 
     Args:
-        stream:    "chat" | "regenerate"
-        token:     the token text (empty string signals done)
-        done:      True if this is the final event
-        meta:      optional diagnostics
+        stream:     "chat" | "regenerate" | ...
+        token:      the token text (empty string signals done)
+        done:       True if this is the final event (grandfathered streams)
+        meta:       optional diagnostics
         elapsed_ms: total elapsed time in ms (included on done event)
+        status:     explicit frame status. The chat sequence passes
+                    "streaming" so the legacy default never labels a chat
+                    frame; omitted, the grandfathered default applies
+                    (working while streaming, complete when done). Chat's
+                    terminal is a separate FINALIZED/finalized event, not a
+                    done token.
     """
     phase = "STREAMING"
-    if done:
-        status = "complete"
-        m = meta or {}
-        if elapsed_ms is not None:
-            m["elapsed_ms"] = round(elapsed_ms, 1)
-    else:
-        status = "working"
-        m = meta or {}
+    if status is None:
+        status = "complete" if done else "working"
+    m = meta or {}
+    if done and elapsed_ms is not None:
+        m["elapsed_ms"] = round(elapsed_ms, 1)
 
     return sse_event(
         stream=stream,

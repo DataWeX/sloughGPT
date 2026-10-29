@@ -264,6 +264,7 @@ from schemas.chat import (  # noqa: E402
 )
 
 from domain.inference.engine import (  # noqa: E402
+    EnginePhase,
     TurnRequest,
     TurnResult,
     fold,
@@ -1852,9 +1853,14 @@ class InferenceRouter:
         (POST /chat, the web client).
 
         Yields:
-            ``str`` raw tokens as they are generated, then a final
-            ``TurnResult`` carrying the details (model, usage, timing,
-            finish_reason, and the full token list).
+            ``EnginePhase`` lifecycle signals at the stage boundaries
+            (PROCESSING/working on entry, PROCESSING/generating at the model
+            handoff, PROCESSING/finalizing once tokens stop), then ``str``
+            raw tokens as they are generated, then a final ``TurnResult``
+            carrying the details (model, usage, timing, finish_reason, and
+            the full token list). The ``TurnResult`` is always the last
+            non-token item — the tracked wrapper persists history off that
+            assumption.
         """
         _chat_t0 = time.monotonic()
         _chat_start_dt = datetime.datetime.now()
@@ -1894,6 +1900,12 @@ class InferenceRouter:
                 break
         if not user_msg:
             raise_error("No user message", "E_BAD_REQUEST", status_code=400)
+
+        # Lifecycle: gates and validation above stay pre-yield so a not-ready
+        # model still answers with a real HTTP status (the client's retry
+        # keys off it); from here the turn is in flight and stage frames are
+        # in-stream events.
+        yield EnginePhase("PROCESSING", "working", message="Preparing")
 
         system_prompt = req.system_prompt or ""
 
@@ -2012,6 +2024,10 @@ class InferenceRouter:
         model = _chat_state.model_type or req.model
 
         collected: list[str] = []
+        # Everything above was engine logic (context, RAG, reflection, the
+        # request build); handing to the provider starts decode — pre-first-
+        # token reasoning runs under this frame until a token arrives.
+        yield EnginePhase("PROCESSING", "generating", message="Generating")
         try:
             async for token in provider.chat_stream(
                 messages,
@@ -2030,6 +2046,10 @@ class InferenceRouter:
         except Exception as e:
             logger.error("chat stream failed: %s", e, exc_info=True)
             raise
+
+        # Post-gen wrap-up begins: metrics, capture, memory persist, the
+        # sideband payloads built below — all under the finalizing frame.
+        yield EnginePhase("PROCESSING", "finalizing", message="Finalizing")
 
         text = "".join(collected)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)

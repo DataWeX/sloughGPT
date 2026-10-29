@@ -5,6 +5,8 @@ import json
 import numpy as np
 
 from domain.api._internal.sse_envelope import (
+    CHAT_SEQUENCE,
+    CHAT_STATUSES,
     SSEEnvelope,
     StreamPhase,
     StreamStatus,
@@ -26,16 +28,66 @@ class TestStreamPhase:
         assert StreamPhase.COMPLETE.value == "COMPLETE"
         assert StreamPhase.FAILED.value == "FAILED"
 
+    def test_chat_sequence_phases(self):
+        assert StreamPhase.PROCESSING.value == "PROCESSING"
+        assert StreamPhase.FINALIZED.value == "FINALIZED"
+        assert StreamPhase.CANCELLED.value == "CANCELLED"
+
 
 class TestStreamStatus:
     def test_all_members(self):
-        assert len(StreamStatus) == 4
+        assert len(StreamStatus) == 9
 
     def test_values(self):
         assert StreamStatus.WORKING.value == "working"
         assert StreamStatus.SUCCESS.value == "success"
         assert StreamStatus.ERROR.value == "error"
         assert StreamStatus.COMPLETE.value == "complete"
+
+    def test_chat_sequence_statuses(self):
+        assert StreamStatus.GENERATING.value == "generating"
+        assert StreamStatus.STREAMING.value == "streaming"
+        assert StreamStatus.FINALIZING.value == "finalizing"
+        assert StreamStatus.FINALIZED.value == "finalized"
+        assert StreamStatus.CANCELLED.value == "cancelled"
+
+
+class TestChatSequenceContract:
+    """The chat wire contract: phase order and the closed status vocabulary."""
+
+    def test_sequence_order(self):
+        assert CHAT_SEQUENCE == [
+            "IDLE",
+            "PROCESSING",
+            "STREAMING",
+            "FINALIZED",
+            "ERROR",
+            "CANCELLED",
+        ]
+
+    def test_statuses_closed_set(self):
+        assert set(CHAT_STATUSES) == {
+            "working",
+            "generating",
+            "streaming",
+            "finalizing",
+            "finalized",
+            "cancelled",
+            "error",
+        }
+
+    def test_status_enum_covers_chat_statuses(self):
+        for s in CHAT_STATUSES:
+            assert s in StreamStatus._value2member_map_, s
+
+    def test_sequence_phases_in_enum(self):
+        for p in CHAT_SEQUENCE:
+            assert p in StreamPhase._value2member_map_, p
+
+    def test_grandfathered_statuses_excluded(self):
+        """Legacy stream labels (success/complete) are not chat statuses."""
+        assert "success" not in CHAT_STATUSES
+        assert "complete" not in CHAT_STATUSES
 
 
 class TestSSEEnvelope:
@@ -178,6 +230,23 @@ class TestSSEToken:
         result = sse_token("chat", "world", meta={"session": "abc"})
         parsed = json.loads(result.removeprefix("data: ").strip())
         assert parsed["meta"]["session"] == "abc"
+
+    def test_token_explicit_status(self):
+        result = sse_token("chat", "tok", status="streaming")
+        parsed = json.loads(result.removeprefix("data: ").strip())
+        assert parsed["status"] == "streaming"
+        assert parsed["phase"] == "STREAMING"
+
+    def test_token_done_with_explicit_status_wins(self):
+        """An explicit status overrides the legacy done default — chat's
+        terminal is a separate FINALIZED event, not a labeled done token."""
+        result = sse_token("chat", "", done=True, status="streaming")
+        parsed = json.loads(result.removeprefix("data: ").strip())
+        assert parsed["status"] == "streaming"
+
+    def test_token_legacy_defaults_when_status_omitted(self):
+        assert json.loads(sse_token("chat", "t").removeprefix("data: ").strip())["status"] == "working"
+        assert json.loads(sse_token("chat", "", done=True).removeprefix("data: ").strip())["status"] == "complete"
 
 
 class TestJsonSafe:

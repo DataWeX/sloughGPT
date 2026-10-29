@@ -60,10 +60,12 @@ except ImportError:
         done: bool = False,
         meta: dict[str, Any] | None = None,
         elapsed_ms: float | None = None,
+        status: str | None = None,
     ) -> str:
-        """Fallback token streaming shortcut."""
+        """Fallback token streaming shortcut (mirrors the envelope's signature)."""
         phase = "STREAMING"
-        status = "complete" if done else "working"
+        if status is None:
+            status = "complete" if done else "working"
         m = dict(meta) if meta else {}
         if done and elapsed_ms is not None:
             m["elapsed_ms"] = round(elapsed_ms, 1)
