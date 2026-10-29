@@ -102,8 +102,13 @@ def render(text: str, *, sample_rate: int = SAMPLE_RATE, speed: int = 150) -> np
         raise ValueError("cannot render empty text")
     with tempfile.TemporaryDirectory(prefix="espeak_pairs_") as td:
         wav_path = os.path.join(td, "utterance.wav")
+        # text via -f file, never argv: leading-dash/quote corpus lines are
+        # parsed as espeak options when passed positionally
+        text_path = os.path.join(td, "input.txt")
+        with open(text_path, "w", encoding="utf-8") as fh:
+            fh.write(text)
         proc = subprocess.run(
-            [binary, "-w", wav_path, "-s", str(speed), text],
+            [binary, "-w", wav_path, "-s", str(speed), "-f", text_path],
             capture_output=True,
             check=False,
         )
@@ -143,6 +148,37 @@ def load_corpus(path) -> list[str]:
     return lines
 
 
+def load_response_logs(log_dir) -> list[str]:
+    """Project chat response logs (responses_*.jsonl) into corpus texts.
+
+    Reads ResponseTracker's daily files: both assistant_response and
+    user_message become one flattened line each, deduped in first-seen order.
+    """
+    import json
+    from pathlib import Path
+
+    directory = Path(log_dir)
+    if not directory.is_dir():
+        return []
+    texts: list[str] = []
+    seen: set[str] = set()
+    for path in sorted(directory.glob("responses_*.jsonl")):
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                record = json.loads(raw)
+            except ValueError:
+                continue
+            for key in ("assistant_response", "user_message"):
+                text = " ".join(str(record.get(key) or "").split())
+                if text and text not in seen:
+                    seen.add(text)
+                    texts.append(text)
+    return texts
+
+
 __all__ = [
     "DEFAULT_CORPUS",
     "DEFAULT_HOLDOUT",
@@ -151,5 +187,6 @@ __all__ = [
     "espeak_available",
     "espeak_bin",
     "load_corpus",
+    "load_response_logs",
     "render",
 ]
