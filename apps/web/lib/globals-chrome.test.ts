@@ -155,6 +155,20 @@ describe('banner tone surfaces (card 87345605)', () => {
     }
   })
 
+  it('has an entrance animation that reduced-motion users opt out of', () => {
+    const block = blockWith('.sl-app-banner')
+    expect(block).toMatch(/animation:\s*sl-banner-in/)
+    // The animated properties live in the keyframes, never on the surface
+    // block — the surface stays a pure token contract.
+    const keyframes = css.slice(css.indexOf('@keyframes sl-banner-in'))
+    expect(keyframes.slice(0, keyframes.indexOf('}'))).toMatch(/transform:/)
+    // Reduced motion: same banner, no movement.
+    const rmStart = css.indexOf('@media (prefers-reduced-motion: reduce) {\n  .sl-app-banner {')
+    expect(rmStart, 'reduced-motion opt-out for the banner').toBeGreaterThanOrEqual(0)
+    const rmBlock = css.slice(rmStart, css.indexOf('}', rmStart))
+    expect(rmBlock).toMatch(/animation:\s*none/)
+  })
+
   it('banner ink passes WCAG 4.5:1 in both modes for every tone', () => {
     for (const [mode, selector] of [
       ['light', ':root'],
