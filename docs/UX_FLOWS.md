@@ -29,6 +29,9 @@ exact heading from this document as its `spec`, and
 a flow loses its anchor. Run them with
 `.venv/bin/python -m domain.journeys` (`--list` shows ids + spec links;
 `--flow <id>` for one; the live sweep needs a running stack).
+**Exception:** flow 14 is doc-only for now — the plugins journey has no
+executable sweep yet. The gate checks registry→doc anchors, so an
+unregistered heading is allowed; register it when the sweep exists.
 
 ---
 
@@ -378,6 +381,35 @@ a flow loses its anchor. Run them with
 - Hash chains, state signatures, or validation hashes
 - Raw API errors — a rejected move gets a plain-language reason
 - WIP limit numbers without context ("column full" beats "limit: 3")
+
+---
+
+### 14. Add an Ability (Plugins)
+
+**What the user sees:**
+
+- A "Plugins" list showing each installed ability with a plain-language
+  name, one sentence about what it adds, and one switch
+- Switching one on makes its panel appear right there in the list;
+  switching it off makes it disappear — nothing else changes
+- A "Look for new plugins" button for when they've added a plugin file
+
+**User flow:**
+
+1. Open Plugins → see "Site checks" with the switch off
+2. Read one line: "Read-only checks across the app — looks at how it is
+   doing and reports anything wrong"
+3. Flip the switch on → the panel appears below with a "Run a check" button
+4. Tap "Run a check" → results appear in the same panel, plain language
+5. Flip the switch off → panel gone; the app works exactly as before
+
+**What they should NOT see:**
+
+- File names, Python, "plugin class", module paths, or load-error stack traces
+- Lifecycle jargon ("setup", "teardown", "hooks", "registration")
+- Anything broken when a plugin is off — off means gone, not error
+- A plugin taking over the home screen or sidebar — abilities live in their
+  panel
 
 ---
 

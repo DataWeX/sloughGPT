@@ -3,11 +3,41 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
 from domain.shared import find_repo_root
+
+logger = logging.getLogger("slo.infrastructure.model_resolver")
+
+# Payload files that prove a cache entry holds real weights. `blobs/`
+# (non-empty) is checked separately — HF stores downloaded weight blobs there.
+_WEIGHT_PATTERNS = ("*.safetensors", "*.slnc", "*.soul")
+
+
+def _dir_has_weights(model_dir: Path) -> bool:
+    """True when *model_dir* holds real model payload, not a refs-only stub.
+
+    HF cache entries can be empty refs-only dirs (refs/main, zero blobs)
+    that nonetheless `exists()` — such a stub must never shadow an intact
+    candidate later in the search order (card c158a0e3).
+    """
+    if not model_dir.is_dir():
+        return False
+    blobs = model_dir / "blobs"
+    if blobs.is_dir() and any(blobs.iterdir()):
+        return True
+    scopes = [model_dir]
+    snapshots = model_dir / "snapshots"
+    if snapshots.is_dir():
+        scopes.extend(p for p in snapshots.iterdir() if p.is_dir())
+    for scope in scopes:
+        for pattern in _WEIGHT_PATTERNS:
+            if any(scope.glob(pattern)):
+                return True
+    return False
 
 
 def get_model_dir(model_id: str) -> Path:
@@ -15,6 +45,9 @@ def get_model_dir(model_id: str) -> Path:
 
     Searches the standard HF cache first, then the project-local
     cache (models/hf-cache/hub/) mirroring MorphTokenizer.from_pretrained.
+    A candidate that actually contains weights wins over an empty
+    refs-only stub anywhere earlier in the order; the first existing
+    candidate remains the fallback when no candidate has weights.
     """
     cache_id = model_id.replace("/", "--")
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
@@ -27,8 +60,29 @@ def get_model_dir(model_id: str) -> Path:
         / f"models--{cache_id}",
         Path("models/hf-cache/hub") / f"models--{cache_id}",
     ]
+
+    for candidate in candidates:
+        if candidate.exists() and _dir_has_weights(candidate):
+            stubs = [
+                c
+                for c in candidates[: candidates.index(candidate)]
+                if c.exists() and not _dir_has_weights(c)
+            ]
+            if stubs:
+                logger.info(
+                    "get_model_dir(%s): chose %s over weightless earlier candidate(s) %s",
+                    model_id,
+                    candidate,
+                    stubs,
+                )
+            return candidate
     for candidate in candidates:
         if candidate.exists():
+            logger.warning(
+                "get_model_dir(%s): no candidate holds weights; using %s anyway",
+                model_id,
+                candidate,
+            )
             return candidate
     return candidates[0]
 

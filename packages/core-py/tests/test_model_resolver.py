@@ -58,6 +58,121 @@ class TestGetModelDir:
         assert result.name == "models--meta-llama--Llama-2-7b"
 
 
+# ── weights preference (card c158a0e3) ────────────────────────────────────
+#
+# get_model_dir() returned the global HF cache dir whenever it existed —
+# even when it was a refs-only stub (refs/main, zero blobs) shadowing the
+# intact weights in the project-local cache. The candidate that actually
+# holds weights must win wherever it sits in the search order; a stub-only
+# result remains the fallback when no candidate has weights.
+
+
+class TestGetModelDirWeightsPreference:
+    @staticmethod
+    def _make_stub(hf_home):
+        """An HF-cache entry with refs/ only — no blobs, no snapshots."""
+        stub = hf_home / "hub" / "models--gpt2"
+        (stub / "refs").mkdir(parents=True)
+        (stub / "refs" / "main").write_text("default")
+        return stub
+
+    @staticmethod
+    def _make_local_with_safetensors(tmp_path):
+        local = tmp_path / "models" / "hf-cache" / "hub" / "models--gpt2"
+        snap = local / "snapshots" / "abc123"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_text("fake-weights")
+        return local
+
+    def test_safetensors_beats_earlier_refs_only_stub(self, tmp_path, monkeypatch):
+        hf_home = tmp_path / "hf"
+        self._make_stub(hf_home)
+        local = self._make_local_with_safetensors(tmp_path)
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        assert get_model_dir("gpt2") == local
+
+    def test_slnc_counts_as_weights(self, tmp_path, monkeypatch):
+        hf_home = tmp_path / "hf"
+        self._make_stub(hf_home)
+        local = tmp_path / "models" / "hf-cache" / "hub" / "models--gpt2"
+        local.mkdir(parents=True)
+        (local / "model.slnc").write_text("fake")
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        assert get_model_dir("gpt2") == local
+
+    def test_soul_counts_as_weights(self, tmp_path, monkeypatch):
+        hf_home = tmp_path / "hf"
+        self._make_stub(hf_home)
+        local = tmp_path / "models" / "hf-cache" / "hub" / "models--gpt2"
+        local.mkdir(parents=True)
+        (local / "model.soul").write_text("fake")
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        assert get_model_dir("gpt2") == local
+
+    def test_nonempty_blobs_counts_as_weights(self, tmp_path, monkeypatch):
+        hf_home = tmp_path / "hf"
+        weighted = hf_home / "hub" / "models--gpt2"
+        blobs = weighted / "blobs"
+        blobs.mkdir(parents=True)
+        (blobs / "deadbeef").write_text("weight-bytes")
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        assert get_model_dir("gpt2") == weighted
+
+    def test_earlier_weighted_candidate_still_wins_over_later_one(self, tmp_path, monkeypatch):
+        hf_home = tmp_path / "hf"
+        weighted = hf_home / "hub" / "models--gpt2"
+        snap = weighted / "snapshots" / "abc123"
+        snap.mkdir(parents=True)
+        (snap / "model.safetensors").write_text("fake-weights")
+        self._make_local_with_safetensors(tmp_path)
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        assert get_model_dir("gpt2") == weighted
+
+    def test_empty_blobs_dir_does_not_count_as_weights(self, tmp_path, monkeypatch):
+        hf_home = tmp_path / "hf"
+        stub = hf_home / "hub" / "models--gpt2"
+        (stub / "blobs").mkdir(parents=True)
+        (stub / "refs").mkdir()
+        (stub / "refs" / "main").write_text("default")
+        local = self._make_local_with_safetensors(tmp_path)
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        assert get_model_dir("gpt2") == local
+
+    def test_all_stubs_falls_back_to_first_existing(self, tmp_path, monkeypatch):
+        hf_home = tmp_path / "hf"
+        stub = self._make_stub(hf_home)
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.find_repo_root",
+            lambda _: tmp_path,
+        )
+        assert get_model_dir("gpt2") == stub
+
+
 # ── find_safetensors ──────────────────────────────────────────────────────
 
 

@@ -23,7 +23,7 @@
     "build": "vite build",
     "build:vite": "NEXT_PUBLIC_API_URL= vite build",
     "start": "vite preview",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 900",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
