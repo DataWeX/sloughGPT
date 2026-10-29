@@ -152,7 +152,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     if (down) {
       const { bannerGraceMs } = useAppStore.getState().settings
       let id: string | null = null
-      const timer = setTimeout(() => {
+      const raise = () => {
         id = useBannerStore.getState().showBanner({
           key: 'backend-connection',
           tone: 'destructive',
@@ -161,16 +161,30 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           action: {
             label: 'Retry',
             onAction: () => {
-              void probeBackendAndRevalidate()
+              // GlobalBanner retires the row on action-click, and a FAILED
+              // probe changes no status — so without this the user's Retry
+              // would silently swallow the outage notice while the backend
+              // is still down. Re-raise unless another producer took the
+              // slot meanwhile (never displace an unrelated banner).
+              void probeBackendAndRevalidate().then((ok) => {
+                if (
+                  !ok &&
+                  !useBannerStore.getState().banners.some((b) => b.key !== 'backend-connection')
+                ) {
+                  raise()
+                }
+              })
             },
           },
         })
         connectionDropRef.current = true
-      }, bannerGraceMs ?? OFFLINE_BANNER_GRACE_MS)
+      }
+      const timer = setTimeout(raise, bannerGraceMs ?? OFFLINE_BANNER_GRACE_MS)
       return () => {
         clearTimeout(timer)
         // A superseded id is a no-op (single-slot store) — another producer's
-        // banner is left alone.
+        // banner is left alone. `id` tracks the latest raise, so a re-raised
+        // banner is retired here too when the status moves on.
         if (id) useBannerStore.getState().dismissBanner(id)
       }
     }

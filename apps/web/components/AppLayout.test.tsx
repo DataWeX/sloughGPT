@@ -143,6 +143,7 @@ vi.mock('@/lib/backend-retry', () => ({ probeBackendAndRevalidate: vi.fn() }))
 
 import AppLayout, { OFFLINE_BANNER_GRACE_MS, RECOVERY_BANNER_HOLD_MS } from './AppLayout'
 import { useBannerStore } from '@/lib/banner-store'
+import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 
 describe('AppLayout', () => {
   const origMatchMedia = window.matchMedia
@@ -456,6 +457,61 @@ describe('AppLayout', () => {
       expect(screen.queryByRole('alert')).toBeNull()
     } finally {
       vi.useRealTimers()
+      mockApiMonitor.status = 'connected'
+    }
+  })
+
+  it('re-raises the drop banner when Retry finds the backend still down', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(probeBackendAndRevalidate).mockResolvedValue(false)
+      mockApiMonitor.status = 'offline'
+      render(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      act(() => {
+        vi.advanceTimersByTime(OFFLINE_BANNER_GRACE_MS)
+      })
+      expect(screen.getByRole('alert').textContent).toContain('Backend unreachable')
+      // GlobalBanner retires the row on action-click; a failed probe must
+      // bring it back (apiStatus never changed, so the effect won't).
+      fireEvent.click(screen.getByText('Retry'))
+      expect(screen.queryByRole('alert')).toBeNull()
+      await act(async () => {
+        vi.advanceTimersByTime(0)
+      })
+      expect(screen.getByRole('alert').textContent).toContain('Backend unreachable')
+    } finally {
+      vi.useRealTimers()
+      vi.mocked(probeBackendAndRevalidate).mockReset()
+      mockApiMonitor.status = 'connected'
+    }
+  })
+
+  it('keeps the banner dismissed when Retry finds the backend back up', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(probeBackendAndRevalidate).mockResolvedValue(true)
+      mockApiMonitor.status = 'offline'
+      render(
+        <AppLayout>
+          <div />
+        </AppLayout>,
+      )
+      act(() => {
+        vi.advanceTimersByTime(OFFLINE_BANNER_GRACE_MS)
+      })
+      fireEvent.click(screen.getByText('Retry'))
+      await act(async () => {
+        vi.advanceTimersByTime(0)
+      })
+      // Successful probe: the monitors will flip status; no re-raise.
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+      vi.mocked(probeBackendAndRevalidate).mockReset()
       mockApiMonitor.status = 'connected'
     }
   })
