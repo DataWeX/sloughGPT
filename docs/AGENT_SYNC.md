@@ -891,7 +891,40 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `69ec6dac1`)
+## Landed on main (origin/main = `0f7873048`)
+
+- **2026-10-30 05:33Z · PR #251 `feat/swiglu-f32c-decode` → MERGED** — lands the
+  stranded SWIGLU decode optimization (card `20261029_153804`, marked done):
+  `_swiglu(h1, h3)` helper in `domain/training/_internal/slonet.py` (AVX2
+  `swiglu_f32_c` from `quant_core` first → `ascontiguousarray` compact-retry
+  for strided `h13[..., :ff_dim]` views → numba `_nb_swi_glu_mul` → numpy
+  fallback) wired into all 8 SwiGLU call sites across `generate_numpy` and
+  `generate_numpy_stream`. Branch was cut at the SWIGLU merge `d6a680d82` to
+  **exclude** two later `wip` web-perf commits (`211f90bc4` vendor chunk split,
+  card `281cf292`) sharing the same local `main`; created from the `main` **ref**
+  only, never reading or touching the live `sloughgpt-api-std` working tree
+  (it was actively receiving commits — 05:14/05:15 SWIGLU, 06:06 web-perf —
+  while this lane ran). **Gates re-run here:** ruff check + format clean;
+  numeric equivalence vs numpy reference on contiguous *and* strided inputs to
+  `(2,512,1024)`, worst abs err **2.86e-06** (degree-5 AVX2 exp poly), dtype
+  + shape preserved; C kernel confirmed present (not silently falling back).
+  Full CI green (16 checks incl. `test-core-py`, E2E). By the time CI finished,
+  another session had pushed local `main` wholesale, which made the head
+  reachable and auto-marked #251 merged. Verified on origin/main post-land:
+  8/8 `_swiglu` call sites, helper present, **0** stale `_nb_swi_glu_mul`
+  sites. Author: Oluwatobi Oluyede (`f64ac1df2`).
+
+- **2026-10-30 — local `main` drift CLOSED (0 ahead / 0 behind).** The two
+  follow-ups asked of this session are both done: (1) git auto-GC unblocked —
+  rescue-branch backups taken, `git prune` ran clean, 6/6 stashes verified,
+  `.git/gc.log` removed; (2) local `main` fast-forwarded in its own checkout
+  (`sloughgpt-api-std`) to `origin/main` — the ff was blocked mid-session while
+  `main` was ahead-by-in-flight-SWIGLU-work, and became possible once #251's
+  lane landed that work. The 7 `rescue/*` branches were then deleted after
+  confirming each was redundant (6/6 stash backups mapped to live `stash@{N}`
+  entries, the stray-commit backup reachable from `origin/main`); stashes still
+  6/6. The `wip` web-perf card `281cf292` work also rode in with the wholesale
+  push — owner's to finish.
 
 - **2026-10-30 04:17Z · PR #249 `fix/native-prompt-engine-import` → MERGED (`69ec6dac1`)** —
   one-line relative-import fix in `NativeEngine._build_prompt`
