@@ -439,7 +439,9 @@ async def start_training(
                     setup_providers(force_default=True)
                 except Exception:
                     pass
-                logger.info("Activated trained soul as default: %s", soul_path, extra={"tag": "TRAIN"})
+                logger.info(
+                    "Activated trained soul as default: %s", soul_path, extra={"tag": "TRAIN"}
+                )
             except Exception as e:
                 logger.debug("Auto-activate trained soul failed: %s", e, extra={"tag": "TRAIN"})
             _finish_job(jid, "completed")
