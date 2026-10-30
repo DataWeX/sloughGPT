@@ -1,8 +1,12 @@
 'use client'
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { Badge, StatusDot } from '@sloughgpt/strui'
+import { Badge, StatusDot, getComponentFeature } from '@sloughgpt/strui'
 import { createSSEStream, type SSEEnvelope, type SSEStream } from '@/lib/sse-client'
+
+// Feature version this surface belongs to — single source of truth is the
+// strui FEATURE_VERSIONS manifest, so a feature bump shows up here for free.
+const TRAINING_FEATURE = getComponentFeature('JobStatus')
 
 interface FeedSourceView {
   name: string
@@ -154,6 +158,15 @@ export const LiveFeedStream = memo(function LiveFeedStream() {
         <div className="flex items-center gap-2">
           <StatusDot tone={connTone} pulse={conn === 'live'} />
           <span className="text-sm font-medium">{connLabel}</span>
+          {TRAINING_FEATURE ? (
+            <Badge
+              variant="outline"
+              className="font-mono text-xs font-normal text-muted-foreground"
+              title={`${TRAINING_FEATURE.feature} feature version`}
+            >
+              {TRAINING_FEATURE.feature} v{TRAINING_FEATURE.version}
+            </Badge>
+          ) : null}
         </div>
         {snapshot ? (
           <span className="text-xs text-muted-foreground">

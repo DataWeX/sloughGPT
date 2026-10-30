@@ -68,11 +68,23 @@ function fingerprint(message: string): string {
   return (hash >>> 0).toString(36).slice(0, 12)
 }
 
+/**
+ * `extractErrorMessage` is contract-bound to return a string — but the error
+ * funnel must be TOTAL: it runs from unhandled-rejection paths (e.g. the
+ * dynamic import in apps/lib/request.ts fires after a test/teardown, where a
+ * partial test mock of error-utils can leak in), and a handler that throws
+ * turns one handled failure into an unhandled crash that takes the whole
+ * vitest run down. Guard once, here, so no fan-out step can re-introduce it.
+ */
+function safeMessage(err: unknown): string {
+  return extractErrorMessage(err) ?? ''
+}
+
 function extractErrorTitle(err: unknown): string {
   if (err && typeof err === 'object') {
     const e = err as Record<string, unknown>
     if (typeof e.title === 'string') return e.title
-    const msg = extractErrorMessage(e)
+    const msg = safeMessage(e)
     if (msg.includes('404') || msg.includes('Not Found')) return 'Not Found'
     if (msg.includes('401') || msg.includes('Unauthorized')) return 'Unauthorized'
     if (msg.includes('403') || msg.includes('Forbidden')) return 'Forbidden'
@@ -95,7 +107,7 @@ function extractErrorTitle(err: unknown): string {
 
 function getSeverity(err: unknown, explicitSev?: ErrorSeverity): ErrorSeverity {
   if (explicitSev) return explicitSev
-  const msg = extractErrorMessage(err).toLowerCase()
+  const msg = safeMessage(err).toLowerCase()
   if (msg.includes('not found') || msg.includes('404')) return 'warning'
   if (msg.includes('unauthorized') || msg.includes('401')) return 'warning'
   if (msg.includes('forbidden') || msg.includes('403')) return 'warning'
@@ -210,7 +222,7 @@ const errorStore = createStore<ErrorStore>((set, get) => ({
   addError: (err, opts = {}) => {
     const { source, severity: sev, dismissible = true, requestId, surface, journeyId } = opts
     const title = opts.title || extractErrorTitle(err)
-    const message = extractErrorMessage(err)
+    const message = safeMessage(err)
     const severity = getSeverity(err, sev)
     const now = Date.now()
 

@@ -139,3 +139,19 @@ jobs:
           # domain/ lives at the repo root (packages/core-py has no domain/);
           # the script imports domain.shared._internal.feature_flags.
           PYTHONPATH=.:packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions
+
+  board-integrity:
+    name: Board integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify kanban board (schema + unique ids + hash chain)
+        # No paths filter on purpose: a corrupted board must redden EVERY
+        # PR, not just the ones that touch it — merge 5e5c8ce36 shipped
+        # 975 duplicate rows with no gate watching the real file
+        # (card 20261029). Stdlib-only; the script self-locates
+        # packages/app-planner/src for the chain verifier.
+        run: python3 scripts/check_board_chain.py

@@ -23,7 +23,7 @@ vi.mock('@/lib/toast-store', () => ({
 }))
 
 vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (e: any, fallback: string) => e?.message || fallback,
+  extractErrorMessage: (e: any, fallback = 'Unknown error') => e?.message || fallback,
 }))
 
 vi.mock('@sloughgpt/strui', () => {
