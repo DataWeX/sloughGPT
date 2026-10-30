@@ -147,11 +147,20 @@ class Cruncher:
     def seal(
         self,
         *,
-        sources: list[str] | None = None,
+        sources: list[str] | list[dict[str, Any]] | None = None,
         mix: dict[str, float] | None = None,
         domain: str = "general",
+        pii_policy: str | None = None,
     ) -> SnapshotRef:
         """Freeze the pending buffer as the next immutable snapshot.
+
+        Args:
+            sources: provenance entries (legacy strings or Standard v1
+                source objects — normalized by the snapshot store).
+            mix: reserved pack-mix weights.
+            domain: dataset domain recorded in the manifest.
+            pii_policy: PII handling policy recorded in the manifest;
+                defaults to the snapshot store's policy when omitted.
 
         Returns:
             SnapshotRef of the sealed version.
@@ -163,16 +172,23 @@ class Cruncher:
             from .snapshot import SnapshotError
 
             raise SnapshotError(f"nothing to seal for {self._dataset_id!r}: buffer is empty")
-        all_sources = list(dict.fromkeys([*(sources or []), *self.result.sources]))
-        ref = self._store.seal(
-            self._dataset_id,
-            self._buffer,
-            sources=all_sources,
-            mix=mix,
-            domain=domain,
-            dedup_state=self._dedup.to_state(),
-            stats=self.result.as_dict(),
-        )
+        seen: set[str] = set()
+        all_sources: list[Any] = []
+        for s in [*(sources or []), *self.result.sources]:
+            key = s if isinstance(s, str) else json.dumps(s, sort_keys=True)
+            if key not in seen:
+                seen.add(key)
+                all_sources.append(s)
+        seal_kwargs: dict[str, Any] = {
+            "sources": all_sources,
+            "mix": mix,
+            "domain": domain,
+            "dedup_state": self._dedup.to_state(),
+            "stats": self.result.as_dict(),
+        }
+        if pii_policy is not None:
+            seal_kwargs["pii_policy"] = pii_policy
+        ref = self._store.seal(self._dataset_id, self._buffer, **seal_kwargs)
         self._buffer.clear()
         return ref
 
@@ -181,13 +197,14 @@ class Cruncher:
         records: Iterable[str],
         *,
         source: str | None = None,
-        sources: list[str] | None = None,
+        sources: list[str] | list[dict[str, Any]] | None = None,
         mix: dict[str, float] | None = None,
         domain: str = "general",
+        pii_policy: str | None = None,
     ) -> SnapshotRef:
         """Batch convenience: ingest everything, then seal immediately."""
         self.crunch_stream(records, source=source)
-        return self.seal(sources=sources, mix=mix, domain=domain)
+        return self.seal(sources=sources, mix=mix, domain=domain, pii_policy=pii_policy)
 
 
 def conversation_records(corpus_path: Path | str) -> Iterable[str]:

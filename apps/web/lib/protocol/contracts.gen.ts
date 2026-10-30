@@ -64,6 +64,64 @@ export const CONTRACTS = {
     },
     "version": "1"
   },
+  "datasets.import_crawl": {
+    "auth_scope": "authenticated",
+    "description": "Ingest bawl-format crawled pages into a dataset: validates each page (non-empty url + text), writes an immutable raw/crawl_<utc>.jsonl batch and appends derived content rows to the dataset corpus.jsonl.",
+    "idempotent": false,
+    "method": "POST",
+    "module": "routers.datasets_crawl",
+    "name": "datasets.import_crawl",
+    "operation_id": "datasets.import_crawl.post",
+    "params": {
+      "properties": {
+        "jsonl": {
+          "description": "Raw JSONL text: one page object per line (bawl -o output).",
+          "type": "string"
+        },
+        "name": {
+          "description": "Dataset id to ingest under ([a-zA-Z0-9_-]+).",
+          "type": "string"
+        },
+        "pages": {
+          "description": "Crawl page objects: {url, text, title?, domain?, ...} (bawl page schema).",
+          "type": "array"
+        },
+        "source": {
+          "description": "Provenance label recorded on every stored record.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "path": "/datasets/import/crawl",
+    "result": {
+      "properties": {
+        "corpus_path": {
+          "type": "string"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "pages_dropped": {
+          "type": "integer"
+        },
+        "pages_received": {
+          "type": "integer"
+        },
+        "pages_stored": {
+          "type": "integer"
+        },
+        "raw_path": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
   "llm.chat.completions": {
     "auth_scope": "authenticated",
     "description": "Chat completion over the SloNet generation seam (stream + non-stream); wire: top-level choices/usage, data: chunk frames terminated by [DONE].",

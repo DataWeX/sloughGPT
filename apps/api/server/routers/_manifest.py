@@ -61,5 +61,6 @@ ROUTER_MODULES: list[str] = [
     "contracts",
     "mole",
     "llm_v1",
+    "datasets_crawl",
 ]
 # fmt: on

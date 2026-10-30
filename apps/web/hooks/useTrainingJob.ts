@@ -151,6 +151,8 @@ export function useTrainingJob(): UseTrainingJobReturn {
       finished_at: job.finished_at,
       error: job.error,
       loss_history: job.loss_history,
+      probe_standings: job.probe_standings,
+      trained_on: job.trained_on,
     }
     downloadJson(data, `training-job-${job.id}.json`)
     addToast('Job details exported', 'success')

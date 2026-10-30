@@ -89,6 +89,9 @@ _LAZY_IMPORTS = {
     "get_turbo_state": ("._internal.state", "get_turbo_state"),
     "peek_training_executor": ("._internal.executor", "peek_training_executor"),
     "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
+    "CrawlStoreError": ("._internal.crawl_store", "CrawlStoreError"),
+    "ingest_crawl": ("._internal.crawl_store", "ingest_crawl"),
+    "parse_jsonl_pages": ("._internal.crawl_store", "parse_jsonl_pages"),
     "executor": ("._internal.executor", None),
 }
 
@@ -176,6 +179,9 @@ __all__ = [
     "get_auto_trainer",
     "executor",
     "peek_training_executor",
+    "CrawlStoreError",
+    "ingest_crawl",
+    "parse_jsonl_pages",
 ]
 
 

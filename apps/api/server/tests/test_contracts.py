@@ -489,17 +489,33 @@ def test_pilot_is_documented_in_openapi():
 
 
 def test_pilot_registry_entry_is_actually_served():
-    """The registry's claim must match the router's route table (not a paper one)."""
-    from routers.contracts import router as contracts_router
+    """The registry's claim must match the router's route table (not a paper one).
 
-    served = {
-        (route.path, method)
-        for route in contracts_router.routes
-        for method in route.methods
-        if method != "HEAD"
-    }
+    Serve-union across every module the REGISTRY itself names: ``contracts`` is
+    the pilot, later descriptor modules (``datasets_crawl``, ``llm_v1``, …)
+    register the same way. Only claiming modules are imported — never the full
+    55-module boot — so this stays a light unit test.
+    """
+    import importlib
+
+    claimed_entries = REGISTRY.routes()
+    served: set[tuple[str, str]] = set()
+    module_names = {e["module"] for e in claimed_entries} | {"routers.contracts"}
+    for mod_name in sorted(module_names):
+        try:
+            mod = importlib.import_module(mod_name)
+        except Exception:
+            continue
+        mod_router = getattr(mod, "router", None)
+        if mod_router is None:
+            continue
+        for route in mod_router.routes:
+            for method in getattr(route, "methods", None) or ():
+                if method != "HEAD":
+                    served.add((route.path, method))
+
     assert ("/contracts", "GET") in served
-    claimed = {(e["path"], e["method"]) for e in REGISTRY.routes()}
+    claimed = {(e["path"], e["method"]) for e in claimed_entries}
     assert claimed <= served, f"registry claims routes no router serves: {claimed - served}"
 
 
