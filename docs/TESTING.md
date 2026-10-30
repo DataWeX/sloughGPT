@@ -7,7 +7,7 @@ This document covers the testing infrastructure for sloughGPT across both the Py
 | Stack | Framework | Location | Run Command |
 |-------|-----------|----------|-------------|
 | Frontend | Vitest + React Testing Library | `apps/web/` | `cd apps/web && npm test` |
-| Backend | pytest | `packages/core-py/tests/` | `cd packages/core-py && python -m pytest -n auto -x -q` |
+| Backend | pytest | `tests/core-py/` | `python -m pytest tests/core-py -n auto -x -q` |
 
 ## Frontend Testing
 
@@ -155,10 +155,10 @@ python -m pytest -v tests/
 
 ### Test File Convention
 
-Tests live in `packages/core-py/tests/`:
+Tests live in `tests/core-py/`:
 
 ```
-packages/core-py/tests/
+tests/core-py/
 ├── test_training_infrastructure.py
 ├── test_training_export_presets.py
 ├── test_inference.py
@@ -349,7 +349,7 @@ behind a disclosure.
 
 ```bash
 # Router + probe/report + Mole monitoring tests
-.venv/bin/python -m pytest tests/server/test_mole_router.py packages/core-py/tests/test_mole_probes.py packages/core-py/tests/test_mole.py -q
+.venv/bin/python -m pytest tests/server/test_mole_router.py tests/core-py/test_mole_probes.py tests/core-py/test_mole.py -q
 # Page + component tests (worktree: add --config /tmp/opencode/vitest-worktree.config.ts)
 node_modules/.bin/vitest run "app/(app)/mole/page.test.tsx" components/mole/
 ```

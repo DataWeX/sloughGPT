@@ -33,19 +33,19 @@ lint:
 
 # ── Tests (Targeted) ────────────────────────────────────
 test-py:
-	cd packages/core-py && $(PY) -m pytest $(ARGS)
+	$(PY) -m pytest $(ARGS)
 
 test-py-fast:
-	cd packages/core-py && $(PY) -m pytest -n auto --dist loadgroup -x -q $(ARGS)
+	$(PY) -m pytest -n auto --dist loadgroup -x -q $(ARGS)
 
 test-py-slow:
-	cd packages/core-py && $(PY) -m pytest -m slow $(ARGS)
+	$(PY) -m pytest -m slow $(ARGS)
 
 test-py-training:
-	cd packages/core-py && $(PY) -m pytest tests/test_training_sequence.py tests/test_training_status__corepy.py tests/test_trainer_protocol.py tests/test_auto_trainer.py tests/test_distillation.py tests/test_distill_gpt2.py tests/test_video_trainer.py tests/test_mobile_training_store.py tests/test_pugqeep_checkpoint.py tests/test_pugqeep.py tests/test_pugqeep_generic.py -x -q $(ARGS)
+	$(PY) -m pytest tests/core-py/test_training_sequence.py tests/core-py/test_training_status__corepy.py tests/core-py/test_trainer_protocol.py tests/core-py/test_auto_trainer.py tests/core-py/test_distillation.py tests/core-py/test_distill_gpt2.py tests/core-py/test_video_trainer.py tests/core-py/test_mobile_training_store.py tests/core-py/test_pugqeep_checkpoint.py tests/core-py/test_pugqeep.py tests/core-py/test_pugqeep_generic.py -x -q $(ARGS)
 
 test-py-all:
-	cd packages/core-py && $(PY) -m pytest -m "" $(ARGS)
+	$(PY) -m pytest -m "" $(ARGS)
 
 test-web:
 	cd apps/web && npm run test $(ARGS)

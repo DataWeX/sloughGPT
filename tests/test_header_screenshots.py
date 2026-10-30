@@ -12,7 +12,7 @@ script code as a gated test:
   screenshot and URL assertion,
 - real assertions: PNG integrity, non-blank pixels, viewport dimensions,
 - skips (never fails) without a live web stack — same contract as the
-  route-level journey tests (packages/core-py/tests/test_user_journeys.py).
+  route-level journey tests (tests/core-py/test_user_journeys.py).
 
 Slow-marked browser capture: runs in ``-m ""`` sweeps against a live stack
 (``scripts/dev-stack.sh`` — web :5173, or ``SLO_WEB_URL``).
