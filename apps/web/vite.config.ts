@@ -53,5 +53,22 @@ export default defineConfig({
   build: {
     outDir: 'dist-vite',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Vendor split: keep the 806KB entry down to app code so first paint
+        // doesn't parse react-dom/three/motion before any route runs. Vendor
+        // chunks are immutable-cached; app entry changes on every release.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'vendor-react'
+          if (/node_modules\/react-router/.test(id)) return 'vendor-router'
+          if (/node_modules\/(framer-motion|motion)\//.test(id)) return 'vendor-motion'
+          if (/node_modules\/(zustand|immer)\//.test(id)) return 'vendor-state'
+          if (/node_modules\/(three|@react-three)\//.test(id)) return 'vendor-three'
+          if (/node_modules\/recharts/.test(id)) return 'vendor-recharts'
+          return 'vendor'
+        },
+      },
+    },
   },
 })
