@@ -15,6 +15,7 @@ Architecture:
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import logging
@@ -266,14 +267,21 @@ class ToolRunner:
         path: str,
         limit: int,
     ) -> list[str]:
-        """Search files using grep."""
+        """Search files using grep.
+
+        No ``--max-count``: GNU grep treats ``-m 0`` as "stop after 0
+        matches", which silently made every search return zero files.
+        ``--exclude-dir`` keeps .git/node_modules noise (and speed) out.
+        """
         proc = await asyncio.create_subprocess_exec(
             "grep",
             "-r",
             "-l",
+            "--exclude-dir=.git",
+            "--exclude-dir=node_modules",
+            "--exclude-dir=__pycache__",
             query,
             path,
-            "--max-count=0",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -734,12 +742,19 @@ class Agent:
         """Decide the next tools given what has run so far (bounded loop).
 
         With inference the model re-plans after every batch of observations
-        (``[]`` = enough information, synthesize). Keyword planning is
-        one-shot: once anything has run it hands off to synthesis instead of
-        re-matching the same request.
+        (``[]`` = enough information, synthesize). The bootstrap model plans
+        ``[]`` even for explicit tool requests (0/5 selection live
+        2026-10-30), so on step 0 an empty model plan falls back to the
+        keyword matcher — conservative patterns only (quoted searches,
+        code blocks) — until SFT tool-use training lands.
         """
         if self._inference_fn:
-            return await self._plan_with_llm(request, observations)
+            plan = await self._plan_with_llm(request, observations)
+            if plan:
+                return plan
+            if not observations:
+                return self._plan_with_keywords(request)
+            return []
         if observations:
             return []
         return self._plan_with_keywords(request)
@@ -808,8 +823,10 @@ class Agent:
                     )
                 )
 
-        if "search" in lower or "find" in lower:
-            query = re.search(r"(?:search|find)\s+(?:for\s+)?['\"](.+?)['\"]", lower)
+        if "search" in lower or "find" in lower or "match" in lower:
+            # Any quoted span works as the query — the earlier pattern only
+            # fired for `search for "x"` and missed `search for files matching "x"`.
+            query = re.search(r"[\"'](.+?)[\"']", request)
             if query:
                 plan.append(
                     (
@@ -891,9 +908,17 @@ class Agent:
         next step — ``[]`` means "enough information, synthesize now".
         """
         allowed = [t.value for t in self.config.tools] or [c.value for c in ToolCapability]
+        # The 0.5B bootstrap model treats a bare "decide which tools" question
+        # as chit-chat and refuses/loops (live journey 2026-10-30). A tiny
+        # format example + strict format line raises JSON compliance without
+        # any training — the SFT lever stays carded for real quality.
         prompt = (
-            f"Given this user request, decide which tools (if any) to use.\n"
+            "You are a tool-calling assistant. Pick tools for the request.\n"
             f"Available tools: {', '.join(allowed)}\n"
+            "Respond with ONLY one JSON array, no prose. Examples:\n"
+            '  [{"tool": "file_search", "args": {"query": "run_history"}}]\n'
+            "  []\n"
+            "Use [] when no tool is needed.\n"
             f"User request: {request}\n"
         )
         if observations:
@@ -915,7 +940,13 @@ class Agent:
             # Extract JSON array
             match = re.search(r"\[.*?\]", text, re.DOTALL)
             if match:
-                plan = json.loads(match.group())
+                span = match.group()
+                try:
+                    plan = json.loads(span)
+                except json.JSONDecodeError:
+                    # The 0.5B model often emits single-quoted Python-style
+                    # dicts — literal_eval is safe (no exec) and recovers it.
+                    plan = ast.literal_eval(span)
             else:
                 return []
             return [
@@ -947,12 +978,23 @@ class Agent:
                         f"User: {request}\n"
                         "Tool observations:\n"
                         f"{json.dumps(observations, ensure_ascii=False)[:6000]}\n"
-                        "Write the final answer for the user based on these observations."
+                        "Write the final answer for the user based on these observations. "
+                        "One answer only: never repeat a phrase or sentence, and do not "
+                        "mention your tools or limits."
                     )
                     resp = await asyncio.to_thread(self._inference_fn, prompt)
                     text = resp.get("text", "") if isinstance(resp, dict) else str(resp)
                     if text.strip():
-                        return text.strip()
+                        from domain.agents._internal.run_history import looks_like_refusal
+
+                        # Bootstrap-model symptoms: canned refusals and
+                        # phrase loops make bad training/UX — compose is honest.
+                        if looks_like_refusal(text):
+                            logger.debug("Synthesis refusal, composing", extra={"tag": "MODEL"})
+                        elif _looks_degenerate(text):
+                            logger.debug("Synthesis loop, composing", extra={"tag": "MODEL"})
+                        else:
+                            return text.strip()
                 else:
                     return await asyncio.to_thread(self._generate_response, request, context)
             except Exception as e:
@@ -1000,6 +1042,26 @@ def _result_summary(result: Any) -> str:
                 return value[:300]
             return f"{key}: {str(value)[:300]}"
     return str(result)[:300]
+
+
+def _looks_degenerate(text: str) -> bool:
+    """True when output loops — the 0.5B repeats a phrase 3x in a row.
+
+    Checked from long chunks down to bigrams: live runs showed both
+    sentence-level loops and tails like "artificial intelligence, ..."
+    three times over. A legit answer never repeats any chunk exactly 3x
+    consecutively, so short answers simply can't trip it.
+    """
+    words = text.split()
+    if len(words) < 8:
+        return False
+    for n in (6, 5, 4, 3, 2):
+        chunk_len = 3 * n
+        for i in range(len(words) - chunk_len + 1):
+            chunk = words[i : i + n]
+            if words[i + n : i + 2 * n] == chunk and words[i + 2 * n : i + chunk_len] == chunk:
+                return True
+    return False
 
 
 _agent: Agent | None = None
