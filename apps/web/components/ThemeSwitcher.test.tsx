@@ -4,7 +4,12 @@ import { describe, it, expect, beforeEach } from 'vitest'
 
 import { ThemeProvider } from './ThemeProvider'
 import { ThemeSwitcher } from './ThemeSwitcher'
-import { MODE_STORAGE_KEY, THEME_STORAGE_KEY, PALETTE_STORAGE_KEY } from '@/lib/theme-storage'
+import {
+  MODE_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  PALETTE_STORAGE_KEY,
+  PALETTE_IDS,
+} from '@/lib/theme-storage'
 
 function renderSwitcher() {
   return render(
@@ -90,7 +95,7 @@ describe('ThemeSwitcher', () => {
     renderSwitcher()
     const groups = screen.getAllByRole('radiogroup', { name: 'Palette' })
     expect(groups.length).toBeGreaterThanOrEqual(1)
-    expect(groups[0].querySelectorAll('[role="radio"]').length).toBe(3)
+    expect(groups[0].querySelectorAll('[role="radio"]').length).toBe(PALETTE_IDS.length)
   })
 
   it('clicking a palette radio selects it', () => {
