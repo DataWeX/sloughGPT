@@ -6,7 +6,7 @@ import stat
 import pytest
 
 # Buildroot is at repo root, not relative to this test file
-_REPO_ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "..")
+_REPO_ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 _BUILDROOT = os.path.join(_REPO_ROOT, "buildroot")
 
 

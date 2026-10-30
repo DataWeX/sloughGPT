@@ -364,7 +364,6 @@ class TestAutoIngester:
                     os.path.dirname(__file__),
                     "..",
                     "..",
-                    "..",
                     "domain",
                     "infrastructure",
                     "_internal",
