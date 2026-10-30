@@ -167,30 +167,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     labelKey: 'nav.section.admin',
     routes: [
       {
-        path: '/workspace',
-        labelKey: 'nav.workspace_dashboard',
-        icon: 'activity',
-        description: 'Workspace overview, usage & audit',
-      },
-      {
-        path: '/workspace/members',
-        labelKey: 'nav.members',
-        icon: 'agents',
-        description: 'Members & permissions',
-      },
-      {
-        path: '/workspace/settings',
-        labelKey: 'nav.workspace_settings',
-        icon: 'settings',
-        description: 'Settings, API keys & notifications',
-      },
-      {
-        path: '/workspace/data',
-        labelKey: 'nav.shared_data',
-        icon: 'users',
-        description: 'Shared data & search',
-      },
-      {
         path: '/shortcuts',
         labelKey: 'nav.shortcuts',
         icon: 'settings',
@@ -238,16 +214,6 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/feedback': IconThumbUp,
   '/planner': IconGrid,
   '/phoneme': IconTokenizer,
-  '/workspace': IconActivity,
-  '/workspace/usage': IconChart,
-  '/workspace/audit': IconActivity,
-  '/workspace/members': IconAgents,
-  '/workspace/members/permissions': IconSettings,
-  '/workspace/settings': IconSettings,
-  '/workspace/settings/api-keys': IconCode,
-  '/workspace/settings/notifications': IconActivity,
-  '/workspace/data': IconUsers,
-  '/workspace/data/search': IconSearch,
   '/plugins-cloud': IconSettings,
   '/shortcuts': IconSettings,
 }

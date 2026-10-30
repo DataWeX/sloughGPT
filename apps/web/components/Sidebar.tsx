@@ -51,7 +51,7 @@ export function Sidebar({
     <div className="relative flex h-dvh min-w-0 flex-1">
       <aside
         className={cn(
-          'sl-sidebar-surface flex flex-col w-full min-w-0 overflow-hidden',
+          'sl-sidebar-surface flex flex-col w-full min-w-0 overflow-hidden relative',
           isDrawer ? 'h-full pb-[max(0px,env(safe-area-inset-bottom))]' : 'h-dvh',
         )}
         data-collapsed={isCollapsed ? 'true' : undefined}
@@ -101,7 +101,7 @@ export function Sidebar({
             )}
           >
             {(() => {
-              // Longest-prefix match so /workspace/members highlights Members, not Dashboard
+              // Longest-prefix match so nested routes highlight their parent section
               const allRoutes = NAV_SECTIONS.flatMap((s) => s.routes)
               let bestPath: string | null = null
               let bestLen = -1
