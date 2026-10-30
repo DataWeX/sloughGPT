@@ -96,11 +96,28 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
 
             {/* Data source */}
             <div className="flex items-center gap-1" role="radiogroup" aria-label="Data source">
-              <ToggleGroup type="single" value={form.inputMode} onValueChange={(v) => { if (v) form.setInputMode(v as 'dataset' | 'text') }}>
+              <ToggleGroup type="single" value={form.inputMode} onValueChange={(v) => { if (v) form.setInputMode(v as 'dataset' | 'text' | 'sequential') }}>
                 <ToggleGroupItem value="dataset" className="px-3 py-1 rounded-md text-[11px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Use a dataset</ToggleGroupItem>
                 <ToggleGroupItem value="text" className="px-3 py-1 rounded-md text-[11px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Paste text</ToggleGroupItem>
+                <ToggleGroupItem value="sequential" className="px-3 py-1 rounded-md text-[11px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Sequential manifests</ToggleGroupItem>
               </ToggleGroup>
             </div>
+
+            {form.inputMode === 'sequential' && (
+              <div className="relative">
+                <textarea
+                  value={form.manifestsInput}
+                  onChange={e => form.setManifestsInput(e.target.value)}
+                  placeholder={'data/crunched/sys_seed/v1/manifest.json\ndata/crunched/github_mini/v1/manifest.json\n— one sealed manifest path per line, trained in order'}
+                  rows={4}
+                  className="w-full rounded-md border border-border/60 bg-background p-3 pb-7 text-[11px] font-mono text-foreground resize-y min-h-[80px]"
+                  aria-label="Sequential manifests input"
+                />
+                <span className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground/50 tabular-nums" aria-live="polite" aria-atomic="true">
+                  {form.manifestsInput.trim() ? `${form.manifestsInput.split('\n').filter(l => l.trim()).length} stages` : ''}
+                </span>
+              </div>
+            )}
 
             {form.inputMode === 'text' && (
               <div className="relative">

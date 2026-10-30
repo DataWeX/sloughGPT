@@ -13,7 +13,7 @@ import { trackEvent } from '@/lib/dev-log'
 import { appShellStore, writeTraining } from '@/lib/app-shell'
 
 export type Method = 'distill' | 'finetune' | 'vlm' | 'native'
-export type InputMode = 'dataset' | 'text'
+export type InputMode = 'dataset' | 'text' | 'sequential'
 
 export interface TrainingPreset {
   name: string
@@ -85,6 +85,7 @@ export interface TrainingFormState {
   method: Method
   inputMode: InputMode
   textInput: string
+  manifestsInput: string
   showAdvanced: boolean
   algo: string
   trainingEpochs: number
@@ -109,6 +110,7 @@ export interface TrainingFormState {
   setMethod: (m: Method) => void
   setInputMode: (m: InputMode) => void
   setTextInput: (s: string) => void
+  setManifestsInput: (s: string) => void
   setShowAdvanced: (v: boolean) => void
   setAlgo: (a: string) => void
   setTrainingEpochs: (n: number) => void
@@ -171,6 +173,7 @@ export function useTrainingForm(
   const [loraRank, setLoraRank] = useState(8)
   const [loraAlpha, setLoraAlpha] = useState(16)
   const [textInput, setTextInput] = useState('')
+  const [manifestsInput, setManifestsInput] = useState('')
   const [configLoaded, setConfigLoaded] = useState(false)
 
   useEffect(() => {
@@ -303,6 +306,7 @@ export function useTrainingForm(
     !session.trainingRunning &&
     (inputMode !== 'dataset' || !!datasets.selectedDataset) &&
     (inputMode !== 'text' || !!textInput.trim()) &&
+    (inputMode !== 'sequential' || !!manifestsInput.trim()) &&
     (method !== 'finetune' || !!selectedModel) &&
     (method !== 'vlm' || !!datasets.selectedDataset)
 
@@ -325,9 +329,18 @@ export function useTrainingForm(
 
       const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
       const hasText = inputMode === 'text' && textInput.trim()
+      const seqList = manifestsInput
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+      const hasSeq = inputMode === 'sequential' && seqList.length > 0
 
-      if (!hasDataset && !hasText && !checkpointName) {
-        addToast('Select a dataset or paste text to train on', 'error')
+      if (!hasDataset && !hasText && !hasSeq && !checkpointName) {
+        addToast('Select a dataset, paste text, or list manifests to train on', 'error')
+        return
+      }
+      if (inputMode === 'sequential' && seqList.length === 0) {
+        addToast('List at least one manifest.json path (one per line)', 'error')
         return
       }
 
@@ -341,7 +354,7 @@ export function useTrainingForm(
         return
       }
 
-      if (method === 'native' && !hasDataset && !hasText) {
+      if (method === 'native' && !hasDataset && !hasText && !hasSeq) {
         addToast('Select a dataset or paste text for native training', 'error')
         return
       }
@@ -355,7 +368,8 @@ export function useTrainingForm(
       }
       if (trainingBatchSize) body.batch_size = trainingBatchSize
       if (checkpointName) body.checkpoint_name = checkpointName
-      if (hasDataset) body.dataset = datasets.selectedDataset
+      if (hasSeq) body.manifests = seqList
+      else if (hasDataset) body.dataset = datasets.selectedDataset
       if (hasText) body.source_text = textInput.trim()
 
       if (method === 'native') {
@@ -482,6 +496,7 @@ export function useTrainingForm(
     method,
     inputMode,
     textInput,
+    manifestsInput,
     showAdvanced,
     algo,
     trainingEpochs,
@@ -506,6 +521,7 @@ export function useTrainingForm(
     setMethod,
     setInputMode,
     setTextInput,
+    setManifestsInput,
     setShowAdvanced,
     setAlgo,
     setTrainingEpochs,

@@ -199,3 +199,58 @@ class TestBuildCorpus:
         ref = Cruncher("adapter_demo", store=store).crunch([TEXT_A], sources=["unit"])
         path = trainer_data_path(ref)
         assert Path(path) == ref.manifest_path
+
+
+# ── probe holdout (sequential-training standings) ─────────────────────
+
+
+class TestProbeHoldout:
+    def _rows(self) -> list[dict]:
+        return [
+            {"text": f"MARKER-ONE {TEXT_A}"},
+            {"text": f"MARKER-TWO {TEXT_B}"},
+            {"text": f"MARKER-THREE {TEXT_B} {TEXT_A}"},
+            {"text": f"MARKER-FOUR {TEXT_A} {TEXT_B}"},
+        ]
+
+    def test_probe_held_out_of_train_and_written_beside_manifest(self, tmp_path: Path):
+        src = _write_jsonl(tmp_path / "p.jsonl", self._rows())
+        manifest_path = build_corpus_mod.build_corpus(
+            "demo_probe", "local", str(src), store_root=tmp_path / "crunched", probe=2
+        )
+        version_dir = Path(manifest_path).parent
+        probe_file = version_dir / "probe.jsonl"
+        assert probe_file.is_file()
+        held = [json.loads(line)["text"] for line in probe_file.read_text().splitlines()]
+        assert len(held) == 2
+        # Last records are the holdout; leakage-free: markers never reach train.txt.
+        assert any(h.startswith("MARKER-THREE") for h in held)
+        assert any(h.startswith("MARKER-FOUR") for h in held)
+        train_lines = (version_dir / "train.txt").read_text(encoding="utf-8").splitlines()
+        for record in held:
+            assert record not in train_lines
+        assert any(line.startswith("MARKER-ONE") for line in train_lines)
+        # Holdout decremented the sealed record count (4 - 2 held = 2 trained).
+        assert load_manifest(manifest_path)["cruncher"]["record_count"] == 2
+        assert len(train_lines) == 2
+
+    def test_probe_clamped_to_leave_training_corpus(self, tmp_path: Path):
+        src = _write_jsonl(tmp_path / "p.jsonl", self._rows())
+        manifest_path = build_corpus_mod.build_corpus(
+            "demo_probe_clamp", "local", str(src), store_root=tmp_path / "crunched", probe=99
+        )
+        version_dir = Path(manifest_path).parent
+        held = [
+            json.loads(line)["text"]
+            for line in (version_dir / "probe.jsonl").read_text().splitlines()
+        ]
+        assert len(held) == 3  # records - 1
+        train_lines = (version_dir / "train.txt").read_text(encoding="utf-8").splitlines()
+        assert len(train_lines) == 1  # exactly one record left to train on
+
+    def test_probe_zero_writes_no_probe_file(self, tmp_path: Path):
+        src = _write_jsonl(tmp_path / "p.jsonl", self._rows())
+        manifest_path = build_corpus_mod.build_corpus(
+            "demo_probe_off", "local", str(src), store_root=tmp_path / "crunched"
+        )
+        assert not (Path(manifest_path).parent / "probe.jsonl").exists()
