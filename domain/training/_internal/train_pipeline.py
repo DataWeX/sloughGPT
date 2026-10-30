@@ -215,12 +215,13 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
     Returns:
         (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
     """
+    cache_src: Path | None = None  # set only when data_path resolved to a plain file
     if isinstance(data_path, str) and is_experience_source(data_path):
         corpus = None
         feedback = None
         if isinstance(data_path, str) and data_path.startswith("experience:"):
             # experience:<corpus_path> optional single override
-            rest = data_path[len("experience:"):]
+            rest = data_path[len("experience:") :]
             if rest and rest not in ("chat", "owned"):
                 corpus = rest
         text, _pairs = load_experience_text(
@@ -296,6 +297,21 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
                 raise FileNotFoundError(
                     f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
                 )
+        # Content-addressed token cache: hit skips the full-text read AND the
+        # tokenize/char-loop below. Key = sha256(file bytes) + tokenizer-state
+        # fingerprint, so an edited corpus or swapped tokenizer misses cleanly.
+        from domain.training._internal.token_cache import try_load
+
+        cached = try_load(path, "bpe" if tokenizer is not None else "char", tokenizer)
+        if cached is not None:
+            data, vocab_size, stoi, itos = cached
+            logger.info(
+                "Data: %d tokens (token cache hit)",
+                len(data),
+                extra={"tag": "TRAIN"},
+            )
+            return data, vocab_size, stoi, itos
+        cache_src: Path | None = path
         with open(path, encoding="utf-8") as f:
             text = f.read()
 
@@ -305,6 +321,10 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         stoi = dict(tokenizer.stoi)
         itos = dict(tokenizer.itos)
         validate_training_data(text)
+        if cache_src is not None:
+            from domain.training._internal.token_cache import store_cache
+
+            store_cache(cache_src, data, vocab_size, stoi, itos, "bpe", tokenizer=tokenizer)
         logger.info(
             "Data: %d tokens, vocab %d (tokenized)",
             len(data),
@@ -319,6 +339,11 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
     stoi = {c: i for i, c in enumerate(chars)}
     itos = dict(enumerate(chars))
     data = np.asarray([stoi[c] for c in text], dtype=np.int64)
+
+    if cache_src is not None:
+        from domain.training._internal.token_cache import store_cache
+
+        store_cache(cache_src, data, len(chars), stoi, itos, "char")
 
     logger.info(
         "Data: %d tokens, %d chars",
@@ -1264,7 +1289,9 @@ class SloughGPTTrainer:
         offsets = np.arange(block_size)
         x = data[idx[:, None] + offsets]
         y = data[idx[:, None] + offsets + 1]
-        return x, y
+        # Token cache serves compact uint16/uint32 memmaps; cast at the seam
+        # so model math always sees int64 regardless of storage dtype.
+        return x.astype(np.int64), y.astype(np.int64)
 
     def _build_feed_sampler_if_configured(self):
         """Build the live feed sampler, or None when not configured.
