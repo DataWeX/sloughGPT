@@ -89,6 +89,12 @@ class AgentsRouter:
         self.router.add_api_route("/{agent_id}", self.delete_agent, methods=["DELETE"])
         self.router.add_api_route("/{agent_id}/execute", self.execute_agent, methods=["POST"])
         self.router.add_api_route(
+            "/{agent_id}/execute/stream",
+            self.execute_agent_stream,
+            methods=["POST"],
+            response_model=None,
+        )
+        self.router.add_api_route(
             "/orchestrate", self.orchestrate_agents, methods=["POST"], response_model=None
         )
         self.router.add_api_route("/loop", self.run_loop, methods=["POST"], response_model=None)
@@ -215,6 +221,58 @@ class AgentsRouter:
             return result
         except Exception as e:
             classify_and_raise(e, source="agents.execute")
+
+    @endpoint("agents.execute_agent_stream")
+    async def execute_agent_stream(
+        self,
+        agent_id: str,
+        req: ExecuteRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> AsyncGenerator[str, None]:
+        """Stream one agent run over SSE: run_start → tool steps → final → run_end.
+
+        Same loop as ``execute_agent`` (dict), projected as events — the
+        contract descriptor names it, the SSE framing matches orchestrate.
+        """
+        system = self._get_system()
+        safe_audit_log(
+            "agent.execute.stream",
+            resource=agent_id,
+            user_id=req.user_id or "",
+            session_id=req.session_id or "",
+        )
+        phases = {
+            "run_start": ("START", "working"),
+            "tool_start": ("TOOL_CALL", "working"),
+            "tool_result": ("TOOL_RESULT", "working"),
+            "final": ("FINAL", "working"),
+            "run_end": ("COMPLETE", "complete"),
+            "error": ("ERROR", "error"),
+        }
+
+        async def event_stream() -> AsyncGenerator[str, None]:
+            try:
+                async for ev in system.execute_stream(
+                    agent_id=agent_id,
+                    request=req.request,
+                    session_id=req.session_id,
+                    user_id=req.user_id,
+                ):
+                    if await request.is_disconnected():
+                        return
+                    kind = str(ev.get("event", "step"))
+                    phase, status = phases.get(kind, (kind.upper(), "working"))
+                    if kind == "error":
+                        yield sse_error("agent", phase, str(ev.get("error", "unknown")))
+                        return
+                    yield sse_event(stream="agent", phase=phase, status=status, data=ev)
+                yield sse_complete(stream="agent", data={"agent_id": agent_id})
+            except Exception as e:
+                logger.warning("Agent stream failed: %s", e, extra={"tag": "AGENT"})
+                yield sse_error("agent", "ERROR", str(e))
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     # ── Orchestration ─────────────────────────────────────────────────────
 

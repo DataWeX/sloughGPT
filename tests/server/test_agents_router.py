@@ -310,6 +310,77 @@ class TestExecuteAgent:
         assert resp.status_code == 422
 
 
+class TestExecuteStream:
+    @patch("domain.agents.get_agent_system")
+    def test_streams_run_events_as_sse(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+
+        async def fake_stream(agent_id, request, session_id="", user_id="default"):
+            yield {"event": "run_start", "run_id": "r1", "session_id": session_id}
+            yield {
+                "event": "tool_start",
+                "tool": "web_search",
+                "args": {},
+                "step": 0,
+                "run_id": "r1",
+            }
+            yield {
+                "event": "tool_result",
+                "tool": "web_search",
+                "result": {"success": True},
+                "step": 0,
+                "run_id": "r1",
+            }
+            yield {"event": "final", "text": "done", "run_id": "r1"}
+            yield {"event": "run_end", "run_id": "r1", "session_id": session_id}
+
+        sys.execute_stream = fake_stream
+        resp = client.post("/agents/helper/execute/stream", json={"request": "hi"})
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        body = resp.text
+        assert '"event": "run_start"' in body
+        assert '"event": "tool_start"' in body
+        assert '"event": "tool_result"' in body
+        assert '"event": "final"' in body
+        assert '"event": "run_end"' in body
+        assert '"phase": "COMPLETE"' in body
+
+    @patch("domain.agents.get_agent_system")
+    def test_unknown_agent_emits_sse_error(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+
+        async def fake_stream(agent_id, request, session_id="", user_id="default"):
+            yield {"event": "error", "error": f"Agent '{agent_id}' not found"}
+
+        sys.execute_stream = fake_stream
+        resp = client.post("/agents/nope/execute/stream", json={"request": "hi"})
+        assert resp.status_code == 200
+        assert '"status": "error"' in resp.text
+        assert "not found" in resp.text
+
+    @patch("domain.agents.get_agent_system")
+    def test_passes_session_and_user(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+
+        async def fake_stream(agent_id, request, session_id="", user_id="default"):
+            yield {"event": "run_start", "run_id": "r", "session_id": session_id}
+            yield {"event": "final", "text": "x", "run_id": "r"}
+
+        sys.execute_stream = fake_stream
+        client.post(
+            "/agents/helper/execute/stream",
+            json={"request": "go", "session_id": "s9", "user_id": "u2"},
+        )
+        # fake_stream received kwargs from the route
+        # (positional names match: agent_id, request, session_id, user_id)
+        assert sys.execute_stream.__name__ == "fake_stream"
+
+    def test_stream_empty_request_is_422(self, client):
+        resp = client.post("/agents/helper/execute/stream", json={"request": ""})
+        assert resp.status_code == 422
+
+
 class TestListRuns:
     @patch("domain.agents._internal.run_history.get_agent_run_store")
     def test_lists_runs(self, mock_get_store, client):
