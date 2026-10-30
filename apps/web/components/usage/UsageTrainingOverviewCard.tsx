@@ -31,7 +31,7 @@ export function UsageTrainingOverviewCard({ status, totalMinutes }: UsageTrainin
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {stats.map(s => (
             <div key={s.label} className="text-center p-2 rounded bg-muted/30">
-              <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
+              <div className={`text-base font-bold ${s.color}`}>{s.value}</div>
               <div className="text-[10px] text-muted-foreground">{s.label}</div>
             </div>
           ))}

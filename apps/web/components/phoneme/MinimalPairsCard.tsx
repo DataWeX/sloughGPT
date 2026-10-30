@@ -171,13 +171,13 @@ export default function MinimalPairsCard() {
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-center">
                   <div className="p-3 rounded-lg bg-muted/30">
-                    <Badge variant="outline" className="text-lg px-3 py-1">{currentPair.word1}</Badge>
+                    <Badge variant="outline" className="text-base px-3 py-1">{currentPair.word1}</Badge>
                     <p className="text-xs text-muted-foreground mt-1">
                       {currentPair.phonemes1.join(' ')}
                     </p>
                   </div>
                   <div className="p-3 rounded-lg bg-muted/30">
-                    <Badge variant="outline" className="text-lg px-3 py-1">{currentPair.word2}</Badge>
+                    <Badge variant="outline" className="text-base px-3 py-1">{currentPair.word2}</Badge>
                     <p className="text-xs text-muted-foreground mt-1">
                       {currentPair.phonemes2.join(' ')}
                     </p>

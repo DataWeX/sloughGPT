@@ -118,13 +118,13 @@ export function OutputCard({ title = 'Service Output', height, tail, maxLines, c
       <CardContent>
         <div
           ref={scrollRef}
-          className={cn(h, 'overflow-y-auto rounded-lg border bg-zinc-950 text-zinc-300 p-3')}
+          className={cn(h, 'overflow-y-auto rounded-lg border bg-card text-foreground p-3')}
           role="log"
           aria-live="polite"
           aria-label="Service output"
         >
           {lines.length === 0 ? (
-            <div className="text-zinc-500 py-4 text-center text-xs">
+            <div className="text-muted-foreground py-4 text-center text-xs">
               {streaming ? 'Waiting for output...' : 'Output will appear here during service activity'}
             </div>
           ) : (

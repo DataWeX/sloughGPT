@@ -120,15 +120,15 @@ export default function PracticeCalendar() {
       <CardContent className="space-y-4">
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="p-2 rounded-lg bg-muted/30">
-            <p className="text-lg font-bold">{totalDays}</p>
+            <p className="text-base font-bold">{totalDays}</p>
             <p className="text-xs text-muted-foreground">Active Days</p>
           </div>
           <div className="p-2 rounded-lg bg-muted/30">
-            <p className="text-lg font-bold">{totalWords}</p>
+            <p className="text-base font-bold">{totalWords}</p>
             <p className="text-xs text-muted-foreground">Total Words</p>
           </div>
           <div className="p-2 rounded-lg bg-muted/30">
-            <p className="text-lg font-bold">{longestStreak}</p>
+            <p className="text-base font-bold">{longestStreak}</p>
             <p className="text-xs text-muted-foreground">Best Streak</p>
           </div>
         </div>

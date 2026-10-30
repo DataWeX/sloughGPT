@@ -116,7 +116,7 @@ export default function QuizCard() {
               {!loading && (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold">{currentWord.word}</span>
+                    <span className="text-base font-bold">{currentWord.word}</span>
                     <Badge variant="secondary">{currentWord.lang.toUpperCase()}</Badge>
                     <Badge variant="outline" className="text-xs">{currentWord.difficulty}</Badge>
                   </div>
