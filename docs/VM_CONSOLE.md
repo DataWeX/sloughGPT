@@ -127,4 +127,4 @@ base64 URL hash takes precedence over the saved source on load.
 | `apps/api/server/routers/vm.py` | `/vm/*` endpoints, role mapping |
 | `apps/web/app/(app)/vm/page.tsx` | Console UI: role selector, samples, Training card, permission banner |
 | `apps/web/lib/vm-controller.ts` | `vmController.run/builtins/info/trainingJob` |
-| `packages/core-py/tests/test_vm_rbac.py` | RBAC enforcement tests (USER denial, ADMIN allow, full syscall lane) |
+| `tests/core-py/test_vm_rbac.py` | RBAC enforcement tests (USER denial, ADMIN allow, full syscall lane) |

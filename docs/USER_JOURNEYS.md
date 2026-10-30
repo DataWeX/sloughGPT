@@ -1,6 +1,6 @@
 # User Journeys
 
-End-to-end user flows driven by the **avion** computer-use library (`packages/avion`) in `packages/core-py/tests/test_user_journeys.py` — one shared driver, so locator/backend fixes land in one place.
+End-to-end user flows driven by the **avion** computer-use library (`packages/avion`) in `tests/core-py/test_user_journeys.py` — one shared driver, so locator/backend fixes land in one place.
 
 ## Tested Journeys
 
@@ -82,10 +82,10 @@ The following routes have `page.tsx` files but are not covered by journey tests:
 
 ```bash
 # Full suite (needs a live stack — skips itself when none is running)
-scripts/python -m pytest packages/core-py/tests/test_user_journeys.py -x -v
+scripts/python -m pytest tests/core-py/test_user_journeys.py -x -v
 
 # Single journey class
-scripts/python -m pytest packages/core-py/tests/test_user_journeys.py::TestDatasetsImport -v
+scripts/python -m pytest tests/core-py/test_user_journeys.py::TestDatasetsImport -v
 ```
 
-Results are saved to `packages/core-py/tests/test_results/user_journey_results.json`.
+Results are saved to `tests/core-py/test_results/user_journey_results.json`.
