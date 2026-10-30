@@ -227,13 +227,35 @@ class AgentRunStore:
 
     # ── Training export ─────────────────────────────────────────────────────
 
+    # Openers of the bootstrap model's canned refusals — training on those
+    # teaches the model to refuse (live journey on 2026-10-30 proved it:
+    # a refusal run made it into an export). Conservative prefix match.
+    _REFUSAL_OPENERS = (
+        "i'm sorry",
+        "i am sorry",
+        "i'm afraid",
+        "i am afraid",
+        "i cannot",
+        "i can't",
+        "unable to assist",
+        "i'm not able",
+        "i am not able",
+        "i'm unable",
+        "i am unable",
+    )
+
+    def _is_refusal(self, response: str) -> bool:
+        lowered = response.strip().lower()
+        return lowered.startswith(self._REFUSAL_OPENERS)
+
     def training_examples(self, min_response: int = 1) -> list[dict[str, Any]]:
         """Convert completed runs into trainer-ready examples.
 
         Each example is ``{"messages": [...], "source": "agent-run",
         "run_id": ...}`` — the JSONL shape ``SloughGPTTrainer`` loads
         (``{"messages": [...]}`` per line), so agent runs become training
-        data with their provenance intact.
+        data with their provenance intact. Refusal-shaped responses are
+        excluded — they are noise today and poison tomorrow.
         """
         with self._lock:
             docs = self._col.find({"status": "completed"})
@@ -242,6 +264,8 @@ class AgentRunStore:
             goal = str(doc.get("goal", "")).strip()
             response = str(doc.get("response", "")).strip()
             if len(goal) < 1 or len(response) < min_response:
+                continue
+            if self._is_refusal(response):
                 continue
             examples.append(
                 {

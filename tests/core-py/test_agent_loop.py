@@ -158,3 +158,13 @@ class TestPersistenceAndExport:
         examples = run_store.training_examples()
         assert len(examples) == 1
         assert examples[0]["messages"][0]["content"] == "kept goal"
+
+    def test_refusal_responses_are_not_exported(self, run_store):
+        good = run_store.start("real question")
+        run_store.complete(good, response="The answer is 42.")
+        bad = run_store.start("risky question")
+        run_store.complete(bad, response="I'm sorry, but I'm unable to assist with that request.")
+        examples = run_store.training_examples()
+        assert len(examples) == 1
+        assert examples[0]["run_id"] == good
+        assert examples[0]["messages"][1]["content"] == "The answer is 42."
