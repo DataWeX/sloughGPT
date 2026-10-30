@@ -265,7 +265,9 @@ class TestCruncher:
         cruncher = Cruncher("batch", store=store)
         ref = cruncher.crunch([GOOD_TEXT, GOOD_TEXT_2], source="unit", sources=["unit"])
         assert ref.version == 1
-        assert "unit" in store.load_manifest(ref)["sources"]
+        # Sources are Standard v1 objects (producer-normalized), not bare strings.
+        sources = store.load_manifest(ref)["sources"]
+        assert {"type": "local_path", "uri": "unit"} in sources
 
     def test_rejects_non_str_record(self, tmp_path: Path):
         cruncher = Cruncher("live", store=SnapshotStore(tmp_path))
