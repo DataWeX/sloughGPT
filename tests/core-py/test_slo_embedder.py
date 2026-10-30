@@ -566,7 +566,7 @@ def test_cmd_train_embed_exists():
     """Verify cmd_train_embed function exists in train.py."""
 
     # Try the CLI path first, then fall back
-    cli_path = str(Path(__file__).resolve().parents[3] / "apps" / "cli" / "src")
+    cli_path = str(Path(__file__).resolve().parents[2] / "apps" / "cli" / "src")
     if cli_path not in __import__("sys").path:
         __import__("sys").path.insert(0, cli_path)
     try:
