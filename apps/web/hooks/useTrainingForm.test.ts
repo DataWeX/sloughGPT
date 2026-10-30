@@ -164,7 +164,7 @@ describe('useTrainingForm', () => {
       await act(async () => {
         await result.current.startTraining()
       })
-      expect(addToast).toHaveBeenCalledWith('Select a dataset or paste text to train on', 'error')
+      expect(addToast).toHaveBeenCalledWith('Select a dataset, paste text, or list manifests to train on', 'error')
     })
 
     it('shows error for VLM without dataset (even with text)', async () => {
