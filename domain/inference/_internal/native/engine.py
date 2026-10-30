@@ -419,7 +419,7 @@ class NativeEngine:
 
     def _build_prompt(self, messages: list[dict[str, str]], system: str = "") -> str:
         """Render a chat prompt via central PromptEngine (single source)."""
-        from .prompt_engine import render_prompt as _render
+        from ..prompt_engine import render_prompt as _render
 
         return _render(
             messages, tokenizer=self._tokenizer, model_type=self._model_type, system=system
