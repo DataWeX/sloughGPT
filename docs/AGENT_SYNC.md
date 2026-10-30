@@ -890,7 +890,24 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `138de93b1`)
+## Landed on main (origin/main = `69ec6dac1`)
+
+- **2026-10-30 04:17Z · PR #249 `fix/native-prompt-engine-import` → MERGED (`69ec6dac1`)** —
+  one-line relative-import fix in `NativeEngine._build_prompt`
+  (`domain/inference/_internal/native/engine.py`): `from .prompt_engine import`
+  → `from ..prompt_engine import`. `prompt_engine.py` lives in `_internal/`,
+  not `native/`, so the old `.`-relative form resolved to a non-existent file
+  and `NativeEngine.generate` raised `ModuleNotFoundError` the moment the chat
+  path ran its (lazy) prompt build. **Validation:** full CI green —
+  `test-core-py` 31m pass, `test-root`/`test-server`/`test-web` pass, E2E 26m
+  pass, lint/Contract-gate/TypeScript/Vite/SDK/strui pass; mergeable CLEAN, no
+  conflicts. Origin carried the broken form at `native/engine.py:422` (bug was
+  live on main under no other SHA — `git cherry` confirmed the fix was not
+  equivalent to anything already in origin). Merged as a **merge commit**, not
+  squash, so the original author SHA (`2f5a399d6`, Oluwatobi Oluyede) stays an
+  ancestor of `origin/main`. **This commit had been stranded on local `main`
+  only (1 ahead / 52 behind) — landing it was step 1 of reconciling local
+  `main` drift; step 2 (fast-forwarding local `main`) is BLOCKED (see below).**
 
 - **2026-10-29 14:45Z · PR #248 `fix/message-data-id-expectations` → MERGED (`138de93b1`)** —
   unbreaks `test-core-py` on main (was red on every PR since the
