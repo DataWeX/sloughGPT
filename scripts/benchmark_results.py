@@ -8,6 +8,7 @@ against prior runs and reports regressions.
 Usage:
     python scripts/benchmark_results.py record --kind stability --json-file out.json
     python scripts/benchmark_results.py record --kind latency --json-file out.json
+    python scripts/benchmark_results.py record --kind inference --json-file out.json
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
 """
@@ -76,7 +77,33 @@ REGRESSION_THRESHOLDS = {
         # a degraded member = partial landing page; zero tolerance
         "member_errors": (0, "abs"),
     },
+    "inference": {
+        # benchmark_decode_slope.py --json (greedy decode, int8 model).
+        # Shared box: decode swings ±50% with loadavg alone (measured
+        # 16.13 @ load 4.3 vs 11.6 @ load 8.8 on the same commit), so the
+        # regression bar is generous; load_s is recorded for interpretation.
+        # Headline = marginal slope; naive_tok_s.<n> gates the two ends of
+        # the context-growth curve (short-context throughput and the
+        # long-context fade the slope alone can hide).
+        "decode_tok_s": (30.0, "rel"),
+        "naive_tok_s.32": (30.0, "rel"),
+        "naive_tok_s.256": (30.0, "rel"),
+    },
 }
+
+
+# Single declaration of the recorded kinds — argparse choices and the
+# history default must never drift apart (parity is mechanical, not vibes).
+KINDS = (
+    "stability",
+    "latency",
+    "execution",
+    "training",
+    "startup",
+    "effects",
+    "bootstrap",
+    "inference",
+)
 
 
 def git_commit() -> str | None:
@@ -306,6 +333,12 @@ def do_record(args) -> int:
                 file=sys.stderr,
             )
             return 1
+        elif kind == "inference":
+            print(
+                "[ERR] inference kind requires --json-file (from benchmark_decode_slope.py --json)",
+                file=sys.stderr,
+            )
+            return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
             return 1
@@ -365,11 +398,7 @@ def _metric_entries(record: dict) -> list[dict]:
 
 def do_history(args) -> int:
     """List stored runs (all kinds unless --kind narrows it)."""
-    for kind in (
-        [args.kind]
-        if args.kind
-        else ["stability", "latency", "startup", "execution", "training", "effects", "bootstrap"]
-    ):
+    for kind in [args.kind] if args.kind else list(KINDS):
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
         for p in runs:
@@ -413,6 +442,15 @@ def do_history(args) -> int:
                         f"  {stamp}  {model:<24} first={str(c.get('first_s', '?')):<7} "
                         f"p95={str(c.get('warm_p95_s', '?')):<7} "
                         f"errs={c.get('member_errors', '?')}  {p.name}"
+                    )
+                elif kind == "inference":
+                    naive = c.get("naive_tok_s") or {}
+                    print(
+                        f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"naive32={str(naive.get('32', '?')):<7} "
+                        f"naive256={str(naive.get('256', '?')):<7} "
+                        f"provider={str(c.get('provider_tok_s', '?')):<7} "
+                        f"load={c.get('loadavg', '?')}  {p.name}"
                     )
                 else:  # latency and unknown kinds
                     print(
@@ -489,19 +527,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_rec = sub.add_parser("record", help="record a benchmark run")
-    p_rec.add_argument(
-        "--kind",
-        required=True,
-        choices=[
-            "stability",
-            "latency",
-            "execution",
-            "training",
-            "startup",
-            "effects",
-            "bootstrap",
-        ],
-    )
+    p_rec.add_argument("--kind", required=True, choices=list(KINDS))
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
     p_rec.add_argument("--runs", type=int, default=20)
@@ -510,35 +536,11 @@ def main() -> int:
     p_rec.set_defaults(fn=do_record)
 
     p_h = sub.add_parser("history", help="list stored runs")
-    p_h.add_argument(
-        "--kind",
-        default=None,
-        choices=[
-            "stability",
-            "latency",
-            "execution",
-            "training",
-            "startup",
-            "effects",
-            "bootstrap",
-        ],
-    )
+    p_h.add_argument("--kind", default=None, choices=list(KINDS))
     p_h.set_defaults(fn=do_history)
 
     p_c = sub.add_parser("compare", help="compare newest vs prior run")
-    p_c.add_argument(
-        "--kind",
-        default="stability",
-        choices=[
-            "stability",
-            "latency",
-            "execution",
-            "training",
-            "startup",
-            "effects",
-            "bootstrap",
-        ],
-    )
+    p_c.add_argument("--kind", default="stability", choices=list(KINDS))
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
 
