@@ -55,15 +55,24 @@ def _gen_once(provider, input_ids, n: int) -> float:
     return time.perf_counter() - t0
 
 
-def _slope(points: list[tuple[int, float]]) -> float:
-    """Least-squares slope (sec/token) of time over token count."""
+def _fit(points: list[tuple[int, float]]) -> tuple[float, float, float]:
+    """Least-squares fit time = intercept + slope * N.
+
+    Returns (slope sec/token, intercept sec, r²). r² is the trust signal:
+    load drift or curvature within the run bends the line, and a low r²
+    means the slope number should not be believed (rerun, don't gate).
+    """
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
     n = len(xs)
     mx, my = sum(xs) / n, sum(ys) / n
     cov = sum((x - mx) * (y - my) for x, y in points)
-    var = sum((x - mx) ** 2 for x in xs)
-    return cov / var
+    varx = sum((x - mx) ** 2 for x in xs)
+    vary = sum((y - my) ** 2 for y in ys)
+    slope = cov / varx
+    intercept = my - slope * mx
+    r2 = (cov * cov) / (varx * vary) if varx > 0 and vary > 0 else 1.0
+    return slope, intercept, r2
 
 
 def main() -> int:
@@ -73,6 +82,13 @@ def main() -> int:
     ap.add_argument("--sizes", default="32,64,128,256", help="token counts to time")
     ap.add_argument("--prompt", default="The quick brown fox jumps over", help="fixed prompt")
     ap.add_argument("--warmup", type=int, default=16, help="warmup tokens before timing")
+    ap.add_argument(
+        "--reps",
+        type=int,
+        default=3,
+        help="timed reps per size, interleaved round-robin (min kept); "
+        "interleaving decouples each size from load drift within the run",
+    )
     ap.add_argument("--target", type=float, default=None, help="gate: min decode tok/s")
     ap.add_argument("--json", action="store_true", help="machine-readable summary line")
     args = ap.parse_args()
@@ -96,14 +112,34 @@ def main() -> int:
     # Warmup: first calls calibrate per-shape kernel dispatch + touch pages.
     _gen_once(provider, input_ids, args.warmup)
 
+    sizes = [int(s) for s in args.sizes.split(",")]
+    load_start = os.getloadavg()[0]
+    t_run0 = time.perf_counter()
+
+    # Interleaved round-robin: every size is sampled across the whole run,
+    # so box load drift averages out over reps instead of biasing one size
+    # (sequential blocks made the fit absorb load drift as fake slope).
+    samples: dict[int, list[float]] = {n: [] for n in sizes}
+    for _ in range(max(1, args.reps)):
+        for n in sizes:
+            samples[n].append(_gen_once(provider, input_ids, n))
+
+    load_end = os.getloadavg()[0]
+    run_s = time.perf_counter() - t_run0
+
     points: list[tuple[int, float]] = []
     rows = []
-    for n in [int(s) for s in args.sizes.split(",")]:
-        secs = min(_gen_once(provider, input_ids, n) for _ in range(2))
+    spread_pct = 0.0
+    for n in sizes:
+        reps_list = samples[n]
+        secs = min(reps_list)
         points.append((n, secs))
         rows.append((n, secs, n / secs))
+        mean = sum(reps_list) / len(reps_list)
+        if mean > 0:
+            spread_pct = max(spread_pct, (max(reps_list) - min(reps_list)) / mean * 100.0)
 
-    slope = _slope(points)
+    slope, intercept, r2 = _fit(points)
     tok_s = 1.0 / slope if slope > 0 else 0.0
 
     if args.json:
@@ -113,6 +149,13 @@ def main() -> int:
                     "model": args.model,
                     "load_s": round(load_s, 2),
                     "decode_tok_s": round(tok_s, 2),
+                    "r2": round(r2, 4),
+                    "intercept_s": round(intercept, 3),
+                    "spread_pct": round(spread_pct, 1),
+                    "loadavg_start": round(load_start, 2),
+                    "loadavg_end": round(load_end, 2),
+                    "reps": max(1, args.reps),
+                    "run_s": round(run_s, 2),
                     "points": [
                         {"n": n, "s": round(s, 3), "naive_tok_s": round(v, 2)} for n, s, v in rows
                     ],
@@ -132,6 +175,10 @@ def main() -> int:
         for n, secs, naive in rows:
             print(f"  gen {n:4d} tok: {secs:7.2f}s   {naive:6.2f} tok/s (naive)")
         print(f"decode slope: {tok_s:.2f} tok/s  ({1000 / tok_s:.1f} ms/token)")
+        print(
+            f"fit: r²={r2:.4f}  intercept={intercept:.3f}s  spread={spread_pct:.1f}%  "
+            f"load {load_start:.2f}→{load_end:.2f}"
+        )
 
     if args.target is not None and tok_s < args.target:
         print(f"FAIL: decode slope {tok_s:.2f} < target {args.target}", file=sys.stderr)

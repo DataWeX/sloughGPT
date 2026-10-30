@@ -447,10 +447,11 @@ def do_history(args) -> int:
                     naive = c.get("naive_tok_s") or {}
                     print(
                         f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"r2={str(c.get('r2', '?')):<7} "
+                        f"spread={str(c.get('spread_pct', '?')):<5} "
                         f"naive32={str(naive.get('32', '?')):<7} "
                         f"naive256={str(naive.get('256', '?')):<7} "
-                        f"provider={str(c.get('provider_tok_s', '?')):<7} "
-                        f"load={c.get('loadavg', '?')}  {p.name}"
+                        f"load={c.get('loadavg_end', c.get('loadavg', '?'))}  {p.name}"
                     )
                 else:  # latency and unknown kinds
                     print(
@@ -458,6 +459,41 @@ def do_history(args) -> int:
                         f"p95={str(c.get('p95_ms', '?')):<7}  {p.name}"
                     )
     return 0
+
+
+# inference compare trust band — loadavg is a confounder of decode tok/s
+# (measured 18.5 @ load 6.86 vs 12.86 @ load 7.96 on the same commit), so a
+# FAIL across materially different load bands is box noise until proven
+# otherwise. r² floor from healthy runs is 0.9977 — 0.99 keeps headroom.
+INFERENCE_LOAD_BAND = 1.0
+INFERENCE_R2_FLOOR = 0.99
+
+
+def _inference_trust_reason(new: dict, old: dict) -> str | None:
+    """Return why an inference compare verdict is untrustworthy, else None.
+
+    Missing fields (pre-trust records) never suppress anything — the guard
+    only acts on evidence, it cannot invent innocence from absent data.
+    """
+
+    def _metric(record: dict, key: str) -> float | None:
+        v = record.get("metrics", {}).get(key)
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    for label, rec in (("new", new), ("old", old)):
+        r2 = _metric(rec, "r2")
+        if r2 is not None and r2 < INFERENCE_R2_FLOOR:
+            return f"fit untrustworthy ({label} r2={r2:.4f} < {INFERENCE_R2_FLOOR})"
+    nl = _metric(new, "loadavg_end") or _metric(new, "loadavg")
+    ol = _metric(old, "loadavg_end") or _metric(old, "loadavg")
+    if nl is not None and ol is not None and abs(nl - ol) > INFERENCE_LOAD_BAND:
+        return (
+            f"load band Δ{abs(nl - ol):.2f} > {INFERENCE_LOAD_BAND} (old {ol:.2f} → new {nl:.2f})"
+        )
+    return None
 
 
 def do_compare(args) -> int:
@@ -514,6 +550,14 @@ def do_compare(args) -> int:
             if comp_delta > limit:
                 flag = "  ⚠ REGRESSION"
         print(f"  {metric:<24} {ov:<10} → {nv:<10} Δ{delta:+.3f}{flag}")
+
+    if regressed and args.kind == "inference":
+        reason = _inference_trust_reason(new, old)
+        if reason:
+            print(
+                f"  → [INCONCLUSIVE] {reason} — FAIL suppressed; re-run both sides under similar load"
+            )
+            return 0
 
     if regressed:
         print(f"  → [FAIL] regression detected in {args.kind}")

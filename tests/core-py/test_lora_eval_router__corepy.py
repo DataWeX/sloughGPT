@@ -1,0 +1,226 @@
+"""Tests for the lora-eval API router (routers/lora_eval.py).
+
+Covers: LoraEvalRouter run, history, aggregate.
+All domain calls are mocked; only HTTP-level behavior is tested.
+
+Note: the lora_eval router imports get_lora_evaluator inside handler body,
+so we must patch at the domain module level. Also get_per_user_lora for aggregate.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+# ---------------------------------------------------------------------------
+# Path setup
+# ---------------------------------------------------------------------------
+_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+if _server_dir not in sys.path:
+    sys.path.insert(0, _server_dir)
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+sys.path.insert(0, _server_dir)
+from routers.lora_eval import router  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_eval_result(**overrides):
+    defaults = {
+        "perplexity": 10.0,
+        "bleu": 0.3,
+        "personality_score": 0.7,
+        "throughput": 50.0,
+        "to_dict": lambda: {
+            "perplexity": 10.0,
+            "bleu": 0.3,
+            "personality_score": 0.7,
+            "throughput": 50.0,
+        },
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def _make_evaluator(**overrides):
+    defaults = {
+        "run": lambda adapter_path=None, soul_name="assistant", save=True: _make_eval_result(),
+        "compare": lambda b, w: {"verdict": "better", "perplexity_delta": -2.0},
+        "compare_with_report": lambda b, w: "Adapter improves perplexity by 2.0",
+        "get_history": lambda limit=20: [_make_eval_result()],
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def _make_store(**overrides):
+    defaults = {
+        "aggregate_best_adapters": lambda **kw: {
+            "user_count": 3,
+            "total_feedback": 20,
+            "output_path": "/tmp/best.npz",
+            "eval": {"delta": {"verdict": "better", "perplexity_delta": -1.5}},
+        },
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def _app():
+    app = FastAPI()
+    app.include_router(router)
+    return app
+
+
+class _PathExists:
+    """Stand-in for the router's own ``Path`` binding.
+
+    Real ``resolve()`` (so the ``_ADAPTER_BASE`` confinement check sees a
+    path genuinely under the base) but ``exists() == True`` so the
+    with-adapter branch runs. Patching ``pathlib.Path`` never reached the
+    router: ``routers.lora_eval`` did ``from pathlib import Path`` at
+    import, so the module-local name kept the real class.
+    """
+
+    def __init__(self, p):
+        self._p = p
+
+    def resolve(self):
+        return Path(self._p).resolve()
+
+    def exists(self):
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Tests — patch at domain module level (lazy imports inside handler body)
+# ---------------------------------------------------------------------------
+
+PATCH_EVALUATOR = "domain.feedback._internal.lora_eval.get_lora_evaluator"
+# get_per_user_lora/get_health_monitor are EAGERLY re-bound in
+# domain/feedback/__init__.py, so the handlers' `from domain.feedback
+# import ...` reads the PACKAGE attribute — patching the submodule they
+# were defined in never reaches it (the store mocks were silently
+# bypassed and the real, empty store answered 'no_adapters').
+# get_lora_evaluator works from the submodule only because it is the
+# lazy __getattr__ re-export.
+PATCH_STORE = "domain.feedback.get_per_user_lora"
+PATCH_PER_U_LORA = "domain.feedback.get_per_user_lora"
+
+
+class TestRunEval:
+    @patch(PATCH_EVALUATOR)
+    def test_baseline_only(self, mock_get):
+        evaluator = _make_evaluator()
+        mock_get.return_value = evaluator
+        client = TestClient(_app())
+        # The route is POST (add_api_route methods=["POST"]) — the GET here
+        # predates the verb move and got 405. The path must also sit under
+        # _ADAPTER_BASE (resolved against CWD) or the confinement check
+        # rejects it before the evaluator runs; a nonexistent file inside the
+        # base is the baseline-only case.
+        resp = client.post(
+            "/lora-eval/run", params={"adapter_path": "data/user_adapters/missing.npz"}
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "baseline_only"
+        assert "baseline" in data
+
+    @patch("routers.lora_eval.Path", _PathExists)
+    @patch(PATCH_EVALUATOR)
+    def test_with_adapter_comparison(self, mock_get):
+        evaluator = _make_evaluator()
+        mock_get.return_value = evaluator
+        client = TestClient(_app())
+        # POST (the verb move — GET got 405), a path under _ADAPTER_BASE
+        # (confinement resolves against CWD), and a patch of the router's
+        # OWN Path binding: @patch("pathlib.Path") never reached it, so
+        # exists() stayed False and the baseline-only branch ran instead
+        # of "compared".
+        resp = client.post("/lora-eval/run", params={"adapter_path": "data/user_adapters/best.npz"})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "compared"
+        assert "baseline" in data
+        assert "with_adapter" in data
+
+
+class TestGetEvalHistory:
+    @patch(PATCH_EVALUATOR)
+    def test_returns_results(self, mock_get):
+        evaluator = _make_evaluator()
+        mock_get.return_value = evaluator
+        client = TestClient(_app())
+        resp = client.get("/lora-eval/history")
+        assert resp.status_code == 200
+        results = resp.json()["data"]["results"]
+        assert len(results) == 1
+
+    @patch(PATCH_EVALUATOR)
+    def test_custom_limit(self, mock_get):
+        evaluator = _make_evaluator(
+            get_history=lambda limit=20: [_make_eval_result() for _ in range(limit)]
+        )
+        mock_get.return_value = evaluator
+        client = TestClient(_app())
+        resp = client.get("/lora-eval/history", params={"limit": 5})
+        assert resp.status_code == 200
+        assert len(resp.json()["data"]["results"]) == 5
+
+
+class TestTriggerAggregation:
+    @patch(PATCH_PER_U_LORA)
+    @patch(PATCH_EVALUATOR)
+    def test_aggregate_with_eval(self, mock_eval_get, mock_store_get):
+        mock_eval_get.return_value = _make_evaluator()
+        mock_store_get.return_value = _make_store()
+        client = TestClient(_app())
+        resp = client.post(
+            "/lora-eval/aggregate",
+            params={
+                "top_k": 5,
+                "min_feedback": 3,
+                "output_name": "best_v2",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "aggregated_with_eval"
+        assert data["user_count"] == 3
+
+    @patch(PATCH_PER_U_LORA)
+    @patch(PATCH_EVALUATOR)
+    def test_aggregate_no_eval(self, mock_eval_get, mock_store_get):
+        mock_eval_get.return_value = _make_evaluator()
+        store = _make_store(
+            aggregate_best_adapters=lambda **kw: {
+                "user_count": 2,
+                "total_feedback": 10,
+                "output_path": "/tmp/best.npz",
+                "eval": {"error": "no adapters"},
+            }
+        )
+        mock_store_get.return_value = store
+        client = TestClient(_app())
+        resp = client.post("/lora-eval/aggregate")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["status"] == "aggregated_no_eval"
+
+    @patch(PATCH_PER_U_LORA)
+    @patch(PATCH_EVALUATOR)
+    def test_aggregate_error(self, mock_eval_get, mock_store_get):
+        mock_eval_get.return_value = _make_evaluator()
+        store = _make_store(aggregate_best_adapters=lambda **kw: {"error": "no adapters found"})
+        mock_store_get.return_value = store
+        client = TestClient(_app())
+        resp = client.post("/lora-eval/aggregate")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["status"] == "no_adapters"
