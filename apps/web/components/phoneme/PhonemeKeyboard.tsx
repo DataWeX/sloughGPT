@@ -42,7 +42,7 @@ function getPhonemeColor(phoneme: string): string {
     return 'bg-accent/15 hover:bg-accent/25 text-accent border-accent/30'
   if (glides.includes(phoneme))
     return 'bg-[rgb(var(--group-8)/0.15)] hover:bg-[rgb(var(--group-8)/0.25)] text-[rgb(var(--group-8))] border-[rgb(var(--group-8)/0.3)]'
-  return 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300'
+  return 'bg-muted hover:bg-secondary text-foreground border-border'
 }
 
 export default function PhonemeKeyboard({ onInsert, onBackspace, onClear }: PhonemeKeyboardProps) {

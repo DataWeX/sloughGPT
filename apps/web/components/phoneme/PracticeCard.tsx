@@ -323,7 +323,7 @@ export default function PracticeCard() {
           {scoreResult && (
             <div className="p-4 rounded-lg bg-muted/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
               <div className="flex items-center justify-between">
-                <span className="text-lg font-bold">{(scoreResult.score * 100).toFixed(0)}%</span>
+                <span className="text-base font-bold">{(scoreResult.score * 100).toFixed(0)}%</span>
                 <div className="flex gap-4 text-sm text-muted-foreground">
                   <span>Precision: {(scoreResult.precision * 100).toFixed(0)}%</span>
                   <span>Recall: {(scoreResult.recall * 100).toFixed(0)}%</span>

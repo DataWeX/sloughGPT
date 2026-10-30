@@ -17,7 +17,7 @@ import {
   ArchiveX, MessageSquare,
   SmilePlus, HeartPulse,
   Layers, ChevronDown, ChevronUp, Terminal,
-  Home, Activity, Shield, Pause, Play, Send, Cpu,
+  Home, Activity, Shield, Pause, Play, Send, Cpu, GitBranch, StickyNote,
 } from 'lucide-react-native';
 import type {LucideIcon} from 'lucide-react-native';
 export type IconName =
@@ -40,6 +40,8 @@ export type IconName =
   | 'heart-pulse'
   | 'layers' | 'chevron-down' | 'chevron-up' | 'terminal'
   | 'home' | 'activity' | 'shield' | 'pause' | 'play' | 'send' | 'cpu'
+  | 'git-branch'
+  | 'sticky-note'
   ;
 
 interface IconProps {
@@ -117,6 +119,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'play': Play,
   'send': Send,
   'cpu': Cpu,
+  'git-branch': GitBranch,
+  'sticky-note': StickyNote,
 };
 
 export function Icon({name, size = 20, color}: IconProps) {

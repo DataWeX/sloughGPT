@@ -737,6 +737,10 @@ class StartupOrchestrator:
             return
         else:
             logger.error("Model load failed: %s", proc.error, extra={"tag": "START"})
+            # A crashed PGQ worker records nothing of its own — without a
+            # terminal state the gate answers E_MODEL_LOADING forever for a
+            # load that already stopped (eternal 503, fix/model-readiness-verdict).
+            _record_model_load_failure(f"Model load process failed: {proc.error}")
             loader.set_model_progress(0.0, f"Model load failed: {proc.error}")
             return
 

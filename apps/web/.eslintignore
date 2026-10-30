@@ -5,3 +5,5 @@ dist-vite/
 .next-dev/
 storybook-static/
 coverage/
+public/v86/
+public/v86-test/

@@ -76,13 +76,18 @@ class TestStoreContext:
 
 class TestGetMessages:
     def test_returns_stored_messages(self, mock_feedback):
-        msg1 = MagicMock(role="user", content="hi")
-        msg2 = MagicMock(role="assistant", content="hello")
+        msg1 = MagicMock(role="user", content="hi", id="m1")
+        msg2 = MagicMock(role="assistant", content="hello", id="m2")
         mock_feedback.get_session_context.return_value = [msg1, msg2]
         result = SessionCore.get_messages("s1")
         assert len(result) == 2
-        assert result[0] == {"role": "user", "content": "hi"}
-        assert result[1] == {"role": "assistant", "content": "hello"}
+        assert result[0] == {"role": "user", "content": "hi", "id": "m1"}
+        assert result[1] == {"role": "assistant", "content": "hello", "id": "m2"}
+
+    def test_legacy_messages_omit_id_key(self, mock_feedback):
+        legacy = MagicMock(role="user", content="hi", id=None)
+        mock_feedback.get_session_context.return_value = [legacy]
+        assert SessionCore.get_messages("legacy") == [{"role": "user", "content": "hi"}]
 
     def test_returns_empty_list_when_none(self, mock_feedback):
         mock_feedback.get_session_context.return_value = None

@@ -230,7 +230,7 @@ export default function PhonemePatternQuiz() {
                   : ''
               }`}
             >
-              <p className="text-lg font-mono font-bold">{question.correctPattern}</p>
+              <p className="text-base font-mono font-bold">{question.correctPattern}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {PATTERNS.find((p) => p.pattern === question.correctPattern)?.label}
               </p>

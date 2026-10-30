@@ -68,11 +68,16 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
     )
   }
 
-  const maxDuration = Math.max(...records.map(r => r.total_duration))
+  const maxDuration = Math.max(...records.map((r) => r.total_duration))
   const avgDuration = records.reduce((sum, r) => sum + r.total_duration, 0) / records.length
 
   return (
-    <div className={cn('rounded-xl border border-white/[0.06] bg-term-surface overflow-hidden', className)}>
+    <div
+      className={cn(
+        'rounded-xl border border-white/[0.06] bg-term-surface overflow-hidden',
+        className,
+      )}
+    >
       <div className="h-9 px-4 bg-term-header border-b border-white/[0.06] flex items-center justify-between">
         <span className="text-[11px] font-medium text-term-text-muted">Startup History</span>
         <span className="text-[10px] text-term-text-dim font-mono">{records.length} runs</span>

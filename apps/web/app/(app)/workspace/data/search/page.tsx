@@ -35,38 +35,44 @@ export default function WorkspaceSearchPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   // Deep link: /workspace/data/search?q=... seeds the query (palette jumps).
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
   const [partial, setPartial] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 
-  const search = useCallback(async (q: string) => {
-    if (!currentWorkspace?.id || !q.trim()) {
-      setHits(null)
-      setPartial([])
-      return
-    }
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({ q: q.trim(), workspace_id: currentWorkspace.id })
-      const res = await apiGet<SearchResponse>(`/search?${params.toString()}`)
-      if (res?.hits) {
-        setHits(res.hits)
-        setPartial(res.partial ?? [])
+  const search = useCallback(
+    async (q: string) => {
+      if (!currentWorkspace?.id || !q.trim()) {
+        setHits(null)
+        setPartial([])
+        return
       }
-    } catch {
-      addToast('Search failed', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }, [currentWorkspace?.id, addToast])
+      setLoading(true)
+      try {
+        const params = new URLSearchParams({ q: q.trim(), workspace_id: currentWorkspace.id })
+        const res = await apiGet<SearchResponse>(`/search?${params.toString()}`)
+        if (res?.hits) {
+          setHits(res.hits)
+          setPartial(res.partial ?? [])
+        }
+      } catch {
+        addToast('Search failed', 'error')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [currentWorkspace?.id, addToast],
+  )
 
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.trim()) search(query)
-      else { setHits(null); setPartial([]) }
+      else {
+        setHits(null)
+        setPartial([])
+      }
     }, 300)
     return () => clearTimeout(timer)
   }, [query, search])
@@ -90,7 +96,7 @@ export default function WorkspaceSearchPage() {
           label: meta.label,
           color: meta.color,
           link: meta.link,
-          items: items.map(h => ({ id: h.id, type: store, title: h.title, detail: h.detail })),
+          items: items.map((h) => ({ id: h.id, type: store, title: h.title, detail: h.detail })),
         })
       }
     }
@@ -118,7 +124,7 @@ export default function WorkspaceSearchPage() {
             groups={groups}
             total={hits.length}
             query={query}
-            onNavigate={link => router.push(link)}
+            onNavigate={(link) => router.push(link)}
           />
         </>
       )}

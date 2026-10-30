@@ -45,9 +45,15 @@ export function useSidebarSearch(conversations: Conversation[]): UseSidebarSearc
         return (a.name || '').localeCompare(b.name || '')
       }
       if (sortMode === 'messages') {
-        return (b.message_count ?? b.messages?.length ?? 0) - (a.message_count ?? a.messages?.length ?? 0)
+        return (
+          (b.message_count ?? b.messages?.length ?? 0) -
+          (a.message_count ?? a.messages?.length ?? 0)
+        )
       }
-      return new Date(b.updated_at || b.updatedAt || 0).getTime() - new Date(a.updated_at || a.updatedAt || 0).getTime()
+      return (
+        new Date(b.updated_at || b.updatedAt || 0).getTime() -
+        new Date(a.updated_at || a.updatedAt || 0).getTime()
+      )
     })
   }, [conversations, sortMode])
 
@@ -64,39 +70,45 @@ export function useSidebarSearch(conversations: Conversation[]): UseSidebarSearc
     searchDebounceRef.current = setTimeout(async () => {
       try {
         const results = await sessionController.search(q, 30)
-        setServerSearchResults(results.map(r => ({
-          id: r.id,
-          name: deriveConversationTitle(r.name),
-          session_id: r.id,
-          messages: r.matches?.map(m => ({ id: m.timestamp, role: m.role, content: m.content })) || [],
-          updated_at: r.updated_at,
-          created_at: r.created_at,
-          pinned: false,
-          starred: false,
-          message_count: r.match_count,
-        })))
+        setServerSearchResults(
+          results.map((r) => ({
+            id: r.id,
+            name: deriveConversationTitle(r.name),
+            session_id: r.id,
+            messages:
+              r.matches?.map((m) => ({ id: m.timestamp, role: m.role, content: m.content })) || [],
+            updated_at: r.updated_at,
+            created_at: r.created_at,
+            pinned: false,
+            starred: false,
+            message_count: r.match_count,
+          })),
+        )
       } catch {
         setServerSearchResults(null)
       } finally {
         setServerSearchLoading(false)
       }
     }, 300)
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    }
   }, [q])
 
   const filtered = useMemo(() => {
     if (!q) return sorted
     if (serverSearchResults) return serverSearchResults
-    return sorted.filter(c =>
-      c.name?.toLowerCase().includes(q) ||
-      c.messages?.some(m => m.content?.toLowerCase().includes(q))
+    return sorted.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(q) ||
+        c.messages?.some((m) => m.content?.toLowerCase().includes(q)),
     )
   }, [sorted, q, serverSearchResults])
 
-  const starred = useMemo(() => filtered.filter(c => c.starred).slice(0, 10), [filtered])
-  const unstarred = useMemo(() => filtered.filter(c => !c.starred), [filtered])
-  const pinned = useMemo(() => unstarred.filter(c => c.pinned), [unstarred])
-  const unpinned = useMemo(() => unstarred.filter(c => !c.pinned), [unstarred])
+  const starred = useMemo(() => filtered.filter((c) => c.starred).slice(0, 10), [filtered])
+  const unstarred = useMemo(() => filtered.filter((c) => !c.starred), [filtered])
+  const pinned = useMemo(() => unstarred.filter((c) => c.pinned), [unstarred])
+  const unpinned = useMemo(() => unstarred.filter((c) => !c.pinned), [unstarred])
 
   function recencyGroup(dateStr: string | undefined): string {
     if (!dateStr) return 'Older'
@@ -117,7 +129,7 @@ export function useSidebarSearch(conversations: Conversation[]): UseSidebarSearc
         seen.add(label)
         groups.push({ label, conversations: [] })
       }
-      const group = groups.find(g => g.label === label)!
+      const group = groups.find((g) => g.label === label)!
       if (group.conversations.length < 15) group.conversations.push(c)
     }
     const order = ['Today', 'Yesterday', 'Last 7 days', 'Older']

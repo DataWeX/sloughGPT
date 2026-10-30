@@ -321,7 +321,7 @@ export default function PronunciationGame() {
         {gameState === 'finished' && (
           <div className="space-y-3">
             <div className="p-4 rounded-lg bg-muted/30 text-center space-y-2">
-              <p className="text-lg font-bold">Game Over!</p>
+              <p className="text-base font-bold">Game Over!</p>
               <p className="text-3xl font-bold text-primary">
                 {totalScore}/{maxScore}
               </p>

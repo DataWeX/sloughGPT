@@ -31,12 +31,17 @@ from fastapi.routing import APIRoute
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import endpoint, success_response
 
-# key -> (path, method): the measured first-paint domain reads of the
-# landing journey (prod-build inventory, card 342d729f, 2026-10-21).
-_BOOTSTRAP_MEMBERS: dict[str, tuple[str, str]] = {
+# key -> (path, method[, fixed kwargs]): the measured first-paint domain
+# reads of the landing journey (prod-build inventory, card 342d729f,
+# 2026-10-21).  An optional third element injects fixed kwargs on top of
+# the signature-resolved ones — the aggregate's one deliberate divergence
+# from the individual endpoint's default contract: ``models`` runs in
+# shallow first-paint mode (local HF cache only, no Hub fan-out), because
+# the fan-out is what made a cold /bootstrap take 4.3s for that member.
+_BOOTSTRAP_MEMBERS: dict[str, tuple] = {
     "health": ("/health", "GET"),
     "startup_progress": ("/health/startup-progress", "GET"),
-    "models": ("/models/hf", "GET"),
+    "models": ("/models/hf", "GET", {"shallow": True}),
     "consciousness_status": ("/consciousness/status", "GET"),
     "souls": ("/souls", "GET"),
     "sessions": ("/chat/sessions", "GET"),
@@ -133,13 +138,24 @@ class BootstrapRouter:
         members are ``null`` with an entry in ``data.errors``.
         """
 
-        async def call(key: str, path: str, method: str) -> tuple[str, Any, str | None]:
+        async def call(key: str, spec: tuple) -> tuple[str, Any, str | None]:
+            path, method, *rest = spec
+            fixed: dict[str, Any] = rest[0] if rest else {}
             route = _get_route(request, path, method)
             if route is None:
                 return key, None, "not_ready"
             try:
                 fn = route.endpoint
                 kwargs = await _member_kwargs(fn, request, auth_user)
+                if fixed:
+                    # validate before applying so a stale spec member name
+                    # degrades loudly (member error entry), never silently
+                    unknown = set(fixed) - set(inspect.signature(fn).parameters)
+                    if unknown:
+                        raise TypeError(
+                            f"member fixed kwargs {sorted(unknown)!r} not in handler signature"
+                        )
+                    kwargs.update(fixed)
                 # @endpoint-wrapped async handlers look sync to
                 # iscoroutinefunction — unwrap before classifying; a sync
                 # wrapper that returns a coroutine is awaited after the
@@ -155,7 +171,7 @@ class BootstrapRouter:
                 return key, None, f"{type(exc).__name__}: {exc}"
 
         results = await asyncio.gather(
-            *(call(key, path, method) for key, (path, method) in _BOOTSTRAP_MEMBERS.items())
+            *(call(key, spec) for key, spec in _BOOTSTRAP_MEMBERS.items())
         )
         members: dict[str, Any] = {}
         errors: dict[str, str] = {}

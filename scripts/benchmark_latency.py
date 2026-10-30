@@ -5,6 +5,7 @@ Usage:
     python scripts/benchmark_latency.py          # run and compare to baseline
     python scripts/benchmark_latency.py --update  # update baseline
     python scripts/benchmark_latency.py --ci      # exit non-zero if regression >20%
+    python scripts/benchmark_latency.py --url http://localhost:8010  # target another server
 """
 
 import json
@@ -81,10 +82,18 @@ def save_baseline(data: dict):
 
 
 def main():
-    args = set(sys.argv[1:])
+    argv = sys.argv[1:]
+    args = set(argv)
     update = "--update" in args
     ci_mode = "--ci" in args
     url = "http://localhost:8000"
+    if "--url" in args:
+        idx = argv.index("--url")
+        if idx + 1 < len(argv):
+            url = argv[idx + 1]
+        else:
+            print("[FAIL] --url requires a value", file=sys.stderr)
+            sys.exit(2)
 
     print(f"[BENCH] Measuring latency against {url}...")
     result = measure_latency(url=url, runs=3)

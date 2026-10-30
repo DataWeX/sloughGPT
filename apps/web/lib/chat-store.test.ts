@@ -85,7 +85,9 @@ if (typeof globalThis.requestAnimationFrame !== 'function') {
   globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) =>
     setTimeout(() => cb(0), 16)) as unknown as typeof requestAnimationFrame
   globalThis.cancelAnimationFrame = ((id: number) =>
-    clearTimeout(id as unknown as ReturnType<typeof setTimeout>)) as unknown as typeof cancelAnimationFrame
+    clearTimeout(
+      id as unknown as ReturnType<typeof setTimeout>,
+    )) as unknown as typeof cancelAnimationFrame
 }
 
 const makeConfig = (): ChatConfig => ({

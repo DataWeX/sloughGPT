@@ -158,7 +158,7 @@ export default function PronunciationDictation() {
               <p className="text-sm font-medium">
                 {userInput.toLowerCase() === currentWord.toLowerCase() ? 'Correct!' : 'Not quite'}
               </p>
-              <p className="text-lg font-mono mt-1">{currentWord}</p>
+              <p className="text-base font-mono mt-1">{currentWord}</p>
               <p className="text-xs text-muted-foreground mt-1">Your answer: {userInput}</p>
             </div>
             <Button onClick={pickNewWord} className="w-full">

@@ -558,3 +558,77 @@ project: what's moving, what's blocked, what's next.
 - Raw transition codes, engine internals, or JSON payloads
 - Silent failures — every rejected move produces visible feedback
 - A different board state after refresh than the one they just acted on
+
+---
+
+## Mobile Journeys
+
+Same golden rule as the web: plain language, no jargon, no technical terms.
+These journeys are the in-code test paths for the mobile app — each one is
+mapped to its implementation files and its tests in
+`domain/journeys/flows.py`, and `scripts/journey_report.py` shows per-journey
+results.
+
+### Mobile: Organize My Conversations
+
+**What the user sees:**
+
+- Open the conversation drawer → recent chats, just like the web sidebar
+- A "+ new folder" action creates a folder (e.g. "Work", "Trips") with a typed name
+- Long-press a conversation → a familiar action sheet: Rename, Move to Folder, Clone, Delete
+- Moving a chat into a folder shows a small colored badge next to the title
+- Tapping a folder chip in the drawer filters the list to just that folder; tap again to see everything
+- "Clone" makes an exact copy of a chat (same messages, new title "... (Copy)") so experimenting doesn't destroy the original
+- Starred conversations are marked with a star and stay easy to find
+
+**What they should NOT see:**
+
+- Session IDs, storage keys, or cache messages
+- "Duplicate session" or "deep copy" — it's just "Clone"
+- Anything that loses their original chat when cloning
+
+### Mobile: See What the AI Sees
+
+**What the user sees:**
+
+- A quiet "+ Context" nudge above the keyboard → tap, type a note (e.g. "I'm writing a wedding speech"), Send — from now on the AI knows it in this chat
+- Details → "Context Window" shows what the AI is actually holding right now: system prompt, knowledge, the back-and-forth — grouped in plain-language sections
+- Each section says roughly how big it is in plain words; a refresh button re-reads the live state
+- If there's nothing yet, it says so plainly — never a blank screen or an error code
+
+**What they should NOT see:**
+
+- Token counts as raw jargon without context, model names, or prompt IDs
+- API errors or stack traces when inspection fails — a friendly "Couldn't read it, try again"
+
+### Mobile: Branch a Conversation
+
+**What the user sees:**
+
+- Long-press any message → a familiar action sheet with "Branch from here"
+- Tapping it forks the chat: everything up to and including that message becomes a new conversation, opened right away
+- The new chat is named "... (Branch)" and shows up in the drawer beside the original — the original is never changed
+- Details → "Branch Lineage" shows where this chat came from: this session first, then its parents, in plain words
+- Branching from a branch keeps the whole family tree reachable
+
+**What they should NOT see:**
+
+- Message IDs, parent pointers, or "fork" jargon — it's "Branch from here"
+- A branch that arrives missing the earlier messages it should have copied
+- Any change to the original conversation
+
+### Mobile: Annotate a Message
+
+**What the user sees:**
+
+- Long-press a message → "Add note" → a small note box opens under it; type something only they care about ("the punchline goes here") → Save
+- The note stays pinned under that message as a soft highlighted strip — visible while scrolling, quiet enough not to shout
+- Long-press again → "Edit note" to change it, or clear the text and Save to remove it
+- Notes survive closing and reopening the app, and even reloading the conversation — the note finds its message again
+- Clone or branch a chat and each copy keeps its own notes namespace — annotating a copy never touches the original
+
+**What they should NOT see:**
+
+- Message IDs, storage keys, or anything that orphans a note when the chat reloads
+- Notes leaking into clones/branches of the conversation
+- A blank screen or error when the notes store is empty — no note means no strip

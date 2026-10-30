@@ -128,19 +128,26 @@ describe('useShell', () => {
   it('cancel(reason) appends a visible cancelled row + tracks the event (60s timeout path)', async () => {
     let resolveStream: (() => void) | null = null
     vi.mocked(shellExecStream).mockImplementation(
-      async () => new Promise<void>(r => { resolveStream = r }),
+      async () =>
+        new Promise<void>((r) => {
+          resolveStream = r
+        }),
     )
 
     const { result } = renderHook(() => useShell())
 
-    act(() => { result.current.execute('long command') })
+    act(() => {
+      result.current.execute('long command')
+    })
     expect(result.current.state.isRunning).toBe(true)
 
-    act(() => { result.current.cancel('after 60s timeout') })
+    act(() => {
+      result.current.cancel('after 60s timeout')
+    })
 
     expect(result.current.state.isRunning).toBe(false)
     const visible = result.current.state.rows
-      .map(r => r.spans.map(s => s.text).join(''))
+      .map((r) => r.spans.map((s) => s.text).join(''))
       .join('\n')
     expect(visible).toContain('cancelled')
     expect(visible).toContain('60s')
@@ -152,18 +159,20 @@ describe('useShell', () => {
   })
 
   it('user cancel without a reason stays silent — no cancelled row (timeout-only scope)', async () => {
-    vi.mocked(shellExecStream).mockImplementation(
-      async () => new Promise<void>(() => {}),
-    )
+    vi.mocked(shellExecStream).mockImplementation(async () => new Promise<void>(() => {}))
 
     const { result } = renderHook(() => useShell())
 
-    act(() => { result.current.execute('long command') })
-    act(() => { result.current.cancel() })
+    act(() => {
+      result.current.execute('long command')
+    })
+    act(() => {
+      result.current.cancel()
+    })
 
     expect(result.current.state.isRunning).toBe(false)
     const visible = result.current.state.rows
-      .map(r => r.spans.map(s => s.text).join(''))
+      .map((r) => r.spans.map((s) => s.text).join(''))
       .join('\n')
     expect(visible).not.toContain('cancelled')
     expect(vi.mocked(trackEvent)).not.toHaveBeenCalledWith(

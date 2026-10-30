@@ -34,15 +34,15 @@ export function AdminErrorTrendCard({
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-md bg-muted/30 px-3 py-2">
             <p className="text-[9px] text-muted-foreground">Total Errors</p>
-            <p className="text-lg font-bold font-mono" data-testid="total-errors">{total}</p>
+            <p className="text-base font-bold font-mono" data-testid="total-errors">{total}</p>
           </div>
           <div className="rounded-md bg-muted/30 px-3 py-2">
             <p className="text-[9px] text-muted-foreground">Grouped</p>
-            <p className="text-lg font-bold font-mono" data-testid="grouped-count">{groupedCount}</p>
+            <p className="text-base font-bold font-mono" data-testid="grouped-count">{groupedCount}</p>
           </div>
           <div className="rounded-md bg-muted/30 px-3 py-2">
             <p className="text-[9px] text-muted-foreground">Last Hour</p>
-            <p className="text-lg font-bold font-mono" data-testid="last-hour-count">{lastHourCount}</p>
+            <p className="text-base font-bold font-mono" data-testid="last-hour-count">{lastHourCount}</p>
           </div>
           <div className="rounded-md bg-muted/30 px-3 py-2">
             <p className="text-[9px] text-muted-foreground">Top Error</p>

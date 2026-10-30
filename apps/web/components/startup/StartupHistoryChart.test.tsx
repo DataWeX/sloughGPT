@@ -25,7 +25,10 @@ describe('StartupHistoryChart', () => {
   })
 
   it('reads records through the shared query cache', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(payload(1))))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(payload(1))),
+    )
     const { container } = render(<StartupHistoryChart />)
     await waitFor(() => expect(screen.getByText('1 runs')).toBeTruthy())
     expect(container.querySelectorAll('.flex-1.flex.flex-col').length).toBe(1)

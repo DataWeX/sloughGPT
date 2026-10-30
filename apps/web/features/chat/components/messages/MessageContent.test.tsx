@@ -27,10 +27,16 @@ describe('MessageContent', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('shows bounce dots for empty assistant message', () => {
-    const { container } = render(<MessageContent content="" role="assistant" />)
+  it('shows bounce dots for empty assistant message while streaming', () => {
+    const { container } = render(<MessageContent content="" role="assistant" isStreaming />)
     const dots = container.querySelectorAll('.animate-bounce')
     expect(dots.length).toBe(3)
+  })
+
+  it('renders nothing for empty assistant message when not streaming', () => {
+    const { container } = render(<MessageContent content="" role="assistant" />)
+    expect(container.innerHTML).toBe('')
+    expect(container.querySelectorAll('.animate-bounce').length).toBe(0)
   })
 
   it('highlights search query in assistant message', () => {

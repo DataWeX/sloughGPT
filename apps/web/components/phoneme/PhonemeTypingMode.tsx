@@ -149,7 +149,7 @@ export default function PhonemeTypingMode() {
               <p className="text-xs text-muted-foreground mb-1">
                 Type these phonemes (space-separated):
               </p>
-              <p className="text-lg font-mono font-bold">{challenge.ipa}</p>
+              <p className="text-base font-mono font-bold">{challenge.ipa}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {challenge.phonemes.length} phonemes
               </p>
@@ -199,7 +199,7 @@ export default function PhonemeTypingMode() {
                   ? 'Correct!'
                   : 'Not quite'}
               </p>
-              <p className="text-lg font-mono mt-1">{challenge.phonemes.join(' ')}</p>
+              <p className="text-base font-mono mt-1">{challenge.phonemes.join(' ')}</p>
               <p className="text-xs text-muted-foreground mt-1">Your answer: {userInput}</p>
             </div>
             <Button onClick={generateChallenge} className="w-full">
