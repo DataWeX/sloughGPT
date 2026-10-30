@@ -907,7 +907,16 @@ git push -u origin feat/<name>   # push your own branch when done
   squash, so the original author SHA (`2f5a399d6`, Oluwatobi Oluyede) stays an
   ancestor of `origin/main`. **This commit had been stranded on local `main`
   only (1 ahead / 52 behind) — landing it was step 1 of reconciling local
-  `main` drift; step 2 (fast-forwarding local `main`) is BLOCKED (see below).**
+  `main` drift. Step 2 did NOT happen:** while this PR's CI ran, the
+  `sloughgpt-api-std` checkout (which holds local `main`) took **2 new local
+  commits** — SWIGLU `f32` decode wiring, card `20261029_153804`, authored
+  05:14–05:15 +0100 2026-10-30 by Oluwatobi Oluyede — i.e. an active session
+  was committing to `main` during the merge. `main` is now **ahead 2 /
+  behind 57**, so a `--ff-only` update is structurally impossible (diverged),
+  and the only alternatives (merge-over / reset) would destroy that
+  in-flight perf work. **Deliberately left untouched (0 dirty files) —
+  api-std's `main` must be reconciled by whoever owns the SWIGLU lane once
+  that work lands.** Do not ff/reset that checkout from another worktree.
 
 - **2026-10-29 14:45Z · PR #248 `fix/message-data-id-expectations` → MERGED (`138de93b1`)** —
   unbreaks `test-core-py` on main (was red on every PR since the
