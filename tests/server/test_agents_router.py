@@ -41,6 +41,36 @@ class TestListAgents:
         assert resp.json()["data"] == []
 
     @patch("domain.agents.get_agent_system")
+    def test_limit_bounds_the_list(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+        sys.list.return_value = [
+            {"id": f"a{i}", "name": f"A{i}", "description": "d"} for i in range(50)
+        ]
+        resp = client.get("/agents?limit=10")
+        assert resp.status_code == 200
+        assert len(resp.json()["data"]) == 10
+
+    @patch("domain.agents.get_agent_system")
+    def test_limit_clamped_to_1000(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+        sys.list.return_value = [
+            {"id": f"a{i}", "name": f"A{i}", "description": "d"} for i in range(5)
+        ]
+        resp = client.get("/agents?limit=99999")
+        assert resp.status_code == 200
+        assert len(resp.json()["data"]) == 5
+
+    @patch("domain.agents.get_agent_system")
+    def test_no_limit_keeps_full_list(self, mock_get_sys, client):
+        sys = mock_get_sys.return_value
+        sys.list.return_value = [
+            {"id": f"a{i}", "name": f"A{i}", "description": "d"} for i in range(30)
+        ]
+        resp = client.get("/agents")
+        assert resp.status_code == 200
+        assert len(resp.json()["data"]) == 30
+
+    @patch("domain.agents.get_agent_system")
     def test_returns_passthrough_entries(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.list.return_value = [

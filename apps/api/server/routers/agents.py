@@ -106,10 +106,18 @@ class AgentsRouter:
         return get_agent_system()
 
     @endpoint("agents.list_agents")
-    async def list_agents(self) -> dict:
-        """List all agents stored in the agent system."""
+    async def list_agents(self, limit: int | None = None) -> dict:
+        """List agents stored in the agent system.
+
+        Optional ``limit`` (1..1000) bounds the payload — the live store has
+        accumulated hundreds of entries and the full dump is a production
+        hazard. Omitted = full list (backward compatible).
+        """
         system = self._get_system()
         agents = await asyncio.to_thread(system.list)
+        if limit is not None:
+            clamped = max(1, min(int(limit), 1000))
+            agents = agents[:clamped]
         return success_response(data=[AgentOut(**a).model_dump() for a in agents])
 
     @endpoint("agents.create_agent")
