@@ -82,7 +82,12 @@ REGRESSION_THRESHOLDS = {
         # Shared box: decode swings ±50% with loadavg alone (measured
         # 16.13 @ load 4.3 vs 11.6 @ load 8.8 on the same commit), so the
         # regression bar is generous; load_s is recorded for interpretation.
+        # Headline = marginal slope; naive_tok_s.<n> gates the two ends of
+        # the context-growth curve (short-context throughput and the
+        # long-context fade the slope alone can hide).
         "decode_tok_s": (30.0, "rel"),
+        "naive_tok_s.32": (30.0, "rel"),
+        "naive_tok_s.256": (30.0, "rel"),
     },
 }
 
@@ -439,8 +444,11 @@ def do_history(args) -> int:
                         f"errs={c.get('member_errors', '?')}  {p.name}"
                     )
                 elif kind == "inference":
+                    naive = c.get("naive_tok_s") or {}
                     print(
                         f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"naive32={str(naive.get('32', '?')):<7} "
+                        f"naive256={str(naive.get('256', '?')):<7} "
                         f"provider={str(c.get('provider_tok_s', '?')):<7} "
                         f"load={c.get('loadavg', '?')}  {p.name}"
                     )

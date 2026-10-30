@@ -116,6 +116,9 @@ def main() -> int:
                     "points": [
                         {"n": n, "s": round(s, 3), "naive_tok_s": round(v, 2)} for n, s, v in rows
                     ],
+                    # per-size naive averages as a flat map — keyed for
+                    # benchmark_results dotted metrics (naive_tok_s.<n>)
+                    "naive_tok_s": {str(n): round(v, 2) for n, s, v in rows},
                     "flags": flags,
                     "target": args.target,
                 }
