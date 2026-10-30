@@ -66,6 +66,88 @@ def _records_from_text_file(path: Path) -> Iterator[str]:
         yield text
 
 
+# SPDX aliases for common non-SPDX license names returned by GitHub/HF APIs.
+_LICENSE_ALIASES = {
+    "mit": "MIT",
+    "apache-2.0": "Apache-2.0",
+    "apache 2.0": "Apache-2.0",
+    "bsd-2-clause": "BSD-2-Clause",
+    "bsd-3-clause": "BSD-3-Clause",
+    "gpl-3.0": "GPL-3.0-only",
+    "gpl-3.0-only": "GPL-3.0-only",
+    "gpl-3.0-or-later": "GPL-3.0-or-later",
+    "lgpl-2.1": "LGPL-2.1-only",
+    "mpl-2.0": "MPL-2.0",
+    "isc": "ISC",
+    "unlicense": "Unlicense",
+    "cc0-1.0": "CC0-1.0",
+    "cc-by-4.0": "CC-BY-4.0",
+    "cc-by-sa-4.0": "CC-BY-SA-4.0",
+}
+
+
+def normalize_license(raw: str | None) -> str | None:
+    """Best-effort SPDX id from a raw license name, or None when unknown.
+
+    Never invents a license — an unrecognized name returns None and the
+    manifest omits ``license_spdx`` (no provenance, no seal).
+    """
+    if not raw:
+        return None
+    key = raw.strip().lower()
+    if key in _LICENSE_ALIASES:
+        return _LICENSE_ALIASES[key]
+    # Already an SPDX-looking id (e.g. "MIT", "Apache-2.0", "GPL-3.0-or-later")
+    if raw.strip() and " " not in raw.strip() and len(raw.strip()) <= 32:
+        return raw.strip()
+    return None
+
+
+def fetch_github_license(repo_url: str) -> str | None:
+    """Fetch SPDX license for a GitHub repo via the public API (no auth).
+
+    Returns None on any network/parse failure — caller omits the field.
+    """
+    import urllib.request
+
+    # https://github.com/owner/repo[.git] -> owner/repo
+    parts = repo_url.rstrip("/").removesuffix(".git").split("/")
+    if len(parts) < 2:
+        return None
+    owner, repo = parts[-2], parts[-1]
+    api = f"https://api.github.com/repos/{owner}/{repo}/license"
+    try:
+        with urllib.request.urlopen(api, timeout=10) as resp:  # noqa: S310 — fixed https host
+            data = json.loads(resp.read().decode("utf-8"))
+        spdx = (data.get("license") or {}).get("spdx_id")
+        if spdx and spdx != "NOASSERTION":
+            return normalize_license(spdx)
+    except Exception:  # noqa: BLE001 — any API failure just omits the field
+        pass
+    return None
+
+
+def fetch_hf_license(dataset_id: str) -> str | None:
+    """Fetch SPDX license for an HF dataset via the Hub metadata API.
+
+    Returns None on any network/parse failure — caller omits the field.
+    """
+    import urllib.request
+
+    api = f"https://huggingface.co/api/datasets/{dataset_id}"
+    try:
+        with urllib.request.urlopen(api, timeout=10) as resp:  # noqa: S310 — fixed https host
+            data = json.loads(resp.read().decode("utf-8"))
+        card = data.get("cardData") or {}
+        raw = card.get("license") or data.get("license")
+        if isinstance(raw, list) and raw:
+            raw = raw[0]
+        return normalize_license(raw if isinstance(raw, str) else None)
+    except Exception:  # noqa: BLE001 — any API failure just omits the field
+        pass
+    return None
+
+
 def acquire_records(source: str, src: str, *, work_dir: Path) -> Iterator[str]:
     """Yield raw text records for the cruncher from one source."""
     if source == "local":
@@ -150,7 +232,17 @@ def build_corpus(
     store_root: Path | None = None,
     work_dir: Path | None = None,
 ) -> str:
-    """Acquire, crunch, and seal one corpus; return the trainer data_path."""
+    """Acquire, crunch, and seal one corpus; return the trainer data_path.
+
+    For ``hf`` and ``github`` sources, when *license_spdx* is not given the
+    license is auto-fetched from the HF Hub card / GitHub API. An unknown
+    license is omitted from the manifest (no provenance, no seal).
+    """
+    if license_spdx is None and source == "github":
+        license_spdx = fetch_github_license(src)
+    if license_spdx is None and source == "hf":
+        license_spdx = fetch_hf_license(src)
+
     work = work_dir or Path("runs") / "build_corpus"
     work.mkdir(parents=True, exist_ok=True)
     store = SnapshotStore(store_root) if store_root else SnapshotStore()
