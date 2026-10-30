@@ -48,8 +48,8 @@ describe('isStoredThemeId', () => {
 })
 
 describe('PALETTE_IDS', () => {
-  it('contains 3 palette ids', () => {
-    expect(PALETTE_IDS).toEqual(['noir-violet', 'neural-precision', 'system-cobalt'])
+  it('contains 4 palette ids', () => {
+    expect(PALETTE_IDS).toEqual(['noir-violet', 'neural-precision', 'system-cobalt', 'rose-blue'])
   })
 
   it('has labels for every palette', () => {
@@ -63,6 +63,11 @@ describe('PALETTE_IDS', () => {
     expect(PALETTE_LABELS['system-cobalt']).toBe('Operating System Blue')
     expect(PALETTE_COLORS['system-cobalt']).toBe('#17599d')
   })
+
+  it('rose-blue projects its label and swatch from the palette protocol', () => {
+    expect(PALETTE_LABELS['rose-blue']).toBe('Rose Blue')
+    expect(PALETTE_COLORS['rose-blue']).toBe('#5a5fc0')
+  })
 })
 
 describe('isStoredPaletteId', () => {
@@ -70,6 +75,7 @@ describe('isStoredPaletteId', () => {
     expect(isStoredPaletteId('noir-violet')).toBe(true)
     expect(isStoredPaletteId('neural-precision')).toBe(true)
     expect(isStoredPaletteId('system-cobalt')).toBe(true)
+    expect(isStoredPaletteId('rose-blue')).toBe(true)
   })
 
   it('returns false for invalid palette id', () => {

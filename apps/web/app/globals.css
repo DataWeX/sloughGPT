@@ -1278,6 +1278,102 @@ html.dark.palette-system-cobalt select:active {
   border-color: rgb(46,170,230);
 }
 
+/* Rose Blue (rose-blue) — PROJECTION of apps/web/lib/rose-blue-palette.ts.
+   Do not hand-edit: apps/web/lib/rose-blue-palette.test.ts re-runs the OKLCH derivation
+   and fails if this block drifts from the module. */
+html.palette-rose-blue {
+  --background: 245 247 255;
+  --foreground: 39 41 54;
+  --card: 255 255 255;
+  --card-foreground: 39 41 54;
+  --popover: 255 255 255;
+  --popover-foreground: 39 41 54;
+  --primary: 90 95 192;
+  --primary-foreground: 255 255 255;
+  --secondary: 227 231 255;
+  --secondary-foreground: 42 45 59;
+  --muted: 235 238 255;
+  --muted-foreground: 110 114 143;
+  --accent: 190 62 106;
+  --accent-foreground: 255 246 250;
+  --ring: 90 95 192;
+  --border: 207 213 247;
+  --input: 207 213 247;
+  --chart-1: 90 95 192;
+  --chart-2: 190 62 106;
+  --chart-3: 90 95 192;
+  --chart-4: 52 176 125;
+  --chart-5: 220 80 90;
+  --shadow-sm: 0 1px 2px rgba(35, 43, 52, 0.06);
+  --shadow-md: 0 4px 12px rgba(35, 43, 52, 0.08);
+  --shadow-lg: 0 8px 30px rgba(35, 43, 52, 0.10);
+  --shadow-xl: 0 16px 48px rgba(35, 43, 52, 0.14);
+}
+html.dark.palette-rose-blue {
+  --chat-bg: 9 11 23;
+  --background: 9 11 23;
+  --foreground: 235 241 248;
+  --card: 29 33 55;
+  --card-foreground: 235 241 248;
+  --popover: 40 45 72;
+  --popover-foreground: 235 241 248;
+  --primary: 168 182 255;
+  --primary-foreground: 8 18 28;
+  --secondary: 40 45 72;
+  --secondary-foreground: 235 241 248;
+  --muted: 29 33 55;
+  --muted-foreground: 152 163 178;
+  --accent: 255 148 186;
+  --accent-foreground: 38 8 20;
+  --ring: 168 182 255;
+  --border: 58 65 101;
+  --input: 58 65 101;
+  --chart-1: 168 182 255;
+  --chart-2: 255 148 186;
+  --chart-3: 108 119 180;
+  --chart-4: 52 176 125;
+  --chart-5: 235 100 110;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+html.palette-rose-blue {
+  accent-color: rgb(var(--primary));
+}
+html.palette-rose-blue option {
+  background-color: rgb(var(--popover));
+  color: rgb(var(--popover-foreground));
+}
+html.palette-rose-blue option:checked {
+  background-color: rgb(90,95,192);
+  color: rgb(var(--primary-foreground));
+}
+html.palette-rose-blue option:hover {
+  background-color: rgb(59,62,137);
+  color: rgb(var(--primary-foreground));
+}
+html.palette-rose-blue select:hover {
+  border-color: rgb(114,122,213);
+}
+html.palette-rose-blue select:active {
+  border-color: rgb(40,41,103);
+}
+html.dark.palette-rose-blue option:checked {
+  background-color: rgb(168,182,255);
+  color: rgb(var(--primary-foreground));
+}
+html.dark.palette-rose-blue option:hover {
+  background-color: rgb(212,220,255);
+  color: rgb(var(--primary-foreground));
+}
+html.dark.palette-rose-blue select:hover {
+  border-color: rgb(108,119,180);
+}
+html.dark.palette-rose-blue select:active {
+  border-color: rgb(140,153,224);
+}
+
 /* Accent themes — website color for accented elements (message bubbles,
    buttons, focus rings). Override --primary/--ring on <html> so the chosen
    accent wins even when a palette class is present; the palette still
