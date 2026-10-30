@@ -279,14 +279,30 @@ class AgentRunStore:
             )
         return examples
 
-    def export_training_jsonl(self, path: str, limit: int | None = None) -> int:
-        """Write training examples to ``path`` as JSONL; returns line count."""
+    def export_training_jsonl(
+        self,
+        path: str,
+        limit: int | None = None,
+        predicate: Any | None = None,
+    ) -> int:
+        """Write training examples to ``path`` as JSONL; returns line count.
+
+        Full rewrite through an atomic writer: re-exporting the same store to
+        a stable path is idempotent — the file always mirrors the current set
+        of completed runs, so a run_id never appears twice. ``predicate``
+        optionally gates examples at this write boundary (the self-gen gate
+        pattern lives at the producer, not in the trainer).
+        """
         import json
 
+        from domain.infrastructure._internal.atomic_write import atomic_writer
+
         examples = self.training_examples()
+        if predicate is not None:
+            examples = [ex for ex in examples if predicate(ex)]
         if limit is not None:
             examples = examples[: max(0, limit)]
-        with open(path, "w", encoding="utf-8") as fh:
+        with atomic_writer(path, binary=False, encoding="utf-8") as fh:
             for example in examples:
                 fh.write(json.dumps(example, ensure_ascii=False) + "\n")
         return len(examples)

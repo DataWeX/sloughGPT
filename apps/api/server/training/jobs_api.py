@@ -7,12 +7,14 @@ import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
+from domain.infrastructure._internal.atomic_write import atomic_writer
 from domain.training._internal.executor import get_training_executor
 
 from .jobs import training_jobs
@@ -330,29 +332,124 @@ class ExportTextRequest(BaseModel):
 
     min_quality: float = Field(default=0, ge=0.0, le=1.0)
     target_count: int = Field(default=100, ge=1, le=10000)
+    source: Literal["feedback", "agent-run", "all"] = Field(
+        default="feedback",
+        description=(
+            "Producer to export: feedback records (raw pairs), completed "
+            "agent runs (trainer-ready JSONL), or both normalized to one "
+            "trainer JSONL."
+        ),
+    )
+
+
+def _training_export_dir() -> Path:
+    """Export directory — stable seam (tests monkeypatch this)."""
+    from domain.shared import find_repo_root
+
+    return find_repo_root(Path(__file__).resolve()) / "data" / "training_exports"
+
+
+def _example_quality_gate(min_quality: float):
+    """Predicate over trainer-ready examples; ``None`` passes everything.
+
+    Reuses the self-gen gate pattern: score at the producer's write
+    boundary, never inside the trainer. ``score_text_chunk`` is 0-5,
+    ``min_quality`` is 0-1 — normalized here.
+    """
+    if min_quality <= 0:
+        return None
+    from domain.training._internal.quality_scorer import score_text_chunk
+
+    def gate(example: dict) -> bool:
+        text = example.get("messages", [{}])[-1].get("content", "")
+        return score_text_chunk(text) / 5.0 >= min_quality
+
+    return gate
 
 
 @router.post("/training/export-text")
 async def export_feedback_pairs(request: ExportTextRequest):
-    """Export feedback conversation pairs with a minimum quality threshold."""
-    from controllers.feedback import get_feedback_controller
+    """Export training data from a source through the existing export door.
 
-    ctrl = get_feedback_controller()
-    pairs = []
-    # Feedback records live in MogDB since the controller refactor (the
-    # filesystem ``feedback_dir`` no longer exists) — read them from the
-    # controller's collection, preserving the original filter semantics:
-    # conversational pairs only, min_quality threshold, cap at target_count.
-    for fb in ctrl.feedback_collection.find():
-        if fb.get("user_message") and fb.get("assistant_response"):
-            if fb.get("quality", 0) < request.min_quality:
-                continue
-            pairs.append(fb)
-            if len(pairs) >= request.target_count:
-                break
-    export_dir = Path(ctrl.repo_root) / "data" / "training_exports"
+    ``feedback`` keeps its legacy raw-pair JSON shape (grandfathered
+    contract); ``agent-run`` and ``all`` emit the trainer-ready JSONL
+    shape ``{"messages": [...]}`` (agent-run exports rewrite a stable
+    path atomically, so re-export is idempotent — no run_id twice).
+    """
+    export_dir = _training_export_dir()
     export_dir.mkdir(parents=True, exist_ok=True)
-    output_file = export_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
-    with open(output_file, "w") as f:
-        json.dump(pairs, f, indent=2)
-    return {"pairs_count": len(pairs), "file": str(output_file), "status": "exported"}
+    source = request.source
+
+    if source in ("feedback", "all"):
+        from controllers.feedback import get_feedback_controller
+
+        ctrl = get_feedback_controller()
+        pairs = []
+        # Feedback records live in MogDB since the controller refactor (the
+        # filesystem ``feedback_dir`` no longer exists) — read them from the
+        # controller's collection, preserving the original filter semantics:
+        # conversational pairs only, min_quality threshold, cap at target_count.
+        for fb in ctrl.feedback_collection.find():
+            if fb.get("user_message") and fb.get("assistant_response"):
+                if fb.get("quality", 0) < request.min_quality:
+                    continue
+                pairs.append(fb)
+                if len(pairs) >= request.target_count:
+                    break
+
+        if source == "feedback":
+            output_file = export_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+            with atomic_writer(output_file, binary=False, encoding="utf-8") as f:
+                json.dump(pairs, f, indent=2)
+            return {
+                "pairs_count": len(pairs),
+                "file": str(output_file),
+                "status": "exported",
+                "source": source,
+            }
+
+    # agent-run / all — trainer-ready JSONL through the run store
+    from domain.agents._internal.run_history import get_agent_run_store
+
+    store = get_agent_run_store()
+    gate = _example_quality_gate(request.min_quality)
+
+    if source == "agent-run":
+        # Stable path + full rewrite = idempotent re-export by construction.
+        output_file = export_dir / "agent_runs.jsonl"
+        count = store.export_training_jsonl(
+            str(output_file), limit=request.target_count, predicate=gate
+        )
+        return {
+            "pairs_count": count,
+            "file": str(output_file),
+            "status": "exported",
+            "source": source,
+        }
+
+    # source == "all": normalize both producers into one trainer JSONL —
+    # feedback pairs gain the messages shape, agent runs keep theirs.
+    examples = [
+        {
+            "messages": [
+                {"role": "user", "content": fb["user_message"]},
+                {"role": "assistant", "content": fb["assistant_response"]},
+            ],
+            "source": "feedback",
+        }
+        for fb in pairs
+    ]
+    agent_examples = store.training_examples()
+    if gate is not None:
+        agent_examples = [ex for ex in agent_examples if gate(ex)]
+    examples = (examples + agent_examples)[: request.target_count]
+    output_file = export_dir / "all_sources.jsonl"
+    with atomic_writer(output_file, binary=False, encoding="utf-8") as f:
+        for example in examples:
+            f.write(json.dumps(example, ensure_ascii=False) + "\n")
+    return {
+        "pairs_count": len(examples),
+        "file": str(output_file),
+        "status": "exported",
+        "source": source,
+    }
