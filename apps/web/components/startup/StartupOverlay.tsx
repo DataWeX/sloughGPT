@@ -170,7 +170,7 @@ export function StartupOverlay() {
     return (
       <div className={overlayClassName}>
         <div className="mb-6">
-          <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
+          <ManMark className="h-12 w-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/20" />
         </div>
 
         <h2 className="text-[14px] font-medium text-term-text mb-3">Still connecting</h2>
@@ -212,7 +212,7 @@ export function StartupOverlay() {
     <div className={overlayClassName}>
       {/* Logo */}
       <div className="mb-8">
-        <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
+        <ManMark className="h-12 w-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/20" />
       </div>
 
       {/* Stage label */}

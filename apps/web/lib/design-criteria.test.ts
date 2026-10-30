@@ -45,7 +45,13 @@ export function stripComments(src: string): string {
  * theme-constant and equal the old values), planner helpers (dead
  * COMMIT_COLORS deleted).)
  */
-const HEX_BASELINE = ['components/ThemeProvider.tsx']
+const HEX_BASELINE = [
+  // Theme swatch *data* — same class as ThemeProvider below.
+  'lib/os-blue-palette.ts',
+  // theme-id → accent-hex map (picker data), same exemption.
+  'lib/theme-storage.ts',
+  'components/ThemeProvider.tsx',
+]
 
 /**
  * Numeric rgb()/rgba() literals NOT routed through a token (`rgb(var(--…))`).
@@ -81,6 +87,75 @@ const STOCK_PALETTE_TOTAL_CEILING = 0
 
 /** This rule also covers lib/ and contexts/ (class strings live there too). */
 const STOCK_SCAN_ROOTS = [...SCAN_ROOTS, 'lib', 'contexts'] as const
+
+/**
+ * Neutral grey wheel utilities (gray/slate/zinc/neutral/stone). The Noir
+ * Violet system replaces greys with semantic tokens (foreground,
+ * muted-foreground, card, muted, border…). BASELINE RATCHET measured
+ * 2026-10-29: 178 instances / 12 files — rows may only shrink; fixing a
+ * file means deleting its row. `components/consciousness/*Notifications*`
+ * and `*QuickActions*` are consciousness-page debt (page excluded from the
+ * burn per product ruling) and may only shrink with the rest.
+ */
+const WHEEL_RE =
+  /\b(?:bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(?:gray|slate|zinc|neutral|stone)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/g
+
+const WHEEL_BASELINE: Record<string, number> = {
+  'components/consciousness/ConsciousnessNotificationsPanel.tsx': 15,
+  'components/consciousness/ConsciousnessQuickActions.tsx': 15,
+}
+
+const WHEEL_TOTAL_CEILING = 30
+
+/**
+ * `text-lg` is not on the type scale (design-system-enforcement skill) —
+ * nearest legal step is `text-base`. Baseline ratchet measured 2026-10-29:
+ * 88 -> 27 instances; only consciousness pages remain (excluded from burn).
+ */
+const TEXT_LG_RE = /\btext-lg\b/g
+
+const TEXT_LG_BASELINE: Record<string, number> = {
+  'app/(app)/consciousness/benchmark/page.tsx': 8,
+  'app/(app)/consciousness/test-runner/page.tsx': 5,
+  'app/(app)/consciousness/playground/page.tsx': 4,
+  'app/(app)/consciousness/health/page.tsx': 4,
+  'app/(app)/consciousness/compare/page.tsx': 3,
+  'app/(app)/consciousness/analytics/page.tsx': 1,
+  'app/(app)/consciousness/docs/page.tsx': 1,
+  'app/(app)/consciousness/master/page.tsx': 1,
+}
+
+const TEXT_LG_TOTAL_CEILING = 27
+
+/**
+ * `text-2xl` is reserved for `components/AppRouteHeader.tsx` (AppRouteHeader
+ * page title). Baseline ratchet measured 2026-10-29: 41 instances / 17 files,
+ * consciousness pages and the magazine styleguide page included as known
+ * debt (magazine renders literal palette/type-scale samples — data class).
+ */
+const TEXT_2XL_RE = /\btext-2xl\b/g
+
+const TEXT_2XL_BASELINE: Record<string, number> = {
+  'app/(app)/consciousness/statistics/page.tsx': 6,
+  'app/(app)/consciousness/analytics/page.tsx': 4,
+  'app/(app)/consciousness/history/page.tsx': 4,
+  'app/(app)/consciousness/master/page.tsx': 4,
+  'components/phoneme/ProgressSummary.tsx': 4,
+  'components/phoneme/PhonemeComparison.tsx': 3,
+  'components/phoneme/ScoringCard.tsx': 3,
+  'app/(app)/magazine/page.tsx': 2,
+  'components/phoneme/MultipleChoiceQuiz.tsx': 2,
+  'components/phoneme/ChallengeCard.tsx': 2,
+  'app/(app)/consciousness/training/page.tsx': 1,
+  'app/(app)/consciousness/insights/page.tsx': 1,
+  'components/security/SecurityAuditCard.tsx': 1,
+  'components/phoneme/PronunciationGame.tsx': 1,
+  'components/phoneme/PronunciationRecording.tsx': 1,
+  'components/phoneme/FlashcardCard.tsx': 1,
+  'features/chat/components/dialogs/ReadFileSection.tsx': 1,
+}
+
+const TEXT_2XL_TOTAL_CEILING = 41
 
 /** Numeric rgb()/rgba() — `rgb(var(--…))` is tokenised and does not match. */
 const RGB_RE = /\brgba?\(\s*\d/
@@ -252,6 +327,114 @@ describe('Design criteria — Noir Violet ratchets', () => {
       `Stock-palette debt grew past ${STOCK_PALETTE_TOTAL_CEILING} instances. ` +
         `Fix files and lower the ceiling — never raise it.`,
     ).toBeLessThanOrEqual(STOCK_PALETTE_TOTAL_CEILING)
+  })
+
+  it('no NEW file introduces neutral-grey wheel utilities', () => {
+    const offenders = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root))).filter(
+      (rel) =>
+        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(WHEEL_RE)?.length,
+    )
+    const unexpected = offenders.filter((f) => !(f in WHEEL_BASELINE))
+    expect(
+      unexpected,
+      `Grey-wheel utilities in NEW files — use text-foreground / ` +
+        `text-muted-foreground / bg-card / bg-muted / border-border ` +
+        `(design-system-enforcement skill). Offenders: ${unexpected.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('grey-wheel per-file counts may only shrink', () => {
+    for (const [rel, max] of Object.entries(WHEEL_BASELINE)) {
+      const src = stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))
+      const now = src.match(WHEEL_RE)?.length ?? 0
+      expect(
+        now,
+        `${rel}: grey-wheel instances grew past baseline ${max} — fix the ` +
+          `file, then lower the row.`,
+      ).toBeLessThanOrEqual(max)
+    }
+  })
+
+  it('grey-wheel TOTAL may only shrink (map additions cannot lift it)', () => {
+    const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
+    let total = 0
+    for (const rel of files) {
+      total += stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(WHEEL_RE)?.length ?? 0
+    }
+    expect(
+      total,
+      `Grey-wheel debt grew past ${WHEEL_TOTAL_CEILING} instances. Fix files ` +
+        `and lower the ceiling — never raise it.`,
+    ).toBeLessThanOrEqual(WHEEL_TOTAL_CEILING)
+  })
+
+  it('no NEW file introduces out-of-scale text-lg', () => {
+    const offenders = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root))).filter(
+      (rel) =>
+        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_LG_RE)?.length,
+    )
+    const unexpected = offenders.filter((f) => !(f in TEXT_LG_BASELINE))
+    expect(
+      unexpected,
+      `text-lg is not on the type scale — use text-base (design-system-` +
+        `enforcement skill). Offenders: ${unexpected.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('text-lg per-file counts may only shrink', () => {
+    for (const [rel, max] of Object.entries(TEXT_LG_BASELINE)) {
+      const src = stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))
+      const now = src.match(TEXT_LG_RE)?.length ?? 0
+      expect(now, `${rel}: text-lg grew past baseline ${max}`).toBeLessThanOrEqual(max)
+    }
+  })
+
+  it('text-lg TOTAL may only shrink', () => {
+    const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
+    let total = 0
+    for (const rel of files) {
+      total += stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_LG_RE)?.length ?? 0
+    }
+    expect(
+      total,
+      `text-lg debt grew past ${TEXT_LG_TOTAL_CEILING}. Fix files and lower ` +
+        `the ceiling — never raise it.`,
+    ).toBeLessThanOrEqual(TEXT_LG_TOTAL_CEILING)
+  })
+
+  it('no NEW file introduces out-of-scope text-2xl', () => {
+    const offenders = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root))).filter(
+      (rel) =>
+        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_2XL_RE)?.length,
+    )
+    const unexpected = offenders.filter((f) => !(f in TEXT_2XL_BASELINE))
+    expect(
+      unexpected,
+      `text-2xl is reserved for AppRouteHeader — use the type scale ` +
+        `(design-system-enforcement skill). Offenders: ${unexpected.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('text-2xl per-file counts may only shrink', () => {
+    for (const [rel, max] of Object.entries(TEXT_2XL_BASELINE)) {
+      const src = stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8'))
+      const now = src.match(TEXT_2XL_RE)?.length ?? 0
+      expect(now, `${rel}: text-2xl grew past baseline ${max}`).toBeLessThanOrEqual(max)
+    }
+  })
+
+  it('text-2xl TOTAL may only shrink', () => {
+    const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
+    let total = 0
+    for (const rel of files) {
+      total +=
+        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_2XL_RE)?.length ?? 0
+    }
+    expect(
+      total,
+      `text-2xl debt grew past ${TEXT_2XL_TOTAL_CEILING}. Fix files and lower ` +
+        `the ceiling — never raise it.`,
+    ).toBeLessThanOrEqual(TEXT_2XL_TOTAL_CEILING)
   })
 
   it('sanity: the catalogue of pages exists (fixture guard)', () => {

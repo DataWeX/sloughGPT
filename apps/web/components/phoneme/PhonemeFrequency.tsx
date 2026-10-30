@@ -65,7 +65,7 @@ function getCategoryColor(category: string): string {
     case 'Vowels':
       return 'bg-warning/15 text-warning'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-muted text-foreground'
   }
 }
 
@@ -141,7 +141,7 @@ export default function PhonemeFrequency() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
           {frequencies.categories.slice(0, 4).map((cat) => (
             <div key={cat.name} className="p-2 rounded-lg bg-muted/30">
-              <p className="text-lg font-bold">{cat.count}</p>
+              <p className="text-base font-bold">{cat.count}</p>
               <p className="text-xs text-muted-foreground">{cat.name}</p>
             </div>
           ))}

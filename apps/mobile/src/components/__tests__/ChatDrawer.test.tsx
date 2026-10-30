@@ -1,14 +1,28 @@
 import React from 'react';
-import {render, fireEvent} from '@testing-library/react-native';
+import {render, fireEvent, screen} from '@testing-library/react-native';
 import {TamaguiProvider} from 'tamagui';
 import appConfig from '../../../tamagui.config';
 import {ChatDrawer} from '../ChatDrawer';
 import {useChatStore} from '../../stores/chat-store';
 import * as starsService from '../../services/stars';
+import * as foldersService from '../../services/folders';
 import {Alert} from 'react-native';
 
 jest.mock('../../stores/chat-store');
 jest.mock('../../services/stars');
+jest.mock('../../services/folders', () => ({
+  getFolders: jest.fn(async () => [
+    {id: 'f1', name: 'Work', createdAt: 1},
+    {id: 'f2', name: 'Personal', createdAt: 2},
+  ]),
+  createFolder: jest.fn(async () => ({id: 'f3', name: 'Ideas', createdAt: 3})),
+  renameFolder: jest.fn(async () => {}),
+  deleteFolder: jest.fn(async () => {}),
+  moveSessionToFolder: jest.fn(async () => {}),
+  getFolderOf: jest.fn(async () => null),
+  getSessionsInFolder: jest.fn(async () => []),
+  _resetCache: jest.fn(),
+}));
 jest.mock('../../services/labels', () => ({
   addLabel: jest.fn(async () => {}),
   removeLabel: jest.fn(async () => {}),
@@ -41,6 +55,8 @@ const mockArchivedSessions = [
   {id: '3', name: 'Old chat', created_at: '2025-12-01', updated_at: '2025-12-02', message_count: 3, archived: true},
 ];
 
+const setFolderFilterSpy = jest.fn();
+
 const defaultProps = {
   visible: true,
   onClose: jest.fn(),
@@ -50,6 +66,8 @@ const defaultProps = {
   allLabels: ['work', 'personal'],
   labelFilter: null as string | null,
   setLabelFilter: jest.fn(),
+  folderFilter: null as string | null,
+  setFolderFilter: setFolderFilterSpy,
   showArchived: false,
   setShowArchived: jest.fn(),
   labelInput: '',
@@ -205,5 +223,70 @@ describe('ChatDrawer', () => {
     const {getAllByTestId} = await renderDrawer();
     fireEvent.press(getAllByTestId('icon-trash-2')[0]);
     expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  // ── folders ──────────────────────────────────────────────────────────────
+
+  it('renders folder chips from the folders service', async () => {
+    const {getByText} = await renderDrawer();
+    expect(await screen.findByText('Work')).toBeTruthy();
+    expect(screen.getByText('Personal')).toBeTruthy();
+  });
+
+  it('filters sessions by folder when folder chip pressed', async () => {
+    (foldersService.getFolderOf as jest.Mock).mockImplementation(async (id: string) =>
+      id === '1' ? 'f1' : null,
+    );
+    const {queryByText} = await renderDrawer({folderFilter: 'f1'});
+    expect(queryByText('First chat')).toBeTruthy();
+    expect(queryByText('Second chat')).toBeNull();
+  });
+
+  it('calls setFolderFilter when folder chip pressed (toggle off when active)', async () => {
+    const {getByTestId} = await renderDrawer({folderFilter: 'f1'});
+    fireEvent.press(getByTestId('folder-chip-f1'));
+    expect(setFolderFilterSpy).toHaveBeenCalledWith(null);
+  });
+
+  it('opens new-folder prompt on plus press and creates the folder', async () => {
+    jest.spyOn(Alert, 'prompt').mockImplementation((_t, _m, cb) => {
+      (cb as any)('Ideas');
+    });
+    const {getByTestId} = await renderDrawer();
+    fireEvent.press(getByTestId('new-folder'));
+    expect(foldersService.createFolder).toHaveBeenCalledWith('Ideas');
+  });
+
+  // ── long-press menu (rename / move / clone / delete) ─────────────────────
+
+  it('opens the session action menu on long-press', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const {getByText} = await renderDrawer();
+    fireEvent(getByText('First chat'), 'longPress');
+    expect(alertSpy).toHaveBeenCalled();
+    const buttons = (alertSpy.mock.calls[0][2] as any[]) || [];
+    const labels = buttons.map(b => b.text);
+    expect(labels).toContain('Rename');
+    expect(labels).toContain('Move to Folder');
+    expect(labels).toContain('Clone');
+    expect(labels).toContain('Delete');
+  });
+
+  it('clones via the action menu using chat-store cloneSession', async () => {
+    const mockClone = jest.fn().mockResolvedValue('new-id');
+    (useChatStore as unknown as jest.Mock).mockReturnValue({
+      loadSession: jest.fn(),
+      deleteSession: jest.fn(),
+      renameSession: jest.fn(),
+      archiveSession: jest.fn(),
+      cloneSession: mockClone,
+    });
+    jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
+      const cloneButton = (buttons as any[])?.find(b => b.text === 'Clone');
+      cloneButton?.onPress?.();
+    });
+    const {getByText} = await renderDrawer();
+    fireEvent(getByText('First chat'), 'longPress');
+    expect(mockClone).toHaveBeenCalledWith('1', 'First chat (Copy)');
   });
 });

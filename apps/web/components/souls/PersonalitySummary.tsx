@@ -151,7 +151,7 @@ export default function PersonalitySummary({
       {currentSoulName && (
         <div className="mb-4 pb-4 border-b border-border/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-[rgb(var(--group-6)/0.2)] border border-primary/30 flex items-center justify-center text-lg shrink-0">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-[rgb(var(--group-6)/0.2)] border border-primary/30 flex items-center justify-center text-base shrink-0">
               {GROUP_ICONS.personality}
             </div>
             <div className="min-w-0 flex-1">
@@ -185,11 +185,11 @@ export default function PersonalitySummary({
               className="flex flex-col items-center p-3 rounded-lg bg-muted/30 border border-border/40 stat-card"
               style={staggerDelay(idx)}
             >
-              <span className="text-lg mb-1">{GROUP_ICONS[group]}</span>
+              <span className="text-base mb-1">{GROUP_ICONS[group]}</span>
               <span className="text-[9px] text-muted-foreground uppercase tracking-wider mb-0.5">
                 {GROUP_LABELS[group]}
               </span>
-              <span className="text-lg font-bold" style={{ color }}>
+              <span className="text-base font-bold" style={{ color }}>
                 {avg}
               </span>
               <div className="w-full h-1.5 rounded-full bg-muted-foreground/10 mt-1.5 overflow-hidden">

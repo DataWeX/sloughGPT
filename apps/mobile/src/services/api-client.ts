@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type {SearchResult} from '../types';
+import type {SearchResult, SessionLineage} from '../types';
 
 const API_URL_KEY = '@sloughgpt/api_url';
 const DEFAULT_URL = 'http://localhost:8000';
@@ -256,6 +256,20 @@ export const api = {
     api.get<SearchResult[]>(
       `/chat/sessions/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`,
     ),
+
+  /** Inspect the live context window (ContextCore inspector). */
+  inspectContext: () => api.get<Record<string, unknown>>('/context/inspect'),
+
+  /** Branch a session at a message index (prefix copy + lineage recorded). */
+  branchSession: (sessionId: string, fromIndex: number, name?: string) =>
+    api.post<{session_id: string; branched_from: string; from_index: number}>(
+      `/chat/sessions/${sessionId}/branch`,
+      name ? {from_index: fromIndex, name} : {from_index: fromIndex},
+    ),
+
+  /** Session branch lineage — parent chain, nearest parent first. */
+  getSessionLineage: (sessionId: string) =>
+    api.get<SessionLineage>(`/chat/sessions/${sessionId}/lineage`),
 
   /** Send a voice message (audio upload) to a session. */
   sendVoiceMessage: (sessionId: string, audioUri: string, durationMs: number) => {

@@ -319,7 +319,7 @@ export default function WordOfDayCard() {
       <CardContent className="space-y-4">
         <div className="p-4 rounded-lg bg-muted/50 text-center space-y-2">
           <p className="text-3xl font-bold">{state.word.word}</p>
-          <p className="text-lg text-muted-foreground font-mono">{state.word.ipa}</p>
+          <p className="text-base text-muted-foreground font-mono">{state.word.ipa}</p>
           <p className="text-sm">{state.word.definition}</p>
           <div className="flex items-center justify-center gap-2">
             <Badge variant="outline">
