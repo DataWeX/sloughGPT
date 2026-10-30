@@ -16,9 +16,18 @@ import time
 
 import requests
 
+# Shared pure gate helpers (fast-lane pinned by tests/test_skip_gate_identity.py):
+# the readiness identity check AND the probe budget (38s < pytest.ini's 120s
+# per-test timeout — the old 158s budget was the setup-timeout mechanism).
+from tests.skip_gate_identity import (
+    PROBE_ATTEMPTS,
+    PROBE_SLEEP,
+    PROBE_TIMEOUT,
+    readiness_payload_ok,
+)
+
 BASE_URL = os.environ.get("MAN_INTEGRATION_BASE_URL", "http://localhost:8000")
 TIMEOUT = int(os.environ.get("MAN_INTEGRATION_TIMEOUT", "120"))
-HEALTH_CHECK_TIMEOUT = int(os.environ.get("MAN_INTEGRATION_HEALTH_TIMEOUT", "30"))
 
 _QUICK_GEN = {"max_new_tokens": 12}
 
@@ -31,17 +40,43 @@ def _data(response):
 
 @pytest.fixture(scope="module", autouse=True)
 def _ensure_api_running():
-    max_retries = 5
-    for i in range(max_retries):
+    """Skip (never error) unless OUR API is ready on BASE_URL.
+
+    Identity probe, not port-open (card 20261029_041801): GET
+    /health/ready and require our nested success envelope with
+    ``data.status == "ready"``. Total budget 38s, safely under the 120s
+    per-test timeout, so the skip is fast and loud — with the probe's
+    last observation in the message.
+    """
+    last = "no attempts"
+    for i in range(PROBE_ATTEMPTS):
         try:
-            response = requests.get(f"{BASE_URL}/health", timeout=HEALTH_CHECK_TIMEOUT)
+            response = requests.get(f"{BASE_URL}/health/ready", timeout=PROBE_TIMEOUT)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last = f"no response ({type(exc).__name__})"
+        else:
             if response.status_code == 200:
-                return
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-            if i < max_retries - 1:
-                time.sleep(2)
+                try:
+                    payload = response.json()
+                except ValueError:
+                    payload = None
+                if readiness_payload_ok(payload):
+                    return
+                last = (
+                    "listener answered /health/ready HTTP 200 but is not our "
+                    f"ready API (payload={str(payload)[:120]!r}) — foreign or "
+                    "still starting"
+                )
+            elif response.status_code in (404, 405):
+                pytest.skip(
+                    f"{BASE_URL} is not the sloughGPT API "
+                    f"(/health/ready -> HTTP {response.status_code})"
+                )
             else:
-                pytest.skip("API server not running")
+                last = f"HTTP {response.status_code} from /health/ready"
+        if i < PROBE_ATTEMPTS - 1:
+            time.sleep(PROBE_SLEEP)
+    pytest.skip(f"our API not ready on {BASE_URL}: {last}")
 
 
 class TestHealthEndpoints:

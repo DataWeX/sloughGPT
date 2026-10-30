@@ -1,3 +1,5 @@
+import crypto from 'node:crypto'
+import fs from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -11,6 +13,21 @@ import { redirectsPlugin } from './vite/redirect-plugin'
 // Phase 2: apiRoutesPlugin serves planner/calendar app/api route handlers in dev.
 // Phase 3: client code codemods onto @/vite/next-compat/* (aliases remain as safety net).
 // Phase 4: redirectsPlugin 307s legacy paths (proxy.ts parity via lib/redirects.ts).
+
+// Tree-identity header (card 20261029_041801): the dev server announces
+// WHICH checkout it serves. Live-stack tests (tests/test_header_screenshots.py)
+// compare this against their own repo root and SKIP — instead of asserting
+// against a foreign vite squatting :5173 — whenever a different tree is
+// answering. Mirrors web_tree_id() in tests/skip_gate_identity.py:
+// sha256(realpath(apps/web)) truncated to 16 hex chars. Node's
+// fs.realpathSync and Python's os.path.realpath both resolve symlinks, so
+// the two sides agree byte-for-byte.
+const webTreeId = crypto
+  .createHash('sha256')
+  .update(fs.realpathSync(__dirname))
+  .digest('hex')
+  .slice(0, 16)
+
 export default defineConfig({
   plugins: [react(), redirectsPlugin(), apiRoutesPlugin()],
   root: __dirname,
@@ -19,6 +36,9 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: false,
+    headers: {
+      'X-Slo-Web-Tree': webTreeId,
+    },
   },
   resolve: {
     alias: [
