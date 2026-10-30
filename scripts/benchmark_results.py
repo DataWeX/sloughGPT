@@ -447,10 +447,11 @@ def do_history(args) -> int:
                     naive = c.get("naive_tok_s") or {}
                     print(
                         f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"r2={str(c.get('r2', '?')):<7} "
+                        f"spread={str(c.get('spread_pct', '?')):<5} "
                         f"naive32={str(naive.get('32', '?')):<7} "
                         f"naive256={str(naive.get('256', '?')):<7} "
-                        f"provider={str(c.get('provider_tok_s', '?')):<7} "
-                        f"load={c.get('loadavg', '?')}  {p.name}"
+                        f"load={c.get('loadavg_end', c.get('loadavg', '?'))}  {p.name}"
                     )
                 else:  # latency and unknown kinds
                     print(
