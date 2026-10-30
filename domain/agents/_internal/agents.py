@@ -622,39 +622,127 @@ class Agent:
 
         This is the main entry point - frontend calls this,
         NOT tools directly.
+
+        Consumes ``execute_stream`` — one loop implementation for both the
+        dict API and the SSE API.
         """
-        # Get or create session
-        context = self._get_session(session_id, user_id)
-
-        # Agent reasoning to decide tools
-        plan = await self._plan_execution(user_request, context)
-
-        # Execute planned tools
-        results = []
-        for tool_name, args in plan:
-            result = await self._runner.execute(
-                tool_name,
-                args,
-                context,
-            )
-            results.append(
-                {
-                    "tool": tool_name,
-                    "result": result,
-                }
-            )
-
-        # Generate response (use inference if no tools ran)
-        if not results and self._inference_fn:
-            response = self._generate_response(user_request, context)
-        else:
-            response = self._compose_response(user_request, results)
-
+        tools_used: list[dict[str, Any]] = []
+        response = ""
+        async for event in self.execute_stream(user_request, session_id, user_id):
+            kind = event.get("event")
+            if kind == "tool_result":
+                tools_used.append({"tool": event["tool"], "result": event["result"]})
+            elif kind == "final":
+                response = event.get("text", "")
+            elif kind == "error":
+                raise RuntimeError(event.get("error", "agent run failed"))
+        if not response:
+            response = self._compose_response(user_request, tools_used)
         return {
             "response": response,
-            "tools_used": results,
+            "tools_used": tools_used,
             "session_id": session_id,
         }
+
+    async def execute_stream(
+        self,
+        user_request: str,
+        session_id: str,
+        user_id: str = "default",
+    ):
+        """Yield step events for one bounded model⇄tool loop run.
+
+        Events: ``run_start`` → (``tool_start`` → ``tool_result``)* →
+        ``final`` → ``run_end``; ``error`` on failure. The loop lets the
+        model observe tool results before deciding the next step, and every
+        run is recorded in the shared run store.
+        """
+        from domain.agents._internal.run_history import get_agent_run_store
+
+        context = self._get_session(session_id, user_id)
+        store = None
+        run_id = None
+        try:
+            store = get_agent_run_store()
+            run_id = store.start(user_request, session_id)
+        except Exception as e:
+            logger.debug("Run persistence unavailable: %s", e, extra={"tag": "AGENT"})
+            store = None
+
+        yield {"event": "run_start", "run_id": run_id, "session_id": session_id}
+
+        observations: list[dict[str, Any]] = []
+        tool_results: list[dict[str, Any]] = []
+        final_text = ""
+        budget = max(1, int(self.config.max_iterations))
+        try:
+            for step in range(budget):
+                plan = await self._plan_next(user_request, context, observations)
+                if not plan:
+                    break
+                for tool_name, args in plan:
+                    yield {
+                        "event": "tool_start",
+                        "tool": tool_name,
+                        "args": args,
+                        "step": step,
+                        "run_id": run_id,
+                    }
+                    try:
+                        result = await self._runner.execute(tool_name, args, context)
+                    except Exception as e:
+                        result = {"success": False, "error": str(e)}
+                    summary = _result_summary(result)
+                    observations.append({"tool": tool_name, "args": args, "summary": summary})
+                    tool_results.append({"tool": tool_name, "result": result})
+                    if store is not None and run_id is not None:
+                        try:
+                            store.append_log(run_id, f"step {step}: {tool_name} → {summary[:180]}")
+                        except Exception as e:
+                            logger.debug("append_log failed: %s", e, extra={"tag": "AGENT"})
+                    yield {
+                        "event": "tool_result",
+                        "tool": tool_name,
+                        "result": result,
+                        "step": step,
+                        "run_id": run_id,
+                    }
+            final_text = await self._synthesize(user_request, context, observations, tool_results)
+            yield {"event": "final", "text": final_text, "run_id": run_id}
+        except Exception as e:
+            if store is not None and run_id is not None:
+                try:
+                    store.fail(run_id, str(e))
+                except Exception:
+                    pass
+            yield {"event": "error", "error": str(e), "run_id": run_id}
+            raise
+        else:
+            if store is not None and run_id is not None:
+                try:
+                    store.complete(run_id, response=final_text)
+                except Exception as e:
+                    logger.debug("complete failed: %s", e, extra={"tag": "AGENT"})
+        yield {"event": "run_end", "run_id": run_id, "session_id": session_id}
+
+    async def _plan_next(
+        self,
+        request: str,
+        context: ToolExecutionContext,
+        observations: list[dict[str, Any]],
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Decide the next tools given what has run so far (bounded loop).
+
+        With inference the model re-plans after every batch of observations
+        (``[]`` = enough information, synthesize). Keyword planning is
+        one-shot: once anything has run it hands off to synthesis instead of
+        re-matching the same request.
+        """
+        if self._inference_fn:
+            return await self._plan_with_llm(request, observations)
+        if observations:
+            return []
+        return self._plan_with_keywords(request)
 
     def _generate_response(self, request: str, context: ToolExecutionContext) -> str:
         """Generate a response via LLM when no tools are needed."""
@@ -698,12 +786,9 @@ class Agent:
         """
         Plan which tools to use.
 
-        Uses LLM reasoning when ``inference_fn`` is available,
-        falls back to keyword matching otherwise.
+        Compatibility shim — the loop uses ``_plan_next`` (one planner path).
         """
-        if self._inference_fn:
-            return await self._plan_with_llm(request)
-        return self._plan_with_keywords(request)
+        return await self._plan_next(request, context, [])
 
     def _plan_with_keywords(
         self,
@@ -798,19 +883,33 @@ class Agent:
     async def _plan_with_llm(
         self,
         request: str,
+        observations: list[dict[str, Any]] | None = None,
     ) -> list[tuple[str, dict[str, Any]]]:
-        """Plan tools using LLM reasoning."""
-        tool_names = [c.value for c in ToolCapability]
+        """Plan (or re-plan) tools using LLM reasoning.
+
+        With ``observations`` the model sees what already ran and decides the
+        next step — ``[]`` means "enough information, synthesize now".
+        """
+        allowed = [t.value for t in self.config.tools] or [c.value for c in ToolCapability]
         prompt = (
             f"Given this user request, decide which tools (if any) to use.\n"
-            f"Available tools: {', '.join(tool_names)}\n"
+            f"Available tools: {', '.join(allowed)}\n"
             f"User request: {request}\n"
-            f"Return a JSON array of {{'tool': str, 'args': dict}} objects, "
-            f"or an empty array [] if no tools are needed.\n"
-            f"Return ONLY the JSON, no other text."
+        )
+        if observations:
+            prompt += (
+                "You already ran tools. Observations:\n"
+                f"{json.dumps(observations, ensure_ascii=False)[:4000]}\n"
+                "Decide the NEXT step now: another JSON array of tools to run, "
+                "or [] if you have enough information to answer.\n"
+            )
+        prompt += (
+            "Return a JSON array of {'tool': str, 'args': dict} objects, "
+            "or an empty array [] if no tools are needed.\n"
+            "Return ONLY the JSON, no other text."
         )
         try:
-            resp = self._inference_fn(prompt)
+            resp = await asyncio.to_thread(self._inference_fn, prompt)
             text = resp.get("text", "") if isinstance(resp, dict) else str(resp)
             text = text.strip()
             # Extract JSON array
@@ -826,7 +925,39 @@ class Agent:
             ]
         except Exception as e:
             logger.warning("LLM planning failed: %s", e, extra={"tag": "MODEL"})
+            # Never keyword-replan mid-loop: it would re-run the same tools.
+            if observations:
+                return []
             return self._plan_with_keywords(request)
+
+    async def _synthesize(
+        self,
+        request: str,
+        context: ToolExecutionContext,
+        observations: list[dict[str, Any]],
+        tool_results: list[dict[str, Any]],
+    ) -> str:
+        """Produce the final answer: model reads observations, compose is fallback."""
+        if self._inference_fn:
+            try:
+                if observations:
+                    system = getattr(self.config, "instructions", "") or "You are an AI assistant."
+                    prompt = (
+                        f"{system}\n\n"
+                        f"User: {request}\n"
+                        "Tool observations:\n"
+                        f"{json.dumps(observations, ensure_ascii=False)[:6000]}\n"
+                        "Write the final answer for the user based on these observations."
+                    )
+                    resp = await asyncio.to_thread(self._inference_fn, prompt)
+                    text = resp.get("text", "") if isinstance(resp, dict) else str(resp)
+                    if text.strip():
+                        return text.strip()
+                else:
+                    return await asyncio.to_thread(self._generate_response, request, context)
+            except Exception as e:
+                logger.warning("Synthesis failed: %s", e, extra={"tag": "MODEL"})
+        return self._compose_response(request, tool_results)
 
     def _compose_response(
         self,
@@ -854,6 +985,22 @@ class Agent:
 
 
 # ============ Singleton Instances ============
+
+
+def _result_summary(result: Any) -> str:
+    """One-line human/model summary of a tool result (loop observation)."""
+    if not isinstance(result, dict):
+        return str(result)[:300]
+    if not result.get("success", True):
+        return f"error: {result.get('error', 'unknown')}"
+    for key in ("stdout", "answer", "text", "results", "files", "citations"):
+        if key in result:
+            value = result[key]
+            if isinstance(value, str):
+                return value[:300]
+            return f"{key}: {str(value)[:300]}"
+    return str(result)[:300]
+
 
 _agent: Agent | None = None
 _runner: ToolRunner | None = None
