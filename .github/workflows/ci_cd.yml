@@ -190,6 +190,16 @@ jobs:
             --ignore=tests/test_training_monitor.py \
             -q --tb=short
 
+      # planner + app-planner suites (added 2026-10-28 with the canonical-state
+      # PR): these never ran in CI before — root conftest puts both src dirs on
+      # the path, so a bare import works here without an editable install.
+      - name: Run planner suites
+        run: |
+          python -m pytest packages/app-planner/tests packages/planner/tests \
+            --override-ini="addopts=" \
+            --import-mode=importlib \
+            -q --tb=short
+
   # ─── Frontend: strui (typecheck + test) ─────────────────────────
   test-strui:
     runs-on: ubuntu-latest

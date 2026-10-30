@@ -273,7 +273,14 @@ class KanbanEngine:
             # Validate legal transition
             if not self.is_legal(from_state, to_state):
                 result.ok = False
-                legal = LEGAL_TRANSITIONS.get(CardState(from_state), set())
+                # from_state may be a non-canonical board column (default
+                # boards use todo/wip/review/done) — CardState() would raise
+                # here; the contract is "raises nothing", so degrade to an
+                # empty legal set instead of a 500.
+                try:
+                    legal = LEGAL_TRANSITIONS.get(CardState(from_state), set())
+                except ValueError:
+                    legal = set()
                 result.error = (
                     f"Illegal transition: {from_state} → {to_state}. "
                     f"Legal: {[s.value for s in legal]}"

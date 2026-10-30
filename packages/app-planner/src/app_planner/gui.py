@@ -327,6 +327,9 @@ class GuiHandler(BaseHTTPRequestHandler):
                 # from "illegal transition / WIP" (409)
                 board = self.stores.kanban_store.load_board()
                 exists = any(c.id == card_id or c.id.startswith(card_id) for c in board.cards)
+                known_cols = {c.name for c in board.columns}
+                if column not in known_cols:
+                    return self._error(404, f"unknown column: {column}")
                 if not exists:
                     return self._error(404, f"card not found: {card_id}")
                 if column not in {c.name for c in board.columns}:
@@ -352,7 +355,19 @@ class GuiHandler(BaseHTTPRequestHandler):
         if not card_id or not to_state:
             return self._error(400, "card_id and to_state are required")
 
-        from planner.engine import KanbanEngine
+        import sys as _sys
+        from pathlib import Path as _Path
+
+        try:
+            from planner.engine import KanbanEngine
+        except ModuleNotFoundError:
+            # planner is a SIBLING src-layout package (packages/planner/src)
+            # — not installed by default; bootstrap it from the repo so the
+            # transition endpoint works without a site-packages install.
+            _sibling = _Path(__file__).resolve().parents[2].parent / "planner" / "src"
+            if _sibling.is_dir() and str(_sibling) not in _sys.path:
+                _sys.path.insert(0, str(_sibling))
+            from planner.engine import KanbanEngine
 
         with self.stores.lock:
             board = self.stores.kanban_store.load_board()
