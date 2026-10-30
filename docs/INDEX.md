@@ -27,6 +27,7 @@ Single source of truth for navigation. Read this first.
 | **PUGQEEP.md**                    | PGQ: points, pools, Pipe                                        |
 | **TRANSPORT_PROJECTIONS.md**      | Capability → contract → route                                   |
 | **DOMAIN_CONSOLIDATION.md**       | Record of `packages/core-py/domains/` → `domain/` consolidation |
+| **VM_ARCHITECTURE.md**            | VM stacks review — four substrates, merge/retire rulings, fault containment |
 
 ## Features
 

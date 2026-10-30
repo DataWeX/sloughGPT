@@ -25,19 +25,19 @@ export function TrainingOverviewCard({
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="text-center p-2 rounded bg-muted/30">
-            <div className="text-lg font-bold text-success">{completed}</div>
+            <div className="text-base font-bold text-success">{completed}</div>
             <div className="text-[10px] text-muted-foreground">Completed</div>
           </div>
           <div className="text-center p-2 rounded bg-muted/30">
-            <div className="text-lg font-bold text-info">{running}</div>
+            <div className="text-base font-bold text-info">{running}</div>
             <div className="text-[10px] text-muted-foreground">Running</div>
           </div>
           <div className="text-center p-2 rounded bg-muted/30">
-            <div className="text-lg font-bold text-warning">{queued}</div>
+            <div className="text-base font-bold text-warning">{queued}</div>
             <div className="text-[10px] text-muted-foreground">Queued</div>
           </div>
           <div className="text-center p-2 rounded bg-muted/30">
-            <div className="text-lg font-bold text-destructive">{failed}</div>
+            <div className="text-base font-bold text-destructive">{failed}</div>
             <div className="text-[10px] text-muted-foreground">Failed</div>
           </div>
         </div>

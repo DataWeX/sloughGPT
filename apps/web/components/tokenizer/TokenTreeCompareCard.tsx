@@ -154,15 +154,15 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                    <div className="text-lg font-medium">{result.shared_tokens}</div>
+                    <div className="text-base font-medium">{result.shared_tokens}</div>
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">shared tokens</div>
                   </div>
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                    <div className="text-lg font-medium">{result.only_a_tokens}</div>
+                    <div className="text-base font-medium">{result.only_a_tokens}</div>
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">only in A</div>
                   </div>
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                    <div className="text-lg font-medium">{result.only_b_tokens}</div>
+                    <div className="text-base font-medium">{result.only_b_tokens}</div>
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">only in B</div>
                   </div>
                 </div>

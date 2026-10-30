@@ -221,7 +221,7 @@ export default function PhonemeQuizAdvanced() {
           <div className="space-y-3">
             <div className="p-4 rounded-lg bg-muted/30 text-center">
               <p className="text-sm text-muted-foreground mb-1">Answer</p>
-              <p className="text-lg font-mono font-bold">{question.correctAnswer}</p>
+              <p className="text-base font-mono font-bold">{question.correctAnswer}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {question.word} ({question.ipa})
               </p>

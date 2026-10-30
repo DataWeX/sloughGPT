@@ -38,6 +38,7 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     deleteMessage,
     forwardMessage,
     createSession,
+    branchFromMessage,
     offlineQueue,
     retryPendingSends,
   } = useChatStore()
@@ -80,6 +81,7 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     setForwardTo,
     select.setSelectMode,
     select.setSelectedIds,
+    branchFromMessage,
   )
 
   const searchNext = useCallback(() => {
@@ -267,6 +269,8 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     setShowArchived: labels.setShowArchived,
     labelFilter: labels.labelFilter,
     setLabelFilter: labels.setLabelFilter,
+    folderFilter: labels.folderFilter,
+    setFolderFilter: labels.setFolderFilter,
     sessionLabels: labels.sessionLabels,
     setSessionLabels: labels.setSessionLabels,
     allLabels: labels.allLabels,

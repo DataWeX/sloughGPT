@@ -26,7 +26,10 @@ class SessionCore:
 
         Args:
             session_id: Identifier for the conversation.
-            messages:   List of dicts ``{"role": ..., "content": ...}``.
+            messages:   List of dicts ``{"role": ..., "content": ...}`` with
+                optional client-assigned ``"id"`` (kept so id-keyed consumers
+                survive reloads).
+
         Returns:
             Dict containing ``status`` and ``message_count`` for API response.
         """
@@ -34,6 +37,7 @@ class SessionCore:
             MessageData(
                 role=m.get("role", "user"),
                 content=m.get("content", ""),
+                id=m.get("id"),
             )
             for m in messages
         ]
@@ -44,12 +48,20 @@ class SessionCore:
     def get_messages(session_id: str) -> list[dict[str, str]]:
         """Retrieve stored messages for *session_id*.
 
-        Returns a list of plain ``{"role": ..., "content": ...}`` dicts.
+        Returns a list of ``{"role": ..., "content": ...}`` dicts; ``id`` is
+        included only when the writer assigned one (legacy writes keep their
+        exact legacy shape — never an ``id: null`` leak).
         """
         msgs = get_message_feedback().get_session_context(session_id)
         if msgs is None:
             return []
-        return [{"role": m.role, "content": m.content} for m in msgs]
+        out: list[dict[str, str]] = []
+        for m in msgs:
+            entry: dict[str, str] = {"role": m.role, "content": m.content}
+            if m.id is not None:
+                entry["id"] = m.id
+            out.append(entry)
+        return out
 
     @staticmethod
     def list_sessions() -> list[dict[str, Any]]:

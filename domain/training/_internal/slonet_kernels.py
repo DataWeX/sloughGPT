@@ -193,7 +193,7 @@ def _build_kernels():
                 x.flat[base + d] += pos_emb.flat[p * emb_dim + d]
 
     # ---- SwiGLU + element-wise multiply (fused) ---------------------------
-    @njit(cache=True, nogil=True, parallel=True)
+    @njit(cache=True, nogil=True, parallel=True, fastmath=True)
     def nb_swi_glu_mul(h1, h3):
         """SwiGLU(h1) * h3 — single pass, no temp alloc.
 
@@ -202,9 +202,12 @@ def _build_kernels():
         Returns: (..., 4E) = swiglu(h1) * h3
         """
         out = np.empty_like(h1)
+        one = np.float32(1.0)
         for i in prange(h1.size):
             v = h1.flat[i]
-            s = v * (1.0 / (1.0 + np.exp(-v)))
+            # f32 arithmetic (literals kept float32 — f64 promotion here
+            # doubled the work and blocked vectorization)
+            s = v * (one / (one + np.exp(-v)))
             out.flat[i] = s * h3.flat[i]
         return out
 
@@ -445,8 +448,31 @@ def nb_add_pos(x, pos_emb, pos, seq_len):
     return x
 
 
+def _swiglu_c(h1, h3):
+    """Vectorized C SwiGLU, lazily loaded; None → caller uses numba/numpy."""
+    global _swiglu_c_fn
+    if _swiglu_c_fn is None:
+        try:
+            from domain.infrastructure._internal.quant_core.wrapper import (
+                swiglu_f32_c as _fn,
+            )
+
+            _swiglu_c_fn = _fn
+        except Exception:
+            _swiglu_c_fn = False
+    if _swiglu_c_fn is False:
+        return None
+    return _swiglu_c_fn(h1, h3)
+
+
+_swiglu_c_fn = None
+
+
 def nb_swi_glu_mul(h1, h3):
     """SwiGLU(h1) * h3 — fused activation + multiply with numba acceleration."""
+    out = _swiglu_c(h1, h3)
+    if out is not None:
+        return out
     _ensure_kernels()
     if _nb_swi_glu_mul is not None:
         return _nb_swi_glu_mul(h1, h3)
@@ -503,7 +529,7 @@ def _build_fused_kernels():
             v = h.flat[i]
             h.flat[i] = 0.5 * v * (1.0 + np.tanh(0.7978845608 * (v + 0.044715 * v * v * v)))
 
-    @njit(cache=True, nogil=True, parallel=True)
+    @njit(cache=True, nogil=True, fastmath=True)
     def _fused_attention_single(
         q,
         k_full,
@@ -514,48 +540,59 @@ def _build_fused_kernels():
         E_head,
         seq_len,
         new_len,
+        reps,
     ):
         """Attention for single-token query (seq_len=1) with full KV cache.
 
         q: (H, E_head) — single query per head
-        k_full: (H, new_len, E_head) — already GQA-expanded
-        v_full: (H, new_len, E_head) — already GQA-expanded
+        k_full: (K_H, new_len, E_head) — GQA kv cache, NOT expanded:
+                query head h reads kv head h // reps (reps = H // K_H,
+                equals 1 for an already-expanded cache)
+        v_full: (K_H, new_len, E_head)
         out: (H, E_head) — output
 
-        Heads are independent (each writes out[h, :]), so the head loop is a
-        prange — measured 3.7-6.0x over the serial form, bit-identical.
+        Heads are independent (each writes out[h, :]). Serial with a
+        per-call scores buffer — one Q·K pass instead of the old three
+        (pass 3 used to recompute every dot: ~56x the work); a prange over H
+        measured slower than serial here (scheduling overhead exceeds the
+        parallel win at decode sizes).
         """
-        for h in prange(H):
-            # Pass 1: compute all scores, find max
-            scores_max = -1e30
+        scores = np.empty(new_len, dtype=np.float32)
+        acc = np.empty(E_head, dtype=np.float32)
+        for h in range(H):
+            kh = h // reps
+            scores_max = np.float32(-1e30)
             for n in range(new_len):
                 dot = 0.0
                 for d in range(E_head):
-                    dot += q[h, d] * k_full[h, n, d]
+                    dot += q[h, d] * k_full[kh, n, d]
                 dot *= scale
-                if dot > scores_max:
-                    scores_max = dot
-            # Pass 2: softmax (exp + sum)
+                s = np.float32(dot)
+                scores[n] = s
+                if s > scores_max:
+                    scores_max = s
+            # Pass 2: softmax in place — one exp per position
             total = 0.0
             for n in range(new_len):
-                dot = 0.0
-                for d in range(E_head):
-                    dot += q[h, d] * k_full[h, n, d]
-                val = np.exp(dot * scale - scores_max)
+                val = np.exp(scores[n] - scores_max)
+                scores[n] = val
                 total += val
-            inv_total = 1.0 / total
-            # Pass 3: weighted sum of V
+            inv_total = np.float32(1.0 / total)
+            for n in range(new_len):
+                scores[n] *= inv_total
+            # Pass 3: weighted sum of V — positions OUTER so the inner loop
+            # streams v_full[kh, n, :] contiguously (the old d-outer order
+            # read with a stride of E_head and dominated the decode slope).
             for d in range(E_head):
-                acc = 0.0
-                for n in range(new_len):
-                    dot = 0.0
-                    for dd in range(E_head):
-                        dot += q[h, dd] * k_full[h, n, dd]
-                    attn_w = np.exp(dot * scale - scores_max) * inv_total
-                    acc += attn_w * v_full[h, n, d]
-                out[h, d] = acc
+                acc[d] = np.float32(0.0)
+            for n in range(new_len):
+                w = scores[n]
+                for d in range(E_head):
+                    acc[d] += w * v_full[kh, n, d]
+            for d in range(E_head):
+                out[h, d] = acc[d]
 
-    @njit(cache=True, nogil=True, parallel=True)
+    @njit(cache=True, nogil=True, fastmath=True)
     def _fused_attention_multi(
         q,
         k_full,
@@ -566,59 +603,61 @@ def _build_fused_kernels():
         E_head,
         seq_len,
         new_len,
+        reps,
     ):
         """Attention for multi-token query (prompt processing, step 0).
 
         q: (seq_len, H, E_head) — query for all prompt tokens
-        k_full: (H, new_len, E_head) — already GQA-expanded
-        v_full: (H, new_len, E_head) — already GQA-expanded
+        k_full: (K_H, new_len, E_head) — GQA kv cache, NOT expanded:
+                query head h reads kv head h // reps (reps = H // K_H,
+                equals 1 for an already-expanded cache)
+        v_full: (K_H, new_len, E_head)
         out: (seq_len, H, E_head) — output
 
         Each (h, s) pair writes its own out[s, h, :] slice and carries no state
-        into any other pair, so the two loops are flattened into one prange over
-        H * seq_len — the only way to get enough parallel tasks out of a short
-        prompt (prange over heads alone would cap us at H ways). Measured
-        3.1-6.2x over the serial form, bit-identical.
+        into any other pair. Serial with a per-call scores buffer: one Q·K pass
+        (the old three-pass form recomputed every dot in pass 3 — ~56x the
+        work) and a prange over H*seq_len was measured slower than this serial
+        form under load (task scheduling ate the parallel win), so the head
+        loop stays plain range.
         """
-        for hs in prange(H * seq_len):
-            h = hs // seq_len
-            s = hs - h * seq_len
-            # Pass 1: compute all scores with causal mask, find max
-            scores_max = -1e30
-            for n in range(new_len):
-                dot = 0.0
-                for d in range(E_head):
-                    dot += q[s, h, d] * k_full[h, n, d]
-                dot *= scale
-                if n > s:
-                    dot = -1e9
-                if dot > scores_max:
-                    scores_max = dot
-            # Pass 2: softmax
-            total = 0.0
-            for n in range(new_len):
-                dot = 0.0
-                for d in range(E_head):
-                    dot += q[s, h, d] * k_full[h, n, d]
-                dot *= scale
-                if n > s:
-                    dot = -1e9
-                val = np.exp(dot - scores_max)
-                total += val
-            inv_total = 1.0 / total
-            # Pass 3: weighted sum of V
-            for d in range(E_head):
-                acc = 0.0
+        scores = np.empty(new_len, dtype=np.float32)
+        acc = np.empty(E_head, dtype=np.float32)
+        for h in range(H):
+            kh = h // reps
+            for s in range(seq_len):
+                # Pass 1: score every position once with causal mask, track max
+                scores_max = np.float32(-1e30)
                 for n in range(new_len):
                     dot = 0.0
-                    for dd in range(E_head):
-                        dot += q[s, h, dd] * k_full[h, n, dd]
+                    for d in range(E_head):
+                        dot += q[s, h, d] * k_full[kh, n, d]
                     dot *= scale
                     if n > s:
                         dot = -1e9
-                    attn_w = np.exp(dot - scores_max) * inv_total
-                    acc += attn_w * v_full[h, n, d]
-                out[s, h, d] = acc
+                    st = np.float32(dot)
+                    scores[n] = st
+                    if st > scores_max:
+                        scores_max = st
+                # Pass 2: softmax in place — one exp per position
+                total = 0.0
+                for n in range(new_len):
+                    val = np.exp(scores[n] - scores_max)
+                    scores[n] = val
+                    total += val
+                inv_total = np.float32(1.0 / total)
+                for n in range(new_len):
+                    scores[n] *= inv_total
+                # Pass 3: weighted sum of V — positions OUTER so the inner
+                # loop streams v_full[kh, n, :] contiguously (see single).
+                for d in range(E_head):
+                    acc[d] = np.float32(0.0)
+                for n in range(new_len):
+                    w = scores[n]
+                    for d in range(E_head):
+                        acc[d] += w * v_full[kh, n, d]
+                for d in range(E_head):
+                    out[s, h, d] = acc[d]
 
     @njit(cache=True, nogil=True)
     def _gqa_expand(k, out, reps):
@@ -659,11 +698,11 @@ def _build_fused_kernels():
         k = np.ones((H, new_len, E), dtype=np.float32)
         v = np.ones((H, new_len, E), dtype=np.float32)
         out = np.zeros((H, E), dtype=np.float32)
-        _fused_attention_single(q, k, v, out, np.float32(0.125), H, E, seq, new_len)
+        _fused_attention_single(q, k, v, out, np.float32(0.125), H, E, seq, new_len, 1)
 
         qm = np.ones((2, H, E), dtype=np.float32)
         outm = np.zeros((2, H, E), dtype=np.float32)
-        _fused_attention_multi(qm, k, v, outm, np.float32(0.125), H, E, 2, new_len)
+        _fused_attention_multi(qm, k, v, outm, np.float32(0.125), H, E, 2, new_len, 1)
 
         k_small = np.ones((K_H, new_len, E), dtype=np.float32)
         k_big = np.zeros((H, new_len, E), dtype=np.float32)
@@ -708,14 +747,23 @@ def fused_layer_norm(x, w, b, eps=np.float32(1e-5)):
 
 
 def fused_attention_single(q, k, v, scale, H, E_head):
-    """Single-token attention — numba manual loops. Returns (H, E_head)."""
+    """Single-token attention — numba manual loops. Returns (H, E_head).
+
+    ``k``/``v`` may be either fully expanded ``(H, new_len, E_head)`` or
+    GQA-unexpanded ``(K_H, new_len, E_head)``; the head mapping is derived
+    as ``reps = H // k.shape[0]`` (1 when already expanded).
+    """
     _ensure_fused()
     new_len = k.shape[1]
+    reps = H // k.shape[0]
     out = np.zeros((H, E_head), dtype=np.float32)
     if _nb_fused_attention_single is not None:
-        _nb_fused_attention_single(q, k, v, out, scale, H, E_head, 1, new_len)
+        _nb_fused_attention_single(q, k, v, out, scale, H, E_head, 1, new_len, reps)
     else:
-        # Numpy fallback
+        # Numpy fallback (no numba): materialize the expansion explicitly
+        if reps != 1:
+            k = k[np.arange(H) // reps]
+            v = v[np.arange(H) // reps]
         scores = np.einsum("hd,hnd->hn", q, k) * scale  # (H, new_len)
         attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
         attn = attn / attn.sum(axis=-1, keepdims=True)
@@ -724,15 +772,23 @@ def fused_attention_single(q, k, v, scale, H, E_head):
 
 
 def fused_attention_multi(q, k, v, scale, H, E_head):
-    """Multi-token attention (prompt) — numba manual loops. Returns (seq, H, E_head)."""
+    """Multi-token attention (prompt) — numba manual loops. Returns (seq, H, E_head).
+
+    ``k``/``v`` accept GQA-unexpanded ``(K_H, new_len, E_head)`` input — see
+    :func:`fused_attention_single`.
+    """
     _ensure_fused()
     seq_len = q.shape[0]
     new_len = k.shape[1]
+    reps = H // k.shape[0]
     out = np.zeros((seq_len, H, E_head), dtype=np.float32)
     if _nb_fused_attention_multi is not None:
-        _nb_fused_attention_multi(q, k, v, out, scale, H, E_head, seq_len, new_len)
+        _nb_fused_attention_multi(q, k, v, out, scale, H, E_head, seq_len, new_len, reps)
     else:
-        # Numpy fallback
+        # Numpy fallback (no numba): materialize the expansion explicitly
+        if reps != 1:
+            k = k[np.arange(H) // reps]
+            v = v[np.arange(H) // reps]
         scores = np.einsum("she,hne->hsn", q, k) * scale  # (H, seq, new_len)
         causal = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
         scores = scores + causal
