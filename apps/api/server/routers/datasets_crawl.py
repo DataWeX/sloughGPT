@@ -55,7 +55,7 @@ async def import_crawl_pages(
     source: str | None = None,
 ) -> dict[str, Any]:
     """Ingest bawl-format crawl pages into the dataset's raw store + corpus."""
-    from domain.training._internal.crawl_store import (
+    from domain.training import (
         CrawlStoreError,
         ingest_crawl,
         parse_jsonl_pages,
