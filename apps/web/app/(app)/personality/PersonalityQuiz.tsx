@@ -129,7 +129,7 @@ export function PersonalityQuiz({ onApply }: Props) {
           <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 p-4">
             <div className="flex-1">
               <div className="text-sm font-medium">{t('personality.quiz.recommendation')}</div>
-              <div className="text-lg font-bold capitalize">{recommended}</div>
+              <div className="text-base font-bold capitalize">{recommended}</div>
             </div>
             <Button onClick={() => onApply(recommended)}>
               {t('personality.quiz.apply')}

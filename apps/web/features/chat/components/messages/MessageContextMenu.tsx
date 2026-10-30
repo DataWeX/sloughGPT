@@ -96,6 +96,13 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   // unmount leak; vitest: post-teardown "window is not defined" once
   // jsdom is destroyed).
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -138,6 +145,7 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(content)
+      if (!aliveRef.current) return
       setCopied(true)
       onCopy?.(content)
       if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current)

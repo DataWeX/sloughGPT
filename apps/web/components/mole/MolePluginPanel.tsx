@@ -81,7 +81,7 @@ export function MolePluginPanel({ plugin }: MolePluginPanelProps) {
   return (
     <div className="space-y-4" data-testid="mole-plugin-panel">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Mole</h2>
+        <h2 className="text-base font-semibold">Mole</h2>
         <RunMoleButton onCompleted={() => void load()} />
       </div>
 

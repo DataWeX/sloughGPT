@@ -159,7 +159,7 @@ export default function Achievements() {
                     : 'bg-muted/30 border-muted opacity-50'
                 }`}
               >
-                <div className="text-lg">{a.icon}</div>
+                <div className="text-base">{a.icon}</div>
                 <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{a.title}</p>
               </div>
             )
@@ -185,7 +185,7 @@ export default function Achievements() {
                         isUnlocked ? 'bg-primary/5' : 'bg-muted/20 opacity-60'
                       }`}
                     >
-                      <span className="text-lg w-8 text-center">{a.icon}</span>
+                      <span className="text-base w-8 text-center">{a.icon}</span>
                       <div className="flex-1">
                         <p className="text-sm font-medium">{a.title}</p>
                         <p className="text-xs text-muted-foreground">{a.description}</p>

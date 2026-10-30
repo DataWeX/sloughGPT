@@ -202,7 +202,7 @@ export default function MultipleChoiceQuiz() {
                   </p>
                   <div className="flex flex-wrap gap-1 justify-center">
                     {question.phonemes?.map((p, i) => (
-                      <Badge key={i} variant="outline" className="text-lg px-3 py-1">
+                      <Badge key={i} variant="outline" className="text-base px-3 py-1">
                         {p}
                       </Badge>
                     ))}
@@ -265,7 +265,7 @@ export default function MultipleChoiceQuiz() {
                   className={`p-3 rounded-lg text-center ${isCorrect ? 'bg-success/10' : 'bg-destructive/10'}`}
                 >
                   <p
-                    className={`text-lg font-bold ${isCorrect ? 'text-success' : 'text-destructive'}`}
+                    className={`text-base font-bold ${isCorrect ? 'text-success' : 'text-destructive'}`}
                   >
                     {isCorrect ? 'Correct!' : 'Incorrect'}
                   </p>

@@ -64,7 +64,7 @@ export const ChatBookmarksPanel = memo(function ChatBookmarksPanel({
                 <button
                   type="button"
                   onClick={() => onJumpToMessage?.(bm.id)}
-                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 min-w-0 text-left"
+                  className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset flex-1 min-w-0 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   title={bm.content.slice(0, 120)}
                 >
                   <div
