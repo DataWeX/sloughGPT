@@ -108,8 +108,27 @@ async def start_training(
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    feed_spec = _feed_spec(request)
-    if feed_spec is not None:
+    manifests = [str(m).strip() for m in (request.manifests or []) if str(m).strip()]
+    is_seq = bool(manifests)
+    feed_spec = _feed_spec(request) if not is_seq else None
+    if is_seq:
+        from pathlib import Path as _SP
+
+        _missing = [m for m in manifests if not _SP(m).is_file()]
+        if _missing:
+            raise_error(
+                f"Sequential manifest not found: {_missing[0]}",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+        data_path_str = manifests[0]
+        _seq_label = (request.name or "sequential").strip().lower()
+        out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in _seq_label)[:60] or (
+            "sequential"
+        )
+        manifest_meta = None
+        source_kind = "sequential"
+    elif feed_spec is not None:
         data_path_str, out_stem, manifest_meta, source_kind = feed_spec
     else:
         from domain.training._internal.dataset_manifest import ManifestError
@@ -129,7 +148,7 @@ async def start_training(
     _data_path = _P(data_path_str)
     if feed_spec is None and not _data_path.exists():
         raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
-    if _data_path.is_file():
+    if _data_path.is_file() and not is_seq:
         _size = _data_path.stat().st_size
         if _size == 0:
             raise_error("Dataset file is empty (0 bytes)", "E_BAD_REQUEST", status_code=400)
@@ -183,7 +202,9 @@ async def start_training(
         else:
             _raw = ""
 
-        if _raw:
+        # Sequential manifests are sealed artifacts — the gate already ran at
+        # seal time (build_corpus), and raw JSON would fail it spuriously.
+        if _raw and not is_seq:
             from domain.training.engine import get_training_engine as _eng
 
             _quality = await _aio.to_thread(_eng().compute_data_quality, _raw)
@@ -288,6 +309,11 @@ async def start_training(
     }
     if manifest_meta is not None:
         job["manifest"] = manifest_meta
+    if is_seq:
+        job["mode"] = "sequential"
+        job["manifests"] = manifests
+        job["probe_standings"] = []
+        job["trained_on"] = []
     training_jobs[job_id] = job
 
     # Update global training controller
@@ -400,16 +426,49 @@ async def start_training(
                     )
                 get_training_runtime().sync(jid)
 
-            trainer = SloughGPTTrainer(
-                data_path=data_path_for_thread,
-                **_sloughgpt_trainer_kwds(req_snapshot),
-                experiment_tracker=tracker,
-            )
-            result = trainer.train(
-                on_progress=on_progress,
-                cancel_event=cancel_event,
-                pause_event=pause_event,
-            )
+            seq_manifests = [
+                str(m).strip() for m in (req_snapshot.get("manifests") or []) if str(m).strip()
+            ]
+            if seq_manifests:
+                from domain.training._internal.sequential import run_sequential_stages
+
+                def on_standings(standings, chain):
+                    rec = training_jobs.get(jid)
+                    if not rec:
+                        return
+                    rec["probe_standings"] = standings
+                    rec["trained_on"] = chain
+                    get_training_runtime().sync(jid)
+
+                seq_kwargs = _sloughgpt_trainer_kwds(req_snapshot)
+                # Per-job continuity dir: stage N resumes what stage N-1 saved.
+                seq_kwargs["checkpoint_dir"] = f"checkpoints/sequential_{jid}"
+                seq_result = run_sequential_stages(
+                    seq_manifests,
+                    trainer_kwargs={**seq_kwargs, "experiment_tracker": tracker},
+                    on_progress=on_progress,
+                    on_standings=on_standings,
+                    cancel_event=cancel_event,
+                    pause_event=pause_event,
+                )
+                trainer = seq_result["last_trainer"]
+                if trainer is None:  # cancelled before stage 0
+                    _finish_job(jid, "cancelled")
+                    get_training_runtime().sync(jid)
+                    get_training_controller().reset()
+                    return
+                result = {"best_eval_loss": None}
+            else:
+                trainer = SloughGPTTrainer(
+                    data_path=data_path_for_thread,
+                    **_sloughgpt_trainer_kwds(req_snapshot),
+                    experiment_tracker=tracker,
+                )
+                result = trainer.train(
+                    on_progress=on_progress,
+                    cancel_event=cancel_event,
+                    pause_event=pause_event,
+                )
             safe_stem = "".join(
                 c if c.isalnum() or c in "-_" else "_" for c in out_stem_for_thread
             )[:120]
@@ -439,7 +498,9 @@ async def start_training(
                     setup_providers(force_default=True)
                 except Exception:
                     pass
-                logger.info("Activated trained soul as default: %s", soul_path, extra={"tag": "TRAIN"})
+                logger.info(
+                    "Activated trained soul as default: %s", soul_path, extra={"tag": "TRAIN"}
+                )
             except Exception as e:
                 logger.debug("Auto-activate trained soul failed: %s", e, extra={"tag": "TRAIN"})
             _finish_job(jid, "completed")

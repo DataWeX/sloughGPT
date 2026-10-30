@@ -231,12 +231,19 @@ def build_corpus(
     license_spdx: str | None = None,
     store_root: Path | None = None,
     work_dir: Path | None = None,
+    probe: int = 0,
 ) -> str:
     """Acquire, crunch, and seal one corpus; return the trainer data_path.
 
     For ``hf`` and ``github`` sources, when *license_spdx* is not given the
     license is auto-fetched from the HF Hub card / GitHub API. An unknown
     license is omitted from the manifest (no provenance, no seal).
+
+    ``probe > 0`` holds that many records OUT of ``train.txt`` after the
+    quality/dedup/PII gate and writes them to ``probe.jsonl`` beside the
+    manifest — a leakage-free eval set for sequential-training standings
+    (dedup state keeps them, so later versions drop them instead of
+    leaking them back into train).
     """
     if license_spdx is None and source == "github":
         license_spdx = fetch_github_license(src)
@@ -250,6 +257,17 @@ def build_corpus(
     # Provenance is carried solely by the explicit sources= on seal() — do not
     # also pass source= to crunch_stream() or it lands as a duplicate entry.
     result = cruncher.crunch_stream(acquire_records(source, src, work_dir=work))
+    held: list[str] = []
+    if probe > 0:
+        # Take the holdout from the END of the post-gate buffer BEFORE seal()
+        # (seal() consumes it), always leaving >= 1 record for train.txt.
+        take = min(probe, max(0, len(cruncher._buffer) - 1))
+        if take:
+            held = list(cruncher._buffer[-take:])
+            del cruncher._buffer[-take:]
+            result.records_kept -= len(held)
+        else:
+            print("probe: skipped (corpus too small)", file=sys.stderr)
     ref = cruncher.seal(
         sources=[source_entry(source, src, license_spdx)],
         domain=domain,
@@ -261,6 +279,12 @@ def build_corpus(
         f"pii_replacements={result.pii_replacements}",
         file=sys.stderr,
     )
+    if held:
+        probe_path = Path(trainer_data_path(ref)).parent / "probe.jsonl"
+        with probe_path.open("w", encoding="utf-8") as fh:
+            for record in held:
+                fh.write(json.dumps({"text": record}) + "\n")
+        print(f"probe: {len(held)} held-out records -> {probe_path}", file=sys.stderr)
     return trainer_data_path(ref)
 
 
@@ -276,6 +300,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--store-root", type=Path, default=None, help="Snapshot store root (default data/crunched)"
     )
+    parser.add_argument(
+        "--probe",
+        type=int,
+        default=0,
+        help="Hold N records out of train.txt into probe.jsonl (sequential-training standings)",
+    )
     args = parser.parse_args(argv)
     path = build_corpus(
         args.dataset_id,
@@ -284,6 +314,7 @@ def main(argv: list[str] | None = None) -> int:
         domain=args.domain,
         license_spdx=args.license_spdx,
         store_root=args.store_root,
+        probe=args.probe,
     )
     print(path)
     return 0
