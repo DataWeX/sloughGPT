@@ -150,6 +150,39 @@ try:
 except ImportError:
     _KERNELS_AVAILABLE = False
 
+try:
+    from domain.infrastructure._internal.quant_core.wrapper import (
+        swiglu_f32_c as _swiglu_f32_c,
+    )
+except Exception:  # pragma: no cover — quant_core optional (no .so / build fail)
+    _swiglu_f32_c = None
+
+
+def _swiglu(h1: np.ndarray, h3: np.ndarray) -> np.ndarray:
+    """SwiGLU(h1) * h3 — AVX2 C kernel first, numba, then numpy fallback.
+
+    The C kernel (quant_core matmul_int8.so) vectorizes exp with a degree-5
+    polynomial across 8 lanes (~10x the numba/libm scalar path, which is
+    ~21% of decode on Qwen int8). It requires C-contiguous float32 inputs;
+    strided views such as ``h13[..., :ff_dim]`` are compacted first (memcpy
+    is far cheaper than the scalar exp it replaces). Returns numba when the
+    kernel is unavailable or the layout/dtype is unsupported.
+    """
+    if _swiglu_f32_c is not None:
+        out = _swiglu_f32_c(h1, h3)
+        if out is not None:
+            return out
+        if h1.dtype == np.float32 and h3.dtype == np.float32 and h1.shape == h3.shape:
+            out = _swiglu_f32_c(np.ascontiguousarray(h1), np.ascontiguousarray(h3))
+            if out is not None:
+                return out
+    if _KERNELS_AVAILABLE:
+        return _nb_swi_glu_mul(h1, h3)
+    h1f = np.asarray(h1, dtype=np.float32)
+    h3f = np.asarray(h3, dtype=np.float32)
+    return h1f * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1f))) * h3f
+
+
 # Global no_grad mode — skips backward graph construction
 _NO_GRAD = False
 
@@ -6707,7 +6740,7 @@ class SloTransformer(SloNet):
                         Wp, Sp, zp, Bp = f_ff4[bi]
                         h13 = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -6716,7 +6749,7 @@ class SloTransformer(SloNet):
                         Wf, Sf, Bf = f_ff[bi]
                         h13 = _ql(h, Wf, Sf, 0, Bf)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -6725,7 +6758,7 @@ class SloTransformer(SloNet):
                         h1 = q_w1[bi].forward_numpy(h)
                         h3 = q_w3[bi].forward_numpy(h)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h1, h3)
+                            h = _swiglu(h1, h3)
                         else:
                             h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
@@ -6734,7 +6767,7 @@ class SloTransformer(SloNet):
                     if _use_bias_b13:
                         h13 = h13 + m_b13[bi]
                     if _use_kernels:
-                        h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                        h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                     else:
                         h = (
                             h13[..., :_ff_dim]
@@ -7262,7 +7295,7 @@ class SloTransformer(SloNet):
                         Wp, Sp, zp, Bp = f_ff4[bi]
                         h13 = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -7271,7 +7304,7 @@ class SloTransformer(SloNet):
                         Wf, Sf, Bf = f_ff[bi]
                         h13 = _ql(h, Wf, Sf, 0, Bf)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -7280,7 +7313,7 @@ class SloTransformer(SloNet):
                         h1 = q_w1[bi].forward_numpy(h)
                         h3 = q_w3[bi].forward_numpy(h)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h1, h3)
+                            h = _swiglu(h1, h3)
                         else:
                             h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
@@ -7291,7 +7324,7 @@ class SloTransformer(SloNet):
                     h1 = h13[..., :_ff_dim]
                     h3 = h13[..., _ff_dim:]
                     if _use_kernels:
-                        h = _nb_swi_glu_mul(h1, h3)
+                        h = _swiglu(h1, h3)
                     else:
                         h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = h @ m_w2[bi]
