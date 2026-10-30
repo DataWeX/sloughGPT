@@ -252,11 +252,11 @@ sloughgpt shell
 
 ### Port map (container truth, audited 2026-10-08 — card 257d310b)
 
-The web container listens on **:3000 inside the container** on both image
-paths — Next image (`apps/web/Dockerfile`: `ENV PORT=3000`, `EXPOSE 3000`)
-and Vite image (`apps/web/Dockerfile.vite`: nginx `listen 3000` +
-`/health`, `EXPOSE 3000`). Everything that targets `web:3000` or
-`localhost:3000` _inside_ the compose network is therefore valid.
+The web container listens on **:3000 inside the container**
+(`apps/web/Dockerfile`: nginx `listen 3000` + `/health`, `EXPOSE 3000`,
+`HEALTHCHECK` — the only web image since Next.js was removed). Everything
+that targets `web:3000` or `localhost:3000` _inside_ the compose network is
+therefore valid.
 
 | Context                                        | Host ports                                            | Notes                                                                                                                 |
 | ---------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -271,8 +271,8 @@ health** (`docker inspect`) instead of host curls that can never pass;
 Next on `:3010`, dev-compose maps it to `:3000`; the live vite stack
 ignores it) applies to the Next path (prod compose defaults to
 `http://localhost`);
-`apps/web/Dockerfile.vite` is built standalone and not wired into compose
-yet. Grafana has no nginx route — no host URL exists for it.
+the web image is `apps/web/Dockerfile` (Vite static on nginx). Grafana has
+no nginx route — no host URL exists for it.
 
 ---
 

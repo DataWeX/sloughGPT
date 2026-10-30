@@ -24,6 +24,13 @@ export interface AppSettings {
   trainingAutoTrain: boolean
   trainingAutoTrainThreshold: number
   trainingEnableTracking: boolean
+  /** Grace before the backend-drop banner raises (ms) — a blip never flashes it.
+   *  Local-only: the banner fires when the backend is unreachable, so these
+   *  flags must be readable offline — backend-persisted settings can't be. */
+  bannerGraceMs: number
+  /** How long the green reconnected banner stays before it retires (ms).
+   *  0 disables the recovery confirmation entirely. */
+  bannerHoldMs: number
 }
 
 export interface InjectedKnowledge {
@@ -73,6 +80,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   trainingAutoTrain: false,
   trainingAutoTrainThreshold: 0.8,
   trainingEnableTracking: true,
+  bannerGraceMs: 5_000,
+  bannerHoldMs: 4_000,
 }
 
 let _settingsTimer: ReturnType<typeof setTimeout> | null = null
@@ -98,7 +107,13 @@ function _flushSettings(get: () => AppStore) {
 export const useAppStore = create<AppStore>()((set, get) => ({
   settings: DEFAULT_SETTINGS,
   injectedKnowledge: [],
-  modelReadiness: { ready: false, phase: 'initializing', step: 0, total: 9, message: 'Starting...' },
+  modelReadiness: {
+    ready: false,
+    phase: 'initializing',
+    step: 0,
+    total: 9,
+    message: 'Starting...',
+  },
 
   updateSettings: (partial) => {
     trackEvent('settings_changed', { keys: Object.keys(partial) })
@@ -189,7 +204,7 @@ export function getKnowledgeContext(): string {
   const { customContext } = state.settings
   const { injectedKnowledge } = state
   const allKnowledge = [
-    ...customContext ? [{ content: customContext }] : [],
+    ...(customContext ? [{ content: customContext }] : []),
     ...injectedKnowledge,
   ]
   if (allKnowledge.length === 0) return ''

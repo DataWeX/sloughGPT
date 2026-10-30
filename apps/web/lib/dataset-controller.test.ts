@@ -15,7 +15,12 @@ import { PUBLIC_API_URL } from './config'
 import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
-import { datasetController, humanizeDatasetName, isTrainingCorpus, toGitHubCloneUrl } from './dataset-controller'
+import {
+  datasetController,
+  humanizeDatasetName,
+  isTrainingCorpus,
+  toGitHubCloneUrl,
+} from './dataset-controller'
 
 describe('isTrainingCorpus', () => {
   it('keeps dataset and untagged entries', () => {
@@ -236,7 +241,12 @@ describe('datasetController.importFromGitHub', () => {
   })
 
   it('normalizes a bare owner/repo slug before POSTing', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'qt', message: 'ok', output_path: '' })
+    apiClient.apiPost.mockResolvedValue({
+      success: true,
+      dataset_id: 'qt',
+      message: 'ok',
+      output_path: '',
+    })
 
     await datasetController.importFromGitHub({ url: 'qt/qt', name: 'qt' })
 
@@ -248,7 +258,12 @@ describe('datasetController.importFromGitHub', () => {
   })
 
   it('keeps an explicit https URL as-is', async () => {
-    apiClient.apiPost.mockResolvedValue({ success: true, dataset_id: 'qt', message: 'ok', output_path: '' })
+    apiClient.apiPost.mockResolvedValue({
+      success: true,
+      dataset_id: 'qt',
+      message: 'ok',
+      output_path: '',
+    })
 
     await datasetController.importFromGitHub({ url: 'https://github.com/qt/qt', name: 'qt' })
 

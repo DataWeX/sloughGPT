@@ -1,7 +1,55 @@
 {
   "root": true,
-  "extends": ["@sloughgpt/eslint-config"],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "ignorePatterns": ["node_modules/", "dist/", ".next/", "*.d.ts"],
+  "rules": {
+    "@typescript-eslint/no-unused-vars": [
+      "warn",
+      {
+        "argsIgnorePattern": "^_"
+      }
+    ],
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/consistent-type-imports": [
+      "error",
+      {
+        "disallowTypeAnnotations": false
+      }
+    ],
+    "no-console": [
+      "warn",
+      {
+        "allow": ["warn", "error"]
+      }
+    ],
+    "no-extra-semi": "off",
+    "@typescript-eslint/no-require-imports": "off",
+    "no-empty": [
+      "error",
+      {
+        "allowEmptyCatch": true
+      }
+    ],
+    "no-constant-condition": [
+      "error",
+      {
+        "checkLoops": false
+      }
+    ]
+  },
   "overrides": [
+    {
+      "files": ["**/*.js", "**/*.cjs", "**/*.mjs"],
+      "env": {
+        "node": true
+      },
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off",
+        "@typescript-eslint/no-var-requires": "off"
+      }
+    },
     {
       "files": [
         "**/__tests__/**",
@@ -9,23 +57,18 @@
         "**/*.test.ts",
         "**/*.test.tsx",
         "**/*.test.js",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
         "jest-setup.js",
         "jest.config.js"
       ],
-      "env": { "jest": true }
-    },
-    {
-      "files": ["**/*.js", "**/*.cjs", "**/*.mjs"],
-      "env": { "node": true },
+      "env": {
+        "jest": true
+      },
       "rules": {
-        "@typescript-eslint/no-require-imports": "off",
-        "@typescript-eslint/no-var-requires": "off"
+        "@typescript-eslint/triple-slash-reference": "off",
+        "@typescript-eslint/no-explicit-any": "off"
       }
     }
-  ],
-  "rules": {
-    "@typescript-eslint/no-require-imports": "off",
-    "no-empty": ["error", { "allowEmptyCatch": true }],
-    "no-constant-condition": ["error", { "checkLoops": false }]
-  }
+  ]
 }

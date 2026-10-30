@@ -1520,7 +1520,7 @@ export default function VMPage() {
                 </div>
               </CardContent>
             </Card>
-            <V86TerminalPanel className="h-[calc(100vh-12rem)]" />
+            <V86TerminalPanel className="h-[calc(100vh-14rem)]" />
           </div>
         </TabsContent>
       </Tabs>

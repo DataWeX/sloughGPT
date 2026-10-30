@@ -23,6 +23,7 @@ The comparison is a subset check, not equality — the allowlist covers every
 contract across the branches that carry this test, and a tree simply lacking
 one of those files is not a violation.
 """
+
 from __future__ import annotations
 
 import ast
@@ -94,9 +95,7 @@ def _production_prints(path: Path) -> int:
 
 
 def _domain_files() -> list[Path]:
-    return sorted(
-        p for p in DOMAIN.rglob("*.py") if "__pycache__" not in str(p)
-    )
+    return sorted(p for p in DOMAIN.rglob("*.py") if "__pycache__" not in str(p))
 
 
 def test_no_new_print_in_domain():

@@ -16,11 +16,7 @@ describe('useRouter().refresh', () => {
   })
 
   it('revalidates client state in place instead of reloading the document', async () => {
-    await fetchQuery(
-      'navigation-test',
-      async () => 'payload',
-      { staleTime: 60_000 },
-    )
+    await fetchQuery('navigation-test', async () => 'payload', { staleTime: 60_000 })
     expect(isStale('navigation-test')).toBe(false)
 
     const { result } = renderHook(() => useRouter(), { wrapper })

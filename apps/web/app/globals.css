@@ -294,6 +294,30 @@ html {
   font-size: 11px;
   font-weight: 500;
   color: color-mix(in srgb, rgb(var(--banner-tone)) 35%, rgb(var(--foreground)));
+  /* Entrance only — the banner drops in from the top edge. The animated
+     properties live in the keyframes below, never in this block, so the
+     token-guard contract above stays the single surface definition. */
+  animation: sl-banner-in 180ms ease-out;
+}
+
+/* From just above the top edge: the bar is the topmost element, so a short
+   slide reads as "this arrived", not "the page shifted". */
+@keyframes sl-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced motion: the banner still appears — instantly, in place. */
+@media (prefers-reduced-motion: reduce) {
+  .sl-app-banner {
+    animation: none;
+  }
 }
 
 .sl-app-banner[data-tone='info'] {

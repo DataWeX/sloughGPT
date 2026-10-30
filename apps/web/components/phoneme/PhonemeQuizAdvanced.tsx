@@ -2,18 +2,149 @@
 
 import { useState, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, toIPA, type PhonemeLanguage } from '@/lib/phoneme-controller'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  toIPA,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 
 const WORDS: Record<PhonemeLanguage, string[]> = {
-  en: ['hello', 'world', 'phone', 'music', 'happy', 'green', 'blue', 'apple', 'tree', 'fish', 'cat', 'dog', 'run', 'jump', 'swim', 'think', 'three', 'this', 'that', 'ship'],
-  de: ['hallo', 'welt', 'musik', 'glück', 'buch', 'schule', 'grün', 'rot', 'haus', 'katze', 'hund', 'laufen', 'springen', 'schwimmen', 'essen', 'ich', 'nicht', 'durch', 'über', 'schon'],
-  fr: ['bonjour', 'monde', 'musique', 'heure', 'heureux', 'bleu', 'vert', 'pomme', 'arbre', 'poisson', 'chat', 'chien', 'courir', 'sauter', 'nager', 'je', 'ne', 'pas', 'bien', 'tout'],
-  es: ['hola', 'mundo', 'música', 'feliz', 'verde', 'azul', 'manzana', 'árbol', 'pez', 'gato', 'perro', 'correr', 'saltar', 'nadar', 'comer', 'yo', 'no', 'bien', 'muy', 'todo'],
-  it: ['ciao', 'mondo', 'musica', 'felice', 'verde', 'blu', 'mela', 'albero', 'pesce', 'gatto', 'cane', 'correre', 'saltare', 'nuotare', 'mangiare', 'io', 'non', 'bene', 'molto', 'tutto'],
-  pt: ['olá', 'mundo', 'música', 'feliz', 'verde', 'azul', 'maçã', 'árvore', 'peixe', 'gato', 'cachorro', 'correr', 'pular', 'nadar', 'comer', 'eu', 'não', 'bem', 'muito', 'tudo'],
+  en: [
+    'hello',
+    'world',
+    'phone',
+    'music',
+    'happy',
+    'green',
+    'blue',
+    'apple',
+    'tree',
+    'fish',
+    'cat',
+    'dog',
+    'run',
+    'jump',
+    'swim',
+    'think',
+    'three',
+    'this',
+    'that',
+    'ship',
+  ],
+  de: [
+    'hallo',
+    'welt',
+    'musik',
+    'glück',
+    'buch',
+    'schule',
+    'grün',
+    'rot',
+    'haus',
+    'katze',
+    'hund',
+    'laufen',
+    'springen',
+    'schwimmen',
+    'essen',
+    'ich',
+    'nicht',
+    'durch',
+    'über',
+    'schon',
+  ],
+  fr: [
+    'bonjour',
+    'monde',
+    'musique',
+    'heure',
+    'heureux',
+    'bleu',
+    'vert',
+    'pomme',
+    'arbre',
+    'poisson',
+    'chat',
+    'chien',
+    'courir',
+    'sauter',
+    'nager',
+    'je',
+    'ne',
+    'pas',
+    'bien',
+    'tout',
+  ],
+  es: [
+    'hola',
+    'mundo',
+    'música',
+    'feliz',
+    'verde',
+    'azul',
+    'manzana',
+    'árbol',
+    'pez',
+    'gato',
+    'perro',
+    'correr',
+    'saltar',
+    'nadar',
+    'comer',
+    'yo',
+    'no',
+    'bien',
+    'muy',
+    'todo',
+  ],
+  it: [
+    'ciao',
+    'mondo',
+    'musica',
+    'felice',
+    'verde',
+    'blu',
+    'mela',
+    'albero',
+    'pesce',
+    'gatto',
+    'cane',
+    'correre',
+    'saltare',
+    'nuotare',
+    'mangiare',
+    'io',
+    'non',
+    'bene',
+    'molto',
+    'tutto',
+  ],
+  pt: [
+    'olá',
+    'mundo',
+    'música',
+    'feliz',
+    'verde',
+    'azul',
+    'maçã',
+    'árvore',
+    'peixe',
+    'gato',
+    'cachorro',
+    'correr',
+    'pular',
+    'nadar',
+    'comer',
+    'eu',
+    'não',
+    'bem',
+    'muito',
+    'tudo',
+  ],
 }
 
 type QuizMode = 'reverse' | 'partial' | 'missing' | 'sequence'
@@ -41,8 +172,8 @@ export default function PhonemeQuizAdvanced() {
   const [score, setScore] = useState(0)
   const [total, setTotal] = useState(0)
   const [streak, setStreak] = useState(0)
-  const addToHistory = usePhonemeStore(s => s.addToHistory)
-  const addToast = useToastStore(s => s.addToast)
+  const addToHistory = usePhonemeStore((s) => s.addToHistory)
+  const addToast = useToastStore((s) => s.addToast)
 
   const generateQuestion = useCallback(async () => {
     const words = WORDS[language]
@@ -52,12 +183,14 @@ export default function PhonemeQuizAdvanced() {
       const result = await phonemeController.encode(word, language)
       const phonemes = result.phonemes
       const ipa = toIPA(phonemes).join('')
-      let prompt = '', correctAnswer = '', options: string[] = []
+      let prompt = '',
+        correctAnswer = '',
+        options: string[] = []
 
       switch (mode) {
         case 'reverse': {
           correctAnswer = word
-          const distractors = words.filter(w => w !== word).slice(0, 3)
+          const distractors = words.filter((w) => w !== word).slice(0, 3)
           options = shuffleArray([word, ...distractors])
           prompt = `Which word has these phonemes: ${phonemes.join('-')}?`
           break
@@ -66,21 +199,26 @@ export default function PhonemeQuizAdvanced() {
           const hiddenIdx = Math.floor(Math.random() * phonemes.length)
           correctAnswer = phonemes[hiddenIdx]
           const phonemeSet = new Set(phonemes)
-          const extra = ['P', 'B', 'T', 'D', 'K', 'G', 'S', 'Z', 'M', 'N', 'L', 'R']
-            .filter(p => !phonemeSet.has(p))
+          const extra = ['P', 'B', 'T', 'D', 'K', 'G', 'S', 'Z', 'M', 'N', 'L', 'R'].filter(
+            (p) => !phonemeSet.has(p),
+          )
           options = shuffleArray([correctAnswer, ...extra.slice(0, 3)])
-          const masked = phonemes.map((p, i) => i === hiddenIdx ? '___' : p).join('-')
+          const masked = phonemes.map((p, i) => (i === hiddenIdx ? '___' : p)).join('-')
           prompt = `Fill in the missing phoneme: ${masked}`
           break
         }
         case 'missing': {
           correctAnswer = phonemes.length.toString()
-          options = shuffleArray([
-            phonemes.length.toString(),
-            (phonemes.length - 1).toString(),
-            (phonemes.length + 1).toString(),
-            (phonemes.length + 2).toString(),
-          ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 4))
+          options = shuffleArray(
+            [
+              phonemes.length.toString(),
+              (phonemes.length - 1).toString(),
+              (phonemes.length + 1).toString(),
+              (phonemes.length + 2).toString(),
+            ]
+              .filter((v, i, a) => a.indexOf(v) === i)
+              .slice(0, 4),
+          )
           prompt = `How many phonemes in "${word}"? (${ipa})`
           break
         }
@@ -90,7 +228,9 @@ export default function PhonemeQuizAdvanced() {
           const correct = phonemes.join('-')
           const wrong1 = shuffleArray(phonemes).join('-')
           const wrong2 = shuffleArray(phonemes).join('-')
-          options = shuffleArray([correct, wrong1, wrong2].filter((v, i, a) => a.indexOf(v) === i).slice(0, 3))
+          options = shuffleArray(
+            [correct, wrong1, wrong2].filter((v, i, a) => a.indexOf(v) === i).slice(0, 3),
+          )
           prompt = `Put the phonemes in order for "${word}":`
           break
         }
@@ -110,27 +250,35 @@ export default function PhonemeQuizAdvanced() {
     generateQuestion()
   }, [generateQuestion])
 
-  const checkAnswer = useCallback((selected: string) => {
-    if (!question) return
-    const isCorrect = selected === question.correctAnswer
-    setTotal(t => t + 1)
-    if (isCorrect) { setScore(s => s + 1); setStreak(s => s + 1) } else { setStreak(0) }
-    setGameState('result')
+  const checkAnswer = useCallback(
+    (selected: string) => {
+      if (!question) return
+      const isCorrect = selected === question.correctAnswer
+      setTotal((t) => t + 1)
+      if (isCorrect) {
+        setScore((s) => s + 1)
+        setStreak((s) => s + 1)
+      } else {
+        setStreak(0)
+      }
+      setGameState('result')
 
-    addToHistory({
-      target: question.word,
-      spoken: question.word,
-      targetPhonemes: question.phonemes,
-      spokenPhonemes: question.phonemes,
-      score: isCorrect ? 1.0 : 0.0,
-      language,
-    })
+      addToHistory({
+        target: question.word,
+        spoken: question.word,
+        targetPhonemes: question.phonemes,
+        spokenPhonemes: question.phonemes,
+        score: isCorrect ? 1.0 : 0.0,
+        language,
+      })
 
-    addToast(
-      isCorrect ? `Correct! ${question.word}` : `Answer: ${question.correctAnswer}`,
-      isCorrect ? 'success' : 'error',
-    )
-  }, [question, language, addToHistory, addToast])
+      addToast(
+        isCorrect ? `Correct! ${question.word}` : `Answer: ${question.correctAnswer}`,
+        isCorrect ? 'success' : 'error',
+      )
+    },
+    [question, language, addToHistory, addToast],
+  )
 
   const MODES: { value: QuizMode; label: string; desc: string }[] = [
     { value: 'reverse', label: 'Reverse', desc: 'Phonemes → Word' },
@@ -146,7 +294,9 @@ export default function PhonemeQuizAdvanced() {
           <span>Advanced Quiz</span>
           {gameState !== 'idle' && (
             <div className="flex items-center gap-2">
-              <Badge variant="outline">{score}/{total}</Badge>
+              <Badge variant="outline">
+                {score}/{total}
+              </Badge>
               {streak >= 3 && <Badge variant="default">🔥 {streak}</Badge>}
             </div>
           )}
@@ -154,23 +304,27 @@ export default function PhonemeQuizAdvanced() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2">
-          <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
+          <Select value={language} onValueChange={(v) => setLanguage(v as PhonemeLanguage)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PHONEME_LANGUAGES.map(lang => (
-                <SelectItem key={lang.value} value={lang.value}>{lang.label}</SelectItem>
+              {PHONEME_LANGUAGES.map((lang) => (
+                <SelectItem key={lang.value} value={lang.value}>
+                  {lang.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select value={mode} onValueChange={v => setMode(v as QuizMode)}>
+          <Select value={mode} onValueChange={(v) => setMode(v as QuizMode)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {MODES.map(m => (
-                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              {MODES.map((m) => (
+                <SelectItem key={m.value} value={m.value}>
+                  {m.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -182,7 +336,7 @@ export default function PhonemeQuizAdvanced() {
               Harder quiz modes: reverse mapping, gap filling, counting, and sequencing.
             </p>
             <div className="flex flex-wrap justify-center gap-2 mb-4">
-              {MODES.map(m => (
+              {MODES.map((m) => (
                 <Badge key={m.value} variant="outline" className="text-xs">
                   {m.label}: {m.desc}
                 </Badge>
@@ -197,13 +351,11 @@ export default function PhonemeQuizAdvanced() {
             <div className="p-4 rounded-lg bg-muted/30 text-center">
               <p className="text-sm text-muted-foreground mb-2">{question.prompt}</p>
               {question.mode === 'sequence' && (
-                <p className="text-xs text-muted-foreground font-mono">
-                  {question.ipa}
-                </p>
+                <p className="text-xs text-muted-foreground font-mono">{question.ipa}</p>
               )}
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {question.options.map(opt => (
+              {question.options.map((opt) => (
                 <Button
                   key={opt}
                   variant="outline"
@@ -221,7 +373,7 @@ export default function PhonemeQuizAdvanced() {
           <div className="space-y-3">
             <div className="p-4 rounded-lg bg-muted/30 text-center">
               <p className="text-sm text-muted-foreground mb-1">Answer</p>
-              <p className="text-lg font-mono font-bold">{question.correctAnswer}</p>
+              <p className="text-base font-mono font-bold">{question.correctAnswer}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {question.word} ({question.ipa})
               </p>

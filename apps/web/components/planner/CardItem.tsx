@@ -68,7 +68,9 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
 
       <div className="relative pl-3.5 pr-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-[13px] font-medium leading-snug flex-1 text-zinc-800">{card.title}</p>
+          <p className="text-[13px] font-medium leading-snug flex-1 text-muted-foreground">
+            {card.title}
+          </p>
           {card.root_hash && (
             <span
               className="mt-1 h-1.5 w-1.5 rounded-full shrink-0"
@@ -82,13 +84,13 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
           )}
         </div>
         {card.description && (
-          <p className="mt-1 text-[11px] leading-snug line-clamp-2 text-zinc-500">
+          <p className="mt-1 text-[11px] leading-snug line-clamp-2 text-muted-foreground">
             {card.description}
           </p>
         )}
-        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[9px] font-mono text-zinc-400">
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[9px] font-mono text-muted-foreground">
           {card.tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="px-1 py-px rounded bg-zinc-100 text-zinc-500">
+            <span key={tag} className="px-1 py-px rounded bg-muted text-muted-foreground">
               {tag}
             </span>
           ))}

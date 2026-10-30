@@ -25,22 +25,26 @@ export default function VqaSection({ asking, onAsk, answer }: VqaSectionProps) {
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Visual Question Answering</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle className="text-base">Visual Question Answering</CardTitle>
+      </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
           <input
             type="file"
             accept="image/*"
             aria-label="VQA image"
-            onChange={e => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="text-xs"
           />
           <Input
             value={question}
-            onChange={e => setQuestion(e.target.value)}
+            onChange={(e) => setQuestion(e.target.value)}
             placeholder="What is in this image?"
             className="h-8 text-xs flex-1"
-            onKeyDown={e => { if (e.key === 'Enter') handleAsk() }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAsk()
+            }}
             aria-label="Question"
           />
           <Button
@@ -53,7 +57,10 @@ export default function VqaSection({ asking, onAsk, answer }: VqaSectionProps) {
           </Button>
         </div>
         {answer && (
-          <div className="rounded-lg border border-border/50 p-3 text-sm bg-muted/20" data-testid="vqa-answer">
+          <div
+            className="rounded-lg border border-border/50 p-3 text-sm bg-muted/20"
+            data-testid="vqa-answer"
+          >
             <p>{answer.answer}</p>
             <p className="text-xs text-muted-foreground mt-1">{answer.elapsed_ms.toFixed(0)}ms</p>
           </div>

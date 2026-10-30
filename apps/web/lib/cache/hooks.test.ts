@@ -116,9 +116,7 @@ describe('useQuery', () => {
 
   it('does not issue a second request if one is already in flight', async () => {
     let resolve: (v: string) => void = () => {}
-    const fetcher = vi
-      .fn()
-      .mockImplementationOnce(() => new Promise<string>((r) => (resolve = r)))
+    const fetcher = vi.fn().mockImplementationOnce(() => new Promise<string>((r) => (resolve = r)))
     const { result } = renderHook(() => useQuery('k', fetcher))
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
 

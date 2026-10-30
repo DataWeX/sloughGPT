@@ -29,7 +29,7 @@ import os
 import threading
 import time
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -51,6 +51,11 @@ from domain.training._internal.experience_adapter import (
 from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 from domain.training._internal.quality_scorer import compute_data_quality
 from domain.training._internal.slonet import load_checkpoint_npz
+from domain.training._internal.step_strategy import (
+    EwcStrategy,
+    OwnedObjectiveStrategy,
+    StepStrategy,
+)
 from domain.training._internal.trainer_protocol import TrainResult
 from domain.training._internal.training_feed import is_feed_source, load_feed_text
 from domain.training._internal.training_handler import (
@@ -220,7 +225,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         feedback = None
         if isinstance(data_path, str) and data_path.startswith("experience:"):
             # experience:<corpus_path> optional single override
-            rest = data_path[len("experience:"):]
+            rest = data_path[len("experience:") :]
             if rest and rest not in ("chat", "owned"):
                 corpus = rest
         text, _pairs = load_experience_text(
@@ -952,6 +957,7 @@ class SloughGPTTrainer:
         use_owned_objective: bool = False,
         owned_tool_weight: float = 0.3,
         owned_memory_weight: float = 0.2,
+        strategies: Sequence[StepStrategy] | None = None,
     ):
         # Handle both TrainerConfig and legacy parameters
         if config is not None:
@@ -1054,6 +1060,9 @@ class SloughGPTTrainer:
         self._owned_metadata: dict | None = None
         self._experience_sampler = self._build_experience_sampler_if_configured()
         self._owned_objective = self._build_owned_objective_if_configured()
+        # Step strategies: the single per-step seam (MetaTrainer injects here;
+        # legacy EWC/owned attrs are wrapped by _iter_strategies, not copied).
+        self.strategies: list[StepStrategy] = list(strategies or ())
 
         # Compute data quality metrics
         try:
@@ -1366,6 +1375,22 @@ class SloughGPTTrainer:
             yield self.get_batch("train")
 
     @_gc_parked_step
+    def _iter_strategies(self) -> list[StepStrategy]:
+        """Strategies active for this step, in composition order.
+
+        Legacy trainer attributes are wrapped as strategies so their inline
+        behavior is preserved exactly (EWC penalty first when snapshots exist,
+        then the owned objective with its ``owned_`` metric namespacing);
+        injected strategies (MetaTrainer) run after them.
+        """
+        active: list[StepStrategy] = []
+        if self._ewc is not None:
+            active.append(EwcStrategy(self._ewc))
+        if self._owned_objective is not None:
+            active.append(OwnedObjectiveStrategy(self._owned_objective))
+        active.extend(self.strategies)
+        return active
+
     def train_step(self) -> dict[str, float]:
         """Execute a single training step on the pure numpy SloNet path."""
         model = self.training_model
@@ -1402,17 +1427,16 @@ class SloughGPTTrainer:
         except Exception:
             pass
 
-        # Add EWC penalty if enabled (prevents forgetting previous tasks)
-        if self._ewc is not None and self._ewc.task_snapshots:
-            ewc_loss, ewc_stats = self._ewc.ewc_loss()
-            loss = loss + ewc_loss
-
-        # Owned objective (goal 13): combine with experience metadata when enabled.
-        owned_metrics: dict[str, float] = {}
-        if self._owned_objective is not None:
-            loss, owned_metrics = self._owned_objective.compute(
-                model, x, y, loss, metadata=self._owned_metadata
+        # Step strategies — the single per-step seam (StepStrategy): legacy EWC
+        # and the owned objective compose first in their historical order, then
+        # any injected strategies (MetaTrainer). Metric keys are final.
+        strategy_metrics: dict[str, float] = {}
+        for strategy in self._iter_strategies():
+            loss, step_metrics = strategy.compute(
+                model, x, y, loss, logits=logits, metadata=self._owned_metadata
             )
+            if step_metrics:
+                strategy_metrics.update(step_metrics)
 
         (loss * scale_factor).backward()
         self.accumulation_step += 1
@@ -1427,9 +1451,9 @@ class SloughGPTTrainer:
         self._ema_loss = ema
         self._last_train_loss = raw_loss
         metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
-        if owned_metrics:
-            for k, v in owned_metrics.items():
-                metrics[f"owned_{k}"] = v
+        if strategy_metrics:
+            for k, v in strategy_metrics.items():
+                metrics[k] = v
 
         if self.accumulation_step >= self.config.gradient_accumulation_steps:
             params = [p for p in model.parameters() if p.grad is not None]
