@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from app_planner import config
+from app_planner.ids import display_id
 from app_planner.notes_controller import NotesController, NoteStoreError, NoteValidationError
 from app_planner.store import PlannerStore, get_store
 
@@ -56,7 +57,7 @@ def _note_new(args: argparse.Namespace) -> int:
         print(f"{e}", file=sys.stderr)
         return 2
     _auto_sync(ctl.store)
-    print(f"Created note: {note.id[:8]} — {note.title}")
+    print(f"Created note: {display_id(note.id)} — {note.title}")
     return 0
 
 
@@ -66,7 +67,7 @@ def _note_list(args: argparse.Namespace) -> int:
     for note in notes:
         icon = "\u25cf" if note.status == "done" else "\u25cb"
         tags = ",".join(note.tags[:3]) if note.tags else ""
-        print(f"  {icon} [{note.id[:8]}] {note.title}" + (f"  ({tags})" if tags else ""))
+        print(f"  {icon} [{display_id(note.id)}] {note.title}" + (f"  ({tags})" if tags else ""))
     print(f"\n{len(notes)} note(s)")
     return 0
 
@@ -113,7 +114,7 @@ def _note_update(args: argparse.Namespace) -> int:
         print(f"Note not found: {args.id}", file=sys.stderr)
         return 1
     _auto_sync(ctl.store)
-    print(f"Updated: {note.id[:8]} — {note.title}")
+    print(f"Updated: {display_id(note.id)} — {note.title}")
     return 0
 
 
@@ -128,7 +129,7 @@ def _note_delete(args: argparse.Namespace) -> int:
         return 1
     if gone:
         _auto_sync(ctl.store)
-        print(f"Deleted: {args.id[:8]}")
+        print(f"Deleted: {display_id(args.id)}")
         return 0
     print(f"Note not found: {args.id}", file=sys.stderr)
     return 1
@@ -143,7 +144,7 @@ def _note_search(args: argparse.Namespace) -> int:
         return 2
     for note in notes:
         icon = "\u25cf" if note.status == "done" else "\u25cb"
-        print(f"  {icon} [{note.id[:8]}] {note.title}")
+        print(f"  {icon} [{display_id(note.id)}] {note.title}")
     print(f"\n{len(notes)} result(s)")
     return 0
 
@@ -209,7 +210,7 @@ def _board_add(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    print(f"Created: {card.id[:8]} — {card.title}")
+    print(f"Created: {display_id(card.id)} — {card.title}")
     return 0
 
 
@@ -221,7 +222,7 @@ def _board_move(args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     if moved:
-        print(f"Moved {args.id[:8]} → {args.column}")
+        print(f"Moved {display_id(args.id)} → {args.column}")
         return 0
     print(f"Card not found: {args.id}", file=sys.stderr)
     return 1
@@ -230,7 +231,7 @@ def _board_move(args: argparse.Namespace) -> int:
 def _board_delete(args: argparse.Namespace) -> int:
     store = _get_store(args)
     if store.delete_card(args.id):
-        print(f"Deleted: {args.id[:8]}")
+        print(f"Deleted: {display_id(args.id)}")
         return 0
     print(f"Card not found: {args.id}", file=sys.stderr)
     return 1
@@ -350,7 +351,9 @@ def _snapshot(args: argparse.Namespace) -> int:
         print(f"snapshot failed: {exc}")
         return 1
     print(f"snapshot: {result['snapshot']} ({result['bytes']} bytes)")
-    print(f"suggested: git add {result['snapshot']} && git commit -m 'chore(kanban): board snapshot'")
+    print(
+        f"suggested: git add {result['snapshot']} && git commit -m 'chore(kanban): board snapshot'"
+    )
     return 0
 
 
@@ -490,9 +493,7 @@ def build_parser() -> argparse.ArgumentParser:
             "never runs git itself."
         ),
     )
-    snapshot_p.add_argument(
-        "--repo", default=".", help="Destination repo root (default: cwd)"
-    )
+    snapshot_p.add_argument("--repo", default=".", help="Destination repo root (default: cwd)")
 
     # GUI
     gui_p = sub.add_parser(

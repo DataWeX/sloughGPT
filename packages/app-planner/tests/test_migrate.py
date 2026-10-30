@@ -40,9 +40,7 @@ def test_migrate_imports_cards_and_notes(tmp_path):
     canonical_notes = tmp_path / "canonical-notes"
     _seed_repo_local(repo)
 
-    result = migrate(
-        repo, board_dir=canonical_board, notes_dir=canonical_notes
-    )
+    result = migrate(repo, board_dir=canonical_board, notes_dir=canonical_notes)
 
     assert result["board"]["imported"] == 2
     assert result["notes"]["imported"] == 1
@@ -152,9 +150,7 @@ def test_migrate_dry_run_writes_nothing(tmp_path):
     canonical_notes = tmp_path / "canonical-notes"
     _seed_repo_local(repo)
 
-    result = migrate(
-        repo, dry_run=True, board_dir=canonical_board, notes_dir=canonical_notes
-    )
+    result = migrate(repo, dry_run=True, board_dir=canonical_board, notes_dir=canonical_notes)
 
     assert result["dry_run"] is True
     assert result["board"]["imported"] == 2

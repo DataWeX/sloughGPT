@@ -167,7 +167,8 @@ vi.mock('@/components/adapters/AdapterHealthCard', () => ({
   ),
 }))
 vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (e: any, fallback: string) => (e instanceof Error ? e.message : fallback),
+  extractErrorMessage: (e: any, fallback = 'Unknown error') =>
+    e instanceof Error ? e.message : fallback,
 }))
 
 import AdaptersPage from './page'

@@ -1,4 +1,4 @@
-import React, {useCallback, useRef, useEffect, useState} from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react'
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -7,128 +7,159 @@ import {
   TextInput as RNTextInput,
   Keyboard,
   RefreshControl,
-} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {YStack, XStack, Text} from 'tamagui';
-import {useColors} from '../theme/colors';
-import {S, R, T} from '../theme/scales';
-import {useChatActions} from '../hooks/useChatActions';
-import {ChatDrawer} from '../components/ChatDrawer';
-import {ChatBottomSheets} from '../components/ChatBottomSheets';
-import {useSidebar} from '../contexts/SidebarContext';
-import {MessageBubble} from '../components/MessageBubble';
-import {ChatInput} from '../components/ChatInput';
-import {ChatModeBar, type ChatMode} from '../components/ChatModeBar';
-import {ReasoningPanel} from '../components/ReasoningPanel';
-import {Icon} from '../components/Icon';
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { YStack, XStack, Text } from 'tamagui'
+import { useColors } from '../theme/colors'
+import { S, R, T } from '../theme/scales'
+import { useChatActions } from '../hooks/useChatActions'
+import { ChatDrawer } from '../components/ChatDrawer'
+import { ChatBottomSheets } from '../components/ChatBottomSheets'
+import { useSidebar } from '../contexts/SidebarContext'
+import { MessageBubble } from '../components/MessageBubble'
+import { ChatInput } from '../components/ChatInput'
+import { ChatModeBar, type ChatMode } from '../components/ChatModeBar'
+import { ContextInjectionBar } from '../components/ContextInjectionBar'
+import { useChatStore } from '../stores/chat-store'
+import { ReasoningPanel } from '../components/ReasoningPanel'
+import { Icon } from '../components/Icon'
 
 const SUGGESTIONS = [
-  {icon: 'zap' as const, text: 'Tell me something interesting', prompt: 'Tell me something interesting'},
-  {icon: 'target' as const, text: 'Help me brainstorm ideas', prompt: 'Help me brainstorm ideas for a project'},
-  {icon: 'book-open' as const, text: 'Explain a concept', prompt: 'Explain a concept to me in simple terms'},
-  {icon: 'terminal' as const, text: 'Write some code', prompt: 'Write some code for me'},
-];
+  {
+    icon: 'zap' as const,
+    text: 'Tell me something interesting',
+    prompt: 'Tell me something interesting',
+  },
+  {
+    icon: 'target' as const,
+    text: 'Help me brainstorm ideas',
+    prompt: 'Help me brainstorm ideas for a project',
+  },
+  {
+    icon: 'book-open' as const,
+    text: 'Explain a concept',
+    prompt: 'Explain a concept to me in simple terms',
+  },
+  { icon: 'terminal' as const, text: 'Write some code', prompt: 'Write some code for me' },
+]
 
 function buildModePrompt(
   mode: ChatMode,
   input: string,
   opts: {
-    tone: string;
-    type: string;
-    rewriteStyle: string;
-    decideStructure: string;
-    difficulty: string;
-    langPair: string;
-    brainstormTopic: string;
-    wellnessType: string;
+    tone: string
+    type: string
+    rewriteStyle: string
+    decideStructure: string
+    difficulty: string
+    langPair: string
+    brainstormTopic: string
+    wellnessType: string
   },
 ): string {
   switch (mode) {
     case 'chat':
-      return input;
+      return input
     case 'write':
-      return `Write a ${opts.tone.toLowerCase()} ${opts.type.toLowerCase()} about: ${input}`;
+      return `Write a ${opts.tone.toLowerCase()} ${opts.type.toLowerCase()} about: ${input}`
     case 'rewrite': {
       const prompts: Record<string, string> = {
         'Fix Grammar': 'Fix all grammar and spelling errors in this text while keeping the meaning',
         'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
         'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
         'Make Professional': 'Rewrite this text in a professional, formal tone',
-        'Sound Like Me': 'Rewrite this text to sound more natural and conversational, like a real person wrote it',
-      };
-      return `${prompts[opts.rewriteStyle] || 'Rewrite this text'}:\n\n${input}`;
+        'Sound Like Me':
+          'Rewrite this text to sound more natural and conversational, like a real person wrote it',
+      }
+      return `${prompts[opts.rewriteStyle] || 'Rewrite this text'}:\n\n${input}`
     }
     case 'decide':
-      return `Help me decide using ${opts.decideStructure.toLowerCase()}: ${input}`;
+      return `Help me decide using ${opts.decideStructure.toLowerCase()}: ${input}`
     case 'explain':
-      return `Explain this at a ${opts.difficulty.toLowerCase()} level (as if explaining to a ${opts.difficulty.toLowerCase()} learner): ${input}`;
+      return `Explain this at a ${opts.difficulty.toLowerCase()} level (as if explaining to a ${opts.difficulty.toLowerCase()} learner): ${input}`
     case 'translate': {
-      const [src, tgt] = opts.langPair.split('→');
-      return `Translate this from ${src} to ${tgt}: ${input}`;
+      const [src, tgt] = opts.langPair.split('→')
+      return `Translate this from ${src} to ${tgt}: ${input}`
     }
     case 'brainstorm':
-      return `Let's brainstorm ${opts.brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`;
+      return `Let's brainstorm ${opts.brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`
     case 'wellness': {
       const prompts: Record<string, string> = {
         'Sleep Story': 'Tell me a calming sleep story',
-        'Meditation': 'Guide me through a short meditation',
-        'Breathing': 'Guide me through a breathing exercise',
-        'Affirmation': 'Share a positive affirmation',
-      };
-      return `Respond in a gentle, soothing tone. ${prompts[opts.wellnessType] || 'Help me feel calm'}: ${input}`;
+        Meditation: 'Guide me through a short meditation',
+        Breathing: 'Guide me through a breathing exercise',
+        Affirmation: 'Share a positive affirmation',
+      }
+      return `Respond in a gentle, soothing tone. ${prompts[opts.wellnessType] || 'Help me feel calm'}: ${input}`
     }
     default:
-      return input;
+      return input
   }
 }
 
 export function ChatScreen() {
-  const colors = useColors();
-  const flatListRef = useRef<FlatList>(null);
-  const a = useChatActions(flatListRef);
-  const {open: openSidebar} = useSidebar();
+  const colors = useColors()
+  const flatListRef = useRef<FlatList>(null)
+  const a = useChatActions(flatListRef)
+  const injectContext = useChatStore(s => s.injectContext)
+  const { open: openSidebar } = useSidebar()
 
   // Mode state
-  const [chatMode, setChatMode] = useState<ChatMode>('chat');
-  const [writeTone, setWriteTone] = useState('Friendly');
-  const [writeType, setWriteType] = useState('Email');
-  const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar');
-  const [decideStructure, setDecideStructure] = useState('Pros & Cons');
-  const [explainDifficulty, setExplainDifficulty] = useState('Simple');
-  const [translateLangPair, setTranslateLangPair] = useState('EN→ES');
-  const [brainstormTopic, setBrainstormTopic] = useState('Name Ideas');
-  const [wellnessType, setWellnessType] = useState('Sleep Story');
+  const [chatMode, setChatMode] = useState<ChatMode>('chat')
+  const [writeTone, setWriteTone] = useState('Friendly')
+  const [writeType, setWriteType] = useState('Email')
+  const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar')
+  const [decideStructure, setDecideStructure] = useState('Pros & Cons')
+  const [explainDifficulty, setExplainDifficulty] = useState('Simple')
+  const [translateLangPair, setTranslateLangPair] = useState('EN→ES')
+  const [brainstormTopic, setBrainstormTopic] = useState('Name Ideas')
+  const [wellnessType, setWellnessType] = useState('Sleep Story')
 
   // Wrap handleSend to apply mode transformation
-  const handleModeSend = useCallback((text: string) => {
-    const transformed = buildModePrompt(chatMode, text, {
-      tone: writeTone,
-      type: writeType,
+  const handleModeSend = useCallback(
+    (text: string) => {
+      const transformed = buildModePrompt(chatMode, text, {
+        tone: writeTone,
+        type: writeType,
+        rewriteStyle,
+        decideStructure,
+        difficulty: explainDifficulty,
+        langPair: translateLangPair,
+        brainstormTopic,
+        wellnessType,
+      })
+      a.handleSend(transformed)
+    },
+    [
+      chatMode,
+      writeTone,
+      writeType,
       rewriteStyle,
       decideStructure,
-      difficulty: explainDifficulty,
-      langPair: translateLangPair,
+      explainDifficulty,
+      translateLangPair,
       brainstormTopic,
       wellnessType,
-    });
-    a.handleSend(transformed);
-  }, [chatMode, writeTone, writeType, rewriteStyle, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, a.handleSend]);
+      a.handleSend,
+    ],
+  )
 
   useEffect(() => {
-    const {Keyboard: KB} = require('react-native');
+    const { Keyboard: KB } = require('react-native')
     const sub = KB.addListener('keyboardDidHide', () => {
       // Only dismiss keyboard-triggered modals (search), not explicit ones (drawer, soul picker)
-      a.dismissKeyboardModals();
-    });
-    return () => sub.remove();
-  }, [a.dismissKeyboardModals]);
+      a.dismissKeyboardModals()
+    })
+    return () => sub.remove()
+  }, [a.dismissKeyboardModals])
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: 'var(--background)'}} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: 'var(--background)' }} edges={['top']}>
       <KeyboardAvoidingView
-        style={{flex: 1}}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}>
+        keyboardVerticalOffset={0}
+      >
         {/* Header */}
         <XStack
           paddingHorizontal={S.lg}
@@ -136,28 +167,38 @@ export function ChatScreen() {
           borderBottomWidth={0}
           backgroundColor="$background"
           alignItems="center"
-          justifyContent="space-between">
+          justifyContent="space-between"
+        >
           <XStack alignItems="center" gap={S.lg}>
             <YStack
-              width={40} height={40} borderRadius={R.lg}
-              alignItems="center" justifyContent="center"
+              width={40}
+              height={40}
+              borderRadius={R.lg}
+              alignItems="center"
+              justifyContent="center"
               backgroundColor={colors.primaryAlpha(0.08)}
               onPress={openSidebar}
-              pressStyle={{opacity: 0.6, scale: 0.95}}
-              accessible accessibilityRole="button" accessibilityLabel="Open menu">
+              pressStyle={{ opacity: 0.6, scale: 0.95 }}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="Open menu"
+            >
               <Icon name="menu" size={18} color={colors.primary} />
             </YStack>
             <YStack
               alignItems="flex-start"
               onPress={() => {
-                const now = Date.now();
+                const now = Date.now()
                 if (now - a.lastHeaderTap.current < 300) {
-                  flatListRef.current?.scrollToOffset({offset: 0, animated: true});
+                  flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
                 }
-                a.lastHeaderTap.current = now;
-              }}>
+                a.lastHeaderTap.current = now
+              }}
+            >
               <XStack alignItems="center" gap={S.sm}>
-                <Text {...T.page} fontWeight="700" letterSpacing={-0.5} color="$color">Chat</Text>
+                <Text {...T.page} fontWeight="700" letterSpacing={-0.5} color="$color">
+                  Chat
+                </Text>
                 {a.currentSoul && (
                   <YStack
                     backgroundColor={colors.primaryAlpha(0.12)}
@@ -165,8 +206,11 @@ export function ChatScreen() {
                     paddingVertical={S.xs}
                     borderRadius={R.full}
                     onPress={() => a.setShowSoulPicker(true)}
-                    pressStyle={{opacity: 0.7, scale: 0.95}}>
-                    <Text {...T.badge} fontWeight="600" color="$color9">{a.currentSoul.name}</Text>
+                    pressStyle={{ opacity: 0.7, scale: 0.95 }}
+                  >
+                    <Text {...T.badge} fontWeight="600" color="$color9">
+                      {a.currentSoul.name}
+                    </Text>
                   </YStack>
                 )}
               </XStack>
@@ -176,22 +220,34 @@ export function ChatScreen() {
           <XStack alignItems="center" gap={S.sm}>
             {a.messages.length > 0 && (
               <YStack
-                width={40} height={40} borderRadius={R.lg}
-                alignItems="center" justifyContent="center"
+                width={40}
+                height={40}
+                borderRadius={R.lg}
+                alignItems="center"
+                justifyContent="center"
                 backgroundColor={colors.primaryAlpha(0.08)}
                 onPress={a.handleExportChat}
-                pressStyle={{opacity: 0.6, scale: 0.95}}
-                accessible accessibilityRole="button" accessibilityLabel="Export conversation">
+                pressStyle={{ opacity: 0.6, scale: 0.95 }}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel="Export conversation"
+              >
                 <Icon name="share-2" size={18} color={colors.primary} />
               </YStack>
             )}
             <YStack
-              width={40} height={40} borderRadius={R.lg}
-              alignItems="center" justifyContent="center"
+              width={40}
+              height={40}
+              borderRadius={R.lg}
+              alignItems="center"
+              justifyContent="center"
               backgroundColor={colors.primaryAlpha(0.08)}
               onPress={() => a.setShowSettings(true)}
-              pressStyle={{opacity: 0.6, scale: 0.95}}
-              accessible accessibilityRole="button" accessibilityLabel="Settings">
+              pressStyle={{ opacity: 0.6, scale: 0.95 }}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+            >
               <Icon name="more-vertical" size={18} color={colors.primary} />
             </YStack>
           </XStack>
@@ -199,22 +255,32 @@ export function ChatScreen() {
 
         {a.error && (
           <XStack
-            paddingHorizontal={S.lg} paddingVertical={S.md}
+            paddingHorizontal={S.lg}
+            paddingVertical={S.md}
             backgroundColor={colors.errorAlpha(0.06)}
-            borderBottomWidth={0.5} borderBottomColor={colors.errorAlpha(0.12)}
-            alignItems="center" gap={S.sm}>
+            borderBottomWidth={0.5}
+            borderBottomColor={colors.errorAlpha(0.12)}
+            alignItems="center"
+            gap={S.sm}
+          >
             <YStack width={6} height={6} borderRadius={R.full} backgroundColor={colors.error} />
-            <Text {...T.caption} color={colors.error} flex={1} numberOfLines={2}>{a.error}</Text>
+            <Text {...T.caption} color={colors.error} flex={1} numberOfLines={2}>
+              {a.error}
+            </Text>
             <YStack
-              paddingHorizontal={S.sm} paddingVertical={S.xs}
+              paddingHorizontal={S.sm}
+              paddingVertical={S.xs}
               backgroundColor={colors.errorAlpha(0.12)}
               borderRadius={R.sm}
               onPress={() => {
-                a.clearError();
-                const lastUserMsg = [...a.messages].reverse().find(m => m.role === 'user');
-                if (lastUserMsg) a.regenerate(lastUserMsg.id);
-              }}>
-              <Text {...T.badge} fontWeight="600" color={colors.error}>Retry</Text>
+                a.clearError()
+                const lastUserMsg = [...a.messages].reverse().find((m) => m.role === 'user')
+                if (lastUserMsg) a.regenerate(lastUserMsg.id)
+              }}
+            >
+              <Text {...T.badge} fontWeight="600" color={colors.error}>
+                Retry
+              </Text>
             </YStack>
             <YStack onPress={a.clearError}>
               <Icon name="x" size={14} color={colors.error} />
@@ -224,14 +290,22 @@ export function ChatScreen() {
 
         {!a.online && (
           <XStack
-            paddingHorizontal={S.lg} paddingVertical={S.sm}
-            borderBottomWidth={0.5} borderBottomColor="$borderColor"
-            alignItems="center" gap={S.sm}>
+            paddingHorizontal={S.lg}
+            paddingVertical={S.sm}
+            borderBottomWidth={0.5}
+            borderBottomColor="$borderColor"
+            alignItems="center"
+            gap={S.sm}
+          >
             <YStack width={5} height={5} borderRadius={R.full} backgroundColor={colors.warning} />
-            <Text {...T.badge} color="$color10">Offline</Text>
+            <Text {...T.badge} color="$color10">
+              Offline
+            </Text>
             {a.offlineQueue > 0 && (
               <YStack onPress={a.retryPendingSends}>
-                <Text {...T.caption} color="$color11" textDecorationLine="underline">{a.offlineQueue} queued</Text>
+                <Text {...T.caption} color="$color11" textDecorationLine="underline">
+                  {a.offlineQueue} queued
+                </Text>
               </YStack>
             )}
           </XStack>
@@ -259,9 +333,7 @@ export function ChatScreen() {
         />
 
         {a.showSearch && (
-          <XStack
-            paddingHorizontal={S.lg} paddingVertical={S.sm}
-            gap={S.sm} alignItems="center">
+          <XStack paddingHorizontal={S.lg} paddingVertical={S.sm} gap={S.sm} alignItems="center">
             <RNTextInput
               style={{
                 ...T.caption,
@@ -269,8 +341,10 @@ export function ChatScreen() {
                 color: colors.text,
                 backgroundColor: colors.primaryAlpha(0.06),
                 borderRadius: R.md,
-                paddingHorizontal: S.md, paddingVertical: S.sm,
-                borderWidth: 0.5, borderColor: colors.border,
+                paddingHorizontal: S.md,
+                paddingVertical: S.sm,
+                borderWidth: 0.5,
+                borderColor: colors.border,
               }}
               value={a.searchQuery}
               onChangeText={a.setSearchQuery}
@@ -286,32 +360,53 @@ export function ChatScreen() {
             {a.matchCount > 0 && (
               <>
                 <YStack
-                  width={28} height={28} borderRadius={R.md}
-                  alignItems="center" justifyContent="center"
+                  width={28}
+                  height={28}
+                  borderRadius={R.md}
+                  alignItems="center"
+                  justifyContent="center"
                   backgroundColor={colors.primaryAlpha(0.06)}
                   onPress={a.searchPrev}
-                  pressStyle={{opacity: 0.6}}
-                  accessible accessibilityRole="button" accessibilityLabel="Previous match">
+                  pressStyle={{ opacity: 0.6 }}
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous match"
+                >
                   <Icon name="chevron-up" size={14} color={colors.textMuted} />
                 </YStack>
                 <YStack
-                  width={28} height={28} borderRadius={R.md}
-                  alignItems="center" justifyContent="center"
+                  width={28}
+                  height={28}
+                  borderRadius={R.md}
+                  alignItems="center"
+                  justifyContent="center"
                   backgroundColor={colors.primaryAlpha(0.06)}
                   onPress={a.searchNext}
-                  pressStyle={{opacity: 0.6}}
-                  accessible accessibilityRole="button" accessibilityLabel="Next match">
+                  pressStyle={{ opacity: 0.6 }}
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel="Next match"
+                >
                   <Icon name="chevron-down" size={14} color={colors.textMuted} />
                 </YStack>
               </>
             )}
             <YStack
-              width={28} height={28} borderRadius={R.md}
-              alignItems="center" justifyContent="center"
+              width={28}
+              height={28}
+              borderRadius={R.md}
+              alignItems="center"
+              justifyContent="center"
               backgroundColor={colors.primaryAlpha(0.06)}
-              onPress={() => { a.setShowSearch(false); a.setSearchQuery(''); }}
-              pressStyle={{opacity: 0.6}}
-              accessible accessibilityRole="button" accessibilityLabel="Close search">
+              onPress={() => {
+                a.setShowSearch(false)
+                a.setSearchQuery('')
+              }}
+              pressStyle={{ opacity: 0.6 }}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="Close search"
+            >
               <Icon name="x" size={14} color={colors.textMuted} />
             </YStack>
           </XStack>
@@ -319,39 +414,63 @@ export function ChatScreen() {
 
         {a.messages.length === 0 && !a.streaming ? (
           <YStack
-            flex={1} alignItems="center" justifyContent="center"
+            flex={1}
+            alignItems="center"
+            justifyContent="center"
             paddingHorizontal={S.xxxl}
-            backgroundColor={a.chatBackground || 'var(--background)'}>
+            backgroundColor={a.chatBackground || 'var(--background)'}
+          >
             <YStack
-              width={88} height={88} borderRadius={R.xl}
+              width={88}
+              height={88}
+              borderRadius={R.xl}
               backgroundColor={colors.primaryAlpha(0.1)}
-              alignItems="center" justifyContent="center"
+              alignItems="center"
+              justifyContent="center"
               marginBottom={S.xxxl}
               shadowColor={colors.primary}
-              shadowOffset={{width: 0, height: 8}}
+              shadowOffset={{ width: 0, height: 8 }}
               shadowOpacity={0.15}
               shadowRadius={24}
-              elevation={8}>
+              elevation={8}
+            >
               <YStack
-                width={56} height={56} borderRadius={R.xl}
+                width={56}
+                height={56}
+                borderRadius={R.xl}
                 backgroundColor={colors.primaryAlpha(0.15)}
-                alignItems="center" justifyContent="center">
+                alignItems="center"
+                justifyContent="center"
+              >
                 <Icon name="message-circle" size={26} color={colors.primary} />
               </YStack>
             </YStack>
 
-            <Text {...T.page} fontWeight="700" letterSpacing={-0.5} color="$color" marginBottom={S.sm} textAlign="center">
+            <Text
+              {...T.page}
+              fontWeight="700"
+              letterSpacing={-0.5}
+              color="$color"
+              marginBottom={S.sm}
+              textAlign="center"
+            >
               {a.currentSoul ? a.currentSoul.name : 'Start chatting'}
             </Text>
 
-            <Text {...T.body} color="$color10" textAlign="center" marginBottom={S.xxxl} maxWidth={280}>
+            <Text
+              {...T.body}
+              color="$color10"
+              textAlign="center"
+              marginBottom={S.xxxl}
+              maxWidth={280}
+            >
               {a.currentSoul
-                ? (a.currentSoul.description || 'Ask me anything')
+                ? a.currentSoul.description || 'Ask me anything'
                 : 'Send a message to begin a conversation with your AI'}
             </Text>
 
             <YStack gap={S.md} width="100%" maxWidth={340}>
-              {SUGGESTIONS.map(s => (
+              {SUGGESTIONS.map((s) => (
                 <YStack
                   key={s.text}
                   flexDirection="row"
@@ -364,35 +483,53 @@ export function ChatScreen() {
                   borderWidth={1}
                   borderColor={colors.primaryAlpha(0.08)}
                   onPress={() => a.handleSuggestion(s.prompt)}
-                  pressStyle={{opacity: 0.7, scale: 0.98, backgroundColor: colors.primaryAlpha(0.12)}}>
+                  pressStyle={{
+                    opacity: 0.7,
+                    scale: 0.98,
+                    backgroundColor: colors.primaryAlpha(0.12),
+                  }}
+                >
                   <YStack
-                    width={36} height={36} borderRadius={R.md}
+                    width={36}
+                    height={36}
+                    borderRadius={R.md}
                     backgroundColor={colors.primaryAlpha(0.12)}
-                    alignItems="center" justifyContent="center">
+                    alignItems="center"
+                    justifyContent="center"
+                  >
                     <Icon name={s.icon} size={18} color={colors.primary} />
                   </YStack>
-                  <Text {...T.body} fontWeight="500" color="$color" flex={1}>{s.text}</Text>
-                  <YStack style={{transform: [{rotate: '-90deg'}]}}>
+                  <Text {...T.body} fontWeight="500" color="$color" flex={1}>
+                    {s.text}
+                  </Text>
+                  <YStack style={{ transform: [{ rotate: '-90deg' }] }}>
                     <Icon name="chevron-down" size={14} color={colors.textMuted} />
                   </YStack>
                 </YStack>
               ))}
             </YStack>
 
-            <Text {...T.caption} color="$color10" marginTop={S.xxxl} textAlign="center" letterSpacing={0.3}>
+            <Text
+              {...T.caption}
+              color="$color10"
+              marginTop={S.xxxl}
+              textAlign="center"
+              letterSpacing={0.3}
+            >
               Swipe left on a message to delete it
             </Text>
           </YStack>
         ) : (
           <Pressable
-            style={{flex: 1, backgroundColor: a.chatBackground || 'var(--background)'}}
-            onPress={() => Keyboard.dismiss()}>
+            style={{ flex: 1, backgroundColor: a.chatBackground || 'var(--background)' }}
+            onPress={() => Keyboard.dismiss()}
+          >
             <FlatList
               ref={flatListRef}
               data={a.messages}
               renderItem={a.renderItem}
               keyExtractor={a.keyExtractor}
-              contentContainerStyle={{paddingTop: S.sm, paddingBottom: S.sm}}
+              contentContainerStyle={{ paddingTop: S.sm, paddingBottom: S.sm }}
               onScroll={a.onScroll}
               scrollEventThrottle={16}
               keyboardDismissMode="on-drag"
@@ -408,26 +545,40 @@ export function ChatScreen() {
                 />
               }
               onContentSizeChange={() => {
-              if (a.atBottom) {
-                flatListRef.current?.scrollToEnd({animated: false});
-              }
-            }}
+                if (a.atBottom) {
+                  flatListRef.current?.scrollToEnd({ animated: false })
+                }
+              }}
             />
           </Pressable>
         )}
 
         {a.pinnedIds.length > 0 && !a.selectMode && (
           <XStack
-            paddingHorizontal={S.lg} paddingVertical={S.sm}
-            gap={S.sm} alignItems="center"
+            paddingHorizontal={S.lg}
+            paddingVertical={S.sm}
+            gap={S.sm}
+            alignItems="center"
             onPress={() => {
-              const firstPinnedIndex = a.messages.findIndex(m => a.pinnedIds.includes(m.id));
+              const firstPinnedIndex = a.messages.findIndex((m) => a.pinnedIds.includes(m.id))
               if (firstPinnedIndex >= 0) {
-                flatListRef.current?.scrollToIndex({index: firstPinnedIndex, animated: true, viewPosition: 0});
+                flatListRef.current?.scrollToIndex({
+                  index: firstPinnedIndex,
+                  animated: true,
+                  viewPosition: 0,
+                })
               }
             }}
-            pressStyle={{opacity: 0.7}}>
-            <YStack width={24} height={24} borderRadius={R.md} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
+            pressStyle={{ opacity: 0.7 }}
+          >
+            <YStack
+              width={24}
+              height={24}
+              borderRadius={R.md}
+              backgroundColor={colors.primaryAlpha(0.08)}
+              alignItems="center"
+              justifyContent="center"
+            >
               <Icon name="pin" size={12} color="$color9" />
             </YStack>
             <Text {...T.badge} color="$color9">
@@ -438,55 +589,106 @@ export function ChatScreen() {
 
         {a.selectMode && (
           <XStack
-            paddingHorizontal={S.lg} paddingVertical={S.md}
-            borderTopWidth={0.5} borderTopColor="$borderColor"
-            alignItems="center" justifyContent="space-between"
-            backgroundColor={colors.primaryAlpha(0.04)}>
-            <YStack onPress={() => {
-              if (a.selectedIds.size === a.messages.length) {
-                a.setSelectedIds(new Set());
-              } else {
-                a.setSelectedIds(new Set(a.messages.map(m => m.id)));
-              }
-            }} pressStyle={{opacity: 0.6}}>
+            paddingHorizontal={S.lg}
+            paddingVertical={S.md}
+            borderTopWidth={0.5}
+            borderTopColor="$borderColor"
+            alignItems="center"
+            justifyContent="space-between"
+            backgroundColor={colors.primaryAlpha(0.04)}
+          >
+            <YStack
+              onPress={() => {
+                if (a.selectedIds.size === a.messages.length) {
+                  a.setSelectedIds(new Set())
+                } else {
+                  a.setSelectedIds(new Set(a.messages.map((m) => m.id)))
+                }
+              }}
+              pressStyle={{ opacity: 0.6 }}
+            >
               <Text {...T.caption} fontWeight="600" color="$color9">
                 {a.selectedIds.size === a.messages.length ? 'Deselect all' : 'Select all'}
               </Text>
             </YStack>
             <XStack gap={S.md} alignItems="center">
-              <Text {...T.caption} color="$color10">{a.selectedIds.size} selected</Text>
-              <YStack paddingHorizontal={S.md} paddingVertical={S.xs} borderRadius={R.md}
+              <Text {...T.caption} color="$color10">
+                {a.selectedIds.size} selected
+              </Text>
+              <YStack
+                paddingHorizontal={S.md}
+                paddingVertical={S.xs}
+                borderRadius={R.md}
                 backgroundColor={a.selectedIds.size > 0 ? colors.errorAlpha(0.1) : 'transparent'}
                 opacity={a.selectedIds.size === 0 ? 0.4 : 1}
                 onPress={a.deleteSelected}
-                disabled={a.selectedIds.size === 0}>
-                <Text {...T.caption} fontWeight="600"
-                  color={a.selectedIds.size > 0 ? colors.error : colors.textMuted}>Delete</Text>
+                disabled={a.selectedIds.size === 0}
+              >
+                <Text
+                  {...T.caption}
+                  fontWeight="600"
+                  color={a.selectedIds.size > 0 ? colors.error : colors.textMuted}
+                >
+                  Delete
+                </Text>
               </YStack>
-              <YStack paddingHorizontal={S.md} paddingVertical={S.xs} borderRadius={R.md}
-                backgroundColor={colors.primaryAlpha(0.08)} onPress={a.toggleSelectMode}>
-                <Text {...T.caption} fontWeight="600" color="$color9">Done</Text>
+              <YStack
+                paddingHorizontal={S.md}
+                paddingVertical={S.xs}
+                borderRadius={R.md}
+                backgroundColor={colors.primaryAlpha(0.08)}
+                onPress={a.toggleSelectMode}
+              >
+                <Text {...T.caption} fontWeight="600" color="$color9">
+                  Done
+                </Text>
               </YStack>
             </XStack>
           </XStack>
         )}
 
-        <ReasoningPanel visible={a.streaming && a.messages.length > 0 && !a.messages[a.messages.length - 1]?.content} />
+        <ReasoningPanel
+          visible={
+            a.streaming && a.messages.length > 0 && !a.messages[a.messages.length - 1]?.content
+          }
+        />
 
         {a.streaming && a.messages.length > 0 && a.messages[a.messages.length - 1]?.content && (
           <XStack paddingHorizontal={S.lg} paddingVertical={S.sm} gap={S.xs} alignItems="center">
-            <YStack width={4} height={4} borderRadius={R.xs} backgroundColor={colors.primary} opacity={0.6} />
-            <YStack width={4} height={4} borderRadius={R.xs} backgroundColor={colors.primary} opacity={0.4} />
-            <YStack width={4} height={4} borderRadius={R.xs} backgroundColor={colors.primary} opacity={0.2} />
+            <YStack
+              width={4}
+              height={4}
+              borderRadius={R.xs}
+              backgroundColor={colors.primary}
+              opacity={0.6}
+            />
+            <YStack
+              width={4}
+              height={4}
+              borderRadius={R.xs}
+              backgroundColor={colors.primary}
+              opacity={0.4}
+            />
+            <YStack
+              width={4}
+              height={4}
+              borderRadius={R.xs}
+              backgroundColor={colors.primary}
+              opacity={0.2}
+            />
           </XStack>
         )}
 
         {a.replyTo && (
           <XStack
-            paddingHorizontal={S.lg} paddingVertical={S.sm}
-            gap={S.md} alignItems="center"
+            paddingHorizontal={S.lg}
+            paddingVertical={S.sm}
+            gap={S.md}
+            alignItems="center"
             backgroundColor={colors.primaryAlpha(0.04)}
-            borderTopWidth={0.5} borderTopColor="$borderColor">
+            borderTopWidth={0.5}
+            borderTopColor="$borderColor"
+          >
             <YStack width={3} height={32} borderRadius={R.xs} backgroundColor="$color9" />
             <YStack flex={1}>
               <Text {...T.badge} fontWeight="600" color="$color9" marginBottom={1}>
@@ -497,15 +699,21 @@ export function ChatScreen() {
               </Text>
             </YStack>
             <YStack
-              width={24} height={24} borderRadius={R.md}
+              width={24}
+              height={24}
+              borderRadius={R.md}
               backgroundColor={colors.primaryAlpha(0.06)}
-              alignItems="center" justifyContent="center"
+              alignItems="center"
+              justifyContent="center"
               onPress={() => a.setReplyTo(null)}
-              pressStyle={{opacity: 0.6}}>
+              pressStyle={{ opacity: 0.6 }}
+            >
               <Icon name="x" size={12} color="$color10" />
             </YStack>
           </XStack>
         )}
+
+        <ContextInjectionBar onInject={injectContext} disabled={a.streaming} />
 
         <ChatInput
           onSend={handleModeSend}
@@ -520,7 +728,7 @@ export function ChatScreen() {
           editText={a.editingMessage}
           onCancelEdit={() => a.setEditingMessage(null)}
           voiceMessageMode={a.voiceMessageMode}
-          onVoiceMessageToggle={() => a.setVoiceMessageMode(v => !v)}
+          onVoiceMessageToggle={() => a.setVoiceMessageMode((v) => !v)}
         />
 
         {!a.atBottom && a.messages.length > 0 && (
@@ -537,13 +745,16 @@ export function ChatScreen() {
             alignItems="center"
             justifyContent="center"
             shadowColor="$color9"
-            shadowOffset={{width: 0, height: 4}}
+            shadowOffset={{ width: 0, height: 4 }}
             shadowOpacity={0.25}
             shadowRadius={12}
             elevation={6}
-            onPress={() => flatListRef.current?.scrollToEnd({animated: true})}
-            pressStyle={{opacity: 0.7, scale: 0.9}}
-            accessible accessibilityRole="button" accessibilityLabel="Jump to bottom">
+            onPress={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            pressStyle={{ opacity: 0.7, scale: 0.9 }}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="Jump to bottom"
+          >
             <Icon name="arrow-down" size={18} color="$color9" />
           </YStack>
         )}
@@ -558,6 +769,8 @@ export function ChatScreen() {
         allLabels={a.allLabels}
         labelFilter={a.labelFilter}
         setLabelFilter={a.setLabelFilter}
+        folderFilter={a.folderFilter}
+        setFolderFilter={a.setFolderFilter}
         showArchived={a.showArchived}
         setShowArchived={a.setShowArchived}
         labelInput={a.labelInput}
@@ -606,5 +819,5 @@ export function ChatScreen() {
         setShowSearch={a.setShowSearch}
       />
     </SafeAreaView>
-  );
+  )
 }

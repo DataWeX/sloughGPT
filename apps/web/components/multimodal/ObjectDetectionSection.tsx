@@ -15,7 +15,11 @@ interface ObjectDetectionSectionProps {
   objects?: DetectedObject[] | null
 }
 
-export default function ObjectDetectionSection({ detecting, onDetect, objects }: ObjectDetectionSectionProps) {
+export default function ObjectDetectionSection({
+  detecting,
+  onDetect,
+  objects,
+}: ObjectDetectionSectionProps) {
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
@@ -35,14 +39,16 @@ export default function ObjectDetectionSection({ detecting, onDetect, objects }:
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Object Detection</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle className="text-base">Object Detection</CardTitle>
+      </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
           <input
             type="file"
             accept="image/*"
             aria-label="Object detection image"
-            onChange={e => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="text-xs"
           />
           <Button
@@ -56,8 +62,15 @@ export default function ObjectDetectionSection({ detecting, onDetect, objects }:
         </div>
 
         {previewUrl && (objects?.length ?? 0) > 0 && (
-          <div className="relative rounded-lg border border-border/50 overflow-hidden" data-testid="detection-preview">
-            <img src={previewUrl} alt="Detection target" className="w-full h-auto max-h-64 object-contain bg-muted/20" />
+          <div
+            className="relative rounded-lg border border-border/50 overflow-hidden"
+            data-testid="detection-preview"
+          >
+            <img
+              src={previewUrl}
+              alt="Detection target"
+              className="w-full h-auto max-h-64 object-contain bg-muted/20"
+            />
             {objects!.map((obj, i) => {
               const [x1, y1, x2, y2] = obj.bbox
               return (
@@ -84,10 +97,14 @@ export default function ObjectDetectionSection({ detecting, onDetect, objects }:
         {(objects?.length ?? 0) > 0 && (
           <ul className="space-y-1" data-testid="detection-list">
             {objects!.map((obj, i) => (
-              <li key={`${obj.label}-${i}`} className="flex items-center justify-between text-xs rounded border border-border/50 px-2 py-1">
+              <li
+                key={`${obj.label}-${i}`}
+                className="flex items-center justify-between text-xs rounded border border-border/50 px-2 py-1"
+              >
                 <span>{obj.label}</span>
                 <span className="text-muted-foreground">
-                  {(obj.confidence * 100).toFixed(0)}% · [{obj.bbox.map(n => n.toFixed(2)).join(', ')}]
+                  {(obj.confidence * 100).toFixed(0)}% · [
+                  {obj.bbox.map((n) => n.toFixed(2)).join(', ')}]
                 </span>
               </li>
             ))}

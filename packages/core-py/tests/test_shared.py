@@ -1,6 +1,8 @@
 """Tests for domain.shared — utils, feature_flags, test_framework."""
 
+import tempfile
 import time
+from pathlib import Path
 
 import pytest
 
@@ -350,9 +352,14 @@ class TestFeatureFlag:
 class TestFeatureFlagsRegistry:
     def setup_method(self):
         FeatureFlags._flags.clear()
+        # Redirect the append-only ledger to a temp file — status-change
+        # tests must never write into the repo's config/ directory.
+        self._orig_history = FeatureFlags._history_path
+        FeatureFlags._history_path = Path(tempfile.mkdtemp()) / "flag_history.jsonl"
 
     def teardown_method(self):
         FeatureFlags._flags.clear()
+        FeatureFlags._history_path = self._orig_history
         _register_defaults_for_tests()
 
     def test_register(self):

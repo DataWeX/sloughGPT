@@ -168,7 +168,7 @@ export const EmptyState = memo(function EmptyState({
 
       {/* Greeting */}
       <div className="space-y-1.5">
-        <p className="text-lg font-semibold text-foreground tracking-tight">
+        <p className="text-base font-semibold text-foreground tracking-tight">
           {hasModel ? (greeting || 'Ready') + '!' : t('common.starting')}
         </p>
         <p className="text-xs text-muted-foreground/50 max-w-[280px] leading-relaxed">

@@ -896,11 +896,11 @@ class TestChatPostGenTasks:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domain.get_chat_domain")
+    @patch("apps.api.server.routers.inference.get_provider")
     @patch("apps.api.server.routers.inference.capture")
     @patch("apps.api.server.routers.inference._run_post_gen_tasks")
     def test_no_inline_capture_alongside_post_gen(
-        self, mock_post_gen, mock_capture, mock_get_domain, client
+        self, mock_post_gen, mock_capture, mock_get_provider, client
     ):
         """No double-run: post-gen already captures, so the turn must not too.
 

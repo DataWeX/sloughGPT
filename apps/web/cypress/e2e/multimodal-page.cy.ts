@@ -29,8 +29,13 @@ describe('Multimodal page', () => {
   })
 
   it('accepts an image generation prompt', () => {
-    cy.get('input[aria-label="Image generation prompt"]').scrollIntoView().type('A cat in a spacesuit')
-    cy.get('input[aria-label="Image generation prompt"]').should('have.value', 'A cat in a spacesuit')
+    cy.get('input[aria-label="Image generation prompt"]')
+      .scrollIntoView()
+      .type('A cat in a spacesuit')
+    cy.get('input[aria-label="Image generation prompt"]').should(
+      'have.value',
+      'A cat in a spacesuit',
+    )
   })
 })
 

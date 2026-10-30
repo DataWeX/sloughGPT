@@ -24,7 +24,8 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.sse_fallback import sse_error, sse_token
+from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
+from infrastructure.sse_fallback import sse_error, sse_event, sse_token
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
@@ -149,16 +150,45 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-def _chunk_replay(text: str, size: int = 40) -> list[str]:
-    """Split cached text into SSE replay chunks without altering whitespace.
+# Budget for the injected RAG block (card cad8ccf0). Measured 2026-10-24:
+# query(prompt, 5) returned 15,228 chars (~4k tokens) from 3-4KB chunks; an
+# uncut dump makes prefill alone exceed the 120s generation timeout (0 tokens
+# streamed). ~2000 chars ≈ 500 tokens keeps first-token ~20s worst-case
+# (8.7s measured @196 tok; prefill attention scales ~quadratically).
+_RAG_CONTEXT_MAX_CHARS = 2000
 
-    Replay must concatenate back to the exact cached text — newlines and
-    multi-space runs included — so reconnects render identically to the
-    original stream.
+
+def _build_rag_block(
+    rag_result: dict[str, Any], max_chars: int = _RAG_CONTEXT_MAX_CHARS
+) -> str | None:
+    """Build the RAG system block, capped to the prompt budget.
+
+    Returns None when there is nothing to inject (zero results).
     """
-    if not text:
-        return []
-    return [text[i : i + size] for i in range(0, len(text), size)]
+    if rag_result.get("num_results", 0) <= 0:
+        return None
+    results = rag_result.get("results") or []
+    if results:
+        # Budget is split evenly across passages: ragsvc chunks are ~3KB, so a
+        # single global slice would keep only the first passage and starve the
+        # rest. Splitting preserves retrieval diversity (all ranks visible).
+        per = max(120, max_chars // len(results))
+        parts: list[str] = []
+        for r in results:
+            c = (r.get("content") or "").strip()
+            if not c:
+                continue
+            if len(c) > per:
+                c = c[:per].rstrip() + " [...]"
+            parts.append(c)
+        ctx = "\n\n".join(parts)
+    else:
+        ctx = rag_result.get("context", "") or ""
+        if len(ctx) > max_chars:
+            ctx = ctx[:max_chars].rstrip() + "\n[...]"
+    if not ctx:
+        return None
+    return f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{ctx}"
 
 
 def _trim_messages_to_budget(
@@ -253,6 +283,17 @@ class UpsertSessionRequest(BaseModel):
     pinned: bool | None = None
 
 
+class BranchSessionRequest(BaseModel):
+    """Schema for branching a session at a message index.
+
+    Server-side messages carry no ids (`MessageData` is role+content), so the
+    branch point is the position in the ordered list.
+    """
+
+    from_index: int
+    name: str | None = Field(None, max_length=200)
+
+
 # Chat-surface wire contracts now live in a neutral home (schemas/chat) so the
 # chat router no longer imports this router. Re-exported here for backwards
 # compatibility with existing importers (mobile BFF, tests).
@@ -341,49 +382,6 @@ def set_chat_control(session_id: str, control: dict) -> None:
                 del _chat_control_store[k]
 
 
-# Cache for partial chat responses (for Last-Event-ID reconnection)
-_chat_response_cache: dict[str, dict] = {}
-_chat_cache_lock = threading.Lock()
-_CHAT_CACHE_MAX_SESSIONS = 100
-_CHAT_CACHE_MAX_AGE_S = 300  # 5 minutes
-
-
-def get_chat_response_cache(session_id: str) -> dict | None:
-    """Get cached response for a session."""
-    import time
-
-    with _chat_cache_lock:
-        entry = _chat_response_cache.get(session_id)
-        if entry and time.time() - entry.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S:
-            _chat_response_cache.pop(session_id, None)
-            return None
-        return entry
-
-
-def set_chat_response_cache(session_id: str, response: dict) -> None:
-    """Cache a partial response for a session."""
-    import time
-
-    with _chat_cache_lock:
-        # Purge old entries if cache is full
-        if len(_chat_response_cache) >= _CHAT_CACHE_MAX_SESSIONS:
-            now = time.time()
-            expired = [
-                k
-                for k, v in _chat_response_cache.items()
-                if now - v.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S
-            ]
-            for k in expired[:10]:  # Remove up to 10 expired entries
-                _chat_response_cache.pop(k, None)
-        _chat_response_cache[session_id] = {**response, "timestamp": time.time()}
-
-
-def clear_chat_response_cache(session_id: str) -> None:
-    """Clear cached response for a session."""
-    with _chat_cache_lock:
-        _chat_response_cache.pop(session_id, None)
-
-
 class ContextInspectorResponse(BaseModel):
     system_prompt: str
     session_messages: list[dict]
@@ -444,6 +442,18 @@ def _extract_user_message(messages: list[Message]) -> str | None:
 _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
 _META_WEIGHT_CACHE_LOCK = threading.Lock()
+
+# Bounds mirroring GenerateRequest's Field constraints (:temperature ge=0 le=2,
+# :top_p ge=0 le=1, :top_k ge=0 le=500, :repetition_penalty ge=0.5 le=2). Nudged
+# values are clamped here so a feedback-derived adjustment can never push a
+# defaulted param outside the schema the request itself is validated against
+# (drift-gated by tests/test_meta_weights_clamp.py).
+_META_WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
+    "temperature": (0.0, 2.0),
+    "top_p": (0.0, 1.0),
+    "top_k": (0.0, 500.0),
+    "repetition_penalty": (0.5, 2.0),
+}
 
 
 def _apply_meta_weights(
@@ -540,10 +550,20 @@ def _apply_meta_weights(
             logger.debug("Meta-weight adjustment failed: %s", e)
             nudge = {}  # no signal -- the request's own values stand
 
-    return {
-        param: value if param in explicit else value + nudge.get(param, 0)
-        for param, value in requested.items()
-    }
+    merged: dict[str, float] = {}
+    for param, value in requested.items():
+        if param in explicit:
+            # Explicit user intent: pydantic already validated it against the
+            # request schema — pass through verbatim.
+            merged[param] = value
+            continue
+        nudged = value + nudge.get(param, 0)
+        lo, hi = _META_WEIGHT_BOUNDS[param]
+        nudged = min(max(nudged, lo), hi)
+        if param == "top_k":
+            nudged = int(round(nudged))
+        merged[param] = nudged
+    return merged
 
 
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
@@ -1030,7 +1050,10 @@ class InferenceRouter:
                         if not raw.strip():
                             continue
                         data = json.loads(raw)
-                    sid = data.get("id") or data.get("session_id") or f.stem
+                    # session_id first: _SessionDictSerializer injects a random
+                    # "id" when absent, which would diverge from the filename
+                    # (the canonical repo key _build_session_cache exposes).
+                    sid = data.get("session_id") or f.stem
                     messages = data.get("messages", [])
                     name = data.get("name") or self._derive_session_name(messages, sid)
                     msg_count = len(messages)
@@ -1976,14 +1999,20 @@ class InferenceRouter:
                         rag_result = await asyncio.wait_for(
                             asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0
                         )
-                        if rag_result.get("num_results", 0) > 0:
-                            rag_block = (
-                                f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} "
-                                f"relevant passages]\n\n{rag_result['context']}"
+                        rag_block = _build_rag_block(rag_result)
+                        if rag_block is not None:
+                            logger.info(
+                                "RAG context injected: %d chars (budget %d)",
+                                len(rag_block),
+                                _RAG_CONTEXT_MAX_CHARS,
                             )
                             messages.insert(0, {"role": "system", "content": rag_block})
             except Exception as e:
                 logger.debug("RAG query skipped: %s", e)
+
+        # CONSCIOUSNESS_PROC — advisory reflection narrative (ported from
+        # main's chat-pipeline wiring onto the stream_turn restructure).
+        messages = await _apply_consciousness_reflection(messages, "-")
 
         gen_params = _apply_meta_weights(
             temperature=req.temperature,
@@ -2029,7 +2058,6 @@ class InferenceRouter:
 
         text = "".join(collected)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
-        tokens = 0
         try:
             tokens = _count_tokens(text, _chat_state)
         except Exception as e:
@@ -2072,6 +2100,47 @@ class InferenceRouter:
                 _memory = {"stored": True, "fact": _memory_facts[0], "facts": _memory_facts}
         except Exception as e:
             logger.debug("Auto-memory remember failed: %s", e)
+
+        # Sideband frames the chat edge forwards verbatim before close:
+        # the consciousness reflection surfaced by post-gen, then the
+        # auto-memory store step (main's chat_stream wiring, re-seamed
+        # onto TurnResult — stream_turn yields tokens, not SSE frames).
+        _sideband_events: list[str] = []
+        if _post_gen.get("narrative"):
+            _sideband_events.append(
+                sse_event(
+                    "chat",
+                    "CONSCIOUSNESS",
+                    "complete",
+                    data={
+                        "level": _post_gen["level"],
+                        "self_insight": _post_gen["narrative"],
+                    },
+                    message="Reflection updated",
+                )
+            )
+
+        _memory_stored = False
+        _memory_fact = None
+        _memory_facts: list[str] = []
+        try:
+            _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", text)
+            _memory_stored = len(_memory_facts) > 0
+            if _memory_stored:
+                _memory_fact = _memory_facts[0]
+        except Exception as e:
+            logger.debug("Auto-memory remember failed: %s", e)
+
+        if _memory_stored:
+            _sideband_events.append(
+                sse_event(
+                    "chat",
+                    "MEMORY",
+                    "success",
+                    data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
+                    message="New fact remembered",
+                )
+            )
 
         yield TurnResult(
             text=text,
@@ -2316,6 +2385,114 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.delete_session")
+
+    async def branch_session(
+        self,
+        session_id: str,
+        req: BranchSessionRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Create a new session from messages[:from_index + 1] of a source.
+
+        The prefix lands in both projections the source session uses: the
+        drawer file (name/lineage/message preview) and the context store that
+        `GET /session/{id}/messages` (mobile loadSession) reads.
+        """
+        try:
+            source_file = self._session_repo.get(session_id)
+            if source_file is None:
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and source_file.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+            from domain.infrastructure.session_core import SessionCore
+
+            history = SessionCore.get_messages(session_id) or source_file.get("messages") or []
+            if not history:
+                raise_error("No messages to branch from", "E_BAD_REQUEST", status_code=400)
+            if req.from_index < 0 or req.from_index >= len(history):
+                raise_error(
+                    f"from_index {req.from_index} out of range (0..{len(history) - 1})",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
+
+            prefix = history[: req.from_index + 1]
+            new_id = str(uuid.uuid4())
+            new_data = {
+                "id": new_id,
+                "session_id": new_id,
+                "name": req.name or f"{source_file.get('name') or session_id} (Branch)",
+                "parent_session_id": session_id,
+                "branch_from_index": req.from_index,
+                "messages": json.loads(json.dumps(prefix)),
+                "created_at": datetime.datetime.now().isoformat(),
+            }
+            if auth_user:
+                new_data["user_id"] = auth_user.get("sub", "")
+
+            self._save_session(new_id, new_data)
+            SessionCore.store_context(new_id, prefix)
+            await self._flush_session_to_disk(new_id)
+            safe_audit_log("inference.session_branch", resource=new_id)
+            return success_response(
+                data={
+                    "session_id": new_id,
+                    "branched_from": session_id,
+                    "from_index": req.from_index,
+                },
+                message="branched",
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.branch_session")
+
+    async def get_session_lineage(
+        self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Walk the parent chain of a session (nearest parent first)."""
+        try:
+            data = self._session_repo.get(session_id)
+            if data is None:
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+            ancestors: list[dict] = []
+            parent = data.get("parent_session_id")
+            seen = {session_id}
+            depth = 0
+            while parent and parent not in seen and depth < 50:
+                seen.add(parent)
+                pdata = self._session_repo.get(parent)
+                if pdata is None:
+                    break
+                ancestors.append(
+                    {
+                        "session_id": parent,
+                        "parent_session_id": pdata.get("parent_session_id"),
+                        "branch_from_index": pdata.get("branch_from_index"),
+                        "name": pdata.get("name") or parent,
+                    }
+                )
+                parent = pdata.get("parent_session_id")
+                depth += 1
+
+            return success_response(
+                data={
+                    "session_id": session_id,
+                    "parent_session_id": data.get("parent_session_id"),
+                    "branch_from_index": data.get("branch_from_index"),
+                    "ancestors": ancestors,
+                }
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_session_lineage")
 
     def _clear_session_kv(self, session_id: str):
         """Drop cross-turn KV state for a deleted session.
@@ -2613,6 +2790,12 @@ class InferenceRouter:
         r.add_api_route("/chat/sessions", self.create_session, methods=["POST"])
         r.add_api_route("/chat/sessions/{session_id}", self.get_session, methods=["GET"])
         r.add_api_route("/chat/sessions/{session_id}", self.delete_session, methods=["DELETE"])
+        r.add_api_route("/chat/sessions/{session_id}/branch", self.branch_session, methods=["POST"])
+        r.add_api_route(
+            "/chat/sessions/{session_id}/lineage",
+            self.get_session_lineage,
+            methods=["GET"],
+        )
         r.add_api_route("/chat/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/providers", self.list_model_providers, methods=["GET"])
         r.add_api_route("/operations", self.list_operations, methods=["GET"])

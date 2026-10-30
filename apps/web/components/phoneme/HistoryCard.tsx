@@ -130,19 +130,19 @@ function HistoryStats({ history }: { history: HistoryEntry[] }) {
       <CollapsibleContent>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-2">
           <div className="text-center p-2 rounded-lg bg-background">
-            <p className="text-lg font-bold">{stats.total}</p>
+            <p className="text-base font-bold">{stats.total}</p>
             <p className="text-xs text-muted-foreground">Total</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-background">
-            <p className="text-lg font-bold">{(stats.avgScore * 100).toFixed(0)}%</p>
+            <p className="text-base font-bold">{(stats.avgScore * 100).toFixed(0)}%</p>
             <p className="text-xs text-muted-foreground">Avg Score</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-background">
-            <p className="text-lg font-bold text-success">{stats.excellent}</p>
+            <p className="text-base font-bold text-success">{stats.excellent}</p>
             <p className="text-xs text-muted-foreground">≥80%</p>
           </div>
           <div className="text-center p-2 rounded-lg bg-background">
-            <p className="text-lg font-bold text-destructive">{stats.needsWork}</p>
+            <p className="text-base font-bold text-destructive">{stats.needsWork}</p>
             <p className="text-xs text-muted-foreground">&lt;50%</p>
           </div>
         </div>

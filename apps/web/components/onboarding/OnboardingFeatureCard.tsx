@@ -105,7 +105,7 @@ export function OnboardingFeatureCard({ onNavigate }: OnboardingFeatureCardProps
               onClick={() => setExpanded(expanded === f.id ? null : f.id)}
               data-testid={`feature-${f.id}`}
             >
-              <div className="text-lg mb-1">{f.icon}</div>
+              <div className="text-base mb-1">{f.icon}</div>
               <div className="text-xs font-medium">{f.title}</div>
               {expanded === f.id && (
                 <div className="mt-1.5">

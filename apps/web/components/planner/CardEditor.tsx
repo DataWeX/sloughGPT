@@ -15,8 +15,8 @@ interface CardEditorProps {
 }
 
 const input =
-  'w-full rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 transition-colors'
-const label = 'text-xs font-medium text-zinc-400'
+  'w-full rounded-md bg-muted border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-colors'
+const label = 'text-xs font-medium text-muted-foreground'
 
 export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProps) {
   const [title, setTitle] = useState('')
@@ -122,19 +122,19 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative w-full max-w-md bg-zinc-900 border-l border-zinc-800 shadow-2xl overflow-y-auto">
+      <div className="relative w-full max-w-md bg-card border-l border-border shadow-2xl overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 px-5 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-medium text-zinc-200">Edit Card</h2>
-            <p className="text-[10px] font-mono text-zinc-600 mt-0.5">{card.id}</p>
+            <h2 className="text-base font-medium text-foreground">Edit Card</h2>
+            <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{card.id}</p>
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={onClose}
             aria-label="Close"
-            className="text-zinc-500 hover:text-zinc-300"
+            className="text-muted-foreground hover:text-foreground"
           >
             <IconX className="h-4 w-4" />
           </Button>
@@ -269,24 +269,24 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           {/* Actions */}
           <div
             className="flex justify-between pt-4"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+            style={{ borderTop: '1px solid rgb(var(--sheen-rgb) / 0.06)' }}
           >
             <button
               onClick={() => onDelete(card.id)}
-              className="px-3 py-1.5 rounded-md text-sm text-red-400 hover:text-red-300 hover:bg-red-950/50 transition-colors"
+              className="px-3 py-1.5 rounded-md text-sm text-destructive hover:brightness-125 hover:bg-[rgb(var(--destructive)/0.15)] transition-colors"
             >
               Delete
             </button>
             <div className="flex gap-2">
               <button
                 onClick={onClose}
-                className="px-3 py-1.5 rounded-md text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                className="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-3 py-1.5 rounded-md text-sm bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 transition-colors"
+                className="px-3 py-1.5 rounded-md text-sm bg-muted text-foreground border border-border hover:bg-secondary transition-colors"
               >
                 Save
               </button>
@@ -294,10 +294,13 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           </div>
 
           {/* Notes — each mutation rehashes the chain */}
-          <div className="pt-4 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div
+            className="pt-4 space-y-2"
+            style={{ borderTop: '1px solid rgb(var(--sheen-rgb) / 0.06)' }}
+          >
             <div className="flex items-center justify-between">
               <span className={label}>Notes</span>
-              <span className="text-[10px] font-mono text-zinc-600">{notes.length}</span>
+              <span className="text-[10px] font-mono text-muted-foreground">{notes.length}</span>
             </div>
 
             {notes.length > 0 && (
@@ -305,7 +308,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                 {notes.map((n) => (
                   <li
                     key={n.id}
-                    className="rounded-md bg-zinc-950/60 border border-zinc-800 px-2.5 py-2 group"
+                    className="rounded-md bg-card/60 border border-border px-2.5 py-2 group"
                   >
                     {editingNote === n.id ? (
                       <div className="space-y-1.5">
@@ -320,14 +323,14 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                         <div className="flex justify-end gap-1.5">
                           <button
                             onClick={() => setEditingNote(null)}
-                            className="px-2 py-1 rounded text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                            className="px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={() => handleSaveNote(n.id)}
                             disabled={noteBusy || !editDraft.trim()}
-                            className="px-2 py-1 rounded text-[11px] bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+                            className="px-2 py-1 rounded text-[11px] bg-muted text-foreground border border-border hover:bg-secondary disabled:opacity-40 transition-colors"
                           >
                             Save
                           </button>
@@ -335,11 +338,11 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                       </div>
                     ) : (
                       <>
-                        <p className="text-[13px] text-zinc-300 whitespace-pre-wrap break-words">
+                        <p className="text-[13px] text-foreground whitespace-pre-wrap break-words">
                           {n.text}
                         </p>
                         <div className="flex items-center justify-between mt-1.5">
-                          <span className="text-[10px] font-mono text-zinc-600">
+                          <span className="text-[10px] font-mono text-muted-foreground">
                             {n.author} · {n.created_at.slice(0, 10)}
                           </span>
                           <span className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -348,7 +351,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                                 setEditingNote(n.id)
                                 setEditDraft(n.text)
                               }}
-                              className="px-1.5 py-0.5 rounded text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                              className="px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               aria-label="Edit note"
                             >
                               edit
@@ -356,7 +359,7 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                             <button
                               onClick={() => handleDeleteNote(n.id)}
                               disabled={noteBusy}
-                              className="px-1.5 py-0.5 rounded text-[10px] text-zinc-600 hover:text-red-400 hover:bg-red-950/40 disabled:opacity-40 transition-colors"
+                              className="px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-destructive hover:bg-[rgb(var(--destructive)/0.12)] disabled:opacity-40 transition-colors"
                               aria-label="Delete note"
                             >
                               delete
@@ -389,19 +392,19 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
                   onChange={(e) => setNoteAuthor(e.target.value)}
                   placeholder="author"
                   aria-label="Note author"
-                  className="rounded-md bg-zinc-800 border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 w-24 transition-colors"
+                  className="rounded-md bg-muted border border-border px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring w-24 transition-colors"
                 />
                 <button
                   onClick={handleAddNote}
                   disabled={noteBusy || !noteDraft.trim()}
-                  className="px-2.5 py-1 rounded-md text-[11px] bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+                  className="px-2.5 py-1 rounded-md text-[11px] bg-muted text-foreground border border-border hover:bg-secondary disabled:opacity-40 transition-colors"
                 >
                   {noteBusy ? 'saving…' : 'Add note'}
                 </button>
-                <span className="text-[9px] font-mono text-zinc-700 ml-auto">⌘↵</span>
+                <span className="text-[9px] font-mono text-muted-foreground ml-auto">⌘↵</span>
               </div>
               {noteError && (
-                <p className="text-[11px] text-red-400 font-mono" role="alert">
+                <p className="text-[11px] text-destructive font-mono" role="alert">
                   {noteError}
                 </p>
               )}

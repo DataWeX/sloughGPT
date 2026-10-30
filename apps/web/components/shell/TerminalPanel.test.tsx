@@ -146,7 +146,9 @@ describe('TerminalPanel', () => {
       mockUseShell.mockReturnValue(shell)
       render(<TerminalPanel />)
 
-      act(() => { vi.advanceTimersByTime(60_000) })
+      act(() => {
+        vi.advanceTimersByTime(60_000)
+      })
 
       expect(shell.cancel).toHaveBeenCalledTimes(1)
       expect(shell.cancel).toHaveBeenCalledWith(expect.stringContaining('60s'))

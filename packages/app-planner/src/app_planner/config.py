@@ -65,10 +65,12 @@ STATUS_ICONS = {
 
 
 def _walk_for_board(start: Path) -> Path | None:
-    """Return the nearest ancestor of *start* containing ``.kanban/board.json``."""
+    """Return the nearest ancestor of *start* containing a kanban board —
+    ``.kanban/board.jsonl`` (canonical) or the legacy ``.kanban/board.json``."""
     cur = start.resolve()
     for candidate in (cur, *cur.parents):
-        if (candidate / ".kanban" / "board.json").is_file():
+        kanban = candidate / ".kanban"
+        if (kanban / "board.jsonl").is_file() or (kanban / "board.json").is_file():
             return candidate
     return None
 

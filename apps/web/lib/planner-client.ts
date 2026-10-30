@@ -5,7 +5,7 @@
  * via Next.js API routes.
  */
 
-import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
+import { apiGet, apiPost, apiPut, apiDelete, ApiError } from './http-client'
 import type { Card, Board, Note, TagCount, Stats, HashTree } from '@/components/planner/types'
 
 // ── Board ───────────────────────────────────────────────────────────────
@@ -174,5 +174,25 @@ export async function transitionCard(payload: {
   actor?: string
   force?: boolean
 }): Promise<TransitionResult> {
-  return apiPost<TransitionResult>('/api/planner/transition', payload)
+  try {
+    // silent + skipCircuitBreaker: a rejected transition (4xx) is an expected
+    // outcome of the engine's validation, not a transport failure — it must
+    // neither toast through the global error store nor count against the
+    // shared circuit breaker.
+    return await apiPost<TransitionResult>('/api/planner/transition', payload, {
+      silent: true,
+      skipCircuitBreaker: true,
+    })
+  } catch (err) {
+    // The rejection body ({ok:false, error, legal targets...}) rides a 4xx —
+    // hand it back to the caller so the UI can show WHY the move was refused.
+    if (err instanceof ApiError && err.data?.raw) {
+      try {
+        return JSON.parse(err.data.raw) as TransitionResult
+      } catch {
+        /* unparseable body — fall through to the original error */
+      }
+    }
+    throw err
+  }
 }

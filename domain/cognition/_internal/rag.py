@@ -67,46 +67,57 @@ class BM25Indexer:
         self.inverted_index: dict[str, list[tuple[int, int]]] = {}
 
     def index(self, chunks: list[TextChunk]):
-        """Build BM25 index (idempotent: resets before rebuilding)."""
-        self.num_docs = len(chunks)
-        # Reset first — index() rebuilds from the full chunk list, so without
-        # this every call re-counts all docs (inflated frequencies, O(n^2)
-        # memory on bulk loads).
-        self.doc_lengths = []
-        self.doc_freq = Counter()
-        self.inverted_index = {}
-        logger.debug("BM25 indexing started: %d documents", self.num_docs)
+        """Build BM25 index (idempotent: resets before rebuilding).
+
+        Structures are built into locals and published at the end so a
+        concurrent score() never observes an emptied or half-built index
+        (which silently returned wrong or empty results mid-rebuild).
+        """
+        num_docs = len(chunks)
+        doc_lengths: list[int] = []
+        doc_freq: Counter = Counter()
+        inverted_index: dict[str, list[tuple[int, int]]] = {}
+        logger.debug("BM25 indexing started: %d documents", num_docs)
 
         for doc_id, chunk in enumerate(chunks):
             tokens = self._tokenize(chunk.content)
-            self.doc_lengths.append(len(tokens))
+            doc_lengths.append(len(tokens))
 
             # Count document frequencies
             for token in set(tokens):
-                self.doc_freq[token] += 1
+                doc_freq[token] += 1
 
             # Build inverted index
             for pos, token in enumerate(tokens):
-                if token not in self.inverted_index:
-                    self.inverted_index[token] = []
-                self.inverted_index[token].append((doc_id, pos))
+                if token not in inverted_index:
+                    inverted_index[token] = []
+                inverted_index[token].append((doc_id, pos))
 
-        self.avg_doc_length = sum(self.doc_lengths) / max(len(self.doc_lengths), 1)
-        logger.debug(
-            "BM25 indexing complete: avg_doc_length=%.1f, unique_terms=%d",
-            self.avg_doc_length,
-            len(self.doc_freq),
-        )
+        avg_doc_length = sum(doc_lengths) / max(len(doc_lengths), 1)
 
         # Structural invariants — a term can occur in at most every chunk,
         # and there is exactly one length entry per chunk. If either breaks,
         # the index was double-counted: fail loud, never silently wrong.
-        assert len(self.doc_lengths) == len(chunks), (
-            f"BM25 index corrupt: {len(self.doc_lengths)} lengths for {len(chunks)} chunks"
+        assert len(doc_lengths) == num_docs, (
+            f"BM25 index corrupt: {len(doc_lengths)} lengths for {num_docs} chunks"
         )
-        assert all(df <= len(chunks) for df in self.doc_freq.values()), (
+        assert all(df <= num_docs for df in doc_freq.values()), (
             "BM25 index corrupt: term frequency exceeds chunk count"
         )
+
+        logger.debug(
+            "BM25 indexing complete: avg_doc_length=%.1f, unique_terms=%d",
+            avg_doc_length,
+            len(doc_freq),
+        )
+
+        # Publish atomically (plain stores run without dropping the GIL, so
+        # readers see either the old complete index or the new one).
+        self.num_docs = num_docs
+        self.doc_lengths = doc_lengths
+        self.doc_freq = doc_freq
+        self.avg_doc_length = avg_doc_length
+        self.inverted_index = inverted_index
 
     def _tokenize(self, text: str) -> list[str]:
         """Tokenize text."""
@@ -116,33 +127,36 @@ class BM25Indexer:
 
     def score(self, query: str) -> list[tuple[int, float]]:
         """
-        Score all documents against query.
+        Score all documents against query (standard BM25).
         Returns list of (doc_id, score) tuples.
         """
         query_tokens = self._tokenize(query)
-        scores = np.zeros(self.num_docs)
+        scores = [0.0] * self.num_docs
 
         for token in query_tokens:
-            if token not in self.inverted_index:
+            postings = self.inverted_index.get(token)
+            if not postings:
                 continue
 
             # IDF for this term
             df = self.doc_freq.get(token, 0)
-            idf = np.log((self.num_docs - df + 0.5) / (df + 0.5) + 1)
+            idf = float(np.log((self.num_docs - df + 0.5) / (df + 0.5) + 1))
 
-            for doc_id, _ in self.inverted_index[token]:
+            # Term frequency counted ONCE per doc, O(postings). The old
+            # per-occurrence full rescan was O(postings^2): a common term
+            # in a large index burned minutes, tripped the chat pipeline's
+            # 15s RAG wait_for (TTFT +15s) and leaked a grinding thread.
+            for doc_id, tf in Counter(d for d, _ in postings).items():
                 doc_len = self.doc_lengths[doc_id]
-                tf = sum(1 for d, _ in self.inverted_index.get(token, []) if d == doc_id)
 
-                # BM25 formula
+                # BM25 formula, added once per doc (plain-float list — a
+                # numpy elementwise add costs ~10x per scalar update here)
                 numerator = tf * (self.k1 + 1)
                 denominator = tf + self.k1 * (1 - self.b + self.b * doc_len / self.avg_doc_length)
-                score = idf * numerator / denominator
-
-                scores[doc_id] += score
+                scores[doc_id] += idf * numerator / denominator
 
         # Return top docs with scores
-        results = [(i, float(scores[i])) for i in range(self.num_docs) if scores[i] > 0]
+        results = [(i, s) for i, s in enumerate(scores) if s > 0]
         results.sort(key=lambda x: -x[1])
         return results
 
@@ -590,6 +604,56 @@ class HallucinationDetector:
         }
 
 
+# Fine-grained retrieval windows (chars). Retrieved ranks share a fixed
+# injection budget (~2000 chars split across top-5 ≈ 400 each), so a chunk
+# must fit that slice whole — 512-token chunks (~3KB) showed ~13% per rank.
+FINE_CHUNK_TARGET_CHARS = 450
+FINE_CHUNK_MAX_CHARS = 600
+FINE_CHUNK_OVERLAP_CHARS = 100
+
+
+def _fine_char_windows(content: str) -> list[str]:
+    """Split content into word-boundary windows of ~450 chars (max 600).
+
+    Greedy: take words until the target (hard-stop at the max), then restart
+    ~100 chars of trailing words back so adjacent windows overlap. A single
+    word longer than the max is kept whole rather than cut mid-word (BM25
+    tokenizes on whitespace — a mid-word cut would corrupt both halves).
+    """
+    words = content.split()
+    if not words:
+        return []
+    windows: list[str] = []
+    start = 0
+    n = len(words)
+    while start < n:
+        end = start
+        total = 0
+        while end < n:
+            add = len(words[end]) + (1 if end > start else 0)
+            if total and total + add > FINE_CHUNK_MAX_CHARS:
+                break
+            total += add
+            end += 1
+            if total >= FINE_CHUNK_TARGET_CHARS:
+                break
+        windows.append(" ".join(words[start:end]))
+        if end >= n:
+            break
+        # Restart the next window ~overlap chars back (whole words only,
+        # always leaving at least one new word so the walk makes progress).
+        ns = end
+        occ = 0
+        while ns > start + 1:
+            prev = len(words[ns - 1]) + (1 if ns - 1 > start else 0)
+            if occ + prev > FINE_CHUNK_OVERLAP_CHARS:
+                break
+            occ += prev
+            ns -= 1
+        start = ns
+    return windows
+
+
 class ProductionRAG:
     """
     Production-grade RAG system.
@@ -612,12 +676,20 @@ class ProductionRAG:
         self,
         content: str,
         metadata: dict[str, Any] | None = None,
-        chunk_size: int = 512,
-        overlap: int = 50,
+        chunk_size: int | None = None,
+        overlap: int | None = None,
         rebuild_index: bool = True,
     ) -> list[str]:
         """
         Add a document with intelligent chunking.
+
+        Default (``chunk_size=None``): fine-grained char windows — ~450-char
+        targets (max 600, ~100 overlap) cut on word boundaries, sized so one
+        retrieved rank fits the injection budget (~400 chars/rank of the
+        2000-char cap) whole instead of showing ~13% of a 3KB chunk.
+
+        ``chunk_size``/``overlap`` given: legacy TOKEN windows (the historic
+        512/50 behaviour) — kept for callers and tests that count in tokens.
 
         Set ``rebuild_index=False`` when bulk-loading many documents, then
         call ``retriever.build_index()`` once at the end (rebuilding per
@@ -626,28 +698,40 @@ class ProductionRAG:
         metadata = metadata or {"source": "user"}
         chunk_ids = []
 
-        logger.debug(
-            "Document ingestion started: chunk_size=%d, overlap=%d",
-            chunk_size,
-            overlap,
-        )
-
-        # Tokenize and chunk with overlap
-        tokens = content.split()
-        stride = max(1, chunk_size - overlap)
-        for i in range(0, len(tokens), stride):
-            chunk_tokens = tokens[i : i + chunk_size]
-            chunk_content = " ".join(chunk_tokens)
-
-            chunk_id = hashlib.md5(chunk_content.encode()).hexdigest()[:12]
-            chunk = TextChunk(
-                id=chunk_id,
-                content=chunk_content,
-                metadata={**metadata, "position": i // chunk_size},
+        if chunk_size is None:
+            windows = _fine_char_windows(content)
+            logger.debug("Document ingestion started: mode=fine, windows=%d", len(windows))
+            for position, window in enumerate(windows):
+                chunk_id = hashlib.md5(window.encode()).hexdigest()[:12]
+                chunk = TextChunk(
+                    id=chunk_id,
+                    content=window,
+                    metadata={**metadata, "position": position},
+                )
+                self.retriever.add_chunk(chunk)
+                chunk_ids.append(chunk_id)
+        else:
+            logger.debug(
+                "Document ingestion started: chunk_size=%d, overlap=%d",
+                chunk_size,
+                overlap,
             )
+            # Tokenize and chunk with overlap
+            tokens = content.split()
+            stride = max(1, chunk_size - (overlap or 0))
+            for i in range(0, len(tokens), stride):
+                chunk_tokens = tokens[i : i + chunk_size]
+                chunk_content = " ".join(chunk_tokens)
 
-            self.retriever.add_chunk(chunk)
-            chunk_ids.append(chunk_id)
+                chunk_id = hashlib.md5(chunk_content.encode()).hexdigest()[:12]
+                chunk = TextChunk(
+                    id=chunk_id,
+                    content=chunk_content,
+                    metadata={**metadata, "position": i // chunk_size},
+                )
+
+                self.retriever.add_chunk(chunk)
+                chunk_ids.append(chunk_id)
 
         # Rebuild index (skipped for bulk loads — caller builds once)
         if rebuild_index:
@@ -656,7 +740,7 @@ class ProductionRAG:
         logger.debug(
             "Document ingestion complete: chunks=%d, total_tokens=%d",
             len(chunk_ids),
-            len(tokens),
+            len(content.split()),
         )
         return chunk_ids
 

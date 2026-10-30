@@ -4,7 +4,11 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconBolt } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
@@ -40,12 +44,14 @@ const QUIZ_WORDS: { word: string; lang: PhonemeLanguage; phonemes: string[] }[] 
 ]
 
 function generateQuizQuestion(type: QuizType, lang: PhonemeLanguage): QuizQuestion {
-  const filteredWords = QUIZ_WORDS.filter(w => w.lang === lang)
+  const filteredWords = QUIZ_WORDS.filter((w) => w.lang === lang)
   const word = filteredWords[Math.floor(Math.random() * filteredWords.length)]
-  const otherWords = QUIZ_WORDS.filter(w => w.word !== word.word)
-  
+  const otherWords = QUIZ_WORDS.filter((w) => w.word !== word.word)
+
   if (type === 'phoneme-to-word') {
-    const options = [word.word, ...otherWords.slice(0, 3).map(w => w.word)].sort(() => Math.random() - 0.5)
+    const options = [word.word, ...otherWords.slice(0, 3).map((w) => w.word)].sort(
+      () => Math.random() - 0.5,
+    )
     return {
       type,
       phonemes: word.phonemes,
@@ -54,7 +60,7 @@ function generateQuizQuestion(type: QuizType, lang: PhonemeLanguage): QuizQuesti
     }
   } else if (type === 'word-to-phoneme') {
     const correctPhonemes = word.phonemes.join(' ')
-    const wrongPhonemes = otherWords.slice(0, 3).map(w => w.phonemes.join(' '))
+    const wrongPhonemes = otherWords.slice(0, 3).map((w) => w.phonemes.join(' '))
     const options = [correctPhonemes, ...wrongPhonemes].sort(() => Math.random() - 0.5)
     return {
       type,
@@ -64,7 +70,9 @@ function generateQuizQuestion(type: QuizType, lang: PhonemeLanguage): QuizQuesti
     }
   } else {
     const ipa = word.phonemes.join(' ')
-    const options = [ipa, ...otherWords.slice(0, 3).map(w => w.phonemes.join(' '))].sort(() => Math.random() - 0.5)
+    const options = [ipa, ...otherWords.slice(0, 3).map((w) => w.phonemes.join(' '))].sort(
+      () => Math.random() - 0.5,
+    )
     return {
       type,
       ipa,
@@ -85,7 +93,7 @@ export default function MultipleChoiceQuiz() {
   const [total, setTotal] = useState(0)
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const startNewQuestion = useCallback(() => {
@@ -107,25 +115,28 @@ export default function MultipleChoiceQuiz() {
     }
   }, [startNewQuestion])
 
-  const handleAnswer = useCallback((answer: string) => {
-    if (!question || selectedAnswer) return
-    setSelectedAnswer(answer)
-    const correct = answer === question.correctAnswer
-    setIsCorrect(correct)
-    setTotal(prev => prev + 1)
-    
-    if (correct) {
-      setScore(prev => prev + 1)
-      setStreak(prev => {
-        const newStreak = prev + 1
-        setBestStreak(best => Math.max(best, newStreak))
-        if (newStreak >= 3) addToast(`${newStreak} streak!`, 'success')
-        return newStreak
-      })
-    } else {
-      setStreak(0)
-    }
-  }, [question, selectedAnswer, addToast])
+  const handleAnswer = useCallback(
+    (answer: string) => {
+      if (!question || selectedAnswer) return
+      setSelectedAnswer(answer)
+      const correct = answer === question.correctAnswer
+      setIsCorrect(correct)
+      setTotal((prev) => prev + 1)
+
+      if (correct) {
+        setScore((prev) => prev + 1)
+        setStreak((prev) => {
+          const newStreak = prev + 1
+          setBestStreak((best) => Math.max(best, newStreak))
+          if (newStreak >= 3) addToast(`${newStreak} streak!`, 'success')
+          return newStreak
+        })
+      } else {
+        setStreak(0)
+      }
+    },
+    [question, selectedAnswer, addToast],
+  )
 
   const handleNext = useCallback(() => {
     startNewQuestion()
@@ -137,7 +148,9 @@ export default function MultipleChoiceQuiz() {
         <CardTitle className="flex items-center justify-between">
           <span>Multiple Choice Quiz</span>
           <div className="flex items-center gap-2">
-            <Badge variant="outline">{score}/{total}</Badge>
+            <Badge variant="outline">
+              {score}/{total}
+            </Badge>
             {streak >= 3 && (
               <Badge variant="default" className="gap-1 bg-warning text-warning-foreground">
                 <IconBolt className="h-3 w-3" />
@@ -149,17 +162,19 @@ export default function MultipleChoiceQuiz() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
-          <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
+          <Select value={language} onValueChange={(v) => setLanguage(v as PhonemeLanguage)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PHONEME_LANGUAGES.map(l => (
-                <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              {PHONEME_LANGUAGES.map((l) => (
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select value={quizType} onValueChange={v => setQuizType(v as QuizType)}>
+          <Select value={quizType} onValueChange={(v) => setQuizType(v as QuizType)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
             </SelectTrigger>
@@ -182,23 +197,31 @@ export default function MultipleChoiceQuiz() {
             <div className="p-4 rounded-lg bg-muted/50 text-center">
               {question.type === 'phoneme-to-word' && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Which word matches these phonemes?</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Which word matches these phonemes?
+                  </p>
                   <div className="flex flex-wrap gap-1 justify-center">
                     {question.phonemes?.map((p, i) => (
-                      <Badge key={i} variant="outline" className="text-lg px-3 py-1">{p}</Badge>
+                      <Badge key={i} variant="outline" className="text-base px-3 py-1">
+                        {p}
+                      </Badge>
                     ))}
                   </div>
                 </div>
               )}
               {question.type === 'word-to-phoneme' && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Which phoneme sequence matches this word?</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Which phoneme sequence matches this word?
+                  </p>
                   <p className="text-2xl font-bold">{question.word}</p>
                 </div>
               )}
               {question.type === 'ipa-to-phoneme' && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Which phoneme sequence matches this IPA?</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Which phoneme sequence matches this IPA?
+                  </p>
                   <p className="text-2xl font-mono">{question.ipa}</p>
                 </div>
               )}
@@ -209,7 +232,7 @@ export default function MultipleChoiceQuiz() {
                 const isSelected = selectedAnswer === option
                 const isCorrectOption = option === question.correctAnswer
                 let buttonClass = 'w-full text-left p-3 rounded-lg border transition-colors '
-                
+
                 if (selectedAnswer) {
                   if (isCorrectOption) {
                     buttonClass += 'bg-success/10 border-success'
@@ -238,8 +261,12 @@ export default function MultipleChoiceQuiz() {
 
             {selectedAnswer && (
               <div className="space-y-3">
-                <div className={`p-3 rounded-lg text-center ${isCorrect ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                  <p className={`text-lg font-bold ${isCorrect ? 'text-success' : 'text-destructive'}`}>
+                <div
+                  className={`p-3 rounded-lg text-center ${isCorrect ? 'bg-success/10' : 'bg-destructive/10'}`}
+                >
+                  <p
+                    className={`text-base font-bold ${isCorrect ? 'text-success' : 'text-destructive'}`}
+                  >
                     {isCorrect ? 'Correct!' : 'Incorrect'}
                   </p>
                   {!isCorrect && (

@@ -207,7 +207,7 @@ function parseBlock(
     if (headingMatch) {
       const level = headingMatch[1].length
       const headingText = headingMatch[2]
-      const Tag = `h${level}` as keyof React.JSX.IntrinsicElements
+      const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
       nodes.push(
         <Tag
           key={key++}

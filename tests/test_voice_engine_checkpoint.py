@@ -74,3 +74,62 @@ def test_default_checkpoint_path_used_when_env_unset(monkeypatch, tmp_path):
 
     assert result.success, result.error
     assert engine.status()["tts_checkpoint"] == DEFAULT_PATH
+
+
+def _rewrite_checkpoint(path, offset: float):
+    """Overwrite a checkpoint with different weights + force an mtime change."""
+    import os
+
+    tts = TTSEngine()
+    for p in tts.parameters():
+        p.data[...] += offset
+    tts.save(str(path))
+    st = os.stat(path)
+    os.utime(path, ns=(st.st_atime_ns + 1_000_000_000, st.st_mtime_ns + 1_000_000_000))
+
+
+def test_synthesize_picks_up_rewritten_checkpoint(monkeypatch, tmp_path):
+    ckpt = _offset_checkpoint(tmp_path / "gen1.npz")
+    monkeypatch.setenv(ENV, ckpt)
+
+    engine = VoiceEngine()
+    assert engine.synthesize("First generation.").success
+    assert engine.status()["tts_checkpoint"] == ckpt
+    gen1 = [p.data.copy() for p in engine._get_tts().parameters()]
+
+    _rewrite_checkpoint(ckpt, offset=-0.75)
+
+    assert engine.synthesize("Second generation.").success
+    for p, old in zip(engine._get_tts().parameters(), gen1):
+        assert not np.allclose(p.data, old), "engine served stale weights after rewrite"
+
+
+def test_corrupt_rewrite_keeps_serving_old_weights(monkeypatch, tmp_path):
+    ckpt = _offset_checkpoint(tmp_path / "gen1.npz")
+    monkeypatch.setenv(ENV, ckpt)
+
+    engine = VoiceEngine()
+    assert engine.synthesize("First generation.").success
+    gen1 = [p.data.copy() for p in engine._get_tts().parameters()]
+
+    import os
+
+    orig_load = TTSEngine.load
+    attempts: list[str] = []
+
+    def spy_load(self, path):
+        attempts.append(str(path))
+        return orig_load(self, path)
+
+    monkeypatch.setattr(TTSEngine, "load", spy_load)
+
+    ckpt_path = tmp_path / "gen1.npz"
+    ckpt_path.write_bytes(b"truncated mid-write garbage")
+    st = os.stat(ckpt_path)
+    os.utime(ckpt_path, ns=(st.st_atime_ns + 1_000_000_000, st.st_mtime_ns + 1_000_000_000))
+
+    result = engine.synthesize("Serving continues through a bad reload.")
+    assert result.success, result.error
+    assert len(attempts) == 1, "engine must attempt the reload before falling back to old weights"
+    for p, old in zip(engine._get_tts().parameters(), gen1):
+        assert np.allclose(p.data, old), "corrupt rewrite must not clobber serving weights"

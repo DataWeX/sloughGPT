@@ -27,8 +27,8 @@ const TOPIC_COLORS: Record<string, string> = {
   personal: 'bg-info/15 text-info dark:bg-info/15 text-info',
   preferences: 'bg-accent/15 text-accent',
   technical: 'bg-success/15 text-success dark:bg-success/15 text-success',
-  planning: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  interests: 'bg-primary/15 text-pink-700 dark:bg-primary/10 dark:text-primary',
+  planning: 'bg-accent/15 text-accent',
+  interests: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
   food: 'bg-warning/15 text-warning dark:bg-warning/15 text-warning',
   general: 'bg-muted/50 text-muted-foreground dark:bg-muted/10 dark:text-muted-foreground',
 }

@@ -22,7 +22,9 @@ describe('VqaSection', () => {
     expect(button).toHaveProperty('disabled', true)
 
     fireEvent.change(screen.getByLabelText('VQA image'), { target: { files: [makeImageFile()] } })
-    fireEvent.change(screen.getByLabelText('Question'), { target: { value: 'What is in this image?' } })
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'What is in this image?' },
+    })
     expect(button).toHaveProperty('disabled', false)
   })
 
@@ -32,7 +34,9 @@ describe('VqaSection', () => {
     render(<VqaSection asking={false} onAsk={onAsk} />)
 
     fireEvent.change(screen.getByLabelText('VQA image'), { target: { files: [file] } })
-    fireEvent.change(screen.getByLabelText('Question'), { target: { value: '  What is in this image?  ' } })
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: '  What is in this image?  ' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
     expect(onAsk).toHaveBeenCalledWith(file, 'What is in this image?')
@@ -43,7 +47,11 @@ describe('VqaSection', () => {
       <VqaSection
         asking={false}
         onAsk={vi.fn()}
-        answer={{ answer: 'A cat in a spacesuit', question: 'What is in this image?', elapsed_ms: 12.3 }}
+        answer={{
+          answer: 'A cat in a spacesuit',
+          question: 'What is in this image?',
+          elapsed_ms: 12.3,
+        }}
       />,
     )
     expect(screen.getByTestId('vqa-answer').textContent).toContain('A cat in a spacesuit')

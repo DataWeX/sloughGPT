@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.cognition._internal.rag import ProductionRAG
+from domain.cognition._internal.rag import FINE_CHUNK_TARGET_CHARS, ProductionRAG
 from domain.inference._internal.vector_store import simple_embed
 from domain.shared import find_repo_root
 
@@ -97,11 +97,12 @@ class RAGService:
                     if not content:
                         continue
                     self._documents.append(doc)
+                    # Stored chunk params are intentionally ignored: raw content
+                    # re-chunks with the CURRENT fine defaults, which is the
+                    # store rebuild (older records were 512-token windows).
                     self.rag.add_document(
                         content=content,
                         metadata=doc.get("metadata", {}),
-                        chunk_size=doc.get("chunk_size", 512),
-                        overlap=doc.get("overlap", 50),
                         rebuild_index=False,
                     )
                     loaded += 1
@@ -117,32 +118,41 @@ class RAGService:
         # Fallback: load from legacy JSONL file
         if not _DOCUMENTS_FILE.exists():
             return
+        skipped = 0
         try:
             with open(_DOCUMENTS_FILE, encoding="utf-8") as f:
-                for line in f:
+                for lineno, line in enumerate(f, 1):
                     line = line.strip()
                     if not line:
                         continue
-                    doc = json.loads(line)
+                    try:
+                        doc = json.loads(line)
+                    except json.JSONDecodeError as e:
+                        skipped += 1
+                        logger.warning("Skipping corrupt RAG store line %d: %s", lineno, e)
+                        continue
                     content = doc.get("content")
                     if not content:
                         continue
                     self._documents.append(doc)
+                    # As in the MogDB path: stored chunk params are ignored so
+                    # raw content re-chunks with the current fine defaults.
                     self.rag.add_document(
                         content=content,
                         metadata=doc.get("metadata", {}),
-                        chunk_size=doc.get("chunk_size", 512),
-                        overlap=doc.get("overlap", 50),
                         rebuild_index=False,
                     )
                     loaded += 1
-            if loaded:
-                # Single index build for the whole bulk load (per-document
-                # rebuilds are O(n^2)).
-                self.rag.retriever.build_index()
-            logger.debug("Loaded %d documents from legacy JSONL RAG store", loaded)
-        except (OSError, json.JSONDecodeError) as e:
+        except OSError as e:
             logger.warning("Failed to load RAG documents: %s", e)
+        if loaded:
+            # Single index build for the whole bulk load (per-document
+            # rebuilds are O(n^2)); outside the try so a mid-file error
+            # cannot skip it.
+            self.rag.retriever.build_index()
+        if skipped:
+            logger.warning("Skipped %d corrupt line(s) in %s", skipped, _DOCUMENTS_FILE)
+        logger.debug("Loaded %d documents from legacy JSONL RAG store", loaded)
 
     def _save_document(self, doc: dict[str, Any]) -> None:
         """Persist a document to MogDB (and legacy JSONL for backward compat)."""
@@ -191,16 +201,23 @@ class RAGService:
         self,
         content: str,
         metadata: dict[str, Any] | None = None,
-        chunk_size: int = 512,
-        overlap: int = 50,
+        chunk_size: int | None = None,
+        overlap: int | None = None,
+        rebuild_index: bool = True,
     ) -> list[str]:
         """Ingest a document into the RAG index, persist it, and extract KG facts.
 
         Args:
             content: Raw text to ingest.
             metadata: Optional metadata dict (source, topic, etc.).
-            chunk_size: Max tokens per chunk.
-            overlap: Overlap between adjacent chunks.
+            chunk_size: Legacy TOKENS-per-chunk (historic 512). ``None`` — the
+                default — uses the fine-grained char windows (~450 target,
+                max 600, ~100 overlap) so one retrieved rank fits the
+                injection budget whole.
+            overlap: Legacy token overlap; ignored unless ``chunk_size`` is set.
+            rebuild_index: Set False for bulk loads, then call
+                ``self.rag.retriever.build_index()`` once at the end
+                (per-document rebuilds are O(n^2)).
 
         Returns:
             List of chunk IDs created.
@@ -214,6 +231,7 @@ class RAGService:
             metadata=metadata,
             chunk_size=chunk_size,
             overlap=overlap,
+            rebuild_index=rebuild_index,
         )
 
         doc_record = {
@@ -323,7 +341,7 @@ class RAGService:
             return [
                 {
                     "metadata": doc.get("metadata", {}),
-                    "chunk_size": doc.get("chunk_size", 512),
+                    "chunk_size": doc.get("chunk_size") or FINE_CHUNK_TARGET_CHARS,
                     "num_chunks": len(doc.get("chunk_ids", [])),
                     "added_at": doc.get("added_at", 0),
                 }
@@ -392,12 +410,16 @@ class RAGService:
                         "file_path": rel,
                         "file_type": scanner.get_file_type(path),
                     },
+                    rebuild_index=False,
                 )
                 ingested += 1
             except Exception as e:
                 logger.debug("auto-ingest file %s failed: %s", path, e)
 
         if ingested > 0:
+            # Single rebuild after the bulk pass — per-document rebuilds are
+            # O(n^2) (150 startup files used to trigger 150 full rebuilds).
+            self.rag.retriever.build_index()
             logger.debug("Auto-ingested %d files into RAG from %s", ingested, root_path)
         return ingested
 

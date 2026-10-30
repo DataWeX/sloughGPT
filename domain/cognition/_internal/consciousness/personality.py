@@ -142,19 +142,37 @@ class PersonalityManager:
     # ── Multi-Persona Support ─────────────────────────────────────────
 
     def list_personas(self) -> list[dict[str, Any]]:
-        """List all saved personas."""
+        """List all saved personas with traits and active flag.
+
+        A persona is "active" when its normalized profile matches the current
+        profile — activation copies the persona onto personality.json, so
+        equality of the two documents is the activation state itself.
+        """
         personas_dir = self._store_path / "personas"
         if not personas_dir.exists():
             return []
+        current = self.load().to_dict()
         personas = []
         for path in personas_dir.glob("*.json"):
             try:
                 data = json.loads(path.read_text())
+                traits = data.get("traits", {})
                 personas.append(
                     {
                         "id": path.stem,
                         "name": data.get("name", path.stem),
                         "values": data.get("values", []),
+                        "traits": traits,
+                        # Traits that define this persona = furthest from neutral 0.5
+                        "top_traits": [
+                            {"key": k, "value": v}
+                            for k, v in sorted(
+                                traits.items(),
+                                key=lambda kv: abs(kv[1] - 0.5),
+                                reverse=True,
+                            )[:3]
+                        ],
+                        "active": PersonalityProfile.from_dict(data).to_dict() == current,
                         "updated_at": data.get("updated_at"),
                     }
                 )

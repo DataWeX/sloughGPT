@@ -53,9 +53,7 @@ const EGRESS =
   /(?<![\w$.:=-])(?:fetch|window\.fetch)\s*\(|new\s+EventSource\s*\(|new\s+WebSocket\s*\(/
 
 function stripComments(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*$/gm, '')
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 }
 
 function scan(): string[] {
@@ -94,7 +92,7 @@ describe('Server transport — raw egress chokepoint', () => {
       unlisted,
       `These talk to the server without the transport — route them through ` +
         `lib/http-client.ts (apiGet/apiPost/streamSSE/authFetch) instead of ` +
-        `adding them to the pin:\n  ${unlisted.join('\n  ')}`
+        `adding them to the pin:\n  ${unlisted.join('\n  ')}`,
     ).toEqual([])
   })
 
@@ -102,7 +100,7 @@ describe('Server transport — raw egress chokepoint', () => {
     const stale = pin.knownRawEgress.filter((p) => !onDisk.includes(p))
     expect(
       stale,
-      `These no longer do raw egress — delete their entries so the pin shrinks:\n  ${stale.join('\n  ')}`
+      `These no longer do raw egress — delete their entries so the pin shrinks:\n  ${stale.join('\n  ')}`,
     ).toEqual([])
   })
 
@@ -120,12 +118,12 @@ describe('Server transport — raw egress chokepoint', () => {
     expect(
       reasons,
       `allowListReasons must mirror knownRawEgress exactly — a pinned file with ` +
-        `no reason is an oversight, and a reason with no file is dead prose`
+        `no reason is an oversight, and a reason with no file is dead prose`,
     ).toEqual(pinned)
     for (const [file, reason] of Object.entries(pin.allowListReasons)) {
       expect(
         reason.length,
-        `${file} needs a real justification, not a placeholder`
+        `${file} needs a real justification, not a placeholder`,
       ).toBeGreaterThan(30)
     }
   })
@@ -153,8 +151,7 @@ describe('Server transport — raw egress chokepoint', () => {
     const UPWARD = /from ['"]\.\.\/web\/lib/
     const leaks: string[] = []
     for (const entry of readdirSync(APPS_LIB, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name.includes('.test.'))
-        continue
+      if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name.includes('.test.')) continue
       if (UPWARD.test(readFileSync(join(APPS_LIB, entry.name), 'utf8'))) {
         leaks.push(`apps/lib/${entry.name}`)
       }
@@ -164,7 +161,7 @@ describe('Server transport — raw egress chokepoint', () => {
       `apps/lib must never import apps/web: it couples the transport to one host ` +
         `app and blocks reuse by any other. Supply the value through ` +
         `apps/lib/ports.ts (wired by configureTransport in ` +
-        `apps/web/lib/http-client.ts) instead:\n  ${leaks.join('\n  ')}`
+        `apps/web/lib/http-client.ts) instead:\n  ${leaks.join('\n  ')}`,
     ).toEqual([])
   })
 })
