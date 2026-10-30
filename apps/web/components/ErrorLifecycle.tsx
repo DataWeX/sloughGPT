@@ -11,7 +11,8 @@
  * Single console.error wrapper, single set of window listeners, one non-fatal pattern list.
  * Hydration errors → localStorage + backend (no overlay).
  * Non-fatal errors → toast only.
- * Fatal errors → error store + toast + backend report.
+ * Fatal errors → error store (surface: global → banner via the addError funnel)
+ *   + backend report (explicit stack-rich report; funnel's batch is deduped).
  */
 
 import { useEffect, useRef } from 'react'
@@ -169,22 +170,16 @@ export function ErrorLifecycle() {
       const { file, line, col, stack } = extractStackInfo(event)
       const source = file ? `${file}:${line}:${col}` : 'client'
 
-      addError(event.error || event, { source, title: 'Runtime Error' })
+      // surface: 'global' → the addError funnel raises the global banner
+      // (journey blocker). No duplicate error toast — banner owns presentation.
+      addError(event.error || event, { source, title: 'Runtime Error', surface: 'global' })
 
-      const verboseParts: string[] = []
-      if (file) verboseParts.push(`at ${file}:${line}:${col}`)
-      if (stack)
-        verboseParts.push(
-          stack
-            .split('\n')
-            .slice(0, 4)
-            .map((s) => s.trim())
-            .join('\n'),
-        )
-      const verbose = verboseParts.length > 0 ? verboseParts.join('\n') : undefined
-
-      addToast('Something went wrong.', 'error', verbose)
-      reportError(message, 'window.onerror', { stack, url: source, line, col })
+      reportError(message, 'window.onerror', {
+        stack,
+        url: source,
+        line,
+        col,
+      })
       event.preventDefault()
     }
 
@@ -208,21 +203,12 @@ export function ErrorLifecycle() {
       const { file, line, col, stack } = extractStackInfo(event)
       const source = file ? `${file}:${line}:${col}` : 'client'
 
-      addError(reason || event, { source, title: 'Unhandled Rejection' })
+      addError(reason || event, {
+        source,
+        title: 'Unhandled Rejection',
+        surface: 'global',
+      })
 
-      const verboseParts: string[] = []
-      if (file) verboseParts.push(`at ${file}:${line}:${col}`)
-      if (stack)
-        verboseParts.push(
-          stack
-            .split('\n')
-            .slice(0, 4)
-            .map((s) => s.trim())
-            .join('\n'),
-        )
-      const verbose = verboseParts.length > 0 ? verboseParts.join('\n') : undefined
-
-      addToast('Something went wrong.', 'error', verbose)
       reportError(message, 'unhandledrejection', { stack, url: source })
       event.preventDefault()
     }

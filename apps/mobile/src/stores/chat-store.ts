@@ -34,6 +34,9 @@ interface ChatState {
   deleteSession: (id: string) => Promise<void>;
   archiveSession: (id: string, archived: boolean) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
+  cloneSession: (sourceId: string, newTitle: string) => Promise<string>;
+  branchFromMessage: (fromIndex: number) => Promise<string>;
+  injectContext: (context: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
   sendMessage: (content: string, images?: string[]) => Promise<void>;
   forwardMessage: (content: string, targetSessionId: string) => Promise<void>;
@@ -51,13 +54,34 @@ function genId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Deterministic id for messages that came back without one (the context
+ * store historically stripped ids). Same session + position + payload ⇒
+ * same id on every reload, so id-keyed client state (notes, pins, delete)
+ * rebinds instead of orphaning.
+ */
+function stableMessageId(
+  sessionId: string,
+  index: number,
+  m: {role?: string; content?: string},
+): string {
+  const raw = `${sessionId}:${index}:${m.role ?? ''}:${m.content ?? ''}`;
+  let h = 5381;
+  for (let i = 0; i < raw.length; i++) h = ((h * 33) ^ raw.charCodeAt(i)) >>> 0;
+  return `sm${h.toString(36)}`;
+}
+
 async function saveSessionContext(
   sessionId: string,
-  messages: {role: string; content: string}[],
+  messages: {role: string; content: string; id?: string}[],
 ) {
   try {
     await api.post(`/session/${sessionId}/context`, {
-      messages: messages.map(m => ({role: m.role, content: m.content})),
+      messages: messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        ...(m.id ? {id: m.id} : {}),
+      })),
     });
   } catch (e) {
     if (__DEV__) console.warn('[chat-store] sendContext failed:', e);
@@ -87,7 +111,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         `/session/${id}/messages`,
       );
       _everConnected = true;
-      const msgs = data.messages || [];
+      const msgs = (data.messages || []).map((m, i) =>
+        m.id ? m : {...m, id: stableMessageId(id, i, m)},
+      );
       set({activeSessionId: id, messages: msgs});
       await cacheActiveSessionId(id);
       await cacheMessages(id, msgs);
@@ -143,6 +169,77 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await api.renameSession(id, name);
       await get().refreshSessions();
     } catch (err: any) {
+      set({error: err.message});
+    }
+  },
+
+  cloneSession: async (sourceId: string, newTitle: string): Promise<string> => {
+    try {
+      const created = await api.post<{session_id: string}>('/chat/sessions', {});
+      const newId = created.session_id;
+      const source = await api.get<{messages: Message[]}>(
+        `/session/${sourceId}/messages`,
+      );
+      const messages = (source.messages || []).map((m, i) => ({
+        ...m,
+        // refetched history may predate id persistence — recompute the same
+        // deterministic id loadSession would have produced, then prefix
+        id: `${newId}-${m.id ?? stableMessageId(sourceId, i, m)}`,
+      }));
+      await api.put(`/chat/sessions/${newId}`, {
+        name: newTitle,
+        messages,
+      });
+      // History readable by loadSession lives in the context store
+      // (GET /session/{id}/messages), not the drawer file the PUT wrote —
+      // seed it too or the clone opens empty.
+      await saveSessionContext(newId, messages);
+      await get().refreshSessions();
+      triggerHaptic('light');
+      toast.success('Session cloned');
+      return newId;
+    } catch (err: any) {
+      toast.error('Failed to clone session');
+      set({error: err.message});
+      return '';
+    }
+  },
+
+  branchFromMessage: async (fromIndex: number): Promise<string> => {
+    const sessionId = get().activeSessionId;
+    if (!sessionId) {
+      toast.error('No active session');
+      return '';
+    }
+    try {
+      const result = await api.branchSession(sessionId, fromIndex);
+      await get().loadSession(result.session_id);
+      await get().refreshSessions();
+      triggerHaptic('light');
+      toast.success('Branched into new session');
+      return result.session_id;
+    } catch (err: any) {
+      toast.error('Failed to branch session');
+      set({error: err.message});
+      return '';
+    }
+  },
+
+  injectContext: async (context: string): Promise<void> => {
+    const sessionId = get().activeSessionId;
+    if (!sessionId) {
+      toast.error('No active session');
+      return;
+    }
+    try {
+      await api.post('/chat/control', {
+        session_id: sessionId,
+        action: 'context',
+        context,
+      });
+      toast.success('Context injected');
+    } catch (err: any) {
+      toast.error('Failed to inject context');
       set({error: err.message});
     }
   },
@@ -380,7 +477,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ),
         }));
         for await (const event of streamSSE(
-          '/chat/stream',
+          '/chat',
           body,
           controller.signal,
         )) {

@@ -28,12 +28,12 @@ and `/operations/cancel-all` have **zero** route hits anywhere under
 
 ## Measured vs claimed
 
-| What                       | Docs claim                      | Code says                                                         | Verdict |
-| -------------------------- | ------------------------------- | ----------------------------------------------------------------- | ------- |
-| HTTP routes                | 607 (`API.md`)                  | **607** literal + 1 dynamic                                       | ok     |
-| Router count               | 58 (`API.md`) / 58 (`PROD_ENG`) | **58** router files, all mounted except `api_keys` (unmounted by design) | ok |
-| `routers.md` endpoint rows | 394 rows / 43 sections          | **129** rows match no code route; **339** code routes undocumented | drift   |
-| Frontend pages             | 110 (`PROD_ENG`)                | **110** `page.tsx`                                                | ok     |
+| What                       | Docs claim                      | Code says                                                                | Verdict |
+| -------------------------- | ------------------------------- | ------------------------------------------------------------------------ | ------- |
+| HTTP routes                | 607 (`API.md`)                  | **607** literal + 1 dynamic                                              | ok      |
+| Router count               | 58 (`API.md`) / 58 (`PROD_ENG`) | **58** router files, all mounted except `api_keys` (unmounted by design) | ok      |
+| `routers.md` endpoint rows | 394 rows / 43 sections          | **129** rows match no code route; **339** code routes undocumented       | drift   |
+| Frontend pages             | 110 (`PROD_ENG`)                | **110** `page.tsx`                                                       | ok      |
 
 ### Machine contract (`parity-claims`)
 
@@ -54,6 +54,10 @@ measured code disagrees with any value, the script exits 1.
 # cause by diff and check the facade still re-exports the names (domain.core
 # exports run_doctor and default_report_path from _internal) — a drop traced
 # to a real facading change is the ratchet working, not measurement drift.
+# Re-measured 2026-10-16: controllers_lines 2844->2908, controllers_defs
+# 93->95. Cause confirmed by diff: 1dfa183e7 (health one-verdict port, card
+# aa482267, +68/-4 in controllers/health.py) landed without refreshing this
+# block; no other controllers_* value moved.
 # Once in sync these act
 # as a DOWNWARD ratchet: the router/controller conformance work (card
 # b22e878a) lowers them as it lands, and any climb shows up as an alarm.
@@ -103,11 +107,11 @@ rows from that output instead of hand-editing.
 
 ### G2 — backend test coverage for 3 routers (card `f71f9f9e`)
 
-| Router           | Surface                                                                    | Lines | Coverage today                                                              |
-| ---------------- | -------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------- |
-| `chat.py`        | `POST /chat`, `/chat/stream`, regenerate, cancel, GET active/health/addons | 246   | none for the HTTP router (existing `test_chat_*` cover manager/trainer/CLI) |
-| `model_stack.py` | model-stack routes                                                         | 116   | zero tests anywhere                                                         |
-| `phoneme.py`     | phoneme router                                                             | 158   | frontend only (`phoneme-controller.test.ts`)                                |
+| Router           | Surface                                                                           | Lines | Coverage today                                                              |
+| ---------------- | --------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------- |
+| `chat.py`        | `POST /chat` (SSE — its only state), regenerate, cancel, GET active/health/addons | 283   | none for the HTTP router (existing `test_chat_*` cover manager/trainer/CLI) |
+| `model_stack.py` | model-stack routes                                                                | 116   | zero tests anywhere                                                         |
+| `phoneme.py`     | phoneme router                                                                    | 158   | frontend only (`phoneme-controller.test.ts`)                                |
 
 ## Out of scope (deliberately)
 

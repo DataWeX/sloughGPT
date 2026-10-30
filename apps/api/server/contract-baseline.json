@@ -1,7 +1,7 @@
 {
  "note": "Route + OpenAPI baseline for scripts/check_contract.py \u2014 report-only drift signal, regenerated with --write-baseline.",
  "routers": 53,
- "count": 555,
+ "count": 552,
  "routes": [
   [
    "/",
@@ -120,10 +120,6 @@
    "POST"
   ],
   [
-   "/chat",
-   "POST"
-  ],
-  [
    "/chat/active",
    "GET"
   ],
@@ -170,14 +166,6 @@
   [
    "/chat/sessions/{session_id}",
    "PUT"
-  ],
-  [
-   "/chat/stream",
-   "POST"
-  ],
-  [
-   "/chat/stream",
-   "POST"
   ],
   [
    "/chat/suggestions",
@@ -2993,20 +2981,6 @@
     ]
    }
   },
-  "/chat/stream": {
-   "POST": {
-    "operationId": "stream_chat_stream_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "routers__chat__ChatRequest"
-    },
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
   "/chat/control": {
    "POST": {
     "operationId": "chat_control_chat_control_post",
@@ -3085,20 +3059,6 @@
      }
     ],
     "body": null,
-    "responses": [
-     "200",
-     "422"
-    ]
-   }
-  },
-  "/chat": {
-   "POST": {
-    "operationId": "respond_chat_post",
-    "params": [],
-    "body": {
-     "content_type": "application/json",
-     "schema": "routers__chat__ChatRequest"
-    },
     "responses": [
      "200",
      "422"
@@ -6610,6 +6570,20 @@
      }
     ],
     "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat": {
+   "POST": {
+    "operationId": "stream_chat_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "schemas__chat__ChatRequest"
+    },
     "responses": [
      "200",
      "422"

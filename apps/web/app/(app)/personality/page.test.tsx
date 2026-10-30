@@ -103,6 +103,9 @@ vi.mock('@sloughgpt/strui', () => {
       <input value={value} onChange={onChange} placeholder={placeholder} {...props} />
     ),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    IconHeart: ({ filled }: { filled?: boolean }) => (
+      <span data-testid="icon-heart" data-filled={String(!!filled)} />
+    ),
   }
 })
 
@@ -155,7 +158,20 @@ beforeEach(() => {
     ],
   })
   mockListPersonas.mockResolvedValue({
-    personas: [{ id: 'p1', name: 'Test Persona', values: ['honesty'] }],
+    personas: [
+      {
+        id: 'p1',
+        name: 'Test Persona',
+        values: ['honesty'],
+        traits: { openness: 0.8, warmth: 0.7, formality: 0.2 },
+        top_traits: [
+          { key: 'openness', value: 0.8 },
+          { key: 'warmth', value: 0.7 },
+        ],
+        active: false,
+      },
+      { id: 'p2', name: 'Active Persona', values: ['kindness'], active: true },
+    ],
   })
   mockResetPersonality.mockResolvedValue({ reset: true })
   mockApplyPersonalityPreset.mockResolvedValue({ applied: true })
@@ -195,6 +211,45 @@ describe('PersonalityPage', () => {
     render(<PersonalityPage />)
     await waitForLoad()
     expect(screen.getByText('Test Persona')).toBeInTheDocument()
+  })
+
+  it('shows the rose-blue traits icon on persona cards', async () => {
+    render(<PersonalityPage />)
+    await waitForLoad()
+    const icons = screen.getAllByTestId('icon-heart')
+    expect(icons.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('previews defining traits on persona cards', async () => {
+    render(<PersonalityPage />)
+    await waitForLoad()
+    const preview = screen.getByLabelText('Test Persona defining traits')
+    expect(preview).toHaveTextContent('openness')
+    expect(preview).toHaveTextContent('80%')
+    expect(preview).toHaveTextContent('warmth')
+  })
+
+  it('marks the active persona and disables its Activate button', async () => {
+    render(<PersonalityPage />)
+    await waitForLoad()
+    const activeCard = screen.getByText('Active Persona').closest('[data-active]')
+    expect(activeCard).toHaveAttribute('data-active', 'true')
+    const activeButton = activeCard!.querySelector('button')
+    expect(activeButton).toBeDisabled()
+    // Inactive persona keeps an enabled Activate button
+    const inactiveCard = screen.getByText('Test Persona').closest('[data-active]')
+    expect(inactiveCard).toHaveAttribute('data-active', 'false')
+    expect(inactiveCard!.querySelector('button')).toBeEnabled()
+  })
+
+  it('activating a persona calls the controller', async () => {
+    render(<PersonalityPage />)
+    await waitForLoad()
+    const inactiveCard = screen.getByText('Test Persona').closest('[data-active]')!
+    await act(async () => {
+      fireEvent.click(inactiveCard.querySelector('button')!)
+    })
+    expect(mockActivatePersona).toHaveBeenCalledWith('p1')
   })
 
   it('displays personality conflicts', async () => {
@@ -316,7 +371,7 @@ describe('PersonalityPage', () => {
     render(<PersonalityPage />)
     await waitForLoad()
     await act(async () => {
-      fireEvent.click(screen.getByText('personality.delete'))
+      fireEvent.click(screen.getAllByText('personality.delete')[0])
     })
     expect(consciousnessController.deletePersona).toHaveBeenCalledWith('p1')
     await waitFor(() => {
@@ -329,7 +384,7 @@ describe('PersonalityPage', () => {
     render(<PersonalityPage />)
     await waitForLoad()
     await act(async () => {
-      fireEvent.click(screen.getByText('personality.delete'))
+      fireEvent.click(screen.getAllByText('personality.delete')[0])
     })
     expect(consciousnessController.deletePersona).not.toHaveBeenCalled()
   })

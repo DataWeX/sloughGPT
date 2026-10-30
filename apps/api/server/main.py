@@ -31,11 +31,26 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from domain.shared import find_repo_root
-
 # ── Path bootstrapping (must happen before any domain imports) ────────
-_REPO_ROOT = find_repo_root(Path(__file__).resolve())
-_SERVER_ROOT = Path(__file__).resolve().parent
+# Script-mode entry (`python apps/api/server/main.py` — how slough-api.service
+# starts) puts only this file's directory on sys.path, so the repo root is not
+# importable yet and `domain` cannot be resolved. Put the root on sys.path with
+# a minimal marker walk FIRST, then `find_repo_root` becomes importable and
+# stays the single source of truth for `_REPO_ROOT`. Importing it before this
+# point is what crash-looped slough-api for ~12h with
+# `ModuleNotFoundError: No module named 'domain'` (the editable install only
+# maps `apps` and `domains`, and the plural tree was deleted in 8e1a0c75c).
+_HERE = Path(__file__).resolve()
+for _ancestor in (_HERE, *_HERE.parents):
+    if (_ancestor / "domain" / "__init__.py").is_file() and (_ancestor / "apps").is_dir():
+        if str(_ancestor) not in sys.path:
+            sys.path.insert(0, str(_ancestor))
+        break
+
+from domain.shared import find_repo_root  # noqa: E402  (resolvable now)
+
+_REPO_ROOT = find_repo_root(_HERE)
+_SERVER_ROOT = _HERE.parent
 _CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
 _CHARGECTL_ROOT = _REPO_ROOT / "packages" / "chargectl" / "src"
@@ -306,6 +321,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Explicit so the preflight-amortization contract is documented, not
+    # inherited: one OPTIONS per (origin, path, method) per 10 minutes (the
+    # measured first-load preflight cost is ~22 round trips per origin and
+    # zero on every load inside the window — card 342d729f).
+    max_age=600,
 )
 
 # Register health/status routes IMMEDIATELY — before lifespan runs.
@@ -313,6 +333,7 @@ app.add_middleware(
 # real responses from /health, /health/startup-progress, /health/summary
 # instead of connection errors.  These lightweight routers have zero
 # heavy imports.
+from routers.bootstrap import router as _bootstrap_router
 from routers.consciousness import router as _consciousness_router
 from routers.dashboard import router as _dashboard_router
 from routers.health import router as _health_router
@@ -322,7 +343,8 @@ app.include_router(_health_router)
 app.include_router(_consciousness_router)
 app.include_router(_status_router)
 app.include_router(_dashboard_router)
-# Health/status/dashboard routes are now registered pre-lifespan.
+app.include_router(_bootstrap_router)
+# Health/status/dashboard/bootstrap routes are now registered pre-lifespan.
 # _phase6_routers() skips them by checking existing route prefixes.
 
 # Feature routers are registered by StartupOrchestrator._phase6_routers()

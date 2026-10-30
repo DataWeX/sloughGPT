@@ -285,6 +285,36 @@ class TestRAGService:
         svc2 = RAGService()
         assert svc2.stats()["total_documents"] == 1
 
+    def test_load_rechunks_stored_documents_with_current_defaults(self):
+        """Stored chunk params are ignored on load — the store rebuild.
+
+        A legacy record claiming 512-token chunking must come back as the
+        current fine char windows (≤600 chars) so old stores adopt the
+        injection-budget granularity without a data migration.
+        """
+        import json as _json
+
+        import domain.cognition._internal.rag_service as mod
+        from domain.cognition._internal.rag import FINE_CHUNK_MAX_CHARS
+
+        content = " ".join(f"sentence{i}" for i in range(400))
+        legacy = {
+            "content": content,
+            "metadata": {"source": "legacy"},
+            "chunk_size": 512,
+            "overlap": 50,
+            "chunk_ids": ["stale-id"],
+            "added_at": 0,
+        }
+        with open(mod._DOCUMENTS_FILE, "w", encoding="utf-8") as f:
+            f.write(_json.dumps(legacy) + "\n")
+
+        svc = mod.RAGService()
+        assert svc.stats()["total_documents"] == 1
+        chunks = svc.rag.retriever.chunks
+        assert len(chunks) > 1
+        assert all(len(c.content) <= FINE_CHUNK_MAX_CHARS for c in chunks)
+
     def test_verify_and_ground(self):
         from domain.cognition._internal.rag_service import get_rag_service
 

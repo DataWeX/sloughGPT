@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+import pytest
 import requests
 
 import domain.shell._internal.commands as commands
 from domain.shell._internal.commands import ShellCommands
+
+
+@pytest.fixture(autouse=True)
+def _remote_transport(monkeypatch):
+    """Pin HTTP transport (remote mode, card ad4f5ec2).
+
+    These tests exercise the HTTP half of the transport seam, so they
+    declare remote mode via MAN_API_URL — local in-process dispatch is
+    the default since the shell-core seam landed.
+    """
+    monkeypatch.setenv("MAN_API_URL", "http://localhost:8000")
 
 
 class _Resp:
@@ -98,15 +110,18 @@ class TestShellCommands:
 
     def test_models_list(self, monkeypatch):
         monkeypatch.setattr(commands, "_api_get", lambda p: [{"id": "gpt2"}])
-        assert ShellCommands.models() == [{"id": "gpt2"}]
+        out = ShellCommands.models()
+        assert out[0]["id"] == "gpt2"
+        assert out[0]["name"] == "gpt2"
+        assert out[0]["loaded"] is False
 
     def test_models_dict(self, monkeypatch):
-        monkeypatch.setattr(commands, "_api_get", lambda p: {"models": ["a"]})
-        assert ShellCommands.models() == ["a"]
-        monkeypatch.setattr(commands, "_api_get", lambda p: {"data": ["b"]})
-        assert ShellCommands.models() == ["b"]
-        monkeypatch.setattr(commands, "_api_get", lambda p: {"available": ["c"]})
-        assert ShellCommands.models() == ["c"]
+        monkeypatch.setattr(commands, "_api_get", lambda p: {"models": [{"model_id": "a"}]})
+        assert ShellCommands.models()[0]["name"] == "a"
+        monkeypatch.setattr(commands, "_api_get", lambda p: {"data": [{"model_id": "b"}]})
+        assert ShellCommands.models()[0]["name"] == "b"
+        monkeypatch.setattr(commands, "_api_get", lambda p: {"available": [{"model_id": "c"}]})
+        assert ShellCommands.models()[0]["name"] == "c"
 
     def test_models_other(self, monkeypatch):
         monkeypatch.setattr(commands, "_api_get", lambda p: 42)

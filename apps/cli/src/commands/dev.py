@@ -5,6 +5,7 @@ Dev commands - Development server, health checks, and API status.
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import threading
@@ -457,6 +458,83 @@ def _web_dev_cmd(web_port: int) -> list[str]:
     return ["npm", "run", "dev"]
 
 
+def _find_main_checkout(root: Path) -> Path | None:
+    """Resolve the main checkout for a git worktree, or None if not a worktree.
+
+    Two signals, cheapest first: (1) ``root/node_modules`` is a symlink —
+    the worktree convention here — so its target's parent is the main
+    checkout; (2) ``git worktree list --porcelain`` whose first entry is
+    always the main worktree.
+    """
+    nm = root / "node_modules"
+    if nm.is_symlink():
+        target = nm.resolve()
+        if (target.parent / "apps").is_dir():
+            return target.parent
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "worktree", "list", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        # Lazy wiring must never take down `slo dev`: a missing/broken git
+        # (or anything odd at this seam) just means no wiring — npm's own
+        # module error stays visible instead.
+        return None
+    if out.returncode != 0:
+        return None
+    for line in out.stdout.splitlines():
+        if line.startswith("worktree "):
+            main = Path(line[len("worktree ") :])
+            return main if main != root else None
+    return None
+
+
+def _ensure_web_node_modules(root: Path) -> None:
+    """Wire ``apps/web/node_modules`` in a worktree to the main checkout's copy.
+
+    The web app keeps its own local npm install (vite,
+    @vitejs/plugin-react — not hoisted to the repo root), so a worktree
+    with only a root-level node_modules symlink dies at ``vite.config.ts``
+    with "Cannot find module '@vitejs/plugin-react'". Lazily wire the web
+    app's ``node_modules`` to the main checkout's copy at spawn instead of
+    requiring a per-worktree ``npm install``.
+
+    Idempotent. No-ops when already wired (real checkout or prior run), on
+    the main checkout itself, or when the main copy is missing. Replaces
+    only a missing, cache-only, or dangling dir; aborts rather than
+    deletes when unexpected content is present.
+    """
+    web_nm = root / "apps" / "web" / "node_modules"
+    if (web_nm / "@vitejs" / "plugin-react").exists():
+        return  # already wired (real checkout, full install, or prior run)
+    main = _find_main_checkout(root)
+    if main is None:
+        return  # main checkout itself (or undetectable) — leave as-is
+    source = main / "apps" / "web" / "node_modules"
+    if not (source / "@vitejs" / "plugin-react").exists():
+        return  # nothing to wire from — npm's own error stays visible
+    if web_nm.is_symlink():
+        web_nm.unlink()  # dangling or stale symlink
+    elif web_nm.is_dir():
+        # Replace only when the dir is absent or holds nothing but the
+        # regenerable vite cache; other entries may be real installs.
+        if any(p.name != ".vite" for p in web_nm.iterdir()):
+            log.info(
+                f"web: {web_nm} has local packages — leaving untouched; "
+                "run npm install in apps/web if vite fails"
+            )
+            return
+        shutil.rmtree(web_nm)
+    elif web_nm.exists():
+        return  # a file, not a dir — not ours to touch
+    web_nm.parent.mkdir(parents=True, exist_ok=True)
+    web_nm.symlink_to(source, target_is_directory=True)
+    log.info(f"web: wired apps/web/node_modules → {source}")
+
+
 def cmd_dev(args):
     """Start API and Web servers with a live TUI dashboard."""
     # ── Pre-flight: check if model needs download ─────────
@@ -543,6 +621,7 @@ def cmd_dev(args):
 
     # ── Start Web ────────────────────────────────────────
     web_cwd = root / "apps/web"
+    _ensure_web_node_modules(root)
 
     if watch_web:
         web_proc = subprocess.Popen(
@@ -1325,6 +1404,7 @@ def _cmd_api_and_web(args):
     web_env = _web_dev_env(env, web_port, api_port)
 
     if not web_reused:
+        _ensure_web_node_modules(root)
         web_proc = subprocess.Popen(
             _web_dev_cmd(web_port),
             cwd=str(web_root.resolve()),

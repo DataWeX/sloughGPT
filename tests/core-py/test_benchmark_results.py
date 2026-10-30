@@ -290,9 +290,15 @@ def test_history_default_iterates_all_kinds(tmp_results, capsys):
         "m",
         metrics=[{"config": "gate", "gate_converged": True, "final_loss": 0.5}],
     )
+    write_result(
+        tmp_results,
+        "bootstrap",
+        "m",
+        metrics={"first_s": 0.5, "warm_p95_s": 0.2, "member_errors": 0},
+    )
     assert br.do_history(_hist_args(None)) == 0
     out = capsys.readouterr().out
-    for kind in ("stability", "latency", "startup", "execution", "training"):
+    for kind in ("stability", "latency", "startup", "execution", "training", "bootstrap"):
         assert f"── {kind}: 1 runs ──" in out
 
 
@@ -319,3 +325,95 @@ def test_history_training_dict_config_does_not_crash(tmp_results, capsys):
     )
     assert br.do_history(_hist_args("training")) == 0
     assert "final=0.9" in capsys.readouterr().out
+
+
+# ── bootstrap kind (landing-page /bootstrap latency gate) ──────────────────
+
+
+def test_bootstrap_thresholds_registered():
+    """Bootstrap kind has rel-latency + abs zero-tolerance thresholds."""
+    assert br._threshold("bootstrap", "first_s") == (1.0, "rel")
+    assert br._threshold("bootstrap", "warm_p95_s") == (0.5, "rel")
+    assert br._threshold("bootstrap", "member_errors") == (0, "abs")
+
+
+def _boot_metrics(**overrides):
+    base = {"first_s": 1.0, "warm_p95_s": 0.3, "member_errors": 0, "members": 12}
+    base.update(overrides)
+    return {"metrics": base}
+
+
+def test_bootstrap_member_error_is_regression():
+    """A new member error (0→1) regresses; a steady state does not."""
+    assert br.is_regression("bootstrap", _boot_metrics(member_errors=1), _boot_metrics())
+    assert not br.is_regression("bootstrap", _boot_metrics(), _boot_metrics())
+
+
+def test_bootstrap_cold_fanout_regression_caught():
+    """The pre-fix class (cold envelope ~19.5s vs ~1.0s) trips first_s."""
+    old = _boot_metrics(first_s=1.0)
+    assert br.is_regression("bootstrap", _boot_metrics(first_s=19.5), old)
+    assert not br.is_regression("bootstrap", _boot_metrics(first_s=1.5), old)
+
+
+def test_record_bootstrap_roundtrip(tmp_results):
+    """do_record ingests a benchmark_bootstrap --json-out file and renders it."""
+    src = tmp_results.parent / "bench.json"
+    src.write_text(
+        json.dumps(
+            {
+                "url": "http://localhost:8000/bootstrap",
+                "first_s": 0.9,
+                "warm_mean_s": 0.2,
+                "warm_p95_s": 0.25,
+                "warm_max_s": 0.4,
+                "runs": 20,
+                "members": 12,
+                "member_errors": 0,
+            }
+        )
+    )
+
+    class Args:
+        kind = "bootstrap"
+        json_file = str(src)
+        url = "http://localhost:8000"
+        runs = 20
+        model = None
+        vs = "previous"
+
+    assert br.do_record(Args()) == 0
+    runs = br.collect_records("bootstrap")
+    assert len(runs) == 1
+    r = br.load_result(runs[0])
+    assert r["kind"] == "bootstrap"
+    assert r["metrics"]["member_errors"] == 0
+    assert r["metrics"]["first_s"] == 0.9
+
+
+def test_record_bootstrap_without_json_file_fails(tmp_results, capsys):
+    """Like startup/training, bootstrap records only from a bench JSON file."""
+
+    class Args:
+        kind = "bootstrap"
+        json_file = None
+        url = "http://localhost:8000"
+        runs = 1
+        model = None
+        vs = "previous"
+
+    assert br.do_record(Args()) == 1
+    assert "requires --json-file" in capsys.readouterr().err
+
+
+def test_history_bootstrap_renders_first_p95(tmp_results, capsys):
+    write_result(
+        tmp_results,
+        "bootstrap",
+        "served",
+        metrics={"first_s": 1.25, "warm_p95_s": 0.31, "member_errors": 0},
+    )
+    assert br.do_history(_hist_args("bootstrap")) == 0
+    out = capsys.readouterr().out
+    assert "first=1.25" in out and "p95=0.31" in out and "errs=0" in out
+    assert "mean=?" not in out

@@ -12,7 +12,6 @@ const MS_PER_DAY = 24 * MS_PER_HOUR
  * Falls back to locale date after 7 days.
  */
 export function formatTimeAgo(ts: number | string): string {
-  let diffMs: number
   let absMs: number
 
   if (typeof ts === 'string') {
@@ -25,7 +24,7 @@ export function formatTimeAgo(ts: number | string): string {
     absMs = ts * 1000
   }
 
-  diffMs = Date.now() - absMs
+  const diffMs = Date.now() - absMs
   if (diffMs < 0) return 'just now'
 
   const mins = Math.floor(diffMs / MS_PER_MINUTE)

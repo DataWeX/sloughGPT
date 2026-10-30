@@ -57,7 +57,7 @@ CLASS_RULES: dict[str, list[tuple[str, dict[str, object]]]] = {
             {"temperature": "C", "top_p": "C", "top_k": "C", "repetition_penalty": "C"},
         ),
     ],
-    "apps/api/server/routers/chat.py": [
+    "apps/api/server/schemas/chat.py": [
         ("ChatRequest", {"temperature": "C"}),
     ],
     "apps/api/server/routers/meta_weights.py": [

@@ -448,10 +448,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         if mode:
             model_parts.append(mode)
         if model_parts:
-            styled = [
-                _c(p, _CYAN) if i == 0 else _c(p, _GREY)
-                for i, p in enumerate(model_parts)
-            ]
+            styled = [_c(p, _CYAN) if i == 0 else _c(p, _GREY) for i, p in enumerate(model_parts)]
             _line(f"  {_c('MODEL', _BOLD)}   {'  '.join(styled)}")
 
     spark_rpm = _sparkline(rpm_history) if rpm_history else ""
@@ -498,10 +495,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
                 elif status == "running" and detail:
                     _line(f"  {icon} {name} {_c(detail, _DIM)}")
                 elif detail:
-                    _line(
-                        f"  {icon} {name} {_c(status, _status_color(status))}"
-                        f" {_c(detail, _DIM)}"
-                    )
+                    _line(f"  {icon} {name} {_c(status, _status_color(status))} {_c(detail, _DIM)}")
                 else:
                     # no detail: the status word fills the line — punchy, no blanks
                     _line(f"  {icon} {name} {_c(status, _status_color(status))}")
@@ -849,8 +843,12 @@ def logs(
 
     if dashboard:
         run_dashboard(
-            host, port, interval,
-            output_json=output_json, no_clear=no_clear, compact=compact,
+            host,
+            port,
+            interval,
+            output_json=output_json,
+            no_clear=no_clear,
+            compact=compact,
         )
         return
 
@@ -897,7 +895,11 @@ def logs(
     help="Old dashboard command — merged into `logs --dashboard`; forwards with the same flags.",
 )
 @click.option(
-    "--interval", "-i", default=2.0, type=float, help="Refresh interval in seconds",
+    "--interval",
+    "-i",
+    default=2.0,
+    type=float,
+    help="Refresh interval in seconds",
     show_default=True,
 )
 @click.option("--host", default="localhost", help="API hostname", show_default=True)

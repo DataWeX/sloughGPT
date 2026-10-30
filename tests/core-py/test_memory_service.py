@@ -546,9 +546,16 @@ class TestChatWiring:
         assert "get_memory_service().remember_facts_async" in src
 
     def test_router_emits_memory_event_with_stored_fact(self):
+        # The payload is built on the generation path (stream_turn) …
         src = self._ROUTER.read_text()
-        assert '"MEMORY"' in src
-        assert 'data={"stored": True, "fact": _memory_fact, "facts": _memory_facts}' in src
+        assert '"stored": True' in src
+        assert '"fact": _memory_facts[0]' in src
+        assert '"facts": _memory_facts' in src
+        # … and framed as a MEMORY event by the chat router (stream-first
+        # moved SSE framing out of the engine; the payload contract stands).
+        chat_src = (self._ROUTER.parent / "chat.py").read_text()
+        assert '"MEMORY"' in chat_src
+        assert "data=item.memory" in chat_src
 
     def test_router_context_gate_uses_total_facts(self):
         src = self._ROUTER.read_text()

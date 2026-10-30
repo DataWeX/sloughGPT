@@ -98,7 +98,7 @@ export default function PhonemeComparison({
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Pronunciation Analysis</span>
-          <span className={`text-lg font-bold ${getScoreColor(score)}`}>
+          <span className={`text-base font-bold ${getScoreColor(score)}`}>
             {getScoreLabel(score)}
           </span>
         </CardTitle>

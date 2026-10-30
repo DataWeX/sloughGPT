@@ -51,7 +51,7 @@ function ThinkingBlock() {
 function StreamingCursor() {
   return (
     <span
-      className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse"
+      className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse motion-reduce:animate-none"
       aria-hidden="true"
     />
   )
@@ -61,8 +61,11 @@ function ImageGrid({ images }: { images: ImageAttachment[] }) {
   if (!images || images.length === 0) return null
   return (
     <div className="flex flex-wrap gap-2 mb-2">
-      {images.map(img => (
-        <div key={img.id} className="relative rounded-lg overflow-hidden border border-border/40 max-w-[240px]">
+      {images.map((img) => (
+        <div
+          key={img.id}
+          className="relative rounded-lg overflow-hidden border border-border/40 max-w-[240px]"
+        >
           <img
             src={img.dataUrl}
             alt={img.name}
@@ -90,9 +93,13 @@ function HighlightedContent({ content, query }: { content: string; query?: strin
   return (
     <>
       {parts.map((part, i) =>
-        part.toLowerCase() === query.toLowerCase()
-          ? <mark key={i} className="bg-primary/20 rounded px-0.5">{part}</mark>
-          : part
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={i} className="bg-primary/20 rounded px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
       )}
     </>
   )
@@ -116,9 +123,7 @@ export const MessageRenderer = memo(function MessageRenderer({
 
     // User messages — plain text with highlighting
     if (role === 'user') {
-      return (
-        <HighlightedContent content={content} query={searchQuery} />
-      )
+      return <HighlightedContent content={content} query={searchQuery} />
     }
 
     // Assistant messages — markdown with streaming cursor
@@ -136,9 +141,7 @@ export const MessageRenderer = memo(function MessageRenderer({
       <ImageGrid images={images || []} />
 
       {/* Tool calls */}
-      {toolCalls && toolCalls.length > 0 && (
-        <ToolCalls events={toolCalls} />
-      )}
+      {toolCalls && toolCalls.length > 0 && <ToolCalls events={toolCalls} />}
 
       {/* Reasoning (thinking) */}
       {reasoning && (

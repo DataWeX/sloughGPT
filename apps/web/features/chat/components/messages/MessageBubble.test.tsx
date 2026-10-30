@@ -17,7 +17,12 @@ vi.mock('@sloughgpt/strui', () => ({
 
   Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
   StatusDot: ({ tone, pulse, label, className }: any) => (
-    <span data-testid="status-dot" data-tone={tone} data-pulse={String(!!pulse)} className={className}>
+    <span
+      data-testid="status-dot"
+      data-tone={tone}
+      data-pulse={String(!!pulse)}
+      className={className}
+    >
       {label}
     </span>
   ),
@@ -245,12 +250,58 @@ describe('MessageBubble', () => {
     expect(container.textContent).not.toContain('just now')
   })
 
-  it('shows loading dots when content is empty and assistant', () => {
+  it('shows loading dots when content is empty, assistant, and streaming', () => {
     const { container } = render(
-      <MessageBubble content="" role="assistant" timestamp={new Date()} showTimestamp />,
+      <MessageBubble
+        content=""
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        isStreaming
+      />,
     )
     const dots = container.querySelector('.animate-bounce')
     expect(dots).toBeInTheDocument()
+  })
+
+  it('hides model + timestamp until first token lands (empty streaming turn)', () => {
+    const { container } = render(
+      <MessageBubble
+        content=""
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        model="Qwen/Qwen2.5-0.5B-Instruct"
+        isStreaming
+      />,
+    )
+    // The log must not claim a finished entry before content exists.
+    expect(container.textContent).not.toContain('Qwen/Qwen2.5-0.5B-Instruct')
+    expect(container.textContent).not.toContain('just now')
+    // Role label still signals the in-progress turn.
+    expect(screen.getByText('Assistant')).toBeInTheDocument()
+  })
+
+  it('shows model + timestamp once content lands', () => {
+    const { container } = render(
+      <MessageBubble
+        content="hello"
+        role="assistant"
+        timestamp={new Date()}
+        showTimestamp
+        model="Qwen/Qwen2.5-0.5B-Instruct"
+        isStreaming
+      />,
+    )
+    expect(container.textContent).toContain('Qwen/Qwen2.5-0.5B-Instruct')
+    expect(container.textContent).toContain('just now')
+  })
+
+  it('shows no loading dots when content is empty and not streaming', () => {
+    const { container } = render(
+      <MessageBubble content="" role="assistant" timestamp={new Date()} showTimestamp />,
+    )
+    expect(container.querySelector('.animate-bounce')).not.toBeInTheDocument()
   })
 
   it('shows streaming cursor when isStreaming', () => {
@@ -396,7 +447,13 @@ describe('MessageBubble', () => {
   describe('transcript anatomy (log-entry primitive)', () => {
     it('renders the gutter turn number, zero-padded', () => {
       const { container } = render(
-        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp turnNumber={7} />,
+        <MessageBubble
+          content="hi"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          turnNumber={7}
+        />,
       )
       expect(container.textContent).toContain('07')
     })
@@ -441,7 +498,13 @@ describe('MessageBubble', () => {
 
     it('shows a pulsing primary StatusDot while streaming', () => {
       render(
-        <MessageBubble content="streaming" role="assistant" timestamp={new Date()} showTimestamp isStreaming />,
+        <MessageBubble
+          content="streaming"
+          role="assistant"
+          timestamp={new Date()}
+          showTimestamp
+          isStreaming
+        />,
       )
       const dot = screen.getByTestId('status-dot')
       expect(dot).toHaveAttribute('data-tone', 'primary')

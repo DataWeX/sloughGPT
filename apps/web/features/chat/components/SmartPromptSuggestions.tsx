@@ -20,18 +20,90 @@ interface SmartPromptSuggestionsProps {
 const STORAGE_KEY = 'chat-prompt-templates'
 
 const BUILT_IN_PROMPTS: PromptTemplate[] = [
-  { id: 'explain', name: 'Explain', content: 'Explain this concept in simple terms:', category: 'Learning', isBuiltIn: true },
-  { id: 'summarize', name: 'Summarize', content: 'Summarize the key points from:', category: 'Learning', isBuiltIn: true },
-  { id: 'debug', name: 'Debug', content: 'Help me debug this code:', category: 'Code', isBuiltIn: true },
-  { id: 'review', name: 'Code Review', content: 'Review this code and suggest improvements:', category: 'Code', isBuiltIn: true },
-  { id: 'refactor', name: 'Refactor', content: 'Refactor this code to be cleaner and more efficient:', category: 'Code', isBuiltIn: true },
-  { id: 'test', name: 'Write Tests', content: 'Write unit tests for:', category: 'Code', isBuiltIn: true },
-  { id: 'translate', name: 'Translate', content: 'Translate this to English:', category: 'Language', isBuiltIn: true },
-  { id: 'rewrite', name: 'Rewrite', content: 'Rewrite this more clearly:', category: 'Language', isBuiltIn: true },
-  { id: 'pros_cons', name: 'Pros & Cons', content: 'What are the pros and cons of:', category: 'Analysis', isBuiltIn: true },
-  { id: 'compare', name: 'Compare', content: 'Compare and contrast:', category: 'Analysis', isBuiltIn: true },
-  { id: 'brainstorm', name: 'Brainstorm', content: 'Brainstorm ideas for:', category: 'Creative', isBuiltIn: true },
-  { id: 'outline', name: 'Outline', content: 'Create an outline for:', category: 'Creative', isBuiltIn: true },
+  {
+    id: 'explain',
+    name: 'Explain',
+    content: 'Explain this concept in simple terms:',
+    category: 'Learning',
+    isBuiltIn: true,
+  },
+  {
+    id: 'summarize',
+    name: 'Summarize',
+    content: 'Summarize the key points from:',
+    category: 'Learning',
+    isBuiltIn: true,
+  },
+  {
+    id: 'debug',
+    name: 'Debug',
+    content: 'Help me debug this code:',
+    category: 'Code',
+    isBuiltIn: true,
+  },
+  {
+    id: 'review',
+    name: 'Code Review',
+    content: 'Review this code and suggest improvements:',
+    category: 'Code',
+    isBuiltIn: true,
+  },
+  {
+    id: 'refactor',
+    name: 'Refactor',
+    content: 'Refactor this code to be cleaner and more efficient:',
+    category: 'Code',
+    isBuiltIn: true,
+  },
+  {
+    id: 'test',
+    name: 'Write Tests',
+    content: 'Write unit tests for:',
+    category: 'Code',
+    isBuiltIn: true,
+  },
+  {
+    id: 'translate',
+    name: 'Translate',
+    content: 'Translate this to English:',
+    category: 'Language',
+    isBuiltIn: true,
+  },
+  {
+    id: 'rewrite',
+    name: 'Rewrite',
+    content: 'Rewrite this more clearly:',
+    category: 'Language',
+    isBuiltIn: true,
+  },
+  {
+    id: 'pros_cons',
+    name: 'Pros & Cons',
+    content: 'What are the pros and cons of:',
+    category: 'Analysis',
+    isBuiltIn: true,
+  },
+  {
+    id: 'compare',
+    name: 'Compare',
+    content: 'Compare and contrast:',
+    category: 'Analysis',
+    isBuiltIn: true,
+  },
+  {
+    id: 'brainstorm',
+    name: 'Brainstorm',
+    content: 'Brainstorm ideas for:',
+    category: 'Creative',
+    isBuiltIn: true,
+  },
+  {
+    id: 'outline',
+    name: 'Outline',
+    content: 'Create an outline for:',
+    category: 'Creative',
+    isBuiltIn: true,
+  },
 ]
 
 function loadTemplates(): PromptTemplate[] {
@@ -66,15 +138,13 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
 
   const categories = useMemo(() => {
     const all = [...BUILT_IN_PROMPTS, ...userTemplates]
-    const cats = [...new Set(all.map(p => p.category))]
+    const cats = [...new Set(all.map((p) => p.category))]
     return cats.sort()
   }, [userTemplates])
 
   const prompts = useMemo(() => {
     const all = [...BUILT_IN_PROMPTS, ...userTemplates]
-    let filtered = selectedCategory
-      ? all.filter(p => p.category === selectedCategory)
-      : all
+    let filtered = selectedCategory ? all.filter((p) => p.category === selectedCategory) : all
     if (!showAll) {
       filtered = filtered.slice(0, 6)
     }
@@ -101,11 +171,14 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
     setCreating(false)
   }, [newName, newContent, userTemplates])
 
-  const handleDelete = useCallback((id: string) => {
-    const next = userTemplates.filter(t => t.id !== id)
-    setUserTemplates(next)
-    saveTemplates(next)
-  }, [userTemplates])
+  const handleDelete = useCallback(
+    (id: string) => {
+      const next = userTemplates.filter((t) => t.id !== id)
+      setUserTemplates(next)
+      saveTemplates(next)
+    },
+    [userTemplates],
+  )
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -133,7 +206,8 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
           <textarea
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
-            placeholder="Prompt text..." aria-label="Prompt text"
+            placeholder="Prompt text..."
+            aria-label="Prompt text"
             className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
             rows={3}
           />
@@ -168,11 +242,12 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
             selectedCategory === null
               ? 'bg-primary/20 text-primary'
               : 'text-muted-foreground hover:bg-muted/50',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           )}
         >
           All
         </button>
-        {categories.map(cat => (
+        {categories.map((cat) => (
           <button
             key={cat}
             type="button"
@@ -182,6 +257,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
               selectedCategory === cat
                 ? 'bg-primary/20 text-primary'
                 : 'text-muted-foreground hover:bg-muted/50',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             )}
           >
             {cat}
@@ -191,7 +267,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
 
       <div className="p-2">
         <div className="grid grid-cols-2 gap-1">
-          {prompts.map(prompt => (
+          {prompts.map((prompt) => (
             <div
               key={prompt.id}
               className="group flex items-center justify-between p-1.5 rounded hover:bg-muted/50 cursor-pointer"

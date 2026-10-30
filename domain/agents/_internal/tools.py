@@ -79,9 +79,10 @@ class ToolResult:
 class ToolRegistry:
     """Registry of tools accessible from chat."""
 
-    def __init__(self):
+    def __init__(self, *, register_defaults: bool = True):
         self._tools: dict[str, ToolSpec] = {}
-        self._register_defaults()
+        if register_defaults:
+            self._register_defaults()
 
     def _register_defaults(self) -> None:
         self.register(
@@ -227,6 +228,20 @@ class ToolRegistry:
 
     def get(self, name: str) -> ToolSpec | None:
         return self._tools.get(name)
+
+    def subset(self, names: list[str]) -> ToolRegistry:
+        """A new registry holding only the named tools.
+
+        Unknown names raise — the caller asked for a capability that does
+        not exist, which must not silently degrade to "all tools".
+        """
+        sub = ToolRegistry(register_defaults=False)
+        for n in names:
+            spec = self._tools.get(n)
+            if spec is None:
+                raise ValueError(f"unknown tool: {n}")
+            sub._tools[n] = spec
+        return sub
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [

@@ -26,6 +26,8 @@ const SPECIFIER_MAP = {
   'next/navigation': '@/vite/next-compat/navigation',
   'next/dynamic': '@/vite/next-compat/dynamic',
   'next/web-vitals': '@/vite/next-compat/web-vitals',
+  'next/server': '@/vite/next-compat/server',
+  'next-auth/react': '@/vite/next-compat/next-auth',
 }
 
 const EXTS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx'])

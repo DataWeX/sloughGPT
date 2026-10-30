@@ -17,7 +17,10 @@ const PHONEME_LAYOUT = [
   { row: 'nasals', phonemes: ['M', 'N', 'NG'] },
   { row: 'liquids', phonemes: ['L', 'R'] },
   { row: 'glides', phonemes: ['W', 'Y'] },
-  { row: 'vowels', phonemes: ['IY', 'IH', 'EY', 'EH', 'AE', 'AA', 'AH', 'AO', 'OW', 'OY', 'UH', 'UW', 'ER', 'AX'] },
+  {
+    row: 'vowels',
+    phonemes: ['IY', 'IH', 'EY', 'EH', 'AE', 'AA', 'AH', 'AO', 'OW', 'OY', 'UH', 'UW', 'ER', 'AX'],
+  },
 ]
 
 function getPhonemeColor(phoneme: string): string {
@@ -28,19 +31,27 @@ function getPhonemeColor(phoneme: string): string {
   const liquids = ['L', 'R']
   const glides = ['W', 'Y']
 
-  if (stops.includes(phoneme)) return 'bg-info/15 hover:bg-blue-200 text-blue-800 border-blue-300'
-  if (fricatives.includes(phoneme)) return 'bg-primary/15 hover:bg-purple-200 text-purple-800 border-purple-300'
-  if (affricates.includes(phoneme)) return 'bg-pink-100 hover:bg-pink-200 text-pink-800 border-pink-300'
-  if (nasals.includes(phoneme)) return 'bg-success/15 hover:bg-green-200 text-green-800 border-green-300'
-  if (liquids.includes(phoneme)) return 'bg-orange-100 hover:bg-orange-200 text-orange-800 border-orange-300'
-  if (glides.includes(phoneme)) return 'bg-cyan-100 hover:bg-cyan-200 text-cyan-800 border-cyan-300'
-  return 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300'
+  if (stops.includes(phoneme)) return 'bg-info/15 hover:bg-info/25 text-info border-info/30'
+  if (fricatives.includes(phoneme))
+    return 'bg-primary/15 hover:bg-primary/25 text-primary border-primary/30'
+  if (affricates.includes(phoneme))
+    return 'bg-[rgb(var(--group-6)/0.15)] hover:bg-[rgb(var(--group-6)/0.25)] text-[rgb(var(--group-6))] border-[rgb(var(--group-6)/0.3)]'
+  if (nasals.includes(phoneme))
+    return 'bg-success/15 hover:bg-success/25 text-success border-success/30'
+  if (liquids.includes(phoneme))
+    return 'bg-accent/15 hover:bg-accent/25 text-accent border-accent/30'
+  if (glides.includes(phoneme))
+    return 'bg-[rgb(var(--group-8)/0.15)] hover:bg-[rgb(var(--group-8)/0.25)] text-[rgb(var(--group-8))] border-[rgb(var(--group-8)/0.3)]'
+  return 'bg-muted hover:bg-secondary text-foreground border-border'
 }
 
 export default function PhonemeKeyboard({ onInsert, onBackspace, onClear }: PhonemeKeyboardProps) {
-  const handlePhonemeClick = useCallback((phoneme: string) => {
-    onInsert(phoneme)
-  }, [onInsert])
+  const handlePhonemeClick = useCallback(
+    (phoneme: string) => {
+      onInsert(phoneme)
+    },
+    [onInsert],
+  )
 
   return (
     <Card>
@@ -48,15 +59,19 @@ export default function PhonemeKeyboard({ onInsert, onBackspace, onClear }: Phon
         <CardTitle className="flex items-center justify-between">
           <span>Phoneme Keyboard</span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onBackspace}>⌫</Button>
-            <Button variant="outline" size="sm" onClick={onClear}>Clear</Button>
+            <Button variant="outline" size="sm" onClick={onBackspace}>
+              ⌫
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClear}>
+              Clear
+            </Button>
           </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {PHONEME_LAYOUT.map(row => (
+        {PHONEME_LAYOUT.map((row) => (
           <div key={row.row} className="flex flex-wrap gap-1">
-            {row.phonemes.map(phoneme => {
+            {row.phonemes.map((phoneme) => {
               const ipa = toIPA([phoneme])[0] || phoneme
               return (
                 <Button

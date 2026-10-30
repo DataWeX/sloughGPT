@@ -7,11 +7,22 @@ Resolution order (first match wins):
     1. Explicit CLI flag (per-command).
     2. Environment variable (``APP_PLANNER_NOTES_DIR``, ``APP_PLANNER_BOARD_DIR``,
        ``APP_PLANNER_BACKEND``).
-    3. Repository detection: walking up from the current directory, the
-       first ancestor containing ``.kanban/board.json`` is treated as the
-       project root, giving ``<root>/.dev-notes`` and ``<root>/.kanban``.
-    4. User config fallback (``~/.config/dev-notes`` and
-       ``~/.config/kanban``).
+    3. Canonical user config (``~/.config/dev-notes`` and
+       ``~/.config/kanban``) — the DEFAULT since the canonical-state flip:
+       mutable planner state must not live inside code checkouts, because
+       git worktrees fork it per checkout (the 2026-10-27 149-commit local
+       fork included 48 kanban/notes commits; sessions found boards with
+       divergent state per worktree). One canonical store, every tool
+       (CLI, GUI, web proxy) projects from it.
+    4. Repository detection — now OPT-IN via ``APP_PLANNER_REPO_LOCAL=1``:
+       walking up from the current directory, the first ancestor containing
+       ``.kanban/board.json`` is treated as the project root, giving
+       ``<root>/.dev-notes`` and ``<root>/.kanban``. Use for legacy data
+       (see ``app-planner migrate``) or an intentionally repo-scoped board.
+
+    Repo-local data is imported into the canonical store with
+    ``app-planner migrate`` and exported back into the repo (for versioned
+    history) with ``app-planner snapshot``.
 """
 
 from __future__ import annotations
@@ -54,10 +65,12 @@ STATUS_ICONS = {
 
 
 def _walk_for_board(start: Path) -> Path | None:
-    """Return the nearest ancestor of *start* containing ``.kanban/board.json``."""
+    """Return the nearest ancestor of *start* containing a kanban board —
+    ``.kanban/board.jsonl`` (canonical) or the legacy ``.kanban/board.json``."""
     cur = start.resolve()
     for candidate in (cur, *cur.parents):
-        if (candidate / ".kanban" / "board.json").is_file():
+        kanban = candidate / ".kanban"
+        if (kanban / "board.jsonl").is_file() or (kanban / "board.json").is_file():
             return candidate
     return None
 
@@ -89,25 +102,32 @@ def project_board_dir(root: Path) -> Path:
     return root / ".kanban"
 
 
+def repo_local_enabled() -> bool:
+    """True when ``APP_PLANNER_REPO_LOCAL`` opts into per-checkout state."""
+    return os.environ.get("APP_PLANNER_REPO_LOCAL", "") not in ("", "0", "false", "False")
+
+
 def default_notes_dir() -> Path:
-    """Notes directory: env override > project root > user config fallback."""
+    """Notes directory: env override > canonical user config > repo-local (opt-in)."""
     env = os.environ.get("APP_PLANNER_NOTES_DIR")
     if env:
         return Path(env)
-    root = find_project_root()
-    if root is not None:
-        return project_notes_dir(root)
+    if repo_local_enabled():
+        root = find_project_root()
+        if root is not None:
+            return project_notes_dir(root)
     return NOTES_FALLBACK
 
 
 def default_board_dir() -> Path:
-    """Board directory: env override > project root > user config fallback."""
+    """Board directory: env override > canonical user config > repo-local (opt-in)."""
     env = os.environ.get("APP_PLANNER_BOARD_DIR")
     if env:
         return Path(env)
-    root = find_project_root()
-    if root is not None:
-        return project_board_dir(root)
+    if repo_local_enabled():
+        root = find_project_root()
+        if root is not None:
+            return project_board_dir(root)
     return BOARD_FALLBACK
 
 

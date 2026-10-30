@@ -33,22 +33,27 @@ function parseArgs(value: string, commandName: string): string[] {
   return rest
 }
 
-export const SlashCommandMenu = memo(function SlashCommandMenu({ value, onInsert, onClose, onExecute }: SlashCommandMenuProps) {
+export const SlashCommandMenu = memo(function SlashCommandMenu({
+  value,
+  onInsert,
+  onClose,
+  onExecute,
+}: SlashCommandMenuProps) {
   const allCommands = useMemo(() => getAllCommands(), [])
 
   const query = value.startsWith('/') ? value.slice(1) : ''
   const firstWord = query.split(/\s+/)[0] || ''
 
   const scored = useMemo(() => {
-    if (!query) return allCommands.map(c => ({ command: c, score: 0 }))
+    if (!query) return allCommands.map((c) => ({ command: c, score: 0 }))
     return allCommands
-      .map(c => {
+      .map((c) => {
         const nameScore = fuzzyScore(firstWord, c.command.slice(1))
         const descScore = fuzzyScore(query, c.description)
         const score = Math.max(nameScore, descScore ?? -1)
         return { command: c, score }
       })
-      .filter(x => x.score >= 0)
+      .filter((x) => x.score >= 0)
       .sort((a, b) => b.score - a.score)
   }, [query, firstWord, allCommands])
 
@@ -71,37 +76,43 @@ export const SlashCommandMenu = memo(function SlashCommandMenu({ value, onInsert
     }
   }, [selectedIndex])
 
-  const select = useCallback((cmd: ChatCommand) => {
-    if (onExecute) {
-      const args = parseArgs(value, cmd.command)
-      onExecute(cmd, args)
-    } else {
-      onInsert(cmd.command)
-    }
-    onClose()
-  }, [onInsert, onClose, onExecute, value])
+  const select = useCallback(
+    (cmd: ChatCommand) => {
+      if (onExecute) {
+        const args = parseArgs(value, cmd.command)
+        onExecute(cmd, args)
+      } else {
+        onInsert(cmd.command)
+      }
+      onClose()
+    },
+    [onInsert, onClose, onExecute, value],
+  )
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault()
-        setSelectedIndex(i => (i + 1) % scored.length)
-        break
-      case 'ArrowUp':
-        e.preventDefault()
-        setSelectedIndex(i => (i - 1 + scored.length) % scored.length)
-        break
-      case 'Enter':
-      case 'Tab':
-        e.preventDefault()
-        if (scored[selectedIndex]) select(scored[selectedIndex].command)
-        break
-      case 'Escape':
-        e.preventDefault()
-        onClose()
-        break
-    }
-  }, [scored, selectedIndex, select, onClose])
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setSelectedIndex((i) => (i + 1) % scored.length)
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setSelectedIndex((i) => (i - 1 + scored.length) % scored.length)
+          break
+        case 'Enter':
+        case 'Tab':
+          e.preventDefault()
+          if (scored[selectedIndex]) select(scored[selectedIndex].command)
+          break
+        case 'Escape':
+          e.preventDefault()
+          onClose()
+          break
+      }
+    },
+    [scored, selectedIndex, select, onClose],
+  )
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
@@ -120,7 +131,9 @@ export const SlashCommandMenu = memo(function SlashCommandMenu({ value, onInsert
       {scored.map(({ command: cmd, score }, i) => (
         <button
           key={cmd.command}
-          ref={el => { itemRefs.current[i] = el }}
+          ref={(el) => {
+            itemRefs.current[i] = el
+          }}
           type="button"
           role="option"
           aria-selected={i === selectedIndex}
@@ -128,7 +141,10 @@ export const SlashCommandMenu = memo(function SlashCommandMenu({ value, onInsert
           onMouseEnter={() => setSelectedIndex(i)}
           className={cn(
             'flex items-center gap-3 w-full px-3 py-2 text-left transition-colors',
-            i === selectedIndex ? 'bg-accent/80 text-accent-foreground' : 'text-popover-foreground hover:bg-accent/40',
+            i === selectedIndex
+              ? 'bg-accent/80 text-accent-foreground'
+              : 'text-popover-foreground hover:bg-accent/40',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           )}
         >
           <code className="text-sm font-medium shrink-0 min-w-[5rem] text-primary/80">

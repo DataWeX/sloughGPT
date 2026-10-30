@@ -21,7 +21,7 @@ describe('Chat page', () => {
       statusCode: 200,
       body: { id: 'test-session', name: 'New Chat', created_at: new Date().toISOString() },
     }).as('createSession')
-    cy.intercept('POST', `${apiBase}/chat/stream`, (req) => {
+    cy.intercept('POST', `${apiBase}/chat`, (req) => {
       req.reply({
         statusCode: 200,
         headers: { 'Content-Type': 'text/event-stream' },

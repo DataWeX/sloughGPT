@@ -72,17 +72,17 @@ class TestAgentToolCall:
             screenshot_on_each_step=False,
             output_dir=tempfile.mkdtemp(prefix="avion-tools-"),
         )
-        agent = Agent(
-            model=EchoModel(actions), config=cfg, tools=registry, executor=executor
-        )
+        agent = Agent(model=EchoModel(actions), config=cfg, tools=registry, executor=executor)
         run(agent.start(backend=FakeBackend()))
         return agent
 
     def _registry(self):
-        return ToolRegistry([
-            ToolSpec("file_search", "search files", {"query": "text"}),
-            ToolSpec("danger", "gated tool", requires_approval=True),
-        ])
+        return ToolRegistry(
+            [
+                ToolSpec("file_search", "search files", {"query": "text"}),
+                ToolSpec("danger", "gated tool", requires_approval=True),
+            ]
+        )
 
     def test_tool_success(self):
         async def fake_runner(tool, args):
@@ -91,8 +91,7 @@ class TestAgentToolCall:
 
         agent = self._agent(
             [
-                Action(ActionType.TOOL_CALL,
-                       {"tool": "file_search", "args": {"query": "x"}}),
+                Action(ActionType.TOOL_CALL, {"tool": "file_search", "args": {"query": "x"}}),
                 Action(ActionType.DONE),
             ],
             self._registry(),
@@ -149,8 +148,7 @@ class TestAgentToolCall:
 
     def test_tool_call_validates(self):
         assert "tool" in validate_action(Action(ActionType.TOOL_CALL, {}))
-        assert validate_action(
-            Action(ActionType.TOOL_CALL, {"tool": "x"})) is None
+        assert validate_action(Action(ActionType.TOOL_CALL, {"tool": "x"})) is None
 
     def test_prompt_lists_tools(self):
         reg = ToolRegistry([ToolSpec("file_search", "search files")])
@@ -210,7 +208,18 @@ class TestHygiene:
 
         importlib.import_module("avion")
         added = {m.split(".")[0] for m in sys.modules if m not in before}
-        heavy = {"playwright", "selenium", "appium", "pyautogui", "PIL",
-                 "cv2", "numpy", "torch", "pytesseract", "websockets",
-                 "domain", "apps"}
+        heavy = {
+            "playwright",
+            "selenium",
+            "appium",
+            "pyautogui",
+            "PIL",
+            "cv2",
+            "numpy",
+            "torch",
+            "pytesseract",
+            "websockets",
+            "domain",
+            "apps",
+        }
         assert not (added & heavy), added & heavy

@@ -197,16 +197,25 @@ class TuiIo:
 
 
 class MemoryIO:
-    """In-memory I/O for testing and programmatic use."""
+    """In-memory I/O for testing and programmatic use.
 
-    def __init__(self) -> None:
+    ``on_write`` (if given) is called with every written chunk as it
+    happens — the seam that lets a streaming endpoint emit lines while a
+    command is still running, instead of after it finishes.
+    """
+
+    def __init__(self, on_write=None) -> None:
         self._output: list[str] = []
         self._inputs: list[str] = []
         self._input_idx = 0
         self._is_tty: bool = False
+        self._on_write = on_write
 
     def write(self, text: str, end: str = "\n") -> None:
-        self._output.append(text + end if text else end)
+        chunk = text + end if text else end
+        self._output.append(chunk)
+        if self._on_write is not None:
+            self._on_write(chunk)
 
     def read(self, prompt: str = "") -> str:
         if self._input_idx < len(self._inputs):

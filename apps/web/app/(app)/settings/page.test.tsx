@@ -186,6 +186,20 @@ describe('SettingsPage', () => {
     expect(screen.getAllByText('Connection').length).toBeGreaterThanOrEqual(1)
   })
 
+  it('renders the Connection banner card with both timing flags', () => {
+    render(<SettingsPage />)
+    expect(screen.getByTestId('settings-connection-banner')).toBeTruthy()
+    expect(screen.getByText('Drop notice delay')).toBeTruthy()
+    expect(screen.getByText('Reconnected confirmation')).toBeTruthy()
+  })
+
+  it('shows the default flag timings on the Connection banner card', () => {
+    render(<SettingsPage />)
+    // Defaults: 5.0s grace, 4.0s hold — rendered by the page's formatValue.
+    expect(screen.getAllByText('5.0s').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('4.0s').length).toBeGreaterThanOrEqual(1)
+  })
+
   it('renders External model provider card', async () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('External model provider').length).toBeGreaterThanOrEqual(1)

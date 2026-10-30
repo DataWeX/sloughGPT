@@ -1,6 +1,8 @@
 """Tests for domain.shared._internal.feature_flags — FeatureFlags, FeatureFlag, FlagStatus."""
 
+import json
 import os
+from dataclasses import replace
 
 import pytest
 
@@ -13,14 +15,24 @@ from domain.shared._internal.feature_flags import (
 
 
 @pytest.fixture(autouse=True)
-def _clean_flags():
-    """Snapshot and restore FeatureFlags state around each test."""
-    original_flags = dict(FeatureFlags._flags)
+def _clean_flags(tmp_path):
+    """Snapshot and restore FeatureFlags state around each test.
+
+    The history ledger is redirected to a temp file so status-change tests
+    never write into the repo's ``config/`` directory. Flags are snapshotted
+    with ``dataclasses.replace`` — a plain ``dict()`` shares the FeatureFlag
+    objects, so a status/version mutation in one test would leak into the
+    next (aliasing bug this suite's versioning tests exposed).
+    """
+    original_flags = {k: replace(v) for k, v in FeatureFlags._flags.items()}
     original_config_path = FeatureFlags._config_path
+    original_history_path = FeatureFlags._history_path
+    FeatureFlags._history_path = tmp_path / "flag_history.jsonl"
     yield
     FeatureFlags._flags.clear()
     FeatureFlags._flags.update(original_flags)
     FeatureFlags._config_path = original_config_path
+    FeatureFlags._history_path = original_history_path
 
 
 class TestFlagStatus:
@@ -344,3 +356,119 @@ class TestRegisterDefaults:
         _register_defaults()
         count_after = len(FeatureFlags._flags)
         assert count_before == count_after
+
+
+class TestFlagVersioning:
+    """Version fields on flags + the append-only change ledger."""
+
+    def test_flag_defaults_version_and_since(self):
+        flag = FeatureFlag(name="ver_default", description="d")
+        assert flag.version == "1.0.0"
+        assert flag.since  # auto-stamped ISO date, never empty
+
+    def test_register_accepts_version_and_since(self):
+        flag = FeatureFlags.register(
+            "ver_register", description="d", version="2.1.0", since="2026-01-01"
+        )
+        assert flag.version == "2.1.0"
+        assert flag.since == "2026-01-01"
+
+    def test_register_keeps_existing_version(self):
+        FeatureFlags.register("ver_keep", version="1.4.0")
+        again = FeatureFlags.register("ver_keep", version="9.9.9")
+        assert again.version == "1.4.0"
+
+    def test_list_all_exposes_version_and_since(self):
+        entry = FeatureFlags.list_all()["slonet_provider"]
+        assert entry["version"] == "1.0.0"
+        assert entry["since"]
+
+    def test_set_status_ledgers_change(self):
+        FeatureFlags.set_status("slonet_provider", FlagStatus.DISABLED)
+        hist = FeatureFlags.read_history()
+        assert len(hist) == 1
+        entry = hist[0]
+        assert entry["kind"] == "status"
+        assert entry["flag"] == "slonet_provider"
+        assert entry["from"] == "enabled"
+        assert entry["to"] == "disabled"
+        assert entry["source"] == "runtime"
+        assert entry["version"] == "1.0.0"
+        assert "at" in entry
+
+    def test_set_status_source_is_recorded(self):
+        FeatureFlags.set_status("slonet_provider", FlagStatus.DISABLED, source="cli")
+        assert FeatureFlags.read_history()[0]["source"] == "cli"
+
+    def test_set_status_same_value_ledgers_nothing(self):
+        FeatureFlags.set_status("slonet_provider", FlagStatus.ENABLED)  # unchanged
+        assert FeatureFlags.read_history() == []
+
+    def test_set_status_unknown_raises_without_ledger(self):
+        with pytest.raises(KeyError):
+            FeatureFlags.set_status("definitely_unknown", FlagStatus.ENABLED)
+        assert FeatureFlags.read_history() == []
+
+    def test_bump_version_updates_flag_and_ledgers(self):
+        result = FeatureFlags.bump_version("slonet_provider", "1.1.0")
+        assert result == "1.1.0"
+        assert FeatureFlags._flags["slonet_provider"].version == "1.1.0"
+        entry = FeatureFlags.read_history()[-1]
+        assert entry["kind"] == "version"
+        assert entry["flag"] == "slonet_provider"
+        assert entry["from"] == "1.0.0"
+        assert entry["to"] == "1.1.0"
+        assert entry["source"] == "manual"
+
+    def test_bump_version_idempotent_ledgers_nothing(self):
+        FeatureFlags.bump_version("slonet_provider", "1.1.0")
+        FeatureFlags.bump_version("slonet_provider", "1.1.0")
+        assert len(FeatureFlags.read_history()) == 1
+
+    def test_bump_version_rejects_non_semver(self):
+        with pytest.raises(ValueError):
+            FeatureFlags.bump_version("slonet_provider", "v1.1")
+        with pytest.raises(ValueError):
+            FeatureFlags.bump_version("slonet_provider", "1.1")
+        assert FeatureFlags._flags["slonet_provider"].version == "1.0.0"
+
+    def test_bump_version_unknown_flag_raises(self):
+        with pytest.raises(KeyError):
+            FeatureFlags.bump_version("definitely_unknown", "1.1.0")
+
+    def test_load_config_divergence_ledgered_exactly_once(self, tmp_path):
+        """An out-of-band config edit is recorded once, not on every boot."""
+        path = tmp_path / "feature_flags.json"
+        path.write_text(json.dumps({"slonet_provider": "disabled"}))
+        FeatureFlags.load_config(path)
+        assert FeatureFlags._flags["slonet_provider"].status is FlagStatus.DISABLED
+        FeatureFlags.load_config(path)  # simulated restart
+        FeatureFlags.load_config(path)  # simulated restart
+        entries = [e for e in FeatureFlags.read_history() if e["flag"] == "slonet_provider"]
+        assert len(entries) == 1
+        assert entries[0]["source"] == "config"
+        assert entries[0]["from"] == "enabled"
+        assert entries[0]["to"] == "disabled"
+
+    def test_load_config_without_divergence_ledgers_nothing(self, tmp_path):
+        path = tmp_path / "feature_flags.json"
+        path.write_text(json.dumps({"slonet_provider": "enabled"}))  # == default
+        FeatureFlags.load_config(path)
+        assert FeatureFlags.read_history() == []
+
+    def test_ledger_is_append_only_across_status_and_version(self):
+        FeatureFlags.set_status("slonet_provider", FlagStatus.DISABLED)
+        FeatureFlags.bump_version("slonet_provider", "1.1.0")
+        FeatureFlags.set_status("slonet_provider", FlagStatus.ENABLED)
+        hist = FeatureFlags.read_history()
+        assert [e["kind"] for e in hist] == ["status", "version", "status"]
+        # nothing overwritten: the first entry still reads as originally written
+        assert hist[0]["to"] == "disabled"
+
+    def test_malformed_history_lines_are_skipped_not_fatal(self):
+        FeatureFlags._history_path.write_text(
+            'not json\n{"flag": "ok", "kind": "status", "to": "enabled"}\n[1,2,3]\n'
+        )
+        hist = FeatureFlags.read_history()
+        assert len(hist) == 1
+        assert hist[0]["flag"] == "ok"

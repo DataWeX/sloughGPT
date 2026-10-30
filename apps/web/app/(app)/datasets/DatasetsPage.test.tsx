@@ -125,7 +125,7 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/datasets',

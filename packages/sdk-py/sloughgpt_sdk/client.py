@@ -303,7 +303,7 @@ class SloughGPTClient:
                     ChatMessage(role=m.get("role", "user"), content=m.get("content", ""))
                 )
         request = ChatRequest(messages=chat_messages, **kwargs)
-        response = self._request("POST", "/chat/stream", json=request.to_dict(), stream=True)
+        response = self._request("POST", "/chat", json=request.to_dict(), stream=True)
         for line in response.iter_lines(decode_unicode=True):
             if not line:
                 continue

@@ -60,9 +60,14 @@ export const MessageContent = memo(function MessageContent({
     return highlightText(content, searchQuery)
   }, [content, searchQuery])
 
+  // Loading UI is gated by the explicit `isStreaming` boolean — never inferred
+  // from content emptiness (a persisted empty message or an error-cleared one
+  // is not "loading"). Empty + streaming + assistant → dots; otherwise → null.
   if (!hasContent) {
-    if (role === 'assistant') {
+    if (isStreaming && role === 'assistant') {
       return (
+        // aria-hidden: the bubble already carries aria-live="polite" while
+        // streaming, so these decorative dots must not be announced twice.
         <div className="flex gap-1 items-center h-5" aria-hidden="true">
           <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0ms]" />
           <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:150ms]" />
@@ -88,7 +93,10 @@ export const MessageContent = memo(function MessageContent({
           <span className="text-muted-foreground/40 select-none">…</span>
         )}
         {isStreaming && (
-          <span className="inline-block ml-0.5 animate-pulse text-primary" aria-hidden="true">
+          <span
+            className="inline-block ml-0.5 animate-pulse motion-reduce:animate-none text-primary"
+            aria-hidden="true"
+          >
             ▊
           </span>
         )}
@@ -96,7 +104,7 @@ export const MessageContent = memo(function MessageContent({
           <button
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset block mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
             aria-expanded={!isCollapsed}
           >
             {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}
@@ -179,7 +187,7 @@ export const MessageContent = memo(function MessageContent({
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
+          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
           aria-expanded={!isCollapsed}
         >
           {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}

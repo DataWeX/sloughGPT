@@ -113,16 +113,14 @@ export function useTrainingStream() {
                   modelPath: (env.data?.model_path as string | null) ?? current.modelPath,
                   avgQuality: (env.data?.avg_quality as number | null) ?? current.avgQuality,
                   dataQuality:
-                    (env.data?.data_quality as typeof current.dataQuality) ??
-                    current.dataQuality,
+                    (env.data?.data_quality as typeof current.dataQuality) ?? current.dataQuality,
                 })
                 addToast('Training complete', 'success')
                 onCheckpointUpdate?.()
               }
               if (env.status === 'error') {
                 closeStream()
-                const errorMsg =
-                  env.message || (env.data?.error as string) || 'Training failed'
+                const errorMsg = env.message || (env.data?.error as string) || 'Training failed'
                 writeTraining({ phase: 'error', error: errorMsg })
                 addToast(errorMsg, 'error')
               }

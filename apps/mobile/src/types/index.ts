@@ -25,6 +25,20 @@ export interface Session {
   archived?: boolean;
 }
 
+export interface LineageAncestor {
+  session_id: string;
+  parent_session_id: string | null;
+  branch_from_index: number | null;
+  name: string;
+}
+
+export interface SessionLineage {
+  session_id: string;
+  parent_session_id: string | null;
+  branch_from_index: number | null;
+  ancestors: LineageAncestor[];
+}
+
 export interface ModelInfo {
   id: string;
   name: string;

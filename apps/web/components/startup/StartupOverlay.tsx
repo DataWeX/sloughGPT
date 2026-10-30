@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useLiveStatus, type StartupStage, type HookStatus } from '@/hooks/useLiveStatus'
 import { ManMark } from '@/components/brand/ManMark'
 import { useBannerStore } from '@/lib/banner-store'
+import { probeBackendAndRevalidate } from '@/lib/backend-retry'
 import { logStateEvent } from '@/lib/state-events'
 import { cn } from '@/lib/utils'
 
@@ -103,7 +104,12 @@ export function StartupOverlay() {
         tone: 'warning',
         title: 'Backend not responding',
         message: 'The server did not respond in time — the app is running in degraded mode.',
-        action: { label: 'Retry', onAction: () => window.location.reload() },
+        action: {
+          label: 'Retry',
+          onAction: () => {
+            void probeBackendAndRevalidate()
+          },
+        },
       })
       // Deliberately not tied to effect cleanup: once we give up, the
       // dismissal completes even if progress arrives during the fade.
@@ -164,7 +170,7 @@ export function StartupOverlay() {
     return (
       <div className={overlayClassName}>
         <div className="mb-6">
-          <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
+          <ManMark className="h-12 w-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/20" />
         </div>
 
         <h2 className="text-[14px] font-medium text-term-text mb-3">Still connecting</h2>
@@ -181,10 +187,13 @@ export function StartupOverlay() {
             onClick={() => {
               logStateEvent('overlay_retry', {
                 kind: 'overlay',
-                message: 'overlay_retry reload requested',
+                message: 'overlay_retry probe requested',
                 data: { stage: startupStage },
               })
-              window.location.reload()
+              // Probe first, never reload: a reload under a down backend
+              // looped (reload → fail → overlay → Retry → reload) and threw
+              // away client state when it succeeded.
+              void probeBackendAndRevalidate()
             }}
             className="pointer-events-auto px-4 py-1.5 rounded-full bg-term-blue text-white text-[12px] font-medium transition-all duration-200 hover:bg-term-blue/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-term-blue focus-visible:ring-offset-2 focus-visible:ring-offset-term-surface"
           >
@@ -203,7 +212,7 @@ export function StartupOverlay() {
     <div className={overlayClassName}>
       {/* Logo */}
       <div className="mb-8">
-        <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
+        <ManMark className="h-12 w-12 rounded-2xl text-base font-bold shadow-lg shadow-primary/20" />
       </div>
 
       {/* Stage label */}
@@ -231,7 +240,10 @@ export function StartupOverlay() {
       </div>
 
       {/* Progress details */}
-      <div className="flex items-center gap-2 text-[11px] text-term-text-dim mb-4" aria-live="polite">
+      <div
+        className="flex items-center gap-2 text-[11px] text-term-text-dim mb-4"
+        aria-live="polite"
+      >
         {!isIndeterminate && startupModelProgress > 0 && (
           <span className="font-mono">{Math.round(startupModelProgress * 100)}%</span>
         )}
@@ -271,7 +283,9 @@ export function StartupOverlay() {
         <div className="w-48 space-y-1 mb-4">
           {completedHooks.map((hook: HookStatus) => (
             <div key={hook.name} className="flex items-center justify-between text-[9px]">
-              <span className="text-term-text-muted truncate">{HOOK_LABELS[hook.name] ?? hook.name}</span>
+              <span className="text-term-text-muted truncate">
+                {HOOK_LABELS[hook.name] ?? hook.name}
+              </span>
               <span className="text-term-text-dim font-mono ml-2">{hook.duration_seconds}s</span>
             </div>
           ))}

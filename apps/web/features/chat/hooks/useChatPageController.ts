@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useCallback, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
 
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { soulsController, multimodalController, modelController } from '@/lib/controllers'
@@ -405,6 +405,7 @@ export function useChatPageController(
     onSystemPrompt: () => setSystemPromptOpen(true),
     onSearchConversations: () => ui.setShowConversationSearch(true),
     bookmarkCount: bookmarks.length,
+    chatMode,
   })
 
   const healthValue = useChatHealthValue({ health, refreshHealth })

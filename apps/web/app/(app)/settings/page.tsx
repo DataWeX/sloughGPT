@@ -354,6 +354,44 @@ export default function SettingsPage() {
           </CardFooter>
         </Card>
 
+        {/* Connection banner — the one banner that shows when the backend is
+            unreachable, so its timings are LOCAL settings (readable offline) */}
+        <Card data-testid="settings-connection-banner">
+          <CardHeader>
+            <div>
+              <CardTitle className="text-base">Connection banner</CardTitle>
+              <CardDescription>Backend drop and reconnection notice timing</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <SettingsSlider
+              label="Drop notice delay"
+              value={settings.bannerGraceMs ?? 5_000}
+              onChange={(v) => updateSettings({ bannerGraceMs: v })}
+              min={0}
+              max={30_000}
+              step={500}
+              formatValue={(v) => (v === 0 ? 'Immediate' : `${(v / 1000).toFixed(1)}s`)}
+            />
+            <SettingsSlider
+              label="Reconnected confirmation"
+              value={settings.bannerHoldMs ?? 4_000}
+              onChange={(v) => updateSettings({ bannerHoldMs: v })}
+              min={0}
+              max={30_000}
+              step={500}
+              formatValue={(v) => (v === 0 ? 'Off' : `${(v / 1000).toFixed(1)}s`)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              The red “Backend unreachable” notice waits this long before appearing (blips are never shown), then the green
+              confirmation stays this long after the connection recovers. Stored locally so they work while the service is down.
+            </p>
+          </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
+        </Card>
+
         {/* External model provider (OpenRouter / OpenAI-compatible) — separate from service API URL + HF token */}
         <SettingsExternalProviderCard version={WEB_VERSION} />
 

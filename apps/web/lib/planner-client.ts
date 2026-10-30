@@ -5,8 +5,8 @@
  * via Next.js API routes.
  */
 
-import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
-import type { Card, Board, Note, TagCount, Stats } from '@/components/planner/types'
+import { apiGet, apiPost, apiPut, apiDelete, ApiError } from './http-client'
+import type { Card, Board, Note, TagCount, Stats, HashTree } from '@/components/planner/types'
 
 // ── Board ───────────────────────────────────────────────────────────────
 
@@ -98,4 +98,101 @@ export async function deleteNote(id: string): Promise<void> {
 
 export async function syncNotes(): Promise<{ added: number; updated: number; total: number }> {
   return apiPost<{ added: number; updated: number; total: number }>('/api/planner/sync', {})
+}
+
+// ── Hash tree ───────────────────────────────────────────────────────────
+
+export async function fetchHashTree(cardId: string): Promise<HashTree | null> {
+  try {
+    return await apiGet<HashTree>('/api/planner/hashtree', { cardId })
+  } catch {
+    return null
+  }
+}
+
+export async function fetchHashTrees(): Promise<{ trees: HashTree[]; count: number }> {
+  return apiGet<{ trees: HashTree[]; count: number }>('/api/planner/hashtree')
+}
+
+// ── Card notes (writes card.notes + hash tree in one save) ──────────────
+
+export async function addCardNote(
+  cardId: string,
+  text: string,
+  author?: string,
+): Promise<{ card: Card }> {
+  return apiPost<{ card: Card }>(`/api/planner/board/cards/${cardId}/notes`, {
+    action: 'add',
+    text,
+    author,
+  })
+}
+
+export async function updateCardNote(
+  cardId: string,
+  noteId: string,
+  text: string,
+): Promise<{ card: Card }> {
+  return apiPost<{ card: Card }>(`/api/planner/board/cards/${cardId}/notes`, {
+    action: 'update',
+    note_id: noteId,
+    text,
+  })
+}
+
+export async function deleteCardNote(cardId: string, noteId: string): Promise<{ card: Card }> {
+  return apiPost<{ card: Card }>(`/api/planner/board/cards/${cardId}/notes`, {
+    action: 'delete',
+    note_id: noteId,
+  })
+}
+
+// ── Transition (engine-validated) ───────────────────────────────────────
+
+export interface TransitionResult {
+  ok: boolean
+  card_id: string
+  from_state: string
+  to_state: string
+  error: string
+  wip_count: number
+  wip_limit: number
+  event: {
+    type: string
+    card_id: string
+    from_state: string
+    to_state: string
+    actor: string
+    timestamp: string
+    metadata: Record<string, unknown>
+  } | null
+}
+
+export async function transitionCard(payload: {
+  card_id: string
+  to_state: string
+  actor?: string
+  force?: boolean
+}): Promise<TransitionResult> {
+  try {
+    // silent + skipCircuitBreaker: a rejected transition (4xx) is an expected
+    // outcome of the engine's validation, not a transport failure — it must
+    // neither toast through the global error store nor count against the
+    // shared circuit breaker.
+    return await apiPost<TransitionResult>('/api/planner/transition', payload, {
+      silent: true,
+      skipCircuitBreaker: true,
+    })
+  } catch (err) {
+    // The rejection body ({ok:false, error, legal targets...}) rides a 4xx —
+    // hand it back to the caller so the UI can show WHY the move was refused.
+    if (err instanceof ApiError && err.data?.raw) {
+      try {
+        return JSON.parse(err.data.raw) as TransitionResult
+      } catch {
+        /* unparseable body — fall through to the original error */
+      }
+    }
+    throw err
+  }
 }

@@ -110,7 +110,7 @@ describe('useTrainingStream', () => {
     )
   })
 
-  it('subscribes with a relative path (base URL is the transport\'s job)', async () => {
+  it("subscribes with a relative path (base URL is the transport's job)", async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingStream())
 

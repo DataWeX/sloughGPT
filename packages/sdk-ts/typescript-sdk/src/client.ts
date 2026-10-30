@@ -397,7 +397,7 @@ export class SloughGPTClient {
   async *chatStream(
     request: ChatRequest
   ): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/chat/stream`;
+    const url = `${this.baseUrl}/chat`;
     this.log('info', `Chat stream: ${request.messages.length} messages`);
 
     const response = await fetch(url, {

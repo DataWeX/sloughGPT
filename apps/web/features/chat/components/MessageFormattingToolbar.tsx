@@ -37,19 +37,25 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
   const [copied, setCopied] = useState(false)
   const [selectedFormat, setSelectedFormat] = useState<string | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const formatTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
+      if (formatTimerRef.current) clearTimeout(formatTimerRef.current)
     }
   }, [])
 
-  const handleFormat = useCallback((prefix: string, suffix: string) => {
-    const formatted = `${prefix}${text || 'text'}${suffix}`
-    onFormat(formatted)
-    setSelectedFormat(prefix)
-    setTimeout(() => setSelectedFormat(null), 200)
-  }, [text, onFormat])
+  const handleFormat = useCallback(
+    (prefix: string, suffix: string) => {
+      const formatted = `${prefix}${text || 'text'}${suffix}`
+      onFormat(formatted)
+      setSelectedFormat(prefix)
+      if (formatTimerRef.current) clearTimeout(formatTimerRef.current)
+      formatTimerRef.current = setTimeout(() => setSelectedFormat(null), 200)
+    },
+    [text, onFormat],
+  )
 
   const handleCopy = useCallback(() => {
     onCopy(text)

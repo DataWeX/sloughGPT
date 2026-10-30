@@ -30,6 +30,7 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import threading
 import time as _time
 import uuid
 from collections.abc import AsyncIterator
@@ -219,6 +220,14 @@ async def _stream_frames(
     cid = f"chatcmpl-{uuid.uuid4().hex[:24]}"
     created = int(_time.time())
     parts: list[str] = []
+    # Client-abandon signal (native /infer parity, inference.py): set in the
+    # finally below on ANY non-complete exit so the model pump stops pulling
+    # tokens and releases SloNetServer._model_lock. Without this an abandoned
+    # SSE client keeps the generator thread holding the lock until its own
+    # internal deadline — every later request then starves behind it.
+    cancel_event = threading.Event()
+    kwargs = {**kwargs, "cancel_event": cancel_event}
+    completed = False
 
     def chunk(delta: dict[str, Any], finish_reason: str | None) -> dict[str, Any]:
         return {
@@ -250,6 +259,7 @@ async def _stream_frames(
                 }
             )
         yield "data: [DONE]\n\n"
+        completed = True
     except Exception as e:
         from domain.infrastructure import classify_exception, emit_error_event
 
@@ -258,11 +268,28 @@ async def _stream_frames(
         # Mid-stream failure: clients read error frames in-band.
         yield _frame({"error": {"message": err.user_message, "type": err.code, "code": err.code}})
         return
+    finally:
+        if not completed:
+            # Client disconnect / GeneratorExit / mid-stream failure. A
+            # completed stream must NOT set it (the provider contract treats
+            # the caller's cancel_event as a request, never a completion
+            # side effect — test_cancel_event_not_set_when_fast).
+            cancel_event.set()
 
 
 async def list_models(auth_user: dict = Depends(require_auth_if_enabled)) -> dict[str, Any]:
-    """GET /v1/models — the loaded model, list shape."""
-    _require_engine()
+    """GET /v1/models — the model list, raw wire shape.
+
+    Discovery, not a generation gate: out-of-process clients poll this as a
+    health probe, so a server whose load has not materialized answers 200
+    with an empty list (nothing to serve) instead of 503. Chat and
+    embeddings keep the full readiness gate.
+    """
+    from routers.inference import _model_ready
+
+    if not _model_ready():
+        return {"object": "list", "data": []}
+
     from routers.infer import InferRouter
 
     try:
