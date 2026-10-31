@@ -155,3 +155,9 @@ jobs:
         # (card 20261029). Stdlib-only; the script self-locates
         # packages/app-planner/src for the chain verifier.
         run: python3 scripts/check_board_chain.py
+      - name: Kanban export freshness (sync producer alarm)
+        # The canonical store lives outside CI; kanban-sync.timer mirrors it
+        # into .kanban/board.jsonl + .kanban/manifest.json
+        # (card 20261031_084842). A dead producer means GitHub board history
+        # goes stale silently — this reddens instead. Stdlib-only.
+        run: python3 scripts/check_kanban_freshness.py --max-age-minutes 120

@@ -357,6 +357,27 @@ def _snapshot(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from app_planner.export import ExportError, export
+
+    try:
+        result = export(
+            Path(args.repo),
+            board_dir=Path(args.board_dir) if args.board_dir else None,
+            notes_dir=Path(args.notes_dir) if args.notes_dir else None,
+        )
+    except ExportError as exc:
+        print(f"export failed: {exc}")
+        return 1
+    print(
+        "export: {card_count} cards, {note_count} notes "
+        "({notes_removed} stale removed) -> {manifest}".format(**result)
+    )
+    return 0
+
+
 def _gui(args: argparse.Namespace) -> int:
     from app_planner.gui import main as gui_main
 
@@ -495,6 +516,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     snapshot_p.add_argument("--repo", default=".", help="Destination repo root (default: cwd)")
 
+    # Export (live mirror for the GitHub sync pipeline — see app_planner.export)
+    export_p = sub.add_parser(
+        "export",
+        help="Mirror canonical board+notes into <repo>/.kanban/board.jsonl + <repo>/.dev-notes/",
+        description=(
+            "Producer half of the kanban GitHub sync: byte-exact mirror of the "
+            "canonical board and notes into the repo working copies plus "
+            ".kanban/manifest.json for the CI freshness alarm. Never runs git — "
+            "scripts/kanban_sync.sh commits and pushes."
+        ),
+    )
+    export_p.add_argument("--repo", default=".", help="Destination repo root (default: cwd)")
+
     # GUI
     gui_p = sub.add_parser(
         "gui",
@@ -556,6 +590,7 @@ def main(argv: list[str] | None = None) -> int:
         ("verify", None): _verify,
         ("migrate", None): _migrate,
         ("snapshot", None): _snapshot,
+        ("export", None): _export,
         ("gui", None): _gui,
     }
 
