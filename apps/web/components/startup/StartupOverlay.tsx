@@ -225,9 +225,7 @@ export function StartupOverlay() {
       </div>
 
       {/* Stage label */}
-      <h2 className="text-[14px] font-medium text-term-text mb-6">
-        {STAGE_LABELS[startupStage] || 'Starting up'}
-      </h2>
+      <h2 className="text-[14px] font-medium text-term-text mb-6">{stageLabel}</h2>
 
       {/* Progress bar */}
       <div
