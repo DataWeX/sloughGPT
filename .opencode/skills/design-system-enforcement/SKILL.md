@@ -73,7 +73,7 @@ Every chart series, progress bar, and per-item accent uses a chart or semantic t
 grep -rn '#[0-9a-fA-F]\{3,8\}' apps/web/ --include="*.tsx" --include="*.css" | grep -v 'node_modules\|\.next\|dist-vite\|\.test\.\|stories\.'
 
 # Find rgb()/rgba() not using var()
-grep -rn 'rgb(' apps/web/ --include="*.tsx" --include="*.css" | grep -v 'var(--' | grep -v 'node_modules\|\.next\|dist-vite'
+grep -rn 'rgb(' apps/web/ --include="*.tsx" --include="*.css" | grep -v 'var(--' | grep -v 'rgb(\$' | grep -v "sample: 'rgb(" | grep -v 'node_modules\|\.next\|dist-vite'
 ```
 
 The mechanical ratchet lives in `apps/web/lib/design-criteria.test.ts`
@@ -82,6 +82,8 @@ The mechanical ratchet lives in `apps/web/lib/design-criteria.test.ts`
 so fix the file and delete its baseline row rather than adding rows.
 
 **Fix:** Replace with token: `text-primary`, `bg-border`, `rgb(var(--primary))`
+
+**Exempt (palette content, not chrome):** data-driven swatches rendering `rgb(\`...\`)`from a token data table — the magazine`Swatch`displays the raw triple as mono text +`aria-label`, so the literal *is* the content being documented. Literal `rgb('...')`/`rgb("...")`in style props are violations: wrap the scope in a token class (e.g.`.magazine-dark-preview`re-declares`html.dark`values) and use`rgb(var(--token))`.
 
 ### Arbitrary Spacing
 

@@ -340,7 +340,7 @@ export default function PersonalityPage() {
         {/* Header with save/reset */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h2 className="text-base sm:text-base font-semibold">Personalities</h2>
+            <h2 className="text-base font-semibold">Personalities</h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Switch personalities and define how your agent speaks and behaves
             </p>
