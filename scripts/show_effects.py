@@ -295,7 +295,7 @@ def main() -> int:
     ap.add_argument(
         "--record",
         action="store_true",
-        help="record metrics to data/benchmark_results/ (kind=effects)",
+        help="record metrics to the canonical store (kind=effects)",
     )
     ap.add_argument(
         "--vs-baseline",
@@ -373,7 +373,7 @@ def main() -> int:
             print("[record] failed", file=sys.stderr)
             rc = rc or r
         else:
-            print("recorded → data/benchmark_results/effects/")
+            print(f"recorded → {br.RESULTS_DIR}/effects/")
     return rc
 
 
