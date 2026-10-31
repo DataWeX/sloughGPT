@@ -57,7 +57,24 @@ while [ "$attempt" -le "$ATTEMPTS" ]; do
   # never commit stale copies; the producer force-adds the canonical mirror.
   # Once tracked, later `git add` runs update them normally (prunes stage as
   # deletions too). Pathspec-limited add+commit: never sweeps other files.
-  git -C "$WT" add -f -- .kanban/board.jsonl .kanban/manifest.json .dev-notes
+  git -C "$WT" add -f -- .kanban/board.jsonl .dev-notes
+
+  # manifest.json carries exported_at, which export() refreshes EVERY run —
+  # committing it unconditionally floods main with timestamp-only noise
+  # (observed: two 1-path commits within 60s on the first live runs).
+  # Commit it when the mirror content moved, OR when the last committed
+  # heartbeat is older than KANBAN_SYNC_HEARTBEAT (default 1h; CI's freshness
+  # budget is 120min, so a live timer never reddens).
+  if ! git -C "$WT" diff --cached --quiet; then
+    git -C "$WT" add -f -- .kanban/manifest.json
+  else
+    last="$(git -C "$WT" log -1 --format=%ct -- .kanban/manifest.json)"
+    now="$(date +%s)"
+    if [ $((now - ${last:-0})) -ge "${KANBAN_SYNC_HEARTBEAT:-3600}" ]; then
+      git -C "$WT" add -f -- .kanban/manifest.json
+    fi
+  fi
+
   if git -C "$WT" diff --cached --quiet; then
     echo "kanban-sync: up to date"
     exit 0
