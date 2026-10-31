@@ -448,6 +448,12 @@ class ToolRegistry:
         """Read a file from the workspace."""
         import os
 
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(path)
+        if violation:
+            return {"output": "", "error": violation}
+
         try:
             resolved = os.path.abspath(path)
             if not os.path.exists(resolved):
@@ -542,6 +548,12 @@ class ToolRegistry:
         """Analyze an image via the inference image-capability facade."""
         import os
 
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(image_path)
+        if violation:
+            return {"output": "", "error": violation}
+
         try:
             from domain.inference import analyze_image
 
@@ -586,6 +598,12 @@ class ToolRegistry:
         """Analyze a CSV/JSON/JSONL data file."""
         import json
         import os
+
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(data_path)
+        if violation:
+            return {"output": "", "error": violation}
 
         try:
             if not os.path.exists(data_path):
