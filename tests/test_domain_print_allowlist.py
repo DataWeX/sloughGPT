@@ -50,6 +50,7 @@ ALLOWLIST: dict[str, str] = {
     "domain/shell/_internal/realm_live.py": "realm harness; prints the run summary",
     "domain/shell/_internal/vm.py": "guest console: _sys_write sends VM stdout/stderr to the process console (the capsys syscall contract)",
     "domain/shell/_internal/world_driver.py": "headless world harness; aligned report tables",
+    "domain/shell/_internal/world_stream.py": "world-stream CLI harness (python -m entrypoint); summary line is its stdout result",
     "domain/training/_internal/lm_eval_char.py": "--json output mode (logger.info covers the rest)",
 }
 

@@ -239,7 +239,10 @@ describe('streamSSE Authorization header', () => {
     );
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
 
-    for await (const _ of streamSSE('/chat/stream', {messages: []})) {}
+    // drain the stream so the fetch call is registered; body is empty
+    for await (const _ of streamSSE('/chat/stream', {messages: []})) {
+      // intentionally empty — we only need the fetch side effect
+    }
 
     const [, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(init.headers).toMatchObject({
@@ -252,7 +255,10 @@ describe('streamSSE Authorization header', () => {
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (global.fetch as jest.Mock).mockResolvedValue(mockSSEResponse([]));
 
-    for await (const _ of streamSSE('/chat/stream', {messages: []})) {}
+    // drain the stream so the fetch call is registered; body is empty
+    for await (const _ of streamSSE('/chat/stream', {messages: []})) {
+      // intentionally empty — we only need the fetch side effect
+    }
 
     const [, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(init.headers.Authorization).toBeUndefined();
