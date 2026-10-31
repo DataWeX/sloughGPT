@@ -71,8 +71,14 @@ jobs:
         run: |
           # 2026-10-25 test-tree consolidation: tests moved from
           # packages/core-py/tests/ to the unified tests/ root (tests/core-py/).
-          # Job ID kept — it is the required check name. Coverage still points
-          # at the package tree, so the 50% floor measures the same code.
+          # Job ID kept — it is the required check name. The old --cov=.
+          # (run from inside packages/core-py) measured the package tree, which
+          # then CONTAINED the test_*_coverage.py driver modules (→ a bogus 97%
+          # that counted test files). After the move packages/core-py is nearly
+          # empty, so --cov=packages/core-py collected 0 lines → fail-under=50
+          # always reddened (card 20261031_080004). Coverage now points at the
+          # domain library the tests actually import, so the 50% floor measures
+          # real source. Source of truth: pyproject [tool.coverage.run] source.
           python -m pytest tests/core-py/ \
             --ignore=tests/core-py/test_server_integration.py \
             --ignore=tests/core-py/test_process_isolation.py \
@@ -83,7 +89,7 @@ jobs:
             --ignore=tests/core-py/test_slonet_compute_sensitivity.py \
             --ignore=tests/core-py/test_slonet_provider.py \
             --ignore=tests/core-py/test_shell_repl.py \
-            --cov=packages/core-py --cov-report=term-missing --cov-fail-under=50 \
+            --cov=domain --cov-report=term-missing --cov-fail-under=50 \
             -q --tb=short
 
   # ─── Server API tests ───────────────────────────────────────────
