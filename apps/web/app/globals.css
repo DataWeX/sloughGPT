@@ -163,6 +163,21 @@ html.dark {
   --chart-5: 235 100 110;
 }
 
+/* Magazine "Dark Mode Preview" — scope html.dark values to the demo box so a
+   light page can render a dark preview through the token system (no literals). */
+.magazine-dark-preview {
+  --background: 17 15 24;
+  --foreground: 238 234 248;
+  --card: 28 25 38;
+  --card-foreground: 238 234 248;
+  --primary: 192 170 244;
+  --primary-foreground: 25 22 36;
+  --muted-foreground: 150 140 172;
+  --accent: 240 176 130;
+  --success: 72 192 140;
+  --border: 52 46 72;
+}
+
 * {
   border-color: rgb(var(--border));
 }

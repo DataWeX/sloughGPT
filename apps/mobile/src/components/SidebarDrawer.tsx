@@ -115,6 +115,8 @@ export function SidebarDrawer() {
             zIndex: 998,
           }}
           onPress={close}
+          accessibilityLabel="Close menu"
+          accessibilityRole="button"
         >
           {/* Dimmed background */}
           <Animated.View
@@ -165,6 +167,8 @@ export function SidebarDrawer() {
                 </YStack>
                 <Pressable
                   onPress={close}
+                  accessibilityLabel="Close menu"
+                  accessibilityRole="button"
                   hitSlop={12}
                   style={({ pressed }) => ({
                     width: 40,
@@ -208,6 +212,8 @@ export function SidebarDrawer() {
                     <Pressable
                       key={item.screen}
                       onPress={() => handleNav(item.screen)}
+                      accessibilityLabel={item.label}
+                      accessibilityRole="menuitem"
                       style={({ pressed }) => ({
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -293,6 +299,8 @@ export function SidebarDrawer() {
                     return (
                       <Pressable
                         key={session.id}
+                        accessibilityLabel={`Open chat session ${session.id}`}
+                        accessibilityRole="button"
                         onPress={() => {
                           loadSession(session.id)
                           navigate('Chat')

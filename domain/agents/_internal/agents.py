@@ -187,34 +187,13 @@ class ToolRunner:
     def _path_violation(self, path: str) -> str | None:
         """Deny model-supplied paths: sensitive locations, then allowlist.
 
-        The model decides which path a file tool touches — unguarded that
-        includes ``~/.ssh`` and repo ``.env`` files. When
-        ``SecurityConfig.allowed_directories`` is configured it is enforced
-        as an allowlist (resolved paths, prefix-bound on separators);
-        otherwise only the sensitive blocklist applies.
+        Delegates to the shared ``path_guard`` (also enforced by tools.py's
+        ToolRegistry) so both tool surfaces keep ONE blocklist; this method
+        only supplies this agent's allowlist config.
         """
-        resolved = os.path.realpath(path)
-        home = os.path.realpath(os.path.expanduser("~"))
-        for name in (".ssh", ".gnupg", ".aws", ".kube", ".docker"):
-            blocked = os.path.join(home, name)
-            if resolved == blocked or resolved.startswith(blocked + os.sep):
-                return f"sensitive directory denied: {path}"
-        base = os.path.basename(resolved)
-        if base.startswith(".env") or base in {
-            "shadow",
-            "gshadow",
-            "id_rsa",
-            "id_ed25519",
-            "id_ecdsa",
-            "credentials",
-        }:
-            return f"sensitive file denied: {path}"
-        allowed = self.security.config.allowed_directories
-        if allowed:
-            roots = [os.path.realpath(a) for a in allowed]
-            if not any(resolved == root or resolved.startswith(root + os.sep) for root in roots):
-                return f"path outside allowed_directories: {path}"
-        return None
+        from domain.agents._internal.path_guard import path_violation
+
+        return path_violation(path, self.security.config.allowed_directories)
 
     async def _run_code(
         self,

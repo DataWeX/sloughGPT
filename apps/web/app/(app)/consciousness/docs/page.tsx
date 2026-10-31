@@ -626,7 +626,7 @@ export default function ConsciousnessDocsPage() {
         </nav>
 
         <div className="flex-1 space-y-4">
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-base font-medium">
             {t(CATEGORIES.find((c) => c.id === activeCategory)!.labelKey)}
           </h2>
 

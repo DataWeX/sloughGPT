@@ -86,6 +86,7 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 | **USER_PERSONA.md**          | Who we build for                                                                                             |
 | **USER_JOURNEYS.md**         | User flows                                                                                                   |
 | **UX_FLOWS.md**              | UX patterns                                                                                                  |
+| **MOBILE_AI_UI_SOP.md**      | SOP: AI + mobile UI development practice                                                                     |
 | **DEVELOPER_GUIDE.md**       | Developer guide                                                                                              |
 | **DOC_VS_CODE_GAP_AUDIT.md** | API doc-vs-code audit + parity script                                                                        |
 

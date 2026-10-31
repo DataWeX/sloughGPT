@@ -69,6 +69,8 @@ import {
   Cpu,
   GitBranch,
   StickyNote,
+  Bell,
+  Radio,
 } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 export type IconName =
@@ -142,6 +144,8 @@ export type IconName =
   | 'cpu'
   | 'git-branch'
   | 'sticky-note'
+  | 'bell'
+  | 'radio'
 
 interface IconProps {
   name: IconName
@@ -220,6 +224,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   cpu: Cpu,
   'git-branch': GitBranch,
   'sticky-note': StickyNote,
+  bell: Bell,
+  radio: Radio,
 }
 
 export function Icon({ name, size = 20, color }: IconProps) {

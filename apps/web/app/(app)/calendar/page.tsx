@@ -261,7 +261,7 @@ export default function CalendarPage() {
       {events.length === 0 && !loading && (
         <Card className="mt-4">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="text-4xl mb-3 opacity-50">📅</div>
+            <div className="text-2xl mb-3 opacity-50">📅</div>
             <h3 className="text-sm font-medium text-foreground">No events scheduled</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               This day is clear. Use the API to add events.

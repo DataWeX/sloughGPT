@@ -1,15 +1,37 @@
-import React from 'react';
-import {render} from '../../test-utils';
-import {MessageBubble} from '../MessageBubble';
+import React from 'react'
+import { render } from '../../test-utils'
+import { MessageBubble } from '../MessageBubble'
 
-jest.mock('../../services/clipboard', () => ({copyToClipboard: jest.fn()}));
-jest.mock('../../services/haptics', () => ({triggerHaptic: jest.fn()}));
-jest.mock('../../services/sounds', () => ({sounds: {play: jest.fn()}}));
-jest.mock('../../services/bookmarks', () => ({addBookmark: jest.fn(), removeBookmark: jest.fn(), isBookmarked: jest.fn(() => Promise.resolve(false))}));
-jest.mock('../../services/pins', () => ({pinMessage: jest.fn(), unpinMessage: jest.fn(), isPinned: jest.fn(() => Promise.resolve(false))}));
-jest.mock('../../services/reactions', () => ({getMessageReactions: jest.fn(() => Promise.resolve({})), toggleReaction: jest.fn(), REACTION_EMOJIS: []}));
-jest.mock('../../services/toast', () => ({toast: {success: jest.fn(), error: jest.fn()}}));
+jest.mock('../../services/clipboard', () => ({ copyToClipboard: jest.fn() }))
+jest.mock('../../services/haptics', () => ({ triggerHaptic: jest.fn() }))
+jest.mock('../../services/sounds', () => ({ sounds: { play: jest.fn() } }))
+jest.mock('../../services/bookmarks', () => ({
+  addBookmark: jest.fn(),
+  removeBookmark: jest.fn(),
+  isBookmarked: jest.fn(() => Promise.resolve(false)),
+}))
+jest.mock('../../services/pins', () => ({
+  pinMessage: jest.fn(),
+  unpinMessage: jest.fn(),
+  isPinned: jest.fn(() => Promise.resolve(false)),
+}))
+jest.mock('../../services/reactions', () => ({
+  getMessageReactions: jest.fn(() => Promise.resolve({})),
+  toggleReaction: jest.fn(),
+  REACTION_EMOJIS: [],
+}))
+jest.mock('../../services/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
 jest.mock('../../theme/colors', () => ({
+  SYNTAX_COLORS: {
+    keyword: '#C4AAF0',
+    string: '#7CC88E',
+    number: '#EC915F',
+    comment: '#8A8A00',
+    function: '#EC915F',
+    operator: '#C4A8D8',
+    punctuation: '#B0A8C4',
+    variable: '#E8C87A',
+  },
   useColors: jest.fn(() => ({
     background: '#FFFFFF',
     backgroundHover: '#F4F2F8',
@@ -32,29 +54,33 @@ jest.mock('../../theme/colors', () => ({
     successAlpha: (o: number) => `rgba(34,197,94,${o})`,
     whiteAlpha: (o: number) => `rgba(255,255,255,${o})`,
   })),
-}));
+}))
 
 const baseMessage = {
   id: 'm1',
   role: 'user' as const,
   content: 'Hello world',
   timestamp: Date.now(),
-};
+}
 
 describe('MessageBubble', () => {
   it('renders user message', () => {
-    expect(() => render(<MessageBubble message={baseMessage} />)).not.toThrow();
-  });
+    expect(() => render(<MessageBubble message={baseMessage} />)).not.toThrow()
+  })
 
   it('renders assistant message', () => {
     expect(() =>
-      render(<MessageBubble message={{...baseMessage, id: 'm2', role: 'assistant', content: 'Hi there'}} />),
-    ).not.toThrow();
-  });
+      render(
+        <MessageBubble
+          message={{ ...baseMessage, id: 'm2', role: 'assistant', content: 'Hi there' }}
+        />,
+      ),
+    ).not.toThrow()
+  })
 
   it('renders message with images', () => {
     expect(() =>
-      render(<MessageBubble message={{...baseMessage, images: ['data:image/png;base64,abc']}} />),
-    ).not.toThrow();
-  });
-});
+      render(<MessageBubble message={{ ...baseMessage, images: ['data:image/png;base64,abc'] }} />),
+    ).not.toThrow()
+  })
+})

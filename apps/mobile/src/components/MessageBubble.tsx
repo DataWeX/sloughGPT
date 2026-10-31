@@ -691,12 +691,22 @@ export function MessageBubble({
   return (
     <Animated.View style={[styles.row, { opacity, transform: [{ translateY }] }]}>
       <View style={[styles.innerRow, isUser && styles.innerRowUser]}>
-        <Pressable style={styles.deleteBtn} onPress={handleDelete}>
+        <Pressable
+          style={styles.deleteBtn}
+          onPress={handleDelete}
+          accessibilityLabel="Delete message"
+          accessibilityRole="button"
+        >
           <Icon name="trash-2" size={16} color="white" />
         </Pressable>
 
         {selectMode && (
-          <Pressable style={styles.selectCheckbox} onPress={onSelect}>
+          <Pressable
+            style={styles.selectCheckbox}
+            onPress={onSelect}
+            accessibilityLabel={selected ? 'Deselect' : 'Select'}
+            accessibilityRole="checkbox"
+          >
             <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
               {selected && <Icon name="check" size={12} color="white" />}
             </View>
@@ -824,6 +834,7 @@ export function MessageBubble({
         >
           <Pressable
             style={{ paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 }}
+            accessibilityLabel="Copy message"
             onPress={() => {
               copyToClipboard(message.content || '')
               triggerHaptic('light')
@@ -836,6 +847,7 @@ export function MessageBubble({
             <>
               <Pressable
                 style={{ paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 }}
+                accessibilityLabel="Good response"
                 onPress={() => {
                   triggerHaptic('light')
                   onFeedback(true)
@@ -845,6 +857,7 @@ export function MessageBubble({
               </Pressable>
               <Pressable
                 style={{ paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 }}
+                accessibilityLabel="Bad response"
                 onPress={() => {
                   triggerHaptic('light')
                   onFeedback(false)
@@ -857,6 +870,7 @@ export function MessageBubble({
           {onRegenerate && (
             <Pressable
               style={{ paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 }}
+              accessibilityLabel="Regenerate response"
               onPress={() => {
                 triggerHaptic('medium')
                 onRegenerate()
@@ -912,7 +926,12 @@ export function MessageBubble({
               <Text style={styles.reactionOptionText}>{emoji}</Text>
             </Pressable>
           ))}
-          <Pressable style={styles.reactionClose} onPress={() => setShowReactionPicker(false)}>
+          <Pressable
+            style={styles.reactionClose}
+            onPress={() => setShowReactionPicker(false)}
+            accessibilityLabel="Close reaction picker"
+            accessibilityRole="button"
+          >
             <Icon name="x" size={14} color={textMuted} />
           </Pressable>
         </View>
