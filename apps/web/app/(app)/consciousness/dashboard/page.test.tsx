@@ -3,7 +3,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { LocaleProvider } from '@/hooks/useLocale'
 import type { ConsciousnessStatus } from '@/lib/consciousness-controller'
 import ConsciousnessDashboardPage from './page'
