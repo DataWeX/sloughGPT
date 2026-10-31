@@ -99,6 +99,19 @@ async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
     global _pgq_engine
     _install_stack_dump_timer()
+
+    # Hydrate feature flags from config/feature_flags.json BEFORE any startup
+    # phase reads a flag (orchestration phases and provider setup call
+    # is_enabled). Without this the registry keeps code defaults and the config
+    # file is dead — card 60917072. Non-fatal: a malformed/missing config logs
+    # a warning and boot proceeds on defaults.
+    try:
+        from domain.shared._internal.feature_flags import FeatureFlags
+
+        FeatureFlags.load_config()
+    except Exception as exc:  # pragma: no cover — defensive, never block boot
+        logger.warning("Feature flag config load failed (non-fatal): %s", exc)
+
     try:
         from infrastructure.startup import StartupOrchestrator
 

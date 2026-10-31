@@ -236,6 +236,34 @@ class TestFeatureFlagsConfigIO:
         FeatureFlags.load_config(path)
         assert FeatureFlags._flags["round_trip_ff"].status == FlagStatus.ENABLED
 
+    def test_real_config_enables_hf_finetune(self, tmp_path):
+        """The repo config/feature_flags.json declares hf_finetune enabled and
+        load_config applies it.
+
+        Pins the boot wiring (card 60917072): lifespan() calls
+        FeatureFlags.load_config() so the declared config status overrides the
+        DISABLED registration default. Without that wiring the config file is
+        dead and hf_finetune stays off. The real config content is read and
+        applied via a tmp path so the append-only ledger is never written into
+        the repo during the test (a no-arg load_config would reset
+        _history_path to config/).
+        """
+        from pathlib import Path
+
+        real = Path(__file__).resolve().parents[2] / "config" / "feature_flags.json"
+        data = json.loads(real.read_text())
+        assert data.get("hf_finetune") == "enabled"  # declared intent
+        # Registration default is DISABLED; config is the override source.
+        assert FeatureFlags._flags["hf_finetune"].status is FlagStatus.DISABLED
+        assert not is_enabled("hf_finetune")
+        # Apply the same content via tmp_path so the ledger goes to tmp (the
+        # fixture's redirected _history_path), never the repo's config/ dir.
+        cfg_copy = tmp_path / "feature_flags.json"
+        cfg_copy.write_text(real.read_text())
+        FeatureFlags.load_config(cfg_copy)
+        assert FeatureFlags._flags["hf_finetune"].status is FlagStatus.ENABLED
+        assert is_enabled("hf_finetune")
+
     def test_load_config_nonexistent_path(self, tmp_path):
         """Loading from a non-existent path is a no-op, doesn't raise."""
         FeatureFlags.load_config(tmp_path / "nonexistent.json")  # should not raise

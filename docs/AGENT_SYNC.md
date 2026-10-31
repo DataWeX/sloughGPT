@@ -1573,6 +1573,7 @@ tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
 
 ## In flight
 
+- **2026-10-31 · root session on `feat/wire-flag-load-config` (landed `HEAD:main`).** Wired `FeatureFlags.load_config()` at boot — card `60917072` (user ruling: wire, don't retire). `config/feature_flags.json` was dead: declared intent but nothing hydrated it, so the registry kept code defaults and `is_enabled('hf_finetune')` read DISABLED. `lifespan()` (`apps/api/server/main.py`) now calls a guarded `load_config()` at the top, BEFORE `StartupOrchestrator.run()` (orchestration phases + provider setup read flags early). Scope minimal + inert: flips exactly one flag (`hf_finetune` disabled→enabled; other 23 config flags already match defaults) and no non-test code calls `is_enabled('hf_finetune')` — it just makes the flag truthful. New test `test_real_config_enables_hf_finetune` (75/75 green) pins the real config declares enabled + `load_config` applies it; ledger dedupes so no restart spam. (PR #252 — the skip-gate identity fix + lint-flake card — MERGED to main `57cbd69c` same day; coverage-source regression from test-tree consolidation carded `20261031_080004`, still reddening main's `test-core-py`.)
 - **2026-10-29 · root session on `feat/version-tracking` (PR opened; 3
   commits, base `origin/main 18f848301`).** Version tracking so feature/UI
   changes are auditable — **built on the registries that already existed**
