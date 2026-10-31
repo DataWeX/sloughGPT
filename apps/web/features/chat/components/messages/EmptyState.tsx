@@ -64,6 +64,8 @@ function ToolModeCard({ mode, label, description, icon, color, onClick }: ToolMo
   )
 }
 
+// Single-accent tiles — same MODE_ACCENT hue language as the tab bar and
+// composer chip (this icon-tile composition just drops the border).
 const TOOL_MODES = [
   {
     mode: 'write',
@@ -77,42 +79,42 @@ const TOOL_MODES = [
     label: 'Translate',
     description: 'Across languages',
     icon: <IconVision className="h-3.5 w-3.5" />,
-    color: 'bg-info/10 text-info/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'rewrite',
     label: 'Rewrite',
     description: 'Polish your text',
     icon: <IconSparkle className="h-3.5 w-3.5" />,
-    color: 'bg-warning/10 text-warning/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'brainstorm',
     label: 'Brainstorm',
     description: 'Generate ideas',
     icon: <IconBolt className="h-3.5 w-3.5" />,
-    color: 'bg-success/10 text-success/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'decide',
     label: 'Decide',
     description: 'Compare options',
     icon: <IconBrain className="h-3.5 w-3.5" />,
-    color: 'bg-destructive/10 text-destructive/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'explain',
     label: 'Explain',
     description: 'Simplify topics',
     icon: <IconSearch className="h-3.5 w-3.5" />,
-    color: 'bg-accent/10 text-accent/70',
+    color: 'bg-primary/10 text-primary/70',
   },
   {
     mode: 'wellness',
     label: 'Wellness',
     description: 'Calm your mind',
     icon: <Waves className="h-3.5 w-3.5" />,
-    color: 'bg-success/10 text-success',
+    color: 'bg-primary/10 text-primary/70',
   },
 ]
 
