@@ -9,7 +9,12 @@ producer half of the sync pipeline (``scripts/kanban_sync.sh`` under the
 * canonical ``board.jsonl``  -> ``<repo>/.kanban/board.jsonl`` — the *live*
   copy the chain verifier and fresh clones read (NOT the dated
   ``.kanban/snapshots/`` directory, which ``snapshot()`` keeps appending to
-  and which would explode at timer frequency);
+  and which would explode at timer frequency). This mirror is a **union
+  merge**, not a byte-copy: the repo copy can hold cards the canonical store
+  never saw (sessions commit cards straight to it), so canonical decides the
+  content of cards it owns while repo-only cards survive. The union is then
+  re-sealed with :meth:`PlannerStore.compute_chains` so the board keeps one
+  valid hash chain. A byte-copy deleted 1124 of 1136 cards on 2026-10-31;
 * canonical ``*.md`` notes   -> ``<repo>/.dev-notes/*.md`` — byte-exact
   add/update; repo notes no longer present in canonical are removed (they
   are git-tracked, so history keeps them; canonical is source of truth);
@@ -33,12 +38,53 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .store import PlannerStore
 
 MANIFEST = "manifest.json"
 
 
 class ExportError(RuntimeError):
     """Raised when the canonical store cannot be exported."""
+
+
+def union_board(
+    dest_board_dir: Path,
+    dest_notes_dir: Path,
+    *,
+    board_dir: Path,
+    notes_dir: Path,
+) -> int:
+    """Union-merge canonical into the repo board and re-seal the chain.
+
+    Never clobbers: cards only the repo knows about are kept, cards both
+    copies know about are taken from canonical (source of truth), and the
+    result is written back with exactly one valid hash chain — the two copies
+    may arrive independently sealed (canonical re-chained its cards 0..11
+    while the repo chain ran to 1115), so a plain concatenation would leave
+    the gate failing on duplicate ``chain_index`` values.
+
+    Returns:
+        Number of cards written to the repo board.
+    """
+    src = PlannerStore(board_dir=board_dir, notes_dir=notes_dir).load_board()
+    dest_store = PlannerStore(board_dir=dest_board_dir, notes_dir=dest_notes_dir)
+    dest = dest_store.load_board()
+
+    by_id = {card.id: card for card in dest.cards}
+    for card in src.cards:
+        by_id[card.id] = card  # canonical wins for cards it owns
+    # Repo order first (stable, and it drops any duplicate id the file
+    # already had), then canonical-only cards in canonical order.
+    repo_order = list(dict.fromkeys(card.id for card in dest.cards))
+    merged = [by_id[card_id] for card_id in repo_order]
+    merged.extend(card for card in src.cards if card.id not in set(repo_order))
+
+    dest.name = src.name
+    dest.columns = src.columns
+    dest.cards = merged
+    dest_store.save_board(dest)
+    dest_store.compute_chains()  # one chain over the union (also reorders)
+    return len(merged)
 
 
 def export(
@@ -79,14 +125,26 @@ def export(
     # Board mirror (live copy; .kanban/snapshots/ is a different consumer).
     kanban_dir = repo / ".kanban"
     kanban_dir.mkdir(parents=True, exist_ok=True)
+    notes_dest = repo / ".dev-notes"
+    notes_dest.mkdir(parents=True, exist_ok=True)
     dest_board = kanban_dir / "board.jsonl"
     board_bytes = src_board.read_bytes()
-    dest_board.write_bytes(board_bytes)
+    if dest_board.is_file():
+        # Existing repo board: union-merge so repo-only cards survive
+        # (see union_board). board_bytes then describes the union.
+        union_board(
+            kanban_dir,
+            notes_dest,
+            board_dir=bdir,
+            notes_dir=ndir,
+        )
+        board_bytes = dest_board.read_bytes()
+    else:
+        # First export into this repo — nothing exists to destroy.
+        dest_board.write_bytes(board_bytes)
 
     # Notes mirror: byte-exact add/update, prune files canonical dropped.
     canonical_notes = {p.name: p for p in ndir.glob("*.md")}
-    notes_dest = repo / ".dev-notes"
-    notes_dest.mkdir(parents=True, exist_ok=True)
     notes_copied = 0
     for name, src in sorted(canonical_notes.items()):
         shutil.copy2(src, notes_dest / name)
