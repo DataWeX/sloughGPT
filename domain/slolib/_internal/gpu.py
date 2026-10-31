@@ -984,16 +984,20 @@ class _CUDABackend(_Accelerator):
         return np.asarray(arr)
 
     def matmul(self, a: Any, b: Any) -> np.ndarray:
+        # Detect an on-device CuPy array by type, NOT by a ``.device`` attribute:
+        # NumPy >= 2 added ``np.ndarray.device`` (== "cpu"), so ``hasattr(x, "device")``
+        # can no longer tell a CPU numpy array from a GPU cupy one and would skip the
+        # host->device transfer, feeding raw numpy into cp.matmul (TypeError -> CPU fallback).
         if self._cp and not self._fp16_mode:
             return self._cp.asnumpy(
                 self._cp.matmul(
-                    self._cp.asarray(a) if not hasattr(a, "device") else a,
-                    self._cp.asarray(b) if not hasattr(b, "device") else b,
+                    a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a),
+                    b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b),
                 )
             )
         if self._cp:
-            a_arr = self._cp.asarray(a, dtype=self._dtype()) if not hasattr(a, "device") else a
-            b_arr = self._cp.asarray(b, dtype=self._dtype()) if not hasattr(b, "device") else b
+            a_arr = a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a, dtype=self._dtype())
+            b_arr = b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b, dtype=self._dtype())
             return self._cp.asnumpy(self._cp.matmul(a_arr, b_arr)).astype(np.float32)
         return np.matmul(np.asarray(a), np.asarray(b))
 
