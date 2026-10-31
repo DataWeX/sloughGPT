@@ -21,7 +21,9 @@ import json
 import logging
 import os
 import re
+import sys
 import tempfile
+import urllib.parse
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -182,6 +184,38 @@ class ToolRunner:
         self._executed_count += 1
         return True
 
+    def _path_violation(self, path: str) -> str | None:
+        """Deny model-supplied paths: sensitive locations, then allowlist.
+
+        The model decides which path a file tool touches — unguarded that
+        includes ``~/.ssh`` and repo ``.env`` files. When
+        ``SecurityConfig.allowed_directories`` is configured it is enforced
+        as an allowlist (resolved paths, prefix-bound on separators);
+        otherwise only the sensitive blocklist applies.
+        """
+        resolved = os.path.realpath(path)
+        home = os.path.realpath(os.path.expanduser("~"))
+        for name in (".ssh", ".gnupg", ".aws", ".kube", ".docker"):
+            blocked = os.path.join(home, name)
+            if resolved == blocked or resolved.startswith(blocked + os.sep):
+                return f"sensitive directory denied: {path}"
+        base = os.path.basename(resolved)
+        if base.startswith(".env") or base in {
+            "shadow",
+            "gshadow",
+            "id_rsa",
+            "id_ed25519",
+            "id_ecdsa",
+            "credentials",
+        }:
+            return f"sensitive file denied: {path}"
+        allowed = self.security.config.allowed_directories
+        if allowed:
+            roots = [os.path.realpath(a) for a in allowed]
+            if not any(resolved == root or resolved.startswith(root + os.sep) for root in roots):
+                return f"path outside allowed_directories: {path}"
+        return None
+
     async def _run_code(
         self,
         args: dict[str, Any],
@@ -224,7 +258,7 @@ class ToolRunner:
             f.write(code)
             path = f.name
 
-        cmd = ["python3", path] if language == "python" else ["node", path]
+        cmd = [sys.executable, path] if language == "python" else ["node", path]
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -233,7 +267,14 @@ class ToolRunner:
         )
 
         try:
-            stdout, stderr = await proc.communicate()
+            try:
+                stdout, stderr = await proc.communicate()
+            except asyncio.CancelledError:
+                # asyncio.wait_for timeout cancels us mid-communicate — kill
+                # the child or it outlives the timeout as an orphan.
+                proc.kill()
+                await proc.communicate()
+                raise
             return {
                 "stdout": stdout.decode() if stdout else "",
                 "stderr": stderr.decode() if stderr else "",
@@ -254,6 +295,9 @@ class ToolRunner:
 
         if not query:
             return {"error": "query required", "success": False}
+        violation = self._path_violation(path)
+        if violation:
+            return {"error": violation, "success": False}
 
         try:
             files = await self._search_files(query, path, limit)
@@ -312,30 +356,53 @@ class ToolRunner:
         query: str,
         limit: int = 10,
     ) -> list[dict[str, str]]:
-        """Search web using httpx + BeautifulSoup."""
+        """Search web using httpx + BeautifulSoup.
+
+        follow_redirects because DDG's POST endpoint 302s; raise_for_status
+        so bot-challenge/403 pages surface as errors instead of silent empty
+        success; every result carries its url (citations need one).
+        """
         import httpx
         from bs4 import BeautifulSoup
 
         url = "https://html.duckduckgo.com/html/"
         data = {"q": query}
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             response = await client.post(url, data=data, timeout=15)
+            response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
             results = []
             for result in soup.select(".result")[:limit]:
                 title = result.select_one(".result__title")
                 snippet = result.select_one(".result__snippet")
+                anchor = result.select_one(".result__a")
+                link = ""
+                if anchor is not None and hasattr(anchor, "get"):
+                    link = self._unwrap_ddg(anchor.get("href") or "")
 
                 results.append(
                     {
                         "title": title.get_text(strip=True) if title else "",
                         "snippet": snippet.get_text(strip=True) if snippet else "",
+                        "url": link,
                     }
                 )
 
             return results
+
+    @staticmethod
+    def _unwrap_ddg(link: str) -> str:
+        """Resolve DDG's ``/l/?uddg=<target>`` redirect wrapper to the target."""
+        if link.startswith("//"):
+            link = "https:" + link
+        if "duckduckgo.com/l/" in link and "uddg=" in link:
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)
+            targets = query.get("uddg")
+            if targets:
+                return targets[0]
+        return link
 
     async def _run_citation(
         self,
@@ -387,6 +454,9 @@ class ToolRunner:
         path = args.get("path", "")
         if not path:
             return {"error": "path required", "success": False}
+        violation = self._path_violation(path)
+        if violation:
+            return {"error": violation, "success": False}
         try:
             if not os.path.exists(path):
                 return {"error": f"File not found: {path}", "success": False}
@@ -451,12 +521,17 @@ class ToolRunner:
             for p in patterns:
                 files.extend(globmod.glob(os.path.join(workspace, p), recursive=True))
             matches = []
-            query_lower = query.lower()
+            # Token-subset match on word characters only: the old
+            # whole-phrase substring check broke on punctuation
+            # ("caching:" never equals "caching") and on words split
+            # across a line wrap ("redis\ncaching").
+            query_tokens = {t for t in re.sub(r"[^\w]+", " ", query.lower()).split() if t}
             for fp in files[:50]:
                 try:
                     with open(fp, errors="replace") as f:
                         text = f.read(8192)
-                    if query_lower in text.lower():
+                    text_tokens = {t for t in re.sub(r"[^\w]+", " ", text.lower()).split() if t}
+                    if query_tokens and query_tokens <= text_tokens:
                         matches.append(
                             {
                                 "file": os.path.relpath(fp, workspace),
@@ -483,6 +558,9 @@ class ToolRunner:
         image_path = args.get("image_path", "")
         if not image_path:
             return {"error": "image_path required", "success": False}
+        violation = self._path_violation(image_path)
+        if violation:
+            return {"error": violation, "success": False}
         try:
             if not os.path.exists(image_path):
                 return {"error": f"Image not found: {image_path}", "success": False}
@@ -517,19 +595,20 @@ class ToolRunner:
                     },
                 }
             except ImportError:
+                # Honest failure: the loop must see the tool did not run.
                 return {
-                    "success": True,
+                    "success": False,
                     "format": ext,
                     "size_bytes": size,
-                    "note": "Vision model not available — install SloNet dependencies",
+                    "error": "Vision model not available — install SloNet dependencies",
                 }
             except Exception as ve:
-                logger.warning("VisionCNN analysis failed, falling back to metadata: %s", ve)
+                logger.warning("VisionCNN analysis failed: %s", ve)
                 return {
-                    "success": True,
+                    "success": False,
                     "format": ext,
                     "size_bytes": size,
-                    "note": f"Vision analysis error: {ve}",
+                    "error": f"Vision analysis error: {ve}",
                 }
         except Exception as e:
             return {"error": str(e), "success": False}
@@ -543,11 +622,16 @@ class ToolRunner:
         data_path = args.get("data_path", "")
         if not data_path:
             return {"error": "data_path required", "success": False}
+        violation = self._path_violation(data_path)
+        if violation:
+            return {"error": violation, "success": False}
         try:
             if not os.path.exists(data_path):
                 return {"error": f"Data file not found: {data_path}", "success": False}
             with open(data_path, errors="replace") as f:
-                raw = f.read(500_000)
+                raw = f.read(500_001)
+            truncated = len(raw) > 500_000
+            raw = raw[:500_000]
             ext = os.path.splitext(data_path)[1].lower()
             if ext == ".csv":
                 lines = raw.strip().split("\n")
@@ -557,19 +641,35 @@ class ToolRunner:
                     "rows": len(lines) - 1,
                     "columns": len(headers),
                     "headers": headers,
+                    "truncated": truncated,
                 }
             elif ext in (".json", ".jsonl"):
                 import json
 
-                data = (
-                    json.loads(raw)
-                    if ext == ".json"
-                    else [json.loads(line) for line in raw.strip().split("\n") if line]
-                )
-                if isinstance(data, list):
-                    keys = list(data[0].keys()) if data and isinstance(data[0], dict) else []
-                    return {"success": True, "items": len(data), "keys": keys}
-                return {"success": True, "keys": list(data.keys())}
+                if ext == ".json":
+                    data = json.loads(raw)
+                    if isinstance(data, list):
+                        keys = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+                        return {"success": True, "items": len(data), "keys": keys}
+                    return {"success": True, "keys": list(data.keys())}
+                # JSONL: the 500KB cap can cut the tail mid-line — skip bad
+                # lines instead of failing the whole tool on one of them.
+                data, bad_lines = [], 0
+                for line in raw.strip().split("\n"):
+                    if not line:
+                        continue
+                    try:
+                        data.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        bad_lines += 1
+                keys = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+                return {
+                    "success": True,
+                    "items": len(data),
+                    "keys": keys,
+                    "bad_lines": bad_lines,
+                    "truncated": truncated,
+                }
             return {"success": True, "lines": len(raw.strip().split("\n")), "chars": len(raw)}
         except Exception as e:
             return {"error": str(e), "success": False}
