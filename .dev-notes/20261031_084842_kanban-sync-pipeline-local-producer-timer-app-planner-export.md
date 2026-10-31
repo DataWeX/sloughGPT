@@ -1,6 +1,6 @@
 ---
 id: 20261031_084842_kanban-sync-pipeline-local-producer-timer-app-planner-export
-status: in_progress
+status: done
 board: 20261031_084842_kanban-sync-pipeline-local-producer-timer-app-planner-export
 title: "kanban sync pipeline: local producer timer + app-planner export + CI freshness alarm"
 tags: [kanban, infra, ci, systemd, app-planner]
@@ -50,7 +50,24 @@ GitHub went stale silently with nothing watching. Split:
 
 ## Evidence
 
-- (to fill: first live run + GitHub verification + timer active)
+- **Landed on main** (`feat/kanban-sync-pipeline` → `HEAD:main`):
+  `a4431cb4e` (10 files +523: export module+tests, CLI export, sync script,
+  units, freshness script+tests, ci.yml step, AGENT_SYNC entry) + heartbeat
+  fix `892eafc37`. One push-race rebase onto `654f32e6e` mid-landing,
+  zero conflicts.
+- **First live run** `2fae706ff`: 230 paths mirrored+pushed; GitHub
+  verified (`git ls-tree origin/main .kanban/manifest.json` + manifest
+  content: 228 notes / 12 cards / board sha).
+- **Timer live**: `kanban-sync.timer` enabled + active since 10:50:33;
+  manual `systemctl --user start kanban-sync.service` → exit 0.
+- **Idempotency live-proven post-fix**: plain script run = "up to date",
+  timer run 11:08:57 = "up to date" (zero commits), `KANBAN_SYNC_HEARTBEAT=0`
+  = gate opens → "pushed (1 paths)".
+- **Verifier**: local freshness `ok: kanban export 0:07 old (12 cards,
+  228 notes)`; `check_board_chain.py` ok; working tree clean at `892eafc37`.
+- Note: pre-fix timer commits (`247d66d5a`, `02d068e61`, `2afd6b599`) are
+  the `exported_at` churn this card's heartbeat fix ended — kept as history,
+  no cleanup.
 
 ## Pitfalls
 
