@@ -1,0 +1,15 @@
+# Kanban -> GitHub sync producer (installed to ~/.config/systemd/user/).
+#
+#   cp infra/systemd-user/kanban-sync.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now kanban-sync.timer
+#
+# Adjust ExecStart if your clone lives elsewhere.
+[Unit]
+Description=SloughGPT kanban/notes export+push (single-writer, detached worktree)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/mana/Documents/sloughgpt-api-std/scripts/kanban_sync.sh
+Nice=10
