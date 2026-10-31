@@ -20,6 +20,51 @@ interface WhatsNewItem {
 
 const ITEMS: WhatsNewItem[] = [
   {
+    id: 'mobile-a11y-polish',
+    title: 'Accessibility & polish pass',
+    description:
+      'Screen-reader labels, corrected contrast tokens, and consistent type scale across all screens.',
+    icon: 'user',
+    date: '2026-10-31',
+    tags: ['Accessibility', 'UX'],
+  },
+  {
+    id: 'sse-auto-reconnect',
+    title: 'More reliable streaming',
+    description:
+      'Chat streams now reconnect automatically after a network blip — responses keep flowing without starting over.',
+    icon: 'refresh-cw',
+    date: '2026-09-08',
+    tags: ['Chat', 'Reliability'],
+  },
+  {
+    id: 'chat-retry-typing',
+    title: 'Chat retry & typing indicator',
+    description:
+      'Retry a failed message in place, and see a typing indicator while the model is thinking.',
+    icon: 'message-circle',
+    date: '2026-09-08',
+    tags: ['Chat', 'UX'],
+  },
+  {
+    id: 'training-eta-cancel',
+    title: 'Training ETA & cancellation',
+    description:
+      'Training runs show a time estimate, and turbo runs can be cancelled with one tap.',
+    icon: 'dumbbell',
+    date: '2026-09-08',
+    tags: ['Training'],
+  },
+  {
+    id: 'dark-mode-fixes',
+    title: 'Dark mode & startup fixes',
+    description:
+      'Fixed the theme crash on launch and dark-mode colors across screens.',
+    icon: 'moon',
+    date: '2026-09-06',
+    tags: ['Theme', 'Stability'],
+  },
+  {
     id: 'deep-linking',
     title: 'Deep linking',
     description: 'Open SloughGPT from links — sloughgpt://chat, sloughgpt://training. Notifications now navigate you to the right screen.',
