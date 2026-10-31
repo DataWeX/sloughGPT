@@ -4,7 +4,12 @@ import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconBolt } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, type PhonemeEncodeResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  type PhonemeEncodeResult,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
@@ -31,24 +36,25 @@ export default function QuizCard() {
   const [language, setLanguage] = useState<PhonemeLanguage>('en')
   const [difficulty, setDifficulty] = useState<Difficulty>('medium')
   const [guess, setGuess] = useState('')
-  const [currentWord, setCurrentWord] = useState<typeof WOTD_WORDS[number] | null>(null)
+  const [currentWord, setCurrentWord] = useState<(typeof WOTD_WORDS)[number] | null>(null)
   const [currentPhonemes, setCurrentPhonemes] = useState<string[]>([])
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | 'revealed' | null>(null)
   const [revealedWord, setRevealedWord] = useState('')
   const [loading, setLoading] = useState(false)
-  const quizScore = usePhonemeStore(s => s.quizScore)
-  const quizTotal = usePhonemeStore(s => s.quizTotal)
-  const quizStreak = usePhonemeStore(s => s.quizStreak)
-  const quizBestStreak = usePhonemeStore(s => s.quizBestStreak)
-  const incrementQuizScore = usePhonemeStore(s => s.incrementQuizScore)
-  const resetQuiz = usePhonemeStore(s => s.resetQuiz)
-  const addToast = useToastStore(s => s.addToast)
+  const quizScore = usePhonemeStore((s) => s.quizScore)
+  const quizTotal = usePhonemeStore((s) => s.quizTotal)
+  const quizStreak = usePhonemeStore((s) => s.quizStreak)
+  const quizBestStreak = usePhonemeStore((s) => s.quizBestStreak)
+  const incrementQuizScore = usePhonemeStore((s) => s.incrementQuizScore)
+  const resetQuiz = usePhonemeStore((s) => s.resetQuiz)
+  const addToast = useToastStore((s) => s.addToast)
 
   const startQuiz = useCallback(async () => {
-    const filtered = WOTD_WORDS.filter(w => w.lang === language && w.difficulty === difficulty)
-    const pick = filtered.length > 0
-      ? filtered[Math.floor(Math.random() * filtered.length)]
-      : WOTD_WORDS[Math.floor(Math.random() * WOTD_WORDS.length)]
+    const filtered = WOTD_WORDS.filter((w) => w.lang === language && w.difficulty === difficulty)
+    const pick =
+      filtered.length > 0
+        ? filtered[Math.floor(Math.random() * filtered.length)]
+        : WOTD_WORDS[Math.floor(Math.random() * WOTD_WORDS.length)]
 
     setCurrentWord(pick)
     setFeedback(null)
@@ -110,32 +116,42 @@ export default function QuizCard() {
         <CardContent className="space-y-3">
           {currentWord ? (
             <>
-              {loading && currentPhonemes.length === 0 && (
-                <PhonemeSkeleton variant="quiz" />
-              )}
+              {loading && currentPhonemes.length === 0 && <PhonemeSkeleton variant="quiz" />}
               {!loading && (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold">{currentWord.word}</span>
+                    <span className="text-base font-bold">{currentWord.word}</span>
                     <Badge variant="secondary">{currentWord.lang.toUpperCase()}</Badge>
-                    <Badge variant="outline" className="text-xs">{currentWord.difficulty}</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {currentWord.difficulty}
+                    </Badge>
                   </div>
                   {showPhonemeHint && currentPhonemes.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {currentPhonemes.map((p, i) => (
-                        <Badge key={i} variant="outline">{p}</Badge>
+                        <Badge key={i} variant="outline">
+                          {p}
+                        </Badge>
                       ))}
                     </div>
                   )}
                   {!showPhonemeHint && showPhonemeCount && currentPhonemes.length > 0 && (
-                    <p className="text-sm text-muted-foreground">{currentPhonemes.length} phonemes</p>
+                    <p className="text-sm text-muted-foreground">
+                      {currentPhonemes.length} phonemes
+                    </p>
                   )}
                   <div className="flex gap-2">
-                    <Button variant="secondary" onClick={startQuiz}>New Word</Button>
-                    <Button onClick={() => {
-                      setRevealedWord(currentWord.word)
-                      setFeedback(null)
-                    }}>Reveal</Button>
+                    <Button variant="secondary" onClick={startQuiz}>
+                      New Word
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setRevealedWord(currentWord.word)
+                        setFeedback(null)
+                      }}
+                    >
+                      Reveal
+                    </Button>
                   </div>
                 </>
               )}
@@ -153,26 +169,31 @@ export default function QuizCard() {
             <div className="flex items-center gap-2">
               {quizStreak >= 3 && (
                 <span className="text-sm text-warning font-medium flex items-center gap-1">
-                  <IconBolt className="h-3 w-3" />{quizStreak}
+                  <IconBolt className="h-3 w-3" />
+                  {quizStreak}
                 </span>
               )}
-              <Badge variant="secondary">{quizScore}/{quizTotal}</Badge>
+              <Badge variant="secondary">
+                {quizScore}/{quizTotal}
+              </Badge>
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3">
-            <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
+            <Select value={language} onValueChange={(v) => setLanguage(v as PhonemeLanguage)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PHONEME_LANGUAGES.map(l => (
-                  <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                {PHONEME_LANGUAGES.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={difficulty} onValueChange={v => setDifficulty(v as Difficulty)}>
+            <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
@@ -187,7 +208,9 @@ export default function QuizCard() {
               Start Quiz
             </Button>
             {quizTotal > 0 && (
-              <Button variant="ghost" size="sm" onClick={resetQuiz}>Reset</Button>
+              <Button variant="ghost" size="sm" onClick={resetQuiz}>
+                Reset
+              </Button>
             )}
           </div>
 
@@ -197,7 +220,9 @@ export default function QuizCard() {
                 <p className="text-sm text-muted-foreground">Hint — Phonemes:</p>
                 <div className="flex flex-wrap gap-1 justify-center mt-1">
                   {currentPhonemes.map((_, i) => (
-                    <Badge key={i} variant="outline">?</Badge>
+                    <Badge key={i} variant="outline">
+                      ?
+                    </Badge>
                   ))}
                 </div>
               </div>
@@ -205,31 +230,53 @@ export default function QuizCard() {
               <div className="flex gap-3">
                 <Input
                   value={guess}
-                  onChange={e => setGuess(e.target.value)}
+                  onChange={(e) => setGuess(e.target.value)}
                   placeholder="Type the word..."
-                  onKeyDown={e => e.key === 'Enter' && handleGuess()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleGuess()}
                   className="flex-1"
                 />
-                <Button onClick={handleGuess} disabled={!guess.trim()}>Check</Button>
-                <Button variant="secondary" onClick={handleReveal}>Reveal</Button>
+                <Button onClick={handleGuess} disabled={!guess.trim()}>
+                  Check
+                </Button>
+                <Button variant="secondary" onClick={handleReveal}>
+                  Reveal
+                </Button>
               </div>
 
               {feedback && (
-                <div className={`p-3 rounded-lg text-center animate-in fade-in duration-200 ${
-                  feedback === 'correct' ? 'bg-success/10 text-success' :
-                  feedback === 'incorrect' ? 'bg-destructive/10 text-destructive' :
-                  'bg-warning/10 text-warning'
-                }`}>
-                  {feedback === 'correct' && <p><strong>Correct!</strong> The answer was &quot;{revealedWord}&quot;</p>}
-                  {feedback === 'incorrect' && <p><strong>Incorrect.</strong> The answer was &quot;{revealedWord}&quot;</p>}
-                  {feedback === 'revealed' && <p><strong>Revealed.</strong> The answer was &quot;{revealedWord}&quot;</p>}
+                <div
+                  className={`p-3 rounded-lg text-center animate-in fade-in duration-200 ${
+                    feedback === 'correct'
+                      ? 'bg-success/10 text-success'
+                      : feedback === 'incorrect'
+                        ? 'bg-destructive/10 text-destructive'
+                        : 'bg-warning/10 text-warning'
+                  }`}
+                >
+                  {feedback === 'correct' && (
+                    <p>
+                      <strong>Correct!</strong> The answer was &quot;{revealedWord}&quot;
+                    </p>
+                  )}
+                  {feedback === 'incorrect' && (
+                    <p>
+                      <strong>Incorrect.</strong> The answer was &quot;{revealedWord}&quot;
+                    </p>
+                  )}
+                  {feedback === 'revealed' && (
+                    <p>
+                      <strong>Revealed.</strong> The answer was &quot;{revealedWord}&quot;
+                    </p>
+                  )}
                 </div>
               )}
             </>
           )}
 
           {quizBestStreak > 0 && (
-            <p className="text-xs text-muted-foreground text-center">Best streak: {quizBestStreak}</p>
+            <p className="text-xs text-muted-foreground text-center">
+              Best streak: {quizBestStreak}
+            </p>
           )}
         </CardContent>
       </Card>

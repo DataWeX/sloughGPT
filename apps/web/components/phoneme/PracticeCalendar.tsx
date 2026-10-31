@@ -14,10 +14,10 @@ function getDayOfWeek(date: Date): number {
 
 function getColorClass(count: number): string {
   if (count === 0) return 'bg-muted/30'
-  if (count <= 3) return 'bg-green-200'
+  if (count <= 3) return 'bg-success/25'
   if (count <= 6) return 'bg-success'
   if (count <= 10) return 'bg-success'
-  return 'bg-green-700'
+  return 'bg-[color-mix(in_oklab,var(--success),black_35%)]'
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -120,15 +120,15 @@ export default function PracticeCalendar() {
       <CardContent className="space-y-4">
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="p-2 rounded-lg bg-muted/30">
-            <p className="text-lg font-bold">{totalDays}</p>
+            <p className="text-base font-bold">{totalDays}</p>
             <p className="text-xs text-muted-foreground">Active Days</p>
           </div>
           <div className="p-2 rounded-lg bg-muted/30">
-            <p className="text-lg font-bold">{totalWords}</p>
+            <p className="text-base font-bold">{totalWords}</p>
             <p className="text-xs text-muted-foreground">Total Words</p>
           </div>
           <div className="p-2 rounded-lg bg-muted/30">
-            <p className="text-lg font-bold">{longestStreak}</p>
+            <p className="text-base font-bold">{longestStreak}</p>
             <p className="text-xs text-muted-foreground">Best Streak</p>
           </div>
         </div>
@@ -153,10 +153,10 @@ export default function PracticeCalendar() {
           <span>Less</span>
           <div className="flex gap-0.5">
             <div className="w-3 h-3 rounded-sm bg-muted/30" />
-            <div className="w-3 h-3 rounded-sm bg-green-200" />
+            <div className="w-3 h-3 rounded-sm bg-success/25" />
             <div className="w-3 h-3 rounded-sm bg-success" />
             <div className="w-3 h-3 rounded-sm bg-success" />
-            <div className="w-3 h-3 rounded-sm bg-green-700" />
+            <div className="w-3 h-3 rounded-sm bg-[color-mix(in_oklab,var(--success),black_35%)]" />
           </div>
           <span>More</span>
         </div>

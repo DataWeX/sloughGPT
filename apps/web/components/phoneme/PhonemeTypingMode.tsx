@@ -149,7 +149,7 @@ export default function PhonemeTypingMode() {
               <p className="text-xs text-muted-foreground mb-1">
                 Type these phonemes (space-separated):
               </p>
-              <p className="text-lg font-mono font-bold">{challenge.ipa}</p>
+              <p className="text-base font-mono font-bold">{challenge.ipa}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {challenge.phonemes.length} phonemes
               </p>
@@ -189,7 +189,7 @@ export default function PhonemeTypingMode() {
               className={`p-4 rounded-lg text-center ${
                 userInput.toUpperCase().replace(/[^A-Z0-9]/g, '') ===
                 challenge.phonemes.join('').toUpperCase()
-                  ? 'bg-success/10 border border-green-500/20'
+                  ? 'bg-success/10 border border-success/20'
                   : 'bg-destructive/10 border border-destructive/20'
               }`}
             >
@@ -199,7 +199,7 @@ export default function PhonemeTypingMode() {
                   ? 'Correct!'
                   : 'Not quite'}
               </p>
-              <p className="text-lg font-mono mt-1">{challenge.phonemes.join(' ')}</p>
+              <p className="text-base font-mono mt-1">{challenge.phonemes.join(' ')}</p>
               <p className="text-xs text-muted-foreground mt-1">Your answer: {userInput}</p>
             </div>
             <Button onClick={generateChallenge} className="w-full">

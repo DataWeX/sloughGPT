@@ -393,7 +393,32 @@ class DaitRuntime:
 
     @property
     def api_status(self) -> dict:
-        """Check API availability. Returns status dict with 'available' key."""
+        """Check API availability. Returns status dict with 'available' key.
+
+        Local in-process mode (default, card ad4f5ec2): the domain core is
+        this process — status is read straight from ``server_state`` and the
+        core is always available. Remote mode probes the API server.
+        """
+        from .config import is_remote_mode
+
+        if not is_remote_mode():
+            try:
+                from domain.infrastructure.server_state import get_server_state
+
+                st = get_server_state()
+                provider = (st.model.get() if st else None) or (st.provider.get() if st else None)
+                model_id = (st.model_type.get() if st else "") or ""
+            except Exception as e:
+                logger.debug("local api_status server_state read failed: %s", e)
+                provider, model_id = None, ""
+            self._model_loaded = provider is not None
+            self._model_name = model_id
+            return {
+                "available": True,
+                "mode": "local",
+                "model_loaded": provider is not None,
+                "model_id": model_id,
+            }
         result = self._api.status()
         self._model_loaded = result.get("model_loaded", False)
         self._model_name = result.get("model_id", "") or result.get("model_id", "")

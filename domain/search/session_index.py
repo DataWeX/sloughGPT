@@ -87,7 +87,7 @@ class SessionSearchIndex:
             try:
                 data = json.loads(fpath.read_text())
                 self._entries[sid] = {
-                    "id": data.get("id") or data.get("session_id") or sid,
+                    "id": data.get("session_id") or sid,
                     "name": data.get("name", "") or "",
                     "created_at": data.get("created_at", ""),
                     "updated_at": data.get("updated_at", ""),

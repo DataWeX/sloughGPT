@@ -12,7 +12,7 @@ Usage:
   python scripts/benchmark_kv_reuse.py [--turns 4] [--max-tokens 8]
                                        [--steps 3] [--json]
   python scripts/benchmark_kv_reuse.py --stack   # full serving-stack path
-  python scripts/benchmark_kv_reuse.py --stack --stream  # /chat/stream SSE path
+  python scripts/benchmark_kv_reuse.py --stack --stream  # POST /chat SSE path
   python scripts/benchmark_kv_reuse.py --quantize-kv  # int8 KV cache (4x smaller)
   python scripts/benchmark_kv_reuse.py --compare-kv  # float32-vs-int8 quality
   python scripts/benchmark_kv_reuse.py --sessions 4  # concurrent-session isolation
@@ -250,7 +250,7 @@ def benchmark_stack(
     Drives ``SloNetServer.generate(session_id=...)`` (or
     ``generate_stream`` when ``stream=True``) → provider
     ``_resolve_session_kv`` → ``generate_numpy(_stream)(kv_state=...)`` — the
-    exact path ``/chat`` and ``/chat/stream`` hit at runtime. Each turn's
+    exact path ``/chat`` hits at runtime. Each turn's
     prompt is the *real* previous warm output plus a new batch of user ids;
     the persistent session KV state reuses the entire shared prefix.
 
@@ -754,7 +754,7 @@ def main():
     parser.add_argument(
         "--stream",
         action="store_true",
-        help="Stream tokens one at a time (with --stack: the /chat/stream SSE path)",
+        help="Stream tokens one at a time (with --stack: the POST /chat SSE path)",
     )
     parser.add_argument("--json", action="store_true", help="Emit machine-readable summary")
     parser.add_argument(

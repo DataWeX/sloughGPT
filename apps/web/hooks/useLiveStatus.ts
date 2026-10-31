@@ -131,6 +131,11 @@ export interface LiveStatusState {
 }
 
 const FALLBACK_POLL_MS = 8000
+
+/** One failure is a hiccup; the Nth consecutive one is a drop. Until this
+ *  escalation existed, nothing in production ever emitted 'offline' — the
+ *  offline UI (status text, Retry button, drop banner) was unreachable. */
+const OFFLINE_ESCALATION_FAILURES = 2
 const MAX_FAILURES_BEFORE_REVALIDATE = 6
 
 /**
@@ -274,16 +279,14 @@ export function initLiveStatus(): () => void {
         const h = await systemController.getDetailedHealth()
         if (h && h !== null) {
           const hadFailures = liveStatusStore.getState().failureCount > 0
-          liveStatusStore
-            .getState()
-            .setHealthLegacy({
-              status: 'healthy',
-              model_loaded: h.model_loaded,
-              model_type: h.model_type || '',
-              summary: '',
-              inference_count: h.inference_count,
-              is_inferencing: h.inference?.is_inferencing,
-            })
+          liveStatusStore.getState().setHealthLegacy({
+            status: 'healthy',
+            model_loaded: h.model_loaded,
+            model_type: h.model_type || '',
+            summary: '',
+            inference_count: h.inference_count,
+            is_inferencing: h.inference?.is_inferencing,
+          })
           liveStatusStore.getState().setConnectionStatus('connected')
           // Convert full detailed health to the live snapshot shape
           const snap = mapDetailedToSnapshot(h)
@@ -304,6 +307,7 @@ export function initLiveStatus(): () => void {
               message: 'health_fallback_empty offline',
             })
           }
+          escalateOffline()
           checkRevalidate()
         }
       } catch {
@@ -316,6 +320,7 @@ export function initLiveStatus(): () => void {
             message: 'health_fallback_error offline',
           })
         }
+        escalateOffline()
         checkRevalidate()
       }
     }
@@ -352,18 +357,32 @@ export function initLiveStatus(): () => void {
     }
   }
 
+  /** First failure is a hiccup ('connecting'); the second consecutive one is
+   *  a real drop ('offline') — the state the Retry UI and drop banner hang
+   *  off. Called after every incrementFailures, before checkRevalidate (the
+   *  threshold reset re-enters through 'connecting', which is honest: the
+   *  cache was just revalidated and the next poll is a fresh probe). */
+  function escalateOffline() {
+    const { failureCount } = liveStatusStore.getState()
+    liveStatusStore
+      .getState()
+      .setConnectionStatus(failureCount >= OFFLINE_ESCALATION_FAILURES ? 'offline' : 'connecting')
+  }
+
   // Convert SSE envelope to our store shape
   function onHealthEvent(envelope: SSEEnvelope) {
     if (envelope.stream !== 'health') return
     _receivedHealthEvent = true
     stopFallbackPoll()
     const d = envelope.data as Partial<LiveHealthSnapshot>
-    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
+    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as
+      StagedLoaderStatus | undefined
     // Hardening: very old / minimal snapshots omit every startup field, which
     // used to pin the StartupOverlay on "Connecting" forever. A loaded model
     // means startup finished — resolve to "background" (overlay-clearing).
     const rawStage = stagedLoader?.stage ?? d.startup_stage ?? 'unknown'
-    const resolvedStage = rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
+    const resolvedStage =
+      rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
     const snap: LiveHealthSnapshot = {
       model_loaded: Boolean(d.model_loaded),
       model_loading: Boolean(d.model_loading),
@@ -466,7 +485,7 @@ export function initLiveStatus(): () => void {
 
   function onError(_err: Error) {
     liveStatusStore.getState().incrementFailures()
-    liveStatusStore.getState().setConnectionStatus('connecting')
+    escalateOffline()
     logStateEvent('sse_error', {
       kind: 'sse',
       message: `sse_error ${_err?.message ?? 'stream failed'}`,
@@ -476,7 +495,10 @@ export function initLiveStatus(): () => void {
   }
 
   function onOpen() {
-    liveStatusStore.getState().reset()
+    // Reconnect, not fresh boot: keep the last health snapshot — wiping it
+    // flashed an empty "No model" through every SSE reconnect — but clear
+    // the failure tally, the stream is up again.
+    liveStatusStore.getState().setFailureCount(0)
     liveStatusStore.getState().setConnectionStatus('connected')
     logStateEvent('sse_open', { kind: 'sse', message: 'sse_open connected' })
   }

@@ -49,6 +49,21 @@ def build_test_app(*routers):
     return app
 
 
+@pytest.fixture(autouse=True)
+def _clear_chat_response_cache():
+    """Isolate the session-keyed chat replay cache between tests.
+
+    Module-level state (infrastructure.chat_response_cache): a completed
+    turn in one test would otherwise be replayed into the next test's
+    identical POST (card 8125c86e).
+    """
+    from infrastructure.chat_response_cache import _chat_response_cache
+
+    _chat_response_cache.clear()
+    yield
+    _chat_response_cache.clear()
+
+
 @pytest.fixture
 def api_base_url() -> str:
     """Base URL for API tests."""

@@ -8,6 +8,7 @@ against prior runs and reports regressions.
 Usage:
     python scripts/benchmark_results.py record --kind stability --json-file out.json
     python scripts/benchmark_results.py record --kind latency --json-file out.json
+    python scripts/benchmark_results.py record --kind inference --json-file out.json
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
 """
@@ -60,7 +61,57 @@ REGRESSION_THRESHOLDS = {
         "first_seed_steps.600": (25.0, "rel"),
         "reseed_steps.600": (25.0, "rel"),
     },
+    "effects": {
+        # show_effects.py engine-level report (card 20261024_095912).
+        # Load-sensitive metrics (attention, prefill, decode) get generous
+        # thresholds — runs happen on a shared box at unknown loadavg,
+        # which is recorded alongside for interpretation.
+        # ms-scale metrics use abs deltas: rel% on a 15ms baseline is pure
+        # scheduler jitter (measured 15→38ms at loadavg 23, no real change).
+        "rag_context_chars": (30.0, "rel"),
+        "rag_query_ms": (100.0, "abs"),
+        "attn_single_ms": (1.0, "abs"),
+        "attn_multi_ms": (50.0, "rel"),
+        "first_token_short_s": (50.0, "rel"),
+        "first_token_rag_s": (50.0, "rel"),
+        "decode_tok_s": (30.0, "rel"),
+    },
+    "bootstrap": {
+        # GET /bootstrap → landing first paint; frontend overlay watchdog = 8s
+        # rel limits are PERCENT (100.0 = 100%): load-tolerant but still
+        # catching fan-out storms (pre-fix cold envelope ~19.5s vs ~1.0s)
+        "first_s": (100.0, "rel"),
+        "warm_p95_s": (50.0, "rel"),
+        # a degraded member = partial landing page; zero tolerance
+        "member_errors": (0, "abs"),
+    },
+    "inference": {
+        # benchmark_decode_slope.py --json (greedy decode, int8 model).
+        # Shared box: decode swings ±50% with loadavg alone (measured
+        # 16.13 @ load 4.3 vs 11.6 @ load 8.8 on the same commit), so the
+        # regression bar is generous; load_s is recorded for interpretation.
+        # Headline = marginal slope; naive_tok_s.<n> gates the two ends of
+        # the context-growth curve (short-context throughput and the
+        # long-context fade the slope alone can hide).
+        "decode_tok_s": (30.0, "rel"),
+        "naive_tok_s.32": (30.0, "rel"),
+        "naive_tok_s.256": (30.0, "rel"),
+    },
 }
+
+
+# Single declaration of the recorded kinds — argparse choices and the
+# history default must never drift apart (parity is mechanical, not vibes).
+KINDS = (
+    "stability",
+    "latency",
+    "execution",
+    "training",
+    "startup",
+    "effects",
+    "bootstrap",
+    "inference",
+)
 
 
 def git_commit() -> str | None:
@@ -179,7 +230,7 @@ def load_result(path: Path) -> dict:
 
 
 # higher-is-better metric names (a drop means regression)
-HIGHER_IS_BETTER = {"overall", "response_rate"}
+HIGHER_IS_BETTER = {"overall", "response_rate", "decode_tok_s"}
 
 
 def _threshold(kind: str, metric: str) -> tuple:
@@ -279,6 +330,23 @@ def do_record(args) -> int:
                 file=sys.stderr,
             )
             return 1
+        elif kind == "effects":
+            print(
+                "[ERR] effects kind requires --json-file (from show_effects.py --json)",
+                file=sys.stderr,
+            )
+        elif kind == "bootstrap":
+            print(
+                "[ERR] bootstrap kind requires --json-file (from benchmark_bootstrap.py)",
+                file=sys.stderr,
+            )
+            return 1
+        elif kind == "inference":
+            print(
+                "[ERR] inference kind requires --json-file (from benchmark_decode_slope.py --json)",
+                file=sys.stderr,
+            )
+            return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
             return 1
@@ -338,9 +406,7 @@ def _metric_entries(record: dict) -> list[dict]:
 
 def do_history(args) -> int:
     """List stored runs (all kinds unless --kind narrows it)."""
-    for kind in (
-        [args.kind] if args.kind else ["stability", "latency", "startup", "execution", "training"]
-    ):
+    for kind in [args.kind] if args.kind else list(KINDS):
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
         for p in runs:
@@ -372,12 +438,70 @@ def do_history(args) -> int:
                         f"  {stamp}  {model:<24} dispatch_us={str(c.get('dispatch_us', '?')):<9} "
                         f"threads={str(c.get('peak_threads', '?')):<7}  {p.name}"
                     )
+                elif kind == "effects":
+                    print(
+                        f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"attn1={str(c.get('attn_single_ms', '?')):<7} "
+                        f"rag={str(c.get('rag_context_chars', '?')):<6} "
+                        f"load={str(c.get('loadavg', '?')):<5}  {p.name}"
+                    )
+                elif kind == "bootstrap":
+                    print(
+                        f"  {stamp}  {model:<24} first={str(c.get('first_s', '?')):<7} "
+                        f"p95={str(c.get('warm_p95_s', '?')):<7} "
+                        f"errs={c.get('member_errors', '?')}  {p.name}"
+                    )
+                elif kind == "inference":
+                    naive = c.get("naive_tok_s") or {}
+                    print(
+                        f"  {stamp}  {model:<24} decode={str(c.get('decode_tok_s', '?')):<7} "
+                        f"r2={str(c.get('r2', '?')):<7} "
+                        f"spread={str(c.get('spread_pct', '?')):<5} "
+                        f"naive32={str(naive.get('32', '?')):<7} "
+                        f"naive256={str(naive.get('256', '?')):<7} "
+                        f"load={c.get('loadavg_end', c.get('loadavg', '?'))}  {p.name}"
+                    )
                 else:  # latency and unknown kinds
                     print(
                         f"  {stamp}  {model:<24} mean={str(c.get('mean_ms', '?')):<7} "
                         f"p95={str(c.get('p95_ms', '?')):<7}  {p.name}"
                     )
     return 0
+
+
+# inference compare trust band — loadavg is a confounder of decode tok/s
+# (measured 18.5 @ load 6.86 vs 12.86 @ load 7.96 on the same commit), so a
+# FAIL across materially different load bands is box noise until proven
+# otherwise. r² floor from healthy runs is 0.9977 — 0.99 keeps headroom.
+INFERENCE_LOAD_BAND = 1.0
+INFERENCE_R2_FLOOR = 0.99
+
+
+def _inference_trust_reason(new: dict, old: dict) -> str | None:
+    """Return why an inference compare verdict is untrustworthy, else None.
+
+    Missing fields (pre-trust records) never suppress anything — the guard
+    only acts on evidence, it cannot invent innocence from absent data.
+    """
+
+    def _metric(record: dict, key: str) -> float | None:
+        v = record.get("metrics", {}).get(key)
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    for label, rec in (("new", new), ("old", old)):
+        r2 = _metric(rec, "r2")
+        if r2 is not None and r2 < INFERENCE_R2_FLOOR:
+            return f"fit untrustworthy ({label} r2={r2:.4f} < {INFERENCE_R2_FLOOR})"
+    nl = _metric(new, "loadavg_end") or _metric(new, "loadavg")
+    ol = _metric(old, "loadavg_end") or _metric(old, "loadavg")
+    if nl is not None and ol is not None and abs(nl - ol) > INFERENCE_LOAD_BAND:
+        return (
+            f"load band Δ{abs(nl - ol):.2f} > {INFERENCE_LOAD_BAND} (old {ol:.2f} → new {nl:.2f})"
+        )
+    return None
 
 
 def do_compare(args) -> int:
@@ -435,6 +559,14 @@ def do_compare(args) -> int:
                 flag = "  ⚠ REGRESSION"
         print(f"  {metric:<24} {ov:<10} → {nv:<10} Δ{delta:+.3f}{flag}")
 
+    if regressed and args.kind == "inference":
+        reason = _inference_trust_reason(new, old)
+        if reason:
+            print(
+                f"  → [INCONCLUSIVE] {reason} — FAIL suppressed; re-run both sides under similar load"
+            )
+            return 0
+
     if regressed:
         print(f"  → [FAIL] regression detected in {args.kind}")
         return 1
@@ -447,11 +579,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_rec = sub.add_parser("record", help="record a benchmark run")
-    p_rec.add_argument(
-        "--kind",
-        required=True,
-        choices=["stability", "latency", "execution", "training", "startup"],
-    )
+    p_rec.add_argument("--kind", required=True, choices=list(KINDS))
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
     p_rec.add_argument("--runs", type=int, default=20)
@@ -460,17 +588,11 @@ def main() -> int:
     p_rec.set_defaults(fn=do_record)
 
     p_h = sub.add_parser("history", help="list stored runs")
-    p_h.add_argument(
-        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup"]
-    )
+    p_h.add_argument("--kind", default=None, choices=list(KINDS))
     p_h.set_defaults(fn=do_history)
 
     p_c = sub.add_parser("compare", help="compare newest vs prior run")
-    p_c.add_argument(
-        "--kind",
-        default="stability",
-        choices=["stability", "latency", "execution", "training", "startup"],
-    )
+    p_c.add_argument("--kind", default="stability", choices=list(KINDS))
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
 

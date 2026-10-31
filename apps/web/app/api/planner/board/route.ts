@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from '@/vite/next-compat/server'
 import { readBoard } from '../helpers'
 
 export async function GET(request: Request) {
@@ -7,9 +7,6 @@ export async function GET(request: Request) {
     const board = readBoard(workspaceId)
     return NextResponse.json({ board })
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to read board' },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: 'Failed to read board' }, { status: 500 })
   }
 }

@@ -131,9 +131,6 @@ try:
         fused_attention_single as _nb_fused_attention_single,
     )
     from domain.training._internal.slonet_kernels import (
-        gqa_expand as _nb_gqa_expand,
-    )
-    from domain.training._internal.slonet_kernels import (
         lm_head_argmax as _nb_lm_head_argmax,
     )
     from domain.training._internal.slonet_kernels import (
@@ -149,6 +146,39 @@ try:
     _KERNELS_AVAILABLE = True
 except ImportError:
     _KERNELS_AVAILABLE = False
+
+try:
+    from domain.infrastructure._internal.quant_core.wrapper import (
+        swiglu_f32_c as _swiglu_f32_c,
+    )
+except Exception:  # pragma: no cover — quant_core optional (no .so / build fail)
+    _swiglu_f32_c = None
+
+
+def _swiglu(h1: np.ndarray, h3: np.ndarray) -> np.ndarray:
+    """SwiGLU(h1) * h3 — AVX2 C kernel first, numba, then numpy fallback.
+
+    The C kernel (quant_core matmul_int8.so) vectorizes exp with a degree-5
+    polynomial across 8 lanes (~10x the numba/libm scalar path, which is
+    ~21% of decode on Qwen int8). It requires C-contiguous float32 inputs;
+    strided views such as ``h13[..., :ff_dim]`` are compacted first (memcpy
+    is far cheaper than the scalar exp it replaces). Returns numba when the
+    kernel is unavailable or the layout/dtype is unsupported.
+    """
+    if _swiglu_f32_c is not None:
+        out = _swiglu_f32_c(h1, h3)
+        if out is not None:
+            return out
+        if h1.dtype == np.float32 and h3.dtype == np.float32 and h1.shape == h3.shape:
+            out = _swiglu_f32_c(np.ascontiguousarray(h1), np.ascontiguousarray(h3))
+            if out is not None:
+                return out
+    if _KERNELS_AVAILABLE:
+        return _nb_swi_glu_mul(h1, h3)
+    h1f = np.asarray(h1, dtype=np.float32)
+    h3f = np.asarray(h3, dtype=np.float32)
+    return h1f * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1f))) * h3f
+
 
 # Global no_grad mode — skips backward graph construction
 _NO_GRAD = False
@@ -1860,6 +1890,10 @@ class SloLinear(SloLayer):
         self._quant_info = quant_info
         self._quant_unpacked = None  # lazy unpack cache for int4
         self._weight_T_contig = None  # transpose cache no longer valid
+        # Fused-pack memos are keyed on _quant_info identity — drop them so
+        # the next _fuse_quant_weights(_int4) call rebuilds from the new info.
+        self._fuse_memo = None
+        self._fuse_memo4 = None
 
     def _get_quant_array(self) -> np.ndarray:
         if self._quant_info is None or not self._quant_info.is_quantized:
@@ -1924,6 +1958,8 @@ class SloLinear(SloLayer):
         arr = point_weight.generate()
         self.weight.data = arr.astype(np.float32)
         self._weight_T_contig = None  # transpose cache no longer valid
+        self._fuse_memo = None  # fused-pack memo (bias/weight layout) stale
+        self._fuse_memo4 = None
 
     def get_point_weight(self):
         """Return the PointWeight for this layer, or None."""
@@ -2852,7 +2888,7 @@ def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> tup
     return Q_out, K_out
 
 
-def _fuse_quant_weights(linears):
+def _fuse_quant_weights_uncached(linears):
     """Concatenate quantized int8 weight rows of ``linears`` into one matrix.
 
     Merges several per-layer projections that share the same float32 input
@@ -2905,7 +2941,45 @@ def _fuse_quant_weights(linears):
     return W, S, fused_bias
 
 
-def _fuse_quant_weights_int4(linears):
+def _fuse_quant_weights(linears):
+    """Memoized wrapper around :func:`_fuse_quant_weights_uncached`.
+
+    The fused pack depends only on each projection's ``_quant_info`` (weight
+    array + meta) and bias, which change only when a projection is
+    re-quantized — the same staleness contract as
+    ``SloTransformerBlock._fused_qkv`` (re-quantization rebuilds; in-place
+    weight edits are not reflected). The pack is therefore cached on
+    ``linears[0]`` keyed by the identity of every ``_quant_info``, so the
+    cache dies with the owning model, and ``set_quantized_weight``/
+    ``set_point_weight`` clear it. Rebuilding costs ~74 ms per generate
+    call, so every call site (generate_numpy, generate_numpy_stream, the
+    forward paths) benefits from the hit.
+
+    Args:
+        linears: sequence of SloLinear with quantized weights.
+
+    Returns:
+        Same as :func:`_fuse_quant_weights_uncached`.
+    """
+    infos = tuple(l._quant_info for l in linears)
+    key = tuple(id(qi) for qi in infos)
+    memo = getattr(linears[0], "_fuse_memo", None)
+    if memo is not None:
+        entry = memo.get(key)
+        # Key match + the entry's strong refs to ``infos`` imply identity: a
+        # live object cannot share another live object's id, and the entry
+        # keeps its infos alive, so their ids can never be recycled.
+        if entry is not None and all(a is b for a, b in zip(entry[0], infos)):
+            return entry[1]
+    result = _fuse_quant_weights_uncached(linears)
+    if memo is None:
+        memo = {}
+        linears[0]._fuse_memo = memo
+    memo[key] = (infos, result)
+    return result
+
+
+def _fuse_quant_weights_int4_uncached(linears):
     """Concatenate packed int4 weight rows of ``linears`` into one packed matrix.
 
     Same contract as ``_fuse_quant_weights`` but keeps the weights packed
@@ -2964,6 +3038,36 @@ def _fuse_quant_weights_int4(linears):
     W = np.concatenate(arrs, axis=0).astype(np.int8, copy=False)
     S = np.concatenate(scales)
     return W, S, int(zps[0]), fused_bias
+
+
+def _fuse_quant_weights_int4(linears):
+    """Memoized wrapper around :func:`_fuse_quant_weights_int4_uncached`.
+
+    Same caching contract as :func:`_fuse_quant_weights` (pack cached on
+    ``linears[0]``, keyed by ``_quant_info`` identity, cleared by
+    ``set_quantized_weight``/``set_point_weight``) but kept in a separate
+    ``_fuse_memo4`` memo so the int4 and int8 packs of the same projections
+    never collide.
+
+    Args:
+        linears: sequence of SloLinear with packed int4 quantized weights.
+
+    Returns:
+        Same as :func:`_fuse_quant_weights_int4_uncached`.
+    """
+    infos = tuple(l._quant_info for l in linears)
+    key = tuple(id(qi) for qi in infos)
+    memo = getattr(linears[0], "_fuse_memo4", None)
+    if memo is not None:
+        entry = memo.get(key)
+        if entry is not None and all(a is b for a, b in zip(entry[0], infos)):
+            return entry[1]
+    result = _fuse_quant_weights_int4_uncached(linears)
+    if memo is None:
+        memo = {}
+        linears[0]._fuse_memo4 = memo
+    memo[key] = (infos, result)
+    return result
 
 
 def _fused_qkv_matmul(
@@ -4178,26 +4282,59 @@ class SloNet:
         return result
 
     def _rebuild_from_state_dict(self, sd: dict[str, np.ndarray]) -> None:
-        """Rebuild architecture from PyTorch state dict keys, then load weights."""
+        """Rebuild architecture from PyTorch state dict keys, then load weights.
+
+        Structure comes from metadata first, then from the keys themselves —
+        both key families: native (``blocks.{i}.attn_norm`` / ``blocks.{i}.ff.w1``,
+        what ``SloTransformer.state_dict()`` emits) and legacy
+        (``blocks.{i}.norm1`` / ``blocks.{i}.mlp.w1``). Head counts stay
+        metadata-or-probe: under GQA a square ``q_proj`` admits many
+        (n_heads, head_dim) splits, so shapes alone cannot decide them.
+        """
         self._sd = sd
         self.layers = []
+        md = self.metadata or {}
+
+        def _shape(key: str, idx: int = 0):
+            w = sd.get(key)
+            if w is None:
+                return None
+            if hasattr(w, "shape"):
+                return w.shape[idx]
+            # v1/v2 JSON weight blocks arrive as nested Python lists,
+            # not ndarrays (import_from_sou tok_emb-only files).
+            return len(w) if idx == 0 else (len(w[0]) if w else None)
 
         # Count transformer blocks
         block_keys = [k for k in sd if k.startswith("blocks.")]
         num_blocks = len({k.split(".")[1] for k in block_keys})
 
-        # Determine dims from first block
-        norm1_w = sd.get("blocks.0.norm1.weight")
-        hidden_dim = norm1_w.shape[0] if norm1_w is not None else 384
+        # Hidden dim: metadata -> tok_emb (vocab, hidden) by definition ->
+        # either norm probe (native or legacy) -> documented fallback.
+        hidden_dim = (
+            md.get("n_embed")
+            or md.get("hidden_size")
+            or _shape("tok_emb.weight", 1)
+            or _shape("blocks.0.attn_norm.weight")
+            or _shape("blocks.0.norm1.weight")
+            or 384
+        )
 
-        q_w = sd.get("blocks.0.attn.q_proj.weight")
-        n_heads = 4  # default
-        if q_w is not None:
-            head_dim = q_w.shape[0]
-            n_heads = hidden_dim // head_dim
+        n_heads = md.get("n_head") or md.get("num_attention_heads")
+        if not n_heads:
+            q_w = sd.get("blocks.0.attn.q_proj.weight")
+            n_heads = 4  # default
+            if q_w is not None:
+                head_dim = q_w.shape[0]
+                n_heads = hidden_dim // head_dim
 
-        ff_w1 = sd.get("blocks.0.mlp.w1.weight")
-        ff_dim = ff_w1.shape[0] if ff_w1 is not None else hidden_dim * 4
+        ff_dim = (
+            md.get("intermediate_size")
+            or _shape("blocks.0.ff.w1.weight")
+            or _shape("blocks.0.mlp.w1.weight")
+            or _shape("blocks.0.w1.weight")
+            or hidden_dim * 4
+        )
 
         for i in range(num_blocks):
             block = _SoulTransformerBlockSoulLib(hidden_dim, n_heads, ff_dim, name=f"block{i}")
@@ -4301,14 +4438,32 @@ class SloNet:
 
     def _forward_state_dict(self, x: Tensor) -> Tensor:
         sd = self._sd
+        md = self.metadata or {}
         vocab = sd["tok_emb.weight"].shape[0]
         hidden = sd["tok_emb.weight"].shape[1]
 
         def _sd_get(key):
-            if key in sd:
-                return sd[key]
+            # Try the requested name, the flat name (legacy HF-style dumps),
+            # then the native family aliases — over BOTH bases, so
+            # blocks.{i}.norm1 <-> blocks.{i}.attn_norm,
+            # blocks.{i}.norm2 <-> blocks.{i}.ff_norm, and
+            # blocks.{i}.mlp.wN <-> blocks.{i}.ff.wN all resolve.
             key2 = key.replace("attn.", "").replace("mlp.", "")
-            return sd.get(key2)
+            key_native = (
+                key.replace("norm1.weight", "attn_norm.weight")
+                .replace("norm2.weight", "ff_norm.weight")
+                .replace("mlp.", "ff.")
+            )
+            key_native2 = (
+                key2.replace("norm1.weight", "attn_norm.weight")
+                .replace("norm2.weight", "ff_norm.weight")
+                .replace("mlp.", "ff.")
+            )
+            for k in (key, key2, key_native, key_native2):
+                w = sd.get(k)
+                if w is not None:
+                    return w
+            return None
 
         indices = x.data.astype(int).clip(0, vocab - 1)
         B, N = indices.shape
@@ -4325,10 +4480,16 @@ class SloNet:
             k_w = _sd_get(f"blocks.{i}.attn.k_proj.weight")
             v_w = _sd_get(f"blocks.{i}.attn.v_proj.weight")
 
+            md_heads = md.get("n_head") or md.get("num_attention_heads")
             H = 4
             E = hidden // H
             C = hidden
-            if q_w is not None:
+            if md_heads and hidden % md_heads == 0:
+                # Metadata first: under GQA a square q_proj cannot pin the
+                # (n_heads, head_dim) split — only metadata can.
+                H = int(md_heads)
+                E = hidden // H
+            elif q_w is not None:
                 q_out_dim = q_w.shape[0]
                 head_dim = q_out_dim // 8
                 if head_dim > 0 and q_out_dim % 8 == 0:
@@ -4344,8 +4505,20 @@ class SloNet:
             v = np.clip(v, -50, 50)
 
             Q = q.reshape(B, N, H, E).transpose(0, 2, 1, 3)
-            K = k.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
-            V = v.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
+            if k.shape[-1] != H * E and k.shape[-1] % E == 0:
+                # GQA: k/v carry fewer features than q (n_kv_head < n_heads).
+                # Reshape with their own head count, then repeat each kv head
+                # over its group of query heads — never fold the seq axis.
+                kv_H = k.shape[-1] // E
+                K = k.reshape(B, N, kv_H, E).transpose(0, 2, 1, 3)
+                V = v.reshape(B, N, kv_H, E).transpose(0, 2, 1, 3)
+                if kv_H != H and H % kv_H == 0:
+                    rep = H // kv_H
+                    K = np.repeat(K, rep, axis=1)
+                    V = np.repeat(V, rep, axis=1)
+            else:
+                K = k.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
+                V = v.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
             scale = 1.0 / (E**0.5)
             scores = np.einsum("bhnd,bhkd->bhnk", Q, K) * scale
             attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
@@ -4400,6 +4573,10 @@ def _matmul_state_dict(a: Tensor, b: np.ndarray) -> Tensor:
 
 
 def _layernorm_state_dict(x: Tensor, weight: np.ndarray, eps: float = 1e-5) -> Tensor:
+    if weight is None:
+        # A missing norm degrades to identity instead of TypeError
+        # ('float * None') — only changes calls that used to crash.
+        return x
     acc = _get_accelerator()
     if acc is not None and acc.name != "cpu":
         try:
@@ -6544,16 +6721,17 @@ class SloTransformer(SloNet):
                     k = kv_buf_k[bi][:, :new_len]
                     v = kv_buf_v[bi][:, :new_len]
 
+                _k_unexpanded = False
                 if _use_gqa:
                     if _use_kernels:
-                        # GQA expand via numba — kernel expects (K_H, new_len, E)
-                        # then expands along the head axis; k[0] is (new_len, K_H, E)
-                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
-                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
+                        # GQA: the fused attention kernels index kv head
+                        # h // (H // K_H) directly — pass the cache
+                        # unexpanded as (1, K_H, new_len, E) and skip the
+                        # O(new_len) expansion (decode slope drag: repeated
+                        # full-cache rewrite of a 7x-larger buffer).
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
+                        _k_unexpanded = True
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
@@ -6568,9 +6746,15 @@ class SloTransformer(SloNet):
                 _use_einsum = not (step > 0 and _use_kernels) and not (
                     step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0
                 )
-                if _use_einsum and k.ndim == 4 and k.shape[1] == H:
-                    k = k.transpose(0, 2, 1, 3)
-                    v = v.transpose(0, 2, 1, 3)
+                if _use_einsum and k.ndim == 4:
+                    if _k_unexpanded:
+                        # einsum has no head mapping — expand here (only the
+                        # non-hot einsum path reaches this branch).
+                        k = np.repeat(k, _gqa_reps, axis=1)
+                        v = np.repeat(v, _gqa_reps, axis=1)
+                    if k.shape[1] == H:
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
 
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
@@ -6634,7 +6818,7 @@ class SloTransformer(SloNet):
                         Wp, Sp, zp, Bp = f_ff4[bi]
                         h13 = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -6643,7 +6827,7 @@ class SloTransformer(SloNet):
                         Wf, Sf, Bf = f_ff[bi]
                         h13 = _ql(h, Wf, Sf, 0, Bf)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -6652,7 +6836,7 @@ class SloTransformer(SloNet):
                         h1 = q_w1[bi].forward_numpy(h)
                         h3 = q_w3[bi].forward_numpy(h)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h1, h3)
+                            h = _swiglu(h1, h3)
                         else:
                             h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
@@ -6661,7 +6845,7 @@ class SloTransformer(SloNet):
                     if _use_bias_b13:
                         h13 = h13 + m_b13[bi]
                     if _use_kernels:
-                        h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                        h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                     else:
                         h = (
                             h13[..., :_ff_dim]
@@ -7103,16 +7287,17 @@ class SloTransformer(SloNet):
                     k = kv_buf_k[bi][:, :new_len]
                     v = kv_buf_v[bi][:, :new_len]
 
+                _k_unexpanded = False
                 if _use_gqa:
                     if _use_kernels:
-                        # GQA expand via numba — kernel expects (K_H, new_len, E)
-                        # then expands along the head axis; k[0] is (new_len, K_H, E)
-                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
-                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(
-                            1, H, new_len, E
-                        )
+                        # GQA: the fused attention kernels index kv head
+                        # h // (H // K_H) directly — pass the cache
+                        # unexpanded as (1, K_H, new_len, E) and skip the
+                        # O(new_len) expansion (decode slope drag: repeated
+                        # full-cache rewrite of a 7x-larger buffer).
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
+                        _k_unexpanded = True
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
@@ -7127,9 +7312,15 @@ class SloTransformer(SloNet):
                 _use_einsum = not (step > 0 and _use_kernels) and not (
                     step == 0 and seq_len > 1 and _use_kernels and _start_pos == 0
                 )
-                if _use_einsum and k.ndim == 4 and k.shape[1] == H:
-                    k = k.transpose(0, 2, 1, 3)
-                    v = v.transpose(0, 2, 1, 3)
+                if _use_einsum and k.ndim == 4:
+                    if _k_unexpanded:
+                        # einsum has no head mapping — expand here (only the
+                        # non-hot einsum path reaches this branch).
+                        k = np.repeat(k, _gqa_reps, axis=1)
+                        v = np.repeat(v, _gqa_reps, axis=1)
+                    if k.shape[1] == H:
+                        k = k.transpose(0, 2, 1, 3)
+                        v = v.transpose(0, 2, 1, 3)
 
                 # Attention — use fused numba kernel for single-token steps
                 if step > 0 and _use_kernels:
@@ -7189,7 +7380,7 @@ class SloTransformer(SloNet):
                         Wp, Sp, zp, Bp = f_ff4[bi]
                         h13 = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -7198,7 +7389,7 @@ class SloTransformer(SloNet):
                         Wf, Sf, Bf = f_ff[bi]
                         h13 = _ql(h, Wf, Sf, 0, Bf)  # (1, seq_len, 2*ff_dim)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
+                            h = _swiglu(h13[..., :_ff_dim], h13[..., _ff_dim:])
                         else:
                             h1 = h13[..., :_ff_dim]
                             h3 = h13[..., _ff_dim:]
@@ -7207,7 +7398,7 @@ class SloTransformer(SloNet):
                         h1 = q_w1[bi].forward_numpy(h)
                         h3 = q_w3[bi].forward_numpy(h)
                         if _use_kernels:
-                            h = _nb_swi_glu_mul(h1, h3)
+                            h = _swiglu(h1, h3)
                         else:
                             h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = q_w2[bi].forward_numpy(h)
@@ -7218,7 +7409,7 @@ class SloTransformer(SloNet):
                     h1 = h13[..., :_ff_dim]
                     h3 = h13[..., _ff_dim:]
                     if _use_kernels:
-                        h = _nb_swi_glu_mul(h1, h3)
+                        h = _swiglu(h1, h3)
                     else:
                         h = h1 * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h1))) * h3
                     h = h @ m_w2[bi]

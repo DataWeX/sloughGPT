@@ -341,11 +341,21 @@ def test_cli_gui_subcommand_dispatches():
 
 
 def test_python_m_dispatch():
+    # Subprocesses do NOT inherit pytest's sys.path inserts — the src dir
+    # must be passed explicitly or `python -m app_planner` fails whenever
+    # PYTHONPATH isn't ambiently set (CI).
+    import os
+    from pathlib import Path
+
+    src = str(Path(__file__).resolve().parent.parent / "src")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     proc = subprocess.run(
         [sys.executable, "-m", "app_planner", "gui", "--help"],
         capture_output=True,
         text=True,
         timeout=30,
+        env=env,
     )
     assert proc.returncode == 0
     assert "Local web interface" in proc.stdout
@@ -378,3 +388,62 @@ def test_bind_server_ephemeral_port(tmp_path):
         assert srv.server_address[1] != 0
     finally:
         srv.server_close()
+
+
+def test_transition_engine_valid_move(server):
+    """POST /api/board/transition through the KanbanEngine — a legal move
+    persists and returns the full engine result. Also proves
+    ``planner.engine`` is importable (sibling src-layout package)."""
+    canonical = {
+        "name": "engine-board",
+        "columns": [
+            {"name": "inbox", "wip_limit": 0, "order": 0},
+            {"name": "ready", "wip_limit": 0, "order": 1},
+            {"name": "doing", "wip_limit": 3, "order": 2},
+            {"name": "review", "wip_limit": 0, "order": 3},
+            {"name": "verify", "wip_limit": 0, "order": 4},
+            {"name": "done", "wip_limit": 0, "order": 5},
+            {"name": "blocked", "wip_limit": 0, "order": 6},
+        ],
+        "cards": [{"id": "card-ready-1", "title": "Move me", "column": "ready"}],
+    }
+    with _client() as c:
+        imp = c.post(server.base_url + "/api/board/import", json=canonical)
+        assert imp.status_code == 200
+        r = c.post(
+            server.base_url + "/api/board/transition",
+            json={"card_id": "card-ready-1", "to_state": "doing", "actor": "tester"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["ok"] is True
+        assert body["from_state"] == "ready"
+        assert body["to_state"] == "doing"
+        board = c.get(server.base_url + "/api/board").json()["board"]
+        moved = next(cd for cd in board["cards"] if cd["id"] == "card-ready-1")
+        assert moved["column"] == "doing"
+
+
+def test_transition_engine_errors_are_409_not_500(server):
+    """Engine errors are results, not exceptions — including a transition
+    FROM a non-canonical default column (todo), which used to raise
+    ValueError inside the illegal-transition branch (→ 500)."""
+    with _client() as c:
+        c.post(server.base_url + "/api/notes", json={"title": "T-card"})
+        c.post(server.base_url + "/api/sync")
+        card = c.get(server.base_url + "/api/board").json()["board"]["cards"][0]
+        # from 'todo' (non-canonical) → 'done': illegal, must be 409 not 500
+        r = c.post(
+            server.base_url + "/api/board/transition",
+            json={"card_id": card["id"], "to_state": "done"},
+        )
+        assert r.status_code == 409
+        assert r.json()["ok"] is False
+        assert "Illegal transition" in r.json()["error"]
+        # unknown target state → 409 with a clean error
+        r2 = c.post(
+            server.base_url + "/api/board/transition",
+            json={"card_id": card["id"], "to_state": "nope"},
+        )
+        assert r2.status_code == 409
+        assert "Unknown state" in r2.json()["error"]

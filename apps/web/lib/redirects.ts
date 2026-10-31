@@ -34,6 +34,7 @@ export const REDIRECTS: Record<string, string> = {
   // shipped once: both /files and /images pointed at /developer). The entry
   // count and that live-route invariant are pinned in redirect-plugin.test.ts.
   '/images': '/files',
+  '/mole': '/plugins-cloud',
   '/session': '/chat',
   '/voice': '/chat?mode=talk',
   '/writing': '/chat?mode=write',

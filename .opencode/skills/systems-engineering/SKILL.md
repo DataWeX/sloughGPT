@@ -12,6 +12,7 @@ description: >
 ## Overview
 
 This skill covers two areas:
+
 1. **Python conventions** — imports, types, error handling, docstrings, naming, logging, testing, file organization
 2. **Systems architecture** — kernel, VM, devices, init system, shell TUI, Buildroot
 
@@ -38,6 +39,7 @@ from .base import Logger, LogLevel
 ```
 
 **Rules:**
+
 - Use `from __future__ import annotations` in production files (not required in tests)
 - Relative imports within packages: `from .base import Logger`
 - Lazy imports for optional deps (torch, etc.):
@@ -70,6 +72,7 @@ def prepare_data(
 ```
 
 **Rules:**
+
 - Use `typing` module imports: `Optional[str]`, `Dict[str, Any]`, `List[str]`
 - No PEP 604 union syntax (`str | None`) — use `Optional[str]`
 - Annotate public method return types: `-> None`, `-> str`, `-> dict[str, Any]`
@@ -92,6 +95,7 @@ except Exception as e:
 ```
 
 **Rules:**
+
 - Domain logic: raise `ValueError` or `KeyError` with descriptive f-string messages
 - Infrastructure: catch broad exceptions, log at debug/warning level, continue
 - No custom exception classes unless the domain specifically needs them
@@ -122,6 +126,7 @@ def prepare_data(
 ```
 
 **Rules:**
+
 - Module docstrings: describe purpose, usage examples with `Usage::`
 - Public functions: `Args:` and `Returns:` blocks
 - Private helpers: one-line docstring or none
@@ -159,6 +164,7 @@ class CheckpointManager:
 ```
 
 **Rules:**
+
 - `@dataclass` for config/value objects
 - `Enum` for type-safe constants
 - `__slots__` only in hot paths (neural network, compression)
@@ -207,6 +213,7 @@ logger.info("Step %d/%d | Loss: %.4f", step, total, loss,
 ```
 
 **Rules:**
+
 - Module-level: `logger = logging.getLogger("slo.<name>")`
 - Use `extra={"tag": "TAG"}` for structured fields
 - Lazy `%s` formatting, not f-strings in log calls
@@ -247,6 +254,7 @@ class TestMyFeature:
 ```
 
 **Rules:**
+
 - Class-based grouping by feature area
 - `@pytest.fixture(autouse=True)` for setup/teardown
 - `@pytest.mark.parametrize` for multiple test cases
@@ -280,6 +288,7 @@ def my_function() -> None:
 ```
 
 **Rules:**
+
 - Module docstring at top
 - `# ── Section ──────────` dividers in large files
 - `__all__` in `__init__.py` for public API
@@ -326,7 +335,7 @@ def __getattr__(name):
 - Extending the x86 VM (new instructions, syscalls, RBAC roles)
 - Building or configuring Buildroot images
 - Working on the shell TUI (pane engine, surfaces, borders, cursor lifecycle)
-- Working on VFS (mount points, /dev/*, /proc/*, host fs bridging)
+- Working on VFS (mount points, /dev/_, /proc/_, host fs bridging)
 
 ### Architecture Reference
 
@@ -367,55 +376,87 @@ def __getattr__(name):
 
 ### Key Files
 
-| Component | File | Key Classes |
-|-----------|------|-------------|
-| Kernel | `domain/shell/_internal/kernel.py` | `Kernel`, `Scheduler`, `TensorMemory`, `SyscallTable` |
-| Init | `domain/shell/_internal/init.py` | `InitSystem`, `ServiceManager`, `ServiceDefinition` |
-| Devices | `domain/shell/_internal/devices.py` | `DeviceSystem`, `DeviceBus` |
-| Device Drivers | `domain/shell/_internal/device_system.py` | `DeviceDriver`, fd-based I/O |
-| VFS | `domain/shell/_internal/addons/filesystem.py` | `VFSAddon`, `MountTable` |
-| x86 VM | `domain/shell/_internal/vm.py` | `X86CPU`, `X86Assembler`, `ProcessTable`, `Scheduler` |
-| VM Engine | `domain/shell/_internal/vm_engine.py` | `VMEngine`, `Breakpoint`, `StepEvent` |
-| VM Syscalls | `domain/shell/_internal/vm.py` | `SYSCALL_TABLE` (INT 0x80 dispatch) |
-| VM RBAC | `domain/shell/_internal/vm_permissions.py` | `Role`, `Permission`, `X86RBAC` |
-| VM Training | `domain/shell/_internal/vm_training_bridge.py` | `TrainingBridge` |
-| VM Programs | `domain/shell/_internal/vm_programs.py` | Built-in assembly programs |
-| Addons | `domain/shell/_internal/addons` | `neural.py`, `filesystem.py`, `shell_ui.py` |
-| Runtime | `domain/shell/_internal/runtime.py` | `DaitRuntime` (boot/shutdown orchestration) |
-| Shell TUI | `domain/shell/_internal/tui_repl.py` | `TuiRepl`, `_draw_borders`, `_render_*` |
-| Pane Engine | `domain/shell/_internal/pane.py` | `Rect`, `Border`, `Pane`, `PaneLayout` |
-| Surfaces | `domain/shell/_internal/surface.py` | `TextSurface`, `LogSurface`, `clip`, `_display_width` |
-| Console | `domain/shell/_internal/console.py` | `Console`, `_TuiSpinner` |
-| Shell IO | `domain/shell/_internal/io.py` | `ShellIO`, `ConsoleIO`, `MemoryIO` |
-| v86 Controller | `apps/web/lib/v86-controller.ts` | `V86Controller` |
-| v86 Hook | `apps/web/hooks/useV86.ts` | `useV86()` |
-| VM API | `apps/api/server/routers/vm.py` | `/vm/run`, `/vm/builtins`, `/vm/info` |
+| Component       | File                                           | Key Classes                                                             |
+| --------------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
+| Kernel          | `domain/shell/_internal/kernel.py`             | `Kernel`, `NeuralKernel`, `get_kernel()`                                |
+| Kernel Syscalls | `domain/shell/_internal/kernel_syscall.py`     | `SyscallNumber`, `SyscallTable` (kernel-side numbering)                 |
+| Init            | `domain/shell/_internal/init.py`               | `InitSystem`, `ServiceManager`, `ServiceDef`, `ServiceInstance`         |
+| Devices         | `domain/shell/_internal/devices.py`            | `AIDevice`, `DeviceManager`, `NullDevice`/`LLMDevice`/…                 |
+| Device System   | `domain/shell/_internal/device_system.py`      | `DeviceSystem`, `get_device_system()` (fd-based I/O)                    |
+| VFS             | `domain/shell/_internal/addons/filesystem.py`  | `VFS`, `VFSEntry`, `VFSDirectory`, `setup()`                            |
+| x86 VM          | `domain/shell/_internal/vm.py`                 | `X86CPU`, `X86Assembler`, `Memory`, `ProcessTable`                      |
+| VM Engine       | `domain/shell/_internal/vm_engine.py`          | `VMEngine`, `Breakpoint`, `StepEvent`                                   |
+| VM Syscalls     | `domain/shell/_internal/vm.py`                 | `X86SyscallHandler` (`SYS_*` 1–30, INT 0x80 dispatch, `_perm_map` RBAC) |
+| VM RBAC         | `domain/shell/_internal/vm_permissions.py`     | `Role`, `Permission`, `X86RBAC`                                         |
+| VM Training     | `domain/shell/_internal/vm_training_bridge.py` | `TrainingBridge`                                                        |
+| VM Programs     | `domain/shell/_internal/vm_programs.py`        | Built-in assembly programs                                              |
+| Addons          | `domain/shell/_internal/addons`                | `neural.py`, `filesystem.py`, `shell_ui.py`                             |
+| Runtime         | `domain/shell/_internal/runtime.py`            | `DaitRuntime` (boot/shutdown orchestration)                             |
+| Shell TUI       | `domain/shell/_internal/tui_repl.py`           | `TuiRepl`, `_draw_borders`, `_render_*`                                 |
+| Pane Engine     | `domain/shell/_internal/pane.py`               | `Rect`, `Border`, `Pane`, `PaneLayout`                                  |
+| Surfaces        | `domain/shell/_internal/surface.py`            | `TextSurface`, `LogSurface`, `clip`, `_display_width`                   |
+| Console         | `domain/shell/_internal/console.py`            | `Console`, `_TuiSpinner`                                                |
+| Shell IO        | `domain/shell/_internal/io.py`                 | `ShellIO`, `ConsoleIO`, `MemoryIO`                                      |
+| v86 Controller  | `apps/web/lib/v86-controller.ts`               | `V86Controller`                                                         |
+| v86 Hook        | `apps/web/hooks/useV86.ts`                     | `useV86()`                                                              |
+| VM API          | `apps/api/server/routers/vm.py`                | `/vm/run`, `/vm/builtins`, `/vm/info`                                   |
 
 ### Kernel Development
 
 #### Syscall Table (INT 0x80)
 
-The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
+The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number.
+**Source of truth is `X86SyscallHandler` in `vm.py`** (`SYS_*` constants, the
+`handlers` dict in `handle()`, and `_perm_map` — RBAC column below is the
+permission `_check_perm` demands).
 
-| Number | Name | Args | Returns | RBAC |
-|--------|------|------|---------|------|
-| 1 | SYS_EXIT | code | — | USER |
-| 2 | SYS_PRINT | addr, len | — | USER |
-| 3 | SYS_SCAN | addr, max | bytes_read | USER |
-| 4 | SYS_OPEN | path_addr, mode | fd | USER |
-| 5 | SYS_READ | fd, buf_addr, len | bytes_read | USER |
-| 6 | SYS_WRITE | fd, buf_addr, len | bytes_written | USER |
-| 7 | SYS_CLOSE | fd | 0 | USER |
-| 8 | SYS_DEV_OPEN | dev_id | fd | ADMIN |
-| 9 | SYS_DEV_CALL | fd, cmd, arg_addr | result | ADMIN |
-| 10 | SYS_DEV_CLOSE | fd | 0 | ADMIN |
-| 28 | SYS_TRAIN_START | config_addr | job_id | ADMIN |
-| 29 | SYS_TRAIN_STATUS | job_id | status | ADMIN |
-| 30 | SYS_TRAIN_GET_RESULT | job_id | result_addr | ADMIN |
+> Do not confuse numbering: `kernel_syscall.SyscallNumber` is the _kernel's_
+> separate syscall numbering (its `dispatch()` does no permission check), and
+> the module-level `SYS_PRINT = 111 … SYS_UPTIME = 200` constants at the top
+> of `vm.py` are dead — nothing references them.
+
+| Number | Name                 | Args (EBX, ECX, EDX)       | Returns       | Required permission |
+| ------ | -------------------- | -------------------------- | ------------- | ------------------- |
+| 1      | SYS_EXIT             | code                       | —             | PROCESS_SELF        |
+| 2      | SYS_READ             | fd, buf_addr, count        | bytes_read    | FILE_READ           |
+| 3      | SYS_WRITE            | fd, buf_addr, count        | bytes_written | FILE_WRITE          |
+| 4      | SYS_OPEN             | name_addr, mode            | fd            | FILE_READ           |
+| 5      | SYS_CLOSE            | fd                         | 0             | FILE_READ           |
+| 6      | SYS_FORK             | —                          | child_pid     | PROCESS_SPAWN       |
+| 7      | SYS_EXEC             | name_addr                  | 0 / -1        | PROCESS_SPAWN       |
+| 8      | SYS_WAIT             | —                          | child_pid     | PROCESS_SELF        |
+| 9      | SYS_BRK              | new_end                    | brk           | PROCESS_SELF        |
+| 10     | SYS_GETPID           | —                          | pid           | PROCESS_SELF        |
+| 11     | SYS_SBRK             | increment                  | old_brk       | PROCESS_SELF        |
+| 12     | SYS_YIELD            | —                          | 0             | PROCESS_SELF        |
+| 13     | SYS_KILL             | pid, signal                | 0 / -1        | PROCESS_KILL        |
+| 14     | SYS_GETTIMEOFDAY     | buf_addr                   | 0             | PROCESS_SELF        |
+| 15     | SYS_MALLOC           | size                       | addr          | PROCESS_SELF        |
+| 16     | SYS_FREE             | addr                       | 0             | PROCESS_SELF        |
+| 17     | SYS_READDIR          | buf_addr, max_entries      | count         | FILE_META           |
+| 18     | SYS_UNAME            | buf_addr                   | 0             | PROCESS_SELF        |
+| 19     | SYS_SERIAL_WRITE     | byte_val                   | 0             | DEVICE_SERIAL       |
+| 20     | SYS_SERIAL_READ      | —                          | byte / -1     | DEVICE_SERIAL       |
+| 21     | SYS_MOUSE_READ       | buf_addr                   | 0 / -1        | DEVICE_MOUSE        |
+| 22     | SYS_RTC_GETTIME      | buf_addr                   | 0             | DEVICE_RTC          |
+| 23     | SYS_DISK_READ        | lba, buf_addr, count       | 0 / -1        | DEVICE_DISK         |
+| 24     | SYS_DISK_WRITE       | lba, buf_addr, count       | 0 / -1        | DEVICE_DISK         |
+| 25     | SYS_NET_SEND         | buf_addr, length           | bytes         | DEVICE_NET          |
+| 26     | SYS_NET_RECV         | buf_addr, max_len          | bytes         | DEVICE_NET          |
+| 27     | SYS_GETROLE          | —                          | role          | PROCESS_SELF        |
+| 28     | SYS_TRAIN_START      | config_addr                | job_id        | TRAINING            |
+| 29     | SYS_TRAIN_STATUS     | job_id                     | status        | TRAINING            |
+| 30     | SYS_TRAIN_GET_RESULT | job_id, buf_addr, buf_size | 0 / -1        | TRAINING            |
+
+Roles (`vm_permissions._ROLE_PERMISSIONS`): **USER** = FILE_READ/WRITE/META +
+PROCESS_SELF/SPAWN · **ADMIN** = USER + PROCESS_KILL + DEVICE_SERIAL/MOUSE/
+DISK/RTC/NET + TRAINING · **KERNEL** = every permission.
 
 #### Adding a New Syscall
 
-1. Define the syscall number in `vm.py` (add to `SYSCALL_TABLE`)
+1. Define the number as `X86SyscallHandler.SYS_<NAME>` in `vm.py`, then add it
+   to both `_build_perm_map()` (permission, or omit for unguarded) and the
+   `handlers` dict in `handle()`
 2. Implement the handler function in `vm.py`
 3. Add RBAC permission mapping in `vm_permissions.py`
 4. Add the assembler mnemonic if user-facing
@@ -424,7 +465,7 @@ The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
 
 #### Adding a New Kernel Addon
 
-1. Create `domain/shell/_internal/addons<name>.py`
+1. Create `domain/shell/_internal/addons/<name>.py`
 2. Implement the `Addon` protocol from `base.py`
 3. Register via `kernel.install_addon(<name>)` in `runtime.py`
 4. Add test in `tests/test_shell_runtime.py`
@@ -476,7 +517,7 @@ analysis = debugger.analyze_trace(trace)
 
 1. Subclass `DeviceDriver` in `device_system.py`
 2. Implement `open()`, `call()`, `close()` methods
-3. Register with `DeviceSystem` in `devices.py`
+3. Register with `DeviceSystem` in `device_system.py`
 4. The device appears at `/dev/<name>` in VFS
 
 ### Buildroot Build System

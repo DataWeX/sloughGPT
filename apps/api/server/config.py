@@ -79,7 +79,6 @@ class ServerConfig:
         120.0  # timeout for register_generate() calls (env: SLO_REGISTER_GENERATE_TIMEOUT)
     )
     streaming_skip_paths: tuple[str, ...] = (
-        "/chat/stream",
         "/training/stream",
         "/session/",
         "/generate/stream",

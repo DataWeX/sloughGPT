@@ -102,9 +102,11 @@ describe('TokenTreePlaygroundCard', () => {
 
     await waitFor(() => expect(mocks.mockTokenize).toHaveBeenCalledWith('the quick brown fox'))
     expect(mocks.mockEncode).toHaveBeenCalledWith('the quick brown fox')
-    expect(screen.getByText('Token tree is 100% more compact')).toBeDefined()
-    expect(screen.getByText('Base BPE — 4 tokens')).toBeDefined()
-    expect(screen.getByText('Token tree — 2 tokens')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('Token tree is 100% more compact')).toBeDefined()
+      expect(screen.getByText('Base BPE — 4 tokens')).toBeDefined()
+      expect(screen.getByText('Token tree — 2 tokens')).toBeDefined()
+    })
   })
 
   it('reports when the base tokenizer is more compact', async () => {

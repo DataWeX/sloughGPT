@@ -16,6 +16,11 @@ from .constants import DEFAULT_GENERATE_TIMEOUT
 from .model_server import CircuitBreaker, ModelMetrics
 
 STREAM_POLL_S = 30.0
+# Bounded grace the consumer waits for its pump thread on any non-success
+# exit (timeout, cancel, disconnect, stream error). Well-behaved pumps exit
+# within one token after cancel_event is set; a pump still alive after this
+# grace is stuck inside native compute and is only logged, never awaited.
+TEARDOWN_GRACE_S = 5.0
 
 logger = logging.getLogger("slo.infrastructure.slonet_server")
 
@@ -84,6 +89,7 @@ class SloNetServer:
         self._model_id = model_id
         self._quantize_kv = quantize_kv
         self._generate_timeout = generate_timeout
+        self._teardown_grace = TEARDOWN_GRACE_S
         self._warmup_prompt = warmup_prompt
         self._provider = provider
         self._max_workers = max_workers
@@ -579,6 +585,19 @@ class SloNetServer:
         err_q: queue.Queue = queue.Queue()
         sentinel = object()
 
+        # The consumer owns a cancellation channel for its pump even when the
+        # caller passes none: teardown must never depend on an optional arg.
+        pump_cancel = threading.Event()
+        if cancel_event is None:
+            pump_cancel_arg: Any = pump_cancel
+        else:
+
+            class _EitherCancel:
+                def is_set(_self) -> bool:
+                    return cancel_event.is_set() or pump_cancel.is_set()
+
+            pump_cancel_arg = _EitherCancel()
+
         def _pump() -> None:
             try:
                 for token in self._generate_stream_sync(
@@ -588,7 +607,7 @@ class SloNetServer:
                     top_p,
                     top_k,
                     repetition_penalty,
-                    cancel_event,
+                    pump_cancel_arg,
                     session_id,
                 ):
                     q_buf.put(token)
@@ -604,6 +623,7 @@ class SloNetServer:
         start = time.monotonic()
         tokens = 0
         _timeout_count = 0
+        outcome = "incomplete"
         try:
             while True:
                 remaining = (start + self._generate_timeout) - time.monotonic()
@@ -623,13 +643,12 @@ class SloNetServer:
                         self._metrics.record_timeout()
                     if self._circuit_breaker:
                         self._circuit_breaker.record_failure()
+                    outcome = "timeout"
                     raise TimeoutError(
                         f"SloNet generation timed out after {self._generate_timeout}s"
                     ) from None
                 try:
-                    token = await asyncio.to_thread(
-                        q_buf.get, True, min(STREAM_POLL_S, remaining)
-                    )
+                    token = await asyncio.to_thread(q_buf.get, True, min(STREAM_POLL_S, remaining))
                 except queue.Empty:
                     _timeout_count += 1
                     elapsed = time.monotonic() - start
@@ -666,6 +685,7 @@ class SloNetServer:
                     if not err_q.empty():
                         exc = err_q.get_nowait()
                         raise RuntimeError(f"SloNet stream error: {exc}")
+                    outcome = "success"
                     break
 
                 if not err_q.empty():
@@ -675,16 +695,48 @@ class SloNetServer:
                 tokens += 1
                 yield token
         except asyncio.CancelledError:
-            if cancel_event:
-                cancel_event.set()
-            pump_thread.join(timeout=10)
+            outcome = "cancelled"
+            raise
+        except GeneratorExit:
+            # Consumer abandoned the stream (client disconnect -> aclose()).
+            outcome = "cancelled"
             raise
         finally:
+            # Teardown invariant: the pump must never outlive its consumer.
+            # Every non-success exit sets the cancel event (the pump checks it
+            # per token) and joins the pump with bounded grace. A pump still
+            # alive after the grace is stuck inside native compute between
+            # token boundaries — cancel cannot reach it in-process; log it
+            # loudly (process-tier enforcement is the backstop).
+            if outcome != "success":
+                pump_cancel.set()
+                if cancel_event:
+                    cancel_event.set()
+            pump_thread.join(timeout=self._teardown_grace)
+            if pump_thread.is_alive():
+                logger.warning(
+                    "STREAM_CONSUMER: pump still alive %.1fs after %s exit "
+                    "(session=%s) — stuck inside native compute, CPU stays busy",
+                    self._teardown_grace,
+                    outcome,
+                    session_id,
+                )
             elapsed = (time.monotonic() - start) * 1000
-            with self._metrics_lock:
-                self._metrics.record_success(elapsed, tokens)
-            if self._circuit_breaker:
-                self._circuit_breaker.record_success()
+            if outcome == "success":
+                with self._metrics_lock:
+                    self._metrics.record_success(elapsed, tokens)
+                if self._circuit_breaker:
+                    self._circuit_breaker.record_success()
+            elif outcome == "incomplete":
+                # A model exception surfaced mid-stream is a server failure —
+                # it used to fall into the unconditional success record.
+                with self._metrics_lock:
+                    self._metrics.record_failure("SloNet stream error")
+                if self._circuit_breaker:
+                    self._circuit_breaker.record_failure()
+            # "timeout": timeout + breaker failure already recorded at the
+            # raise site. "cancelled": a client choice — neither success nor
+            # failure; it must not feed the breaker's success path.
 
     # ------------------------------------------------------------------
     # Observability

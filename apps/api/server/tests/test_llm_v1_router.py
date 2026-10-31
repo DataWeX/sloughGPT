@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from contextlib import ExitStack, contextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -77,6 +78,7 @@ def _engine(
     provider=None,
     status: dict | None = None,
     pressure: PressureLevel = PressureLevel.NORMAL,
+    model_ready: bool = True,
     infer_info=None,
     infer_embed=None,
 ):
@@ -87,6 +89,9 @@ def _engine(
         stack.enter_context(
             patch("routers.inference._get_model_status", return_value=status or {"ready": True})
         )
+        # /v1/models reads the materialization probe directly; without this the
+        # suite's answer would depend on whatever a prior test left loaded.
+        stack.enter_context(patch("routers.inference._model_ready", return_value=model_ready))
         stack.enter_context(
             patch(
                 "domain.infrastructure.memory_pressure.get_memory_pressure_monitor",
@@ -224,6 +229,59 @@ class TestChatCompletionsWireShape:
         assert resp.status_code == 422  # pydantic rejects — the wire schema is the validator
 
 
+# ── Stream cancellation (lock hygiene — native /infer parity) ───────────────
+
+
+class TestStreamCancelEvent:
+    """The stream passes a cancel_event the shim sets on any non-complete exit.
+
+    SloNetServer serializes generation behind ``_model_lock``; an abandoned SSE
+    client otherwise leaves the pump thread generating (and holding the lock)
+    — every later request starves behind it. Native /infer creates the event
+    (inference.py); the /v1 shim must do the same.
+    """
+
+    def test_stream_passes_event_left_unset_on_completion(self):
+        provider = _fake_provider()
+        app = _build_app()
+        with _engine(provider=provider):
+            resp = _post_chat(app, stream=True)
+        assert resp.status_code == 200
+        _, kwargs = provider.calls[0]
+        cancel_event = kwargs["cancel_event"]
+        assert isinstance(cancel_event, threading.Event)
+        # Completed stream: the caller's event is a request, never a completion
+        # side effect (provider contract, test_cancel_event_not_set_when_fast).
+        assert not cancel_event.is_set()
+
+    def test_abandoned_stream_sets_event(self):
+        provider = _fake_provider()
+        request = MagicMock()
+        request.is_disconnected = AsyncMock(return_value=False)
+        gen = shim._stream_frames(
+            req=SimpleNamespace(stream=True, stream_options=None),
+            request=request,
+            provider=provider,
+            messages=[{"role": "user", "content": "hi"}],
+            model_id="default",
+            kwargs={"max_tokens": 16},
+            prompt_text="hi",
+        )
+
+        async def _run():
+            frames = []
+            async for frame in gen:
+                frames.append(frame)
+                if len(frames) == 2:  # role frame + first token frame
+                    break
+            await gen.aclose()  # caller walks away mid-stream
+            _, kwargs = provider.calls[0]
+            return kwargs
+
+        kwargs = asyncio.run(_run())
+        assert kwargs["cancel_event"].is_set()
+
+
 # ── /v1/models ──────────────────────────────────────────────────────────────
 
 
@@ -239,6 +297,26 @@ class TestModelsList:
         assert body["data"] == [
             {"id": "slonet-test", "object": "model", "created": 0, "owned_by": "sloughgpt"}
         ]
+
+    def test_models_is_discovery_not_a_generation_gate(self):
+        """No materialized model -> 200 with an empty list, never 503.
+
+        Clients poll /v1/models as a health probe; a 503 here (the old
+        ``_require_engine()`` gate) spammed two ERROR lines per probe while
+        telling the client nothing it could not learn from an empty list.
+        """
+        app = _build_app()
+        status = {
+            "ready": False,
+            "reason": "No local weights for Qwen/Qwen2.5-0.5B-Instruct — SLO_BOOTSTRAP_HF is off",
+            "code": "E_MODEL_LOAD_FAILED",
+            "status": 503,
+        }
+        with _engine(status=status, model_ready=False):
+            resp = TestClient(app).get("/v1/models")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"object": "list", "data": []}
 
 
 # ── /v1/embeddings ──────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  IconHeart,
   Input,
   Skeleton,
 } from '@sloughgpt/strui'
@@ -25,6 +26,12 @@ interface SavedPersona {
   id: string
   name: string
   values: string[]
+  /** Trait weights — present on personas saved/listed by the consciousness API. */
+  traits?: Record<string, number>
+  /** The traits that define this persona (furthest from neutral). */
+  top_traits?: Array<{ key: string; value: number }>
+  /** True when this persona's profile is the current live profile. */
+  active?: boolean
 }
 
 interface PersonalityConflict {
@@ -336,7 +343,7 @@ export default function PersonalityPage() {
         {/* Header with save/reset */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h2 className="text-base sm:text-lg font-semibold">Personalities</h2>
+            <h2 className="text-base sm:text-base font-semibold">Personalities</h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Switch personalities and define how your agent speaks and behaves
             </p>
@@ -374,19 +381,70 @@ export default function PersonalityPage() {
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {savedPersonas.map((persona) => (
-                  <div key={persona.id} className="rounded-lg border p-3 sm:p-4 space-y-2">
-                    <div className="text-sm sm:text-base font-medium">{persona.name}</div>
-                    <div className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2">
-                      {persona.values?.join(', ') || '—'}
+                  <div
+                    key={persona.id}
+                    className={`rounded-lg border p-3 sm:p-4 space-y-2 ${
+                      persona.active ? 'border-primary/50 bg-primary/5' : ''
+                    }`}
+                    data-active={persona.active ? 'true' : 'false'}
+                  >
+                    <div className="flex items-center gap-2">
+                      {/* Rose-blue traits icon — identity marker for a persona */}
+                      <span
+                        aria-hidden="true"
+                        className="w-7 h-7 shrink-0 rounded-full bg-gradient-to-br from-[rgb(var(--chart-5)/0.25)] to-[rgb(var(--chart-4)/0.25)] border border-[rgb(var(--chart-4)/0.4)] flex items-center justify-center"
+                      >
+                        <IconHeart className="w-3.5 h-3.5 text-[rgb(var(--chart-4))]" filled />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm sm:text-base font-medium truncate">
+                            {persona.name}
+                          </span>
+                          {persona.active && (
+                            <Badge variant="outline" className="text-[10px] text-primary shrink-0">
+                              Active
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2">
+                          {persona.values?.join(', ') || '—'}
+                        </div>
+                      </div>
                     </div>
+                    {/* Trait preview — what this persona actually feels like */}
+                    {(persona.top_traits?.length ?? 0) > 0 && (
+                      <div className="space-y-1" aria-label={`${persona.name} defining traits`}>
+                        {persona.top_traits!.map(({ key, value }) => (
+                          <div key={key} className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground capitalize w-24 shrink-0 truncate">
+                              {key.replace(/_/g, ' ')}
+                            </span>
+                            <div className="flex-1 h-1 rounded-full bg-muted/50 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-[rgb(var(--chart-5))] to-[rgb(var(--chart-4))]"
+                                style={{ width: `${Math.round(value * 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-mono text-muted-foreground w-8 text-right shrink-0">
+                              {Math.round(value * 100)}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex gap-2 pt-1">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleActivatePersona(persona.id)}
-                        disabled={activatingPersona === persona.id}
+                        disabled={persona.active || activatingPersona === persona.id}
                       >
-                        {activatingPersona === persona.id ? '...' : t('personality.activate')}
+                        {activatingPersona === persona.id
+                          ? '...'
+                          : persona.active
+                            ? 'Active'
+                            : t('personality.activate')}
                       </Button>
                       <Button
                         size="sm"
@@ -480,7 +538,7 @@ export default function PersonalityPage() {
 
         {/* Conflict Warnings */}
         {conflicts.length > 0 && (
-          <Card className="border-yellow-500/50">
+          <Card className="border-warning/50">
             <CardHeader>
               <CardTitle className="text-warning dark:text-warning">
                 Personality Conflicts
@@ -489,10 +547,7 @@ export default function PersonalityPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {conflicts.map((c, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5"
-                >
+                <div key={i} className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5">
                   <Badge
                     variant={c.severity === 'medium' ? 'destructive' : 'outline'}
                     className="text-[10px] mt-0.5"
@@ -642,11 +697,9 @@ export default function PersonalityPage() {
 
         {/* Import Comparison */}
         {showComparison && originalProfile && profile && (
-          <Card className="border-blue-500/50">
+          <Card className="border-info/50">
             <CardHeader>
-              <CardTitle className="text-info dark:text-info">
-                Imported Profile — Review
-              </CardTitle>
+              <CardTitle className="text-info dark:text-info">Imported Profile — Review</CardTitle>
               <CardDescription>Compare imported values with your current profile</CardDescription>
             </CardHeader>
             <CardContent>

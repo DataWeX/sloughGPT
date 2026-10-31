@@ -28,7 +28,7 @@ interface ThreatEntry {
 
 const SEVERITY_STYLES: Record<Severity, string> = {
   critical: 'bg-destructive/15 text-destructive border-destructive/30',
-  high: 'bg-orange-500/15 text-orange-500 border-orange-500/30',
+  high: 'bg-accent/15 text-accent border-accent/30',
   medium: 'bg-warning/15 text-warning border-warning/30',
   low: 'bg-primary/15 text-primary border-primary/30',
   info: 'bg-muted text-muted-foreground border-border/40',
@@ -36,7 +36,7 @@ const SEVERITY_STYLES: Record<Severity, string> = {
 
 const SEVERITY_DOT: Record<Severity, string> = {
   critical: 'bg-destructive',
-  high: 'bg-orange-500',
+  high: 'bg-accent',
   medium: 'bg-warning',
   low: 'bg-primary',
   info: 'bg-muted-foreground',
@@ -49,10 +49,13 @@ function classifySeverity(log: AuditLog): { severity: Severity; reason: string }
   if (t.includes('delete') || t.includes('revoke') || t.includes('destroy')) {
     return { severity: 'high', reason: 'Destructive action' }
   }
-  if (t.includes('auth') && (t.includes('fail') || t.includes('denied') || detail.includes('fail'))) {
+  if (
+    t.includes('auth') &&
+    (t.includes('fail') || t.includes('denied') || detail.includes('fail'))
+  ) {
     return { severity: 'high', reason: 'Authentication failure' }
   }
-  if (t.includes('rotate') || t.includes('create') && t.includes('key')) {
+  if (t.includes('rotate') || (t.includes('create') && t.includes('key'))) {
     return { severity: 'medium', reason: 'Key management' }
   }
   if (t.includes('train') || t.includes('checkpoint')) {
@@ -70,7 +73,11 @@ function classifySeverity(log: AuditLog): { severity: Severity; reason: string }
 function detectAnomalies(logs: AuditLog[]): ThreatEntry[] {
   const threats: ThreatEntry[] = []
 
-  const authFails = logs.filter(l => l.event_type.toLowerCase().includes('auth') && (l.detail?.toLowerCase().includes('fail') || l.event_type.toLowerCase().includes('fail')))
+  const authFails = logs.filter(
+    (l) =>
+      l.event_type.toLowerCase().includes('auth') &&
+      (l.detail?.toLowerCase().includes('fail') || l.event_type.toLowerCase().includes('fail')),
+  )
   if (authFails.length >= 3) {
     threats.push({
       log: authFails[authFails.length - 1],
@@ -79,7 +86,7 @@ function detectAnomalies(logs: AuditLog[]): ThreatEntry[] {
     })
   }
 
-  const deletes = logs.filter(l => l.event_type.toLowerCase().includes('delete'))
+  const deletes = logs.filter((l) => l.event_type.toLowerCase().includes('delete'))
   if (deletes.length >= 5) {
     threats.push({
       log: deletes[deletes.length - 1],
@@ -94,7 +101,7 @@ function detectAnomalies(logs: AuditLog[]): ThreatEntry[] {
   }
   const suspiciousIps = Object.entries(ipCounts).filter(([, c]) => c >= 10)
   for (const [ip, count] of suspiciousIps) {
-    const log = logs.find(l => l.ip === ip)
+    const log = logs.find((l) => l.ip === ip)
     if (log) {
       threats.push({
         log,
@@ -112,7 +119,7 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
   const [showAnomalies, setShowAnomalies] = useState(false)
 
   const classified = useMemo(() => {
-    return logs.map(log => ({
+    return logs.map((log) => ({
       log,
       ...classifySeverity(log),
     }))
@@ -126,11 +133,7 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
     return counts
   }, [classified])
 
-  const displayLogs = showAnomalies
-    ? anomalies
-    : expanded
-      ? classified
-      : classified.slice(0, 10)
+  const displayLogs = showAnomalies ? anomalies : expanded ? classified : classified.slice(0, 10)
 
   const totalAnomalies = anomalies.length
 
@@ -148,13 +151,20 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-1.5">
-          {(Object.entries(severityCounts) as [Severity, number][]).map(([sev, count]) => (
-            count > 0 && (
-              <span key={sev} className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium border', SEVERITY_STYLES[sev])}>
-                {sev} ({count})
-              </span>
-            )
-          ))}
+          {(Object.entries(severityCounts) as [Severity, number][]).map(
+            ([sev, count]) =>
+              count > 0 && (
+                <span
+                  key={sev}
+                  className={cn(
+                    'text-[9px] px-1.5 py-0.5 rounded font-medium border',
+                    SEVERITY_STYLES[sev],
+                  )}
+                >
+                  {sev} ({count})
+                </span>
+              ),
+          )}
         </div>
 
         <div className="flex gap-1">
@@ -186,17 +196,31 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
             {displayLogs.map((entry, i) => (
               <div
                 key={i}
-                className={cn('flex items-start gap-2 rounded-md border px-2 py-1.5 text-[10px]', SEVERITY_STYLES[entry.severity])}
+                className={cn(
+                  'flex items-start gap-2 rounded-md border px-2 py-1.5 text-[10px]',
+                  SEVERITY_STYLES[entry.severity],
+                )}
               >
-                <span className={cn('h-2 w-2 rounded-full shrink-0 mt-0.5', SEVERITY_DOT[entry.severity])} />
+                <span
+                  className={cn(
+                    'h-2 w-2 rounded-full shrink-0 mt-0.5',
+                    SEVERITY_DOT[entry.severity],
+                  )}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium truncate">{entry.log.event_type}</span>
-                    <span className="text-[9px] text-muted-foreground shrink-0">{timeAgo(entry.log.timestamp)}</span>
+                    <span className="text-[9px] text-muted-foreground shrink-0">
+                      {timeAgo(entry.log.timestamp)}
+                    </span>
                   </div>
                   <p className="text-[9px] text-muted-foreground/70 mt-0.5">{entry.reason}</p>
-                  {entry.log.user && <span className="text-[9px] text-muted-foreground/60">@{entry.log.user} </span>}
-                  {entry.log.ip && <span className="text-[9px] text-muted-foreground/60">from {entry.log.ip}</span>}
+                  {entry.log.user && (
+                    <span className="text-[9px] text-muted-foreground/60">@{entry.log.user} </span>
+                  )}
+                  {entry.log.ip && (
+                    <span className="text-[9px] text-muted-foreground/60">from {entry.log.ip}</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -204,7 +228,12 @@ export function ThreatLogCard({ logs }: ThreatLogCardProps) {
         )}
 
         {!showAnomalies && classified.length > 10 && (
-          <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full" onClick={() => setExpanded(!expanded)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px] w-full"
+            onClick={() => setExpanded(!expanded)}
+          >
             {expanded ? 'Show less' : `Show all ${classified.length} events`}
           </Button>
         )}

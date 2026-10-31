@@ -37,25 +37,35 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
       title: title.trim(),
       body: body.trim(),
       status,
-      tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+      tags: tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
       sprint: sprint.trim(),
       gh: gh.trim(),
     })
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Edit note">
+    <div
+      className="fixed inset-0 z-50 flex justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit note"
+    >
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full max-w-md bg-card border-l border-border shadow-lg overflow-y-auto">
         <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Edit Note</h2>
+          <h2 className="text-base font-semibold">Edit Note</h2>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <IconX className="h-4 w-4" />
           </Button>
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <label htmlFor="note-title" className="text-sm font-medium">Title</label>
+            <label htmlFor="note-title" className="text-sm font-medium">
+              Title
+            </label>
             <input
               id="note-title"
               type="text"
@@ -65,7 +75,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
             />
           </div>
           <div>
-            <label htmlFor="note-body" className="text-sm font-medium">Body</label>
+            <label htmlFor="note-body" className="text-sm font-medium">
+              Body
+            </label>
             <textarea
               id="note-body"
               value={body}
@@ -76,7 +88,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="note-status" className="text-sm font-medium">Status</label>
+              <label htmlFor="note-status" className="text-sm font-medium">
+                Status
+              </label>
               <select
                 id="note-status"
                 value={status}
@@ -92,7 +106,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
               </select>
             </div>
             <div>
-              <label htmlFor="note-tags" className="text-sm font-medium">Tags (comma-separated)</label>
+              <label htmlFor="note-tags" className="text-sm font-medium">
+                Tags (comma-separated)
+              </label>
               <input
                 id="note-tags"
                 type="text"
@@ -104,7 +120,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="note-sprint" className="text-sm font-medium">Sprint</label>
+              <label htmlFor="note-sprint" className="text-sm font-medium">
+                Sprint
+              </label>
               <input
                 id="note-sprint"
                 type="text"
@@ -114,7 +132,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
               />
             </div>
             <div>
-              <label htmlFor="note-gh" className="text-sm font-medium">GitHub</label>
+              <label htmlFor="note-gh" className="text-sm font-medium">
+                GitHub
+              </label>
               <input
                 id="note-gh"
                 type="text"
@@ -125,11 +145,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
             </div>
           </div>
           <div className="flex justify-between pt-4">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => onDelete(note.id)}
-            >
+            <Button variant="destructive" size="sm" onClick={() => onDelete(note.id)}>
               Delete
             </Button>
             <div className="flex gap-2">

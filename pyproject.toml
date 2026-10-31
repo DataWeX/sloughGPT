@@ -52,6 +52,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
+    "pytest-testmon>=2.1.0",
     "ruff>=0.1.0",
 ]
 notebook = [
@@ -124,7 +125,6 @@ known-first-party = ["domain"]
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401", "F811"]
 "domain/training/*.py" = ["B006", "C408"]
-"packages/core-py/tests/*.py" = ["N801", "F811", "B017"]
 "**/tests/*.py" = ["F811", "B017"]
 "tests/fixtures/__init__.py" = ["F403", "F405"]
 "domain/cognitive/_internal/metacognition/__init__.py" = ["F403", "F405"]

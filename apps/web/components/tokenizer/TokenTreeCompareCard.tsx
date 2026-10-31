@@ -16,14 +16,26 @@ import {
   SelectItem,
   SelectValue,
 } from '@sloughgpt/strui'
-import { tokenTreeController, type CompareResult, type SavedTree } from '@/lib/token-tree-controller'
+import {
+  tokenTreeController,
+  type CompareResult,
+  type SavedTree,
+} from '@/lib/token-tree-controller'
 import { useToastStore } from '@/lib/toast-store'
 
 interface TokenTreeCompareCardProps {
   refreshKey?: number
 }
 
-function ExampleList({ title, examples, accent }: { title: string; examples: [string, number][]; accent: string }) {
+function ExampleList({
+  title,
+  examples,
+  accent,
+}: {
+  title: string
+  examples: [string, number][]
+  accent: string
+}) {
   return (
     <div>
       <div className="text-xs text-muted-foreground mb-1">{title}</div>
@@ -49,7 +61,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
   const [comparing, setComparing] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [result, setResult] = useState<CompareResult | null>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const load = useCallback(async () => {
     try {
@@ -79,7 +91,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
     }
   }
 
-  const names = trees.map(t => t.name)
+  const names = trees.map((t) => t.name)
   const hasTwo = trees.length >= 2
 
   return (
@@ -90,7 +102,10 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
       <CardContent className="space-y-4">
         {loadFailed ? (
           <div className="text-center py-4 text-sm text-muted-foreground">
-            Could not load saved trees. <button type="button" onClick={load} className="text-primary underline">Retry</button>
+            Could not load saved trees.{' '}
+            <button type="button" onClick={load} className="text-primary underline">
+              Retry
+            </button>
           </div>
         ) : trees.length === 0 ? (
           <div className="text-center py-6 text-sm text-muted-foreground">
@@ -108,7 +123,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {names.map(n => (
+                    {names.map((n) => (
                       <SelectItem key={n} value={n}>
                         {n}
                       </SelectItem>
@@ -125,7 +140,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {names.map(n => (
+                    {names.map((n) => (
                       <SelectItem key={n} value={n}>
                         {n}
                       </SelectItem>
@@ -133,7 +148,11 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
                   </SelectContent>
                 </Select>
               </div>
-              <Button size="sm" onClick={handleCompare} disabled={!hasTwo || !a || !b || a === b || comparing}>
+              <Button
+                size="sm"
+                onClick={handleCompare}
+                disabled={!hasTwo || !a || !b || a === b || comparing}
+              >
                 {comparing ? 'Comparing...' : 'Compare'}
               </Button>
             </div>
@@ -142,7 +161,8 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
             )}
             {!hasTwo && (
               <p className="text-xs text-muted-foreground">
-                Comparing needs at least two saved trees. Save the current tree to create a second one.
+                Comparing needs at least two saved trees. Save the current tree to create a second
+                one.
               </p>
             )}
 
@@ -154,16 +174,22 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                    <div className="text-lg font-medium">{result.shared_tokens}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">shared tokens</div>
+                    <div className="text-base font-medium">{result.shared_tokens}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      shared tokens
+                    </div>
                   </div>
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                    <div className="text-lg font-medium">{result.only_a_tokens}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">only in A</div>
+                    <div className="text-base font-medium">{result.only_a_tokens}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      only in A
+                    </div>
                   </div>
                   <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                    <div className="text-lg font-medium">{result.only_b_tokens}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">only in B</div>
+                    <div className="text-base font-medium">{result.only_b_tokens}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      only in B
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 text-center">
@@ -171,9 +197,21 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
                   <Chip label={`${result.only_a_merges} merges in A`} />
                   <Chip label={`${result.only_b_merges} merges in B`} />
                 </div>
-                <ExampleList title={`Shared token examples (${result.shared_examples.length})`} examples={result.shared_examples} accent="bg-primary/10 text-primary" />
-                <ExampleList title={`Only in ${result.a.name} (${result.only_a_examples.length})`} examples={result.only_a_examples} accent="bg-accent/10 text-accent" />
-                <ExampleList title={`Only in ${result.b.name} (${result.only_b_examples.length})`} examples={result.only_b_examples} accent="bg-success/10 text-success" />
+                <ExampleList
+                  title={`Shared token examples (${result.shared_examples.length})`}
+                  examples={result.shared_examples}
+                  accent="bg-primary/10 text-primary"
+                />
+                <ExampleList
+                  title={`Only in ${result.a.name} (${result.only_a_examples.length})`}
+                  examples={result.only_a_examples}
+                  accent="bg-accent/10 text-accent"
+                />
+                <ExampleList
+                  title={`Only in ${result.b.name} (${result.only_b_examples.length})`}
+                  examples={result.only_b_examples}
+                  accent="bg-success/10 text-success"
+                />
               </div>
             ) : comparing ? (
               <div className="space-y-2">
@@ -184,7 +222,8 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
           </>
         )}
         <p className="text-xs text-muted-foreground">
-          Diffs the saved vocabularies and merge rules without changing the current tree. Examples show the highest-frequency tokens of each group.
+          Diffs the saved vocabularies and merge rules without changing the current tree. Examples
+          show the highest-frequency tokens of each group.
         </p>
       </CardContent>
     </Card>

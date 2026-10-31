@@ -573,3 +573,26 @@ class TestFeedLiveRefreshSchema:
                 dataset="feed:api-conversations",
                 feed_refresh_interval=-1,
             )
+
+
+class TestRouterRegistrationHygiene:
+    def test_no_duplicate_operation_ids(self):
+        """Regression: ``feeds_router`` was included twice in ``training/router.py``,
+        so FastAPI emitted ``Duplicate Operation ID training_feed_training_feeds_get``
+        at every boot (visible in the dev-server log)."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            spec = app.openapi()
+
+        dup_warnings = [w for w in caught if "Duplicate Operation ID" in str(w.message)]
+        assert not dup_warnings, [str(w.message) for w in dup_warnings]
+
+        op_ids = [
+            op["operationId"]
+            for path_ops in spec["paths"].values()
+            for op in path_ops.values()
+            if isinstance(op, dict) and "operationId" in op
+        ]
+        assert len(op_ids) == len(set(op_ids))

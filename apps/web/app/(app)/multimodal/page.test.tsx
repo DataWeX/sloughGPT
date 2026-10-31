@@ -34,7 +34,7 @@ vi.mock('@/lib/dev-log', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock('next/dynamic', async () => {
+vi.mock('@/vite/next-compat/dynamic', async () => {
   const React = await import('react')
   return {
     __esModule: true,
@@ -69,6 +69,9 @@ vi.mock('@/components/multimodal/AudioCard', () => ({
 }))
 vi.mock('@/components/multimodal/VqaSection', () => ({
   default: () => <div data-testid="vqa-section" />,
+}))
+vi.mock('@/components/multimodal/ObjectDetectionSection', () => ({
+  default: () => <div data-testid="object-detection-section" />,
 }))
 
 import MultimodalPage from './page'
@@ -153,6 +156,12 @@ describe('MultimodalPage — other cards', () => {
     render(<MultimodalPage />)
     await act(async () => {})
     expect(screen.getByTestId('vqa-section')).toBeTruthy()
+  })
+
+  it('shows object detection section', async () => {
+    render(<MultimodalPage />)
+    await act(async () => {})
+    expect(screen.getByTestId('object-detection-section')).toBeTruthy()
   })
 })
 

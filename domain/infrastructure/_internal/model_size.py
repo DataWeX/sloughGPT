@@ -60,20 +60,33 @@ def _sum_weight_files(cache_dir: Path) -> float | None:
 
 
 def _get_hub_file_size_gb(model_id: str) -> float | None:
-    """Get total model weight file size from HuggingFace Hub API (siblings listing)."""
+    """Get total model weight file size from HuggingFace Hub API (siblings listing).
+
+    Mirrors ``list_model_files``: dual-format repos ship the same weights as
+    safetensors AND ``.bin``, the downloader fetches only safetensors when
+    present, so the estimate counts only bytes that would actually be
+    downloaded (gpt2: 0.51 GB, not the 1.02 GB both-copies sum).
+    """
     try:
         from .hf_hub import fetch_model_info
 
         info = fetch_model_info(model_id)
         if not info or not info.get("siblings"):
             return None
-        total = 0
+        st_total = 0
+        bin_total = 0
         for sib in info.get("siblings") or []:
             if not isinstance(sib, dict):
                 continue
             name = sib.get("rfilename", "")
-            if name.endswith((".safetensors", ".bin")) and sib.get("size"):
-                total += sib.get("size")
+            size = sib.get("size") or 0
+            if not size:
+                continue
+            if name.endswith(".safetensors"):
+                st_total += size
+            elif name.endswith(".bin"):
+                bin_total += size
+        total = st_total if st_total > 0 else bin_total
         if total > 0:
             return round(total / (1024**3), 2)
     except (OSError, ValueError, RuntimeError) as exc:
@@ -81,7 +94,7 @@ def _get_hub_file_size_gb(model_id: str) -> float | None:
     return None
 
 
-def compute_model_size_gb(model_id: str) -> float | None:
+def compute_model_size_gb(model_id: str, *, offline: bool = False) -> float | None:
     """Get actual model size in GB from real file sizes only.
 
     Priority:
@@ -90,6 +103,12 @@ def compute_model_size_gb(model_id: str) -> float | None:
     3. Returns ``None`` when size cannot be determined
 
     Results are cached for 5 minutes to avoid repeated API calls.
+
+    ``offline=True`` stops after the local pass: never calls the Hub API.
+    Offline misses are NOT written to the shared cache, so a later online
+    call still fills in the real size (freshness is never poisoned by a
+    first-paint request). First-paint readers (bootstrap fan-out) pass this
+    so a cold cache costs zero network round-trips instead of one per model.
     """
     now = time.monotonic()
     with _size_cache_lock:
@@ -108,6 +127,8 @@ def compute_model_size_gb(model_id: str) -> float | None:
             return cache_size
 
     # 2. HuggingFace Hub API — real file sizes from repo sibling listing
+    if offline:
+        return None
     result = _get_hub_file_size_gb(model_id)
     with _size_cache_lock:
         _size_cache[model_id] = (now, result)

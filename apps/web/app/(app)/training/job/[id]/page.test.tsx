@@ -125,7 +125,7 @@ const {
 }))
 
 const stableRouter = { push: mockPush }
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useParams: () => ({ id: 'job-1' }),
   useRouter: () => stableRouter,
   useSearchParams: () => new URLSearchParams(),
@@ -154,7 +154,9 @@ vi.mock('@/lib/download-utils', () => ({
   downloadBlob: mockDownloadBlob,
   downloadJson: mockDownloadJson,
 }))
-vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="loss-chart" /> }))
+vi.mock('@/vite/next-compat/dynamic', () => ({
+  default: () => () => <div data-testid="loss-chart" />,
+}))
 vi.mock('@/vite/next-compat/dynamic', () => ({
   default: () => () => <div data-testid="loss-chart" />,
 }))

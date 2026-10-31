@@ -29,8 +29,13 @@ describe('Multimodal page', () => {
   })
 
   it('accepts an image generation prompt', () => {
-    cy.get('input[aria-label="Image generation prompt"]').scrollIntoView().type('A cat in a spacesuit')
-    cy.get('input[aria-label="Image generation prompt"]').should('have.value', 'A cat in a spacesuit')
+    cy.get('input[aria-label="Image generation prompt"]')
+      .scrollIntoView()
+      .type('A cat in a spacesuit')
+    cy.get('input[aria-label="Image generation prompt"]').should(
+      'have.value',
+      'A cat in a spacesuit',
+    )
   })
 })
 
@@ -58,7 +63,7 @@ describe('Object detection flow', () => {
     cy.visit('/multimodal')
   })
 
-  it.skip('shows object detection section — never built; core-feature backlog', () => {
+  it('shows object detection section', () => {
     cy.contains('Object Detection').scrollIntoView().should('be.visible')
   })
 })

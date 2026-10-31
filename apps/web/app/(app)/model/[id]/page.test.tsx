@@ -139,7 +139,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const stableRouter = { push: vi.fn() }
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useParams: () => ({ id: 'gpt2' }),
   useRouter: () => stableRouter,
   useSearchParams: () => new URLSearchParams(),
@@ -169,7 +169,8 @@ vi.mock('@/lib/generation-config-controller', () => ({
   generationConfigController: { get: mocks.get, update: mocks.update },
 }))
 vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (e: any, fallback: string) => (e instanceof Error ? e.message : fallback),
+  extractErrorMessage: (e: any, fallback = 'Unknown error') =>
+    e instanceof Error ? e.message : fallback,
 }))
 vi.mock('@/lib/http-client', () => ({
   apiGet: mocks.apiGet,

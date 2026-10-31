@@ -14,9 +14,7 @@ def demo_conversation_engine():
     print("=" * 60)
 
     # Load conversation engine - absolute path
-    ce_path = Path(
-        "/Users/mac/sloughGPT/domain/infrastructure/conversation_engine.py"
-    )
+    ce_path = Path("/Users/mac/sloughGPT/domain/infrastructure/conversation_engine.py")
     spec = spec_from_file_location("conversation_engine", ce_path)
     ce_module = module_from_spec(spec)
     spec.loader.exec_module(ce_module)
@@ -87,7 +85,7 @@ def demo_conversation_engine():
 How it works with existing infrastructure:
 
   1. Frontend sends message with session_id
-  2. /chat/stream saves user message to conversation DB
+  2. POST /chat saves user message to conversation DB
   3. Model generates response
   4. Response saved to conversation DB
   5. Next message: _build_context_prompt() fetches history

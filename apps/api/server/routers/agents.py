@@ -63,6 +63,15 @@ class OrchestrateRequest(BaseModel):
     )
 
 
+class LoopRunRequest(BaseModel):
+    task: str = Field(..., min_length=1, description="The task for the agent loop to drive")
+    system_prompt: str = Field(default="", description="Optional system prompt override")
+    max_iters: int = Field(default=10, ge=1, le=50, description="Max tool-call iterations")
+    tools: list[str] = Field(
+        default_factory=list, description="Tool names to expose (empty = all defaults)"
+    )
+
+
 class AgentsRouter:
     """Router for AI agent CRUD, execution and orchestration."""
 
@@ -80,8 +89,15 @@ class AgentsRouter:
         self.router.add_api_route("/{agent_id}", self.delete_agent, methods=["DELETE"])
         self.router.add_api_route("/{agent_id}/execute", self.execute_agent, methods=["POST"])
         self.router.add_api_route(
+            "/{agent_id}/execute/stream",
+            self.execute_agent_stream,
+            methods=["POST"],
+            response_model=None,
+        )
+        self.router.add_api_route(
             "/orchestrate", self.orchestrate_agents, methods=["POST"], response_model=None
         )
+        self.router.add_api_route("/loop", self.run_loop, methods=["POST"], response_model=None)
 
     def _get_system(self):
         """Get the agent system singleton."""
@@ -90,10 +106,18 @@ class AgentsRouter:
         return get_agent_system()
 
     @endpoint("agents.list_agents")
-    async def list_agents(self) -> dict:
-        """List all agents stored in the agent system."""
+    async def list_agents(self, limit: int | None = None) -> dict:
+        """List agents stored in the agent system.
+
+        Optional ``limit`` (1..1000) bounds the payload — the live store has
+        accumulated hundreds of entries and the full dump is a production
+        hazard. Omitted = full list (backward compatible).
+        """
         system = self._get_system()
         agents = await asyncio.to_thread(system.list)
+        if limit is not None:
+            clamped = max(1, min(int(limit), 1000))
+            agents = agents[:clamped]
         return success_response(data=[AgentOut(**a).model_dump() for a in agents])
 
     @endpoint("agents.create_agent")
@@ -205,6 +229,58 @@ class AgentsRouter:
             return result
         except Exception as e:
             classify_and_raise(e, source="agents.execute")
+
+    @endpoint("agents.execute_agent_stream")
+    async def execute_agent_stream(
+        self,
+        agent_id: str,
+        req: ExecuteRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> AsyncGenerator[str, None]:
+        """Stream one agent run over SSE: run_start → tool steps → final → run_end.
+
+        Same loop as ``execute_agent`` (dict), projected as events — the
+        contract descriptor names it, the SSE framing matches orchestrate.
+        """
+        system = self._get_system()
+        safe_audit_log(
+            "agent.execute.stream",
+            resource=agent_id,
+            user_id=req.user_id or "",
+            session_id=req.session_id or "",
+        )
+        phases = {
+            "run_start": ("START", "working"),
+            "tool_start": ("TOOL_CALL", "working"),
+            "tool_result": ("TOOL_RESULT", "working"),
+            "final": ("FINAL", "working"),
+            "run_end": ("COMPLETE", "complete"),
+            "error": ("ERROR", "error"),
+        }
+
+        async def event_stream() -> AsyncGenerator[str, None]:
+            try:
+                async for ev in system.execute_stream(
+                    agent_id=agent_id,
+                    request=req.request,
+                    session_id=req.session_id,
+                    user_id=req.user_id,
+                ):
+                    if await request.is_disconnected():
+                        return
+                    kind = str(ev.get("event", "step"))
+                    phase, status = phases.get(kind, (kind.upper(), "working"))
+                    if kind == "error":
+                        yield sse_error("agent", phase, str(ev.get("error", "unknown")))
+                        return
+                    yield sse_event(stream="agent", phase=phase, status=status, data=ev)
+                yield sse_complete(stream="agent", data={"agent_id": agent_id})
+            except Exception as e:
+                logger.warning("Agent stream failed: %s", e, extra={"tag": "AGENT"})
+                yield sse_error("agent", "ERROR", str(e))
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     # ── Orchestration ─────────────────────────────────────────────────────
 
@@ -404,6 +480,104 @@ class AgentsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="agents.orchestrate_agents")
+
+    @endpoint("agents.run_loop")
+    async def run_loop(
+        self,
+        req: LoopRunRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> StreamingResponse:
+        """Drive the canonical AgentLoop over the live provider, streamed as SSE.
+
+        Streams ``plan`` → ``tool_call``/``tool_result`` pairs → ``final``
+        (or ``error``) as ``agent-loop`` frames. The model is the registered
+        provider (autoloaded Qwen/SmolLM/SloNet) wrapped by
+        ``make_provider_infer`` — the same loop the CLI/REPL drive, no
+        parallel implementation.
+        """
+        from domain.agents import (
+            NO_PROVIDER_MSG,
+            AgentLoop,
+            get_tool_registry,
+            make_provider_infer,
+            resolve_provider,
+        )
+
+        async def event_stream() -> AsyncGenerator[str, None]:
+            """event_stream."""
+            try:
+                if resolve_provider() is None:
+                    yield sse_error(
+                        stream="agent-loop",
+                        phase="ERROR",
+                        error=NO_PROVIDER_MSG,
+                        code="E_MODEL_NOT_READY",
+                        http_status=503,
+                    )
+                    return
+
+                registry = get_tool_registry()
+                if req.tools:
+                    try:
+                        registry = registry.subset(req.tools)
+                    except ValueError as e:
+                        yield sse_error(
+                            stream="agent-loop",
+                            phase="ERROR",
+                            error=str(e),
+                            code="E_INVALID_REQUEST",
+                            http_status=400,
+                        )
+                        return
+
+                infer = make_provider_infer(resolve_provider())
+                loop = AgentLoop(max_iters=req.max_iters)
+                safe_audit_log("agent.loop", detail=req.task[:200])
+
+                async for ev in loop.run(
+                    req.task,
+                    infer=infer,
+                    tools=registry,
+                    system_prompt=req.system_prompt or None,
+                ):
+                    if await request.is_disconnected():
+                        return
+                    if ev.kind == "final":
+                        yield sse_complete(
+                            stream="agent-loop",
+                            phase="FINAL",
+                            data=ev.payload,
+                            message="Loop complete",
+                        )
+                    elif ev.kind == "error":
+                        yield sse_event(
+                            stream="agent-loop",
+                            phase="ERROR",
+                            status="error",
+                            data=ev.payload,
+                            message=ev.payload.get("message", "loop error"),
+                        )
+                    else:
+                        name = ev.payload.get("name")
+                        yield sse_event(
+                            stream="agent-loop",
+                            phase=ev.kind.upper(),
+                            status="working",
+                            data=ev.payload,
+                            message=f"{ev.kind}: {name}" if name else ev.kind,
+                        )
+            except Exception as e:
+                logger.exception("Agent loop error", extra={"tag": "MODEL"})
+                yield sse_error(
+                    stream="agent-loop",
+                    phase="ERROR",
+                    error=str(e),
+                    code="E_INFRA_GENERATION",
+                    http_status=500,
+                )
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     @endpoint("agents.list_runs")
     async def list_runs(self, limit: int = 20) -> dict:

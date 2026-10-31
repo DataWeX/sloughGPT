@@ -1,3 +1,5 @@
+import crypto from 'node:crypto'
+import fs from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -11,6 +13,21 @@ import { redirectsPlugin } from './vite/redirect-plugin'
 // Phase 2: apiRoutesPlugin serves planner/calendar app/api route handlers in dev.
 // Phase 3: client code codemods onto @/vite/next-compat/* (aliases remain as safety net).
 // Phase 4: redirectsPlugin 307s legacy paths (proxy.ts parity via lib/redirects.ts).
+
+// Tree-identity header (card 20261029_041801): the dev server announces
+// WHICH checkout it serves. Live-stack tests (tests/test_header_screenshots.py)
+// compare this against their own repo root and SKIP — instead of asserting
+// against a foreign vite squatting :5173 — whenever a different tree is
+// answering. Mirrors web_tree_id() in tests/skip_gate_identity.py:
+// sha256(realpath(apps/web)) truncated to 16 hex chars. Node's
+// fs.realpathSync and Python's os.path.realpath both resolve symlinks, so
+// the two sides agree byte-for-byte.
+const webTreeId = crypto
+  .createHash('sha256')
+  .update(fs.realpathSync(__dirname))
+  .digest('hex')
+  .slice(0, 16)
+
 export default defineConfig({
   plugins: [react(), redirectsPlugin(), apiRoutesPlugin()],
   root: __dirname,
@@ -19,6 +36,9 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: false,
+    headers: {
+      'X-Slo-Web-Tree': webTreeId,
+    },
   },
   resolve: {
     alias: [
@@ -26,27 +46,6 @@ export default defineConfig({
       {
         find: /^@sloughgpt\/strui$/,
         replacement: path.resolve(__dirname, '../../packages/strui/src'),
-      },
-      { find: /^next\/link$/, replacement: path.resolve(__dirname, 'vite/next-compat/link.tsx') },
-      {
-        find: /^next\/navigation$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/navigation.ts'),
-      },
-      {
-        find: /^next\/dynamic$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/dynamic.tsx'),
-      },
-      {
-        find: /^next\/web-vitals$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/web-vitals.ts'),
-      },
-      {
-        find: /^next\/server$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/server.ts'),
-      },
-      {
-        find: /^next-auth\/react$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/next-auth.tsx'),
       },
       { find: /^v86$/, replacement: path.resolve(__dirname, 'lib/node-builtin-stub.ts') },
       { find: /^react$/, replacement: path.resolve(__dirname, '../../node_modules/react') },
@@ -74,8 +73,22 @@ export default defineConfig({
   build: {
     outDir: 'dist-vite',
     emptyOutDir: true,
-  },
-  ssr: {
-    external: ['next'],
+    rollupOptions: {
+      output: {
+        // Vendor split: keep the 806KB entry down to app code so first paint
+        // doesn't parse react-dom/three/motion before any route runs. Vendor
+        // chunks are immutable-cached; app entry changes on every release.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'vendor-react'
+          if (/node_modules\/react-router/.test(id)) return 'vendor-router'
+          if (/node_modules\/(framer-motion|motion)\//.test(id)) return 'vendor-motion'
+          if (/node_modules\/(zustand|immer)\//.test(id)) return 'vendor-state'
+          if (/node_modules\/(three|@react-three)\//.test(id)) return 'vendor-three'
+          if (/node_modules\/recharts/.test(id)) return 'vendor-recharts'
+          return 'vendor'
+        },
+      },
+    },
   },
 })

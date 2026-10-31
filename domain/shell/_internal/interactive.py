@@ -1,6 +1,6 @@
 """InteractivePrompt — assembled from one mixin per feature family.
 
-The public surface is unchanged: still constructed as `InteractivePrompt(io)`, still carrying all 126 public prompts and their raw paths, and still the name every caller imports.
+The public surface is unchanged: still constructed as `InteractivePrompt(io)`, still carrying all 127 public prompts and their raw paths, and still the name every caller imports.
 
 The MRO below *is* the layering. `_InputPrompts` is the substrate every other family composes; the rest are ordered so a family only ever inherits from families declared before it.
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from domain.shell._internal.interactive_confirm import _ConfirmPrompts
 from domain.shell._internal.interactive_input import _InputPrompts
+from domain.shell._internal.interactive_options import _OptionsPrompts
 from domain.shell._internal.interactive_picker import _PickerPrompts
 from domain.shell._internal.interactive_progress import _ProgressPrompts
 from domain.shell._internal.interactive_prompt import _PromptPrompts
@@ -72,6 +73,7 @@ class InteractivePrompt(
     _PickerPrompts,
     _SelectPrompts,
     _ConfirmPrompts,
+    _OptionsPrompts,
     _WidgetPrompts,
     _PromptPrompts,
     _InputPrompts,

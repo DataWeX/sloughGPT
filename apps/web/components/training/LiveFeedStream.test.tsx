@@ -6,10 +6,18 @@ import { LiveFeedStream } from './LiveFeedStream'
 import type { SSEEnvelope, SSEStreamOptions } from '@/lib/sse-client'
 
 vi.mock('@sloughgpt/strui', () => ({
-  Badge: ({ children, className }: any) => <span className={className}>{children}</span>,
+  Badge: ({ children, className, title }: any) => (
+    <span className={className} title={title}>
+      {children}
+    </span>
+  ),
   StatusDot: ({ tone, pulse }: any) => (
     <span data-testid="status-dot" data-tone={tone} data-pulse={pulse ? 'yes' : 'no'} />
   ),
+  // Mirrors the real FEATURE_VERSIONS entry (pinned by strui's own
+  // versions.test.ts: training.api === '1.0.0').
+  getComponentFeature: (name: string) =>
+    name === 'JobStatus' ? { feature: 'training', version: '1.0.0' } : null,
 }))
 
 let capturedOptions: SSEStreamOptions | null = null
@@ -93,6 +101,12 @@ describe('LiveFeedStream', () => {
     expect(screen.getByText(/Loading feed totals/)).toBeInTheDocument()
   })
 
+  it('shows the training feature version tag on the header', () => {
+    render(<LiveFeedStream />)
+    const tag = screen.getByTitle('training feature version')
+    expect(tag).toHaveTextContent('training v1.0.0')
+  })
+
   it('renders feed totals with the trainable spec from the baseline frame', () => {
     render(<LiveFeedStream />)
     openStream()
@@ -121,9 +135,7 @@ describe('LiveFeedStream', () => {
         changed: true,
       }),
     )
-    expect(
-      screen.getByText('feed:api-conversations received 2 new records'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('feed:api-conversations received 2 new records')).toBeInTheDocument()
     expect(screen.getByText('+2')).toBeInTheDocument()
   })
 
@@ -144,7 +156,13 @@ describe('LiveFeedStream', () => {
       snapshot({
         jobs: {
           active: [
-            { id: 'j1', name: 'Live job', status: 'running', dataset: 'feed:feedback', progress: 40 },
+            {
+              id: 'j1',
+              name: 'Live job',
+              status: 'running',
+              dataset: 'feed:feedback',
+              progress: 40,
+            },
           ],
           count: 1,
         },

@@ -1,6 +1,14 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Button,
+} from '@sloughgpt/strui'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -10,8 +18,12 @@ interface SettingsBackupRestoreCardProps {
   version?: string
 }
 
-export function SettingsBackupRestoreCard({ settings, onImport, version }: SettingsBackupRestoreCardProps) {
-  const addToast = useToastStore(s => s.addToast)
+export function SettingsBackupRestoreCard({
+  settings,
+  onImport,
+  version,
+}: SettingsBackupRestoreCardProps) {
+  const addToast = useToastStore((s) => s.addToast)
 
   const handleExport = () => {
     downloadJson(settings, 'sloughgpt-settings.json')
@@ -34,7 +46,10 @@ export function SettingsBackupRestoreCard({ settings, onImport, version }: Setti
       if (['dark', 'light', 'system'].includes(raw.theme)) valid.theme = raw.theme
       if (typeof raw.streaming === 'boolean') valid.streaming = raw.streaming
       if (typeof raw.customContext === 'string') valid.customContext = raw.customContext
-      if (typeof raw.collapsibleMessageLength === 'number') valid.collapsibleMessageLength = raw.collapsibleMessageLength
+      if (typeof raw.collapsibleMessageLength === 'number')
+        valid.collapsibleMessageLength = raw.collapsibleMessageLength
+      if (typeof raw.bannerGraceMs === 'number') valid.bannerGraceMs = raw.bannerGraceMs
+      if (typeof raw.bannerHoldMs === 'number') valid.bannerHoldMs = raw.bannerHoldMs
       if (Object.keys(valid).length === 0) throw new Error('No valid settings found')
       onImport(valid)
       addToast('Settings imported', 'success')
@@ -53,12 +68,20 @@ export function SettingsBackupRestoreCard({ settings, onImport, version }: Setti
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={handleExport}>Export settings</Button>
-          <Button size="sm" variant="outline" onClick={handleImport}>Import settings</Button>
+          <Button size="sm" variant="outline" onClick={handleExport}>
+            Export settings
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleImport}>
+            Import settings
+          </Button>
         </div>
       </CardContent>
       <CardFooter className="justify-end">
-        {version && <span className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border border-border/50 rounded text-xs">v{version}</span>}
+        {version && (
+          <span className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border border-border/50 rounded text-xs">
+            v{version}
+          </span>
+        )}
       </CardFooter>
     </Card>
   )

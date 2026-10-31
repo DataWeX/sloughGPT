@@ -77,7 +77,9 @@ def _default_inference_fn(prompt: str, max_tokens: int = 200) -> dict[str, Any]:
                 "max_new_tokens": max_tokens,
                 "temperature": 0.7,
             },
-            timeout=30,
+            # Planning/synthesis prompts run on a contended box; 30s was
+            # starving real runs (live demo hit it under load).
+            timeout=60,
         )
         if r.status_code == 200:
             return r.json()
@@ -168,24 +170,38 @@ class AgentSystem:
     def delete(self, agent_id: str) -> bool:
         return _agent_repo.delete(agent_id)
 
-    async def execute(
-        self, agent_id: str, request: str, session_id: str = "", user_id: str = "default"
-    ) -> dict:
-        """Execute an agent on a user request."""
+    def _fresh_agent(self, agent_id: str) -> Agent | None:
+        """Build a per-call Agent from stored config (thread-safe, no shared state)."""
         agent_data = self.get(agent_id)
         if agent_data is None:
-            return {"error": f"Agent '{agent_id}' not found", "success": False}
-
-        # Build fresh config per call (thread-safe)
+            return None
         tool_names = agent_data.get("tools", [])
         tools = [ToolCapability(t) for t in tool_names if t in [c.value for c in ToolCapability]]
         config = AgentConfig(
             tools=tools,
             instructions=agent_data.get("instructions", ""),
         )
-        # Create a fresh Agent with per-call config to avoid shared-state races
-        fresh_agent = Agent(config=config, inference_fn=self._agent._inference_fn)
+        return Agent(config=config, inference_fn=self._agent._inference_fn)
+
+    async def execute(
+        self, agent_id: str, request: str, session_id: str = "", user_id: str = "default"
+    ) -> dict:
+        """Execute an agent on a user request."""
+        fresh_agent = self._fresh_agent(agent_id)
+        if fresh_agent is None:
+            return {"error": f"Agent '{agent_id}' not found", "success": False}
         return await fresh_agent.execute(request, session_id, user_id)
+
+    async def execute_stream(
+        self, agent_id: str, request: str, session_id: str = "", user_id: str = "default"
+    ):
+        """Yield run events for one agent execution (same loop, SSE view)."""
+        fresh_agent = self._fresh_agent(agent_id)
+        if fresh_agent is None:
+            yield {"event": "error", "error": f"Agent '{agent_id}' not found"}
+            return
+        async for event in fresh_agent.execute_stream(request, session_id, user_id):
+            yield event
 
 
 _default_system: AgentSystem | None = None

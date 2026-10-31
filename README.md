@@ -1,6 +1,18 @@
 # SloughGPT
 
-Self-hosted LLM infrastructure with local model training, inference, and a web UI.
+Self-hosted LLM infrastructure with local model training, inference, and a web UI. Training and inference run on SloNet, an in-repository pure-NumPy autograd engine (reverse-mode and forward-mode differentiation) — PyTorch and HuggingFace Transformers are not required.
+
+## Features
+
+- **SloNet engine** — pure-NumPy training and inference with KV-cache streaming; removes approximately 4 GB of framework dependencies
+- **Soul checkpoints** — `.sou` files carry personality metadata (traits, system prompt) alongside weights; system prompts hot-reload without a model restart
+- **`.slnc` weight format** — memory-mapped zero-copy loading, measured 2.2× faster than safetensors on GPT-2
+- **Interactive shell** — 40+ commands, pipelines, aliases, tab completion (`sloughgpt shell`; see [docs/SHELL.md](docs/SHELL.md))
+- **Rust gateway** — Axum HTTP/SSE gateway in `apps/gateway`
+- **Export and quantization** — GGUF (llama.rn mobile), ONNX, safetensors; FP16, INT8, INT4, Q4_K_M, Q5_K_M
+- **Dataset pipelines** — import from GitHub, HuggingFace, Kaggle, URL, or CSV; combine, preview, and version datasets
+- **Feedback-driven adaptation** — thumbs feedback trains per-user LoRA adapters, aggregated and evaluated automatically
+- **Interfaces** — Next.js web UI (`@sloughgpt/strui` component library), React Native mobile client, Python and TypeScript SDKs
 
 ## Prerequisites
 
@@ -83,8 +95,8 @@ sloughGPT/
 │   ├── web/                   # Next.js frontend
 │   ├── cli/                   # CLI implementation
 │   ├── mobile/                # React Native app
-│   ├── gateway/               # API gateway
-│   └── data/                  # Data utilities
+│   ├── gateway/               # Rust Axum gateway
+│   └── lib/                   # Shared frontend/backend helpers
 ├── domain/                   # Core Python logic (training, inference, feedback, shell, infrastructure)
 ├── packages/
 │   ├── core-py/               # Python core (tests, utils)
@@ -103,14 +115,14 @@ sloughGPT/
 
 SloughGPT includes a consciousness system with 26 pages for monitoring and managing AI self-awareness:
 
-| Feature | Description |
-|---------|-------------|
-| Dashboard | Main consciousness overview with health metrics |
-| Training | Consciousness training controls and progress |
-| Playground | Interactive experimentation with qualia and beliefs |
-| Analytics | Trend analysis and statistics |
-| Benchmark | Performance benchmarking tools |
-| API Explorer | Interactive API testing interface |
+| Feature      | Description                                         |
+| ------------ | --------------------------------------------------- |
+| Dashboard    | Main consciousness overview with health metrics     |
+| Training     | Consciousness training controls and progress        |
+| Playground   | Interactive experimentation with qualia and beliefs |
+| Analytics    | Trend analysis and statistics                       |
+| Benchmark    | Performance benchmarking tools                      |
+| API Explorer | Interactive API testing interface                   |
 
 Access the consciousness UI at `http://localhost:5173/consciousness/dashboard` after starting the web UI.
 
@@ -120,21 +132,20 @@ Start the server and visit `http://localhost:8000/docs` for the full interactive
 
 Core endpoints:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/chat` | Chat with a loaded model |
-| `POST` | `/chat/stream` | Streaming chat (SSE) |
-| `POST` | `/inference/generate` | Text generation |
-| `POST` | `/inference/generate/stream` | Streaming generation (SSE) |
-| `POST` | `/training/start` | Start training (SSE progress) |
-| `GET` | `/health` | Server and model health |
-| `GET` | `/models` | List available models |
-| `GET` | `/souls` | List available souls |
-| `POST` | `/souls/switch` | Switch active soul |
-| `GET` | `/datasets` | List datasets |
-| `GET` | `/consciousness/status` | Get consciousness status |
-| `POST` | `/consciousness/reflect` | Trigger self-reflection |
-| `GET` | `/consciousness/health` | Consciousness health check |
+| Method | Path                         | Description                                                          |
+| ------ | ---------------------------- | -------------------------------------------------------------------- |
+| `POST` | `/chat`                      | Chat with a loaded model (SSE streaming — the endpoint's only state) |
+| `POST` | `/inference/generate`        | Text generation                                                      |
+| `POST` | `/inference/generate/stream` | Streaming generation (SSE)                                           |
+| `POST` | `/training/start`            | Start training (SSE progress)                                        |
+| `GET`  | `/health`                    | Server and model health                                              |
+| `GET`  | `/models`                    | List available models                                                |
+| `GET`  | `/souls`                     | List available souls                                                 |
+| `POST` | `/souls/switch`              | Switch active soul                                                   |
+| `GET`  | `/datasets`                  | List datasets                                                        |
+| `GET`  | `/consciousness/status`      | Get consciousness status                                             |
+| `POST` | `/consciousness/reflect`     | Trigger self-reflection                                              |
+| `GET`  | `/consciousness/health`      | Consciousness health check                                           |
 
 ## Development
 
@@ -154,29 +165,33 @@ cd apps/web && npm run lint
 
 ## GPU Support
 
-| Hardware | Status | Notes |
-|----------|--------|-------|
-| NVIDIA (CUDA) | Supported | Fastest |
-| Apple Silicon (MPS) | Supported | M1/M2/M3/M4 |
-| AMD (ROCm) | Supported | Linux only |
-| Intel Mac | CPU only | Stable, slower |
+SloNet dispatches large tensor operations to the first available backend in `domain/slolib/_internal/gpu.py`; everything else falls back to NumPy.
+
+| Backend     | Hardware      | Notes                                                                                                        |
+| ----------- | ------------- | ------------------------------------------------------------------------------------------------------------ |
+| Metal       | Apple Silicon | Disabled on Intel Macs (`x86_64` — false-positive MPS detection crashed the process); those machines run CPU |
+| CUDA        | NVIDIA        | Requires `pip install cupy-cuda12x`                                                                          |
+| OpenCL      | Various       | Requires an OpenCL runtime                                                                                   |
+| CPU (NumPy) | Any           | Always available                                                                                             |
+
+Accelerator use is forward-only — the backward pass stays in NumPy — and small operations (under 4096 elements) stay on CPU to avoid dispatch overhead.
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [QUICKSTART.md](QUICKSTART.md) | Get started in 5 minutes |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
-| [SECURITY.md](SECURITY.md) | Security policy |
-| [AGENTS.md](AGENTS.md) | AI agent workflow and conventions |
-| [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Pre-LLM infrastructure layers |
-| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Developer reference |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment guide |
-| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | Environment configuration |
-| [docs/STRUCTURE.md](docs/STRUCTURE.md) | Project structure and conventions |
-| [docs/SHELL.md](docs/SHELL.md) | Shell REPL documentation |
-| [docs/mogdb-guide.md](docs/mogdb-guide.md) | MogDB usage guide |
-| [docs/engineering-overview.md](docs/engineering-overview.md) | System architecture overview |
+| Document                                                     | Description                       |
+| ------------------------------------------------------------ | --------------------------------- |
+| [QUICKSTART.md](QUICKSTART.md)                               | Get started in 5 minutes          |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                           | Contribution guidelines           |
+| [SECURITY.md](SECURITY.md)                                   | Security policy                   |
+| [AGENTS.md](AGENTS.md)                                       | AI agent workflow and conventions |
+| [INFRASTRUCTURE.md](INFRASTRUCTURE.md)                       | Pre-LLM infrastructure layers     |
+| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)           | Developer reference               |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)                     | Deployment guide                  |
+| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md)                   | Environment configuration         |
+| [docs/STRUCTURE.md](docs/STRUCTURE.md)                       | Project structure and conventions |
+| [docs/SHELL.md](docs/SHELL.md)                               | Shell REPL documentation          |
+| [docs/mogdb-guide.md](docs/mogdb-guide.md)                   | MogDB usage guide                 |
+| [docs/engineering-overview.md](docs/engineering-overview.md) | System architecture overview      |
 
 ## Data Infrastructure
 

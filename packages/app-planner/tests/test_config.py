@@ -28,6 +28,18 @@ def test_find_project_root_finds_nearest_ancestor(tmp_path):
     assert config.find_project_root(nested) == root
 
 
+def test_find_project_root_finds_jsonl_only(tmp_path):
+    """The canonical board.jsonl alone is enough to claim a project root."""
+    root = tmp_path
+    (root / ".kanban").mkdir()
+    (root / ".kanban" / "board.jsonl").write_text(
+        '{"schema": "planner/1", "name": "b", "columns": []}\n'
+    )
+    nested = root / "x" / "y"
+    nested.mkdir(parents=True)
+    assert config.find_project_root(nested) == root
+
+
 def test_find_project_root_returns_none_without_board(tmp_path):
     assert config.find_project_root(tmp_path) is None
 
@@ -72,19 +84,35 @@ def test_default_board_dir_env_override(tmp_path, monkeypatch):
     assert config.default_board_dir() == tmp_path / "env-board"
 
 
-def test_default_notes_dir_project_root(tmp_path, monkeypatch):
+def test_default_dirs_ignore_repo_root_by_default(tmp_path, monkeypatch):
+    """Canonical-state flip: repo detection no longer wins by default —
+    mutable planner state must not live inside code checkouts (worktrees
+    fork it per checkout)."""
     root = _write_board(tmp_path)
+    monkeypatch.delenv("APP_PLANNER_REPO_LOCAL", raising=False)
+    monkeypatch.setattr(config, "find_project_root", lambda start=None: root)
+    assert config.default_notes_dir() == config.NOTES_FALLBACK
+    assert config.default_board_dir() == config.BOARD_FALLBACK
+
+
+def test_default_dirs_repo_local_opt_in(tmp_path, monkeypatch):
+    root = _write_board(tmp_path)
+    monkeypatch.setenv("APP_PLANNER_REPO_LOCAL", "1")
     monkeypatch.setattr(config, "find_project_root", lambda start=None: root)
     assert config.default_notes_dir() == root / ".dev-notes"
-
-
-def test_default_board_dir_project_root(tmp_path, monkeypatch):
-    root = _write_board(tmp_path)
-    monkeypatch.setattr(config, "find_project_root", lambda start=None: root)
     assert config.default_board_dir() == root / ".kanban"
 
 
+def test_repo_local_opt_in_ignores_falsey_values(tmp_path, monkeypatch):
+    root = _write_board(tmp_path)
+    monkeypatch.setattr(config, "find_project_root", lambda start=None: root)
+    for value in ("", "0", "false"):
+        monkeypatch.setenv("APP_PLANNER_REPO_LOCAL", value)
+        assert config.default_board_dir() == config.BOARD_FALLBACK
+
+
 def test_default_dirs_fall_back_to_user_config(monkeypatch):
+    monkeypatch.delenv("APP_PLANNER_REPO_LOCAL", raising=False)
     monkeypatch.setattr(config, "find_project_root", lambda start=None: None)
     assert config.default_notes_dir() == config.NOTES_FALLBACK
     assert config.default_board_dir() == config.BOARD_FALLBACK

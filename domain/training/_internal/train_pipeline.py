@@ -29,7 +29,7 @@ import os
 import threading
 import time
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -51,6 +51,11 @@ from domain.training._internal.experience_adapter import (
 from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 from domain.training._internal.quality_scorer import compute_data_quality
 from domain.training._internal.slonet import load_checkpoint_npz
+from domain.training._internal.step_strategy import (
+    EwcStrategy,
+    OwnedObjectiveStrategy,
+    StepStrategy,
+)
 from domain.training._internal.trainer_protocol import TrainResult
 from domain.training._internal.training_feed import is_feed_source, load_feed_text
 from domain.training._internal.training_handler import (
@@ -220,7 +225,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         feedback = None
         if isinstance(data_path, str) and data_path.startswith("experience:"):
             # experience:<corpus_path> optional single override
-            rest = data_path[len("experience:"):]
+            rest = data_path[len("experience:") :]
             if rest and rest not in ("chat", "owned"):
                 corpus = rest
         text, _pairs = load_experience_text(
@@ -385,6 +390,21 @@ class TrainerConfig:
     # never change mid-run; eval remains on the initial snapshot.
     feed_refresh_interval: float = 0.0
 
+    # Self-gen flywheel (0 = disabled). Every ``selfgen_interval`` train steps
+    # the trainer samples its own live model; gated continuations are appended
+    # to the ``selfgen`` feed source and mixed into train batches at
+    # ``selfgen_quota`` — the quota keeps the static dataset in every batch
+    # mix, which is the anti-collapse control for self-training.
+    selfgen_interval: int = 0
+    selfgen_quota: float = 0.25
+    selfgen_samples: int = 4
+    selfgen_max_tokens: int = 64
+    selfgen_temperature: float = 0.9
+    selfgen_min_quality: float = 1.0
+    selfgen_prompts: list[str] | None = None
+    selfgen_source: str = "selfgen"
+    selfgen_local_base: str | None = None  # testing hook (mirrors feed local_base)
+
     # Early stopping (0 = disabled; stop if no improvement for N evals)
     early_stopping_patience: int = 5
 
@@ -449,6 +469,16 @@ class TrainerConfig:
         if self.feed_refresh_interval < 0:
             raise ValueError(
                 f"feed_refresh_interval must be >= 0, got {self.feed_refresh_interval}"
+            )
+        if self.selfgen_interval < 0:
+            raise ValueError(f"selfgen_interval must be >= 0, got {self.selfgen_interval}")
+        if not 0.0 <= self.selfgen_quota <= 1.0:
+            raise ValueError(f"selfgen_quota must be in [0, 1], got {self.selfgen_quota}")
+        if self.selfgen_samples < 1:
+            raise ValueError(f"selfgen_samples must be >= 1, got {self.selfgen_samples}")
+        if not 0.0 <= self.selfgen_min_quality <= 5.0:
+            raise ValueError(
+                f"selfgen_min_quality must be in [0, 5], got {self.selfgen_min_quality}"
             )
 
 
@@ -952,6 +982,7 @@ class SloughGPTTrainer:
         use_owned_objective: bool = False,
         owned_tool_weight: float = 0.3,
         owned_memory_weight: float = 0.2,
+        strategies: Sequence[StepStrategy] | None = None,
     ):
         # Handle both TrainerConfig and legacy parameters
         if config is not None:
@@ -1054,6 +1085,17 @@ class SloughGPTTrainer:
         self._owned_metadata: dict | None = None
         self._experience_sampler = self._build_experience_sampler_if_configured()
         self._owned_objective = self._build_owned_objective_if_configured()
+        # Step strategies: the single per-step seam (MetaTrainer injects here;
+        # legacy EWC/owned attrs are wrapped by _iter_strategies, not copied).
+        self.strategies: list[StepStrategy] = list(strategies or ())
+
+        # Self-gen flywheel: producer gates model-generated continuations at
+        # the corpus write boundary; the sampler mixes them into train batches
+        # at config.selfgen_quota (0 = disabled).
+        self._selfgen_producer = None
+        self._selfgen_sampler = None
+        self._selfgen_mix_rng = np.random.default_rng(42)
+        self._build_selfgen_if_configured()
 
         # Compute data quality metrics
         try:
@@ -1248,8 +1290,14 @@ class SloughGPTTrainer:
 
         When live feed ingestion is configured, the train split streams from
         the FeedBatchSampler (fixed vocab, timer refresh); val stays on the
-        initial snapshot.
+        initial snapshot. The self-gen flywheel mixes in at most
+        ``selfgen_quota`` of train batches (anti-collapse: the static data
+        always keeps its share).
         """
+        if split == "train" and self._selfgen_sampler is not None:
+            if self._selfgen_mix_rng.random() < self.config.selfgen_quota:
+                x, y = self._selfgen_sampler.get_batch(self.config.batch_size)
+                return x.astype(np.int64), y.astype(np.int64)
         if split == "train" and self._experience_sampler is not None:
             x, y = self._experience_sampler.get_batch(self.config.batch_size)
             return x.astype(np.int64), y.astype(np.int64)
@@ -1310,6 +1358,120 @@ class SloughGPTTrainer:
         )
         return sampler
 
+    def _build_selfgen_if_configured(self):
+        """Build the self-gen producer + sampler, or stay None when disabled.
+
+        Requires ``config.selfgen_interval > 0``. The producer resolves (and
+        creates if needed) the self-gen corpus; the FeedBatchSampler drains it
+        with unknown chars mapped to token 0, same fixed-vocab contract as the
+        live feed path. Corpus seeding happens here so a first-ever run starts
+        with prompts before the model generates anything.
+        """
+        if self.config.selfgen_interval <= 0:
+            return None
+        from domain.training._internal.selfgen import (
+            SelfGenProducer,
+            resolve_corpus_path,
+        )
+
+        prompts = list(self.config.selfgen_prompts or [])
+        if not prompts:
+            head = "".join(self.itos.get(int(i), "") for i in self.data[:2048])
+            prompts = SelfGenProducer.prompts_from_text(head, count=8)
+        if not prompts:
+            logger.warning(
+                "selfgen_interval set but no prompts derivable — self-gen disabled",
+                extra={"tag": "TRAIN"},
+            )
+            return None
+
+        corpus_path = resolve_corpus_path(
+            self.config.selfgen_source, local_base=self.config.selfgen_local_base
+        )
+        producer = SelfGenProducer(
+            corpus_path, prompts, min_quality=self.config.selfgen_min_quality
+        )
+        producer.ensure_corpus()
+        self._selfgen_producer = producer
+        self._selfgen_sampler = self._make_selfgen_sampler()
+        logger.info(
+            "Self-gen flywheel enabled (interval=%d, quota=%.2f, samples=%d, corpus=%s)",
+            self.config.selfgen_interval,
+            self.config.selfgen_quota,
+            self.config.selfgen_samples,
+            corpus_path,
+            extra={"tag": "TRAIN"},
+        )
+        return producer
+
+    def _make_selfgen_sampler(self):
+        """Build the FeedBatchSampler draining the self-gen corpus (or None)."""
+        from domain.training._internal.training_feed import FeedBatchSampler
+
+        try:
+            return FeedBatchSampler(
+                stoi=self.stoi,
+                block_size=self.config.block_size,
+                source=self.config.selfgen_source,
+                refresh_interval=0.0,  # explicit refresh after each round
+                local_base=self.config.selfgen_local_base,
+                max_pairs=1024,
+            )
+        except Exception as exc:
+            logger.warning(
+                "self-gen sampler unavailable (%s) — flywheel disabled",
+                exc,
+                extra={"tag": "TRAIN"},
+            )
+            self._selfgen_producer = None
+            return None
+
+    def _selfgen_round(self) -> dict[str, float]:
+        """Generate → gate → append → refresh for one self-gen round.
+
+        Uses the trainer's own live model (train ≡ serve via ``generate``);
+        any failure is logged and swallowed — generation must never kill the
+        training run.
+        """
+        producer = self._selfgen_producer
+        if producer is None:
+            return {}
+        accepted = 0
+        prompts = producer.next_prompts(self.config.selfgen_samples)
+        producer.rounds += 1  # count the attempt so failures don't re-log round 1
+        try:
+            for prompt in prompts:
+                text = self.generate(
+                    prompt,
+                    max_tokens=self.config.selfgen_max_tokens,
+                    temperature=self.config.selfgen_temperature,
+                )
+                continuation = text[len(prompt) :] if text.startswith(prompt) else text
+                if producer.accept(prompt, continuation):
+                    accepted += 1
+            if accepted and self._selfgen_sampler is not None:
+                self._selfgen_sampler.refresh()
+        except Exception as exc:
+            logger.warning(
+                "self-gen round %d failed (training continues): %s",
+                producer.rounds,
+                exc,
+                extra={"tag": "TRAIN"},
+            )
+        finally:
+            self.model.train()  # generate() switched to eval; restore (train_step also resets)
+        if accepted:
+            logger.info(
+                "Self-gen round %d: %d/%d accepted (written=%d, corpus=%s)",
+                producer.rounds,
+                accepted,
+                len(prompts),
+                producer.written,
+                producer.corpus_path,
+                extra={"tag": "TRAIN"},
+            )
+        return {"selfgen_accepted": float(accepted), "selfgen_written": float(producer.written)}
+
     def _build_experience_sampler_if_configured(self):
         """Build ExperienceSampler when data_path is an owned-experience source."""
         if not is_experience_source(self.data_path):
@@ -1366,6 +1528,22 @@ class SloughGPTTrainer:
             yield self.get_batch("train")
 
     @_gc_parked_step
+    def _iter_strategies(self) -> list[StepStrategy]:
+        """Strategies active for this step, in composition order.
+
+        Legacy trainer attributes are wrapped as strategies so their inline
+        behavior is preserved exactly (EWC penalty first when snapshots exist,
+        then the owned objective with its ``owned_`` metric namespacing);
+        injected strategies (MetaTrainer) run after them.
+        """
+        active: list[StepStrategy] = []
+        if self._ewc is not None:
+            active.append(EwcStrategy(self._ewc))
+        if self._owned_objective is not None:
+            active.append(OwnedObjectiveStrategy(self._owned_objective))
+        active.extend(self.strategies)
+        return active
+
     def train_step(self) -> dict[str, float]:
         """Execute a single training step on the pure numpy SloNet path."""
         model = self.training_model
@@ -1402,17 +1580,16 @@ class SloughGPTTrainer:
         except Exception:
             pass
 
-        # Add EWC penalty if enabled (prevents forgetting previous tasks)
-        if self._ewc is not None and self._ewc.task_snapshots:
-            ewc_loss, ewc_stats = self._ewc.ewc_loss()
-            loss = loss + ewc_loss
-
-        # Owned objective (goal 13): combine with experience metadata when enabled.
-        owned_metrics: dict[str, float] = {}
-        if self._owned_objective is not None:
-            loss, owned_metrics = self._owned_objective.compute(
-                model, x, y, loss, metadata=self._owned_metadata
+        # Step strategies — the single per-step seam (StepStrategy): legacy EWC
+        # and the owned objective compose first in their historical order, then
+        # any injected strategies (MetaTrainer). Metric keys are final.
+        strategy_metrics: dict[str, float] = {}
+        for strategy in self._iter_strategies():
+            loss, step_metrics = strategy.compute(
+                model, x, y, loss, logits=logits, metadata=self._owned_metadata
             )
+            if step_metrics:
+                strategy_metrics.update(step_metrics)
 
         (loss * scale_factor).backward()
         self.accumulation_step += 1
@@ -1427,9 +1604,9 @@ class SloughGPTTrainer:
         self._ema_loss = ema
         self._last_train_loss = raw_loss
         metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
-        if owned_metrics:
-            for k, v in owned_metrics.items():
-                metrics[f"owned_{k}"] = v
+        if strategy_metrics:
+            for k, v in strategy_metrics.items():
+                metrics[k] = v
 
         if self.accumulation_step >= self.config.gradient_accumulation_steps:
             params = [p for p in model.parameters() if p.grad is not None]
@@ -1852,6 +2029,14 @@ class SloughGPTTrainer:
                 metrics = self.train_step()
                 train_loss += metrics["loss"]
                 self.global_step += 1
+
+                # Self-gen flywheel: generate gated continuations with the
+                # live model on schedule; failures never stop the run.
+                if (
+                    self._selfgen_producer is not None
+                    and self.global_step % self.config.selfgen_interval == 0
+                ):
+                    self._selfgen_round()
 
                 if self.global_step % self.config.log_interval == 0:
                     lr = (

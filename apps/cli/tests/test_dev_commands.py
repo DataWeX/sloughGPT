@@ -6,6 +6,7 @@ import os
 import signal
 import sys
 from contextlib import ExitStack
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1040,3 +1041,138 @@ class TestApiOnlySignalHandling:
                 f"{fn}: SIGINT registered after spawn — an interrupt in the gap "
                 "orphan-leaks the children"
             )
+
+
+class TestEnsureWebNodeModules:
+    """Lazily wire apps/web/node_modules in a git worktree to the main checkout.
+
+    Regression for cosmic-tiger 2026-10-28: `slo dev` in a worktree died at
+    vite.config.ts with "Cannot find module '@vitejs/plugin-react'" — the web
+    app keeps a local node_modules that root-level worktree symlinks don't
+    cover, so npm's walk-up from apps/web never finds it.
+    """
+
+    @staticmethod
+    def _mk_main_checkout(tmp_path: Path, with_web_nm: bool = True) -> Path:
+        """Fake main checkout: apps/, packages/, apps/web/node_modules with the plugin."""
+        main = tmp_path / "main"
+        (main / "apps" / "web").mkdir(parents=True)
+        (main / "packages").mkdir()
+        if with_web_nm:
+            (main / "apps" / "web" / "node_modules" / "@vitejs" / "plugin-react").mkdir(
+                parents=True
+            )
+        return main
+
+    @staticmethod
+    def _mk_worktree(tmp_path: Path, main: Path) -> Path:
+        """Fake worktree: root node_modules symlinked to the main checkout's."""
+        wt = tmp_path / "wt"
+        (wt / "apps" / "web").mkdir(parents=True)
+        (wt / "node_modules").symlink_to(main / "node_modules", target_is_directory=True)
+        return wt
+
+    def test_already_wired_is_noop(self, tmp_path, mock_log):
+        from commands.dev import _ensure_web_node_modules
+
+        main = self._mk_main_checkout(tmp_path)
+        web_nm = main / "apps" / "web" / "node_modules"
+        _ensure_web_node_modules(main)
+        assert not web_nm.is_symlink()  # untouched, not re-pointed
+        assert (web_nm / "@vitejs" / "plugin-react").exists()
+
+    def test_main_checkout_without_web_nm_is_noop(self, tmp_path, mock_log):
+        from commands.dev import _ensure_web_node_modules
+
+        main = self._mk_main_checkout(tmp_path, with_web_nm=False)
+        _ensure_web_node_modules(main)
+        assert not (main / "apps" / "web" / "node_modules").exists()
+
+    def test_worktree_missing_dir_gets_symlink(self, tmp_path, mock_log):
+        from commands.dev import _ensure_web_node_modules
+
+        main = self._mk_main_checkout(tmp_path)
+        wt = self._mk_worktree(tmp_path, main)
+        _ensure_web_node_modules(wt)
+        wired = wt / "apps" / "web" / "node_modules"
+        assert wired.is_symlink()
+        assert wired.resolve() == (main / "apps" / "web" / "node_modules").resolve()
+
+    def test_worktree_cache_only_dir_replaced(self, tmp_path, mock_log):
+        from commands.dev import _ensure_web_node_modules
+
+        main = self._mk_main_checkout(tmp_path)
+        wt = self._mk_worktree(tmp_path, main)
+        cache_only = wt / "apps" / "web" / "node_modules" / ".vite" / "deps"
+        cache_only.mkdir(parents=True)
+        _ensure_web_node_modules(wt)
+        wired = wt / "apps" / "web" / "node_modules"
+        assert wired.is_symlink()
+        assert wired.resolve() == (main / "apps" / "web" / "node_modules").resolve()
+
+    def test_worktree_foreign_content_aborts(self, tmp_path, mock_log):
+        from commands.dev import _ensure_web_node_modules
+
+        main = self._mk_main_checkout(tmp_path)
+        wt = self._mk_worktree(tmp_path, main)
+        foreign = wt / "apps" / "web" / "node_modules" / "left-pad"
+        foreign.mkdir(parents=True)
+        _ensure_web_node_modules(wt)
+        wired = wt / "apps" / "web" / "node_modules"
+        assert not wired.is_symlink()  # never delete content we didn't create
+        assert foreign.exists()
+
+    def test_git_fallback_detects_worktree(self, tmp_path, mock_log, monkeypatch):
+        """Worktree without a root node_modules symlink — detected via git."""
+        import subprocess
+
+        from commands.dev import _ensure_web_node_modules
+
+        main = self._mk_main_checkout(tmp_path)
+        (main / ".git").mkdir()
+        (main / "pyproject.toml").write_text("[project]\nname='x'\n")
+        wt = tmp_path / "wt-git"
+        wt.mkdir()
+        (wt / "apps" / "web").mkdir(parents=True)
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:3] == ["git", "-C", str(wt)] and "worktree" in cmd:
+                out = f"worktree {main}\nHEAD aaa\n\nworktree {wt}\nHEAD bbb\ndetached\n"
+                return subprocess.CompletedProcess(cmd, 0, stdout=out)
+            return subprocess.CompletedProcess(cmd, 1, stdout="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        _ensure_web_node_modules(wt)
+        wired = wt / "apps" / "web" / "node_modules"
+        assert wired.is_symlink()
+        assert wired.resolve() == (main / "apps" / "web" / "node_modules").resolve()
+
+    def test_not_a_worktree_without_web_nm_is_noop(self, tmp_path, mock_log, monkeypatch):
+        """No symlink, git says we ARE the main checkout — leave everything alone."""
+        import subprocess
+
+        from commands.dev import _ensure_web_node_modules
+
+        root = self._mk_main_checkout(tmp_path, with_web_nm=False)
+        (root / ".git").mkdir()
+
+        def fake_run(cmd, **kwargs):
+            if "worktree" in cmd:
+                out = f"worktree {root}\nHEAD aaa\n"
+                return subprocess.CompletedProcess(cmd, 0, stdout=out)
+            return subprocess.CompletedProcess(cmd, 1, stdout="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        _ensure_web_node_modules(root)
+        assert not (root / "apps" / "web" / "node_modules").exists()
+
+    def test_dangling_symlink_replaced(self, tmp_path, mock_log):
+        from commands.dev import _ensure_web_node_modules
+
+        main = self._mk_main_checkout(tmp_path)
+        wt = self._mk_worktree(tmp_path, main)
+        dangling = wt / "apps" / "web" / "node_modules"
+        dangling.symlink_to(tmp_path / "gone", target_is_directory=True)
+        _ensure_web_node_modules(wt)
+        assert dangling.is_symlink()
+        assert dangling.resolve() == (main / "apps" / "web" / "node_modules").resolve()

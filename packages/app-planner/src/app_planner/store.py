@@ -28,13 +28,13 @@ import os
 import random
 import tempfile
 import time
-import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
 from . import config
+from .ids import make_readable_id
 
 logger = logging.getLogger("app_planner.store")
 
@@ -64,6 +64,10 @@ class Card:
     chain_index: int = -1
     chain_prev: str = ""
     chain_hash: str = ""
+    # Edit counter: bumped on every content mutation (update/move/block).
+    # Derived metadata — deliberately NOT hashed (see _UNHASHED_FIELDS), so
+    # adding it cannot invalidate the stored hashes of legacy cards.
+    rev: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -71,6 +75,7 @@ class Card:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Card:
         chain_index = d.get("chain_index", -1)
+        rev = d.get("rev", 0)
         return cls(
             id=d.get("id", ""),
             title=d.get("title", ""),
@@ -90,6 +95,7 @@ class Card:
             chain_index=chain_index if isinstance(chain_index, int) else -1,
             chain_prev=d.get("chain_prev", "") or "",
             chain_hash=d.get("chain_hash", "") or "",
+            rev=rev if isinstance(rev, int) else 0,
         )
 
 
@@ -147,6 +153,10 @@ class Board:
 
 CHAIN_GENESIS = "0" * 64
 _CHAIN_FIELDS = ("chain_index", "chain_prev", "chain_hash")
+# `rev` is a derived edit counter, not content: excluding it keeps hashes
+# recomputable over legacy cards that predate the field (adding it to the
+# payload would flag all 1028 pre-existing cards as mutated).
+_UNHASHED_FIELDS = _CHAIN_FIELDS + ("rev",)
 
 
 def chain_hash_for(card: Card, prev_hash: str) -> str:
@@ -154,8 +164,11 @@ def chain_hash_for(card: Card, prev_hash: str) -> str:
 
     The chain fields themselves are excluded so a card's hash depends only
     on its content and its predecessor — recomputation is well-founded.
+    The ``rev`` counter is excluded for forward compatibility (see
+    ``_UNHASHED_FIELDS``); the content it counts *is* hashed, so tampering
+    with a card's text is still caught.
     """
-    payload = {k: v for k, v in card.to_dict().items() if k not in _CHAIN_FIELDS}
+    payload = {k: v for k, v in card.to_dict().items() if k not in _UNHASHED_FIELDS}
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256((prev_hash + "\x00" + blob).encode()).hexdigest()
 
@@ -181,8 +194,8 @@ def chain_hash_for(card: Card, prev_hash: str) -> str:
 # 4/40 hammer runs under box load spikes (2026-10-04 evidence). POSIX-only.
 
 _OCC_ATTEMPTS = 30
-_OCC_BACKOFF_S = 0.005       # first retry delay; doubles per attempt
-_OCC_BACKOFF_CAP_S = 0.1     # per-sleep ceiling (worst total ≈ 3s, then LOUD)
+_OCC_BACKOFF_S = 0.005  # first retry delay; doubles per attempt
+_OCC_BACKOFF_CAP_S = 0.1  # per-sleep ceiling (worst total ≈ 3s, then LOUD)
 
 
 class BoardWriteConflict(RuntimeError):
@@ -226,8 +239,17 @@ class PlannerStore:
 
     @staticmethod
     def _card_line(card: Card) -> str:
-        """Canonical, byte-stable JSONL serialization of a card line."""
-        return json.dumps(card.to_dict(), sort_keys=True, ensure_ascii=False)
+        """Canonical, byte-stable JSONL serialization of a card line.
+
+        ``rev`` is omitted while it is 0: legacy lines (and never-edited
+        cards) stay byte-identical to pre-upgrade output, so sealing the
+        board after an edit produces a one-line diff instead of rewriting
+        all 1000+ cards.
+        """
+        payload = card.to_dict()
+        if not payload.get("rev"):
+            payload.pop("rev", None)
+        return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
     @staticmethod
     def _schema_line(name: str, columns: list[dict[str, Any]]) -> str:
@@ -301,9 +323,7 @@ class PlannerStore:
                 if attempt < _OCC_ATTEMPTS:
                     delay = min(_OCC_BACKOFF_CAP_S, _OCC_BACKOFF_S * 2 ** (attempt - 1))
                     time.sleep(delay * rng.uniform(0.5, 1.5))
-        raise BoardWriteConflict(
-            f"unresolved after {_OCC_ATTEMPTS} OCC attempts: {last}"
-        ) from last
+        raise BoardWriteConflict(f"unresolved after {_OCC_ATTEMPTS} OCC attempts: {last}") from last
 
     @staticmethod
     def _has_schema_header(lines: list[str]) -> bool:
@@ -375,11 +395,7 @@ class PlannerStore:
         """
 
         def attempt() -> None:
-            raw = (
-                self._board_file.read_text(encoding="utf-8")
-                if self._board_file.exists()
-                else ""
-            )
+            raw = self._board_file.read_text(encoding="utf-8") if self._board_file.exists() else ""
             token = _token_of(raw)
             body = [line for line in raw.splitlines() if line.strip()]
             out = list(body)
@@ -437,8 +453,7 @@ class PlannerStore:
         for card in board.cards:
             if card.column not in declared_set:
                 logger.warning(
-                    "Card %s has undeclared column %r — coercing to %r "
-                    "(declared: %s)",
+                    "Card %s has undeclared column %r — coercing to %r (declared: %s)",
                     card.id,
                     card.column,
                     fallback,
@@ -489,9 +504,25 @@ class PlannerStore:
         self._write_board(board)
 
     def get_card(self, card_id: str) -> Card | None:
-        for obj in self._read_board_lines():
-            if obj.get("id") == card_id and obj.get("title"):
-                return Card.from_dict(obj)
+        cards = [Card.from_dict(obj) for obj in self._read_board_lines() if obj.get("title")]
+        lower = card_id.lower()
+        matches = [c for c in cards if c.id.lower() == lower]
+        if not matches:
+            matches = [c for c in cards if c.id.lower().startswith(lower)]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            matches.sort(
+                key=lambda c: c.updated_at or c.created_at or c.id,
+                reverse=True,
+            )
+            logger.warning(
+                "Ambiguous card id '%s' (%d matches); using most recently updated: %s",
+                card_id,
+                len(matches),
+                matches[0].id,
+            )
+            return matches[0]
         return None
 
     def add_card(
@@ -509,8 +540,9 @@ class PlannerStore:
     ) -> Card:
         self.validate_column(column)
         now = datetime.now(UTC).isoformat()
+        board = self.load_board()
         card = Card(
-            id=str(uuid.uuid4()),
+            id=make_readable_id(title, (c.id for c in board.cards)),
             title=title,
             description=description,
             column=column,
@@ -536,6 +568,7 @@ class PlannerStore:
                 for key, value in kwargs.items():
                     if hasattr(card, key):
                         setattr(card, key, value)
+                card.rev += 1
                 card.updated_at = datetime.now(UTC).isoformat()
                 self._surgical_rewrite({card_id: self._card_line(card)})
                 return card
@@ -550,6 +583,7 @@ class PlannerStore:
         for card in board.cards:
             if card.id == card_id:
                 card.column = to_column
+                card.rev += 1
                 card.updated_at = datetime.now(UTC).isoformat()
                 self._surgical_rewrite({card_id: self._card_line(card)})
                 return True
@@ -589,6 +623,7 @@ class PlannerStore:
             if card.id == card_id:
                 if blocker_id not in card.blocked_by:
                     card.blocked_by.append(blocker_id)
+                    card.rev += 1
                     card.updated_at = datetime.now(UTC).isoformat()
                     self._surgical_rewrite({card_id: self._card_line(card)})
                 return card
@@ -600,6 +635,7 @@ class PlannerStore:
             if card.id == card_id:
                 if blocker_id in card.blocked_by:
                     card.blocked_by.remove(blocker_id)
+                    card.rev += 1
                     card.updated_at = datetime.now(UTC).isoformat()
                     self._surgical_rewrite({card_id: self._card_line(card)})
                 return card
@@ -642,11 +678,7 @@ class PlannerStore:
 
     def _read_notes_with_token(self) -> tuple[list[Note], str]:
         """Read the journal AND its generation token from ONE snapshot (OCC)."""
-        raw = (
-            self._notes_file.read_text(encoding="utf-8")
-            if self._notes_file.exists()
-            else ""
-        )
+        raw = self._notes_file.read_text(encoding="utf-8") if self._notes_file.exists() else ""
         notes: list[Note] = []
         for line in raw.splitlines():
             stripped = line.strip()
@@ -683,9 +715,25 @@ class PlannerStore:
         return notes[:limit]
 
     def get_note(self, note_id: str) -> Note | None:
-        for note in self._read_notes():
-            if note.id == note_id:
-                return note
+        notes = self._read_notes()
+        lower = note_id.lower()
+        matches = [n for n in notes if n.id.lower() == lower]
+        if not matches:
+            matches = [n for n in notes if n.id.lower().startswith(lower)]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            matches.sort(
+                key=lambda n: n.updated_at or n.created_at or n.id,
+                reverse=True,
+            )
+            logger.warning(
+                "Ambiguous note id '%s' (%d matches); using most recently updated: %s",
+                note_id,
+                len(matches),
+                matches[0].id,
+            )
+            return matches[0]
         return None
 
     def create_note(
@@ -700,7 +748,7 @@ class PlannerStore:
     ) -> Note:
         now = datetime.now(UTC).isoformat()
         note = Note(
-            id=str(uuid.uuid4()),
+            id=make_readable_id(title, (n.id for n in self._read_notes())),
             title=title,
             body=body,
             status=status,

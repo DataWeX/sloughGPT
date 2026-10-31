@@ -514,11 +514,17 @@ class TestConsciousnessAPI:
         assert data["data"]["id"] == "test-hero"
         assert data["data"]["name"] == "Test Hero"
 
-        # List should show it
+        # List should show it, with traits summary and active flag
         res = client.get("/consciousness/personas")
         assert res.status_code == 200
         personas = res.json()["data"]["personas"]
-        assert any(p["id"] == "test-hero" for p in personas)
+        saved = next((p for p in personas if p["id"] == "test-hero"), None)
+        assert saved is not None
+        assert "traits" in saved and isinstance(saved["traits"], dict)
+        assert "top_traits" in saved and isinstance(saved["top_traits"], list)
+        assert isinstance(saved["active"], bool)
+        # Saved from the current profile → it IS the current profile → active
+        assert saved["active"] is True
 
         # Activate it
         res = client.post("/consciousness/personas/test-hero/activate")

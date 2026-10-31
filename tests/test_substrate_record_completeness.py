@@ -68,15 +68,16 @@ def test_process_never_writes_contentless_episode(tmp_path):
     )
 
 
-# (G2 landed on main 2026-10-19 via fix/substrate-g2-nonstream-postgen —
-# kept un-xfailed here as a regression guard for the non-stream post-gen call.)
-def test_non_stream_chat_runs_post_gen_tasks():
+# (G2 landed on main 2026-10-19 via fix/substrate-g2-nonstream-postgen; the
+# stream-first rework kept the rule and moved the call site — chat has exactly
+# one path now, ``stream_turn``, so that is where the regression guard pins.)
+def test_chat_stream_turn_runs_post_gen_tasks():
     src = (REPO / "apps/api/server/routers/inference.py").read_text()
-    m = re.search(r"    async def chat\((?s:.*?)\n    (?:async )?def ", src)
-    assert m, "chat() body not found"
+    m = re.search(r"    async def stream_turn\((?s:.*?)\n    (?:async )?def ", src)
+    assert m, "stream_turn() body not found"
     assert "_run_post_gen_tasks" in m.group(0), (
-        "the non-stream chat handler must run the same post-generation tasks "
-        "(consciousness processing) the stream handler runs"
+        "the single chat generation path (stream_turn) must run the "
+        "post-generation tasks (consciousness processing) for every turn"
     )
 
 

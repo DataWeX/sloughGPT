@@ -97,7 +97,9 @@ class RAGIngestRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=100000)
     source: str = Field(default="user", max_length=200)
     topic: str = Field(default="general", max_length=100)
-    chunk_size: int = Field(default=512, ge=64, le=4096)
+    # None → service default: fine-grained char windows sized to the
+    # retrieval injection budget; a value = legacy token chunking.
+    chunk_size: int | None = Field(default=None, ge=64, le=4096)
 
 
 class RAGQueryRequest(BaseModel):
