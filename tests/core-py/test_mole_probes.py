@@ -293,10 +293,10 @@ class TestJourneyProbe:
     def test_sweep_uses_stub_runner(self, monkeypatch, tmp_path):
         # Import the real package first so its attributes bind to the REAL
         # runner; then swap only sys.modules so the probe picks up the stub.
-        import domain.journeys  # noqa: F401
+        import journeys  # noqa: F401
 
         report_path = tmp_path / "sweep-report.json"
-        stub = types.ModuleType("domain.journeys.runner")
+        stub = types.ModuleType("journeys.runner")
         calls: dict = {}
 
         def fake_run(flows, headed, strict_errors):
@@ -309,7 +309,7 @@ class TestJourneyProbe:
         stub.run = fake_run
         stub.REPORT = str(report_path)
         stub.main = lambda *a, **k: 0
-        monkeypatch.setitem(sys.modules, "domain.journeys.runner", stub)
+        monkeypatch.setitem(sys.modules, "journeys.runner", stub)
 
         result = journey_probe.run_probe(True)
 

@@ -24,7 +24,7 @@ Probe seams:
                 from scripts/benchmark_results.py itself (local files)
     http        API self-diagnosis surface (/health, /errors/*)
     sse         /health/stream — payload-size + cadence watchdog
-    journey     UX sweep report (domain.journeys) — report-only unless swept
+    journey     UX sweep report (journeys) — report-only unless swept
 
 The journey runner freezes ``SLO_WEB_URL``/``SLO_API_URL`` at *import*
 time with a stale ``:5175`` web default; this package sets
@@ -139,7 +139,7 @@ def run_mole(
     """
     skipped = {s.strip() for s in skip if s.strip()}
     # Freeze targets (and the mole-side :5173 env default) BEFORE probes
-    # — the journey probe imports domain.journeys, which freezes env at import.
+    # — the journey probe imports journeys, which freezes env at import.
     targets = default_targets()
     results: list[ProbeResult] = []
 

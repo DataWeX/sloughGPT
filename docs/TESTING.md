@@ -264,7 +264,7 @@ There is nothing else to name: module, URLs, and CLI all say Mole
   (readers are hermetic in tests, never raise: missing sensors degrade to an
   explicit finding, not a crash); API health/errors (`/health*`, `/errors/*`);
   `/health/stream` cadence + payload size (flags >256 KB frames and >8s
-  stalls); the UX journey sweep report (`domain/journeys`); the newest
+  stalls); the UX journey sweep report (`journeys`); the newest
   full-suite gate artifact vs the drift baseline (`~/.cache/slog-gates`;
   env `SLO_GATES_DIR` / `SLO_GATES_DRIFT_MAX` / `SLO_GATES_FULL_PASSED`);
   and stored benchmark records vs thresholds — the verdict comes from

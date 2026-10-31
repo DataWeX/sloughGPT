@@ -39,7 +39,6 @@ ALLOWLIST: dict[str, str] = {
     "domain/infrastructure/_internal/inference_engine.py": (
         "ENGINE_READY port=... readiness line consumed over stdout by a parent process"
     ),
-    "domain/journeys/runner.py": "journey harness runner; prints the run report",
     "domain/logging/_internal/config.py": (
         "writes to stderr during logging bootstrap — a logging failure cannot be logged"
     ),

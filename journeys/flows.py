@@ -20,7 +20,7 @@ import os
 from dataclasses import dataclass
 from typing import Callable
 
-from domain.journeys.steps import (
+from journeys.steps import (
     s_click,
     s_exists,
     s_goto,

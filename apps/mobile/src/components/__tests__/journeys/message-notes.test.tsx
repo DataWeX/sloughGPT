@@ -4,7 +4,7 @@
  * Slice 4 foundation + feature: message ids must survive reloads (the context
  * seam strips them today), and notes key off those ids. Only transports and
  * services are mocked — the real message-notes service runs against a mocked
- * AsyncStorage. Mapped in domain/journeys/flows.py as m4-notes.
+ * AsyncStorage. Mapped in journeys/flows.py as m4-notes.
  */
 import React from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'

@@ -4,7 +4,7 @@
  * In-code journey: "+ Context" note flows through the real chat-store into
  * the /chat/control contract, and the Details sheet reads /context/inspect
  * through the real mapper into the ContextWindowViewer. Only the transport
- * is mocked. Mapped in domain/journeys/flows.py as m2-context.
+ * is mocked. Mapped in journeys/flows.py as m2-context.
  */
 import React from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'

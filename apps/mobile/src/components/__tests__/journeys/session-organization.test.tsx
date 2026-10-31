@@ -3,7 +3,7 @@
  *
  * In-code journey test — drives the real ChatDrawer against the real
  * folders service and the real chat-store, with only the transport
- * (api-client) mocked. Mapped in domain/journeys/flows.py as m1-organize.
+ * (api-client) mocked. Mapped in journeys/flows.py as m1-organize.
  */
 import React from 'react'
 import { Alert } from 'react-native'

@@ -1,7 +1,7 @@
 """Vertical journey tests — real routers in-process (no stack, no model).
 
 API legs of the mobile in-code journeys (`m1-organize`, `m2-context` in
-``domain/journeys/flows.py``), walked in the call order the mobile app
+``journeys/flows.py``), walked in the call order the mobile app
 executes them through FastAPI ``TestClient`` → real handlers. The jest
 journeys (``apps/mobile/src/components/__tests__/journeys/``) assert client
 behavior against mocked transports; these assert the server contracts those
