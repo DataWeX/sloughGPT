@@ -23,7 +23,6 @@ Quick start:
     pgq.put("weights", numpy_array)
     data = pgq.get("weights")
 """
-
 from __future__ import annotations
 
 import logging

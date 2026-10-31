@@ -22,6 +22,9 @@ class TestGetMetaWeightsRequest:
         assert req.user_id == "u1"
 
     def test_defaults(self):
+        # k defaults to 5, not 10: the schema (routers/meta_weights.py),
+        # the web controller (k = 5) and meta-weights-controller.test.ts
+        # all agree on 5 — this assertion was the stale one.
         req = GetMetaWeightsRequest(user_message="hi")
         # Default top-k shipped as 5 since 4a4616b15 (May); the 10 came from
         # the pre-consolidation test root that stopped running.

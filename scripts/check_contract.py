@@ -37,7 +37,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_DIR = ROOT / "apps" / "api" / "server"
 ROUTERS_DIR = SERVER_DIR / "routers"
-TESTS_DIR = SERVER_DIR / "tests"
+# Server tests sit in different trees across the lineages that carry this gate:
+# main keeps them at apps/api/server/tests, the contract-projection branch at
+# tests/api-server. Scanning every tree that exists means a contract whose only
+# test lives in the other one still counts as tested — hardcoding a single path
+# makes the gate cry "a contract without a test" about a contract that is
+# thoroughly tested, and a gate that reports false positives gets ignored rather
+# than obeyed. (Ported from feat/contract-ts-projection 770c4f504.)
+TESTS_DIRS: tuple[Path, ...] = tuple(
+    p for p in (SERVER_DIR / "tests", ROOT / "tests" / "api-server") if p.is_dir()
+)
 BASELINE_PATH = SERVER_DIR / "contract-baseline.json"
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -192,9 +201,13 @@ def run_static() -> int:
                 if owner and owner != module:
                     failures.append(f"{module}: descriptor name '{name}' already used by {owner}")
                 names_seen[name] = module
-                if not contract_tests_exist(name, TESTS_DIR):
+                if not any(contract_tests_exist(name, d) for d in TESTS_DIRS):
+                    scanned = (
+                        ", ".join(str(d.relative_to(ROOT)) for d in TESTS_DIRS)
+                        or "(no server test tree found)"
+                    )
                     failures.append(
-                        f"{module}: no test under {TESTS_DIR.relative_to(ROOT)} mentions "
+                        f"{module}: no test under {scanned} mentions "
                         f"'{name}' — a contract without a test is a wish"
                     )
 

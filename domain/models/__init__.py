@@ -5,7 +5,6 @@ Public API:
     rotate_half, apply_rotary_pos_emb
     KnowledgeProcessor, apply_processors, get_provider, list_providers
 """
-
 from __future__ import annotations
 
 from domain.models._internal.models import (

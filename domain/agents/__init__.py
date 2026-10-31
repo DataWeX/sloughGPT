@@ -9,7 +9,6 @@ Public API:
     validate_args
     make_provider_infer, resolve_provider, render_tool_contract
 """
-
 from __future__ import annotations
 
 from domain.agents._internal.agents import (

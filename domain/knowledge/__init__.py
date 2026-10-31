@@ -5,7 +5,6 @@ canonical in ``domain.memory`` (single source of truth). This package is the
 thin ``KnowledgeEngine`` facade plus the knowledge-specific ops that keep
 their meaning here (data filtering, search indexes, dedup, gap detection).
 """
-
 from __future__ import annotations
 
 from domain.knowledge._internal.data_filter import DataFilter, get_data_filter

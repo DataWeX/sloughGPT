@@ -196,6 +196,14 @@ $(<command>)                    # Command substitution
 | `bg` / `jobs` | List background shell processes |
 | `fg <id>` | Wait for a background process |
 
+### VM (x86 sandbox)
+
+| Command | Description |
+|---------|-------------|
+| `vmrun <file.asm>` | Assemble + run a 32-bit x86 program in the sandbox VM (`--steps=N`, `--debug`, `--admin`/`--kernel`) |
+| `vmrun <name>` | Run a built-in program — `hello`, `count`, `counter`, `life` |
+| `vmrun --list` | List the built-in programs (includes `life`, Conway's Game of Life: type 1..1200 then Enter; space pause, s step, r reseed, q quit) |
+
 ---
 
 ## Pipelines

@@ -194,9 +194,25 @@ class TestGetPrompt:
 
 
 class TestListPresets:
+    @patch("routers.companion._get_db")
     @patch(PATCH_GET)
-    def test_returns_preset_list(self, mock_get):
+    def test_returns_preset_list(self, mock_get, mock_db):
         mock_get.return_value = _make_companion()
+        # Hermetic on purpose: the handler seeds the collection only when it is
+        # empty, then returns whatever is in it. Reading the live collection
+        # made this an exact count of a mutable store -- it drifted 4 -> 5 as
+        # soon as anything else wrote a preset. Stub the four documented
+        # defaults so the assertion means what it says.
+        preset_docs = [
+            {"id": "warm", "name": "Warm Friend"},
+            {"id": "curious", "name": "Curious Friend"},
+            {"id": "playful", "name": "Playful Friend"},
+            {"id": "balanced", "name": "Balanced Friend"},
+        ]
+        mock_col = MagicMock()
+        mock_col.count.return_value = len(preset_docs)
+        mock_col.find.return_value = preset_docs
+        mock_db.return_value.collection.return_value = mock_col
         client = TestClient(_app())
         resp = client.get("/companion/presets")
         assert resp.status_code == 200

@@ -21,7 +21,6 @@ Features:
 - Seed control for reproducible generation
 - Per-request metadata (timing, token count, model info)
 """
-
 from __future__ import annotations
 
 import threading

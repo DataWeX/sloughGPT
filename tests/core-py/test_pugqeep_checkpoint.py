@@ -134,7 +134,12 @@ class TestCompressCheckpoint:
             stats = compress_checkpoint(soul_path, n_clusters=8)
             assert stats is not None
             assert stats["point_count"] > 0
-            assert stats["compression_ratio"] > 1.0
+            # Honest-nbytes era (card d9028c8f): the payload includes any
+            # stored residual, and k-means VQ at the 0.99 default threshold
+            # stores full-size residuals on random-init weights — so the
+            # ratio can legitimately be < 1.0. The old "> 1.0" pin only
+            # passed because nbytes omitted the residual (always on disk).
+            assert stats["compression_ratio"] > 0
 
             lib_path = Path(stats["library_path"])
             meta_path = Path(stats["meta_path"])
@@ -162,7 +167,10 @@ class TestCompressCheckpoint:
             assert stats is not None
             assert stats["total_raw_bytes"] > 0
             assert stats["total_compressed_bytes"] > 0
-            assert stats["compression_ratio"] >= 1.0
+            # See test_compress_checkpoint_creates_files: honest payload
+            # accounting counts the stored residual, so >= 1.0 is not a
+            # universal invariant for VQ-with-residual points.
+            assert stats["compression_ratio"] > 0
 
     def test_compress_checkpoint_nonexistent_file(self):
         from domain.training._internal.executor import compress_checkpoint

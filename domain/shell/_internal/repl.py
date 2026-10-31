@@ -295,6 +295,14 @@ class _CaptureOutput:
 # ── REPL ─────────────────────────────────────────────────────────────
 
 
+# The TUI chain (tui_repl, graphics, term_screen) is imported on demand — the
+# shell must start without it — and this name sits at module scope rather than
+# inside the method so the failure paths stay patchable: tests reach it as
+# `domain.shell._internal.repl.TuiRepl`, and the on-demand import below goes
+# through the canonical dotted path.
+TuiRepl: Any = None
+
+
 class ShellREPL(LinuxCommandsMixin):
     """Interactive REPL with built-in commands and AI-assisted mode.
 
@@ -2547,9 +2555,11 @@ Examples:
     def _cmd_tui(self, args: str = "") -> None:
         """Launch the split-panel TUI mode — console panel + shell output + input line."""
         try:
-            from .tui_repl import TuiRepl
+            _TuiRepl = TuiRepl
+            if _TuiRepl is None:
+                from domain.shell._internal.tui_repl import TuiRepl as _TuiRepl
 
-            tui = TuiRepl(self, self._log_buffer)
+            tui = _TuiRepl(self, self._log_buffer)
             tui.run()
         except ImportError as ex:
             self._print(f"  TUI mode not available: {ex}")
@@ -3557,7 +3567,7 @@ Examples:
             dev.call("set_samples", spp)
             self._print(f"  Rendering {w}x{h} @ {spp} spp...")
             t0 = _time.time()
-            img = dev.call("render")
+            img = dev.arena.get(dev.call("render"))
             dt = _time.time() - t0
             nz = int((img.sum(axis=-1) > 0.01).sum())
             self._print(
@@ -4682,6 +4692,7 @@ nl: db 10
                 self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
                 self._print(f"    {'count':15s} Count 0 to 9")
                 self._print(f"    {'counter':15s} Count 0 to 4")
+                self._print(f"    {'life':15s} Conway's Game of Life (60x20, validated lives prompt)")
                 self._last_exit_code = 0
                 return
             else:
@@ -4700,10 +4711,13 @@ nl: db 10
         file_or_name = rest if rest else ""
 
         # Check built-in programs by name
+        from domain.shell._internal.vm_programs import LIFE_ASM  # noqa: PLC0415
+
         builtins = {
             "hello": ShellREPL.HELLO_X86,
             "count": ShellREPL.FIB_X86,
             "counter": ShellREPL.COLLATZ_X86,
+            "life": LIFE_ASM,
         }
         if file_or_name and file_or_name in builtins:
             source = builtins[file_or_name]

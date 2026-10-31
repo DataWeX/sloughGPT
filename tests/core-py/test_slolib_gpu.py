@@ -1388,7 +1388,10 @@ class TestCudaWithFakeCupy:
         b = np.random.randn(4, 5).astype(np.float32)
         assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-5)
         backend._fp16_mode = True
-        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-4)
+        # Genuine fp16 compute (inputs actually downcast now — the old
+        # hasattr(x, "device") passthrough silently kept fp32): fp16 matmul
+        # error on randn(3,4)@randn(4,5) measures max ~5e-3, so 1e-2.
+        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-2)
 
     def test_cuda_scaled_dot_causal_with_fake_cupy(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "cupy", self._fake_cupy())

@@ -13,7 +13,6 @@ Public API:
     analyze_image, ImageAnalysis
     generation: LanguageClient, hosted, soul, engine, extract_json
 """
-
 from __future__ import annotations
 
 from domain.inference._internal.context_contract import (

@@ -797,6 +797,49 @@ decision): default = one-pass sweep + printed summary, `--watch` = cadence
   server). Gates and benchmarks now run on conda `sloughgpt` + `PYTHONPATH` —
   the root `.venv` is NOT authoritative (its green was hiding 2 zstd failures;
   `zstandard` is now installed into conda, user-approved).
+**2026-10-16 — startup benchmark gains the launcher path (branch
+`feat/notebook-web-ui`, card `85e15cc4` follow-up).** The card's serve
+launcher was landing in a concurrent session (`22cb8d1c4` + fixes
+`2e09f1a70`, `dcc0165c0`, `e883379bf`) while this session independently
+rebuilt it — duplicate caught at the gate by a path-based check
+(`git log main -- <owned paths>`, not commit-message grep), this session's
+implementation **discarded**, theirs kept. What survives is the measurement:
+`scripts/benchmark_startup.py --via {uvicorn,serve_ui}` boots the API through
+either the raw-uvicorn baseline or `scripts/serve_ui.py` and reports
+`time_to_health_s` / `time_to_ready_s` / `stop_latency_s` (shared
+`benchmark_results record` history). Same load window: health **3.01 s**
+baseline vs **3.89 s** launcher, ready 123.0 vs 123.9 (the app's own warm-up
+dominates both), stop **25.11 s → SIGKILL** (baseline — the app lifespan's
+PGQ engine swallows SIGTERM) vs **2.23 s** (launcher: bounded TERM→KILL +
+reap). Gate = `stop_latency_s ≤ 14 s` on the launcher path only, i.e. its own
+contract (wrapper escalation 5 s, `terminate_grace` 10, `stop()` reap 12).
+Landed by ff from `~/Documents/sloughgpt-api-std` (see Sync recipe). Deltas
+deliberately **not** landed here — port/host overrides and reuse-ownership of
+an already-running stack — are handed off in the card note for whichever
+session owns `scripts/serve_ui.py`.
+
+**2026-10-16 — MogDB full-sync mirror encode 2.6× faster (branch
+`feat/mogdb-sync-perf`, card `223f8de1`, source card
+`20260916_100007_mogdb-performance`).** `MogDB(sync_dir=...)` wraps every
+collection in `SyncableCollection` with the default `sync_mode="full"` — i.e.
+**every insert/update/delete rewrites the whole JSON mirror** — and the encode
+was `json.dump(docs, f, indent=2)`: incremental Python-level streaming plus
+pretty-printing, on the per-write hot path. Now one
+`json.dumps(docs, separators=(",", ":"))` + a single `f.write` in both the
+plain and gzip branches; semantics unchanged (temp file + atomic `replace`,
+`json.load` contract — every reader is parse-based, no pretty-text consumer).
+Measured interleaved A/B (3 pairs, stash-swapping only this file, normalized
+to the benchmark's own `JSON write` machine reference because load swung 2–4×
+inside the window): full-single single-write **47/51/56 → 197/159/137 ops/s —
+ranges non-overlapping, 2.6× normalized**; encode micro 63.7 → 25.2 ms per
+1000-doc mirror, file 226,625 → 164,624 B (−27%). Gated by 3 new deterministic
+contract tests (compact single-line mirror; encode-once counted **through the
+`json_sync` module binding only** — the collection's own journal writes go
+through the shared `json`, so a global counter lies; one atomic replace per
+write): `packages/mogdb` **283/283**, consumer `tests/test_api_keys.py`
+green, `ruff check`/`format` clean on both files. NOT mine, pre-existing on
+main: `test_slonet_provider_real.py` 2 failures (`ImportError: LayerNorm`) and
+`collection.py` `ruff format` dirt.
 
 ## Sync recipe
 
@@ -1591,6 +1634,24 @@ tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
 - `zzz_test.py` at repo root is a stray from origin's `89e01b58c`
   (shell lazy-loading refactor) — not ours; owner please remove.
 
+- **2026-10-20 · gateway binary provenance closed (card `12aad775`, done).**
+  Was partially remediated (Oct 19 rebuild, stamps already clean) but still
+  stale vs its own source: `cargo build --release --locked -p slough-gateway`
+  in the **shared checkout** recompiled the crate (1m10s → binary 10:50),
+  `systemctl --user restart slough-gateway` (PID 171770), and `:8080/health`
+  = `{status, gateway:"rust", sidecar{healthy,last_check,model_loaded,
+  model_name}, uptime_seconds}` matches this checkout's `HealthResponse`
+  (`src/main.rs:146`, handler `:380`; uptime=3s proves the fresh process
+  serves it). `strings binary | grep edge-cascade` = 0; foreign `.d` stamps
+  = 0. Unit `WorkingDirectory`/`ExecStart` already pointed at the shared
+  checkout — no unit edits; edge-cascade worktree stays provenance reference
+  only. Journal note (`~/.config/dev-notes/2026-10-01-*.md`) set `status:
+  done` by hand — **note the tooling gap: `PlannerStore` reads only
+  `.dev-notes/notes.journal.jsonl`, it cannot see the legacy `.md` journal
+  AGENTS.md calls source of truth, so CLI `note update` misses those** (the
+  `08baf13f` board-sync owner may want this on their radar). From
+  `.wt-worldbrain`.
+
 ## In flight
 
 - **2026-10-31 · root session on `feat/wire-flag-load-config` (landed `HEAD:main`).** Wired `FeatureFlags.load_config()` at boot — card `60917072` (user ruling: wire, don't retire). `config/feature_flags.json` was dead: declared intent but nothing hydrated it, so the registry kept code defaults and `is_enabled('hf_finetune')` read DISABLED. `lifespan()` (`apps/api/server/main.py`) now calls a guarded `load_config()` at the top, BEFORE `StartupOrchestrator.run()` (orchestration phases + provider setup read flags early). Scope minimal + inert: flips exactly one flag (`hf_finetune` disabled→enabled; other 23 config flags already match defaults) and no non-test code calls `is_enabled('hf_finetune')` — it just makes the flag truthful. New test `test_real_config_enables_hf_finetune` (75/75 green) pins the real config declares enabled + `load_config` applies it; ledger dedupes so no restart spam. (PR #252 — the skip-gate identity fix + lint-flake card — MERGED to main `57cbd69c` same day; coverage-source regression from test-tree consolidation carded `20261031_080004`, still reddening main's `test-core-py`.)
@@ -1764,6 +1825,300 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   byte-identical); `13cc7bde2` mark the 15 heavy-but-correct quantization
   benchmark tests `@slow` (module-scoped `int8_bench` fixture + 4 standalone
   `run_all`) → fast lane 79→62. Merging this turns `test-core-py` green.
+- **2026-10-19 · `feat/wire-py` — we own the HTTP wire, phase 1 (card
+  `ecea49c8`, stacked on `feat/scene-build`).** `packages/wire-py` is the
+  stdlib-only sync framing layer: `wire/framing.py` (request parser —
+  version-aware keep-alive, chunked request bodies, TE+CL smuggling guard,
+  conflicting-CL rejection, header caps -> 431, malformed -> 400; response
+  serializer with wire-owned Content-Length/Connection/Date/Server) and
+  `wire/server.py` (`WireServer`: threaded sync accept loop, handler crash ->
+  500 + close, desynced connections never reused, prompt `stop()`). TDD: 30
+  tests RED -> GREEN, ruff clean; `pytest.ini` adds the package to default
+  testpaths/pythonpath (+30 collected; the 24 collection errors are
+  diff-identical to HEAD = pre-existing). NEXT: phase 2 ASGI host adapter
+  (`wire/asgi_host.py`, asyncio confined to that seam) + SSE; minimal RFC6455
+  WS deferred (flip stays gated on WS). uvicorn remains the default host until
+  phase 3 gates (`SLO_TRANSPORT` A/B harness + `benchmark_transport.py`) are
+  green. **Phase 2 also done (`3eed464dc`)**: `wire/asgi_host.py` (scope +
+  per-request loop + streaming frames; crash-before-bytes = 500 + close;
+  receive parks post-body - proven against real FastAPI
+  `StreamingResponse`, no hang), `serialize_head` extracted, target
+  high-byte now a clean 400 (was `UnicodeDecodeError` killing the conn
+  thread), `WireServer(asgi_app=...)` mode. 37 tests green; smoke: JSON
+  (Content-Length) then SSE (chunked) on the SAME keep-alive connection.
+  **Phase 3 part 1 done (`bddedfe6e`)**: `scripts/benchmark_transport.py`
+  (raw-socket client for precise TTFB, `--json` for tracking) —
+  keep-alive p50 0.115 ms / ~8.3k req/s, fresh-conn p50 0.285 ms,
+  8-thread concurrent 5.8k req/s, ASGI adapter p50 0.398 ms
+  (+0.28 ms/req = per-request `asyncio.run`), SSE TTFB p50 0.529 ms
+  (total 41 ms / 5 frames x 5 ms); TTFB bug fixed pre-commit (absolute
+  `perf_counter` had leaked into the latency metric). REMAINING phase 3:
+  `SLO_TRANSPORT` wiring + journey gates before any default flip;
+  RFC6455 WS deferred (flip gated on it). **Phase 3 lifespan + A/B done
+  (2026-10-20, committed on stack tail `feat/npu-caps`)**:
+  `wire/asgi_host.py` gains `Lifespan` — one dedicated loop thread drives
+  the spec handshake (startup completes before the accept thread spawns,
+  shutdown after connections close; failed/crashed/timed-out handshakes
+  unwind with no thread leak); `WireServer(lifespan="auto"|"on"|"off")`
+  with uvicorn-compatible auto fallback (lifespan-unaware apps keep
+  serving). Real FastAPI `lifespan=` interop proven in tests; 48 wire
+  tests green (11 new `tests/test_lifespan.py`), ruff clean. A/B: in-process uvicorn 0.53 in `benchmark_transport.py` (same app, same
+  raw-socket client, interleaved rows, `--no-uvicorn`) — ours 0.354 ms
+  p50 vs uvicorn 41.0 ms tight-loop, localized to uvicorn's split
+  head/body writes with no TCP_NODELAY + delayed-ACK (TTFB 0.77 ms,
+  body held 40 ms; 100ms-idle capacity row = 0.94 ms) vs our
+  single-write framing; adapter overhead +0.23 ms/req; 2 runs recorded
+  (note `2026-10-20-wire-layer-phase3-lifespan-ab.md`). REMAINING:
+  `SLO_TRANSPORT` wiring + journey gates (shared tree ~110 dirty — the
+  window). Next lane: NPU CAPS. From `.wt-worldbrain`.
+  **RFC6455 WS done (2026-10-20, committed on stack tail `feat/npu-caps`)
+  — the flip gate is CLEARED.** `wire/websocket.py` (sync stdlib:
+  handshake validation, 101 + `Sec-WebSocket-Accept`, unmasked server /
+  masked client frames, 7/16/64-bit lengths, fragmentation,
+  ping→auto-pong) + `wire/asgi_host.py` `run_websocket` (one session loop
+  per connection over the ASGI websocket connect/accept/receive/send/
+  close/disconnect contract, dedicated single-worker reader executor with
+  a shielded in-flight read) + `wire/server.py` routes
+  `is_ws_upgrade(request)` → `run_websocket` (session consumes the
+  connection, no keep-alive after). Scope grounded on the API's real
+  surface — `inference.py` `add_api_websocket_route("/ws/generate",
+  ws_generate)` with Starlette accept/receive_text/send_json/close, whose
+  interop test pins that exact route shape end-to-end over a real socket.
+  Two real bugs caught by RED tests then fixed: (1) cancelled-receive
+  teardown deadlock — Starlette's `wait_for(receive,30s)` cancels a
+  pending receive and the in-flight read stayed on the default executor
+  that `asyncio.run` joins at session end while the connection is still
+  open → hang; fixed with a session-owned reader executor torn down
+  `shutdown(wait=False,cancel_futures=True)`. (2) reader-close deadlock
+  (second order) — `reader.close()` waits on the makefile lock held by
+  that blocked read, and `socket.close()` does not interrupt a blocked
+  recv (only `shutdown()` does); `_serve_conn` teardown now does
+  `conn.shutdown(SHUT_RDWR)` before `reader.close()`. 14 new
+  `tests/test_websocket.py` (handshake 101/400/426, text+binary 16/64-bit
+  echo, fragmentation, ping→pong, unmasked-client-frame 1002,
+  server-push-while-receive-pending, close/EOF, reject→403, plain-HTTP
+  untouched, cancelled-receive teardown, FastAPI interop); full wire
+  suite **62 green**, ruff clean. pytest gotcha recorded in-file: with
+  `from __future__ import annotations` FastAPI resolves the endpoint's
+  `websocket: WebSocket` annotation against MODULE globals — importing
+  `WebSocket` inside the test silently degrades it to a required query
+  param and the route 403-rejects. Benchmark re-run after the teardown
+  change (shutdown on every HTTP conn path): no regression (keepalive
+  p50 0.087 ms, keepalive_asgi 0.352 ms, uvicorn A/B delta unchanged
+  −99.1%). **Tier-1 hardening (uvicorn parity, wire-local)** then closed
+  the A/B gap list: proxy-header translation (XFF/XFP → scope
+  client/scheme, trusted peers only, `forwarded_allow_ips` default
+  `127.0.0.1`), keep-alive idle timeout (`keep_alive_timeout=5.0`,
+  read-phase only — SSE writes unbounded, pipelined bytes never
+  false-trip), body cap (`max_body` 64 MiB → 413; chunked counts;
+  trailers capped), WS message cap (`ws_max_size` 16 MiB on declared
+  frame length + fragment assembly → close 1009), `Expect:
+  100-continue` (interim only after validation; unknown → 417),
+  uvicorn-format access log (`wire.access`, handler + ASGI + WS 101).
+  Smuggling guards already existed from phase 1 — the only body gap
+  was the cap. 15 new tests (`test_hardening.py` 13 + 2 WS-cap) →
+  suite **77 green**, ruff clean; a test-helper flake (discarded
+  coalesced pipelined bytes) fixed via shared read buffer (43/60 →
+  0/15). Benchmark no regression (keepalive p50 0.099 ms, adapter
+  +0.284 ms). Deferred with reasons: body streaming (needs a card),
+  permessage-deflate, hot-reload. Only the shared-tree `SLO_TRANSPORT`
+  wiring + journey gates remain. From `.wt-worldbrain`.
+  **Streaming request bodies (card `c24543a4`, DONE, 2026-10-20)** —
+  the last deferred Tier-1 item, landed on `feat/npu-caps`. Bodies over
+  `body_buffer_threshold` (default 64 KiB) stream through ASGI
+  `receive()` (`http.request` + `more_body`); `max_body` became a
+  running total (413 `BodyTooLarge`, matters for chunked); small bodies
+  keep the exact single-frame path (hot path pinned by test). New
+  `wire/framing.py` `BodyReader` (reads through the connection's
+  buffered reader — pipelined bytes never stolen; threshold read-ahead
+  re-queued so nothing is lost or reordered at the buffer→stream
+  switch), per-request single-worker reader executor in `server.py`
+  (the WS seam, `shutdown(wait=False,cancel_futures=True)` in a
+  finally), handler mode drains via `read_all()` (buffered contract
+  preserved). Two bugs caught by RED tests: (1) **cancellation dropped
+  body bytes** — `wait_for(receive())` cancelled the wrapped future
+  while the executor read completed, discarding bytes; the WS
+  cancel-and-reset pattern would corrupt an HTTP body, so the HTTP side
+  uses `asyncio.shield()` (cancellation abandons the await, never the
+  future's result); (2) access-log assert race in my own hardening test
+  (client has the response before the server thread logs) → bounded
+  poll. `_BODILESS` → `_BODYLESS` typo fix. Benchmark gained
+  `upload_wire`/`upload_uvicorn` (10 MiB CL, byte-exact per round):
+  64 KiB chunks = 3.4× behind uvicorn → `_BODY_READ_CHUNK` 1 MiB =
+  **488 MiB/s (1.55×)**; 2 MiB no better → floor is the thread↔loop
+  seam itself, core stays sync (execution philosophy). Final record at
+  load 15: upload_wire 35.1 ms p50 vs uvicorn 15.6 ms, all other rows
+  unchanged (A/B −98.7%). 6 new `tests/test_streaming.py` → suite
+  **83 green**, ruff clean. Follow-up on card (low prio): bounded
+  read-ahead queue if a bulk-ingest journey demands it.
+
+- **2026-10-19 · `feat/npu-caps` — OS design L2, CAPS + native tensor
+  kernels, card DONE (phase 2; `d74e2cef`, stacked on `feat/wire-py`).**
+  `IoctlCommand.CAPS` + `TensorDevice.caps()` = the tensor unit's
+  machine-readable contract `{name, type, ops, dtypes, backend, parity}`
+  — declared once on the ONE TensorDevice whose three faces (CPU tensor
+  backend `vm._default_tensor`, kernel `NPUDevice._compute`, runtime
+  DeviceManager `"tensor"`) all reach it through the same
+  `ioctl()/call()` path; `ops` single-sourced from `list_commands()`
+  with a drift test. Phase 2 routes hot ops through the ONE loader:
+  `domain/shell/_internal/tensor_kernels.c` (SLO_Q source, gcc+OpenMP /
+  NVRTC entries) behind `SLO_TENSOR_NATIVE` (=0 forces the numpy oracle)
+  — **benchmark-gated** (`scripts/benchmark_tensor_kernels.py`,
+  thread-pinned): softmax 2.5-2.7x, layernorm 3.6-3.8x, rmsnorm 1.4-1.5x,
+  gelu 1.5-1.6x shipped; relu 0.97x NOT routed (kernel ships, stays
+  engine-tested); matmul stays BLAS. CAPS reports reality: engine
+  `native-cpu`, `native_ops = parity = [GELU, LAYER_NORM, RMS_NORM,
+  SOFTMAX]` (exact-set ratchet). TDD 19 RED -> GREEN; new
+  `test_tensor_native.py` (CPU parity, kill-switch spy, byte-identity
+  fallbacks, GPU-vs-oracle on real CUDA); face stash-diff = 12
+  pre-existing identical; ruff clean. shas `8050828ae` (routing),
+  `e23fdb2d7` (bench), `05df4b22d` (evidence). LANDING: tail of the
+  7-branch stack (after `feat/wire-py`). From `.wt-worldbrain`.
+
+- **2026-10-21 · vq-huffman-04 benchmark truth-up (stack tail `feat/npu-caps`,
+  `b4fda3edc`; card `vq-huffman-04` DONE).**
+  `scripts/benchmark_block_quantization.py` was the card's deliverable all
+  along (exact title match) — fixed, ran, recorded: `zlib.crc32` seeds replace
+  PYTHONHASHSEED `hash()` (history now comparable), cluster serialize measured
+  + **bit-exact integrity-gated** (stale block-only guard; series cards 01-03
+  landed `ClusterCodec` streams), median-of-rounds timings, JSON history
+  (`benchmark_block_quantization.json`, downcraft precedent). Verdict avg over
+  5 realistic NN shapes: **block_q4 5.33x / cos 0.99695 / 0.9 ms encode =
+  storage default**, **block_q8 3.20x / MSE 8.39e-09 = fidelity pick**,
+  cluster dominated (3.43x, 248 ms encode, ~275x slower) on weight-like data
+  — its niche is discrete/heavy-tailed input. Suite gate `-05`: pugqeep/
+  compressor 2020 tests **0 fail**; wire-py 83/83; canonical remainder 3784
+  tests with 8+2 reds **all stash-proven pre-existing** (drift-baseline lane
+  `56b49cf1`/`33773fce`); the 24 core-py collection errors pre-date the fork
+  (`merge-base` lacks `domain/shell/_internal/cmds/*` too — main gained them
+  after; zero deletions on my side). From `.wt-worldbrain`.
+
+- **2026-10-21 · vq-huffman-06 — `benchmark_vq_approaches.py` truth-up
+  (stack tail `feat/npu-caps`, card `202365ec` created+closed this session).**
+  The script's "current baseline" was its own local quantile-init `vq_core`
+  and it listed adaptive-k + k-means++ as *proposals* — both shipped by series
+  card 02. Re-anchored rows on the REAL `PointCompressor`
+  (`shipped_vq` + `shipped_vq_k16`), kept `legacy_quantile_k16` as history,
+  kept PQ/RVQ/FSQ as the exploration set (documented as-un-Huffman-coded);
+  median-of-3 timings, bit-exact decode gate, JSON history. Verdict over 6
+  BERT-scale layers: no exploration row beats the shipped codec (PQ 0.71x
+  ratio/13.6x MSE, RVQ 0.26x, FSQ 0.81x/28x — FSQ encodes 60x faster, the one
+  interesting signal). **Headline: fixed k=16 + the codec's residual fallback
+  (accuracy < residual_threshold 0.99, compressor.py:357) dominates adaptive-k
+  lossy VQ — 8.22x ratio AND lossless (MSE 3e-21) vs 4.91x lossy.** Cite when
+  tuning n_clusters/residual_threshold. From `.wt-worldbrain`.
+
+- **2026-10-21 · board reconciliation — worktree board stale-row graveyard
+  cleaned (card `b19e29eb` created+closed this session).** Every unowned todo
+  candidate on the fork board was re-pickaxe-verified (10th consecutive
+  "continue building" round burning minutes on the same rot rows): **32 cards
+  closed with sha-cited evidence** (ancestry-tested against origin/main where
+  possible — deliveries like `93286c6fe`/`dd83baf9a`/`b53487b3b`/`3f73ff956`/
+  `91e81243b` IN-main; `ca167dbd` proven by origin/main's own `pytest.ini`
+  carrying its card id), **10 byte-identical dup-id rows collapsed**
+  (`8182563a`×4, `f74b9e75`×3, `90839119`/`a25e490b`/`13aed9ad`/`ec2ae5c1`/
+  `7e2af9fe`×2). **Two honesty exceptions: `ccad389e` stays OPEN** — its close
+  claims "landed on main 356d73b83" but that sha is only in `chore/*`
+  branches, never reached origin/main (note appended); `44c63b91` untouched
+  (frontend lane + conflicting board states). Unowned todo: 75 → 38, every
+  remaining row intentional (cleanup/lint/ux/My-Note/user-parked/window-
+  blocked). Board-only via PlannerStore; NO sync run — fork lacks `cf89ac6a4`
+  (the oscillation fix is on a planner branch, not in this fork). From
+  `.wt-worldbrain`.
+
+- **2026-10-21 · vq-huffman-07 — compression-knob frontier + the storage-
+  accounting double-lie (stack tail `feat/npu-caps`, card `6eaa413c`
+  created+closed this session).** Grid adaptive x n_clusters{8..64} x
+  residual_threshold{0,0.99,1} on the real PointCompressor
+  (`scripts/benchmark_compression_knobs.py`, suite imported from -06). The
+  sweep exposed a measurement red flag (ratio identical across thresholds
+  while decode flipped lossless) → **two production accounting bugs**:
+  (1) `huffman_data` is written only in-memory (`compressor.py:375`) —
+  `serialize_params` packs dense uint8 assignments and `from_bytes` never
+  rebuilds the tree, so the Huffman compression **dies with the process**;
+  (2) `ClusterCodec.nbytes` (`codecs.py:217-232`) counts that phantom
+  Huffman (line 225) while omitting the residual serialize packs (line 249).
+  Consumers of the lie: `training/executor.py:527`, `pugqeep/library.py:461`,
+  `dedup.py:71`, `generic.py:693,696`, `point_interface.py:121`.
+  **RETRACTION: the -06 headline "fixed k16 + residual dominates adaptive-k
+  (8.22x AND lossless)" was an accounting artifact** — honest (to_bytes)
+  ratios: k16+residual = 0.80x lossless, adaptive = 3.84x lossy (0.21x).
+  Corrected frontier truths: lossy ratio is ~k-independent (3.8-3.9x — dense
+  assigns dominate; k is a fidelity knob), lossless class = 0.79-0.80x raw
+  (residual = the price of losslessness), fixed_k64 ≈ adaptive at equal bytes
+  (cos 0.99820 vs 0.99776, marginal). benchmark_vq_approaches.py re-anchored
+  to to_bytes + fresh history: shipped-beats-PQ/RVQ/legacy HOLDS (legacy 1.01x
+  ratio, 13.8x MSE), FSQ flips to **1.04x shipped's honest ratio at 77x
+  faster encode**. Storage fix filed as follow-up card (needs approval: nbytes
+  truth-up vs persist-Huffman wire-layout change). From `.wt-worldbrain`.
+
+- **2026-10-21 · pugqeep storage truth-up option B — Huffman persists (CLH1)
+  + honest nbytes (stack tail `feat/npu-caps`, card `d9028c8f` closed this
+  session).** The vq-huffman-07 follow-up landed as the user-chosen option B:
+  `ClusterCodec.serialize_params` writes the Huffman bitstream under a
+  self-identifying `CLH1` marker (legacy dense blobs keep parsing; the outer
+  type code `b"CLH1"` → old readers fail loudly instead of misparsing the
+  bitstream as dense assignments), `deserialize_params` rebuilds the tree,
+  decodes, and MATERIALIZES dense assignments so every params consumer
+  (dedup fingerprints, ratios, lazy slices, to_dict) sees the same shape a
+  fresh compression produces — huffman keys restored alongside, so
+  re-serialization is idempotent. `nbytes` rewritten to the payload
+  contract: residual in EVERY branch; the huffman branch counts the
+  persisted bitstream + tree JSON (was: a phantom bitstream counted + a real
+  residual omitted); invariants `nbytes <= len(to_bytes())` and
+  point-vs-residual-twin delta = exactly `residual.nbytes`. TDD: 11 contract
+  tests RED→GREEN (`test_pugqeep_huffman_wire.py`), full pugqeep suite 2151
+  green / 3 skipped, ruff clean; 3 stale pins updated with why-comments
+  (compressor nbytes formula + the 2 checkpoint `compression_ratio` pins).
+  Benchmarks re-recorded post-B (third history record; honest accounting,
+  `nbytes_gap` = 306 B per 6-layer config = headers only, under the new
+  512-B tripwire): **CLH1 lifts the shipped codec's honest ratio — knobs
+  sweep adaptive_k16 3.84x -> 4.50x, fixed_k16_rt0 3.90x -> 7.49x (+92% —
+  dense assignments were the dominant cost); vq-approaches shipped_vq
+  4.00x -> 5.75x, shipped_vq_k16 (lossless) 0.80x -> 0.90x, while PQ/RVQ/
+  FSQ/legacy rows are byte-identical pre/post — the wire change moves
+  exactly and only huffman-carrying cluster points.** DISCOVERY needing a user decision:
+  `compress_checkpoint`'s default rt=0.99 stores full-size float32 residuals
+  on real weights → honest ratio < 1.0 (0.86-0.91 measured) — checkpoint
+  "compression" INFLATES the library on disk; the old nbytes omission was
+  masking it. Options: lossy checkpoint path (rt=0) vs reframe the stat —
+  behavior change, deliberately out of this card's scope. Capacity nuance:
+  k=64 clears the 0.99 threshold on all 6 benchmark layers (0 residuals
+  fired, genuine compression) — the inflation is a low-k capacity effect.
+  From `.wt-worldbrain`.
+
+- **2026-10-23 · lint + hygiene-gate + cleanup-row sweep (cards `lint-fix-01`
+  closed, `ccad389e` test half landed; stack tail `feat/npu-caps`).** (1)
+  `lint-fix-01` "3417 ruff errors" proven stale: repo-wide `ruff check .` was
+  8 `I001`s → **0** after auto-fix (`511be7c86`); the 7/8 touched test files
+  that fail collection do so identically at HEAD — the stack's fork point
+  predates main's shell-tree restore `eb48feab2`, zero regressions (proven by
+  stash-diff collection). (2) `ccad389e` acceptance now under test:
+  `TestResourceTrackerHygiene` (`e97c8fb85`) — subprocess lifecycle asserting
+  0 `resource_tracker` warnings + 0 `/dev/shm` leaks, fork AND forkserver;
+  **RED-proven** with `resource_tracker.getfd()` removed (fork arm floods the
+  card's exact `'/psm_*': [Errno 2]` class; forkserver was already clean via
+  the spawn-list tracker fd). First test attempt was vacuous — `forward()`'s
+  3D tensors never pool-dispatch, so workers never attached; the script now
+  exercises the 2D `matmul`/`softmax` primitives explicitly. The fix itself
+  rides `a0c0561bb`; card stays open until it reaches origin/main. (3)
+  Hygiene ratchet was 2/5 red on the stack: `atomic_write.py:7` bare-except =
+  docstring false positive main already fixed AST-based (`b94452570`);
+  `world_stream.py:170` = REAL stack-side violation (card `a3b39114` /
+  `72076fbcf`) that would break main's gate at landing → adopted origin/main's
+  ratchet wholesale + `PRINT_ALLOWLIST` exemption in main's format
+  (`edf4b960b`, `git diff origin/main` on that file = 1 line, auto-merge).
+  Hygiene 5/5. (4) **15 `cleanup-NN` todo rows closed with per-row pickaxe
+  evidence** — all sourced from `2026-09-03-code-cleanup-slnc-refactor.md`,
+  a note with NO frontmatter status, so sync parked every "What Was Done"
+  row in todo forever (root cause; `status: done` frontmatter on that note
+  proposed, not done). Two rows were real, not stale: `domain/cognition/
+  _internal/rag.py` still reseeded the global RNG per `_default_embedding`
+  (the note's RandomState fix had only landed on the deleted `core-py/domains`
+  tree) → fixed as the note specified, byte-identical vectors, RED-proven
+  (`76c815d06`, rag suites 247 green); plus the world_stream print above.
+  Evidence note: `2026-10-23-cleanup-rows-batch-closure.md`. Board todo
+  38 → 22, no sync run. From `.wt-worldbrain`.
 
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
@@ -1805,12 +2160,27 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
 
 ## Gotchas that cost hours (add yours here)
 
+- **A child log opened with `open(path, "a")` poisons every log-derived
+  metric**: `scripts/serve_ui.py` appends to `logs/serve_ui-api.log`, so the
+  next reader of `Startup complete — server ready for requests` /
+  `Preload import failed` can measure a *previous* run's boot. Hit while
+  adding `benchmark_startup.py --via serve_ui`: time-to-ready read as 3.88 s
+  off a stale marker (honest value 126.4 s) and the 25→5 s marker diff hid a
+  real measurement bug. Fix: give the run its own log dir (the benchmark
+  re-points `serve_ui.LOG_DIR`) and delete this run's file before starting.
+- **Never force-update `main` to land your commit while another worktree sits
+  on it at the old tip**: `git fetch . HEAD:main` / `git branch -f main` are
+  refused for good reason — that worktree's next `git commit` re-points the
+  branch from *its* HEAD and would silently drop your commit from main's line.
+  Land from the worktree that owns `main` (`~/Documents/sloughgpt-api-std`,
+  see Sync recipe) after claiming it here first.
 - **Stale `main` behind a foreign worktree is untouchable.** `main` may be
   checked out by another session's worktree with hundreds of uncommitted
   changes; git refuses checkout/merge/reset there and you must not disturb it.
   Run `git worktree list` + `git status` on `main` BEFORE promising a merge.
   Also: other sessions commit into YOUR current branch in the root worktree —
-  `git log main..feat/<name>` overcounts your work; cite your own hashes.- **Worktree web gates need BOTH `node_modules` symlinked** — `vite.config.ts`
+  `git log main..feat/<name>` overcounts your work; cite your own hashes.
+- **Worktree web gates need BOTH `node_modules` symlinked** — `vite.config.ts`
   pins react/react-dom via `path.resolve(__dirname, '../../node_modules')`, which
   in a worktree points at `<root>/.wt-*/node_modules` (absent) → vitest dies
   with `Failed to resolve import "react" from "vitest-setup.ts"` while
@@ -1830,7 +2200,6 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   and never launch a full suite without checking `curl localhost:8000/health`
   first. Other sessions' stacks may also flap mid-run — classify failures by
   running them standalone before blaming the merge.
-
 - **`PYTHONNOUSERSITE=1` (AGENTS.md) breaks browser suites**: playwright is
   installed in `~/.local/lib/python3.12/site-packages/` (user site), not in
   the conda env — with the flag, `import playwright` dies and every
@@ -1889,3 +2258,210 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   alone — and when a mock IS installed, set the **public** attribute the
   handler reads (`.max_workers`, not `_max_workers`) or the envelope
   silently turns the auto-MagicMock into `[]`.
+- **`.kanban/board.json` is a retired legacy snapshot — the live board is
+  `.kanban/board.jsonl`.** They sit in the same dir with the same size class,
+  so triaging the queue from `board.json` silently reads a stale card set
+  (it showed 10 todo cards vs the canonical 82). The CLI cannot address
+  legacy date-style ids either: `board show/move 20260916_100007_…` →
+  "Card not found" (it resolves app-planner 8-hex ids). Read the queue with
+  `app_planner board ls` or by parsing `board.jsonl`; claim a legacy card by
+  `board add`-ing a fresh card that references the legacy id in its
+  description (`board add` appends exactly one line — no chain cascade).
+
+- **2026-10-23 · review-column screening — 9 review cards flipped to done with
+  origin/main sha evidence, 6 correctly left (fork board; stack tail
+  `feat/npu-caps`).** Heeded this file's own warning (`0dcdefda1`: review-column
+  state is stale vs code — flip, don't re-implement). A prior session had
+  already closed 5 on the main checkout's board (`d62873e8a`, ancestor-verified)
+  but could not touch this fork's board. Flipped: `9d8319fb` + `83f01763`
+  (StartupOverlay.tsx:160 / AppLayout.tsx:123 contract comments on main;
+  `sl-app-banner` only in sanctioned GlobalBanner), `d484f48a` (`4e37b70df`),
+  avion trio `e26dc68c`/`24676ff2`/`553da7a7` (`b777b4384`/`68aeec952`/
+  `fc56789e3` + content probes), `a101ee3a` (PR#135 `9dcee3fed`, re-homed as
+  mole), `b2136a14` (`9791f0df9`), `96d06ef3` voice orb (PR #167 `8ec274820`
+  merged `d9761588d` — the land call happened; pre-merge head `2a4132c81` is
+  not an ancestor because the PR tip was re-rebased). Left in review (work NOT
+  on main, branches exist): `752ca443` (rides stack landing `2cec0811`),
+  `74032dd0`, `f2836f6c`, `8fe718f5`, `88fe100b` (main still ships only the
+  macOS `.dylib`), `117429ed` (no gemv in main C). Also closed: 5 stale ux-*
+  rows (React19/next16 in package.json; gateway rustls + 0 openssl; gateway
+  repoint landed `d949eb509`, rollback premise falsified; `halfA` referent
+  exists nowhere) and `44c63b91` strui Checkbox+Radio (both dup twins; source
+  note `status: done`, all gates checked, files on main, 8/8 adoption).
+  Dup-line collapse untouched — dup-ids note forbids deletion without user
+  confirmation; store card `89c58cfb` (wip) owns it. Evidence note:
+  `2026-10-23-review-column-screening-flips.md`. Board done 897→906,
+  review 15→6, todo 22→15, no sync run. From `.wt-worldbrain`.
+
+- **2026-10-23 · wip-column screening — 4 unowned wip rows closed with
+  origin/main evidence (fork board; stack tail `feat/npu-caps`).**
+  `7d5e5a7c` hygiene sweep (ratchet `bb7162041`/`a189d78eb` ancestors; PEP563
+  in 626 main domain files; main's `test_code_hygiene.py` carries both scope
+  halves incl. the "2026-10-04 sweep: 92/92" print-allowlist marker);
+  `b8c37898` slot_chain crash (subsystem extinct in app-planner src — the
+  missing import cannot recur; was a transient main-checkout breakage);
+  `7f879f56` chargectl (`packages/chargectl/` complete on main, battery
+  endpoints in `system.py:70-72`, `getBattery()` wired into monitoring page,
+  old `charge_manager.py` removed); `cb089b43` stall watchdog
+  (`StartupOverlay.tsx:56` progress-based stall clock + `overlay_timeout`
+  event + degraded-banner test). Mechanical note-sweep false-positive
+  avoided: `294818b7` matched a done note that is `6d0ebf37`'s and lists it
+  as in-progress owner — not closed. Evidence note (WIP section):
+  `2026-10-23-review-column-screening-flips.md`. Board wip 32→28,
+  done 906→910, no sync run. From `.wt-worldbrain`.
+
+- **2026-10-23 · af19fb40 fixed — training register() backfills config on
+  pre-existing job rows (stack tail `feat/npu-caps`, commit `11aa66fc2`).**
+  Root cause verified still live on origin/main `4a25b8385`:
+  `_ensure_row` early-returned when the row existed, silently dropping
+  `register()`'s request snapshot — the configless in-memory job dict
+  (execution.py:288, no config key) gets persisted first, so the column
+  stayed `{}` and recovery rebuilt trainer kwargs from defaults (the
+  `job_1438982c` 4096>399 incident). Fix: existing row + EMPTY config →
+  backfill from the snapshot (`store.update`); non-empty config is
+  first-registration-wins. RED-proven (`assert {} == snapshot`), no-clobber
+  guard, training/runtime/job_store surface 68 green, ruff clean. runtime/
+  execution/job_store are byte-identical to origin/main in this worktree —
+  auto-applies at landing. Card af19fb40: wip → review. Evidence:
+  `2026-10-23-af19fb40-config-backfill.md`. From `.wt-worldbrain`.
+
+- **2026-10-23 · 243016c3 built — reflection->prompt wiring
+  (CONSCIOUSNESS_PROC, stack tail `feat/npu-caps`, commit `3e0885625`).**
+  The engine had post-process+SSE hooks but no reflection->prompt path.
+  `ConsciousnessProcessor` (domain/models provider/processors — takes the
+  narrative as PLAIN TEXT, models stay decoupled from cognition), exported
+  from the domain.models facade; chat pipeline step after KNOWLEDGE_PROC
+  (right after the existing consciousness SSE block):
+  `ce.reflect(apply=False).narrative` -> processor via the established
+  `apply_processors` seam, mirroring the neighbor hook's
+  `domain.core.get_consciousness` + `is_enabled()` guard. Advisory by
+  design: disabled engine / empty narrative / ANY failure skips injection,
+  chat proceeds unchanged (skip-on-failure, unlike KNOWLEDGE_PROC).
+  RED-proven (3 unit + 5 injection tests incl. propose-only assert);
+  models surface 482 green; ruff clean; hygiene 5/5. New file needed
+  `git add -f` — local `.git/info/exclude` rule `models` (meant for
+  weights) also matches the tracked `domain/models/` code package; worth
+  knowing for other sessions. Card 243016c3: wip → review. From
+  `.wt-worldbrain`.
+
+- **2026-10-24 · training router delegation part 1 built (card `50675952`,
+  stack tail `feat/npu-caps`, commit `5be763e55`).** Build order #4 part 1:
+  all 17 part-1 `domain.training._internal` import sites in
+  `apps/api/server/training/router.py` (service×9 incl. async
+  `list_checkpoints`, `get_state`×2, `VALID_CKPT_NAME`, advisor×2, outcome,
+  monitor×5) rewired through **14 new raw-passthrough `TrainingEngine`
+  methods** (`domain/training/engine.py`) — raw values, exceptions bubble,
+  HTTP classification in the router unchanged. Names avoid the engine's
+  existing soul-checkpoint `list_checkpoints`/`load_checkpoint`
+  (TrainingResult style stays for legacy consumers). Only the 4 part-2 sites
+  remain (executor import, `CheckpointManager`, `SloughGPTTrainer`,
+  `executor.submit`). Card's `cache_tags` site doesn't exist in this tree
+  (drift — recorded in the evidence note). RED-proven boundary invariant test
+  (`test_training_router_delegation.py`: router source has no part-1
+  `_internal` refs + engine surface + semantics pins — caught a stale
+  comment too); 6→0 failures; router suite 70/70 (7 files); ruff clean.
+  Card `50675952`: wip → review; closes on landing. Evidence:
+  `2026-10-24-training-router-delegation-part1.md`. From `.wt-worldbrain`.
+
+- **2026-10-24 · training router delegation part 2 built (card `c48aaaad`,
+  stack tail `feat/npu-caps`, commit `118e11a23`) — build order #4 COMPLETE.**
+  Last 4 `_internal` sites retired from `training/router.py` (executor import,
+  `CheckpointManager` resume resolution, `SloughGPTTrainer` build+train,
+  `executor.submit`): engine gains `resolve_resume_checkpoint` (raises
+  ValueError; router maps to 422 — the one sanctioned mapping, identical
+  messages), `run_recovery_training(config, on_progress, resume, events)
+  -> trainer` (closure keeps ALL job-store/controller/webhook state;
+  `resume` = pre-loaded bundle preserves "no second disk load"), and
+  `executor_submit(fn, *args)`. **Zero `domain.training._internal` refs
+  remain in the router — the boundary invariant (routers never import
+  `_internal`; engine is the single seam) now holds repo-wide for training.**
+  Recovery fixture retargeted (executor patch follows the import to its
+  defining module — module-attr patch survives lazy import, same style as the
+  suite's existing SloughGPTTrainer patch). RED→GREEN 7→0; router suite
+  75/75 (7 files); ruff check+format clean. Card `c48aaaad`: wip → review.
+  Evidence: `2026-10-24-training-router-delegation-part2.md`. From
+  `.wt-worldbrain`.
+
+- **2026-10-24 · frontend brief parked (subagent dispatch blocked — free-usage
+  limit).** User ask "make the frontend agent aware of the reflection feature
+  and have it on the webchat page" → full build brief (both CONSCIOUSNESS SSE
+  events' payload map, existing panel/badge/toggle/bus/hook components, the
+  `self_insight` consumption gap, Noir Violet + strui constraints) parked at
+  dev-note `2026-10-24-frontend-brief-webchat-reflection.md` — any frontend
+  session can pick it up and card it. No backend payload change needed
+  (narrative already streams as `self_insight`). From `.wt-worldbrain`.
+
+- **2026-10-24 · live main bug found + fixed: episodic tie-sort TypeError
+  (card `5bfa16e5`, stack tail `feat/npu-caps`, commit `6f3238f00`, port of
+  `70b021b6a`).** Wip screening found the card's "all fixed" claim covered 3
+  fixes whose shas never reached main (`70b021b6a`/`3b605d205` sit on
+  unlanded branches): B (repo-root bootstrap) and C (uvicorn reload globs)
+  had landed on main by other means — verified by content — but **A was still
+  live: `context_core.py:274` `scored.sort(reverse=True)` on
+  (score, episode_dict) tuples compares dicts on any score tie → TypeError →
+  500 + zero streamed tokens on /chat/stream**. Ported the branch's one-liner
+  (sort by score key + why-comment) and its TDD test verbatim; RED with the
+  exact production TypeError, GREEN 113/113 (context_core), ruff clean. Card
+  wip→review; the fix rides the stack, so the bug stays on main until landing.
+  Evidence: `2026-10-24-tie-sort-port.md`. From `.wt-worldbrain`.
+
+- **2026-10-24 · wip screening pass 2 — 6 of 17 unowned wip rows resolved, 2
+  of them by BUILD (stack tail `feat/npu-caps`).** Flipped to done with
+  origin/main evidence: `a9bc8648` (moodboard skill shipped at
+  `.opencode/skills/moodboard/`), `278fdeaf` (chain-hash audit live — every
+  board row carries chain_hash/chain_prev + `test_store_chain.py`),
+  `656023ab` (http-client split: 1443→28-line facade over 14 `apps/lib/`
+  modules), `9fc4b4cf` (fault containment: staged_loader + startup_rollback +
+  health capability/degraded + startup tests on main). Ported-from-unlanded-
+  branch builds → review: the `5bfa16e5` tie-sort main bug (commit `6f3238f00`,
+  detail in prior bullet) and `8e9ee65d` (`aed61d144`'s compaction-tight.ts,
+  single-file 141-line exact port, commit `d2f14aa65` — SOP-field compaction
+  prompt, fail-open). Left open deliberately: `6edae3a7` (doctor orchestrator
+  rides `chore/ast-reachability`+`feat/app-ready-signal` cluster), `4a1e62fa`
+  (active lane `feat/generate-consolidation` cites the card), `284aa214`
+  (empty shell — deletion user-gated), legacy docs-truth-up rows (no guard
+  exists; editorial job, deferred). Evidence:
+  `2026-10-24-wip-screening-pass2.md`. From `.wt-worldbrain`.
+
+- **2026-10-24 · LANDED ON MAIN (`f30d5a964`, 6 cards) — quickwin cherry-pick
+  series off the stack.** Merge dry-run (`git merge-tree`) showed the raw
+  stack-vs-main merge is a 60+ file conflict project (fork 10-04, stack +238,
+  main +153: shell-tree restore, doctor→mole rename, generated files,
+  protocol/* add/add) — carded as `37dccde4` (todo/high, full taxonomy +
+  resolution rules). But this session's six cards were isolated and applied
+  CLEANLY onto current main in a side worktree: **`8ee8f7f46`** af19fb40
+  config backfill, **`5b53a9285`** 243016c3 reflection→prompt wiring,
+  **`8316643bb`** + **`36dc5ea8d`** training-router delegation parts 1+2
+  (router now has ZERO `_internal` refs on MAIN), **`9d9c9f519`** the
+  tie-sort /chat/stream 500 fix (bug squashed at the source), **`f30d5a964`
+  8e9ee65d compaction-tight.ts. Gates on the merged result: 277 passed
+  (11 suites incl. router 75, context_core 113, runtime, consciousness,
+  provider processors), ruff clean; pushed `land/quickwins:main` FF-safe.
+  All six cards: review → done. Local `main` checked out at
+  `sloughgpt-api-std` (not force-updated — that session pulls when ready).
+  From `.wt-worldbrain`.
+
+- **2026-10-24 · LANDED ON MAIN (`cc5f8cffb`, card `2cec0811`) — search stack
+  via cherry-pick series.** The card's premises were stale (81-conflict
+  whole-line merge, Sep-25 fork) — the search-owned subset applied as 8
+  chronological picks onto fresh main in a side worktree: workspace search
+  server-side q, house-cleanup, core Searchable protocol + GET /search +
+  domain/search, Cmd+K palette, file-backed + API + sessions stores, live
+  journey fix. Conflicts (5 total, all resolved deliberately): workspaces.py
+  repo access = main's facade forms + branch's entries-filter structure;
+  routers/__init__ = main's generated manifest (re-generated, 55 modules
+  incl. search); CommandPalette imports = union (kept main's revalidateAll);
+  .gitignore = union; board/notes = main's (branch entries would corrupt the
+  hash chain). **Caught a riding regression**: pick `d2cc97d74` carried the
+  branch-line chat-ownership refactor (unregisters inference's POST /chat +
+  /chat/stream) — on main those registrations WIN the route match and tests
+  pin their guards (503/400); restored as `cc5f8cffb` while keeping the
+  search-owned SessionSearchIndex extraction. Parity: empty diff of
+  domain/search + search router + tests vs `feat/core-general-search`; no
+  workspace-search commits left unpicked. Gates post-rebase: 169 targeted
+  (search/workspaces/inference/facade-guard/contracts) + 1331 server +
+  44479 core-py/server — 5 failures all attributed pre-existing/external
+  (2 GPU env reproduce on clean main; 3 journey tests drive the live shared
+  stack :5173/:8000, files untouched by picks). Pushed FF `land/search:main`
+  after rebase onto fresh main (zero overlap). Card → done. From
+  `.wt-worldbrain`.

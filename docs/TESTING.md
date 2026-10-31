@@ -135,6 +135,26 @@ describe('MyComponent', () => {
 - **pytest** with parallel execution (`-n auto`)
 - **pytest-asyncio** for async tests
 
+### Canonical test roots
+
+Four test roots are canonical on `main` (do not invent others):
+
+| Root | Contents |
+|------|----------|
+| `tests/` | flat root — `tests/server/`, `tests/contract/`, and other root-level tests |
+| `packages/core-py/tests/` | core-py unit tests (in-tree `pytest.ini` applies there) |
+| `apps/api/server/tests/` | API-server tests |
+| `apps/cli/tests` | CLI tests |
+
+- Root `pytest.ini` declares the first three: `testpaths = packages/core-py/tests tests apps/cli/tests`;
+  CI jobs run pytest from their own working directory.
+- Every gate command and every piece of test evidence must **name the tree it was
+  measured in** (e.g. `tests/server/…` is the flat root), so baselines are never
+  compared across layouts.
+- The four-root consolidation commit (`dcb2a5eaf`) is 392 commits behind `main`
+  and sits on 76 off-main refs (both measured 2026-10-12) — it is **not
+  landing**; `main`'s layout is canonical.
+
 ### Running Tests
 
 ```bash

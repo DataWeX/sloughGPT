@@ -4,7 +4,6 @@ Public API:
     ResponseStyle, CompanionTraits, ConversationContext
     CompanionSystem, get_companion, create_companion
 """
-
 from __future__ import annotations
 
 from domain.companion._internal.companion import (

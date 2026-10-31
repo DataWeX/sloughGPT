@@ -71,6 +71,14 @@ REGRESSION_THRESHOLDS = {
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
     },
+    "vm_life": {
+        # scripts/benchmark_vm_life.py — step counts are deterministic, wall
+        # time carries machine-load noise (hence the wider rel limit)
+        "batch_wall_ms": (50.0, "rel"),
+        "step_frame_steps": (10.0, "rel"),
+        "first_seed_steps.600": (25.0, "rel"),
+        "reseed_steps.600": (25.0, "rel"),
+    },
     "effects": {
         # show_effects.py engine-level report (card 20261024_095912).
         # Load-sensitive metrics (attention, prefill, decode) get generous

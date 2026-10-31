@@ -7,7 +7,6 @@
 - SessionKVManager: per-session KV state registry with LRU + TTL — delegates
   its storage onto ``KVState`` session mode
 """
-
 from __future__ import annotations
 
 from domain.infrastructure._internal.kv_cache.kv_state import KVState

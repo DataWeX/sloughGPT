@@ -24,7 +24,6 @@ Usage:
     engine.dispatch()  # one-shot dispatch
     engine.run(poll_interval=0.5)  # continuous loop
 """
-
 from __future__ import annotations
 
 import logging

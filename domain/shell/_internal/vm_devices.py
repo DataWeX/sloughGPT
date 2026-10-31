@@ -13,6 +13,7 @@ from __future__ import annotations
 import numpy as np
 
 from .device_ops import OpTable
+from .tensor_arena import TensorArena, resolve
 from .vm import Device, DeviceFault
 
 # ---------------------------------------------------------------------------
@@ -393,11 +394,13 @@ class MultimodalDevice(Device):
         DEV_CALL   R2, R0, embed, R_img                   # R2 = feature vector
         DEV_CALL   R3, R0, info                            # R3 = model info
 
-    Image is passed as a numpy array (H×W×3, float32 [0,1]).
+    Image is passed as a numpy array (H×W×3, float32 [0,1]) or as a
+    TensorArena slot id from another device (e.g. ``cycles render``).
     """
 
-    def __init__(self, engine):
+    def __init__(self, engine, arena: TensorArena | None = None):
         self._engine = engine
+        self._arena: TensorArena = arena if arena is not None else TensorArena()
         self._ops = OpTable("MultimodalDevice", {
             "generate": self._generate,
             "embed": self._embed,
@@ -405,6 +408,7 @@ class MultimodalDevice(Device):
         })
 
     def _generate(self, image_np=None, max_len=20, temperature=1.0):
+        image_np = resolve(image_np, self._arena)
         img = np.asarray(image_np, dtype=np.float32) if image_np is not None else None
         if img is not None and img.ndim == 3:
             img = img[np.newaxis, ...]
@@ -416,6 +420,7 @@ class MultimodalDevice(Device):
         return result.text
 
     def _embed(self, image_np):
+        image_np = resolve(image_np, self._arena)
         img = np.asarray(image_np, dtype=np.float32)
         if img.ndim == 3:
             img = img[np.newaxis, ...]
@@ -1052,3 +1057,96 @@ class NPUVMDevice(Device):
 
     def info(self):
         return self._npu.info()
+
+
+# ---------------------------------------------------------------------------
+# WorldDevice – live world sim + frame render into the shared arena
+# ---------------------------------------------------------------------------
+
+
+class WorldDevice(Device):
+    """
+    Live world driver — steps the Simulation and renders frames into a
+    TensorArena, so assembly can move the slot onward (``cycles encode_png``)
+    without Python ever touching a register.
+
+    From assembly:
+        DEV_OPEN   R0, world
+        DEV_CALL   R1, R0, step            # R1 = tick
+        DEV_CALL   R2, R0, render          # R2 = arena slot id
+        DEV_CALL   R3, RC, encode_png, R2  # cycles shares the arena
+        DEV_CALL   R4, RS, write, R3, R1   # stream write, tag = tick
+        DEV_CALL   R5, RC, free_slot, R2
+
+    Python builds this once (kernel + driver); the frame loop itself lives
+    in the asm app (``world_stream.asm``).
+    """
+
+    def __init__(
+        self,
+        scene,
+        *,
+        config=None,
+        simulation=None,
+        bridge=None,
+        arena=None,
+        max_ticks: int = 1_000_000,
+    ):
+        from .simulation import Simulation
+        from .world_render import RenderBridge
+
+        self._scene = scene
+        self._simulation = (
+            simulation if simulation is not None else Simulation(scene, max_ticks=max_ticks)
+        )
+        self._bridge = bridge if bridge is not None else RenderBridge(config)
+        self._arena = arena if arena is not None else TensorArena()
+
+    @property
+    def arena(self) -> TensorArena:
+        """Slot arena backing render's bus values (share across devices)."""
+        return self._arena
+
+    @property
+    def scene(self):
+        return self._scene
+
+    def info(self):
+        scene = self._scene
+        cfg = self._bridge.config
+        return {
+            "type": "world",
+            "tick": int(scene.tick),
+            "alive": sum(1 for b in scene.babies if b.alive),
+            "population": len(scene.babies),
+            "resolution": [cfg.width, cfg.height],
+            "samples": cfg.samples,
+        }
+
+    def call(self, method, *args):
+        if method == "step":
+            self._simulation.step()
+            return int(self._scene.tick)
+        if method == "render":
+            scene = self._scene
+            nests = scene.nests if scene.params.structure_enabled else None
+            image = self._bridge.render_tick(
+                scene.world,
+                babies=list(scene.alive_babies),
+                nests=nests,
+            )
+            return self._arena.put(image)
+        if method == "free_slot":
+            self._arena.free(int(args[0]))
+            return 0
+        if method == "stats":
+            scene = self._scene
+            return {
+                "tick": int(scene.tick),
+                "alive": sum(1 for b in scene.babies if b.alive),
+                "population": len(scene.babies),
+                "births": int(scene.births),
+                "energy_total": float(scene.world.energy.sum())
+                + sum(b.energy for b in scene.babies),
+            }
+        return super().call(method, *args)

@@ -1,11 +1,16 @@
 """infra-lib — Type-agnostic infrastructure primitives.
 
-Zero-internal-dependency modules extracted from sloughGPT for reuse.
+Infrastructure modules extracted from sloughGPT for reuse.
 
 Modules:
     cancel_manager — Track and cancel long-running operations
     task_queue     — Async priority queue with pause/resume/cancel/dependencies
     server_state   — Thread-safe atomic state with listener notifications
+
+Note (card 44229b2a): ``task_queue`` is now a delegating shim over the
+canonical implementation in ``domain/infrastructure/_internal/task_queue.py``
+— the only remaining zero-internal-dependency modules are ``cancel_manager``
+and ``server_state``.
 """
 
 from .cancel_manager import (
