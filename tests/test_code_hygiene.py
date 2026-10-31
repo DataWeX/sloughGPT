@@ -52,7 +52,7 @@ SKIP_DIRS = frozenset(
     }
 )
 
-SCAN_ROOTS = ("domain", "packages", "apps", "scripts")
+SCAN_ROOTS = ("domain", "journeys", "packages", "apps", "scripts")
 PY = (".py",)
 MARKER_EXTS = (".py", ".ts", ".tsx")
 
@@ -86,7 +86,7 @@ PRINT_ALLOWLIST = {
     "domain/shell/_internal/realm_live.py": "argparse CLI run summary",
     "domain/shell/_internal/world_stream.py": "argparse CLI run summary in main() — python -m entry, stdout is its report",
     "domain/training/_internal/lm_eval_char.py": "--json machine-readable stdout mode",
-    "domain/journeys/runner.py": "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
+    "journeys/runner.py": "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
     "domain/shell/_internal/cmds/dashboard.py": "dashboard watch-loop renderer — terminal frames ARE its output",
     "domain/shell/_internal/cmds/status.py": "status --json machine-readable stdout mode (CLI result channel)",
 }

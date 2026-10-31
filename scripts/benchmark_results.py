@@ -1,9 +1,17 @@
 """
 Persistent benchmark results + regression tracking.
 
-Records benchmark output (stability, latency) to data/benchmark_results/
-as JSON, tagged with model + git commit + timestamp. Compares each new run
-against prior runs and reports regressions.
+Records benchmark output (stability, latency, inference, ...) as JSON, tagged
+with model + git commit + timestamp + source. Compares each new run against
+prior runs and reports regressions.
+
+The store is CANONICAL and checkout-independent (card 20261031_133226): the
+old script-relative ``REPO_ROOT/data/benchmark_results`` forked one history per
+checkout — worktrees and the api-std lane each stranded their own records, so
+no single place ever held the series that regression gating needs. Resolution:
+``SLO_BENCH_DATA_DIR`` env var, else ``~/.local/share/sloughgpt/benchmark_results``.
+``migrate --from <dir>`` copies an old per-checkout store in (union: never
+overwrites an existing file).
 
 Usage:
     python scripts/benchmark_results.py record --kind stability --json-file out.json
@@ -11,12 +19,15 @@ Usage:
     python scripts/benchmark_results.py record --kind inference --json-file out.json
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
+    python scripts/benchmark_results.py migrate --from <old-checkout>/data/benchmark_results
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,7 +35,14 @@ from pathlib import Path
 from domain.shared import utc_now_iso
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-RESULTS_DIR = REPO_ROOT / "data" / "benchmark_results"
+# Canonical store — env override for CI/containers, else the user-level
+# default. NEVER repo-relative: a worktree must record into the same history
+# as main or the series silently forks (the 2026-10-31 stranding: 5 decode
+# runs visible only from the api-std checkout).
+RESULTS_DIR = Path(
+    os.environ.get("SLO_BENCH_DATA_DIR")
+    or Path.home() / ".local" / "share" / "sloughgpt" / "benchmark_results"
+)
 
 REGRESSION_THRESHOLDS = {
     "stability": {
@@ -359,6 +377,7 @@ def do_record(args) -> int:
             "model": model,
             "commit": git_commit(),
             "timestamp": stamp,
+            "source": "ci" if os.environ.get("CI") else "local",
             "runs": data.get("runs", args.runs),
             "passed": data.get("passed"),
             "score": data.get("score"),
@@ -372,6 +391,7 @@ def do_record(args) -> int:
             "model": model,
             "commit": git_commit(),
             "timestamp": stamp,
+            "source": "ci" if os.environ.get("CI") else "local",
             "metrics": data,
         }
 
@@ -385,6 +405,33 @@ def do_record(args) -> int:
     prior = collect_records(kind)
     if len(prior) > 1:
         return do_compare(args)
+    return 0
+
+
+def do_migrate(args) -> int:
+    """Union-copy an old per-checkout store into the canonical dir.
+
+    Copy semantics, never move: the source checkout may still be in use, and a
+    failed migrate must never destroy history (same lesson as the board
+    export wipe — preserve before touching). Existing canonical files are
+    skipped, so re-running is idempotent.
+    """
+    src = Path(args.source).expanduser()
+    if not src.is_dir():
+        print(f"[ERR] not a directory: {src}", file=sys.stderr)
+        return 1
+    copied = skipped = 0
+    for f in sorted(src.rglob("*.json")):
+        rel = f.relative_to(src)  # <kind>/<file>.json
+        dest = RESULTS_DIR / rel
+        if dest.exists():
+            skipped += 1
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, dest)
+        copied += 1
+        print(f"  copied {rel}")
+    print(f"[MIGRATE] {copied} copied, {skipped} already present → {RESULTS_DIR}")
     return 0
 
 
@@ -595,6 +642,14 @@ def main() -> int:
     p_c.add_argument("--kind", default="stability", choices=list(KINDS))
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
+
+    p_m = sub.add_parser(
+        "migrate", help="union-copy an old per-checkout store into the canonical dir"
+    )
+    p_m.add_argument(
+        "--from", dest="source", required=True, help="old results dir (…/data/benchmark_results)"
+    )
+    p_m.set_defaults(fn=do_migrate)
 
     args = parser.parse_args()
     return args.fn(args)

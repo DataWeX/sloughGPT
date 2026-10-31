@@ -189,7 +189,7 @@ def test_agent_stack_records_experience(tmp_path):
     file counts as a trail.
     """
     hits = []
-    for root in ("domain/agents", "packages/uxjourneys", "domain/journeys"):
+    for root in ("domain/agents", "packages/uxjourneys", "journeys"):
         base = REPO / root
         if not base.exists():
             continue

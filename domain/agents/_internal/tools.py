@@ -539,47 +539,44 @@ class ToolRegistry:
             return []
 
     async def _run_image_analysis(self, image_path: str) -> dict[str, Any]:
-        """Analyze an image using VisionCNN — embedding, caption, and object detection."""
+        """Analyze an image via the inference image-capability facade."""
         import os
 
         try:
-            if not os.path.exists(image_path):
-                return {"output": "", "error": f"Image not found: {image_path}"}
-            size = os.path.getsize(image_path)
-            ext = os.path.splitext(image_path)[1].lower()
+            from domain.inference import analyze_image
 
-            try:
-                from domain.multimodal._internal.vision import VisionCNN
-
-                vision = VisionCNN()
-                caption_result = vision.caption(image_path)
-                objects = vision.detect(image_path)
-                embedding = vision.get_embedding(image_path)
-
-                lines = [
-                    f"Image: {os.path.basename(image_path)}",
-                    f"Format: {ext or 'unknown'}  |  Size: {size:,} bytes",
-                    f"Caption: {caption_result.text}",
-                    f"Confidence: {caption_result.confidence:.1%}",
-                ]
-                if caption_result.tags:
-                    lines.append(f"Tags: {', '.join(caption_result.tags)}")
-                if objects:
-                    lines.append("Objects:")
-                    for obj in objects:
-                        lines.append(f"  - {obj.label} ({obj.confidence:.1%})")
-                lines.append(
-                    f"Embedding: {len(embedding)}-dim, L2={float((embedding**2).sum() ** 0.5):.3f}"
+            result = analyze_image(image_path)
+            if not result.success:
+                if result.error_kind == "not_found":
+                    return {"output": "", "error": result.error}
+                header = (
+                    f"Image: {os.path.basename(image_path)}"
+                    f"\nFormat: {result.format}\nSize: {result.size_bytes:,} bytes"
                 )
-                return {"output": "\n".join(lines)}
-            except ImportError:
-                return {
-                    "output": f"Image: {os.path.basename(image_path)}\nFormat: {ext}\nSize: {size:,} bytes\n\n(Vision model not available)"
-                }
-            except Exception as ve:
-                return {
-                    "output": f"Image: {os.path.basename(image_path)}\nFormat: {ext}\nSize: {size:,} bytes\n\nVision error: {ve}"
-                }
+                tail = (
+                    "(Vision model not available)"
+                    if result.error_kind == "unavailable"
+                    else f"Vision error: {result.error}"
+                )
+                return {"output": f"{header}\n\n{tail}"}
+
+            embedding = result.embedding
+            lines = [
+                f"Image: {os.path.basename(image_path)}",
+                f"Format: {result.format or 'unknown'}  |  Size: {result.size_bytes:,} bytes",
+                f"Caption: {result.caption}",
+                f"Confidence: {result.confidence:.1%}",
+            ]
+            if result.tags:
+                lines.append(f"Tags: {', '.join(result.tags)}")
+            if result.objects:
+                lines.append("Objects:")
+                for obj in result.objects:
+                    lines.append(f"  - {obj['label']} ({obj['confidence']:.1%})")
+            lines.append(
+                f"Embedding: {len(embedding)}-dim, L2={float((embedding**2).sum() ** 0.5):.3f}"
+            )
+            return {"output": "\n".join(lines)}
         except Exception as e:
             return {"output": "", "error": str(e)}
 

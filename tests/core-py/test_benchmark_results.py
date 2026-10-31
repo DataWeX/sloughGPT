@@ -417,3 +417,94 @@ def test_history_bootstrap_renders_first_p95(tmp_results, capsys):
     out = capsys.readouterr().out
     assert "first=1.25" in out and "p95=0.31" in out and "errs=0" in out
     assert "mean=?" not in out
+
+
+# ── canonical store: env resolution, migrate, source tag (card 20261031_133226) ──
+
+
+def test_results_dir_env_override(monkeypatch, tmp_path):
+    """SLO_BENCH_DATA_DIR wins; the default is checkout-independent.
+
+    The invariant that stranded 5 decode records in the api-std checkout:
+    the resolved store is NEVER repo-relative, so every worktree records
+    into one history.
+    """
+    import importlib
+
+    old = br.RESULTS_DIR
+    monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(tmp_path / "bench"))
+    try:
+        importlib.reload(br)
+        assert br.RESULTS_DIR == tmp_path / "bench"
+    finally:
+        monkeypatch.delenv("SLO_BENCH_DATA_DIR", raising=False)
+        importlib.reload(br)
+        default = br.RESULTS_DIR
+        br.RESULTS_DIR = old  # restore exact pre-test state
+    assert not str(default).startswith(str(br.REPO_ROOT))
+
+
+def _fake_latency(url, runs, update_baseline):
+    return {"mean_ms": 10.0, "p95_ms": 12.0}
+
+
+def _latency_args():
+    class Args:
+        kind = "latency"
+        json_file = None
+        url = "http://localhost:8000"
+        runs = 1
+        model = "m"
+        vs = "previous"
+
+    return Args()
+
+
+def test_record_stamps_source_local(tmp_results, monkeypatch):
+    """records carry source=local — the doctor's provenance tag."""
+    monkeypatch.setattr(br, "_run_latency", _fake_latency)
+    monkeypatch.delenv("CI", raising=False)
+    assert br.do_record(_latency_args()) == 0
+    r = br.load_result(br.collect_records("latency")[0])
+    assert r["source"] == "local"
+
+
+def test_record_stamps_source_ci(tmp_results, monkeypatch):
+    """CI-tagged runs stamp source=ci (runner vs dev-box provenance)."""
+    monkeypatch.setattr(br, "_run_latency", _fake_latency)
+    monkeypatch.setenv("CI", "true")
+    assert br.do_record(_latency_args()) == 0
+    r = br.load_result(br.collect_records("latency")[0])
+    assert r["source"] == "ci"
+
+
+def test_migrate_unions_into_canonical_store(tmp_results, tmp_path, capsys):
+    """migrate copies old records in, never overwrites, is idempotent."""
+    src = tmp_path / "old_checkout" / "data" / "benchmark_results"
+    (src / "inference").mkdir(parents=True)
+    (src / "latency").mkdir()
+    rec = {"kind": "inference", "model": "m", "timestamp": "2026-10-30T08:04:23Z"}
+    (src / "inference" / "a.json").write_text(json.dumps(rec))
+    (src / "latency" / "b.json").write_text(json.dumps({"kind": "latency"}))
+
+    class Args:
+        source = str(src)
+
+    assert br.do_migrate(Args()) == 0
+    assert (tmp_results / "inference" / "a.json").exists()
+    assert (tmp_results / "latency" / "b.json").exists()
+
+    # idempotent + union: a changed source file never overwrites the store
+    (src / "inference" / "a.json").write_text(json.dumps({**rec, "model": "changed"}))
+    assert br.do_migrate(Args()) == 0
+    assert br.load_result(tmp_results / "inference" / "a.json")["model"] == "m"
+    out = capsys.readouterr().out
+    assert "0 copied, 2 already present" in out
+
+
+def test_migrate_missing_source_is_error(tmp_results, tmp_path, capsys):
+    class Args:
+        source = str(tmp_path / "does-not-exist")
+
+    assert br.do_migrate(Args()) == 1
+    assert "not a directory" in capsys.readouterr().err

@@ -10,6 +10,7 @@ Public API:
     create_vector_store, get_slo_manager, PDFVLMProcessor, _ngram_embed
     ContextPart, BudgetedContext, budget_parts, render_context_block, estimate_tokens
     DEFAULT_KNOWLEDGE_BUDGET, LAYER_PRIORITY
+    analyze_image, ImageAnalysis
     generation: LanguageClient, hosted, soul, engine, extract_json
 """
 from __future__ import annotations
@@ -85,6 +86,8 @@ __all__ = [
     "estimate_tokens",
     "DEFAULT_KNOWLEDGE_BUDGET",
     "LAYER_PRIORITY",
+    "analyze_image",
+    "ImageAnalysis",
 ]
 
 
@@ -102,6 +105,8 @@ def __getattr__(name):
         "PineconeVectorStore": "domain.inference._internal.vector_stores.pinecone_store",
         "configure_api_provider": "domain.inference._internal.api_provider",
         "get_engine": "domain.inference._internal.native.engine",
+        "analyze_image": "domain.inference._internal.image_capability",
+        "ImageAnalysis": "domain.inference._internal.image_capability",
         "LanguageClient": "domain.inference.generation",
         "hosted": "domain.inference.generation",
         "soul": "domain.inference.generation",

@@ -31,6 +31,29 @@ logger = logging.getLogger("slo.agents.runs")
 
 RUNS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agent_runs")
 
+# Openers of the bootstrap model's canned refusals — shared by the export
+# filter and the loop's synthesis fallback (training on refusals teaches the
+# model to refuse; live journey 2026-10-30 proved one reached an export).
+REFUSAL_OPENERS = (
+    "i'm sorry",
+    "i am sorry",
+    "i'm afraid",
+    "i am afraid",
+    "i cannot",
+    "i can't",
+    "unable to assist",
+    "i'm not able",
+    "i am not able",
+    "i'm unable",
+    "i am unable",
+)
+
+
+def looks_like_refusal(text: str) -> bool:
+    """Conservative prefix test for the bootstrap model's canned refusals."""
+    return text.strip().lower().startswith(REFUSAL_OPENERS)
+
+
 _db = None
 _collection = None
 
@@ -230,23 +253,10 @@ class AgentRunStore:
     # Openers of the bootstrap model's canned refusals — training on those
     # teaches the model to refuse (live journey on 2026-10-30 proved it:
     # a refusal run made it into an export). Conservative prefix match.
-    _REFUSAL_OPENERS = (
-        "i'm sorry",
-        "i am sorry",
-        "i'm afraid",
-        "i am afraid",
-        "i cannot",
-        "i can't",
-        "unable to assist",
-        "i'm not able",
-        "i am not able",
-        "i'm unable",
-        "i am unable",
-    )
+    _REFUSAL_OPENERS = REFUSAL_OPENERS
 
     def _is_refusal(self, response: str) -> bool:
-        lowered = response.strip().lower()
-        return lowered.startswith(self._REFUSAL_OPENERS)
+        return looks_like_refusal(response)
 
     def training_examples(self, min_response: int = 1) -> list[dict[str, Any]]:
         """Convert completed runs into trainer-ready examples.

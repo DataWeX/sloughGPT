@@ -4,7 +4,7 @@
  * In-code journey: long-press a message → "Branch from here" drives the
  * real chat-store into the branch contract, and the Details sheet shows the
  * real lineage payload. Only transports/services are mocked. Mapped in
- * domain/journeys/flows.py as m3-branch.
+ * journeys/flows.py as m3-branch.
  */
 import React from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'

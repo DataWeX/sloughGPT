@@ -29,7 +29,7 @@ Five things are checked, in the order they matter:
    `tests/contract/test_site_doctor_probe.py`.
 
 5. **Journeys and inference.** Phase 3 reads the UX journey report that
-   `domain/journeys` writes (it never launches a browser sweep — no browser
+   `journeys` writes (it never launches a browser sweep — no browser
    stack is imported, so the probe stays a consumer), and triages the
    inference engine from `/health/detailed`'s service status and residency
    counters. A missing journey report is `info`, not a defect, so `--strict`
@@ -558,7 +558,7 @@ def check_edge(gateway: str, api: str, web: str) -> list[dict[str, Any]]:
 def check_journeys(report_path: str | None = None) -> list[dict[str, Any]]:
     """Read the UX journey report — the probe never launches a browser sweep.
 
-    `domain/journeys` writes the report after every flow; this reads it the
+    `journeys` writes the report after every flow; this reads it the
     same way `mole/probes/journey.py` does. A missing report is information
     (no sweep has run yet), not a defect, so it carries `severity=info` and
     never trips `--strict`. The probe stays read-only: it imports no browser
@@ -580,7 +580,7 @@ def check_journeys(report_path: str | None = None) -> list[dict[str, Any]]:
                 "check": "journeys",
                 "message": (
                     f"no journey report at {report_path} — run "
-                    "`python -m domain.journeys` to sweep the UX flows"
+                    "`python -m journeys` to sweep the UX flows"
                 ),
             }
         ]

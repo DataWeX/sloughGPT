@@ -4,13 +4,13 @@ Public API:
     Flow, FLOWS, get_flow, list_flows, main
 
 Entry points:
-    .venv/bin/python -m domain.journeys        # run journeys (live stack)
-    .venv/bin/python -m domain.journeys --list # registry + spec links
+    .venv/bin/python -m journeys        # run journeys (live stack)
+    .venv/bin/python -m journeys --list # registry + spec links
 """
 
 from __future__ import annotations
 
-from domain.journeys.flows import (
+from journeys.flows import (
     ALL_FLOWS,
     FLOWS,
     MOBILE_FLOWS,
@@ -20,7 +20,7 @@ from domain.journeys.flows import (
     list_all_flows,
     list_flows,
 )
-from domain.journeys.runner import main
+from journeys.runner import main
 
 __all__ = [
     "Flow",

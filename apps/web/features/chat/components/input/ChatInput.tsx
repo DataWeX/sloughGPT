@@ -26,64 +26,20 @@ import {
 import { Waves } from 'lucide-react'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
-import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
+import { MODE_ACCENT, type ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
-const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  chat: {
-    label: 'Chat',
-    icon: <IconChat className="h-3 w-3" />,
-    color: 'bg-primary/10 text-primary border-primary/20',
-  },
-  write: {
-    label: 'Write',
-    icon: <IconEdit className="h-3 w-3" />,
-    color: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
-  },
-  rewrite: {
-    label: 'Rewrite',
-    icon: <IconSparkle className="h-3 w-3" />,
-    color: 'bg-warning/10 text-warning border-warning/20',
-  },
-  translate: {
-    label: 'Translate',
-    icon: <IconVision className="h-3 w-3" />,
-    color: 'bg-info/10 text-info border-info/20',
-  },
-  brainstorm: {
-    label: 'Brainstorm',
-    icon: <IconBolt className="h-3 w-3" />,
-    color: 'bg-success/10 text-success border-success/20',
-  },
-  decide: {
-    label: 'Decide',
-    icon: <IconBrain className="h-3 w-3" />,
-    color: 'bg-destructive/10 text-destructive border-destructive/20',
-  },
-  explain: {
-    label: 'Explain',
-    icon: <IconSearch className="h-3 w-3" />,
-    color: 'bg-info/10 text-info border-info/20',
-  },
-  wellness: {
-    label: 'Wellness',
-    icon: <Waves className="h-3 w-3" />,
-    color: 'bg-info/10 text-info border-info/20',
-  },
-  create: {
-    label: 'Create',
-    icon: <IconVision className="h-3 w-3" />,
-    color: 'bg-primary/10 text-primary border-primary/20',
-  },
-  read: {
-    label: 'Read',
-    icon: <IconDocument className="h-3 w-3" />,
-    color: 'bg-accent/10 text-accent border-accent/20',
-  },
-  talk: {
-    label: 'Talk',
-    icon: <IconMic className="h-3 w-3" />,
-    color: 'bg-primary/10 text-primary border-primary/20',
-  },
+const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
+  chat: { label: 'Chat', icon: <IconChat className="h-3 w-3" /> },
+  write: { label: 'Write', icon: <IconEdit className="h-3 w-3" /> },
+  rewrite: { label: 'Rewrite', icon: <IconSparkle className="h-3 w-3" /> },
+  translate: { label: 'Translate', icon: <IconVision className="h-3 w-3" /> },
+  brainstorm: { label: 'Brainstorm', icon: <IconBolt className="h-3 w-3" /> },
+  decide: { label: 'Decide', icon: <IconBrain className="h-3 w-3" /> },
+  explain: { label: 'Explain', icon: <IconSearch className="h-3 w-3" /> },
+  wellness: { label: 'Wellness', icon: <Waves className="h-3 w-3" /> },
+  create: { label: 'Create', icon: <IconVision className="h-3 w-3" /> },
+  read: { label: 'Read', icon: <IconDocument className="h-3 w-3" /> },
+  talk: { label: 'Talk', icon: <IconMic className="h-3 w-3" /> },
 }
 
 const HISTORY_KEY = 'chat-input-history'
@@ -308,7 +264,7 @@ export const ChatInput = memo(function ChatInput({
               <span
                 className={cn(
                   'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors',
-                  modeConfig.color,
+                  MODE_ACCENT,
                 )}
               >
                 {modeConfig.icon}
@@ -365,10 +321,10 @@ export const ChatInput = memo(function ChatInput({
               <>
                 <span className="text-muted-foreground/20">·</span>
                 <span
-                  className="flex items-center gap-1 text-violet-400/60"
+                  className="flex items-center gap-1 text-primary/60"
                   title={`Consciousness ${getConsciousnessLevelLabel(consciousnessStatus.level)}: ${getQualiaMood(consciousnessStatus.current_qualia)}`}
                 >
-                  <span className="h-1 w-1 rounded-full bg-violet-400" />
+                  <span className="h-1 w-1 rounded-full bg-primary" />
                   <span>{getConsciousnessLevelLabel(consciousnessStatus.level)}</span>
                 </span>
               </>
@@ -380,7 +336,7 @@ export const ChatInput = memo(function ChatInput({
                   value={activePersona ?? ''}
                   onChange={(e) => handlePersonaChange(e.target.value)}
                   title={t('chat.switchPersona')}
-                  className="rounded border border-violet-400/30 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-400/70 outline-none cursor-pointer hover:bg-violet-400/20 transition-colors"
+                  className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary/70 outline-none cursor-pointer hover:bg-primary/20 transition-colors"
                 >
                   <option value="">{t('chat.defaultPersona')}</option>
                   {personas.map((p) => (

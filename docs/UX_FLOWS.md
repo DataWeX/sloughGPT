@@ -23,11 +23,11 @@ deep-link per flow), **not** as standalone pages. Flows 1 and 12 still have
 their own pages (`/chat`, `/training`).
 
 **Executable registry (Sep 2026):** Every flow below is also an executable
-spec-linked journey in `domain/journeys/flows.py` — each `Flow` carries its
+spec-linked journey in `journeys/flows.py` — each `Flow` carries its
 exact heading from this document as its `spec`, and
 `tests/test_ux_flows_library.py` fails the suite if a heading is renamed or
 a flow loses its anchor. Run them with
-`.venv/bin/python -m domain.journeys` (`--list` shows ids + spec links;
+`.venv/bin/python -m journeys` (`--list` shows ids + spec links;
 `--flow <id>` for one; the live sweep needs a running stack).
 **Exception:** flow 14 is doc-only for now — the plugins journey has no
 executable sweep yet. The gate checks registry→doc anchors, so an
@@ -566,7 +566,7 @@ project: what's moving, what's blocked, what's next.
 Same golden rule as the web: plain language, no jargon, no technical terms.
 These journeys are the in-code test paths for the mobile app — each one is
 mapped to its implementation files and its tests in
-`domain/journeys/flows.py`, and `scripts/journey_report.py` shows per-journey
+`journeys/flows.py`, and `scripts/journey_report.py` shows per-journey
 results.
 
 ### Mobile: Organize My Conversations

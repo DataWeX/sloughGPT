@@ -1,6 +1,6 @@
 """Per-journey traceability + test-status report (observable journey results).
 
-Every flow in domain/journeys (web + mobile) mapped to its UX_FLOWS spec,
+Every flow in journeys (web + mobile) mapped to its UX_FLOWS spec,
 implementation files, asserting tests, and owner. `--run` executes each
 flow's mapped suites (mobile → jest, web → vitest, repo-root → pytest) and
 prints a status table; a JSON report is written for history/automation.
@@ -27,7 +27,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO))
 
-from domain.journeys.flows import ALL_FLOWS, Flow  # noqa: E402
+from journeys.flows import ALL_FLOWS, Flow  # noqa: E402
 
 _DEFAULT_REPORT = (
     Path(os.environ.get("SLO_JOURNEY_CACHE", os.path.expanduser("~/.cache/slog-journeys")))

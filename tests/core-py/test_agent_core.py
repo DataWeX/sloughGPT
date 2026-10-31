@@ -2,6 +2,8 @@
 
 import asyncio
 import sys
+import time
+import types
 
 import pytest
 
@@ -178,7 +180,9 @@ class TestToolRunnerFileSearch:
         (tmp_path / "f.txt").write_text("needle")
         runner = ToolRunner()
         files = await runner._search_files("needle", str(tmp_path), 10)
-        assert isinstance(files, list)
+        # Real assertion: grep must actually find the file (the old
+        # --max-count=0 bug made this return [] silently).
+        assert any("f.txt" in f for f in files)
 
 
 class TestToolRunnerWebSearch:
@@ -219,16 +223,27 @@ class _FakeText:
         return text.strip() if strip else text
 
 
+class _FakeAnchor:
+    def __init__(self, href):
+        self._href = href
+
+    def get(self, attr, default=None):
+        return self._href if attr == "href" else default
+
+
 class _FakeResult:
-    def __init__(self, title, snippet):
+    def __init__(self, title, snippet, href=None):
         self._title = _FakeText(title)
         self._snippet = _FakeText(snippet)
+        self._href = href
 
     def select_one(self, sel):
         if sel == ".result__title":
             return self._title
         if sel == ".result__snippet":
             return self._snippet
+        if sel == ".result__a":
+            return _FakeAnchor(self._href) if self._href else None
         return None
 
 
@@ -249,13 +264,19 @@ class _FakeBS4:
 
 
 class _FakeResponse:
-    def __init__(self, text):
+    def __init__(self, text, status=200):
         self.text = text
+        self.status_code = status
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
 
 
 class _FakeClient:
-    def __init__(self, text):
+    def __init__(self, text, status=200, **kwargs):
         self._text = text
+        self._status = status
 
     async def __aenter__(self):
         return self
@@ -264,15 +285,16 @@ class _FakeClient:
         return False
 
     async def post(self, url, data=None, timeout=None):
-        return _FakeResponse(self._text)
+        return _FakeResponse(self._text, self._status)
 
 
 class _FakeHttpx:
-    def __init__(self, text):
+    def __init__(self, text, status=200):
         self._text = text
+        self._status = status
 
-    def AsyncClient(self):
-        return _FakeClient(self._text)
+    def AsyncClient(self, **kwargs):
+        return _FakeClient(self._text, self._status, **kwargs)
 
 
 class TestToolRunnerSearchWebImpl:
@@ -281,14 +303,36 @@ class TestToolRunnerSearchWebImpl:
         monkeypatch.setitem(sys.modules, "bs4", _FakeBS4([_FakeResult("Hello", "World")]))
         runner = ToolRunner()
         results = await runner._search_web("q", limit=2)
-        assert results == [{"title": "Hello", "snippet": "World"}]
+        assert results == [{"title": "Hello", "snippet": "World", "url": ""}]
 
     async def test_search_web_missing_fields(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "httpx", _FakeHttpx("<html></html>"))
         monkeypatch.setitem(sys.modules, "bs4", _FakeBS4([_FakeResult(None, None)]))
         runner = ToolRunner()
         results = await runner._search_web("q", limit=2)
-        assert results == [{"title": "", "snippet": ""}]
+        assert results == [{"title": "", "snippet": "", "url": ""}]
+
+    async def test_search_web_extracts_and_unwraps_url(self, monkeypatch):
+        href = "//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fpage&rut=x"
+        monkeypatch.setitem(sys.modules, "httpx", _FakeHttpx("<html></html>"))
+        monkeypatch.setitem(sys.modules, "bs4", _FakeBS4([_FakeResult("T", "s", href=href)]))
+        runner = ToolRunner()
+        results = await runner._search_web("q", limit=1)
+        assert results[0]["url"] == "https://example.com/page"
+
+    async def test_search_web_http_error_is_error_not_empty_success(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "httpx", _FakeHttpx("<html></html>", status=403))
+        monkeypatch.setitem(sys.modules, "bs4", _FakeBS4([]))
+        runner = ToolRunner()
+        res = await runner.execute(ToolCapability.WEB_SEARCH.value, {"query": "q"}, make_context())
+        assert res["success"] is False
+        assert "403" in res["error"]
+
+    def test_unwrap_ddg_plain_link_passthrough(self):
+        assert ToolRunner._unwrap_ddg("https://example.com/a") == "https://example.com/a"
+
+    def test_unwrap_ddg_protocol_relative(self):
+        assert ToolRunner._unwrap_ddg("//example.com/a") == "https://example.com/a"
 
 
 class TestToolRunnerCitation:
@@ -438,6 +482,171 @@ class _FakeEngine:
         from domain.knowledge.engine import KnowledgeResult
 
         return KnowledgeResult(success=True, data=self._facts, metadata={"count": len(self._facts)})
+
+
+# ── Tool correctness: path guard, code exec, data analysis ─────────────────
+
+
+class TestToolRunnerPathGuard:
+    async def test_file_read_denies_sensitive_dir(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        secret = tmp_path / ".ssh" / "known_hosts"
+        secret.parent.mkdir()
+        secret.write_text("key material")
+        runner = ToolRunner()
+        res = await runner.execute(
+            ToolCapability.FILE_READ.value, {"path": str(secret)}, make_context()
+        )
+        assert res["success"] is False
+        assert "sensitive" in res["error"]
+
+    async def test_file_read_denies_dotenv(self, tmp_path):
+        env_file = tmp_path / ".env"
+        env_file.write_text("API_KEY=abc")
+        runner = ToolRunner()
+        res = await runner.execute(
+            ToolCapability.FILE_READ.value, {"path": str(env_file)}, make_context()
+        )
+        assert res["success"] is False
+        assert "sensitive" in res["error"]
+
+    async def test_file_search_denies_sensitive_path(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        (tmp_path / ".aws").mkdir()
+        runner = ToolRunner()
+        res = await runner.execute(
+            ToolCapability.FILE_SEARCH.value,
+            {"query": "x", "path": str(tmp_path / ".aws")},
+            make_context(),
+        )
+        assert res["success"] is False
+        assert "sensitive" in res["error"]
+
+    async def test_allowed_directories_allowlist_enforced(self, tmp_path):
+        inside = tmp_path / "ok"
+        inside.mkdir()
+        (inside / "a.txt").write_text("hello")
+        outside = tmp_path / "outside.txt"
+        outside.write_text("secret")
+        runner = ToolRunner(SecurityBoundary(SecurityConfig(allowed_directories=[str(inside)])))
+        res_in = await runner.execute(
+            ToolCapability.FILE_READ.value, {"path": str(inside / "a.txt")}, make_context()
+        )
+        assert res_in["success"] is True
+        res_out = await runner.execute(
+            ToolCapability.FILE_READ.value, {"path": str(outside)}, make_context()
+        )
+        assert res_out["success"] is False
+        assert "allowed_directories" in res_out["error"]
+
+    async def test_data_analysis_denies_sensitive_path(self, tmp_path):
+        runner = ToolRunner()
+        res = await runner.execute(
+            ToolCapability.DATA_ANALYSIS.value,
+            {"data_path": str(tmp_path / ".env")},
+            make_context(),
+        )
+        assert res["success"] is False
+        assert "sensitive" in res["error"]
+
+
+class TestToolRunnerCodeExec:
+    async def test_python_runs_in_project_interpreter(self, monkeypatch):
+        runner = ToolRunner()
+        res = await runner.execute(
+            ToolCapability.CODE_EXECUTION.value,
+            {"code": "import sys; print(sys.executable)", "language": "python"},
+            make_context(),
+        )
+        assert res["success"] is True
+        assert res["stdout"].strip() == sys.executable
+
+    async def test_timeout_kills_child_process(self, monkeypatch, tmp_path):
+        boundary = SecurityBoundary(SecurityConfig(max_execution_time=1))
+        runner = ToolRunner(boundary)
+        sentinel = tmp_path / "tick.txt"
+        code = (
+            "import time, pathlib\n"
+            f"p = pathlib.Path({str(sentinel)!r})\n"
+            "while True:\n"
+            "    p.write_text(str(time.time()))\n"
+            "    time.sleep(0.05)\n"
+        )
+        res = await runner.execute(
+            ToolCapability.CODE_EXECUTION.value,
+            {"code": code, "language": "python"},
+            make_context(),
+        )
+        assert res["success"] is False
+        assert "timed out" in res["error"].lower()
+        # if the child outlived the timeout, the sentinel keeps ticking
+        time.sleep(0.3)
+        first = sentinel.read_text()
+        time.sleep(0.4)
+        assert sentinel.read_text() == first
+
+
+class TestToolRunnerDataAnalysis:
+    async def test_jsonl_skips_malformed_tail_line(self, tmp_path):
+        data = tmp_path / "rows.jsonl"
+        data.write_text('{"a": 1}\n{"a": 2}\n{"a": 3')  # third line cut off
+        runner = ToolRunner()
+        res = await runner.execute(
+            ToolCapability.DATA_ANALYSIS.value, {"data_path": str(data)}, make_context()
+        )
+        assert res["success"] is True
+        assert res["items"] == 2
+        assert res["bad_lines"] == 1
+        assert res["truncated"] is False
+
+    async def test_large_file_flags_truncation(self, tmp_path):
+        data = tmp_path / "big.jsonl"
+        line = '{"a": 1, "b": "xxxxxxxxxxxxxxxxxxxxxxxx"}\n'
+        data.write_text(line * 20_000)  # ~900KB > 500KB cap
+        runner = ToolRunner()
+        res = await runner.execute(
+            ToolCapability.DATA_ANALYSIS.value, {"data_path": str(data)}, make_context()
+        )
+        assert res["success"] is True
+        assert res["truncated"] is True
+        assert res["bad_lines"] >= 1  # cut mid-line tail
+
+
+class TestKnowledgeFallbackTokenMatch:
+    async def test_words_split_across_lines_still_match(self, monkeypatch, tmp_path):
+        runner = ToolRunner()
+
+        def fake_engine():
+            return _FakeEngine([])
+
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", fake_engine)
+        doc = tmp_path / "notes.md"
+        doc.write_text("redis\ncaching: the harness stores chunks here.")
+        monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path))
+        res = await runner.execute(
+            ToolCapability.KNOWLEDGE_RETRIEVAL.value,
+            {"query": "redis caching"},
+            make_context(),
+        )
+        # old whole-phrase substring check missed "redis\ncaching"
+        assert res["engine"] == "files"
+        assert res["count"] == 1
+
+
+class TestImageAnalysisHonesty:
+    async def test_vision_unavailable_reports_failure(self, monkeypatch, tmp_path):
+        img = tmp_path / "pic.png"
+        img.write_bytes(b"\x89PNG fake")
+        stub = types.ModuleType("domain.multimodal._internal.vision")
+        monkeypatch.setitem(sys.modules, "domain.multimodal._internal.vision", stub)
+        runner = ToolRunner()
+        res = await runner.execute(
+            ToolCapability.IMAGE_ANALYSIS.value,
+            {"image_path": str(img)},
+            make_context(),
+        )
+        assert res["success"] is False
+        assert "Vision model not available" in res["error"]
 
 
 # ── Agent: planning ────────────────────────────────────────────────────────

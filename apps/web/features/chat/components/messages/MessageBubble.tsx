@@ -176,7 +176,7 @@ export const MessageBubble = memo(function MessageBubble({
               role === 'user'
                 ? isEditing
                   ? 'w-full bg-muted text-foreground rounded-lg px-4 py-2.5'
-                  : 'bg-primary text-primary-foreground rounded-lg px-4 py-2.5 max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] shadow-sm'
+                  : 'bg-primary/10 text-foreground border border-primary/20 rounded-lg px-4 py-2.5 max-w-[85%] sm:max-w-[75%] lg:max-w-[65%]'
                 : 'text-foreground max-w-[70ch] py-0.5',
               isError && role === 'assistant' && 'text-destructive',
             )}

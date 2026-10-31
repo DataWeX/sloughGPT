@@ -28,76 +28,24 @@ export type ChatMode =
   | 'read'
   | 'talk'
 
-// Mode colors use theme tokens only (shared with EmptyState cards — same
-// mode, same token). Only one tab is active at a time, so token reuse
-// across modes is intentional and keeps a single accent language.
-const MODES: { value: ChatMode; label: string; icon: ReactNode; color: string }[] = [
-  {
-    value: 'chat',
-    label: 'Chat',
-    icon: <IconChat className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary border-primary/20',
-  },
-  {
-    value: 'write',
-    label: 'Write',
-    icon: <IconEdit className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary border-primary/20',
-  },
-  {
-    value: 'rewrite',
-    label: 'Rewrite',
-    icon: <IconSparkle className="h-3.5 w-3.5" />,
-    color: 'bg-warning/10 text-warning border-warning/20',
-  },
-  {
-    value: 'translate',
-    label: 'Translate',
-    icon: <IconVision className="h-3.5 w-3.5" />,
-    color: 'bg-info/10 text-info border-info/20',
-  },
-  {
-    value: 'brainstorm',
-    label: 'Brainstorm',
-    icon: <IconBolt className="h-3.5 w-3.5" />,
-    color: 'bg-success/10 text-success border-success/20',
-  },
-  {
-    value: 'decide',
-    label: 'Decide',
-    icon: <IconBrain className="h-3.5 w-3.5" />,
-    color: 'bg-destructive/10 text-destructive border-destructive/20',
-  },
-  {
-    value: 'explain',
-    label: 'Explain',
-    icon: <IconSearch className="h-3.5 w-3.5" />,
-    color: 'bg-accent/10 text-accent border-accent/20',
-  },
-  {
-    value: 'wellness',
-    label: 'Wellness',
-    icon: <Waves className="h-3.5 w-3.5" />,
-    color: 'bg-success/10 text-success border-success/20',
-  },
-  {
-    value: 'create',
-    label: 'Create',
-    icon: <IconVision className="h-3.5 w-3.5" />,
-    color: 'bg-accent/10 text-accent border-accent/20',
-  },
-  {
-    value: 'read',
-    label: 'Read',
-    icon: <IconDocument className="h-3.5 w-3.5" />,
-    color: 'bg-info/10 text-info border-info/20',
-  },
-  {
-    value: 'talk',
-    label: 'Talk',
-    icon: <IconMic className="h-3.5 w-3.5" />,
-    color: 'bg-primary/10 text-primary border-primary/20',
-  },
+// Single-accent language: every mode wears the same primary tint — only the
+// active tab/chip carries color. The accent is declared exactly once here and
+// consumed by the tab bar, the composer chip, and EmptyState tiles, so mode
+// colors can never drift apart again.
+export const MODE_ACCENT = 'bg-primary/10 text-primary border-primary/20'
+
+const MODES: { value: ChatMode; label: string; icon: ReactNode }[] = [
+  { value: 'chat', label: 'Chat', icon: <IconChat className="h-3.5 w-3.5" /> },
+  { value: 'write', label: 'Write', icon: <IconEdit className="h-3.5 w-3.5" /> },
+  { value: 'rewrite', label: 'Rewrite', icon: <IconSparkle className="h-3.5 w-3.5" /> },
+  { value: 'translate', label: 'Translate', icon: <IconVision className="h-3.5 w-3.5" /> },
+  { value: 'brainstorm', label: 'Brainstorm', icon: <IconBolt className="h-3.5 w-3.5" /> },
+  { value: 'decide', label: 'Decide', icon: <IconBrain className="h-3.5 w-3.5" /> },
+  { value: 'explain', label: 'Explain', icon: <IconSearch className="h-3.5 w-3.5" /> },
+  { value: 'wellness', label: 'Wellness', icon: <Waves className="h-3.5 w-3.5" /> },
+  { value: 'create', label: 'Create', icon: <IconVision className="h-3.5 w-3.5" /> },
+  { value: 'read', label: 'Read', icon: <IconDocument className="h-3.5 w-3.5" /> },
+  { value: 'talk', label: 'Talk', icon: <IconMic className="h-3.5 w-3.5" /> },
 ]
 
 const TONES = ['Friendly', 'Professional', 'Funny', 'Short', 'Detailed'] as const
@@ -361,7 +309,7 @@ export const ModeBar = memo(function ModeBar({
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-150 whitespace-nowrap shrink-0',
               m.value === mode
-                ? cn('shadow-sm border', m.color)
+                ? cn('shadow-sm border', MODE_ACCENT)
                 : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30 border border-transparent',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
               'active:bg-muted',
