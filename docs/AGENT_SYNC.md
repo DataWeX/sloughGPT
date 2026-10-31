@@ -4,6 +4,8 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-31 — OPENCODE (whats-new truth-up lane): PR #256 open (`chore/whats-new-truthup-main`, base main `c03127055`).** Both What's New surfaces were stale (web all-2026-05-27, mobile all-2026-08-20). Web `apps/web/lib/whats-new-data.ts` +8 git-verified entries (workspace switcher 10-30, KV-cache `session_id` 10-29, fail-closed auth 10-28, RAG fine chunking 10-24, 3D kanban 10-23, engine-validated kanban 10-22, one-request `/bootstrap` boot 10-21, chat transcript redesign 10-16); mobile `WhatsNewScreen.tsx` +5 (a11y pass 10-31, SSE auto-reconnect / chat retry+typing / training ETA+cancel 09-08, dark-mode+startup fixes 09-06). Mobile test fix: oldest 3 entries virtualize out of the FlatList window at 13 items — "all 8" test now asserts the 5 newest + archived separately. Gates: web vitest 13P, mobile jest 7P, tsc exit 0 both apps, eslint 0. **Pitfall:** this lane's opencode worktree (`jolly-island`) is on the audit-fixes lineage (`f246bd9d3`, a same-content twin of main's `5a822e0d3`, NOT an ancestor) — `git merge-tree` preview against main showed whole-file conflicts in board.jsonl/journal/mobile; cherry-picked both commits onto `origin/main` tip instead (`2bffb3a68` + `69524400a`), gates re-run green post-rebase.
+
 **Hard rule: local `main` = `origin/main`, always.** No stacks of unpushed
 commits on main (pre-commit/pre-push block >5 ahead via
 `scripts/check-main-sync.sh`; `SLO_MAIN_SYNC_SKIP=1` = deliberate escape), no
