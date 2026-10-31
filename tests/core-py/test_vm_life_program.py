@@ -27,6 +27,17 @@ from domain.shell._internal.vm_programs import LIFE_ASM, PROGRAMS
 
 GRID_W, GRID_H = 60, 20
 GRID_CELLS = GRID_W * GRID_H  # 1200 — also the maximum live count
+
+# This file is an end-to-end run of a full assembly program on the pure-Python
+# x86 emulator: millions of interpreter steps per test.  CI runs pytest with
+# `--cov=domain` (per-line tracer), which is 100x+ slower on that workload —
+# bare 5.8s became >600s measured locally, so under the global
+# pytest.ini timeout=120 these tests failed ONLY in CI (branch CI never ran
+# tests/core-py/, so it never surfaced before).  Skip tracing for this module:
+# the same vm.py/program-loader lines are already traced by the hundreds of
+# other tests/core-py VM tests, so the measured domain/ coverage is unaffected
+# and the tests run at bare speed (whole file ~60s).
+pytestmark = pytest.mark.no_cover
 PROMPT = "Enter number of lifes(max=1200): "
 DEFAULT_LIVES = 240
 BATCH_GENS = 4

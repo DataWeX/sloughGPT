@@ -400,6 +400,7 @@ class MultimodalDevice(Device):
 
     def __init__(self, engine, arena: TensorArena | None = None):
         self._engine = engine
+        self._arena: TensorArena = arena if arena is not None else TensorArena()
         self._ops = OpTable("MultimodalDevice", {
             "generate": self._generate,
             "embed": self._embed,

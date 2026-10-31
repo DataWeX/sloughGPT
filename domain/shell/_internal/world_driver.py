@@ -343,13 +343,6 @@ def main(argv: list[str] | None = None) -> int:
         help="optimizer for --brain slonet updates",
     )
     parser.add_argument(
-        "--brain",
-        choices=("perceptron", "model"),
-        default="perceptron",
-        help="brain class for babies: perceptron (default) or model "
-        "(ModelBrain — trainable hidden projection, genome-compatible)",
-    )
-    parser.add_argument(
         "--social", action="store_true", help="run the social benchmark (trait-group vs individual)"
     )
     parser.add_argument(

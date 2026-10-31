@@ -262,8 +262,9 @@ import importlib.util, sys, warnings
 warnings.simplefilter("always")
 sys.path.insert(0, ".")
 sys.path.insert(0, "packages/core-py")
+# tests/... path since the 2026-10-25 consolidation (was packages/core-py/tests/)
 spec = importlib.util.spec_from_file_location(
-    "tvb", "packages/core-py/tests/test_vector_backend.py"
+    "tvb", "tests/core-py/test_vector_backend.py"
 )
 tvb = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tvb)
@@ -292,7 +293,9 @@ gc.collect()
         import sys
         from pathlib import Path
 
-        root = Path(__file__).resolve().parents[3]
+        # parents[2] = repo root for a file at tests/core-py depth (2026-10-25
+        # consolidation; parents[3] was the old packages/core-py/tests depth)
+        root = Path(__file__).resolve().parents[2]
         before = {p.name for p in Path("/dev/shm").glob("psm_*")}
         env = {
             **os.environ,

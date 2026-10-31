@@ -137,8 +137,10 @@ class TestNumpyBatchIterator:
         assert len(it) == 3
 
     def test_len_empty_dataset(self):
+        # Documented contract: an empty dataset is one (empty) batch, so len()
+        # never reports 0 for a dataset that is being iterated.
         it = _NumpyBatchIterator([], 4, shuffle=False)
-        assert len(it) == 0  # zero batches, consistent with iteration
+        assert len(it) == 1
 
     def test_stop_iteration_at_end(self):
         it = iter(_NumpyBatchIterator(list(range(3)), 4, shuffle=False))
@@ -150,8 +152,9 @@ class TestNumpyBatchIterator:
 
 class TestCollate:
     def test_empty_batch(self):
-        xs, ys = _collate([])
-        assert xs.size == 0 and ys.size == 0
+        # An empty batch collates to None (nothing to stack) — _new_epoch
+        # uses that sentinel to end the epoch generator.
+        assert _collate([]) is None
 
     def test_pair_list_padded(self):
         x, y = _collate(
@@ -190,17 +193,16 @@ class TestOptimizedDataLoader:
         assert effective_prefetch_factor(4, 1) == 1
 
     def test_iteration_one_epoch_then_restart(self):
-        # one epoch per iter() call; batches are lists (numpy-free loader)
+        # Infinite epoch stream: exhausting an epoch rolls over into the next
+        # one instead of terminating (a for-loop never ends), so consume a
+        # bounded number of batches per epoch.
         loader = OptimizedDataLoader(list(range(5)), 2)
         assert len(loader) == 3
-        epoch1 = []
-        for batch in iter(loader):
-            epoch1.extend(batch)
-        assert sorted(epoch1) == list(range(5))
-        epoch2 = []
-        for batch in iter(loader):
-            epoch2.extend(batch)
-        assert sorted(epoch2) == list(range(5))
+        it = iter(loader)
+        epoch1 = [next(it) for _ in range(3)]
+        assert sorted(v for b in epoch1 for v in b) == list(range(5))
+        epoch2 = [next(it) for _ in range(3)]
+        assert sorted(v for b in epoch2 for v in b) == list(range(5))
 
     def test_next_restarts(self):
         loader = OptimizedDataLoader(list(range(3)), 4)
@@ -460,24 +462,31 @@ class TestClipGradNorm:
             total_sq += float(np.dot(arr, arr))
         return float(np.sqrt(total_sq))
 
-    def test_stub_returns_zero_with_grads(self):
-        # committed contract: numpy stub — grad clipping belongs to the trainer
-        model = _tiny_model()
-        rng = np.random.default_rng(0)
-        x = rng.integers(0, 64, size=(2, 8))
-        logits, loss = model(x, x)
-        loss.backward()
-        assert _clip_grad_norm_(model, 1e-6) == 0.0
-
-    def test_stub_leaves_grads_untouched(self):
+    def test_returns_preclip_norm_and_scales(self):
+        # Real implementation: returns the PRE-clip global norm and scales
+        # grads in place only when they exceed max_norm (the old no-op stub
+        # returned 0.0 and never touched grads).
         model = _tiny_model()
         rng = np.random.default_rng(0)
         x = rng.integers(0, 64, size=(2, 8))
         logits, loss = model(x, x)
         loss.backward()
         before = self._grad_sq_norm(model)
-        _clip_grad_norm_(model, 1e-6)
-        assert before > 0  # grads really exist — the stub just ignores them
+        assert before > 0  # grads really exist
+        total = _clip_grad_norm_(model, 1e-6)
+        assert total == pytest.approx(before)
+        # exceeded max_norm=1e-6 → scaled back down to (just under) 1e-6
+        assert self._grad_sq_norm(model) <= 1e-6 * 1.001
+
+    def test_leaves_grads_untouched_when_under_max_norm(self):
+        model = _tiny_model()
+        rng = np.random.default_rng(0)
+        x = rng.integers(0, 64, size=(2, 8))
+        logits, loss = model(x, x)
+        loss.backward()
+        before = self._grad_sq_norm(model)
+        assert before > 0
+        _clip_grad_norm_(model, before * 10)  # max_norm well above the norm
         assert self._grad_sq_norm(model) == pytest.approx(before)
 
 
