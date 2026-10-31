@@ -554,7 +554,7 @@ class ToolRunner:
         args: dict[str, Any],
         context: ToolExecutionContext,
     ) -> dict[str, Any]:
-        """Analyze an image using VisionCNN — embedding, caption, and object detection."""
+        """Analyze an image via the inference image-capability facade."""
         image_path = args.get("image_path", "")
         if not image_path:
             return {"error": "image_path required", "success": False}
@@ -562,54 +562,44 @@ class ToolRunner:
         if violation:
             return {"error": violation, "success": False}
         try:
-            if not os.path.exists(image_path):
-                return {"error": f"Image not found: {image_path}", "success": False}
+            from domain.inference import analyze_image
 
-            size = os.path.getsize(image_path)
-            ext = os.path.splitext(image_path)[1].lower()
-
-            try:
-                from domain.multimodal._internal.vision import VisionCNN
-
-                vision = VisionCNN()
-                caption_result = vision.caption(image_path)
-                objects = vision.detect(image_path)
-                embedding = vision.get_embedding(image_path)
-
-                return {
-                    "success": True,
-                    "format": ext,
-                    "size_bytes": size,
-                    "caption": caption_result.text,
-                    "confidence": round(caption_result.confidence, 3),
-                    "tags": caption_result.tags,
-                    "objects": [
-                        {"label": obj.label, "confidence": round(obj.confidence, 3)}
-                        for obj in objects
-                    ],
-                    "embedding_dim": len(embedding),
-                    "embedding_stats": {
-                        "mean": round(float(embedding.mean()), 4),
-                        "std": round(float(embedding.std()), 4),
-                        "l2_norm": round(float((embedding**2).sum() ** 0.5), 4),
-                    },
-                }
-            except ImportError:
-                # Honest failure: the loop must see the tool did not run.
+            result = analyze_image(image_path)
+            if not result.success:
+                # Map the facade's taxonomy onto this tool's existing shape.
+                if result.error_kind == "not_found":
+                    return {"error": result.error, "success": False}
+                message = (
+                    "Vision model not available — install SloNet dependencies"
+                    if result.error_kind == "unavailable"
+                    else f"Vision analysis error: {result.error}"
+                )
                 return {
                     "success": False,
-                    "format": ext,
-                    "size_bytes": size,
-                    "error": "Vision model not available — install SloNet dependencies",
+                    "format": result.format,
+                    "size_bytes": result.size_bytes,
+                    "error": message,
                 }
-            except Exception as ve:
-                logger.warning("VisionCNN analysis failed: %s", ve)
-                return {
-                    "success": False,
-                    "format": ext,
-                    "size_bytes": size,
-                    "error": f"Vision analysis error: {ve}",
-                }
+
+            embedding = result.embedding
+            return {
+                "success": True,
+                "format": result.format,
+                "size_bytes": result.size_bytes,
+                "caption": result.caption,
+                "confidence": round(result.confidence, 3),
+                "tags": result.tags,
+                "objects": [
+                    {"label": o["label"], "confidence": round(o["confidence"], 3)}
+                    for o in result.objects
+                ],
+                "embedding_dim": len(embedding),
+                "embedding_stats": {
+                    "mean": round(float(embedding.mean()), 4),
+                    "std": round(float(embedding.std()), 4),
+                    "l2_norm": round(float((embedding**2).sum() ** 0.5), 4),
+                },
+            }
         except Exception as e:
             return {"error": str(e), "success": False}
 
