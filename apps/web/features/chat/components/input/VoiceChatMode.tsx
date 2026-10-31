@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useVoiceChat, VoiceExchange, VoiceSettings } from '@/features/chat/hooks/useVoiceChat'
+import { useVoiceChat } from '@/features/chat/hooks/useVoiceChat'
 import { VoiceOrb, voiceStateTone } from '@/features/chat/components/input/VoiceWaveform'
+import { VoiceWarble } from '@/features/chat/components/input/VoiceWarble'
 import { cn, Spinner } from '@sloughgpt/strui'
 import { IconX, IconSettings, IconSpeaker, IconMicFilled } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -24,6 +25,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
     conversation,
     micLevel,
     micLevelRef,
+    audioFeaturesRef,
     settings,
     availableVoices,
     updateSettings,
@@ -133,11 +135,19 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           />
         )}
 
-        {/* Hero orb — one visual surface for the whole voice state machine.
-            Level arrives per-frame through micLevelRef (written to --mic-level
-            on the orb's own rAF loop), so this tree only re-renders on
-            discrete state changes. */}
-        <VoiceOrb state={state} micLevel={micLevel} levelRef={micLevelRef}>
+        {/* Warble — aura + one fine resting line that blooms into the 7-trace
+            echo while voice is present. Anchored to a wrapper around the orb
+            (not the stage) so the aura stays concentric and the line tucks
+            under the orb wherever the column shifts. Decorative (aria-hidden),
+            z-index -1: never affects layout, hit-testing, or the text. */}
+        <div className="relative">
+          <VoiceWarble state={state} featuresRef={audioFeaturesRef} />
+
+          {/* Hero orb — one visual surface for the whole voice state machine.
+              Level arrives per-frame through micLevelRef (written to --mic-level
+              on the orb's own rAF loop), so this tree only re-renders on
+              discrete state changes. */}
+          <VoiceOrb state={state} micLevel={micLevel} levelRef={micLevelRef}>
           <button
             type="button"
             onClick={handleToggle}
@@ -163,7 +173,8 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               <IconMicFilled className="h-12 w-12" />
             )}
           </button>
-        </VoiceOrb>
+          </VoiceOrb>
+        </div>
 
         {/* Interim text */}
         {interimText && (

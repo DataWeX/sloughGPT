@@ -89,39 +89,46 @@ export type VoiceVisualState = 'idle' | 'listening' | 'processing' | 'speaking' 
 /**
  * Single source of truth for state -> color. The header status dot and the
  * orb ring both read this map, so the two surfaces can never drift apart.
+ * `hue` is the opaque token form (gradients/auras that need a real color,
+ * where the `fill` wash would be too faint).
  */
 export const VOICE_STATE_TONE: Record<
   VoiceVisualState,
-  { dot: string; border: string; fill: string; pulse: boolean }
+  { dot: string; border: string; fill: string; hue: string; pulse: boolean }
 > = {
   idle: {
     dot: 'bg-muted-foreground/30',
     border: 'border-muted-foreground/20',
     fill: 'color-mix(in srgb, rgb(var(--muted)) 75%, transparent)',
+    hue: 'rgb(var(--muted-foreground))',
     pulse: false,
   },
   listening: {
     dot: 'bg-primary',
     border: 'border-primary',
     fill: 'color-mix(in srgb, rgb(var(--primary)) 16%, transparent)',
+    hue: 'rgb(var(--primary))',
     pulse: true,
   },
   processing: {
     dot: 'bg-warning',
     border: 'border-warning',
     fill: 'color-mix(in srgb, rgb(var(--warning)) 16%, transparent)',
+    hue: 'rgb(var(--warning))',
     pulse: true,
   },
   speaking: {
     dot: 'bg-success',
     border: 'border-success',
     fill: 'color-mix(in srgb, rgb(var(--success)) 16%, transparent)',
+    hue: 'rgb(var(--success))',
     pulse: true,
   },
   error: {
     dot: 'bg-destructive',
     border: 'border-destructive',
     fill: 'color-mix(in srgb, rgb(var(--destructive)) 16%, transparent)',
+    hue: 'rgb(var(--destructive))',
     pulse: true,
   },
 }
