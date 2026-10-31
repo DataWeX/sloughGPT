@@ -8314,8 +8314,10 @@ class TestCmdTui:
         def mock_import(name, *args, **kwargs):
             # A relative import passes the bare name ('tui_repl', level=1), not
             # the resolved dotted path -- matching the dotted path never fired
-            # and let the real TuiRepl start curses in-process.
-            if name == "tui_repl":
+            # and let the real TuiRepl start curses in-process. repl._cmd_tui
+            # has since moved to an absolute import, which arrives fully
+            # dotted; match both spellings so the shim fires either way.
+            if name in ("tui_repl", "domain.shell._internal.tui_repl"):
                 mod = MagicMock()
                 mod.TuiRepl.side_effect = RuntimeError("tui crashed")
                 return mod
