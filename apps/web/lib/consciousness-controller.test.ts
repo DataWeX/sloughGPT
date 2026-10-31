@@ -31,10 +31,20 @@ describe('consciousnessController.getSelfModel', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs /consciousness/self-model', async () => {
-    apiClient.apiGet.mockResolvedValue({ traits: { curiosity: 0.8 }, beliefs: ['b1'], goals: ['g1'], memories: ['m1'] })
+    // Real wire shape from routers/consciousness.py get_self_model — `beliefs`
+    // carries the numeric self-beliefs. The old mock here declared `traits` +
+    // `beliefs: string[]`, which matched the interface, not the backend, so the
+    // suite stayed green while the dashboard's beliefs panel never rendered.
+    apiClient.apiGet.mockResolvedValue({
+      identity: { name: 'SloughGPT', capabilities: ['analysis'], limitations: [], values: ['honesty'] },
+      beliefs: { curiosity: 0.8 },
+      doubts: ['am I truly understanding?'],
+      episode_count: 42,
+    })
     const result = await consciousnessController.getSelfModel()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/consciousness/self-model')
-    expect(result.traits.curiosity).toBe(0.8)
+    expect(result.beliefs.curiosity).toBe(0.8)
+    expect(result.episode_count).toBe(42)
   })
 })
 

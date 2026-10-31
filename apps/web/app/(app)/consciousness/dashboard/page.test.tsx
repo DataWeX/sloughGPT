@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LocaleProvider } from '@/hooks/useLocale'
+import type { ConsciousnessStatus } from '@/lib/consciousness-controller'
 import ConsciousnessDashboardPage from './page'
 
 vi.mock('@/lib/consciousness-controller', () => ({
@@ -75,6 +76,28 @@ const mockStatus = {
   enabled: true,
 }
 
+// Real wire payloads, copied from apps/api/server/routers/consciousness.py
+// (get_qualia / get_self_model). Both blocks below use these instead of the
+// shapes the page *wished* for — mocking a wish is what kept this suite green
+// while the route unmounted itself in production on 2026-10-31.
+const wireQualia = {
+  current: { valence: 0.1, arousal: -0.2, dominance: 0.0, novelty: 0.4, coherence: 0.6, beauty: 0.3 },
+  narrative: 'I feel calm and measured.',
+  history_count: 0,
+}
+
+const wireSelfModel = {
+  identity: {
+    name: 'SloughGPT',
+    capabilities: ['analysis'],
+    limitations: [],
+    values: ['honesty'],
+  },
+  beliefs: { competence: 0.7, helpfulness: 0.8 },
+  doubts: ['am I truly understanding?'],
+  episode_count: 0,
+}
+
 describe('ConsciousnessDashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -82,8 +105,8 @@ describe('ConsciousnessDashboardPage', () => {
     mockController.getQualiaHistory.mockResolvedValue({ history: [] as any })
     mockController.getBeliefsHistory.mockResolvedValue({ beliefs: [] as any })
     mockController.evaluate.mockResolvedValue(mockEvalReport as any)
-    mockController.getSelfModel.mockResolvedValue({ self_beliefs: { competence: 0.7, helpfulness: 0.8 } } as any)
-    mockController.getQualia.mockResolvedValue({ valence: 0.5, arousal: 0.3 })
+    mockController.getSelfModel.mockResolvedValue(wireSelfModel)
+    mockController.getQualia.mockResolvedValue(wireQualia)
     mockController.getStatus.mockResolvedValue(mockStatus as any)
     mockController.seedData.mockResolvedValue({ seeded: true })
     mockController.reflect.mockResolvedValue({ reflection: 'Test reflection' })
@@ -199,6 +222,62 @@ describe('ConsciousnessDashboardPage', () => {
     render(<ConsciousnessDashboardPage />, { wrapper: TestWrapper })
     await waitFor(() => {
       expect(screen.getAllByText('Qualia History').length).toBeGreaterThan(0)
+    })
+  })
+})
+
+// Regression guards for the 2026-10-31 production crash. The mocks above match
+// the shapes the page *wanted*, not the shapes the backend actually sends, which
+// is exactly why all 15 tests stayed green while the route unmounted itself for
+// real users. These feed the true wire payloads from
+// apps/api/server/routers/consciousness.py (get_qualia / get_self_model).
+describe('ConsciousnessDashboardPage — real backend wire shapes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockController.getEpisodeHistory.mockResolvedValue({ episodes: [], total: 0 })
+    mockController.getQualiaHistory.mockResolvedValue({ history: [] })
+    mockController.getBeliefsHistory.mockResolvedValue({ beliefs: [] })
+    mockController.evaluate.mockResolvedValue({ overall_score: 80, metrics: {}, diagnostics: [] })
+    // `as unknown as ConsciousnessStatus` because that interface is itself
+    // unverified against engine.get_status() (it declares status/uptime/
+    // narrative the router never sends) — a separate contract to reconcile.
+    // The page only reads `.level`, which is genuinely present.
+    mockController.getStatus.mockResolvedValue({
+      level: 1,
+      enabled: true,
+    } as unknown as ConsciousnessStatus)
+    mockController.getQualia.mockResolvedValue(wireQualia)
+    mockController.getSelfModel.mockResolvedValue(wireSelfModel)
+  })
+
+  it('renders the nested qualia envelope without throwing', async () => {
+    // The old code did setCurrentQualia(wholeEnvelope), so the qualia bars
+    // iterated {current, narrative, history_count} and called .toFixed() on an
+    // object and a string → TypeError → DigestBoundary unmounted the route.
+    render(<ConsciousnessDashboardPage />, { wrapper: TestWrapper })
+    await waitFor(() => {
+      expect(screen.getAllByText('Qualia').length).toBeGreaterThan(0)
+    })
+    expect(screen.getByText('0.10')).toBeTruthy()
+    expect(screen.getByText('-0.20')).toBeTruthy()
+  })
+
+  it('renders each numeric qualia dimension as a formatted value', async () => {
+    render(<ConsciousnessDashboardPage />, { wrapper: TestWrapper })
+    // All six backend dimensions survive — none is dropped or stringified.
+    await waitFor(() => {
+      for (const v of ['0.10', '-0.20', '0.00', '0.40', '0.60', '0.30']) {
+        expect(screen.getAllByText(v).length).toBeGreaterThan(0)
+      }
+    })
+  })
+
+  it('populates the beliefs panel from self-model `beliefs` (was `self_beliefs`)', async () => {
+    render(<ConsciousnessDashboardPage />, { wrapper: TestWrapper })
+    await waitFor(() => {
+      expect(screen.getAllByText('Beliefs').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('70%').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('80%').length).toBeGreaterThan(0)
     })
   })
 })

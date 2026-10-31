@@ -160,10 +160,10 @@ export default function ConsciousnessDashboardPage() {
         setEvalReport(eResult.value ?? null)
       }
       if (sResult.status === 'fulfilled') {
-        if (sResult.value.self_beliefs) setCurrentBeliefs(sResult.value.self_beliefs)
+        if (sResult.value.beliefs) setCurrentBeliefs(sResult.value.beliefs)
       }
       if (qNowResult.status === 'fulfilled') {
-        if (qNowResult.value) setCurrentQualia(qNowResult.value)
+        if (qNowResult.value) setCurrentQualia(qNowResult.value.current)
       }
       if (statusResult.status === 'fulfilled') {
         if (statusResult.value.level !== undefined) setConsciousnessLevel(statusResult.value.level)
@@ -740,13 +740,13 @@ export default function ConsciousnessDashboardPage() {
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
-                            width: `${Math.max(0, Math.min(100, (v as number) * 100))}%`,
+                            width: `${Math.max(0, Math.min(100, v * 100))}%`,
                             backgroundColor: BELIEF_COLORS[k] || 'rgb(var(--chart-1))',
                           }}
                         />
                       </div>
                       <span className="text-xs text-muted-foreground w-10 text-right">
-                        {((v as number) * 100).toFixed(0)}%
+                        {(v * 100).toFixed(0)}%
                       </span>
                     </div>
                   ))}
@@ -764,13 +764,13 @@ export default function ConsciousnessDashboardPage() {
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
-                            width: `${Math.max(0, Math.min(100, (((v as number) + 1) / 2) * 100))}%`,
+                            width: `${Math.max(0, Math.min(100, ((v + 1) / 2) * 100))}%`,
                             backgroundColor: QUALIA_COLORS[k] || 'rgb(var(--chart-1))',
                           }}
                         />
                       </div>
                       <span className="text-xs text-muted-foreground w-10 text-right">
-                        {(v as number).toFixed(2)}
+                        {v.toFixed(2)}
                       </span>
                     </div>
                   ))}
