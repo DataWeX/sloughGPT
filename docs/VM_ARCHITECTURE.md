@@ -86,14 +86,14 @@ kernel; S4's binaries are guest services).
 
 ## 2. Rulings — merge / retire / keep
 
-| # | Ruling | Disposition | Rationale |
-|---|--------|-------------|-----------|
-| R1 | **S1 keeps the name "Dait kernel"; S4's guest binaries drop it** (rename to guest-side names in `sloughgpt.mk`/overlays) | keep S1, rename S4 | one name per thing; S1 is the product kernel |
-| R2 | **Retire the "x86 QEMU VM" name** — docs/cards say "x86 interpreter VM (X86VirtualSystem)" | docs-only rename | zero QEMU in tree; the name misdirected this review's own scope |
-| R3 | **Land `feat/v86-tiny-linux-port`** onto main | merge (subcard C1) | fixes a live constructor bug; 57 tests; ISO/GUI work already paid for |
-| R4 | **S2 stays** as a distinct substrate (assembly/RBAC/training bridge) — no merge into S1, no real-QEMU introduction | keep | distinct journey; interpreter ≠ shell; v86 already covers "real Linux" |
-| R5 | **S3 render path adopts S1's view-seam VT engine** (`engine.ts`) over time — one terminal interpreter for every pane | follow-up (subcard C2) | card D's engine is the shared seam; drift between panels caused the corruption class |
-| R6 | **S4 stays** as S3's image factory; the S99dait dait-guest bridge is parked until a journey demands guest services | keep, bridge parked | no journey today; placeholder binaries would rot silently |
+| #   | Ruling                                                                                                                   | Disposition            | Rationale                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------ |
+| R1  | **S1 keeps the name "Dait kernel"; S4's guest binaries drop it** (rename to guest-side names in `sloughgpt.mk`/overlays) | keep S1, rename S4     | one name per thing; S1 is the product kernel                                         |
+| R2  | **Retire the "x86 QEMU VM" name** — docs/cards say "x86 interpreter VM (X86VirtualSystem)"                               | docs-only rename       | zero QEMU in tree; the name misdirected this review's own scope                      |
+| R3  | **Land `feat/v86-tiny-linux-port`** onto main                                                                            | merge (subcard C1)     | fixes a live constructor bug; 57 tests; ISO/GUI work already paid for                |
+| R4  | **S2 stays** as a distinct substrate (assembly/RBAC/training bridge) — no merge into S1, no real-QEMU introduction       | keep                   | distinct journey; interpreter ≠ shell; v86 already covers "real Linux"               |
+| R5  | **S3 render path adopts S1's view-seam VT engine** (`engine.ts`) over time — one terminal interpreter for every pane     | follow-up (subcard C2) | card D's engine is the shared seam; drift between panels caused the corruption class |
+| R6  | **S4 stays** as S3's image factory; the S99dait dait-guest bridge is parked until a journey demands guest services       | keep, bridge parked    | no journey today; placeholder binaries would rot silently                            |
 
 **One story:** S1 is the product console (fix + design-language lane: B landed,
 D in flight). S2 is an educational interpreter beside it. S3 is the browser's
@@ -135,12 +135,12 @@ is its VM-specific projection.
 
 ## 4. Subcards (emitted with this record)
 
-| Card | Scope | Owner paths |
-|------|-------|-------------|
-| **C1** | Land `feat/v86-tiny-linux-port` on main (rebase, gates, merge) | `apps/web/hooks/useV86.ts`, `V86TerminalPanel.tsx`, `lib/v86-controller.ts`, `public/v86/` |
-| **C2** | v86 pane adopts `lib/terminal/engine.ts` at the view seam (raw tier; fallback plain) | `V86TerminalPanel.tsx`, `useV86.ts`, engine consumers |
-| **C3** | `/vm/run` process-isolation evaluation → decision + card (pairs with modular Tier-1 card) | `routers/vm.py`, `domain/shell/_internal/vm.py` (eval only, no code in first pass) |
-| **C4** | Naming truth-up: R1 guest-binary rename + R2 "QEMU"→"interpreter" sweep in docs/cards | `packages/sloughgpt/sloughgpt.mk`, `buildroot/` overlays, `docs/VM_CONSOLE.md`, `docs/vm-devices-spec.md`, this doc |
+| Card   | Scope                                                                                     | Owner paths                                                                                                         |
+| ------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **C1** | Land `feat/v86-tiny-linux-port` on main (rebase, gates, merge)                            | `apps/web/hooks/useV86.ts`, `V86TerminalPanel.tsx`, `lib/v86-controller.ts`, `public/v86/`                          |
+| **C2** | v86 pane adopts `lib/terminal/engine.ts` at the view seam (raw tier; fallback plain)      | `V86TerminalPanel.tsx`, `useV86.ts`, engine consumers                                                               |
+| **C3** | `/vm/run` process-isolation evaluation → decision + card (pairs with modular Tier-1 card) | `routers/vm.py`, `domain/shell/_internal/vm.py` (eval only, no code in first pass)                                  |
+| **C4** | Naming truth-up: R1 guest-binary rename + R2 "QEMU"→"interpreter" sweep in docs/cards     | `packages/sloughgpt/sloughgpt.mk`, `buildroot/` overlays, `docs/VM_CONSOLE.md`, `docs/vm-devices-spec.md`, this doc |
 
 Subcards land on the board under umbrella `20261026_085725`; D (RetroBIOS
 design language) continues independently — R5 makes it the shared-render

@@ -33,9 +33,7 @@ let v86LoadPromise: Promise<unknown> | null = null
  */
 export function ensureV86RenderScheduling(): void {
   const win =
-    typeof window === 'undefined'
-      ? undefined
-      : (window as unknown as Record<string, unknown>)
+    typeof window === 'undefined' ? undefined : (window as unknown as Record<string, unknown>)
   if (!win || typeof win.requestAnimationFrame !== 'function' || win.__v86RafShim) return
   win.__v86RafShim = true
 
@@ -109,7 +107,6 @@ function ensureV86SchedulingGlobals(): void {
       setTimeout(() => cb(...args), 0)) as never
   }
 }
-
 
 async function loadV86Runtime(): Promise<unknown> {
   if (window.V86) return window.V86

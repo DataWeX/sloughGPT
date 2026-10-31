@@ -78,16 +78,21 @@ export function ChatDrawer({
   }, [visible, refreshFolders])
 
   const handleNewFolder = useCallback(() => {
-    Alert.prompt('New Folder', 'Enter a folder name:', async (name: string) => {
-      if (!name || !name.trim()) return
-      try {
-        await foldersService.createFolder(name.trim())
-        await refreshFolders()
-        triggerHaptic('light')
-      } catch (e: any) {
-        toast.error(e?.message || 'Failed to create folder')
-      }
-    }, 'plain-text')
+    Alert.prompt(
+      'New Folder',
+      'Enter a folder name:',
+      async (name: string) => {
+        if (!name || !name.trim()) return
+        try {
+          await foldersService.createFolder(name.trim())
+          await refreshFolders()
+          triggerHaptic('light')
+        } catch (e: any) {
+          toast.error(e?.message || 'Failed to create folder')
+        }
+      },
+      'plain-text',
+    )
   }, [refreshFolders])
 
   const handleMoveToFolder = useCallback(
@@ -236,7 +241,9 @@ export function ChatDrawer({
                     paddingHorizontal={12}
                     paddingVertical={5}
                     borderRadius={10}
-                    backgroundColor={folderFilter === f.id ? colors.primary : colors.primaryAlpha(0.06)}
+                    backgroundColor={
+                      folderFilter === f.id ? colors.primary : colors.primaryAlpha(0.06)
+                    }
                     borderWidth={1}
                     borderColor={folderFilter === f.id ? colors.primary : colors.border}
                     pressStyle={{ opacity: 0.8 }}

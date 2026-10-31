@@ -1,194 +1,182 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type {SearchResult, SessionLineage} from '../types';
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import type { SearchResult, SessionLineage } from '../types'
 
-const API_URL_KEY = '@sloughgpt/api_url';
-const DEFAULT_URL = 'http://localhost:8000';
+const API_URL_KEY = '@sloughgpt/api_url'
+const DEFAULT_URL = 'http://localhost:8000'
 
 export async function getApiUrl(): Promise<string> {
-  const stored = await AsyncStorage.getItem(API_URL_KEY);
-  return stored || DEFAULT_URL;
+  const stored = await AsyncStorage.getItem(API_URL_KEY)
+  return stored || DEFAULT_URL
 }
 
 export async function setApiUrl(url: string): Promise<void> {
-  await AsyncStorage.setItem(API_URL_KEY, url);
+  await AsyncStorage.setItem(API_URL_KEY, url)
 }
 
 export class ApiError extends Error {
-  status: number;
-  data: unknown;
+  status: number
+  data: unknown
 
   constructor(status: number, message: string, data?: unknown) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.data = data;
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.data = data
   }
 }
 
 /** Standard response envelope from backend. */
 interface StandardResponse<T> {
-  status: 'success' | 'error';
-  data: T;
-  message?: string;
-  meta?: Record<string, unknown>;
+  status: 'success' | 'error'
+  data: T
+  message?: string
+  meta?: Record<string, unknown>
 }
 
 /** Unwrap StandardResponse — extracts `data` field if present. */
 function unwrap<T>(raw: unknown): T {
   if (raw && typeof raw === 'object' && 'status' in raw && 'data' in raw) {
-    return (raw as StandardResponse<T>).data;
+    return (raw as StandardResponse<T>).data
   }
-  return raw as T;
+  return raw as T
 }
 
-const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
-const MAX_RETRIES = 1;
-const BASE_DELAY = 500;
-const DEFAULT_TIMEOUT_MS = 30_000;
+const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504])
+const MAX_RETRIES = 1
+const BASE_DELAY = 500
+const DEFAULT_TIMEOUT_MS = 30_000
 
 /** Simple in-memory cache for GET requests. */
 class RequestCache {
-  private store = new Map<string, {data: unknown; expiresAt: number}>();
+  private store = new Map<string, { data: unknown; expiresAt: number }>()
 
   constructor(private defaultTtlMs = 5000) {}
 
   get<T>(key: string): T | undefined {
-    const entry = this.store.get(key);
-    if (!entry) return undefined;
+    const entry = this.store.get(key)
+    if (!entry) return undefined
     if (Date.now() > entry.expiresAt) {
-      this.store.delete(key);
-      return undefined;
+      this.store.delete(key)
+      return undefined
     }
-    return entry.data as T;
+    return entry.data as T
   }
 
   set(key: string, data: unknown, ttlMs?: number) {
-    this.store.set(key, {data, expiresAt: Date.now() + (ttlMs ?? this.defaultTtlMs)});
+    this.store.set(key, { data, expiresAt: Date.now() + (ttlMs ?? this.defaultTtlMs) })
   }
 
   invalidate(prefix: string) {
     for (const key of this.store.keys()) {
-      if (key.startsWith(prefix)) this.store.delete(key);
+      if (key.startsWith(prefix)) this.store.delete(key)
     }
   }
 }
 
-const cache = new RequestCache(5000);
+const cache = new RequestCache(5000)
 
 /** Paths that benefit from longer cache TTL. */
 const LONG_TTL_PATHS: [RegExp, number][] = [
   [/^\/models(?!\/)/, 10_000],
   [/^\/datasets(?!\/)/, 10_000],
   [/^\/health/, 5_000],
-];
+]
 
 function parseErrorDetail(text: string, resStatus: number): string {
   try {
-    const j = JSON.parse(text);
-    const detail = j.detail ?? j.message ?? j.error;
+    const j = JSON.parse(text)
+    const detail = j.detail ?? j.message ?? j.error
     if (Array.isArray(detail)) {
-      return detail
-        .map((d: any) => (typeof d === 'string' ? d : d.msg ?? ''))
-        .join('; ');
+      return detail.map((d: any) => (typeof d === 'string' ? d : (d.msg ?? ''))).join('; ')
     }
-    return detail || `Request failed (${resStatus})`;
+    return detail || `Request failed (${resStatus})`
   } catch {
-    return text || `Request failed (${resStatus})`;
+    return text || `Request failed (${resStatus})`
   }
 }
 
-async function request<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (method === 'GET' && !body) {
-    const cached = cache.get<T>(path);
-    if (cached !== undefined) return cached;
+    const cached = cache.get<T>(path)
+    if (cached !== undefined) return cached
   }
 
-  const baseUrl = await getApiUrl();
+  const baseUrl = await getApiUrl()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-  };
+  }
 
-  let retries = 0;
+  let retries = 0
 
   while (true) {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), DEFAULT_TIMEOUT_MS);
+    const ac = new AbortController()
+    const timer = setTimeout(() => ac.abort(), DEFAULT_TIMEOUT_MS)
 
     try {
-      const config: RequestInit = {method, headers, signal: ac.signal};
+      const config: RequestInit = { method, headers, signal: ac.signal }
       if (body && method !== 'GET') {
-        config.body = JSON.stringify(body);
+        config.body = JSON.stringify(body)
       }
 
-      const res = await fetch(`${baseUrl}${path}`, config);
-      clearTimeout(timer);
+      const res = await fetch(`${baseUrl}${path}`, config)
+      clearTimeout(timer)
 
       if (!res.ok) {
-        const status = res.status;
-        const isRetryable = RETRYABLE_STATUSES.has(status);
+        const status = res.status
+        const isRetryable = RETRYABLE_STATUSES.has(status)
 
         if (isRetryable && retries < MAX_RETRIES) {
-          retries++;
-          const retryAfter = Number(res.headers?.get?.('Retry-After')) || 0;
-          const delay =
-            retryAfter > 0
-              ? retryAfter * 1000
-              : BASE_DELAY * Math.pow(2, retries - 1);
-          await new Promise(r => setTimeout(r, delay));
-          continue;
+          retries++
+          const retryAfter = Number(res.headers?.get?.('Retry-After')) || 0
+          const delay = retryAfter > 0 ? retryAfter * 1000 : BASE_DELAY * Math.pow(2, retries - 1)
+          await new Promise((r) => setTimeout(r, delay))
+          continue
         }
 
-        const text = await res.text();
-        throw new ApiError(status, parseErrorDetail(text, status), text);
+        const text = await res.text()
+        throw new ApiError(status, parseErrorDetail(text, status), text)
       }
 
-      const text = await res.text();
-      if (!text) return undefined as T;
-      const raw = JSON.parse(text);
-      const result = unwrap<T>(raw);
+      const text = await res.text()
+      if (!text) return undefined as T
+      const raw = JSON.parse(text)
+      const result = unwrap<T>(raw)
 
       if (method === 'GET') {
-        const ttl = LONG_TTL_PATHS.find(([re]) => re.test(path))?.[1];
-        cache.set(path, result, ttl);
+        const ttl = LONG_TTL_PATHS.find(([re]) => re.test(path))?.[1]
+        cache.set(path, result, ttl)
       } else if (method !== 'GET') {
-        cache.invalidate(path.split('/').slice(0, 3).join('/'));
+        cache.invalidate(path.split('/').slice(0, 3).join('/'))
       }
 
-      return result;
+      return result
     } catch (err) {
-      clearTimeout(timer);
+      clearTimeout(timer)
 
-      if (err instanceof ApiError) throw err;
+      if (err instanceof ApiError) throw err
 
       // Caller-initiated abort is terminal — never retry
       if (ac.signal.aborted && err instanceof Error && err.name === 'AbortError') {
-        throw new ApiError(0, 'Request timed out');
+        throw new ApiError(0, 'Request timed out')
       }
 
       const isConnRefused =
         err instanceof Error &&
-        (err.message === 'Failed to fetch' ||
-          (err as any).cause?.code === 'ECONNREFUSED');
+        (err.message === 'Failed to fetch' || (err as any).cause?.code === 'ECONNREFUSED')
 
       if (retries < MAX_RETRIES) {
-        retries++;
-        await new Promise(r =>
-          setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)),
-        );
-        continue;
+        retries++
+        await new Promise((r) => setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)))
+        continue
       }
 
       const message = isConnRefused
         ? 'Connection unavailable — server may be starting up'
         : err instanceof Error
           ? err.message
-          : 'Request failed';
+          : 'Request failed'
 
-      throw new ApiError(0, message);
+      throw new ApiError(0, message)
     }
   }
 }
@@ -202,54 +190,56 @@ export const api = {
 
   /** Upload a file (image/audio) via multipart form data. */
   upload: async <T>(path: string, formData: FormData): Promise<T> => {
-    const baseUrl = await getApiUrl();
-    const MAX_RETRIES = 2;
-    const TIMEOUT_MS = 60_000;
+    const baseUrl = await getApiUrl()
+    const MAX_RETRIES = 2
+    const TIMEOUT_MS = 60_000
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
       try {
         const res = await fetch(`${baseUrl}${path}`, {
           method: 'POST',
           body: formData,
           signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
+        })
+        clearTimeout(timeoutId)
 
         if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new ApiError(res.status, (data as any)?.detail || res.statusText, data);
+          const data = await res.json().catch(() => null)
+          throw new ApiError(res.status, (data as any)?.detail || res.statusText, data)
         }
-        const text = await res.text();
-        if (!text) return undefined as T;
-        const raw = JSON.parse(text);
-        return unwrap<T>(raw);
+        const text = await res.text()
+        if (!text) return undefined as T
+        const raw = JSON.parse(text)
+        return unwrap<T>(raw)
       } catch (err: any) {
-        clearTimeout(timeoutId);
-        const isRetryable = err?.name === 'AbortError' || (err?.status && [408, 429, 502, 503, 504].includes(err.status));
+        clearTimeout(timeoutId)
+        const isRetryable =
+          err?.name === 'AbortError' ||
+          (err?.status && [408, 429, 502, 503, 504].includes(err.status))
         if (isRetryable && attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-          continue;
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+          continue
         }
-        throw err;
+        throw err
       }
     }
-    throw new Error('Upload failed after retries');
+    throw new Error('Upload failed after retries')
   },
 
   /** Sync offline messages with the server. */
-  sync: <T>(body: {pending_messages: any[]; last_sync_timestamp?: number}) =>
+  sync: <T>(body: { pending_messages: any[]; last_sync_timestamp?: number }) =>
     request<T>('POST', '/mobile/sync', body),
 
   /** Rename a session. */
   renameSession: (sessionId: string, name: string) =>
-    api.put(`/chat/sessions/${sessionId}`, {name}),
+    api.put(`/chat/sessions/${sessionId}`, { name }),
 
   /** Archive or unarchive a session. */
   archiveSession: (sessionId: string, archived: boolean) =>
-    api.put(`/chat/sessions/${sessionId}`, {archived}),
+    api.put(`/chat/sessions/${sessionId}`, { archived }),
 
   /** Search across all sessions. */
   searchSessions: (q: string, limit?: number) =>
@@ -262,9 +252,9 @@ export const api = {
 
   /** Branch a session at a message index (prefix copy + lineage recorded). */
   branchSession: (sessionId: string, fromIndex: number, name?: string) =>
-    api.post<{session_id: string; branched_from: string; from_index: number}>(
+    api.post<{ session_id: string; branched_from: string; from_index: number }>(
       `/chat/sessions/${sessionId}/branch`,
-      name ? {from_index: fromIndex, name} : {from_index: fromIndex},
+      name ? { from_index: fromIndex, name } : { from_index: fromIndex },
     ),
 
   /** Session branch lineage — parent chain, nearest parent first. */
@@ -273,28 +263,28 @@ export const api = {
 
   /** Send a voice message (audio upload) to a session. */
   sendVoiceMessage: (sessionId: string, audioUri: string, durationMs: number) => {
-    const formData = new FormData();
+    const formData = new FormData()
     formData.append('file', {
       uri: audioUri,
       type: 'audio/m4a',
       name: 'voice.m4a',
-    } as any);
-    formData.append('duration_ms', String(durationMs));
-    return api.upload<{message_id: string; audio_path: string; session_id: string}>(
+    } as any)
+    formData.append('duration_ms', String(durationMs))
+    return api.upload<{ message_id: string; audio_path: string; session_id: string }>(
       `/chat/voice/${sessionId}`,
       formData,
-    );
+    )
   },
 
   /** Check server connectivity. */
   syncStatus: <T>() => request<T>('GET', '/mobile/sync/status'),
 
   /** Trigger on-device training on server with conversation pairs. */
-  mobileTrain: <T>(body: {pairs: any[]; checkpoint: string}) =>
+  mobileTrain: <T>(body: { pairs: any[]; checkpoint: string }) =>
     request<T>('POST', '/mobile/train', body),
 
   /** Train from server-side inference logs (no mobile data needed). */
-  trainFromSessions: <T>(body?: {limit?: number; min_length?: number; model?: string}) =>
+  trainFromSessions: <T>(body?: { limit?: number; min_length?: number; model?: string }) =>
     request<T>('POST', '/mobile/train/from-sessions', body || {}),
 
   /** Get auto-trainer status. */
@@ -305,6 +295,6 @@ export const api = {
     return request<any>(
       'GET',
       `/training/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
-    );
+    )
   },
-};
+}

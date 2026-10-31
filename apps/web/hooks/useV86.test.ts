@@ -226,13 +226,15 @@ describe('useV86', () => {
     const { resolveBios } = await import('./useV86')
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation((url: string) =>
-        Promise.resolve(
-          url.startsWith('https://copy.sh/v86/bios/')
-            ? { ok: true, status: 200, headers: { get: () => null } }
-            : { ok: false, status: 404, headers: { get: () => null } },
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            url.startsWith('https://copy.sh/v86/bios/')
+              ? { ok: true, status: 200, headers: { get: () => null } }
+              : { ok: false, status: 404, headers: { get: () => null } },
+          ),
         ),
-      ),
     )
 
     await expect(resolveBios()).resolves.toEqual({
@@ -272,8 +274,7 @@ describe('useV86', () => {
       expect.anything(),
       expect.objectContaining({
         imageKind: 'kernel',
-        cmdline:
-          'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on',
+        cmdline: 'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on',
       }),
     )
 

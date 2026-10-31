@@ -331,8 +331,7 @@ describe('Design criteria — Noir Violet ratchets', () => {
 
   it('no NEW file introduces neutral-grey wheel utilities', () => {
     const offenders = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root))).filter(
-      (rel) =>
-        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(WHEEL_RE)?.length,
+      (rel) => stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(WHEEL_RE)?.length,
     )
     const unexpected = offenders.filter((f) => !(f in WHEEL_BASELINE))
     expect(
@@ -359,7 +358,8 @@ describe('Design criteria — Noir Violet ratchets', () => {
     const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
     let total = 0
     for (const rel of files) {
-      total += stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(WHEEL_RE)?.length ?? 0
+      total +=
+        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(WHEEL_RE)?.length ?? 0
     }
     expect(
       total,
@@ -370,8 +370,7 @@ describe('Design criteria — Noir Violet ratchets', () => {
 
   it('no NEW file introduces out-of-scale text-lg', () => {
     const offenders = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root))).filter(
-      (rel) =>
-        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_LG_RE)?.length,
+      (rel) => stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_LG_RE)?.length,
     )
     const unexpected = offenders.filter((f) => !(f in TEXT_LG_BASELINE))
     expect(
@@ -393,7 +392,8 @@ describe('Design criteria — Noir Violet ratchets', () => {
     const files = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root)))
     let total = 0
     for (const rel of files) {
-      total += stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_LG_RE)?.length ?? 0
+      total +=
+        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_LG_RE)?.length ?? 0
     }
     expect(
       total,
@@ -404,8 +404,7 @@ describe('Design criteria — Noir Violet ratchets', () => {
 
   it('no NEW file introduces out-of-scope text-2xl', () => {
     const offenders = STOCK_SCAN_ROOTS.flatMap((root) => collectFiles(join(WEB_ROOT, root))).filter(
-      (rel) =>
-        stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_2XL_RE)?.length,
+      (rel) => stripComments(readFileSync(join(WEB_ROOT, rel), 'utf-8')).match(TEXT_2XL_RE)?.length,
     )
     const unexpected = offenders.filter((f) => !(f in TEXT_2XL_BASELINE))
     expect(

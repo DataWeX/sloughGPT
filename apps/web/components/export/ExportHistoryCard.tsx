@@ -24,7 +24,11 @@ async function loadHistory(): Promise<ExportRecord[]> {
 }
 
 async function saveHistory(history: ExportRecord[]) {
-  try { await chatDB.setKV(STORAGE_KEY, history.slice(0, 20)) } catch { /* quota exceeded */ }
+  try {
+    await chatDB.setKV(STORAGE_KEY, history.slice(0, 20))
+  } catch {
+    /* quota exceeded */
+  }
 }
 
 export async function recordExport(format: string, fileCount: number) {
@@ -33,7 +37,7 @@ export async function recordExport(format: string, fileCount: number) {
     format,
     timestamp: Date.now(),
     fileCount,
-    label: format.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    label: format.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
   })
   await saveHistory(history.slice(0, 20))
 }
@@ -59,7 +63,9 @@ export function ExportHistoryCard() {
   for (const r of history) {
     formatCounts[r.label] = (formatCounts[r.label] || 0) + 1
   }
-  const topFormats = Object.entries(formatCounts).sort((a, b) => b[1] - a[1]).slice(0, 4)
+  const topFormats = Object.entries(formatCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
 
   return (
     <Card data-testid="export-history">
@@ -69,31 +75,47 @@ export function ExportHistoryCard() {
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Exports</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+              Total Exports
+            </div>
             <div className="text-base font-semibold">{history.length}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Formats Used</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+              Formats Used
+            </div>
             <div className="text-base font-semibold">{Object.keys(formatCounts).length}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last Export</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+              Last Export
+            </div>
             <div className="text-base font-semibold">{timeAgo(history[0].timestamp)}</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Files</div>
-            <div className="text-base font-semibold">{history.reduce((s, r) => s + r.fileCount, 0)}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+              Total Files
+            </div>
+            <div className="text-base font-semibold">
+              {history.reduce((s, r) => s + r.fileCount, 0)}
+            </div>
           </div>
         </div>
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">Recent</div>
+        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
+          Recent
+        </div>
         <div className="space-y-1">
           {history.slice(0, 5).map((r, idx) => (
             <div key={idx} className="flex items-center justify-between text-[11px]">
               <div className="flex items-center gap-2">
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${formatColor(r.format)}`}>
+                <span
+                  className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${formatColor(r.format)}`}
+                >
                   {r.label}
                 </span>
-                <span className="text-muted-foreground">{r.fileCount} file{r.fileCount !== 1 ? 's' : ''}</span>
+                <span className="text-muted-foreground">
+                  {r.fileCount} file{r.fileCount !== 1 ? 's' : ''}
+                </span>
               </div>
               <span className="text-muted-foreground">{timeAgo(r.timestamp)}</span>
             </div>

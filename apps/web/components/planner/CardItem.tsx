@@ -68,7 +68,9 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
 
       <div className="relative pl-3.5 pr-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-[13px] font-medium leading-snug flex-1 text-muted-foreground">{card.title}</p>
+          <p className="text-[13px] font-medium leading-snug flex-1 text-muted-foreground">
+            {card.title}
+          </p>
           {card.root_hash && (
             <span
               className="mt-1 h-1.5 w-1.5 rounded-full shrink-0"

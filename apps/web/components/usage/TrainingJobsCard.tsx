@@ -10,7 +10,13 @@ export interface TrainingJobsCardProps {
   totalMinutes: number
 }
 
-export function TrainingJobsCard({ completed, running, queued, failed, totalMinutes }: TrainingJobsCardProps) {
+export function TrainingJobsCard({
+  completed,
+  running,
+  queued,
+  failed,
+  totalMinutes,
+}: TrainingJobsCardProps) {
   return (
     <Card>
       <CardHeader className="pb-2">

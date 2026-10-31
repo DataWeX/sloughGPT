@@ -107,7 +107,13 @@ function _flushSettings(get: () => AppStore) {
 export const useAppStore = create<AppStore>()((set, get) => ({
   settings: DEFAULT_SETTINGS,
   injectedKnowledge: [],
-  modelReadiness: { ready: false, phase: 'initializing', step: 0, total: 9, message: 'Starting...' },
+  modelReadiness: {
+    ready: false,
+    phase: 'initializing',
+    step: 0,
+    total: 9,
+    message: 'Starting...',
+  },
 
   updateSettings: (partial) => {
     trackEvent('settings_changed', { keys: Object.keys(partial) })
@@ -198,7 +204,7 @@ export function getKnowledgeContext(): string {
   const { customContext } = state.settings
   const { injectedKnowledge } = state
   const allKnowledge = [
-    ...customContext ? [{ content: customContext }] : [],
+    ...(customContext ? [{ content: customContext }] : []),
     ...injectedKnowledge,
   ]
   if (allKnowledge.length === 0) return ''

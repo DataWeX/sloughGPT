@@ -58,7 +58,7 @@ export function useChatScroll(
           onReply={() => setReplyTo(item)}
           onForward={() => setForwardTo(item)}
           onBranch={() => {
-            branchFromMessage(index);
+            branchFromMessage(index)
           }}
           selectMode={selectMode}
           selected={selectedIds.has(item.id)}

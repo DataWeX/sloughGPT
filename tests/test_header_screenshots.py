@@ -12,7 +12,10 @@ script code as a gated test:
   screenshot and URL assertion,
 - real assertions: PNG integrity, non-blank pixels, viewport dimensions,
 - skips (never fails) without a live web stack — same contract as the
-  route-level journey tests (tests/core-py/test_user_journeys.py).
+  route-level journey tests (tests/core-py/test_user_journeys.py),
+  AND without asserting against a foreign checkout's dev server: the
+  skip gate verifies the served tree via the X-Slo-Web-Tree header
+  (card 20261029_041801, identity helpers in tests/skip_gate_identity.py).
 
 Slow-marked browser capture: runs in ``-m ""`` sweeps against a live stack
 (``scripts/dev-stack.sh`` — web :5173, or ``SLO_WEB_URL``).
@@ -36,6 +39,9 @@ if _AVION_SRC.is_dir() and str(_AVION_SRC) not in sys.path:
 pytest.importorskip("avion")
 pytest.importorskip("playwright")
 
+# Shared pure gate helpers (fast-lane pinned by tests/test_skip_gate_identity.py).
+from tests.skip_gate_identity import WEB_TREE_HEADER, web_tree_id
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "apps" / "web" / "scripts" / "screenshot_headers.py"
 WEB_URL = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
@@ -57,13 +63,36 @@ MIN_BYTES = 3_000
 MIN_UNIQUE_COLORS = 30
 
 
-def _web_is_ready() -> bool:
+def _web_is_ready() -> tuple[bool, str]:
+    """Whether WEB_URL serves THIS checkout's web tree — identity, not port-open.
+
+    The vite dev server announces its checkout via the ``X-Slo-Web-Tree``
+    header (set in apps/web/vite.config.ts from realpath(apps/web), same
+    recipe as ``web_tree_id()``). A server without the header (foreign
+    checkout's vite, a pre-fix server, a static preview) or with a
+    different value is NOT this tree → the module skips instead of
+    capturing a foreign checkout's UI (card 20261029_041801).
+    """
+    expected = web_tree_id()
     try:
         req = urllib.request.Request(WEB_URL)
         with urllib.request.urlopen(req, timeout=5) as resp:
-            return 200 <= resp.status < 400
-    except Exception:
-        return False
+            if not (200 <= resp.status < 400):
+                return False, f"{WEB_URL} answered HTTP {resp.status}"
+            served = resp.headers.get(WEB_TREE_HEADER)
+    except Exception as exc:  # noqa: BLE001 — any transport failure = not ready
+        return False, f"no web server on {WEB_URL} ({type(exc).__name__})"
+    if served == expected:
+        return True, ""
+    return False, (
+        f"{WEB_URL} does not serve this tree (header {WEB_TREE_HEADER}="
+        f"{served!r}, expected {expected!r}) — foreign or pre-fix dev "
+        "server; start this tree's stack (scripts/dev-stack.sh) or set "
+        "SLO_WEB_URL"
+    )
+
+
+_WEB_READY, _WEB_SKIP_REASON = _web_is_ready()
 
 
 def _api_is_ready() -> bool:
@@ -78,8 +107,9 @@ def _api_is_ready() -> bool:
 pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(
-        not _web_is_ready(),
-        reason=(
+        not _WEB_READY,
+        reason=_WEB_SKIP_REASON
+        or (
             "header screenshot tests need a live web app "
             f"({WEB_URL} — scripts/dev-stack.sh or SLO_WEB_URL)"
         ),

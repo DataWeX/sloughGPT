@@ -12,7 +12,13 @@ interface Achievement {
   description: string
   icon: string
   category: string
-  condition: (state: { history: HistoryEntry[]; quizTotal: number; pronunciationBestStreak: number; flashcardSRS: Record<string, unknown>; challenge?: { score: number } }) => boolean
+  condition: (state: {
+    history: HistoryEntry[]
+    quizTotal: number
+    pronunciationBestStreak: number
+    flashcardSRS: Record<string, unknown>
+    challenge?: { score: number }
+  }) => boolean
 }
 
 const ACHIEVEMENTS: Achievement[] = [
@@ -54,7 +60,7 @@ const ACHIEVEMENTS: Achievement[] = [
     description: 'Get a perfect score (100%)',
     icon: '★',
     category: 'Scores',
-    condition: (s) => s.history.some(e => e.score >= 0.99),
+    condition: (s) => s.history.some((e) => e.score >= 0.99),
   },
   {
     id: 'streak-3',
@@ -86,7 +92,7 @@ const ACHIEVEMENTS: Achievement[] = [
     description: 'Practice words in 3+ languages',
     icon: '🌍',
     category: 'Languages',
-    condition: (s) => new Set(s.history.map(e => e.language)).size >= 3,
+    condition: (s) => new Set(s.history.map((e) => e.language)).size >= 3,
   },
   {
     id: 'quiz-master',
@@ -118,18 +124,18 @@ const ACHIEVEMENTS: Achievement[] = [
 ]
 
 export default function Achievements() {
-  const state = usePhonemeStore(s => s)
+  const state = usePhonemeStore((s) => s)
 
   const { unlocked, locked } = useMemo(() => {
-    const unlocked = ACHIEVEMENTS.filter(a => a.condition(state))
-    const locked = ACHIEVEMENTS.filter(a => !a.condition(state))
+    const unlocked = ACHIEVEMENTS.filter((a) => a.condition(state))
+    const locked = ACHIEVEMENTS.filter((a) => !a.condition(state))
     return { unlocked, locked }
   }, [state])
 
   const grouped = useMemo(() => {
     const map: Record<string, { unlocked: Achievement[]; locked: Achievement[] }> = {}
     const all = [...unlocked, ...locked]
-    all.forEach(a => {
+    all.forEach((a) => {
       if (!map[a.category]) map[a.category] = { unlocked: [], locked: [] }
       map[a.category][a.condition(state) ? 'unlocked' : 'locked'].push(a)
     })
@@ -142,13 +148,15 @@ export default function Achievements() {
         <CardTitle className="flex items-center justify-between">
           <span>Achievements</span>
           <div className="flex items-center gap-2">
-            <Badge variant="default">{unlocked.length}/{ACHIEVEMENTS.length}</Badge>
+            <Badge variant="default">
+              {unlocked.length}/{ACHIEVEMENTS.length}
+            </Badge>
           </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 text-center">
-          {ACHIEVEMENTS.slice(0, 6).map(a => {
+          {ACHIEVEMENTS.slice(0, 6).map((a) => {
             const isUnlocked = a.condition(state)
             return (
               <div
@@ -171,12 +179,14 @@ export default function Achievements() {
             <CollapsibleTrigger className="w-full">
               <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer text-sm">
                 <span className="font-medium">{category}</span>
-                <Badge variant="outline">{catUnlocked.length}/{catUnlocked.length + catLocked.length}</Badge>
+                <Badge variant="outline">
+                  {catUnlocked.length}/{catUnlocked.length + catLocked.length}
+                </Badge>
               </div>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="p-2 space-y-2">
-                {[...catUnlocked, ...catLocked].map(a => {
+                {[...catUnlocked, ...catLocked].map((a) => {
                   const isUnlocked = a.condition(state)
                   return (
                     <div
@@ -190,7 +200,11 @@ export default function Achievements() {
                         <p className="text-sm font-medium">{a.title}</p>
                         <p className="text-xs text-muted-foreground">{a.description}</p>
                       </div>
-                      {isUnlocked && <Badge variant="default" className="text-xs">Unlocked</Badge>}
+                      {isUnlocked && (
+                        <Badge variant="default" className="text-xs">
+                          Unlocked
+                        </Badge>
+                      )}
                     </div>
                   )
                 })}

@@ -196,7 +196,9 @@ export function BuffetEngine() {
   if (loading && !board) {
     return (
       <div className="min-h-screen bg-card flex items-center justify-center">
-        <div className="text-sm text-muted-foreground font-mono animate-pulse">loading board...</div>
+        <div className="text-sm text-muted-foreground font-mono animate-pulse">
+          loading board...
+        </div>
       </div>
     )
   }
@@ -389,7 +391,9 @@ export function BuffetEngine() {
         </div>
         <div className="flex items-center gap-4">
           {filterTag && <span className="text-muted-foreground">filter: {filterTag}</span>}
-          {searchQuery && <span className="text-muted-foreground">search: &quot;{searchQuery}&quot;</span>}
+          {searchQuery && (
+            <span className="text-muted-foreground">search: &quot;{searchQuery}&quot;</span>
+          )}
           <span>
             {filteredCards.length} / {board?.cards.length ?? 0}
           </span>

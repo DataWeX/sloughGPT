@@ -29,11 +29,10 @@ sys.path.insert(0, str(_REPO))
 
 from domain.journeys.flows import ALL_FLOWS, Flow  # noqa: E402
 
-_DEFAULT_REPORT = Path(
-    os.environ.get(
-        "SLO_JOURNEY_CACHE", os.path.expanduser("~/.cache/slog-journeys")
-    )
-) / "journey-report.json"
+_DEFAULT_REPORT = (
+    Path(os.environ.get("SLO_JOURNEY_CACHE", os.path.expanduser("~/.cache/slog-journeys")))
+    / "journey-report.json"
+)
 
 
 def _check_links(flow: Flow, repo: Path) -> dict:

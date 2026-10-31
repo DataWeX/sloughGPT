@@ -78,7 +78,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
 
       {expanded && (
         <>
-          {FORMAT_OPTIONS.map(option => (
+          {FORMAT_OPTIONS.map((option) => (
             <Button
               key={option.label}
               variant="ghost"
@@ -99,10 +99,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className={cn(
-          'text-[10px] h-6',
-          copied && 'bg-success/20 text-success',
-        )}
+        className={cn('text-[10px] h-6', copied && 'bg-success/20 text-success')}
         onClick={handleCopy}
       >
         {copied ? 'Copied!' : 'Copy'}

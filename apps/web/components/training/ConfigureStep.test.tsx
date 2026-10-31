@@ -14,7 +14,13 @@ vi.mock('@sloughgpt/strui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@sloughgpt/strui')>()
   return {
     ...actual,
-    FoldSection: ({ heading, children }: { heading: React.ReactNode; children: React.ReactNode }) => {
+    FoldSection: ({
+      heading,
+      children,
+    }: {
+      heading: React.ReactNode
+      children: React.ReactNode
+    }) => {
       const [open, setOpen] = React.useState(false)
       return (
         <details open={open}>

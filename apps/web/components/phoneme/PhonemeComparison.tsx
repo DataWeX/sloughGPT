@@ -68,16 +68,16 @@ export default function PhonemeComparison({
 }: PhonemeComparisonProps) {
   const pairs = useMemo(
     () => alignPhonemes(targetPhonemes, spokenPhonemes),
-    [targetPhonemes, spokenPhonemes]
+    [targetPhonemes, spokenPhonemes],
   )
 
-  const matchCount = pairs.filter(p => p.match).length
+  const matchCount = pairs.filter((p) => p.match).length
   const totalCount = pairs.length
 
   const mismatchedPhonemes = useMemo(() => {
     return pairs
-      .filter(p => !p.match && p.target && p.spoken)
-      .map(p => ({
+      .filter((p) => !p.match && p.target && p.spoken)
+      .map((p) => ({
         target: p.target!,
         spoken: p.spoken!,
         targetIPA: p.targetIPA,
@@ -86,11 +86,11 @@ export default function PhonemeComparison({
   }, [pairs])
 
   const missingPhonemes = useMemo(() => {
-    return pairs.filter(p => p.target && !p.spoken).map(p => p.target!)
+    return pairs.filter((p) => p.target && !p.spoken).map((p) => p.target!)
   }, [pairs])
 
   const extraPhonemes = useMemo(() => {
-    return pairs.filter(p => !p.target && p.spoken).map(p => p.spoken!)
+    return pairs.filter((p) => !p.target && p.spoken).map((p) => p.spoken!)
   }, [pairs])
 
   return (
@@ -126,11 +126,15 @@ export default function PhonemeComparison({
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Words Compared</span>
-            <span className="font-medium">{target} → {spoken}</span>
+            <span className="font-medium">
+              {target} → {spoken}
+            </span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Phoneme Match</span>
-            <span className="font-medium">{matchCount}/{totalCount}</span>
+            <span className="font-medium">
+              {matchCount}/{totalCount}
+            </span>
           </div>
         </div>
 
@@ -138,7 +142,9 @@ export default function PhonemeComparison({
           <CollapsibleTrigger className="w-full">
             <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer text-sm">
               <span className="font-medium">Phoneme-by-Phoneme Comparison</span>
-              <span className="text-muted-foreground">{matchCount}/{totalCount} matched</span>
+              <span className="text-muted-foreground">
+                {matchCount}/{totalCount} matched
+              </span>
             </div>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -150,8 +156,8 @@ export default function PhonemeComparison({
                     pair.match
                       ? 'bg-success/10'
                       : pair.target && pair.spoken
-                      ? 'bg-destructive/10'
-                      : 'bg-warning/10'
+                        ? 'bg-destructive/10'
+                        : 'bg-warning/10'
                   }`}
                 >
                   <span className="w-8 text-center text-muted-foreground">{i + 1}</span>
@@ -176,10 +182,7 @@ export default function PhonemeComparison({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </span>
-                  <Badge
-                    variant={pair.match ? 'default' : 'destructive'}
-                    className="ml-auto"
-                  >
+                  <Badge variant={pair.match ? 'default' : 'destructive'} className="ml-auto">
                     {pair.match ? '✓' : '✗'}
                   </Badge>
                 </div>
@@ -199,7 +202,10 @@ export default function PhonemeComparison({
             <CollapsibleContent>
               <div className="p-2 space-y-1">
                 {mismatchedPhonemes.map((m, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded bg-destructive/5 text-sm">
+                  <div
+                    key={i}
+                    className="flex items-center justify-between p-2 rounded bg-destructive/5 text-sm"
+                  >
                     <div className="flex items-center gap-2">
                       <Badge variant="outline">{m.target}</Badge>
                       <span className="text-muted-foreground">→</span>
@@ -219,7 +225,9 @@ export default function PhonemeComparison({
           <div className="p-2 rounded bg-warning/10 text-sm">
             <span className="font-medium">Missing:</span>{' '}
             {missingPhonemes.map((p, i) => (
-              <Badge key={i} variant="outline" className="mr-1">{p}</Badge>
+              <Badge key={i} variant="outline" className="mr-1">
+                {p}
+              </Badge>
             ))}
           </div>
         )}
@@ -228,7 +236,9 @@ export default function PhonemeComparison({
           <div className="p-2 rounded bg-warning/10 text-sm">
             <span className="font-medium">Extra:</span>{' '}
             {extraPhonemes.map((p, i) => (
-              <Badge key={i} variant="outline" className="mr-1">{p}</Badge>
+              <Badge key={i} variant="outline" className="mr-1">
+                {p}
+              </Badge>
             ))}
           </div>
         )}

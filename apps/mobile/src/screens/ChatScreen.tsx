@@ -101,7 +101,7 @@ export function ChatScreen() {
   const colors = useColors()
   const flatListRef = useRef<FlatList>(null)
   const a = useChatActions(flatListRef)
-  const injectContext = useChatStore(s => s.injectContext)
+  const injectContext = useChatStore((s) => s.injectContext)
   const { open: openSidebar } = useSidebar()
 
   // Mode state

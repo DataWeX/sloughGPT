@@ -210,61 +210,61 @@ describe('forwardMessage', () => {
 
 describe('cloneSession', () => {
   it('creates a new session, copies source messages, renames it', async () => {
-    mockApi.post.mockResolvedValue({session_id: 'new-id'});
+    mockApi.post.mockResolvedValue({ session_id: 'new-id' })
     mockApi.get.mockResolvedValue({
-      messages: [{id: 'm1', role: 'user', content: 'hello', timestamp: 1}],
-    });
-    mockApi.put.mockResolvedValue(undefined);
+      messages: [{ id: 'm1', role: 'user', content: 'hello', timestamp: 1 }],
+    })
+    mockApi.put.mockResolvedValue(undefined)
     mockApi.get.mockResolvedValueOnce({
-      messages: [{id: 'm1', role: 'user', content: 'hello', timestamp: 1}],
-    });
+      messages: [{ id: 'm1', role: 'user', content: 'hello', timestamp: 1 }],
+    })
     mockApi.get.mockResolvedValue([
-      {id: 's1', name: 'Original', updated_at: 'x'},
-      {id: 'new-id', name: 'Original (Copy)', updated_at: 'y'},
-    ]);
+      { id: 's1', name: 'Original', updated_at: 'x' },
+      { id: 'new-id', name: 'Original (Copy)', updated_at: 'y' },
+    ])
 
-    const result = await useChatStore.getState().cloneSession('s1', 'Original (Copy)');
+    const result = await useChatStore.getState().cloneSession('s1', 'Original (Copy)')
 
-    expect(mockApi.post).toHaveBeenCalledWith('/chat/sessions', {});
+    expect(mockApi.post).toHaveBeenCalledWith('/chat/sessions', {})
     expect(mockApi.put).toHaveBeenCalledWith(
       '/chat/sessions/new-id',
       expect.objectContaining({
-        messages: expect.arrayContaining([expect.objectContaining({content: 'hello'})]),
+        messages: expect.arrayContaining([expect.objectContaining({ content: 'hello' })]),
       }),
-    );
-    expect(result).toBe('new-id');
-    expect(mockToast.success).toHaveBeenCalled();
-  });
+    )
+    expect(result).toBe('new-id')
+    expect(mockToast.success).toHaveBeenCalled()
+  })
 
   it('returns empty string and toasts on failure', async () => {
-    mockApi.post.mockRejectedValue(new Error('nope'));
-    const result = await useChatStore.getState().cloneSession('s1', 'Copy');
-    expect(result).toBe('');
-    expect(mockToast.error).toHaveBeenCalled();
-  });
-});
+    mockApi.post.mockRejectedValue(new Error('nope'))
+    const result = await useChatStore.getState().cloneSession('s1', 'Copy')
+    expect(result).toBe('')
+    expect(mockToast.error).toHaveBeenCalled()
+  })
+})
 
 // ── injectContext ────────────────────────────────────────────────────────
 
 describe('injectContext', () => {
   it('posts context control for the active session', async () => {
-    mockApi.post.mockResolvedValue(undefined);
-    useChatStore.setState({activeSessionId: 's1'});
-    await useChatStore.getState().injectContext('extra rules');
+    mockApi.post.mockResolvedValue(undefined)
+    useChatStore.setState({ activeSessionId: 's1' })
+    await useChatStore.getState().injectContext('extra rules')
     expect(mockApi.post).toHaveBeenCalledWith('/chat/control', {
       session_id: 's1',
       action: 'context',
       context: 'extra rules',
-    });
-  });
+    })
+  })
 
   it('toasts on failure', async () => {
-    mockApi.post.mockRejectedValue(new Error('down'));
-    useChatStore.setState({activeSessionId: 's1'});
-    await useChatStore.getState().injectContext('x');
-    expect(mockToast.error).toHaveBeenCalled();
-  });
-});
+    mockApi.post.mockRejectedValue(new Error('down'))
+    useChatStore.setState({ activeSessionId: 's1' })
+    await useChatStore.getState().injectContext('x')
+    expect(mockToast.error).toHaveBeenCalled()
+  })
+})
 
 // ── cancelStream ─────────────────────────────────────────────────────────
 

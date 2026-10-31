@@ -61,7 +61,10 @@ describe('useAppStore', () => {
       vi.useFakeTimers()
       useAppStore.getState().updateSettings({ defaultTemp: 0.5 })
       vi.advanceTimersByTime(500)
-      expect(chatDBMock.setKV).toHaveBeenCalledWith('app-settings', expect.objectContaining({ defaultTemp: 0.5 }))
+      expect(chatDBMock.setKV).toHaveBeenCalledWith(
+        'app-settings',
+        expect.objectContaining({ defaultTemp: 0.5 }),
+      )
       vi.useRealTimers()
     })
   })
@@ -84,9 +87,10 @@ describe('useAppStore', () => {
 
     it('persists knowledge to MogDB', () => {
       useAppStore.getState().addKnowledge('test fact')
-      expect(chatDBMock.setKV).toHaveBeenCalledWith('app-knowledge', expect.arrayContaining([
-        expect.objectContaining({ content: 'test fact' })
-      ]))
+      expect(chatDBMock.setKV).toHaveBeenCalledWith(
+        'app-knowledge',
+        expect.arrayContaining([expect.objectContaining({ content: 'test fact' })]),
+      )
     })
   })
 
@@ -115,9 +119,10 @@ describe('useAppStore', () => {
       useAppStore.getState().addKnowledge('fact 2')
       const idToRemove = useAppStore.getState().injectedKnowledge[0].id
       useAppStore.getState().removeKnowledge(idToRemove)
-      expect(chatDBMock.setKV).toHaveBeenCalledWith('app-knowledge', expect.arrayContaining([
-        expect.objectContaining({ content: 'fact 2' })
-      ]))
+      expect(chatDBMock.setKV).toHaveBeenCalledWith(
+        'app-knowledge',
+        expect.arrayContaining([expect.objectContaining({ content: 'fact 2' })]),
+      )
     })
   })
 

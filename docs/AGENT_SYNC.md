@@ -1623,6 +1623,37 @@ version, source, at}`; out-of-band config divergence recorded **once**
   `tests/test_board_chain_gate.py` incl. a union-merge replay; proven to
   FAIL exit-1 on the real corrupted blobs (backup + origin/main) and pass
   on the repaired board.
+- **2026-10-29 · same lane, follow-up (c) — skip-gate identity fix (card
+  `20261029_041801`, DONE):** the root-suite live tests skipped on
+  PORT-OPEN, so a foreign listener (another checkout's API mid-load, a
+  foreign vite on :5173) turned live runs into 27×120s setup-timeout
+  ERRORS — and the old probe budget (5×30s+4×2s=158s) itself exceeded
+  pytest.ini's `timeout=120`, which is exactly why the skip never fired.
+  Fixed with identity, not port-open: `tests/skip_gate_identity.py` (NEW,
+  pure helpers, single source of truth) — `readiness_payload_ok()`
+  requires our exact nested envelope from `success_response(get_readiness())`
+  (`status:success` + `data.status:ready` + `data.checks` dict — the
+  router docstring's "ready=True" never existed; validator written from
+  `controllers/health.py` source) and `web_tree_id()` =
+  `sha256(realpath(apps/web))[:16]`. `tests/test_integration.py` now
+  probes `/health/ready` with a 38s budget (404/405 = immediate
+  "not our API" skip; last-observation skip messages);
+  `tests/test_header_screenshots.py` verifies the `X-Slo-Web-Tree`
+  header == this tree before capturing (None/wrong = foreign or pre-fix
+  server = actionable skip); `apps/web/vite.config.ts` emits the header
+  (`fs.realpathSync(__dirname)` — agrees with python `os.path.realpath`
+  byte-for-byte). Fast-lane pins (NEW `tests/test_skip_gate_identity.py`,
+  11 tests): envelope shapes incl. foreign k8s-style `ready:True`,
+  determinism, **vite recipe parity** (header name + hash steps must
+  exist in the config — a rename on one side reddens the gate), and the
+  budget invariant parsed from pytest.ini. Evidence: foreign vite
+  listener → 27 skips in 8.6s (was 27×120s errors); accept-never-respond
+  listener → 40s total (< 120s); live :8000 accept path → health tests
+  5/5; header parity proven end-to-end (`bf27ca5f43811e69` served ==
+  `web_tree_id()`); ruff/eslint/tsc all clean. Note: this machine has a
+  PRE-EXISTING vite dev HTML 500 (rolldown `Missing field moduleType`,
+  reproduced with the config change stashed) — screenshots correctly
+  skip until that env issue is fixed; static assets serve fine.
 - **2026-10-24 · root session on `feat/error-funnel` (NOT on main; merge
   blocked).** Contents: browser error funnel (`error-store` fan-out →
   GlobalBanner / opt-in toast / `state_events` / backend batch, ~39 bare

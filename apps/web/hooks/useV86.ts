@@ -38,7 +38,8 @@ const MEMORY_MB = 256
  * over serial 2026-10-18. `tsc=reliable` covers v86's TSC, which Linux
  * otherwise distrusts as a clocksource.
  */
-const KERNEL_CMDLINE = 'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on'
+const KERNEL_CMDLINE =
+  'earlyprintk=serial,ttyS0,115200 tsc=reliable mitigations=off random.trust_cpu=on'
 const AUTO_SAVE_INTERVAL_MS = 30_000
 const IMAGE_PROBE_TIMEOUT_MS = 10_000
 
@@ -158,9 +159,7 @@ export async function resolveBios(): Promise<{ bios: string; vga: string }> {
     const probe = await probeImage(pair.bios)
     if (probe.available) return pair
   }
-  throw new Error(
-    `BIOS not available: ${BIOS_URLS.map((p) => p.bios).join(', ')} all unreachable.`,
-  )
+  throw new Error(`BIOS not available: ${BIOS_URLS.map((p) => p.bios).join(', ')} all unreachable.`)
 }
 
 /**

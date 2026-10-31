@@ -391,10 +391,7 @@ export default function PersonalityPage() {
                         aria-hidden="true"
                         className="w-7 h-7 shrink-0 rounded-full bg-gradient-to-br from-[rgb(var(--chart-5)/0.25)] to-[rgb(var(--chart-4)/0.25)] border border-[rgb(var(--chart-4)/0.4)] flex items-center justify-center"
                       >
-                        <IconHeart
-                          className="w-3.5 h-3.5 text-[rgb(var(--chart-4))]"
-                          filled
-                        />
+                        <IconHeart className="w-3.5 h-3.5 text-[rgb(var(--chart-4))]" filled />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">

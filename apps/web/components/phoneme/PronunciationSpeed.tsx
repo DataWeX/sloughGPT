@@ -21,7 +21,7 @@ function formatTime(ms: number): string {
 }
 
 export default function PronunciationSpeed() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
 
   const stats = useMemo(() => {
     const langData: Record<string, { times: number[]; count: number }> = {}
@@ -76,7 +76,9 @@ export default function PronunciationSpeed() {
     )
   }
 
-  const overallAvg = stats.reduce((sum, s) => sum + s.avgTime * s.attempts, 0) / stats.reduce((sum, s) => sum + s.attempts, 0)
+  const overallAvg =
+    stats.reduce((sum, s) => sum + s.avgTime * s.attempts, 0) /
+    stats.reduce((sum, s) => sum + s.attempts, 0)
 
   return (
     <Card>
@@ -101,12 +103,17 @@ export default function PronunciationSpeed() {
             <p className="text-xs text-muted-foreground">Total Attempts</p>
           </div>
           <div className="p-2 rounded-lg bg-muted/30">
-            <p className="text-base font-bold">{Math.round(stats.reduce((sum, s) => sum + s.wordsPerMinute * s.attempts, 0) / stats.reduce((sum, s) => sum + s.attempts, 0))}</p>
+            <p className="text-base font-bold">
+              {Math.round(
+                stats.reduce((sum, s) => sum + s.wordsPerMinute * s.attempts, 0) /
+                  stats.reduce((sum, s) => sum + s.attempts, 0),
+              )}
+            </p>
             <p className="text-xs text-muted-foreground">Words/Min</p>
           </div>
         </div>
 
-        {stats.map(s => (
+        {stats.map((s) => (
           <Collapsible key={s.language}>
             <CollapsibleTrigger className="w-full">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer text-sm">

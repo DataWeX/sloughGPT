@@ -87,7 +87,12 @@ export function HashChain({ cardId, refreshKey = 0 }: HashChainProps) {
                   <span className="text-muted-foreground">{short(h.old_hash)}</span>
                   <span className="text-muted-foreground">→</span>
                   <span className="text-muted-foreground">{short(h.new_hash)}</span>
-                  <span className={cn('ml-auto', CHANGE_COLOR[h.change_type] || 'text-muted-foreground')}>
+                  <span
+                    className={cn(
+                      'ml-auto',
+                      CHANGE_COLOR[h.change_type] || 'text-muted-foreground',
+                    )}
+                  >
                     {h.change_type}
                   </span>
                 </div>

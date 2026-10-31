@@ -1,18 +1,18 @@
-import React, {useState, useCallback} from 'react';
-import {TextInput} from 'react-native';
-import {XStack, YStack, Text} from 'tamagui';
-import {useColors} from '../theme/colors';
-import {triggerHaptic} from '../services/haptics';
+import React, { useState, useCallback } from 'react'
+import { TextInput } from 'react-native'
+import { XStack, YStack, Text } from 'tamagui'
+import { useColors } from '../theme/colors'
+import { triggerHaptic } from '../services/haptics'
 
 interface ContextInjectionBarProps {
-  onInject: (context: string) => void;
-  disabled?: boolean;
+  onInject: (context: string) => void
+  disabled?: boolean
 }
 
-export function ContextInjectionBar({onInject, disabled = false}: ContextInjectionBarProps) {
-  const colors = useColors();
-  const [context, setContext] = useState('');
-  const [showInput, setShowInput] = useState(false);
+export function ContextInjectionBar({ onInject, disabled = false }: ContextInjectionBarProps) {
+  const colors = useColors()
+  const [context, setContext] = useState('')
+  const [showInput, setShowInput] = useState(false)
 
   const inputStyle = {
     flex: 1,
@@ -24,23 +24,23 @@ export function ContextInjectionBar({onInject, disabled = false}: ContextInjecti
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.border,
-  } as const;
+  } as const
 
   const handleInject = useCallback(() => {
-    const trimmed = context.trim();
+    const trimmed = context.trim()
     if (!trimmed) {
-      return;
+      return
     }
-    onInject(trimmed);
-    triggerHaptic('light');
-    setContext('');
-    setShowInput(false);
-  }, [context, onInject]);
+    onInject(trimmed)
+    triggerHaptic('light')
+    setContext('')
+    setShowInput(false)
+  }, [context, onInject])
 
   const handleCancel = useCallback(() => {
-    setShowInput(false);
-    setContext('');
-  }, []);
+    setShowInput(false)
+    setContext('')
+  }, [])
 
   if (!showInput) {
     return (
@@ -48,17 +48,20 @@ export function ContextInjectionBar({onInject, disabled = false}: ContextInjecti
         testID="inject-context-trigger"
         accessibilityRole="button"
         accessibilityLabel="Inject context"
-        accessibilityState={{disabled}}
+        accessibilityState={{ disabled }}
         paddingHorizontal={10}
         paddingVertical={6}
         alignSelf="flex-start"
         disabled={disabled}
         opacity={disabled ? 0.5 : 1}
         onPress={() => setShowInput(true)}
-        pressStyle={{opacity: 0.6}}>
-        <Text fontSize={11} color="$color10">+ Context</Text>
+        pressStyle={{ opacity: 0.6 }}
+      >
+        <Text fontSize={11} color="$color10">
+          + Context
+        </Text>
       </YStack>
-    );
+    )
   }
 
   return (
@@ -81,11 +84,13 @@ export function ContextInjectionBar({onInject, disabled = false}: ContextInjecti
         backgroundColor={context.trim() ? colors.primaryAlpha(0.12) : colors.primaryAlpha(0.05)}
         disabled={!context.trim()}
         onPress={handleInject}
-        pressStyle={{opacity: 0.6}}>
+        pressStyle={{ opacity: 0.6 }}
+      >
         <Text
           fontSize={12}
           fontWeight="600"
-          color={context.trim() ? colors.primary : colors.textMuted}>
+          color={context.trim() ? colors.primary : colors.textMuted}
+        >
           Send
         </Text>
       </XStack>
@@ -95,9 +100,12 @@ export function ContextInjectionBar({onInject, disabled = false}: ContextInjecti
         paddingVertical={6}
         borderRadius={8}
         onPress={handleCancel}
-        pressStyle={{opacity: 0.6}}>
-        <Text fontSize={12} color="$color10">Cancel</Text>
+        pressStyle={{ opacity: 0.6 }}
+      >
+        <Text fontSize={12} color="$color10">
+          Cancel
+        </Text>
       </XStack>
     </XStack>
-  );
+  )
 }

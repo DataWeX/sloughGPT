@@ -93,9 +93,7 @@ class TestM1OrganizeJourney:
             assert r.status_code == 200, r.text
             source_messages = r.json()["data"]["messages"]
 
-            r = client.post(
-                f"/session/{clone}/context", json={"messages": source_messages}
-            )
+            r = client.post(f"/session/{clone}/context", json={"messages": source_messages})
             assert r.status_code == 200, r.text
 
             # 5. opening the clone yields identical history

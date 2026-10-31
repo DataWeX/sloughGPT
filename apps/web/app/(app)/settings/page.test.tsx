@@ -59,8 +59,12 @@ vi.mock('@/lib/system-controller', () => ({
     getMetrics: vi.fn().mockResolvedValue(null),
     getDisk: vi.fn().mockResolvedValue(null),
     getInfo: vi.fn().mockResolvedValue(null),
-    getProcessGuardStatus: vi.fn().mockResolvedValue({ enabled: false, active: false, model_id: null, health: null }),
-    setProcessGuardEnabled: vi.fn().mockResolvedValue({ enabled: true, active: false, model_id: null, health: null }),
+    getProcessGuardStatus: vi
+      .fn()
+      .mockResolvedValue({ enabled: false, active: false, model_id: null, health: null }),
+    setProcessGuardEnabled: vi
+      .fn()
+      .mockResolvedValue({ enabled: true, active: false, model_id: null, health: null }),
   },
 }))
 
@@ -142,7 +146,7 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/theme-storage', () => ({
   PALETTE_IDS: ['noir-violet', 'ocean'],
-  PALETTE_LABELS: { 'noir-violet': 'Noir Violet', 'ocean': 'Ocean' },
+  PALETTE_LABELS: { 'noir-violet': 'Noir Violet', ocean: 'Ocean' },
 }))
 
 vi.mock('@/lib/config', () => ({
@@ -267,7 +271,9 @@ describe('SettingsPage', () => {
 
   it('renders collapsible message length control', () => {
     render(<SettingsPage />)
-    expect(screen.getAllByText('Auto-collapse messages longer than').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Auto-collapse messages longer than').length).toBeGreaterThanOrEqual(
+      1,
+    )
   })
 
   it('renders Process isolation card', () => {

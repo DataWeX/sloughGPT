@@ -16,17 +16,17 @@ Single source of truth for navigation. Read this first.
 
 ## Architecture
 
-| Doc                               | Purpose                                                         |
-| --------------------------------- | --------------------------------------------------------------- |
-| **STRUCTURE.md**                  | Repo layout, domain/ map, branch lanes                          |
-| **RAG_ARCHITECTURE.md**           | RAG system design                                               |
-| **RAG_PATTERNS.md**               | RAG implementation patterns                                     |
-| **TRAINING_REFACTOR_PLAN.md**     | Consolidating training loops                                    |
-| **process-guard-architecture.md** | Process isolation design                                        |
-| **PRODUCER_CONSUMER_QUEUE.md**    | Queue pattern                                                   |
-| **PUGQEEP.md**                    | PGQ: points, pools, Pipe                                        |
-| **TRANSPORT_PROJECTIONS.md**      | Capability → contract → route                                   |
-| **DOMAIN_CONSOLIDATION.md**       | Record of `packages/core-py/domains/` → `domain/` consolidation |
+| Doc                               | Purpose                                                                     |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| **STRUCTURE.md**                  | Repo layout, domain/ map, branch lanes                                      |
+| **RAG_ARCHITECTURE.md**           | RAG system design                                                           |
+| **RAG_PATTERNS.md**               | RAG implementation patterns                                                 |
+| **TRAINING_REFACTOR_PLAN.md**     | Consolidating training loops                                                |
+| **process-guard-architecture.md** | Process isolation design                                                    |
+| **PRODUCER_CONSUMER_QUEUE.md**    | Queue pattern                                                               |
+| **PUGQEEP.md**                    | PGQ: points, pools, Pipe                                                    |
+| **TRANSPORT_PROJECTIONS.md**      | Capability → contract → route                                               |
+| **DOMAIN_CONSOLIDATION.md**       | Record of `packages/core-py/domains/` → `domain/` consolidation             |
 | **VM_ARCHITECTURE.md**            | VM stacks review — four substrates, merge/retire rulings, fault containment |
 
 ## Features
