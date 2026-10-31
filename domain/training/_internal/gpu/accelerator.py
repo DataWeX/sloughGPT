@@ -203,7 +203,12 @@ class _CUDAAccelerator:
 
     def matmul(self, a: Any, b: Any) -> Any:
         if self._cp:
-            return self._cp.matmul(a, b)
+            # Convert numpy -> cupy before dispatch; cp.matmul rejects raw numpy
+            # (TypeError: expected cupy ndarray). Detect on-device arrays by type,
+            # not the ``.device`` attribute (NumPy >= 2 added ``ndarray.device``).
+            a_c = a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a)
+            b_c = b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b)
+            return self._cp.asnumpy(self._cp.matmul(a_c, b_c))
         return np.matmul(np.asarray(a), np.asarray(b))
 
     def add(self, a: Any, b: Any) -> Any:
