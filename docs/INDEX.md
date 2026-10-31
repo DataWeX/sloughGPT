@@ -34,6 +34,7 @@ Single source of truth for navigation. Read this first.
 | Doc                         | Purpose                                                    |
 | --------------------------- | ---------------------------------------------------------- |
 | **FEATURES.md**             | Feature list                                               |
+| **moodboards/voice-warble.html** | Mood board #2 — voice warble (aura + echo stack, open in browser) |
 | **moodboards/widgets.html** | Mood board #1 — widgets (visual ideation, open in browser) |
 | **NAVIGATION_AND_SOULS.md** | Soul/personality system                                    |
 | **SHELL.md**                | CLI shell                                                  |

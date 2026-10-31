@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moodboard #2 — Voice Warble · sloughGPT</title>
+<style>
+  :root {
+    --primary: 192 170 244;   --primary-foreground: 25 22 36;
+    --accent: 240 176 130;    --accent-foreground: 25 22 36;
+    --background: 17 15 24;
+    --card: 28 25 38;
+    --border: 52 46 72;
+    --foreground: 238 234 248;
+    --muted: 38 34 52;
+    --muted-foreground: 150 140 172;
+    --success: 72 192 140;
+    --warning: 236 168 60;
+    --destructive: 235 100 110;
+
+    /* live demo signal — written by the demo script at the bottom */
+    --voice-intensity: .3;
+    --voice-pitch: 150;
+    --voice-timbre: .5;
+    --bloom: 0;               /* 0 = resting single line · 1 = full 7-trace echo */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: rgb(var(--background)); color: rgb(var(--foreground));
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55; font-size: 15px;
+  }
+  a { color: rgb(var(--primary)); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 40px 28px 72px; }
+
+  header.board { border-bottom: 1px solid rgb(var(--border)); padding-bottom: 28px; margin-bottom: 36px; }
+  .kicker { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: rgb(var(--accent)); font-weight: 600; }
+  h1 { font-size: 34px; margin: 8px 0 6px; letter-spacing: -0.02em; }
+  .sub { color: rgb(var(--muted-foreground)); max-width: 760px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip {
+    font-size: 12px; padding: 4px 11px; border-radius: 999px;
+    border: 1px solid rgb(var(--border)); background: rgb(var(--card));
+    color: rgb(var(--muted-foreground));
+  }
+  .chip.hot { border-color: rgb(var(--primary) / .55); color: rgb(var(--primary)); }
+  .chip.stage { border-color: rgb(var(--accent) / .5); color: rgb(var(--accent)); font-weight: 600; letter-spacing: .06em; }
+  .chip.no { border-color: rgb(var(--destructive) / .45); color: rgb(var(--destructive)); text-decoration: line-through; }
+
+  section { margin: 44px 0 0; }
+  h2 {
+    font-size: 13px; letter-spacing: .16em; text-transform: uppercase;
+    color: rgb(var(--muted-foreground)); margin: 0 0 18px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  h2::after { content: ""; flex: 1; height: 1px; background: rgb(var(--border)); }
+  h3 { font-size: 17px; margin: 0 0 8px; letter-spacing: -0.01em; }
+
+  .idea-card {
+    background: linear-gradient(145deg, rgb(var(--card)), rgb(var(--muted) / .45));
+    border: 1px solid rgb(var(--border)); border-radius: 16px; padding: 26px 28px;
+  }
+  .idea-card p { margin: 0; font-size: 17px; max-width: 900px; }
+  .anatomy { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .anatomy .chip { font-size: 13px; padding: 7px 14px; background: rgb(var(--muted)); color: rgb(var(--foreground)); }
+  .anatomy .chip b { color: rgb(var(--accent)); font-weight: 600; }
+
+  .masonry { columns: 3; column-gap: 16px; }
+  @media (max-width: 1080px) { .masonry { columns: 2; } }
+  @media (max-width: 720px)  { .masonry { columns: 1; } }
+
+  .ev {
+    break-inside: avoid; margin-bottom: 16px;
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border));
+    border-radius: 14px; padding: 16px 18px;
+  }
+  .ev-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+    color: rgb(var(--primary)); background: rgb(var(--muted)); border: 1px solid rgb(var(--border));
+    padding: 3px 9px; border-radius: 7px; display: inline-block; margin-bottom: 10px;
+    word-break: break-all;
+  }
+  .ev p { margin: 0 0 10px; color: rgb(var(--foreground)); font-size: 14px; }
+  .ev p .why { color: rgb(var(--muted-foreground)); }
+  .ev .tag { display: inline-block; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: rgb(var(--accent)); margin-top: 9px; }
+
+  .refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .ref {
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border)); border-radius: 14px;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .ref .noimg {
+    aspect-ratio: 1200 / 630; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgb(var(--muted)), rgb(var(--background)));
+    border-bottom: 1px solid rgb(var(--border));
+    color: rgb(var(--primary) / .7); font-size: 34px; font-weight: 700; letter-spacing: .05em;
+  }
+  .ref .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .ref .theme { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: rgb(var(--accent)); font-weight: 600; }
+  .ref h3 { font-size: 15px; margin: 0; }
+  .ref p { margin: 0; font-size: 13px; color: rgb(var(--muted-foreground)); flex: 1; }
+  .ref .go { font-size: 12.5px; margin-top: 4px; word-break: break-all; }
+
+  .mocks { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .mock {
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border));
+    border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .mock > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .mock > header .proj { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: rgb(var(--accent)); font-weight: 600; }
+  .synth { font-size: 12.5px; color: rgb(var(--muted-foreground)); }
+  .synth b { color: rgb(var(--foreground)); font-weight: 600; }
+
+  .stagebox {
+    position: relative; overflow: hidden;
+    background: rgb(var(--background) / .8); border: 1px solid rgb(var(--border));
+    border-radius: 12px; min-height: 340px;
+    display: grid; place-items: center;
+  }
+
+  /* ── The decided composition: aura behind orb + line that blooms ───────── */
+  .centerstage { position: relative; width: min(720px, 90%); min-height: 320px; display: grid; place-items: center; }
+  .aura {
+    position: absolute; top: 50%; left: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 38% 32%, color-mix(in srgb, rgb(var(--primary)) 45%, transparent), transparent 62%),
+      radial-gradient(circle at 70% 74%, color-mix(in srgb, rgb(var(--accent)) 32%, transparent), transparent 58%);
+    filter: blur(22px);
+    transform: scale(calc(0.9 + var(--voice-intensity) * 0.35 + var(--bloom) * 0.15));
+    opacity: calc(0.45 + var(--voice-intensity) * 0.4 + var(--bloom) * 0.15);
+    animation: drift 5.5s ease-in-out infinite;
+    transition: transform 120ms linear, opacity 120ms linear;
+  }
+  @keyframes drift { 50% { transform: scale(calc(0.9 + var(--voice-intensity) * 0.5 + var(--bloom) * 0.15)) rotate(6deg); } }
+
+  .orbmock {
+    position: relative; z-index: 2; width: 132px; height: 132px; border-radius: 50%;
+    border: 2px solid rgb(var(--primary) / .65);
+    background:
+      radial-gradient(circle at 34% 28%, color-mix(in srgb, rgb(var(--primary)) 45%, transparent), transparent 58%),
+      radial-gradient(circle at 72% 78%, color-mix(in srgb, rgb(var(--accent)) 32%, transparent), transparent 55%),
+      color-mix(in srgb, rgb(var(--primary)) 16%, transparent);
+    display: grid; place-items: center;
+    transform: scale(calc(1 + var(--voice-intensity) * 0.16 * var(--bloom)));
+    transition: transform 90ms linear;
+    box-shadow: 0 10px 44px rgb(var(--background) / .8);
+  }
+  .orbmock .glyph { width: 44px; height: 44px; color: rgb(var(--foreground)); opacity: .92; }
+
+  .warble-stack { position: absolute; left: 0; right: 0; bottom: 6px; z-index: 1; display: grid; gap: 7px; }
+  .warble-stack .trace {
+    position: relative; height: 22px; overflow: hidden;
+    transition: transform 520ms cubic-bezier(.22, 1, .36, 1), opacity 520ms ease;
+  }
+  /* resting line — always present, calm */
+  .warble-stack .trace.base {
+    transform: scaleY(calc(0.4 + var(--voice-intensity) * 0.5));
+    opacity: calc(0.7 + var(--voice-intensity) * 0.3);
+  }
+  .warble-stack .trace.base span {
+    animation-duration: calc((360000ms + (1 - var(--bloom)) * 360000ms) / var(--voice-pitch));
+  }
+  /* the echo — six more traces that bloom out while voice is active */
+  .warble-stack .trace.leaf {
+    transform: scaleY(calc((0.3 + var(--voice-intensity) * 0.9) * var(--bloom)));
+    opacity: calc(var(--bloom) * (0.92 - var(--i) * 0.07));
+    transition-delay: calc(var(--i) * 70ms);
+  }
+  .warble-stack .trace span {
+    position: absolute; inset: 0 -120px 0 0;
+    background: linear-gradient(90deg, transparent, rgb(var(--primary)) 18%,
+                rgb(var(--accent)) 50%, rgb(var(--primary)) 82%, transparent);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='22'%3E%3Cpath d='M0 11 Q12.5 1 25 11 T50 11' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E") repeat-x center / auto 100%;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='22'%3E%3Cpath d='M0 11 Q12.5 1 25 11 T50 11' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3C/svg%3E") repeat-x center / auto 100%;
+    animation: flow calc(360000ms / var(--voice-pitch)) linear infinite;
+    animation-delay: calc(var(--i) * -0.16s);
+  }
+  @keyframes flow { to { transform: translateX(-50px); } }
+
+  .stage-note {
+    position: absolute; top: 12px; left: 14px; z-index: 3;
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: rgb(var(--muted-foreground));
+  }
+  .state-flag {
+    position: absolute; top: 12px; right: 14px; z-index: 3;
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: rgb(var(--muted-foreground));
+    display: flex; align-items: center; gap: 7px;
+  }
+  .state-flag b { color: rgb(var(--primary)); font-weight: 600; }
+
+  /* state matrix */
+  .states { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .st { background: rgb(var(--muted) / .55); border: 1px solid rgb(var(--border)); border-radius: 10px; padding: 11px 12px; }
+  .st .label { font-size: 10px; margin-bottom: 7px; display: flex; align-items: center; gap: 7px; }
+  .st .txt { font-size: 12.5px; color: rgb(var(--muted-foreground)); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+
+  table.sig { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.sig th, table.sig td { text-align: left; padding: 9px 12px; border-bottom: 1px solid rgb(var(--border)); vertical-align: top; }
+  table.sig th { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: rgb(var(--muted-foreground)); font-weight: 600; }
+  table.sig td code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: rgb(var(--primary)); }
+  table.sig td .why { color: rgb(var(--muted-foreground)); }
+
+  .qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+  .q {
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border));
+    border-left: 3px solid rgb(var(--primary)); border-radius: 11px; padding: 14px 17px;
+  }
+  .q b { color: rgb(var(--foreground)); }
+  .q p { margin: 6px 0 0; font-size: 13.5px; color: rgb(var(--muted-foreground)); }
+
+  footer.board { margin-top: 52px; padding-top: 20px; border-top: 1px solid rgb(var(--border));
+    color: rgb(var(--muted-foreground)); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+  footer.board code { color: rgb(var(--primary)); font-size: 11.5px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .aura, .warble-stack .trace span, .orbmock { animation: none !important; transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="board">
+    <div class="kicker">Moodboard #2 · dev-time ideation</div>
+    <h1>Voice Warble — calm line, blooms on voice</h1>
+    <p class="sub">
+      The center-stage visual for the voice conversation page: an organic aura behind the hero orb
+      and a single fine wave beneath it — simple and clean at rest, blooming into seven echoing
+      traces only while a voice is actually speaking.
+    </p>
+    <div class="chips">
+      <span class="chip stage">CENTER STAGE ONLY</span>
+      <span class="chip hot">line → bloom on voice</span>
+      <span class="chip hot">css-vars + rAF</span>
+      <span class="chip">no readouts</span>
+      <span class="chip">mic-only signal</span>
+      <span class="chip">reduced-motion honored</span>
+      <span class="chip no">variant 2 · rings — cut</span>
+      <span class="chip no">A spine · B strokes · C ribbon — cut</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Idea</h2>
+    <div class="idea-card">
+      <p>
+        Your voice is analyzed once — <b>intensity</b>, <b>pitch</b>, <b>timbre</b> — and published
+        as CSS variables on the center-stage wrapper. At rest the page shows almost nothing: a soft
+        aura and <b>one fine line</b>, drifting slowly. While you speak, the line <b>blooms</b> —
+        six more traces unfurl beneath it, each rendering the same waveform a few frames
+        <i>behind its neighbor</i>, so the stack warbles as one organism and motion travels down
+        the chain. When you stop, it exhales back to the single line. No numbers on screen; the
+        motion <i>is</i> the readout.
+      </p>
+      <div class="anatomy">
+        <span class="chip"><b>mic</b> → AnalyserNode (already running)</span>
+        <span class="chip"><b>features</b> → intensity · pitch Hz · timbre centroid</span>
+        <span class="chip"><b>channel</b> → featuresRef → rAF → CSS vars</span>
+        <span class="chip"><b>rest</b> → aura + one slow line</span>
+        <span class="chip"><b>bloom</b> → 7 traces, delay stagger = the echo</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Evidence from our code</h2>
+    <div class="masonry">
+      <div class="ev">
+        <span class="ev-path">apps/web/features/chat/hooks/useVoiceChat.ts:97-106</span>
+        <p>The analyser reads the spectrum every frame, then collapses 128 bins into one mean scalar.
+          <span class="why">The warble's raw material is produced and thrown away at the source —
+          this function is where the feature ref belongs.</span></p>
+        <span class="tag">signal origin</span>
+      </div>
+      <div class="ev">
+        <span class="ev-path">apps/web/features/chat/hooks/useVoiceChat.ts:34-39, 161-162</span>
+        <p>The two-channel rule: per-frame data lives on <code>micLevelRef</code>, React state only
+          gets 8/s quantized values. <span class="why">Features must ride the ref channel —
+          no setState at audio-frame rate.</span></p>
+        <span class="tag">invariant</span>
+      </div>
+      <div class="ev">
+        <span class="ev-path">apps/web/features/chat/components/input/VoiceWaveform.tsx:93-131</span>
+        <p><code>VOICE_STATE_TONE</code> is the single state→color map. <span class="why">Aura and
+          trace color must read this map — never invent hues, or header and warble drift apart.</span></p>
+        <span class="tag">color contract</span>
+      </div>
+      <div class="ev">
+        <span class="ev-path">apps/web/features/chat/components/input/VoiceWaveform.tsx:176-199</span>
+        <p>The orb's listening corona already consumes <code>--mic-level</code> imperatively for
+          scale/opacity. <span class="why">The warble is the same mechanism with a richer payload —
+          precedent, not invention.</span></p>
+        <span class="tag">prior art</span>
+      </div>
+      <div class="ev">
+        <span class="ev-path">apps/web/features/chat/components/input/VoiceChatMode.tsx:126</span>
+        <p><code>flex-1 · justify-center · relative</code> — the center stage. <span class="why">The
+          agreed mount surface: aura + line live here; header, transcript, footer untouched.</span></p>
+        <span class="tag">mount point</span>
+      </div>
+      <div class="ev">
+        <span class="ev-path">docs/design/DESIGN_SYSTEM.md:43, 334, 352</span>
+        <p><code>--primary: 124 82 196</code> (dark) · respect <code>prefers-reduced-motion</code> ·
+          <code>motion-reduce:</code> variants. <span class="why">Token + motion contract every
+          animation on this board obeys.</span></p>
+        <span class="tag">design system</span>
+      </div>
+      <div class="ev">
+        <span class="ev-path">.kanban/board.jsonl:908 — voice orb card</span>
+        <p>One hero orb is the single presentation surface for the voice state machine.
+          <span class="why">The warble wraps the orb — it never replaces the toggle, status dot, or
+          aria contract.</span></p>
+        <span class="tag">decision</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The composition — live</h2>
+    <div class="mocks">
+      <div class="mock">
+        <header>
+          <span class="proj">Decided · line + bloom</span>
+          <span class="synth"><b>Rest = one fine line · voice = 7-trace echo</b> — simulated signal</span>
+        </header>
+        <div class="stagebox">
+          <span class="stage-note">center stage · behind the orb</span>
+          <span class="state-flag" id="state">state · <b>rest</b></span>
+          <div class="centerstage">
+            <span class="aura" aria-hidden="true"></span>
+            <div class="orbmock" aria-hidden="true"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3.5"/><path d="M8.5 21.5h7"/></svg></div>
+            <div class="warble-stack" aria-hidden="true">
+              <div class="trace base" style="--i:0"><span></span></div>
+              <div class="trace leaf" style="--i:1"><span></span></div>
+              <div class="trace leaf" style="--i:2"><span></span></div>
+              <div class="trace leaf" style="--i:3"><span></span></div>
+              <div class="trace leaf" style="--i:4"><span></span></div>
+              <div class="trace leaf" style="--i:5"><span></span></div>
+              <div class="trace leaf" style="--i:6"><span></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="synth">
+          Synthesis: <b>variant 3's clean resting line × VoiceWave's phase-shifted echo × LiveKit
+          aura</b>. The six <code>animation-delay</code> offsets are the echo — every trace leaves the
+          one above by <b>0.16&nbsp;s</b> — and the bloom itself unfurls with a
+          <b>70&nbsp;ms</b> per-trace stagger, so the stack opens downward like a fan.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Signal mapping</h2>
+    <table class="sig">
+      <thead><tr><th>Voice quality</th><th>Derived how</th><th>Drives</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Intensity</b> (loudness)</td>
+          <td><code>RMS</code> of time-domain buffer, smoothed</td>
+          <td>aura scale/opacity · trace <code>scaleY</code> · orb corona — <span class="why">swell on loudness</span></td>
+        </tr>
+        <tr>
+          <td><b>Pitch</b> (fundamental)</td>
+          <td>autocorrelation over <code>fftSize 1024</code> time-domain window → Hz</td>
+          <td>flow duration <code>calc(360000ms / pitch)</code> — <span class="why">~2.4&nbsp;s/period at 150&nbsp;Hz while bloomed; the resting line runs at half speed for calm</span></td>
+        </tr>
+        <tr>
+          <td><b>Timbre</b> (brightness)</td>
+          <td>spectral centroid of frequency bins, normalized</td>
+          <td>trace gradient lightness + opacity falloff — <span class="why">bright, dense voice = crisp high traces; soft voice = dim, spread</span></td>
+        </tr>
+        <tr>
+          <td><b>Voice presence</b></td>
+          <td>intensity sustained above floor, with hold + hysteresis</td>
+          <td><code>--bloom</code> 0↔1 — <span class="why">blooms fast (~150&nbsp;ms) while you speak, settles slowly (~2&nbsp;s) back to the line; brief pauses don't flicker it</span></td>
+        </tr>
+        <tr>
+          <td><b>State</b></td>
+          <td>the existing <code>VoiceState</code> machine</td>
+          <td>color from <code>VOICE_STATE_TONE</code> + the matrix below</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>State matrix</h2>
+    <div class="states">
+      <div class="st">
+        <span class="label"><i class="dot" style="background:rgb(var(--muted-foreground))"></i> idle</span>
+        <span class="txt">The resting look: aura at low opacity, one slow line. Honest "not listening" (AI UX rule: never look live when the mic is off).</span>
+      </div>
+      <div class="st">
+        <span class="label"><i class="dot" style="background:rgb(var(--primary))"></i> listening</span>
+        <span class="txt">Line present, ready — blooms to the full 7-trace echo the moment voice activity crosses the floor.</span>
+      </div>
+      <div class="st">
+        <span class="label"><i class="dot" style="background:rgb(var(--warning))"></i> processing</span>
+        <span class="txt">Exhales back to the single line, drifting slowly; aura eases toward the warning tone.</span>
+      </div>
+      <div class="st">
+        <span class="label"><i class="dot" style="background:rgb(var(--success))"></i> speaking</span>
+        <span class="txt">Resting line with a gentle pulse (mic-only signal: browser TTS output cannot be captured, so the AI voice cannot drive the wave).</span>
+      </div>
+      <div class="st">
+        <span class="label"><i class="dot" style="background:rgb(var(--destructive))"></i> error</span>
+        <span class="txt">Flatline — animation stops, aura holds a dim destructive tint. The StatusBanner carries the message.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Motion spec</h2>
+    <table class="sig">
+      <tbody>
+        <tr><td>Resting line</td><td>one trace, half-speed flow — <code>calc((360000ms + (1 - bloom) * 360000ms) / pitch)</code>, calm ~4.8&nbsp;s/period at 150&nbsp;Hz</td></tr>
+        <tr><td>Bloom</td><td>six leaf traces scale + fade in over <b>520&nbsp;ms</b> (ease-out), unfurl stagger <code>calc(var(--i) * 70ms)</code> — the stack opens downward like a fan</td></tr>
+        <tr><td>Settle</td><td>slower decay back to the single line (~2&nbsp;s) with hysteresis — pauses in speech don't flicker the bloom</td></tr>
+        <tr><td>Echo stagger</td><td><code>animation-delay: calc(var(--i) * -0.16s)</code>, i = 1…6 — the signature "backing each other"</td></tr>
+        <tr><td>Intensity response</td><td>90–120&nbsp;ms linear transitions on scale/opacity; vars written per-frame by the component's own rAF loop</td></tr>
+        <tr><td>Reduced motion</td><td><code>@media (prefers-reduced-motion: reduce)</code> — all animation off, static composition retained (header status text carries state)</td></tr>
+        <tr><td>React re-renders</td><td>none at frame rate — discrete state changes only, same as the orb today</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>External references</h2>
+    <div class="refs">
+      <div class="ref">
+        <div class="noimg">VW</div>
+        <div class="body">
+          <span class="theme">Component precedent</span>
+          <h3>VoiceWave — react-ai-voice-visualizer</h3>
+          <p>"Siri/Gemini-inspired multiple sine waves with phase-shifted dancing animation" —
+            props literally named <code>numberOfLines</code> + <code>phaseShift</code>. Our bloomed
+            stack is this pattern, fed by a real history buffer, hidden behind a resting line.</p>
+          <span class="go"><a href="https://github.com/chevgan/react-ai-voice-visualizer">github.com/chevgan/react-ai-voice-visualizer</a></span>
+        </div>
+      </div>
+      <div class="ref">
+        <div class="noimg">LK</div>
+        <div class="body">
+          <span class="theme">State-driven motion</span>
+          <h3>Audio visualizers — LiveKit Agents UI</h3>
+          <p>Bar / Grid / Radial / Wave / <b>Aura</b> driven by volume <i>and</i> agent state —
+            animates on speech, settles on silence. The aura direction and the settle behavior
+            both come from here.</p>
+          <span class="go"><a href="https://docs.livekit.io/frontends/agents-ui/audio-visualizer/prebuilt/">docs.livekit.io/frontends/agents-ui/audio-visualizer/prebuilt</a></span>
+        </div>
+      </div>
+      <div class="ref">
+        <div class="noimg">EL</div>
+        <div class="body">
+          <span class="theme">Canvas craft</span>
+          <h3>Live Waveform — ElevenLabs UI</h3>
+          <p>Canvas mic visualizer with static/scrolling modes and a distinct processing state —
+            proof of the processing-vs-listening visual split our state matrix keeps.</p>
+          <span class="go"><a href="https://ui.elevenlabs.io/docs/components/live-waveform">ui.elevenlabs.io/docs/components/live-waveform</a></span>
+        </div>
+      </div>
+      <div class="ref">
+        <div class="noimg">UX</div>
+        <div class="body">
+          <span class="theme">Rules</span>
+          <h3>Voice Visualizer pattern — AI UX Playground</h3>
+          <p>The guardrails: distinct listen vs. speak animation, a real idle state, never flashy
+            enough to fight the transcript, reduced-motion path. Every row of the state matrix
+            traces back here.</p>
+          <span class="go"><a href="https://aiuxplayground.com/pattern/voice-visualizer">aiuxplayground.com/pattern/voice-visualizer</a></span>
+        </div>
+      </div>
+      <div class="ref">
+        <div class="noimg">OR</div>
+        <div class="body">
+          <span class="theme">Orb integration</span>
+          <h3>Voice Orb — orb-ui</h3>
+          <p>One signal drives every theme; keep the text status for reduced-motion users. Our orb
+            stays the hero — the warble is backdrop, never the sole state carrier.</p>
+          <span class="go"><a href="https://orb-ui.com/docs/examples/voice-orb-ui">orb-ui.com/docs/examples/voice-orb-ui</a></span>
+        </div>
+      </div>
+      <div class="ref">
+        <div class="noimg">MB</div>
+        <div class="body">
+          <span class="theme">Pattern match</span>
+          <h3>Building a voice-reactive orb — Medium</h3>
+          <p><code>levelRef</code> + rAF smoothing — the exact channel pattern
+            <code>micLevelRef</code> already implements. Confirms the architecture, not just the look.</p>
+          <span class="go"><a href="https://medium.com/@therealmilesjackson/building-a-voice-reactive-orb-in-react-audio-visualization-for-voice-assistants-2bee12797b93">medium.com/…/building-a-voice-reactive-orb</a></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rejected on this board</h2>
+    <div class="chips">
+      <span class="chip no">A — F spine with arm pairs</span>
+      <span class="chip no">B — side-by-side vertical strokes</span>
+      <span class="chip no">C — mirrored ribbon</span>
+      <span class="chip no">2 — radial echo corona</span>
+      <span class="chip no">numeric readouts (pitch/intensity/timbre chips)</span>
+      <span class="chip no">always-on 7-trace stack — rest state now the single line</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Open questions</h2>
+    <div class="qgrid">
+      <div class="q">
+        <b>"See the training of it" — still unresolved</b>
+        <p>From the original request; never decoded. One sentence from you and it either becomes a
+          card or disappears.</p>
+      </div>
+      <div class="q">
+        <b>Mic-only confirmed?</b>
+        <p>Browser TTS output cannot be routed through Web Audio, so during <i>speaking</i> the
+          warble stays on the resting line. Default is yes unless you object.</p>
+      </div>
+      <div class="q">
+        <b>Go for implementation?</b>
+        <p>Approved plan: <code>audioFeaturesRef</code> in useVoiceChat.ts → <code>VoiceWarble.tsx</code>
+          in center stage → kanban card + <code>feat/voice-warble</code> → lint/typecheck/tests → live walkthrough.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="board">
+    <span>Moodboard #2 — voice warble</span>
+    <span>boards live in <code>docs/moodboards/</code>, registered in <code>docs/INDEX.md</code></span>
+    <span>live demo runs on a simulated signal · real build reads <code>audioFeaturesRef</code></span>
+  </footer>
+
+</div>
+
+<script>
+(() => {
+  'use strict';
+  // Simulated voice signal for the live demo only: syllables, pauses, pitch drift.
+  const root = document.documentElement;
+  const sim = { amp: 0, sylUntil: 0, pauseUntil: 0, pitchTarget: 150, brightTarget: 0.5 };
+  let intensity = 0.3, pitch = 150, bright = 0.5, bloom = 0;
+  let activeUntil = 0, last = performance.now(), lastM = 0;
+  const stateEl = document.getElementById('state');
+
+  function tick(tms) {
+    const dt = Math.min(0.05, (tms - last) / 1000);
+    last = tms;
+
+    // speech generator
+    if (tms >= sim.sylUntil && tms >= sim.pauseUntil) {
+      sim.amp = 0.3 + Math.random() * 0.7;
+      sim.sylUntil = tms + 140 + Math.random() * 300;
+      sim.pauseUntil = Math.random() < 0.35 ? sim.sylUntil + 300 + Math.random() * 600 : sim.sylUntil;
+    } else if (tms >= sim.sylUntil) {
+      sim.amp = 0;
+    }
+    intensity += (sim.amp - intensity) * Math.min(1, dt * 12);
+    if (Math.random() < dt * 2) sim.pitchTarget = 95 + Math.random() * 175;
+    pitch += (sim.pitchTarget - pitch) * Math.min(1, dt * 3);
+    if (Math.random() < dt * 1.2) sim.brightTarget = Math.random();
+    bright += (sim.brightTarget - bright) * Math.min(1, dt * 2);
+
+    // voice-presence envelope with hold — bloom in fast, settle slow, no flicker
+    if (intensity > 0.12) activeUntil = tms + 1300;
+    const target = tms < activeUntil ? 1 : 0;
+    bloom += (target - bloom) * Math.min(1, dt * (target ? 7 : 2));
+
+    root.style.setProperty('--voice-intensity', intensity.toFixed(3));
+    root.style.setProperty('--voice-pitch', String(Math.round(pitch)));
+    root.style.setProperty('--voice-timbre', bright.toFixed(3));
+    root.style.setProperty('--bloom', bloom.toFixed(3));
+
+    if (tms - lastM > 150) {
+      lastM = tms;
+      stateEl.innerHTML = 'state · <b>' + (bloom > 0.5 ? 'voice — bloomed' : 'rest') + '</b>';
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
