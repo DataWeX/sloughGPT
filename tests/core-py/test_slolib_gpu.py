@@ -1308,6 +1308,10 @@ class TestCudaWithFakeCupy:
 
         _FakeCupy._CupArr = cls._CupArr
         _FakeCupy._val = cls._val
+        # Real cupy exposes `cupy.ndarray` (asarray returns instances of it) and
+        # np.ndarray.device exists under NumPy>=2, so the accelerator's on-device
+        # check `isinstance(x, cp.ndarray)` must resolve against the fake too.
+        _FakeCupy.ndarray = cls._CupArr
         return _FakeCupy
 
     def test_cuda_available_with_fake_cupy(self, monkeypatch):
@@ -1388,7 +1392,12 @@ class TestCudaWithFakeCupy:
         b = np.random.randn(4, 5).astype(np.float32)
         assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-5)
         backend._fp16_mode = True
-        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-4)
+        # fp16 has ~3 significant decimal digits: a genuine fp16 matmul of these
+        # values errs up to ~5e-3 (measured 0.005 over 200 runs), so 1e-4 can
+        # never hold once the path truly converts to fp16. (It used to "pass"
+        # only because the NumPy>=2 hasattr(x, "device") bug skipped the fp16
+        # conversion and silently computed in fp32.)
+        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-2)
 
     def test_cuda_scaled_dot_causal_with_fake_cupy(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "cupy", self._fake_cupy())
