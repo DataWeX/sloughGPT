@@ -500,6 +500,28 @@ def _assert(s: _TuiSession, cond: bool, msg: str) -> None:
         pytest.fail(f"{msg}\n--- screen ---\n{s.screen.text()}\n--- child stderr ---\n{err}")
 
 
+def _dispatched(sc: _Screen, cmd: str) -> bool:
+    """True once Enter for ``cmd`` has been *processed* by the dispatcher.
+
+    ``tui_repl`` echoes ``λ {cmd}`` into the output pane in the same loop
+    iteration in which it creates and starts the command thread, and only
+    then redraws — so seeing that echo anywhere above the prompt row proves
+    ``_active_thread`` is set.  That matters because Ctrl+C is dispatched on
+    two branches: with a live thread it injects ``KeyboardInterrupt``
+    (``_interrupt_active``), but with ``_active_thread`` still ``None`` the
+    *other* branch sets ``_running = False`` and **exits the TUI**.  A fixed
+    sleep before Ctrl+C therefore raced the dispatch, and tracing inherited
+    by the forked pty child (``os.fork`` copies the tracer) pushed startup
+    past that deadline — ~50% failures under ``--cov=domain``.
+    """
+    echo = f"λ {cmd}"
+    # The output pane paints blank cells with '░' (the prompt row uses real
+    # spaces), so normalize before matching; the prompt row holds the typed
+    # text until Enter clears it, so only an echo above it counts as
+    # dispatched.
+    return any(r < sc.rows - 1 and echo in sc.row(r).replace("░", " ") for r in range(sc.rows))
+
+
 # ── layout ────────────────────────────────────────────────────────────────
 
 
@@ -1277,9 +1299,15 @@ def test_ctrl_c_interrupts_running_command(session):
     ``time.sleep`` is not reliably interruptible by async exceptions.
     """
     assert session.wait_until(lambda sc: _ready(session))
-    session.write("py sum(i * i for i in range(10**9))")
+    cmd = "py sum(i * i for i in range(10**9))"
+    session.write(cmd)
     session.keys(b"\n")
-    time.sleep(0.5)  # let the command thread enter the eval loop
+    # Wait for dispatch instead of sleeping a fixed 0.5s: Ctrl+C before the
+    # command thread exists takes the other branch of the dispatcher and
+    # EXITS the TUI (see _dispatched). The echo lands only after the thread
+    # is started, so it is the exact moment Ctrl+C interrupts safely.
+    ok = session.wait_until(lambda sc: _dispatched(sc, cmd), timeout=15)
+    _assert(session, ok, "command was never dispatched to the TUI")
     session.keys(b"\x03")  # Ctrl+C — interrupt, not exit
     ok = session.wait_until(lambda sc: "Aborted" in sc.text(), timeout=15)
     _assert(session, ok, "Ctrl+C did not abort the running command")
