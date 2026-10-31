@@ -31,7 +31,7 @@ You are the design lead for sloughGPT, a local-first AI training platform with a
 - **Display**: Outfit (400/500/600/700) — served locally from `/public/fonts/`
 - **Mono**: JetBrains Mono (400/500) — code, technical values
 - Body: `text-sm` (14px). Section titles: `text-base font-medium`. Page titles: `AppRouteHeaderLead`.
-- Never use `text-lg` or `text-2xl` in page body.
+- Never use `text-lg` or `text-2xl` for **body/prose or section titles**. **Exempt**: numeric stats, KPIs, scores, and single-word/icon display content (typically `font-mono`/`font-bold`) may use `text-lg`/`text-2xl`.
 
 ### Layout
 
@@ -119,7 +119,7 @@ raised anywhere survives navigation until dismissed or acted on.
 | Add more cards                                       | Card soup               | Use KpiGrid, StatCard, SectionHeader, inline content      |
 | Use `px-8 py-6` arbitrary spacing                    | Breaks spacing system   | Use `sl-page` padding, `space-y-4`, `gap-*` tokens        |
 | Add gradient backgrounds to cards                    | Visual noise            | Use subtle border + shadow depth                          |
-| Use `text-lg` in body                                | Breaks type scale       | Use `text-sm` body, `text-base` titles                    |
+| Use `text-lg` on body/titles                         | Breaks type scale       | `text-sm` body, `text-base` titles; stats/KPIs exempt     |
 | Add decorative illustrations                         | Clutters interface      | Use the training loss SVG motif, StatusDot, colored chips |
 | Create new color variables                           | Palette drift           | Use existing tokens, theme chips for accent shifts        |
 | Use hardcoded colors                                 | Unmaintainable          | Always `rgb(var(--token))`                                |
@@ -139,7 +139,7 @@ Before shipping any UI change:
 
 - [ ] All colors via CSS custom properties
 - [ ] Spacing uses token system (`gap-*`, `space-y-*`, `p-*`)
-- [ ] Typography follows type scale (no `text-lg` in body)
+- [ ] Typography follows type scale (`text-lg`/`text-2xl` only on stats/KPIs/display content)
 - [ ] Interactive elements have hover/focus/active/disabled states
 - [ ] `focus-visible:ring-2 focus-visible:ring-ring` on all interactive elements
 - [ ] `aria-label` on icon-only buttons

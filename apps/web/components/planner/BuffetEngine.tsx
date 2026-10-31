@@ -242,7 +242,7 @@ export function BuffetEngine() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-light tracking-tight text-zinc-200">Planner</h1>
+            <h1 className="text-base font-medium tracking-tight text-zinc-200">Planner</h1>
             <p className="text-[11px] font-mono text-zinc-600">
               {board?.cards.length ?? 0} cards · {uniqueTags.length} tags
             </p>
