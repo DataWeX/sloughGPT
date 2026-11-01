@@ -20,6 +20,20 @@ COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages/strui/node_modules ./packages/strui/node_modules
 COPY apps/web ./apps/web
 COPY packages/strui ./packages/strui
+# apps/web and strui tsconfigs extend ../../tsconfig.base.json — rolldown's
+# tsconfig discovery (vite 8) hard-fails with "Tsconfig not found" without it.
+COPY tsconfig.base.json ./tsconfig.base.json
+# apps/web/lib/* imports ../../lib/* (ports, index, cache/client, sse-parse),
+# which lives in apps/lib — OUTSIDE the copied web app dir.
+COPY apps/lib ./apps/lib
+# vite.config.ts aliases react/react-dom (and dedupes scheduler) to the
+# workspace-hoisted ROOT node_modules, which only exists in the monorepo
+# layout; the standalone deps install keeps them in apps/web/node_modules.
+# Bridge the two so the alias target resolves during the build.
+RUN mkdir -p ./node_modules \
+ && ln -s ../apps/web/node_modules/react ./node_modules/react \
+ && ln -s ../apps/web/node_modules/react-dom ./node_modules/react-dom \
+ && ln -s ../apps/web/node_modules/scheduler ./node_modules/scheduler
 WORKDIR /app/apps/web
 RUN npm run build:vite \
   && test -f dist-vite/index.html
