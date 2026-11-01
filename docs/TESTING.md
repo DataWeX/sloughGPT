@@ -288,8 +288,8 @@ There is nothing else to name: module, URLs, and CLI all say Mole
   full-suite gate artifact vs the drift baseline (`~/.cache/slog-gates`;
   env `SLO_GATES_DIR` / `SLO_GATES_DRIFT_MAX` / `SLO_GATES_FULL_PASSED`);
   and stored benchmark records vs thresholds — the verdict comes from
-  `scripts/benchmark_results.py` itself (`data/benchmark_results`;
-  env `SLO_BENCH_RESULTS_DIR`).
+  `scripts/benchmark_results.py` itself (`~/.local/share/sloughgpt/
+benchmark_results`; env `SLO_BENCH_DATA_DIR`).
 - **Sibling, standalone:** `scripts/site_doctor_probe.py` — the read-only
   **route/stream triage** probe (Site Doctor). It walks the router manifest
   (~246 routes, no write verbs) and judges each streaming route on its

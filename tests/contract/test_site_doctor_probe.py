@@ -38,6 +38,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 
+import benchmark_results as br  # noqa: E402 — trend gate's store owner
 import site_doctor_probe as doctor  # noqa: E402
 
 
@@ -278,8 +279,11 @@ def test_the_probe_never_launches_a_browser_sweep() -> None:
     assert "playwright" not in src, "playwright import would break the read-only contract"
 
 
-def test_inference_triage_reports_a_stuck_or_error_engine(monkeypatch) -> None:
+def test_inference_triage_reports_a_stuck_or_error_engine(monkeypatch, tmp_path) -> None:
     """An erroring inference service is a defect the health surface already knows."""
+    # the trend gate reads the benchmark store — isolate it so this test
+    # asserts our triage, never the local machine's record history
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
     detailed = {
         "data": {
             "status": "degraded",
@@ -302,3 +306,124 @@ def test_inference_triage_reports_a_stuck_or_error_engine(monkeypatch) -> None:
     finding = checks["inference-engine"]
     assert finding["severity"] == "high"
     assert "engine timeout" in finding["message"]
+
+
+# ── inference trend gate over the always-record store ──────────────────────
+# (card 20261031_170120 — additive to the health-surface triage above:
+# step change vs drift; the store dir is always monkeypatched, never the
+# local machine's record history)
+
+
+def _inference_store(store: Path, rows: list[tuple[str, float, str]]) -> None:
+    """Write inference records; rows are (timestamp, decode_tok_s, source)."""
+    d = store / "inference"
+    d.mkdir(parents=True, exist_ok=True)
+    for i, (ts, value, source) in enumerate(rows):
+        rec = {
+            "kind": "inference",
+            "model": "m",
+            "commit": "sha",
+            "timestamp": ts,
+            "source": source,
+            "metrics": {"decode_tok_s": value},
+        }
+        (d / f"r{i:02d}.json").write_text(json.dumps(rec), encoding="utf-8")
+
+
+def _healthy_engine(monkeypatch) -> None:
+    detailed = {
+        "data": {
+            "status": "healthy",
+            "services": {"inference": {"status": "ok"}},
+            "model_loaded": True,
+            "device": "cpu",
+            "inference_count": 7,
+        }
+    }
+    monkeypatch.setattr(doctor, "get", lambda url, timeout=5.0: (200, detailed, 0.1))
+
+
+def _trend_checks(monkeypatch) -> dict:
+    _healthy_engine(monkeypatch)
+    return {f["check"]: f for f in doctor.check_inference("http://unused")}
+
+
+def test_trend_gate_flags_a_step_down_as_medium(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    rows = [(f"2026-11-01T00:00:{i:02d}Z", 10.0, "local") for i in range(5)]
+    rows.append(("2026-11-01T00:00:05Z", 4.0, "local"))  # newest = current
+    _inference_store(tmp_path / "benchmarks", rows)
+    checks = _trend_checks(monkeypatch)
+    trend = checks["inference-trend"]
+    assert trend["severity"] == "medium"  # regressed trips --strict
+    assert "[local]" in trend["message"]  # source tag, compact
+    assert "regression candidate" in trend["message"]
+    assert checks["inference-engine"]["severity"] == "ok"  # engine itself fine
+
+
+def test_trend_gate_ok_when_within_band(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    rows = [(f"2026-11-01T00:00:{i:02d}Z", 10.0, "local") for i in range(6)]
+    _inference_store(tmp_path / "benchmarks", rows)
+    checks = _trend_checks(monkeypatch)
+    trend = checks["inference-trend"]
+    assert trend["severity"] == "ok"
+    assert "within" in trend["message"]
+
+
+def test_trend_insufficient_on_empty_store(monkeypatch, tmp_path) -> None:
+    """Fresh store: say n=0 as ok — never a false alarm, never --strict."""
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    checks = _trend_checks(monkeypatch)
+    trend = checks["inference-trend"]
+    assert trend["severity"] == "ok"
+    assert "insufficient" in trend["message"]
+    assert "n=0" in trend["message"]
+
+
+def test_trend_band_is_same_source_only(monkeypatch, tmp_path) -> None:
+    """ci records never pad a local band — 4 priors exist, only 1 counts."""
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    rows = [
+        ("2026-11-01T00:00:00Z", 10.0, "ci"),
+        ("2026-11-01T00:00:01Z", 11.0, "ci"),
+        ("2026-11-01T00:00:02Z", 9.0, "ci"),
+        ("2026-11-01T00:00:03Z", 10.0, "local"),  # the only local prior
+        ("2026-11-01T00:00:04Z", 4.0, "local"),  # current
+    ]
+    _inference_store(tmp_path / "benchmarks", rows)
+    checks = _trend_checks(monkeypatch)
+    trend = checks["inference-trend"]
+    # mixed sources would give n=4 and a regressed verdict; same-source
+    # gives n=1 -> insufficient, reported ok
+    assert "n=1" in trend["message"]
+    assert trend["severity"] == "ok"
+    assert "[local]" in trend["message"]
+
+
+def test_trend_skipped_when_health_does_not_answer(monkeypatch, tmp_path) -> None:
+    """No /health/detailed, no triage at all — the early return skips trend."""
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    monkeypatch.setattr(doctor, "get", lambda url, timeout=5.0: (503, None, 0.1))
+    findings = doctor.check_inference("http://unused")
+    assert findings and findings[0]["check"] == "inference-engine"
+    assert findings[0]["severity"] == "high"
+    assert all(f["check"] != "inference-trend" for f in findings)
+
+
+def test_trend_absent_when_newest_record_lacks_headline(monkeypatch, tmp_path) -> None:
+    """Nothing to judge -> no finding, rather than a fabricated one."""
+    monkeypatch.setattr(br, "RESULTS_DIR", tmp_path / "benchmarks")
+    d = tmp_path / "benchmarks" / "inference"
+    d.mkdir(parents=True)
+    for i in range(3):
+        rec = {
+            "kind": "inference",
+            "model": "m",
+            "timestamp": f"2026-11-01T00:00:0{i}Z",
+            "source": "local",
+            "metrics": {"r2": 0.99},
+        }
+        (d / f"r{i}.json").write_text(json.dumps(rec), encoding="utf-8")
+    checks = _trend_checks(monkeypatch)
+    assert "inference-trend" not in checks

@@ -1,11 +1,13 @@
 """Benchmarks probe — latest recorded benchmark vs its predecessor.
 
-Reads ``$SLO_BENCH_RESULTS_DIR`` (default ``<repo>/data/benchmark_results``,
-the store written by ``scripts/benchmark_results.py record``) and, for
-every kind that script tracks in ``REGRESSION_THRESHOLDS``, compares the
-two newest records with THAT script's own ``is_regression`` — one
-regression definition, never a second copy. Kinds with fewer than two
-records have no baseline and stay silent; untracked kind dirs are
+Reads ``$SLO_BENCH_DATA_DIR`` (default
+``~/.local/share/sloughgpt/benchmark_results`` — the store written by
+``scripts/benchmark_results.py record``; the SAME env var and default as
+that script, so this probe never carries a second default path to drift)
+and, for every kind that script tracks in ``REGRESSION_THRESHOLDS``,
+compares the two newest records with THAT script's own ``is_regression``
+— one regression definition, never a second copy. Kinds with fewer than
+two records have no baseline and stay silent; untracked kind dirs are
 ignored. Read-only, deterministic, no AI.
 
 Findings (component ``benchmarks``):
@@ -30,17 +32,28 @@ from . import ProbeResult
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 _SCRIPT = _REPO_ROOT / "scripts" / "benchmark_results.py"
 _mod = None  # one load per process, not per tick
+_default_dir: Path | None = None  # the SCRIPT's canonical RESULTS_DIR, captured at load
 
 
 def _bench():
     """Load scripts/benchmark_results.py once (importlib; it has a main guard)."""
-    global _mod
+    global _mod, _default_dir
     if _mod is None:
         spec = importlib.util.spec_from_file_location("_mole_benchmark_results", _SCRIPT)
         if spec is None or spec.loader is None:
             raise ImportError(f"cannot load {_SCRIPT}")
         mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        # exec with the store env cleared: captures the script's own
+        # canonical RESULTS_DIR independent of any per-call override, so a
+        # later env-unset tick can never inherit a stale dir from an
+        # earlier env-set one (deterministic per call, one default only)
+        saved = os.environ.pop("SLO_BENCH_DATA_DIR", None)
+        try:
+            spec.loader.exec_module(mod)
+        finally:
+            if saved is not None:
+                os.environ["SLO_BENCH_DATA_DIR"] = saved
+        _default_dir = mod.RESULTS_DIR
         _mod = mod
     return _mod
 
@@ -79,9 +92,15 @@ def run_probe() -> ProbeResult:
             error=f"load {_SCRIPT.name}: {exc}",
         )
 
-    env = os.environ.get("SLO_BENCH_RESULTS_DIR")
-    d = Path(env).expanduser() if env else _REPO_ROOT / "data" / "benchmark_results"
-    mod.RESULTS_DIR = d  # deterministic per call; env wins over the script default
+    # per-call env wins; otherwise the script's own canonical default
+    # (captured at load) — never a second default path here to drift from
+    # the store owner. This replaces the old SLO_BENCH_RESULTS_DIR +
+    # <repo>/data fallback, which pointed at a dir the store stopped
+    # writing when it moved to SLO_BENCH_DATA_DIR (probe reported "No
+    # benchmark records yet" forever).
+    env = os.environ.get("SLO_BENCH_DATA_DIR")
+    d = Path(env).expanduser() if env else _default_dir
+    mod.RESULTS_DIR = d  # deterministic per call; no stale override survives
     if not d.is_dir():
         return ProbeResult(
             name="benchmarks",

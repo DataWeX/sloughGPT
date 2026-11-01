@@ -327,6 +327,56 @@ class TestTokenAccountResets:
         assert account.can_afford(500) is True
         assert account.monthly_used == 0
 
+    def test_monthly_reset_fires_once_per_month_not_every_call(self):
+        # Regression (2026-11-01 CI red): last_daily_reset defaults to epoch
+        # 1970-01-01 (day 1). On the 1st of any month the old `.day != .day`
+        # compare never refreshed it, so the month branch compared a stale
+        # epoch timestamp on EVERY call and zeroed monthly_used each time —
+        # monthly limits went unenforced all day. Deterministic synthetic
+        # timestamps: must hold regardless of the run date.
+        from datetime import datetime
+
+        account = TokenAccount(
+            user_id="rd1", balance=10_000, daily_limit=5000, monthly_limit=50_000
+        )
+        day_one_noon = datetime(2026, 11, 1, 12, 0, 0).timestamp()
+        day_one_later = datetime(2026, 11, 1, 23, 30, 0).timestamp()
+
+        account._maybe_reset(day_one_noon)
+        # usage accrued after the first reset of the month
+        account.monthly_used = 350
+        # same day, same month: must NOT reset again
+        account._maybe_reset(day_one_later)
+        assert account.monthly_used == 350
+
+    def test_daily_reset_fires_across_same_day_of_month(self):
+        # Regression: day-of-month-only compare let daily_used carry across a
+        # month boundary (Oct 15 -> Nov 15 saw `15 == 15` and skipped reset).
+        from datetime import datetime
+
+        account = TokenAccount(
+            user_id="rd2", balance=10_000, daily_used=450, daily_limit=500
+        )
+        account.last_daily_reset = datetime(2026, 10, 15, 8, 0, 0).timestamp()
+        account.last_monthly_reset = datetime(2026, 11, 1, 0, 0, 0).timestamp()
+
+        account._maybe_reset(datetime(2026, 11, 15, 8, 0, 0).timestamp())
+        assert account.daily_used == 0
+
+    def test_monthly_reset_fires_across_same_month_previous_year(self):
+        # Regression: year-blind month compare kept monthly_used stale when
+        # the next call landed in the same calendar month a year later.
+        from datetime import datetime
+
+        account = TokenAccount(
+            user_id="rd3", balance=10_000, monthly_used=40_000, monthly_limit=50_000
+        )
+        account.last_daily_reset = datetime(2025, 1, 10, 8, 0, 0).timestamp()
+        account.last_monthly_reset = datetime(2025, 1, 10, 8, 0, 0).timestamp()
+
+        account._maybe_reset(datetime(2026, 1, 10, 8, 0, 0).timestamp())
+        assert account.monthly_used == 0
+
     def test_no_reset_same_day(self):
         account = TokenAccount(
             user_id="r3",
