@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from domain.agents._internal import code_guard
+
 logger = logging.getLogger("slo.agents")
 
 
@@ -52,18 +54,9 @@ class SecurityConfig:
 class SecurityBoundary:
     """Security boundaries for safe execution."""
 
-    BLOCKED_PATTERNS = [
-        r"import\s+os\s*.*remove",
-        r"import\s+shutil\s*.*rmtree",
-        r"subprocess\s*\..*shell\s*=\s*True",
-        r"__import__\s*\(\s*['\"]os['\"]",
-        r"eval\s*\(",
-        r"exec\s*\(",
-        r"open\s*\([^)]*\br\/w",
-        r"pickle",
-        r"marshal",
-        r"compile\s*\(",
-    ]
+    #: Aliased to the SHARED list in ``code_guard`` — one list, both tool
+    #: surfaces; the chat run_code tool consults the same patterns.
+    BLOCKED_PATTERNS = code_guard.BLOCKED_PATTERNS
 
     ALLOWED_DIRS = [
         "data",
@@ -77,11 +70,13 @@ class SecurityBoundary:
         self._blocked_re = [re.compile(p) for p in self.BLOCKED_PATTERNS]
 
     def is_allowed(self, code: str) -> tuple[bool, str]:
-        """Check if code is safe to execute."""
-        for pattern in self._blocked_re:
-            if pattern.search(code):
-                return False, f"Blocked pattern: {pattern.pattern}"
-        return True, ""
+        """Check if code is safe to execute.
+
+        Delegates to the shared ``code_guard`` so both tool surfaces run
+        one list and one loop; ``self._blocked_re`` is the instance view
+        of that same list (kept for callers that inspect it).
+        """
+        return code_guard.is_allowed(code)
 
     @contextmanager
     def resource_limit(self, tool: str):
