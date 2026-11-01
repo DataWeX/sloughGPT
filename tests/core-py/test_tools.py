@@ -14,6 +14,15 @@ def registry():
     return ToolRegistry()
 
 
+def _approve(_call) -> bool:
+    """Test approver — declares upstream approval for requires_approval tools.
+
+    The seam gate (ToolRegistry.execute) refuses approval tools with no
+    approver; tests exercising the raw tool pass this to state intent.
+    """
+    return True
+
+
 # ── ToolSpec / ToolParam Dataclasses ──────────────────────────────────────
 
 
@@ -300,7 +309,9 @@ class TestExecuteCurrentTime:
 class TestExecuteWebSearch:
     @pytest.mark.asyncio
     async def test_graceful_when_unavailable(self, registry):
-        result = await registry.execute("web_search", {"query": "test", "num_results": 3})
+        result = await registry.execute(
+            "web_search", {"query": "test", "num_results": 3}, approve=_approve
+        )
         # Should not crash — web_search module likely not installed
         assert isinstance(result, ToolResult)
         assert "not available" in result.output.lower()
@@ -314,7 +325,9 @@ class TestExecuteWebSearch:
             ]
 
         monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
-        result = await registry.execute("web_search", {"query": "q", "num_results": 3})
+        result = await registry.execute(
+            "web_search", {"query": "q", "num_results": 3}, approve=_approve
+        )
         assert result.success is True
         assert "**T**" in result.output
         assert "http://x" in result.output
@@ -326,7 +339,7 @@ class TestExecuteWebSearch:
             return "plain string"
 
         monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
-        result = await registry.execute("web_search", {"query": "q"})
+        result = await registry.execute("web_search", {"query": "q"}, approve=_approve)
         assert result.success is True
         assert result.output == "plain string"
 
@@ -336,7 +349,7 @@ class TestExecuteWebSearch:
             return []
 
         monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
-        result = await registry.execute("web_search", {"query": "q"})
+        result = await registry.execute("web_search", {"query": "q"}, approve=_approve)
         assert result.success is True
         assert "No results found" in result.output
 
@@ -345,21 +358,23 @@ class TestExecuteRunCode:
     @pytest.mark.asyncio
     async def test_run_python(self, registry):
         result = await registry.execute(
-            "run_code", {"language": "python", "code": "print('hello')"}
+            "run_code", {"language": "python", "code": "print('hello')"}, approve=_approve
         )
         assert result.success is True
         assert result.output == "hello"
 
     @pytest.mark.asyncio
     async def test_run_code_with_error(self, registry):
-        result = await registry.execute("run_code", {"language": "python", "code": "1/0"})
+        result = await registry.execute(
+            "run_code", {"language": "python", "code": "1/0"}, approve=_approve
+        )
         assert result.success is False
         assert "division" in (result.error or "").lower()
 
     @pytest.mark.asyncio
     async def test_run_bash(self, registry):
         result = await registry.execute(
-            "run_code", {"language": "bash", "code": "echo hello_world"}
+            "run_code", {"language": "bash", "code": "echo hello_world"}, approve=_approve
         )
         assert result.success is True
         assert "hello_world" in result.output
@@ -367,7 +382,9 @@ class TestExecuteRunCode:
     @pytest.mark.asyncio
     async def test_timeout_handling(self, registry):
         result = await registry.execute(
-            "run_code", {"language": "python", "code": "import time; time.sleep(20)"}
+            "run_code",
+            {"language": "python", "code": "import time; time.sleep(20)"},
+            approve=_approve,
         )
         assert result.success is False
         assert (
@@ -376,7 +393,9 @@ class TestExecuteRunCode:
 
     @pytest.mark.asyncio
     async def test_unknown_language(self, registry):
-        result = await registry.execute("run_code", {"language": "ruby", "code": "puts 'hi'"})
+        result = await registry.execute(
+            "run_code", {"language": "ruby", "code": "puts 'hi'"}, approve=_approve
+        )
         # Should still try to execute even with unknown language
         assert isinstance(result, ToolResult)
 
@@ -386,7 +405,9 @@ class TestExecuteRunCode:
             raise RuntimeError("spawn failed")
 
         monkeypatch.setattr("asyncio.create_subprocess_exec", boom)
-        result = await registry.execute("run_code", {"language": "python", "code": "print(1)"})
+        result = await registry.execute(
+            "run_code", {"language": "python", "code": "print(1)"}, approve=_approve
+        )
         assert result.success is False
         assert "spawn failed" in result.error
 
@@ -396,7 +417,9 @@ class TestExecuteRunCode:
             raise OSError("already gone")
 
         monkeypatch.setattr("os.unlink", boom)
-        result = await registry.execute("run_code", {"language": "python", "code": "print('ok')"})
+        result = await registry.execute(
+            "run_code", {"language": "python", "code": "print('ok')"}, approve=_approve
+        )
         assert result.success is True
 
 
@@ -462,7 +485,9 @@ class TestSecurity:
     async def test_run_code_limited_by_subprocess(self, registry):
         """run_code should NOT be able to escape the temp file sandbox easily."""
         result = await registry.execute(
-            "run_code", {"language": "python", "code": "import os; print(os.listdir('.'))"}
+            "run_code",
+            {"language": "python", "code": "import os; print(os.listdir('.'))"},
+            approve=_approve,
         )
         # It runs but output comes from temp dir, not server root
         assert isinstance(result, ToolResult)

@@ -27,6 +27,11 @@ def registry():
     return ToolRegistry()
 
 
+def _approve(_call) -> bool:
+    """Test approver — the seam gate refuses approval tools without one."""
+    return True
+
+
 class TestCodeGuardSingleSource:
     """Both surfaces must read the SAME list — identity, not equality."""
 
@@ -95,20 +100,26 @@ class TestToolRegistryRunCodeGuard:
 
     @pytest.mark.asyncio
     async def test_eval_denied(self, registry):
-        result = await registry.execute("run_code", {"language": "python", "code": "eval('1+1')"})
+        result = await registry.execute(
+            "run_code", {"language": "python", "code": "eval('1+1')"}, approve=_approve
+        )
         assert result.success is False
         assert "Blocked pattern" in result.error
 
     @pytest.mark.asyncio
     async def test_pickle_denied(self, registry):
-        result = await registry.execute("run_code", {"language": "python", "code": "import pickle"})
+        result = await registry.execute(
+            "run_code", {"language": "python", "code": "import pickle"}, approve=_approve
+        )
         assert result.success is False
         assert "Blocked pattern" in result.error
 
     @pytest.mark.asyncio
     async def test_os_remove_denied(self, registry):
         result = await registry.execute(
-            "run_code", {"language": "python", "code": "import os; os.remove('x')"}
+            "run_code",
+            {"language": "python", "code": "import os; os.remove('x')"},
+            approve=_approve,
         )
         assert result.success is False
         assert "Blocked pattern" in result.error
@@ -117,7 +128,9 @@ class TestToolRegistryRunCodeGuard:
     async def test_denied_before_subprocess_no_output(self, registry):
         # a blocked snippet must not run at all: no stdout, just the refusal
         result = await registry.execute(
-            "run_code", {"language": "python", "code": "import pickle; print('RAN')"}
+            "run_code",
+            {"language": "python", "code": "import pickle; print('RAN')"},
+            approve=_approve,
         )
         assert result.success is False
         assert "RAN" not in (result.output or "")
@@ -125,14 +138,16 @@ class TestToolRegistryRunCodeGuard:
     @pytest.mark.asyncio
     async def test_ordinary_code_still_runs(self, registry):
         result = await registry.execute(
-            "run_code", {"language": "python", "code": "print('hello')"}
+            "run_code", {"language": "python", "code": "print('hello')"}, approve=_approve
         )
         assert result.success is True
         assert "hello" in result.output
 
     @pytest.mark.asyncio
     async def test_bash_still_runs(self, registry):
-        result = await registry.execute("run_code", {"language": "bash", "code": "echo hi"})
+        result = await registry.execute(
+            "run_code", {"language": "bash", "code": "echo hi"}, approve=_approve
+        )
         assert result.success is True
         assert "hi" in result.output
 
@@ -142,6 +157,7 @@ class TestToolRegistryRunCodeGuard:
         result = await registry.execute(
             "run_code",
             {"language": "python", "code": "import sys; print(sys.executable)"},
+            approve=_approve,
         )
         assert result.success is True
         assert result.output.strip() == sys.executable
