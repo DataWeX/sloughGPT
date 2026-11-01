@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "3dc8697e5905738b5d1edc14642bf2d429969316",
+    "recorded_commit": "c01918182fda9dddd6730aebea2281304891abf3",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "0a75cecc1e2c95a5629074f3bde5200ed909e4b5"
+      "tree_hash": "bcb15d12a024ec7140a30e2ec6525764edee70c2"
     },
     "ai_personality": {
       "class": "feature",
