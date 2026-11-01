@@ -206,6 +206,13 @@ class TestTokenAccount:
 
     def test_deduct_multiple_times(self):
         account = TokenAccount(user_id="u15", balance=1000, daily_limit=5000, monthly_limit=50000)
+        # Pin the reset clock: default last_daily_reset=0 is epoch (day 1,
+        # January), and on the 1st of any month _maybe_reset's daily branch
+        # never fires (epoch day 1 == today) while the monthly branch re-wipes
+        # monthly_used on EVERY call — the accumulation under test would
+        # silently reset mid-test (CI failed 2026-11-01, passed every October
+        # run). This test is about accumulate semantics, not reset semantics.
+        account.last_daily_reset = time.time()
         account.deduct(100)
         account.deduct(200)
         account.deduct(50)
@@ -307,22 +314,13 @@ class TestTokenAccountResets:
         )
         # _maybe_reset uses last_daily_reset for BOTH day and month comparisons,
         # so set it to a time in a different month to trigger monthly reset.
-        # Use day=1 so that even after monthly reset the daily check passes.
-        from datetime import datetime
-
-        now = time.time()
-        now_dt = datetime.fromtimestamp(now)
-        target_month = now_dt.month - 2
-        target_year = now_dt.year
-        while target_month <= 0:
-            target_month += 12
-            target_year -= 1
-        import datetime as dt_mod
-
-        target = dt_mod.datetime(
-            target_year, target_month, 1, now_dt.hour, now_dt.minute, now_dt.second
-        ).timestamp()
-        account.last_daily_reset = target
+        # It must also be a different DAY: the old construction pinned the
+        # target to day 1, which on the 1st of a month matches today's day —
+        # the daily branch then never fires, daily_used stays 100 and
+        # can_afford(500) fails the daily limit (CI failed 2026-11-01).
+        # now - 32d is always a different month (two consecutive months always
+        # span >= 59 days) and always a different day-of-month.
+        account.last_daily_reset = time.time() - 32 * 86400
 
         # daily_used resets (different day), monthly_used resets (different month)
         # After reset: daily_used=0, monthly_used=0, so 0+500 <= 500 ✓
@@ -772,6 +770,11 @@ class TestEdgeCases:
             daily_limit=100_000,
             monthly_limit=100,
         )
+        # Pin the reset clock (see test_deduct_multiple_times): on the 1st of
+        # a month the epoch-0 default makes the monthly branch re-fire on every
+        # can_afford call, wiping monthly_used between the two assertions and
+        # making the limit check pass spuriously.
+        account.last_daily_reset = time.time()
         assert account.deduct(100) is True
         assert account.monthly_used == 100
         assert account.can_afford(1) is False
