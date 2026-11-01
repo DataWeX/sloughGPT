@@ -37,7 +37,15 @@ GRID_CELLS = GRID_W * GRID_H  # 1200 — also the maximum live count
 # the same vm.py/program-loader lines are already traced by the hundreds of
 # other tests/core-py VM tests, so the measured domain/ coverage is unaffected
 # and the tests run at bare speed (whole file ~60s).
-pytestmark = pytest.mark.no_cover
+#
+# no_cover alone was not enough: run 41222202352 (head WITH this marker) still
+# timed out 3 batch/control tests at >120s — a contended 2-core runner is
+# ~20-40x slower than a local machine on interpreter-bound emulation, and
+# nothing about no_cover removes that.  timeout(600) is the established
+# precedent for legitimately-slow tests under CI load
+# (test_quantization_benchmark_e2e.py, card 56b49cf1); it stays a hang guard,
+# not a budget.
+pytestmark = [pytest.mark.no_cover, pytest.mark.timeout(600)]
 PROMPT = "Enter number of lifes(max=1200): "
 DEFAULT_LIVES = 240
 BATCH_GENS = 4
