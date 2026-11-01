@@ -365,9 +365,9 @@ The world is a 3D spatial grid. Each cell has:
 
 ```python
 class WorldCell:
-    material: int      # what substance occupies this cell (unnamed, 0-7)
-    energy: float      # energy level (heat, light, kinetic)
-    temperature: float # local temperature
+    material: int  # what substance occupies this cell (unnamed, 0-7)
+    energy: float  # energy level (heat, light, kinetic)
+    temperature: float  # local temperature
 ```
 
 The grid is the memory of the world-computer.
@@ -398,9 +398,9 @@ Everything in the world is an entity:
 ```python
 class Entity:
     id: int
-    position: np.ndarray      # (x, y, z)
+    position: np.ndarray  # (x, y, z)
     energy: float
-    entity_type: EntityType   # AGENT, OBJECT, LIGHT
+    entity_type: EntityType  # AGENT, OBJECT, LIGHT
 ```
 
 Simple. No velocity, no rotation, no mass, no charge.
@@ -529,60 +529,60 @@ Numbers below are design-time defaults — arbitrary, will be tuned.
 
 ```python
 class WorldParams:
-    grid_size: tuple[int, int, int]       # e.g. (64, 32, 64)
-    tick_rate: float                       # e.g. 0.1s
-    max_entities: int                      # e.g. 128
-    diffusion_rate: float                  # how fast energy spreads
-    wave_speed: float                      # how fast signals propagate
-    energy_loss: float                     # total energy decay per tick
-    see_radius: float                      # how far perception reaches
-    see_cost: float                        # energy per perception
-    write_cost: float                      # energy fee per cell written
-    write_energy_scale: float              # max energy deposited per cell written
-    passive_drain: float                   # energy lost per tick alive
-    memory_capacity: int                   # episodic ring-buffer size
-    memory_lookback: int                   # episodes averaged as learning baseline
-    render_width: int                      # camera pixel width
-    render_height: int                     # camera pixel height
-    render_samples: int                    # path tracing samples
+    grid_size: tuple[int, int, int]  # e.g. (64, 32, 64)
+    tick_rate: float  # e.g. 0.1s
+    max_entities: int  # e.g. 128
+    diffusion_rate: float  # how fast energy spreads
+    wave_speed: float  # how fast signals propagate
+    energy_loss: float  # total energy decay per tick
+    see_radius: float  # how far perception reaches
+    see_cost: float  # energy per perception
+    write_cost: float  # energy fee per cell written
+    write_energy_scale: float  # max energy deposited per cell written
+    passive_drain: float  # energy lost per tick alive
+    memory_capacity: int  # episodic ring-buffer size
+    memory_lookback: int  # episodes averaged as learning baseline
+    render_width: int  # camera pixel width
+    render_height: int  # camera pixel height
+    render_samples: int  # path tracing samples
     # Terrain
-    generate_world: bool                   # build terrain on scene creation
-    world_seed: int                        # deterministic terrain seed (local RNG)
+    generate_world: bool  # build terrain on scene creation
+    world_seed: int  # deterministic terrain seed (local RNG)
     # Temperature & combustion
-    ambient_temp: float                    # temperature the world relaxes toward
-    ambient_cooling: float                 # fraction of temp gap closed per tick
-    ignition_temp: float                   # organic ignites above this
-    burn_temp: float                       # temperature a live ember sustains
+    ambient_temp: float  # temperature the world relaxes toward
+    ambient_cooling: float  # fraction of temp gap closed per tick
+    ignition_temp: float  # organic ignites above this
+    burn_temp: float  # temperature a live ember sustains
     # Material behaviors
-    ember_heat_rate: float                 # fraction of ember fuel emitted per tick
-    ember_energy_fraction: float           # share of emission given as energy
-    heat_to_temp: float                    # converts emitted heat to temperature
-    organic_metabolism: float              # organic rot sink per tick
-    living_growth_rate: float              # fraction of living energy spent growing
-    living_growth_cost: float              # energy per new organic cell
-    growth_transfer_fraction: float        # share moved into the new cell
-    metal_conduction_boost: float          # extra diffusion carried by metal
-    water_signal_dampen: float             # signal removed at water cells
-    water_cool_rate: float                 # water relaxes to ambient per tick
+    ember_heat_rate: float  # fraction of ember fuel emitted per tick
+    ember_energy_fraction: float  # share of emission given as energy
+    heat_to_temp: float  # converts emitted heat to temperature
+    organic_metabolism: float  # organic rot sink per tick
+    living_growth_rate: float  # fraction of living energy spent growing
+    living_growth_cost: float  # energy per new organic cell
+    growth_transfer_fraction: float  # share moved into the new cell
+    metal_conduction_boost: float  # extra diffusion carried by metal
+    water_signal_dampen: float  # signal removed at water cells
+    water_cool_rate: float  # water relaxes to ambient per tick
     # Durable structures (nests, Stage 7)
-    structure_enabled: bool                # nests built, fed, and drawn (opt-in)
-    nest_radius: float                     # feed writes must land within this of a nest
-    nest_seed_energy: float                # energy needed to seed a new nest
-    nest_draw_rate: float                  # max energy a starving baby draws per tick
-    nest_use_radius: float                 # draw range around the nest
-    nest_decay: float                      # fraction of bank lost per tick
-    max_nests: int                         # world-wide nest cap
+    structure_enabled: bool  # nests built, fed, and drawn (opt-in)
+    nest_radius: float  # feed writes must land within this of a nest
+    nest_seed_energy: float  # energy needed to seed a new nest
+    nest_draw_rate: float  # max energy a starving baby draws per tick
+    nest_use_radius: float  # draw range around the nest
+    nest_decay: float  # fraction of bank lost per tick
+    max_nests: int  # world-wide nest cap
     # Cultural transmission (teaching, Stage 7)
-    teaching_enabled: bool                 # lateral teaching between living agents (opt-in)
-    teach_cost: float                      # energy spent per unit of lesson amplitude
-    teach_range: float                     # max distance for a lesson
-    teach_gate_threshold: float            # perceptron gate must clear to teach
-    teach_weight_blend: float              # fraction of the weight gap closed per lesson
-    teach_memotype_cap: int                # best episodes copied per lesson (1 default, 0 = none)
+    teaching_enabled: bool  # lateral teaching between living agents (opt-in)
+    teach_cost: float  # energy spent per unit of lesson amplitude
+    teach_range: float  # max distance for a lesson
+    teach_gate_threshold: float  # perceptron gate must clear to teach
+    teach_weight_blend: float  # fraction of the weight gap closed per lesson
+    teach_memotype_cap: int  # best episodes copied per lesson (1 default, 0 = none)
     # World-level long-term memory (Stage 7)
-    memory_enabled: bool                   # scene carries an append-only world reservoir (opt-in)
-    memory_deposit: int                    # best episodes a baby deposits into the reservoir
-    memory_seed: int                       # best reservoir episodes seeded into a newborn
+    memory_enabled: bool  # scene carries an append-only world reservoir (opt-in)
+    memory_deposit: int  # best episodes a baby deposits into the reservoir
+    memory_seed: int  # best reservoir episodes seeded into a newborn
 ```
 
 No agent gets this list. No agent gets a manual.

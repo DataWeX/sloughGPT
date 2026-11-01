@@ -598,12 +598,13 @@ class BenchmarkResult:
     passed: bool
     details: str
 
+
 class QuantizationBenchmark:
     def __init__(self, model_name: str = "gpt2", quick: bool = False):
         self.model_name = model_name
         self.quick = quick
         self.results: List[BenchmarkResult] = []
-        
+
     def run_all(self) -> List[BenchmarkResult]:
         """Run all benchmark tests."""
         self.results.append(self.test_throughput_vs_length())
@@ -614,31 +615,31 @@ class QuantizationBenchmark:
         self.results.append(self.test_temperature_impact())
         self.results.append(self.test_regression())
         return self.results
-        
+
     def test_throughput_vs_length(self) -> BenchmarkResult:
         """Test 1: Generate different lengths, measure tok/s."""
-        
+
     def test_throughput_vs_prompt(self) -> BenchmarkResult:
         """Test 2: Different prompt lengths, measure generation time."""
-        
+
     def test_memory_usage(self) -> BenchmarkResult:
         """Test 3: Measure RSS delta for quantized vs non-quantized."""
-        
+
     def test_quality_degradation(self) -> BenchmarkResult:
         """Test 4: Compare outputs, logits, perplexity."""
-        
+
     def test_cold_vs_warm(self) -> BenchmarkResult:
         """Test 5: 20 runs, analyze cold start vs steady state."""
-        
+
     def test_temperature_impact(self) -> BenchmarkResult:
         """Test 6: Greedy vs sampling throughput."""
-        
+
     def test_regression(self) -> BenchmarkResult:
         """Test 7: Non-quantized model performance unchanged."""
-        
+
     def print_report(self):
         """Print human-readable report."""
-        
+
     def to_json(self) -> str:
         """Machine-readable output."""
 ```

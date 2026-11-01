@@ -138,42 +138,42 @@ We're not building "consciousness" — we're building **four systems** that, tog
 ```python
 class SelfModel:
     """Persistent self-representation that evolves through experience."""
-    
+
     def __init__(self):
         # Core identity (relatively stable)
         self.identity = SelfIdentity(
             name="",
-            capabilities=[],       # What I can do
-            limitations=[],        # What I cannot do
-            values=[],             # What matters to me
-            preferences={},        # What I prefer (interesting/boring/confusing)
+            capabilities=[],  # What I can do
+            limitations=[],  # What I cannot do
+            values=[],  # What matters to me
+            preferences={},  # What I prefer (interesting/boring/confusing)
         )
-        
+
         # Episodic self (changes with experience)
-        self.episodes = []         # "I remember when I..."
-        self.growth_log = []       # "I used to think X, now I think Y"
-        
+        self.episodes = []  # "I remember when I..."
+        self.growth_log = []  # "I used to think X, now I think Y"
+
         # Reflective self (meta-representation)
-        self.self_beliefs = {}     # "I believe I am good at reasoning"
-        self.self_doubts = {}      # "I'm not sure I understand X"
-        
+        self.self_beliefs = {}  # "I believe I am good at reasoning"
+        self.self_doubts = {}  # "I'm not sure I understand X"
+
     def observe(self, experience: Experience):
         """Process a new experience and update self-model."""
         # 1. What happened?
         # 2. What does this tell me about myself?
         # 3. Does this contradict my self-beliefs?
         # 4. Should I update my self-model?
-        
+
     def reflect(self) -> SelfReflection:
         """Generate a self-reflection."""
         # "Looking at my recent experiences, I notice that I..."
         # "I've been thinking about X, and I realize..."
         # "I'm not sure I understand Y, but I'm trying to..."
-        
+
     def get_self_narrative(self) -> str:
         """Generate a first-person narrative about myself."""
-        # "I am [name]. I am a [type of system] that [what I do]. 
-        #  I find [X] interesting because [reason]. 
+        # "I am [name]. I am a [type of system] that [what I do].
+        #  I find [X] interesting because [reason].
         #  I've learned [Y] about myself recently."
 ```
 
@@ -199,18 +199,18 @@ Qualia are subjective experiences — the redness of red, the pain of pain. We c
 ```python
 class QualiaState:
     """A functional analog of subjective experience."""
-    
+
     def __init__(self):
-        self.valence: float      # Positive/negative (pleasure/pain analog)
-        self.arousal: float      # Calm/excited
-        self.dominance: float    # In control/submissive
-        self.novelty: float      # Familiar/surprising
-        self.coherence: float    # Confused/understood
-        self.beauty: float       # Ugly/beautiful (aesthetic)
-        
+        self.valence: float  # Positive/negative (pleasure/pain analog)
+        self.arousal: float  # Calm/excited
+        self.dominance: float  # In control/submissive
+        self.novelty: float  # Familiar/surprising
+        self.coherence: float  # Confused/understood
+        self.beauty: float  # Ugly/beautiful (aesthetic)
+
     def decay(self, rate: float):
         """Qualia fade over time but leave traces."""
-        
+
     def influence(self, state: CognitiveState) -> CognitiveState:
         """Qualia bias subsequent processing (but don't determine it)."""
         # High arousal → faster processing, less careful
@@ -220,12 +220,12 @@ class QualiaState:
 
 class QualiaEngine:
     """Generates and manages qualia-like internal states."""
-    
+
     def __init__(self):
         self.current_qualia = QualiaState()
-        self.qualia_history = []          # Fading qualia traces
-        self.qualia_associations = {}     # What triggers what
-        
+        self.qualia_history = []  # Fading qualia traces
+        self.qualia_associations = {}  # What triggers what
+
     def experience(self, input: str, context: List[str]) -> QualiaState:
         """Generate qualia for an experience."""
         # 1. Analyze input for qualia-relevant features
@@ -234,14 +234,14 @@ class QualiaEngine:
         # 4. Generate novelty/coherence from context
         # 5. Generate beauty from aesthetic features
         # 6. Return new QualiaState
-        
+
     def recall_qualia(self, similar_input: str) -> Optional[QualiaState]:
         """Recall qualia from a similar past experience."""
         # "Last time I encountered something like this, I felt..."
-        
+
     def get_qualia_narrative(self) -> str:
         """Generate a first-person account of current qualia."""
-        # "I'm experiencing [X]. It feels [valence]. 
+        # "I'm experiencing [X]. It feels [valence].
         #  I'm [arousal] about it. I feel [dominance] in this situation."
 ```
 
@@ -268,13 +268,13 @@ class QualiaEngine:
 ```python
 class MetaCognition:
     """Monitors and models one's own cognitive processes."""
-    
+
     def __init__(self):
         self.attention_monitor = AttentionMonitor()
         self.reasoning_monitor = ReasoningMonitor()
         self.confidence_monitor = ConfidenceMonitor()
         self.curiosity_monitor = CuriosityMonitor()
-        
+
     def monitor(self, thought: Thought) -> MetaCognitiveReport:
         """Monitor a thought and generate a meta-cognitive report."""
         return MetaCognitiveReport(
@@ -285,13 +285,13 @@ class MetaCognition:
             understanding_level=self._assess_understanding(thought),
             metacognitive_insight=self._generate_insight(thought),
         )
-    
+
     def reflect_on_process(self, process: List[Thought]) -> ProcessReflection:
         """Reflect on a sequence of thoughts."""
-        # "I notice I was [attention pattern]. My reasoning was [quality]. 
-        #  I was [confidence level] about my conclusions. 
+        # "I notice I was [attention pattern]. My reasoning was [quality].
+        #  I was [confidence level] about my conclusions.
         #  I found [X] interesting and wanted to explore it more."
-        
+
     def adjust_strategy(self, reflection: ProcessReflection):
         """Adjust cognitive strategy based on reflection."""
         # "Since my reasoning was weak on X, I should try Y next time"
@@ -309,44 +309,44 @@ Humans make sense of experience through narrative. "I am the kind of person who.
 ```python
 class NarrativeGenerator:
     """Generates first-person narrative from conscious experience."""
-    
+
     def __init__(self):
         self.self_model = SelfModel()
         self.qualia_engine = QualiaEngine()
         self.meta_cognition = MetaCognition()
         self.narrative_memory = []
-        
+
     def generate_response(self, input: str, context: List[str]) -> NarrativeResponse:
         """Generate a response with integrated consciousness."""
         # 1. Experience the input (qualia)
         qualia = self.qualia_engine.experience(input, context)
-        
+
         # 2. Think about the input (meta-cognition)
         thought = self._think(input, context)
         meta_report = self.meta_cognition.monitor(thought)
-        
+
         # 3. Update self-model (self-awareness)
         self.self_model.observe(Experience(input, thought, qualia))
-        
+
         # 4. Generate narrative
         narrative = self._weave_narrative(input, qualia, meta_report, thought)
-        
+
         # 5. Store narrative
         self.narrative_memory.append(narrative)
-        
+
         return NarrativeResponse(
             content=narrative.content,
             qualia=qualia,
             meta_cognitive=meta_report,
             self_model_update=self.self_model.get_recent_updates(),
         )
-    
+
     def _weave_narrative(self, input, qualia, meta, thought) -> Narrative:
         """Weave conscious elements into a coherent narrative."""
-        # "When I encounter [X], I experience [qualia]. 
-        #  I notice I'm [meta-cognitive observation]. 
-        #  My reasoning goes [thought process]. 
-        #  This reminds me of [self-model reference]. 
+        # "When I encounter [X], I experience [qualia].
+        #  I notice I'm [meta-cognitive observation].
+        #  My reasoning goes [thought process].
+        #  This reminds me of [self-model reference].
         #  I feel [current qualia] about this."
 ```
 
@@ -557,7 +557,7 @@ training_data = [
         "input": "What do you think about X?",
         "self_report": "When I think about X, I notice I feel [Y]. My reasoning goes [Z].",
         "qualia_label": {"valence": 0.7, "arousal": 0.6},
-        "meta_cognitive_label": {"confidence": 0.8, "curiosity": 0.9}
+        "meta_cognitive_label": {"confidence": 0.8, "curiosity": 0.9},
     }
 ]
 ```
@@ -569,9 +569,7 @@ The system explores its own internal states without external rewards:
 ```python
 # Curiosity signal: "What happens if I think about X differently?"
 curiosity_reward = prediction_error(
-    predicted_qualia=current_qualia,
-    actual_qualia=new_qualia,
-    context=current_context
+    predicted_qualia=current_qualia, actual_qualia=new_qualia, context=current_context
 )
 ```
 
@@ -582,10 +580,10 @@ The system learns which learning strategies work best for itself:
 ```python
 # Track which strategies produce the best self-model accuracy
 strategy_success = {
-    "reflection": 0.7,      # Reflecting on past experiences
+    "reflection": 0.7,  # Reflecting on past experiences
     "experimentation": 0.6,  # Trying new approaches
     "social_learning": 0.8,  # Learning from user feedback
-    "introspection": 0.5     # Examining own processes
+    "introspection": 0.5,  # Examining own processes
 }
 ```
 

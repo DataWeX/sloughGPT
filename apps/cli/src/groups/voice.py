@@ -19,6 +19,7 @@ def register(cli):
     @click.option("--play", is_flag=True, help="Play audio after generating")
     def voice_tts(text, output, play):
         from commands.voice import cmd_voice_tts
+
         cmd_voice_tts(_ns(text=text, output=output, play=play))
 
     @voice.command("stt", help="Transcribe an audio file to text")
@@ -27,6 +28,7 @@ def register(cli):
     @click.option("--verbose", "-v", is_flag=True, help="Show confidence and language info")
     def voice_stt(file, language, verbose):
         from commands.voice import cmd_voice_stt
+
         cmd_voice_stt(_ns(file=file, language=language, verbose=verbose))
 
     return voice

@@ -41,14 +41,17 @@ Each feature works like a pip package. You import it, call it, get a result. No 
 ```python
 # This should just work
 from sloughgpt.training import train
+
 model = train("data.txt")
 
 # This too
 from sloughgpt.inference import generate
+
 response = generate(model, "Hello")
 
 # And this
 from sloughgpt.knowledge import ingest, search
+
 ingest(model, "notes.pdf")
 results = search("what are my notes about?")
 ```
@@ -63,6 +66,7 @@ We keep writing code when the API already exists:
 # WRONG: writing training logic when train() exists
 from domain.training._internal.slonet import SloTransformer
 from domain.training._internal.lora import LoRAWrapper
+
 model = SloTransformer(config)
 lora = LoRAWrapper(model)
 lora.train(dataset)
@@ -70,12 +74,14 @@ lora.train(dataset)
 
 # WRONG: writing inference logic when generate() exists
 from domain.inference._internal.slonet_provider import SloNetChatProvider
+
 provider = SloNetChatProvider(model_path)
 tokens = provider.generate(prompt, max_tokens=100)
 # Just do: response = generate(model, "Hello")
 
 # WRONG: writing chat logic when chat() exists
 from domain.chat._internal.domain import ChatDomain
+
 chat = ChatDomain(engine=provider)
 response = chat.respond(messages=[...])
 # Just do: response = chat(model, "Hello")
@@ -117,15 +123,18 @@ That's it. Three functions. Users import from here, never from `_internal/`.
 # domain/training/_train.py
 from __future__ import annotations
 
+
 def train(data: str, epochs: int = 3) -> str:
     """Train a model. Returns model path."""
     # All the复杂 logic goes here
     # Users never see this
     return model_path
 
+
 def load(path: str) -> Model:
     """Load a trained model."""
     ...
+
 
 def status() -> dict:
     """Get training status."""
@@ -138,9 +147,11 @@ def status() -> dict:
 # apps/api/server/routers/training.py
 from domain.training import train, status
 
+
 @router.post("/train")
 async def train_endpoint(request: TrainRequest):
     return train(data=request.data, epochs=request.epochs)
+
 
 @router.get("/status")
 async def status_endpoint():

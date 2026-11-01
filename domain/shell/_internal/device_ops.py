@@ -30,7 +30,9 @@ from typing import Any
 __all__ = ["OpTable", "dispatch_ops"]
 
 
-def dispatch_ops(ops: Mapping[str, Callable], owner: str, method: str, *args: Any, **kwargs: Any) -> Any:
+def dispatch_ops(
+    ops: Mapping[str, Callable], owner: str, method: str, *args: Any, **kwargs: Any
+) -> Any:
     """Run one op from a table, or fault with the owner's name.
 
     Shared by :class:`OpTable` and by ``vm.Device.call`` so a device that

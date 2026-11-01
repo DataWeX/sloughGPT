@@ -248,9 +248,7 @@ def run_tier2(server: HTTPServer, payload: bytes, wire_len: int) -> list[dict]:
     rows = [
         run_download(server, "/file.bin", payload, compressed=False, truncate_at=None),
         run_download(server, "/file.lz4", payload, compressed=True, truncate_at=None),
-        run_download(
-            server, "/file.bin", payload, compressed=False, truncate_at=cut(len(payload))
-        ),
+        run_download(server, "/file.bin", payload, compressed=False, truncate_at=cut(len(payload))),
     ]
     if wire_len >= 2 * DL_CHUNK:
         rows.append(
@@ -264,10 +262,7 @@ def run_tier2(server: HTTPServer, payload: bytes, wire_len: int) -> list[dict]:
 
 def print_tables(tier1: list[dict], tier2: list[dict]) -> None:
     print("\nTier 1 — codec (in-process, SHA-256-gated):")
-    print(
-        f"  {'codec':<10} {'wire B':>12} {'ratio':>8} "
-        f"{'enc MiB/s':>10} {'dec MiB/s':>10}"
-    )
+    print(f"  {'codec':<10} {'wire B':>12} {'ratio':>8} {'enc MiB/s':>10} {'dec MiB/s':>10}")
     for r in tier1:
         print(
             f"  {r['codec']:<10} {r['wire_bytes']:>12} {r['ratio']:>8.4f} "
@@ -279,8 +274,7 @@ def print_tables(tier1: list[dict], tier2: list[dict]) -> None:
     base = tier2[0]["wall_s"] or 1e-9
     print("\nTier 2 — end-to-end download_file (Range server, checksum-verified):")
     print(
-        f"  {'scenario':<24} {'requests':>8} {'wall s':>8} "
-        f"{'MiB/s':>8} {'vs 1x':>7} {'sha256':>7}"
+        f"  {'scenario':<24} {'requests':>8} {'wall s':>8} {'MiB/s':>8} {'vs 1x':>7} {'sha256':>7}"
     )
     for r in tier2:
         rel = f"{r['wall_s'] / base * 100:.0f}%"

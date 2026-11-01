@@ -348,6 +348,7 @@ cd packages/core-py && .venv/bin/python -m pytest tests/test_<module>.py -x -v
 
 ```python
 """Tests for domain.<area>.<module>."""
+
 import pytest
 import tempfile
 from pathlib import Path
@@ -365,19 +366,23 @@ FAST_CONFIG = {
     "n_head": 2,
 }
 
+
 class TestMyModule:
     def test_basic(self):
         from domain.my_module import my_function
+
         result = my_function("input")
         assert result == "expected"
 
     def test_error(self):
         from domain.my_module import my_function
+
         with pytest.raises(ValueError, match="not found"):
             my_function(None)
 
     def test_with_temp_file(self, tmp_path):
         from domain.my_module import process_file
+
         f = tmp_path / "test.txt"
         f.write_text(DATA_TEXT)
         result = process_file(str(f))
@@ -481,7 +486,7 @@ cd apps/web && npm test -- --coverage
 The `ROUTES` list in `test_user_journeys.py` accepts tuples of `(path, name)`:
 
 ```python
-("/page-path", "page_name"),
+(("/page-path", "page_name"),)
 ```
 
 All routes in the list get a parametrized navigation test that:

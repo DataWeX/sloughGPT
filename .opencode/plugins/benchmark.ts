@@ -6,7 +6,14 @@
  *   2. Efficiency — memory allocation per match
  *   3. Portability — OS/path resolution
  *   4. Performance — throughput under load (matches/sec)
+ *
+ * Opt-in: opencode imports every plugin at startup, so the suite only runs
+ * when SLO_UI_BENCHMARK=1 is set (otherwise it adds ~10s of banner noise to
+ * every session start).
  */
+
+import { homedir } from "os"
+import { join } from "path"
 
 const UI_ERROR_PATTERNS = [
   { pattern: /Hydration (mismatch|failed)/i, category: "hydration" },
@@ -149,7 +156,8 @@ function measureMemory(fn, iterations = 10_000) {
   return { bytesPerCall: Math.round((after - before) / iterations), totalBytes: after - before }
 }
 
-// ── Run Benchmarks ─────────────────────────────────────────────────
+// ── Run Benchmarks (opt-in) ────────────────────────────────────────
+if (process.env.SLO_UI_BENCHMARK === "1") {
 console.log("=" .repeat(70))
 console.log("  UI Error Watcher — Performance Benchmark")
 console.log("=".repeat(70))
@@ -199,9 +207,6 @@ console.log(`  Large output: ${memLarge.bytesPerCall} bytes/call`)
 console.log("\n▸ PORTABILITY — Cross-platform paths")
 console.log("-".repeat(70))
 
-import { homedir } from "os"
-import { join } from "path"
-
 const logPath = join(homedir(), ".opencode-ui-error-log.json")
 const isAbsolute = /^[A-Za-z]:\\|^\//.test(logPath)
 const separator = logPath.includes("\\") ? "\\" : "/"
@@ -240,3 +245,4 @@ console.log(`  Speed:       ${score.speed} (${cleanResult.nsPerOp} ns/op on clea
 console.log(`  Memory:      ${score.memory} (${memClean.bytesPerCall} bytes/call on clean output)`)
 console.log(`  Portability: ${score.portability} (${platform}, ${separator} separator)`)
 console.log("=".repeat(70))
+}

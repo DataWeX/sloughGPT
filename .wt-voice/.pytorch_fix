@@ -1,0 +1,12 @@
+# SloughGPT macOS PyTorch Fix
+# Add to ~/.zshrc or ~/.bashrc
+#
+# Codebase: packages/core-py/domains/torch_runtime.py (API + DataLoader defaults)
+# API MPS opt-in: SLOUGHGPT_API_ENABLE_MPS=1
+
+# Fix for Intel Macs with AMD GPUs - prevents PyTorch hanging
+export DYLD_INSERT_LIBRARIES=""
+
+# Alternative: Use alias for Python commands
+alias python3='DYLD_INSERT_LIBRARIES="" python3'
+alias python='DYLD_INSERT_LIBRARIES="" python3'

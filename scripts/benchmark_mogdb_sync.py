@@ -243,7 +243,9 @@ def main():
         # --- File size comparison ---
         plain_size = (tmp_path / "plain.json").stat().st_size
         gz_size = (tmp_path / "gz.json.gz").stat().st_size
-        print(f"\n  File sizes: plain={plain_size:,}B  gzip={gz_size:,}B  ratio={gz_size/plain_size:.1%}")
+        print(
+            f"\n  File sizes: plain={plain_size:,}B  gzip={gz_size:,}B  ratio={gz_size / plain_size:.1%}"
+        )
 
     suite.report()
 

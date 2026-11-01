@@ -50,6 +50,7 @@ from .base import Logger, LogLevel
 - Use `TYPE_CHECKING` guard for type-only imports:
   ```python
   from typing import TYPE_CHECKING
+
   if TYPE_CHECKING:
       from domain.training._internal.tracking import ExperimentTracker
   ```
@@ -61,12 +62,12 @@ def get_batch(self, split: str = "train") -> tuple:
     """Get a batch of data."""
     ...
 
+
 def prepare_data(
     data_path: str,
     block_size: int,
     tokenizer: Optional[Any] = None,
-) -> tuple:
-    ...
+) -> tuple: ...
 ```
 
 **Rules:**
@@ -85,6 +86,7 @@ raise ValueError(f"Cannot resume from '{resume_path}': checkpoint is unreadable 
 # Infrastructure — degrade gracefully
 try:
     from domain.infrastructure._internal.output_buffer import install_log_bridge
+
     install_log_bridge()
 except Exception as e:
     logger.debug("OutputBuffer bridge unavailable: %s", e)
@@ -133,6 +135,7 @@ def prepare_data(
 from dataclasses import dataclass, field
 from enum import Enum
 
+
 # Config DTOs — use @dataclass
 @dataclass
 class TrainerConfig:
@@ -142,20 +145,22 @@ class TrainerConfig:
     epochs: int = 10
     learning_rate: float = 3e-4
 
+
 # Constants — use Enum
 class DatasetType(Enum):
     TEXT = "text"
     CODE = "code"
     CONVERSATION = "conversation"
 
+
 # Performance-critical — use __slots__
 class SloughGPTBlock:
     __slots__ = ("ln_1", "attn", "ln_2", "mlp")
     ...
 
+
 # Everything else — plain classes
-class CheckpointManager:
-    ...
+class CheckpointManager: ...
 ```
 
 **Rules:**
@@ -172,9 +177,13 @@ def setup_logging() -> None: ...
 def get_request_id() -> str: ...
 def _format_human(record: logging.LogRecord) -> str: ...
 
+
 # Classes — PascalCase
 class CLILogger(Logger): ...
+
+
 class TrainerConfig: ...
+
 
 # Constants — UPPER_SNAKE_CASE
 _NO_COLOR = os.environ.get("NO_COLOR")
@@ -198,12 +207,10 @@ import logging
 logger = logging.getLogger("slo.my_module")
 
 # Structured logging with extra
-logger.info("Registered: %s (%s)", config.name, config.dataset_type.value,
-    extra={"tag": "TRAIN"})
+logger.info("Registered: %s (%s)", config.name, config.dataset_type.value, extra={"tag": "TRAIN"})
 
 # Lazy %-style formatting (not f-strings in log calls)
-logger.info("Step %d/%d | Loss: %.4f", step, total, loss,
-    extra={"tag": "TRAIN"})
+logger.info("Step %d/%d | Loss: %.4f", step, total, loss, extra={"tag": "TRAIN"})
 ```
 
 **Rules:**
@@ -217,6 +224,7 @@ logger.info("Step %d/%d | Loss: %.4f", step, total, loss,
 ```python
 import pytest
 from unittest.mock import patch
+
 
 class TestMyFeature:
     """Tests for MyFeature."""
@@ -232,11 +240,14 @@ class TestMyFeature:
         result = my_function("input")
         assert result == "expected"
 
-    @pytest.mark.parametrize("input,expected", [
-        ("a", 1),
-        ("b", 2),
-        ("c", 3),
-    ])
+    @pytest.mark.parametrize(
+        "input,expected",
+        [
+            ("a", 1),
+            ("b", 2),
+            ("c", 3),
+        ],
+    )
     def test_parametrized(self, input, expected):
         assert my_function(input) == expected
 
@@ -304,9 +315,11 @@ LAZY_IMPORTS = {
 
 __all__ = ["Logger", "LogLevel", "LogFormatter", "TrainingUX"]
 
+
 def __getattr__(name):
     if name in LAZY_IMPORTS:
         import importlib
+
         module = importlib.import_module(LAZY_IMPORTS[name], package=__name__)
         obj = getattr(module, name)
         globals()[name] = obj
@@ -533,12 +546,14 @@ The v86 browser VM loads a raw disk image. After Buildroot builds:
 #### Pane Layout
 
 ```python
-layout = PaneLayout([
-    Pane("console", ratio=0.3, min_rows=3, border=Border("all")),
-    Pane("output", ratio=0.7, min_rows=3, border=Border("all")),
-    Pane("status", fixed=1),
-    Pane("input", fixed=1),
-])
+layout = PaneLayout(
+    [
+        Pane("console", ratio=0.3, min_rows=3, border=Border("all")),
+        Pane("output", ratio=0.7, min_rows=3, border=Border("all")),
+        Pane("status", fixed=1),
+        Pane("input", fixed=1),
+    ]
+)
 regions = layout.compute(term_rows, term_cols)
 ```
 

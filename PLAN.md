@@ -107,16 +107,15 @@ class SLNCLoader:
         """Get weight by name — returns view into mmap'd memory."""
         offset, shape, dtype = self._tensor_map[name]
         return np.frombuffer(
-            self._file[offset:offset + np.prod(shape) * dtype.itemsize],
-            dtype=dtype
+            self._file[offset : offset + np.prod(shape) * dtype.itemsize], dtype=dtype
         ).reshape(shape)
 
     def get_block(self, block_idx: int) -> dict:
         """Get all weights for a transformer block — sequential access."""
         base = self._block_offsets[block_idx]
         return {
-            'attn_norm_w': self._view(base + self._off.an_w, ...),
-            'attn_norm_b': self._view(base + self._off.an_b, ...),
+            "attn_norm_w": self._view(base + self._off.an_w, ...),
+            "attn_norm_b": self._view(base + self._off.an_b, ...),
             # ... all block tensors
         }
 ```

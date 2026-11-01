@@ -16,6 +16,7 @@ def register(cli):
     @personality.command("list", help="List built-in personalities")
     def personality_list():
         from commands.models import _cmd_models_personalities
+
         _cmd_models_personalities(_ns())
 
     @personality.command("load", help="Load soul via API")
@@ -23,12 +24,14 @@ def register(cli):
     @click.pass_context
     def personality_load(ctx, path):
         from commands.models import cmd_soul
+
         cmd_soul(_ns(load=path, host=ctx.obj["host"], port=ctx.obj["port"]))
 
     @personality.command("info", help="Inspect soul file")
     @click.argument("path")
     def personality_info(path):
         from commands.models import cmd_soul
+
         cmd_soul(_ns(info=path))
 
     @personality.command("create", help="Create new soul from checkpoint")
@@ -41,9 +44,15 @@ def register(cli):
     @click.option("--output", "-o", help="Output .soul path")
     def personality_create(checkpoint, name, dataset, epochs, lineage, tags, output):
         from commands.models import cmd_soul
+
         args = _ns(
-            create=output or f"models/{name}.soul", model=checkpoint,
-            name=name, dataset=dataset, epochs=epochs, lineage=lineage, tags=tags,
+            create=output or f"models/{name}.soul",
+            model=checkpoint,
+            name=name,
+            dataset=dataset,
+            epochs=epochs,
+            lineage=lineage,
+            tags=tags,
         )
         cmd_soul(args)
 

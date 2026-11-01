@@ -17,7 +17,7 @@ class PersonalityType(Enum):
     PROFESSIONAL = "professional"
     CASUAL = "casual"
     ACADEMIC = "academic"
-    SARCastic = "sarcastic"
+    SARCASTIC = "sarcastic"
 
 
 @dataclass
@@ -87,7 +87,7 @@ PERSONALITIES: dict[PersonalityType, Personality] = {
             "The theoretical framework suggests...",
         ],
     ),
-    PersonalityType.SARCastic: Personality(
+    PersonalityType.SARCASTIC: Personality(
         name="Sarcastic",
         description="Witty and ironic",
         traits={"creativity": 0.8, "formality": 0.2, "humor": 0.9, "patience": 0.3},

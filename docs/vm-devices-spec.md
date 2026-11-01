@@ -19,11 +19,11 @@ Bit-based file descriptor management.
 
 ```python
 class DeviceTable:
-    _fd_bitmap: int          # 64 fds in one integer
-    _fd_device: list[...]    # fd → device (direct index)
-    _fd_mode: list[int]      # fd → mode bits
-    _fd_offset: list[int]    # fd → offset
-    _devices: dict[str, ...] # name → device
+    _fd_bitmap: int  # 64 fds in one integer
+    _fd_device: list[...]  # fd → device (direct index)
+    _fd_mode: list[int]  # fd → mode bits
+    _fd_offset: list[int]  # fd → offset
+    _devices: dict[str, ...]  # name → device
 ```
 
 **Operations:**
@@ -59,12 +59,12 @@ Bit flags for device categories:
 
 ```python
 INFERENCE = 1 << 0  # 0b000001
-TRAINING  = 1 << 1  # 0b000010
-STORAGE   = 1 << 2  # 0b000100
-NETWORK   = 1 << 3  # 0b001000
-DISPLAY   = 1 << 4  # 0b010000
-INPUT     = 1 << 5  # 0b100000
-CUSTOM    = 0       # no type
+TRAINING = 1 << 1  # 0b000010
+STORAGE = 1 << 2  # 0b000100
+NETWORK = 1 << 3  # 0b001000
+DISPLAY = 1 << 4  # 0b010000
+INPUT = 1 << 5  # 0b100000
+CUSTOM = 0  # no type
 ```
 
 ## TensorDevice

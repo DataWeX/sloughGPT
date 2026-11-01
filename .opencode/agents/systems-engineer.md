@@ -308,6 +308,7 @@ logger.debug("Variable: %s", var)
 from .kernel_syscall import SyscallResult
 from .ioctl import IoctlCommand
 
+
 class MyDevice:
     """Standalone hardware device — clean ioctl interface."""
 
@@ -347,17 +348,21 @@ class MyDevice:
 from dataclasses import dataclass, field
 from typing import Optional
 
+
 @dataclass
 class DeviceHandle:
     """A file-descriptor-like handle to an open device."""
+
     fd: int
     device_name: str
     mode: str = "r"
     offset: int = 0
 
+
 @dataclass
 class Config:
     """Configuration object."""
+
     name: str
     max_items: int = 100
     enabled: bool = True
@@ -369,21 +374,24 @@ class Config:
 ```python
 from enum import IntEnum
 
+
 class DeviceType(IntEnum):
     """Device categories as bit positions."""
+
     INFERENCE = 1 << 0  # 0b000001
-    TRAINING  = 1 << 1  # 0b000010
-    STORAGE   = 1 << 2  # 0b000100
-    NETWORK   = 1 << 3  # 0b001000
-    DISPLAY   = 1 << 4  # 0b010000
-    INPUT     = 1 << 5  # 0b100000
-    CUSTOM    = 0       # no type
+    TRAINING = 1 << 1  # 0b000010
+    STORAGE = 1 << 2  # 0b000100
+    NETWORK = 1 << 3  # 0b001000
+    DISPLAY = 1 << 4  # 0b010000
+    INPUT = 1 << 5  # 0b100000
+    CUSTOM = 0  # no type
 ```
 
 ### Threading (matches kernel_devices.py)
 
 ```python
 import threading
+
 
 class ThreadSafeDevice:
     """Thread-safe device with lock."""
@@ -439,8 +447,10 @@ class MyRequest(BaseModel):
             raise ValueError("Either 'name' or 'data' must be provided")
         return self
 
+
 class MyResponse(BaseModel):
     """Response schema."""
+
     success: bool
     result: Optional[dict] = None
     error: Optional[str] = None
@@ -469,13 +479,16 @@ async def handler(req: MyRequest) -> MyResponse:
 from fastapi.responses import StreamingResponse
 import json
 
+
 @router.get("/stream")
 async def stream_endpoint():
     """SSE streaming endpoint."""
+
     async def generate():
         while True:
             data = await get_next()
             yield f"data: {json.dumps(data)}\n\n"
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 ```
 
@@ -489,9 +502,11 @@ from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 
+
 @dataclass
 class ModelMetadata:
     """Model metadata for registry."""
+
     name: str
     version: str
     format: str  # "slnc", "safetensors", "onnx"
@@ -499,6 +514,7 @@ class ModelMetadata:
     checksum: str
     created_at: str
     tags: list[str] = field(default_factory=list)
+
 
 class ModelRegistry:
     """Central model registry with versioning."""
@@ -537,6 +553,7 @@ class ModelRegistry:
 from typing import Iterator, AsyncIterator
 import numpy as np
 
+
 class InferenceEngine:
     """Unified inference engine for all model types."""
 
@@ -573,15 +590,18 @@ from dataclasses import dataclass
 from typing import Optional, Callable
 import numpy as np
 
+
 @dataclass
 class TrainingConfig:
     """Training configuration."""
+
     model_name: str
     epochs: int = 10
     batch_size: int = 32
     learning_rate: float = 0.001
     optimizer: str = "adam"
     checkpoint_dir: Optional[Path] = None
+
 
 class TrainingPipeline:
     """Manages training lifecycle."""
@@ -596,11 +616,13 @@ class TrainingPipeline:
             train_loss = self._train_epoch(train_data)
             val_loss = self._validate(val_data) if val_data else None
 
-            self.metrics.append({
-                "epoch": epoch,
-                "train_loss": train_loss,
-                "val_loss": val_loss,
-            })
+            self.metrics.append(
+                {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                }
+            )
 
             if self.config.checkpoint_dir:
                 self._save_checkpoint(epoch)
@@ -622,15 +644,18 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 
+
 @dataclass
 class Experiment:
     """Experiment metadata."""
+
     name: str
     run_id: str
     params: dict = field(default_factory=dict)
     metrics: dict = field(default_factory=dict)
     artifacts: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+
 
 class ExperimentTracker:
     """Track experiments and runs."""
@@ -666,6 +691,7 @@ class ExperimentTracker:
 from pathlib import Path
 import hashlib
 import json
+
 
 class ModelVersioning:
     """Version control for models."""
@@ -706,15 +732,18 @@ from dataclasses import dataclass
 from typing import Optional
 import subprocess
 
+
 @dataclass
 class DeploymentConfig:
     """Deployment configuration."""
+
     model_name: str
     version: str
     replicas: int = 1
     cpu_limit: str = "1"
     memory_limit: str = "2Gi"
     gpu_limit: int = 0
+
 
 class ModelDeployer:
     """Deploy models to production."""
@@ -752,14 +781,17 @@ from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 
+
 @dataclass
 class Feature:
     """Feature definition."""
+
     name: str
     dtype: str
     description: str
     owner: str
     tags: list[str] = field(default_factory=list)
+
 
 class FeatureStore:
     """Central feature store for ML."""
@@ -777,8 +809,9 @@ class FeatureStore:
         """Get feature values."""
         return np.column_stack([self._load_feature(n) for n in names])
 
-    def create_training_dataset(self, feature_names: list[str],
-                                 labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def create_training_dataset(
+        self, feature_names: list[str], labels: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Create training dataset from features."""
         X = self.get_features(feature_names)
         return X, labels
@@ -791,13 +824,16 @@ from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 
+
 @dataclass
 class MonitoringConfig:
     """Monitoring configuration."""
+
     model_name: str
     drift_threshold: float = 0.1
     performance_threshold: float = 0.9
     alert_channel: Optional[str] = None
+
 
 class ModelMonitor:
     """Monitor model performance and drift."""
@@ -806,8 +842,7 @@ class ModelMonitor:
         self.config = config
         self.metrics_history: list[dict] = []
 
-    def check_drift(self, reference_data: np.ndarray,
-                    current_data: np.ndarray) -> dict:
+    def check_drift(self, reference_data: np.ndarray, current_data: np.ndarray) -> dict:
         """Check for data drift."""
         drift_score = self._compute_drift(reference_data, current_data)
         return {
@@ -816,8 +851,7 @@ class ModelMonitor:
             "drifted": drift_score > self.config.drift_threshold,
         }
 
-    def check_performance(self, predictions: np.ndarray,
-                          ground_truth: np.ndarray) -> dict:
+    def check_performance(self, predictions: np.ndarray, ground_truth: np.ndarray) -> dict:
         """Check model performance."""
         accuracy = np.mean(predictions == ground_truth)
         return {

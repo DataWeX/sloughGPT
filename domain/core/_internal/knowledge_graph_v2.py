@@ -548,17 +548,52 @@ class KnowledgeGraph:
 
     def check_consistency(self) -> list[dict[str, Any]]:
         """
-        Check graph for logical inconsistencies.
+        Check graph for logical inconsistencies: cycles, deep hierarchies, type conflicts.
         """
         issues = []
 
-        # Check for cycles in hierarchical relations
+        # Detect cycles using DFS with recursion stack (any predicate)
+        visited: set[str] = set()
+        rec_stack: set[str] = set()
+        cycle_path: list[str] = []
+
+        def detect_cycle(node: str) -> bool:
+            visited.add(node)
+            rec_stack.add(node)
+            cycle_path.append(node)
+
+            for _pred, obj in self.get_outgoing(node):
+                if obj not in visited:
+                    if detect_cycle(obj):
+                        return True
+                elif obj in rec_stack:
+                    # Found cycle — extract it from cycle_path
+                    idx = cycle_path.index(obj)
+                    cycle = cycle_path[idx:] + [obj]
+                    issues.append(
+                        {
+                            "type": "cycle",
+                            "path": cycle,
+                            "severity": "error",
+                        }
+                    )
+                    return True
+
+            cycle_path.pop()
+            rec_stack.discard(node)
+            return False
+
+        for entity in self.entities:
+            if entity not in visited:
+                detect_cycle(entity)
+
+        # Check for deep hierarchies in IS_A / PART_OF relations
         hierarchical = [RelationType.IS_A.value, RelationType.PART_OF.value]
 
         for entity in self.entities:
             paths = self.dfs(entity, lambda p: p in hierarchical, max_depth=5)
             for path in paths:
-                if len(path) > 3:  # Suspiciously deep
+                if len(path) > 3:
                     issues.append(
                         {
                             "type": "deep_hierarchy",
@@ -568,22 +603,19 @@ class KnowledgeGraph:
                         }
                     )
 
-        # Check for conflicting facts
+        # Check for conflicting IS_A types
         for entity in self.entities:
             outgoing = self.get_outgoing(entity)
-            for pred, _obj in outgoing:
-                if pred in [RelationType.IS_A.value]:
-                    # Check for multiple direct types
-                    types = [o for p, o in outgoing if p == RelationType.IS_A.value]
-                    if len(set(types)) > 1:
-                        issues.append(
-                            {
-                                "type": "multiple_types",
-                                "entity": entity,
-                                "types": types,
-                                "severity": "error",
-                            }
-                        )
+            types = [o for p, o in outgoing if p == RelationType.IS_A.value]
+            if len(set(types)) > 1:
+                issues.append(
+                    {
+                        "type": "multiple_types",
+                        "entity": entity,
+                        "types": types,
+                        "severity": "error",
+                    }
+                )
 
         return issues
 

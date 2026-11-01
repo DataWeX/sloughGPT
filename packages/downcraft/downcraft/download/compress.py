@@ -210,8 +210,7 @@ def decompress_stream(
 
     if verify_header and expected_size is not None and uncompressed_size != expected_size:
         raise ValueError(
-            f"Size mismatch: header says {expected_size} bytes, "
-            f"decompressed {uncompressed_size}"
+            f"Size mismatch: header says {expected_size} bytes, decompressed {uncompressed_size}"
         )
 
     if verify_header and expected_sha256 and actual_sha256 != expected_sha256:

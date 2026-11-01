@@ -74,7 +74,7 @@ export default function ChatPage() {
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <ChatSidebarSection controller={controller} />
           <main
-            className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-xl border border-border/40 bg-[rgb(var(--chat-bg))] shadow-sm relative before:absolute before:inset-0 before:rounded-none lg:before:rounded-xl before:pointer-events-none before:bg-gradient-to-b before:from-primary/[0.02] before:via-transparent before:to-transparent"
+            className="sl-surface-glow flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-xl border border-border/50 bg-[rgb(var(--chat-bg))] shadow-sm relative before:absolute before:inset-0 before:rounded-none lg:before:rounded-xl before:pointer-events-none before:bg-gradient-to-b before:from-primary/[0.04] before:via-primary/[0.01] before:to-transparent"
             aria-label="Chat"
           >
             <div className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">

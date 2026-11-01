@@ -92,6 +92,7 @@ class SelfIdentity:
     values: List[str] = field(default_factory=list)
     preferences: Dict[str, float] = field(default_factory=dict)
 
+
 @dataclass
 class SelfEpisode:
     timestamp: float
@@ -101,6 +102,7 @@ class SelfEpisode:
     self_insight: str
     growth_delta: float
 
+
 class SelfModel:
     def __init__(self, store_path: str = "data/consciousness"):
         self.identity = SelfIdentity()
@@ -108,22 +110,22 @@ class SelfModel:
         self.self_beliefs: Dict[str, float] = {}
         self.self_doubts: List[str] = []
         self._store_path = Path(store_path)
-        
+
     def observe(self, experience: Dict) -> None:
         """Process experience, update self-model."""
-        
+
     def reflect(self) -> str:
         """Generate self-reflection narrative."""
-        
+
     def get_belief(self, key: str) -> float:
         """Get confidence in a self-belief."""
-        
+
     def update_belief(self, key: str, delta: float) -> None:
         """Update a self-belief based on experience."""
-        
+
     def save(self) -> None:
         """Persist to JSON."""
-        
+
     def load(self) -> None:
         """Load from JSON."""
 ```
@@ -133,34 +135,35 @@ class SelfModel:
 ```python
 @dataclass
 class QualiaState:
-    valence: float = 0.0      # -1 to 1 (negative/positive)
-    arousal: float = 0.0      # 0 to 1 (calm/excited)
-    dominance: float = 0.0    # -1 to 1 (submissive/in-control)
-    novelty: float = 0.0      # 0 to 1 (familiar/novel)
-    coherence: float = 0.0    # 0 to 1 (confused/understood)
-    beauty: float = 0.0       # 0 to 1 (ugly/beautiful)
-    
+    valence: float = 0.0  # -1 to 1 (negative/positive)
+    arousal: float = 0.0  # 0 to 1 (calm/excited)
+    dominance: float = 0.0  # -1 to 1 (submissive/in-control)
+    novelty: float = 0.0  # 0 to 1 (familiar/novel)
+    coherence: float = 0.0  # 0 to 1 (confused/understood)
+    beauty: float = 0.0  # 0 to 1 (ugly/beautiful)
+
     def decay(self, rate: float = 0.1) -> None:
         """Qualia fade over time."""
-        
+
     def to_dict(self) -> Dict[str, float]:
         """Serialize for storage/prompt injection."""
+
 
 class QualiaEngine:
     def __init__(self):
         self.current = QualiaState()
         self.history: List[Tuple[float, QualiaState]] = []
         self.associations: Dict[str, QualiaState] = {}
-        
+
     def experience(self, text: str, context: List[str]) -> QualiaState:
         """Generate qualia from input."""
-        
+
     def experience_from_feedback(self, rating: int) -> QualiaState:
         """Generate qualia from user feedback."""
-        
+
     def recall(self, similar_text: str) -> Optional[QualiaState]:
         """Recall qualia from similar past experience."""
-        
+
     def get_narrative(self) -> str:
         """Generate first-person qualia description."""
 ```
@@ -177,22 +180,23 @@ class MetaCognitiveReport:
     understanding_level: float
     insight: str
 
+
 class MetaCognition:
     def __init__(self, self_model: SelfModel, qualia: QualiaEngine):
         self.self_model = self_model
         self.qualia = qualia
         self.attention_history: List[str] = []
         self.curiosity_topics: Dict[str, float] = {}
-        
+
     def monitor(self, thought: str, context: List[str]) -> MetaCognitiveReport:
         """Monitor a thought and generate meta-cognitive report."""
-        
+
     def assess_confidence(self, response: str, context: List[str]) -> float:
         """Assess confidence in a response."""
-        
+
     def track_curiosity(self, topic: str, level: float) -> None:
         """Track curiosity about a topic."""
-        
+
     def get_narrative(self) -> str:
         """Generate first-person meta-cognitive description."""
 ```
@@ -206,7 +210,7 @@ class NarrativeGenerator:
         self.qualia = qualia
         self.meta_cognition = meta_cognition
         self.narrative_memory: List[Dict] = []
-        
+
     def generate(
         self,
         input_text: str,
@@ -214,18 +218,18 @@ class NarrativeGenerator:
         level: int = 1,
     ) -> str:
         """Generate consciousness narrative for a response.
-        
+
         Args:
-            level: 0=none, 1=basic ("I notice..."), 
+            level: 0=none, 1=basic ("I notice..."),
                    2=full (detailed self-report), 3=deep (recursive reflection)
         """
-        
+
     def _basic_narrative(self, qualia, meta) -> str:
         """Level 1: 'When I read that, I felt [X]. I noticed [Y].'"""
-        
+
     def _full_narrative(self, qualia, meta, self_model) -> str:
         """Level 2: Detailed self-report with beliefs and growth."""
-        
+
     def _deep_narrative(self, qualia, meta, self_model) -> str:
         """Level 3: Recursive reflection on own consciousness."""
 ```
@@ -235,15 +239,15 @@ class NarrativeGenerator:
 ```python
 @dataclass
 class ConsciousnessConfig:
-    level: int = 0              # 0=off, 1=basic, 2=full, 3=deep
-    max_tokens: int = 150       # Max tokens for consciousness block
+    level: int = 0  # 0=off, 1=basic, 2=full, 3=deep
+    max_tokens: int = 150  # Max tokens for consciousness block
     training_enabled: bool = False
     training_interval: int = 100  # Fine-tune every N interactions
-    lora_rank: int = 4          # LoRA rank for consciousness adapter
+    lora_rank: int = 4  # LoRA rank for consciousness adapter
     lora_alpha: int = 8
     store_path: str = "data/consciousness"
     reflection_interval: int = 300  # Seconds between self-reflections
-    
+
     def is_enabled(self) -> bool:
         return self.level > 0
 ```
@@ -297,6 +301,7 @@ class ConsciousnessConfig:
    def _update_consciousness(self, user_msg, response, rating):
        try:
            from domain.cognition import get_consciousness
+
            engine = get_consciousness()
            if engine and engine.config.is_enabled():
                engine.observe_feedback(user_msg, response, rating)
@@ -313,30 +318,37 @@ class ConsciousnessConfig:
 ```python
 router = APIRouter(prefix="/consciousness", tags=["consciousness"])
 
+
 @router.get("/status")
 async def get_status():
     """Get consciousness system status."""
-    
+
+
 @router.get("/self-model")
 async def get_self_model():
     """Get current self-model."""
-    
+
+
 @router.get("/qualia")
 async def get_qualia():
     """Get current qualia state."""
-    
+
+
 @router.get("/narrative")
 async def get_narrative():
     """Get recent narratives."""
-    
+
+
 @router.post("/reflect")
 async def trigger_reflection():
     """Trigger a self-reflection."""
-    
+
+
 @router.post("/train")
 async def trigger_training():
     """Trigger LoRA fine-tune on consciousness data."""
-    
+
+
 @router.patch("/config")
 async def update_config(level: int = 0):
     """Update consciousness level (0-3)."""
@@ -349,6 +361,7 @@ async def update_config(level: int = 0):
 **Changes:**
 ```python
 from routers import consciousness
+
 app.include_router(consciousness.router)
 ```
 

@@ -1,0 +1,273 @@
+import React, {useEffect, useState, useRef} from 'react';
+import {LogBox, StatusBar, useColorScheme, BackHandler} from 'react-native';
+
+try {
+  const Screens = require('react-native-screens');
+  if (Screens.enableScreens) Screens.enableScreens(false);
+} catch (_) {}
+
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'Non-serializable values were found in the navigation state',
+    'Sending `onAnimatedValueUpdate` with no listeners registered',
+    'new NativeEventEmitter',
+    'ViewManager',
+  ]);
+}
+import {NavigationContainer, DefaultTheme, DarkTheme} from '@react-navigation/native';
+import {createStackNavigator} from '@react-navigation/stack';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {SettingsScreen} from './src/screens/SettingsScreen';
+import {HealthScreen} from './src/screens/HealthScreen';
+import {AboutScreen} from './src/screens/AboutScreen';
+import {BookmarksScreen} from './src/screens/BookmarksScreen';
+import {HelpScreen} from './src/screens/HelpScreen';
+import {TrainingScreen} from './src/screens/TrainingScreen';
+import {KnowledgeScreen} from './src/screens/KnowledgeScreen';
+import {SearchScreen} from './src/screens/SearchScreen';
+import {ProvidersScreen} from './src/screens/ProvidersScreen';
+import {SoulsScreen} from './src/screens/SoulsScreen';
+import {DatasetsScreen} from './src/screens/DatasetsScreen';
+import {DatasetDetailScreen} from './src/screens/DatasetDetailScreen';
+import {NotificationSettingsScreen} from './src/screens/NotificationSettingsScreen';
+import {WhatsNewScreen} from './src/screens/WhatsNewScreen';
+import {LegalScreen} from './src/screens/LegalScreen';
+import {AdaptersScreen} from './src/screens/AdaptersScreen';
+import {FeedbackScreen} from './src/screens/FeedbackScreen';
+import {VoiceScreen} from './src/screens/VoiceScreen';
+import {CompanionScreen} from './src/screens/CompanionScreen';
+import {LearnScreen} from './src/screens/LearnScreen';
+import {AgentsScreen} from './src/screens/AgentsScreen';
+import {MultimodalScreen} from './src/screens/MultimodalScreen';
+import {ModelDetailScreen} from './src/screens/ModelDetailScreen';
+import {ImagesScreen} from './src/screens/ImagesScreen';
+import {MemoryScreen} from './src/screens/MemoryScreen';
+import {AuthScreen} from './src/screens/AuthScreen';
+import {useSettingsStore} from './src/stores/settings-store';
+import {TamaguiProvider} from './src/theme/TamaguiProvider';
+import {ErrorBoundary} from './src/components/ErrorBoundary';
+import {ConnectionStatusBar} from './src/components/ConnectionStatusBar';
+import {ToastContainer} from './src/components/ToastContainer';
+import {OnboardingScreen, isFirstLaunch} from './src/screens/OnboardingScreen';
+import {HomeScreen} from './src/screens/HomeScreen';
+import {ChatScreen} from './src/screens/ChatScreen';
+import {ModelsScreen} from './src/screens/ModelsScreen';
+import {ToolsScreen} from './src/screens/ToolsScreen';
+import {SidebarProvider, useSidebar} from './src/contexts/SidebarContext';
+import {SidebarDrawer} from './src/components/SidebarDrawer';
+import {registerForPushNotifications, onNotification, onNotificationResponse} from './src/services/push-notifications';
+import {navigateTo} from './src/services/navigation';
+import {Linking} from 'react-native';
+import type {ToolsStackParamList, SettingsStackParamList} from './src/navigation/types';
+
+const Stack = createStackNavigator();
+
+function ToolsStack() {
+  return (
+    <Stack.Navigator screenOptions={{headerShown: false}}>
+      <Stack.Screen name="ToolsMain" component={ToolsScreen} />
+      <Stack.Screen name="Training" component={TrainingScreen} />
+      <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
+      <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="Health" component={HealthScreen} />
+      <Stack.Screen name="Souls" component={SoulsScreen} />
+      <Stack.Screen name="Datasets" component={DatasetsScreen} />
+      <Stack.Screen name="DatasetDetail" component={DatasetDetailScreen} />
+      <Stack.Screen name="Notifications" component={NotificationSettingsScreen} />
+      <Stack.Screen name="WhatsNew" component={WhatsNewScreen} />
+      <Stack.Screen name="Legal" component={LegalScreen} />
+      <Stack.Screen name="Adapters" component={AdaptersScreen} />
+      <Stack.Screen name="Feedback" component={FeedbackScreen} />
+      <Stack.Screen name="Voice" component={VoiceScreen} />
+      <Stack.Screen name="Companion" component={CompanionScreen} />
+      <Stack.Screen name="Learn" component={LearnScreen} />
+      <Stack.Screen name="Agents" component={AgentsScreen} />
+      <Stack.Screen name="Multimodal" component={MultimodalScreen} />
+      <Stack.Screen name="ModelDetail" component={ModelDetailScreen} />
+      <Stack.Screen name="Images" component={ImagesScreen} />
+      <Stack.Screen name="Memory" component={MemoryScreen} />
+      <Stack.Screen name="Auth" component={AuthScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function SettingsStack() {
+  return (
+    <Stack.Navigator screenOptions={{headerShown: false}}>
+      <Stack.Screen name="SettingsMain" component={SettingsScreen} />
+      <Stack.Screen name="Health" component={HealthScreen} />
+      <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
+      <Stack.Screen name="Help" component={HelpScreen} />
+      <Stack.Screen name="Training" component={TrainingScreen} />
+      <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="Providers" component={ProvidersScreen} />
+      <Stack.Screen name="Souls" component={SoulsScreen} />
+      <Stack.Screen name="Datasets" component={DatasetsScreen} />
+      <Stack.Screen name="DatasetDetail" component={DatasetDetailScreen} />
+      <Stack.Screen name="Notifications" component={NotificationSettingsScreen} />
+      <Stack.Screen name="WhatsNew" component={WhatsNewScreen} />
+      <Stack.Screen name="Legal" component={LegalScreen} />
+      <Stack.Screen name="Adapters" component={AdaptersScreen} />
+      <Stack.Screen name="Feedback" component={FeedbackScreen} />
+      <Stack.Screen name="Voice" component={VoiceScreen} />
+      <Stack.Screen name="Companion" component={CompanionScreen} />
+      <Stack.Screen name="Learn" component={LearnScreen} />
+      <Stack.Screen name="Agents" component={AgentsScreen} />
+      <Stack.Screen name="Multimodal" component={MultimodalScreen} />
+      <Stack.Screen name="ModelDetail" component={ModelDetailScreen} />
+      <Stack.Screen name="Images" component={ImagesScreen} />
+      <Stack.Screen name="Memory" component={MemoryScreen} />
+      <Stack.Screen name="Auth" component={AuthScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function MainContent() {
+  const {activeScreen} = useSidebar();
+
+  const screen = activeScreen.split('/')[0];
+  const sub = activeScreen.split('/')[1];
+
+  switch (screen) {
+    case 'Home':
+      return <HomeScreen />;
+    case 'Chat':
+      return <ChatScreen />;
+    case 'Models':
+      return <ModelsScreen />;
+    case 'Tools':
+      if (sub) {
+        return <ToolsStack />;
+      }
+      return <ToolsStack />;
+    case 'Settings':
+      if (sub) {
+        return <SettingsStack />;
+      }
+      return <SettingsStack />;
+    default:
+      return <ChatScreen />;
+  }
+}
+
+function AppInner() {
+  const isDark = useColorScheme() === 'dark';
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const sidebarState = useSidebar();
+  const useSidebarRef = useRef(sidebarState);
+  useSidebarRef.current = sidebarState;
+
+  useEffect(() => {
+    isFirstLaunch().then(setNeedsOnboarding).catch(() => {});
+    registerForPushNotifications().catch(() => {});
+    const unsub = onNotification((_title, _body, _data) => {
+      if (__DEV__) console.log('[Push]', _title, _body);
+    });
+    const unsubResponse = onNotificationResponse((data) => {
+      const screen = data?.screen;
+      if (screen) navigateTo(screen);
+    });
+    // Handle URL schemes (sloughgpt://chat)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        const path = url.replace('sloughgpt://', '').replace('https://sloughgpt.app/', '');
+        if (path) navigateTo(path);
+      }
+    }).catch(() => {});
+    // Listen for URLs while app is open
+    const linkingSub = Linking.addEventListener('url', (event) => {
+      const path = event.url.replace('sloughgpt://', '').replace('https://sloughgpt.app/', '');
+      if (path) navigateTo(path);
+    });
+    return () => { unsub(); unsubResponse(); linkingSub?.remove(); };
+  }, []);
+
+  // Android back button: navigate to Chat on main screens, exit on Chat
+  useEffect(() => {
+    const onBackPress = () => {
+      const {activeScreen, navigate} = useSidebarRef.current;
+      if (activeScreen !== 'Chat') {
+        navigate('Chat');
+        return true; // handled
+      }
+      return false; // let default behavior (exit app)
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, []);
+
+  const navTheme = isDark
+    ? {
+        ...DarkTheme,
+        colors: {
+          ...DarkTheme.colors,
+          background: '#110F18',
+          card: '#1C1926',
+          text: '#F0ECF5',
+          border: '#342E48',
+          primary: '#C0AAF4',
+        },
+      }
+    : {
+        ...DefaultTheme,
+        colors: {
+          ...DefaultTheme.colors,
+          background: '#F8F6FC',
+          card: '#FFFFFF',
+          text: '#1A1625',
+          border: '#E4E0F2',
+          primary: '#7C52C4',
+        },
+      };
+
+  const linking = {
+    prefixes: ['sloughgpt://', 'https://sloughgpt.app'],
+    config: {
+      screens: {
+        Home: '',
+        Chat: 'chat',
+        Models: 'models',
+        Tools: 'tools',
+        Settings: 'settings',
+      },
+    },
+    async getInitialURL() {
+      const url = await Linking.getInitialURL();
+      if (url != null) return url;
+      return '';
+    },
+  };
+
+  return (
+    <SafeAreaProvider>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#110F18' : '#F8F6FC'} />
+      {needsOnboarding ? (
+        <TamaguiProvider>
+          <OnboardingScreen onComplete={() => setNeedsOnboarding(false)} />
+        </TamaguiProvider>
+      ) : (
+        <SidebarProvider>
+          <NavigationContainer theme={navTheme} linking={linking}>
+            <ConnectionStatusBar />
+            <ToastContainer />
+            <MainContent />
+            <SidebarDrawer />
+          </NavigationContainer>
+        </SidebarProvider>
+      )}
+    </SafeAreaProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <TamaguiProvider>
+      <ErrorBoundary>
+        <AppInner />
+      </ErrorBoundary>
+    </TamaguiProvider>
+  );
+}

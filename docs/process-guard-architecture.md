@@ -61,6 +61,7 @@ Eliminates parameter duplication. Both ProcessGuard and workers receive one conf
 @dataclass(frozen=True)
 class ModelConfig:
     """Immutable model configuration shared across guard + workers."""
+
     slnc_path: str | None = None
     model_id: str = "default"
     quantize: bool = False
@@ -76,7 +77,7 @@ class ModelConfig:
 ```python
 class ExecutionMode(Enum):
     SUBPROCESS = "subprocess"  # Manual API load — full OS isolation
-    THREAD = "thread"          # Autoload / PGQ — no IPC overhead
+    THREAD = "thread"  # Autoload / PGQ — no IPC overhead
 ```
 
 ### _ThreadWorker (in-process, for PGQ context)

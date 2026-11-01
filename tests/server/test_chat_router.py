@@ -101,7 +101,9 @@ class TestRegenerateChat:
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
     @patch("domain.models._internal.provider.get_provider")
     @patch("domain.models.get_provider")
-    def test_regenerate_stream_emits_errors_as_sse(self, mock_facade, mock_internal, mock_get, client):
+    def test_regenerate_stream_emits_errors_as_sse(
+        self, mock_facade, mock_internal, mock_get, client
+    ):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_prov = MagicMock()
 

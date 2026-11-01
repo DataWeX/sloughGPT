@@ -127,9 +127,7 @@ class TestGenerateEndpoint:
         from domain.feedback import MetaWeights
 
         with patch("domain.feedback.get_meta_weight_manager") as manager:
-            manager.return_value.get_adjustment.return_value = MetaWeights(
-                temperature=0.77
-            )
+            manager.return_value.get_adjustment.return_value = MetaWeights(temperature=0.77)
             manager.return_value.neutral_weights = MetaWeights()
             client.post(
                 "/inference/generate",
@@ -153,9 +151,7 @@ class TestGenerateEndpoint:
             patch("domain.feedback.get_meta_weight_manager") as manager,
             patch("apps.api.server.routers.inference.capture") as capture_mock,
         ):
-            manager.return_value.get_adjustment.return_value = MetaWeights(
-                temperature=1.05
-            )
+            manager.return_value.get_adjustment.return_value = MetaWeights(temperature=1.05)
             manager.return_value.neutral_weights = MetaWeights()
             client.post(
                 "/inference/generate",

@@ -57,10 +57,11 @@ instance._kv_ttl = 3600.0
 instance._kv_max_sessions = 64
 instance._kv_lock = threading.Lock()
 
+
 # After: Single manager class
 @dataclass
 class SessionKVManager:
-    __slots__ = ('kv_states', 'kv_last_access', 'kv_ttl', 'kv_max_sessions', 'lock')
+    __slots__ = ("kv_states", "kv_last_access", "kv_ttl", "kv_max_sessions", "lock")
     kv_states: Dict[str, Any] = field(default_factory=dict)
     kv_last_access: Dict[str, float] = field(default_factory=dict)
     kv_ttl: float = 3600.0
@@ -73,9 +74,10 @@ class SessionKVManager:
 # When: Dataclass instances are created frequently
 # Memory savings: ~300 bytes → ~80 bytes per instance
 
+
 @dataclass
 class Task:
-    __slots__ = ('id', 'name', 'status', 'result')
+    __slots__ = ("id", "name", "status", "result")
     id: str
     name: str
     status: TaskStatus
@@ -89,6 +91,7 @@ class Task:
 _lock = threading.Lock()
 _instance = None
 
+
 def get_thing():
     global _instance
     if _instance is None:
@@ -97,8 +100,10 @@ def get_thing():
                 _instance = Thing()
     return _instance
 
+
 # After: One import
 from domain.infrastructure._internal.singleton import SingletonMeta
+
 
 class Thing(metaclass=SingletonMeta):
     pass
@@ -114,13 +119,16 @@ def _memory_mb(self):
     except ImportError:
         return None
 
+
 # After: Zero overhead after first call
 try:
     import psutil
+
     _psutil_available = True
 except ImportError:
     psutil = None
     _psutil_available = False
+
 
 def _memory_mb(self):
     if not _psutil_available:
@@ -138,11 +146,13 @@ def state(self) -> State:
                 self._transition_to(State.HALF_OPEN)  # SIDE EFFECT!
         return self._state
 
+
 # After: Pure read + explicit method
 @property
 def state(self) -> State:
     with self._lock:
         return self._state
+
 
 def allow_request(self) -> bool:
     with self._lock:

@@ -193,11 +193,11 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
               'transition-all duration-300 ease-[cubic-bezier(0.222,0.133,0,1)]',
               'hover:w-[1.4rem]',
               'right-0 translate-x-[calc(100%-1px)]',
-              'bg-gradient-to-b from-primary/80 via-primary to-primary/90',
-              'shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1)]',
-              'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-r-md before:bg-gradient-to-b before:from-white/40 before:to-transparent',
-              'after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:rounded-r-md after:bg-gradient-to-t after:from-black/20 after:to-transparent',
-              'hover:shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1),0_0_12px_-2px_rgba(var(--primary)/0.3)]',
+              'bg-gradient-to-b from-primary/90 via-primary to-primary/85',
+              'shadow-[1px_0_3px_-1px_rgba(0,0,0,0.25),2px_0_6px_-2px_rgba(0,0,0,0.18),4px_0_12px_-4px_rgba(0,0,0,0.12),0_0_16px_-4px_rgba(var(--primary)/0.35)]',
+              'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-r-md before:bg-gradient-to-b before:from-white/50 before:to-transparent',
+              'after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:rounded-r-md after:bg-gradient-to-t after:from-black/25 after:to-transparent',
+              'hover:shadow-[1px_0_3px_-1px_rgba(0,0,0,0.25),2px_0_6px_-2px_rgba(0,0,0,0.18),4px_0_16px_-4px_rgba(0,0,0,0.12),0_0_20px_-2px_rgba(var(--primary)/0.5)]',
             )}
           >
             <IconChevronRight

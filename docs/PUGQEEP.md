@@ -357,9 +357,9 @@ socketpair with a framed wire protocol.
 ```python
 from domains.infrastructure.pugqeep import Pipe, ProcessQueue, PipeClosed
 
-pipe = Pipe(limit=64)          # bounded: capacity hit => block (backpressure)
-proc = engine.spawn(fn, arg)   # admission is the FIRST mutation in spawn
-pipe.close()                   # Engine.stop() closes it; run()/dispatch() re-open
+pipe = Pipe(limit=64)  # bounded: capacity hit => block (backpressure)
+proc = engine.spawn(fn, arg)  # admission is the FIRST mutation in spawn
+pipe.close()  # Engine.stop() closes it; run()/dispatch() re-open
 ```
 
 - **Bound** — at capacity `put()` blocks on a `Condition`; no visited-set rejection.

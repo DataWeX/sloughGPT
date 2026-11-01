@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build
+android/app/build/
+ios/build/
+*.xcworkspace/xcuserdata/
+
+# Metro
+.metro-health-check*
+
+# Environment
+.env
+.env.local
+
+# Tamagui build cache
+.tamagui/
+
+# OS
+.DS_Store
+Thumbs.db

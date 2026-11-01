@@ -29,9 +29,7 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PROD_ROOTS = (
-    REPO_ROOT / "domain",
-)
+PROD_ROOTS = (REPO_ROOT / "domain",)
 ROUTERS_DIR = REPO_ROOT / "apps" / "api" / "server" / "routers"
 
 # Existing pair-signal files (backward + step/clip). Shrink-only: new files

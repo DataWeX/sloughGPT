@@ -139,6 +139,7 @@ import asyncio
 import logging
 from typing import Dict, Any, List, Optional
 
+
 # Class definitions
 class ExampleService:
     """Example service following the project's patterns."""
@@ -150,7 +151,9 @@ class ExampleService:
 
     async def process_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process data and return results."""
-        self.logger.info("Processing data", extra={"tag": "SERVICE", "context": {"keys": list(data.keys())}})
+        self.logger.info(
+            "Processing data", extra={"tag": "SERVICE", "context": {"keys": list(data.keys())}}
+        )
         # Implementation
         return {}
 ```
@@ -163,9 +166,11 @@ All public interfaces must have comprehensive type hints:
 from typing import Dict, List, Optional, Union
 from dataclasses import dataclass
 
+
 @dataclass
 class CognitiveRequest:
     """Request for cognitive processing."""
+
     content: str
     context: Dict[str, Any]
     options: Optional[Dict[str, Any]] = None
@@ -180,7 +185,7 @@ Use comprehensive docstrings for all public modules, classes, and functions:
 def process_memory(
     memory_data: Dict[str, Any],
     memory_type: str = "episodic",
-    options: Optional[Dict[str, Any]] = None
+    options: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Process memory data and return storage confirmation.
 
@@ -266,6 +271,7 @@ import logging
 
 logger = logging.getLogger("slo.services.example")
 
+
 class ExampleService:
     def __init__(self):
         self.logger = logging.getLogger(f"slo.services.{self.__class__.__name__}")
@@ -300,13 +306,17 @@ state.record_training(tokens=1000, elapsed_ms=30000)
 ```python
 # Enable debug mode
 import os
-os.environ['SLO_DEBUG'] = '1'
+
+os.environ["SLO_DEBUG"] = "1"
 
 # Use Python debugger
-import pdb; pdb.set_trace()
+import pdb
+
+pdb.set_trace()
 
 # Enable async debugging
 import asyncio
+
 asyncio.run(main())
 ```
 
@@ -326,6 +336,7 @@ Always use async/await for I/O operations:
 ```python
 import asyncio
 from typing import List
+
 
 class OptimizedProcessor:
     async def process_batch(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -400,16 +411,18 @@ Always validate and sanitize input:
 from pydantic import BaseModel, validator
 from typing import Optional
 
+
 class UserCreateRequest(BaseModel):
     username: str
     email: str
     password: str
 
-    @validator('password')
+    @validator("password")
     def validate_password(cls, v):
         if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
+            raise ValueError("Password must be at least 8 characters")
         return v
+
 
 class UserService:
     async def create_user(self, request: UserCreateRequest) -> User:
@@ -434,8 +447,9 @@ app.add_middleware(
     allow_origins=["https://trusted-origin.com"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    max_age=3600
+    max_age=3600,
 )
+
 
 # Add security headers
 @app.middleware("http")
@@ -464,6 +478,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 security = HTTPBearer()
+
 
 class JWTManager:
     def create_access_token(self, data: dict, expires_delta: timedelta = None) -> str:

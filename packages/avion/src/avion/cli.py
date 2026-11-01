@@ -157,9 +157,7 @@ def _locator(value: str, by: str):
     if by == "role":
         return ElementLocator.role(value)
     if by == "xpath":
-        return ElementLocator(
-            selectors=(Selector(SelectorStrategy.XPATH, value),)
-        )
+        return ElementLocator(selectors=(Selector(SelectorStrategy.XPATH, value),))
     raise SystemExit(_fail(f"unknown --by {by!r} (css|text|testid|label|role|xpath)"))
 
 
@@ -246,9 +244,7 @@ async def _cmd_console(
     return 0
 
 
-async def _cmd_network(
-    b, as_json: bool, history: list[dict[str, Any]] | None = None
-) -> int:
+async def _cmd_network(b, as_json: bool, history: list[dict[str, Any]] | None = None) -> int:
     entries = _merge(history or [], b.network_entries())
     if as_json:
         print(json.dumps(entries, indent=2))
@@ -347,9 +343,7 @@ def _pop_by(rest: list[str]) -> tuple[str, list[str]]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        prog="avion", description="Drive a debuggable Chromium over CDP."
-    )
+    p = argparse.ArgumentParser(prog="avion", description="Drive a debuggable Chromium over CDP.")
     p.add_argument("--cdp", default=_DEFAULT_CDP, help="CDP websocket endpoint")
     sub = p.add_subparsers(dest="cmd")
 
@@ -360,14 +354,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("click", help="click an element")
     sp.add_argument("selector")
-    sp.add_argument("--by", default="css",
-                    choices=["css", "text", "testid", "label", "role", "xpath"])
+    sp.add_argument(
+        "--by", default="css", choices=["css", "text", "testid", "label", "role", "xpath"]
+    )
 
     sp = sub.add_parser("fill", help="fill an input")
     sp.add_argument("selector")
     sp.add_argument("text")
-    sp.add_argument("--by", default="css",
-                    choices=["css", "text", "testid", "label", "role", "xpath"])
+    sp.add_argument(
+        "--by", default="css", choices=["css", "text", "testid", "label", "role", "xpath"]
+    )
 
     sp = sub.add_parser("wait", help="wait until page text appears")
     sp.add_argument("text")

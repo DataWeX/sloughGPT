@@ -142,7 +142,9 @@ class TestPriorityFlip:
             if placed.exists():
                 placed.unlink()
 
-    def test_soul_to_slnc_does_not_import_huggingface(self, tiny_soul: Path, tmp_path: Path) -> None:
+    def test_soul_to_slnc_does_not_import_huggingface(
+        self, tiny_soul: Path, tmp_path: Path
+    ) -> None:
         """Bridge is pure — no transformers/huggingface_hub import required."""
         import sys
 
@@ -184,9 +186,7 @@ class TestBootstrapGate:
         with (
             patch.dict("sys.modules", {"state": server_state}),
             patch("domain.infrastructure.model_loader.ModelLoader") as mock_loader,
-            patch(
-                "domain.infrastructure.hf_hub.download_hf_model"
-            ) as mock_dl,
+            patch("domain.infrastructure.hf_hub.download_hf_model") as mock_dl,
         ):
             mock_loader.return_value.load.return_value = fail_result
             server_state.model = None
@@ -199,7 +199,9 @@ class TestBootstrapGate:
 
         mock_dl.assert_not_called()
 
-    def test_autoload_downloads_when_bootstrap_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_autoload_downloads_when_bootstrap_enabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """SLO_BOOTSTRAP_HF=1 restores the HF download fallback."""
         monkeypatch.setenv("SLO_BOOTSTRAP_HF", "1")
 
@@ -243,7 +245,12 @@ class TestBootstrapGate:
                 return_value=Path("/tmp/goal12-hf-cache"),
             ),
         ):
-            mock_loader.return_value.load.side_effect = [fail_result, fail_result, fail_result, ok_result]
+            mock_loader.return_value.load.side_effect = [
+                fail_result,
+                fail_result,
+                fail_result,
+                ok_result,
+            ]
             server_state.model = None
             server_state.model_type = None
             server_state.provider = None

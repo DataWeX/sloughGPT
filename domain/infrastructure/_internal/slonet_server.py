@@ -627,9 +627,7 @@ class SloNetServer:
                         f"SloNet generation timed out after {self._generate_timeout}s"
                     ) from None
                 try:
-                    token = await asyncio.to_thread(
-                        q_buf.get, True, min(STREAM_POLL_S, remaining)
-                    )
+                    token = await asyncio.to_thread(q_buf.get, True, min(STREAM_POLL_S, remaining))
                 except queue.Empty:
                     _timeout_count += 1
                     elapsed = time.monotonic() - start

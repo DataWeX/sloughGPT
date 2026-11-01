@@ -89,9 +89,7 @@ def _run_scenario(
         assert result.steps_taken == steps, f"short run: {result.steps_taken}/{steps}"
         rate = steps / elapsed
         per_step_us = (elapsed / steps) * 1e6
-        print(
-            f"  {label:<44} {rate:>10,.0f} steps/s   {per_step_us:>8.2f} us/step"
-        )
+        print(f"  {label:<44} {rate:>10,.0f} steps/s   {per_step_us:>8.2f} us/step")
 
     asyncio.run(scenario())
 
@@ -102,8 +100,16 @@ def main() -> int:
     args = parser.parse_args()
 
     print(f"avion agent-loop benchmark — {args.steps:,} steps per scenario")
-    _run_scenario("bare loop (bounded awaits only)", args.steps, transcript=False, callbacks=0, shots=False)
-    _run_scenario("+ JSONL transcript (write+flush/step)", args.steps, transcript=True, callbacks=0, shots=False)
+    _run_scenario(
+        "bare loop (bounded awaits only)", args.steps, transcript=False, callbacks=0, shots=False
+    )
+    _run_scenario(
+        "+ JSONL transcript (write+flush/step)",
+        args.steps,
+        transcript=True,
+        callbacks=0,
+        shots=False,
+    )
     _run_scenario("+ 3 on_step callbacks", args.steps, transcript=False, callbacks=3, shots=False)
     _run_scenario("+ screenshot every step", args.steps, transcript=False, callbacks=0, shots=True)
     _run_scenario(

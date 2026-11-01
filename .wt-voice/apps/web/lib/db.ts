@@ -1,0 +1,514 @@
+import { apiGet, apiPut, apiPatch, apiDelete, apiPost } from './http-client'
+import { logger } from './dev-log'
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
+}
+
+export interface ChatSession {
+  id: string
+  name: string
+  messages: ChatMessage[]
+  createdAt: string
+  updatedAt: string
+  synced: boolean
+  starred: boolean
+  pinned: boolean
+  archived?: boolean
+  unread?: boolean
+}
+
+export interface KnowledgeItem {
+  id: string
+  content: string
+  timestamp: number
+}
+
+export interface BookmarkedMessage {
+  id: string
+  content: string
+  role: 'user' | 'assistant'
+  timestamp: number
+  sessionTitle?: string
+}
+
+export interface QuickPrompt {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  icon: string
+  category: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface MessageNote {
+  id: string
+  sessionId: string
+  messageId: string
+  content: string
+  createdAt: number
+  updatedAt: number
+}
+
+interface StoredChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+}
+
+interface StoredChatSession {
+  id: string
+  name: string
+  messages: StoredChatMessage[]
+  createdAt: string
+  updatedAt: string
+  synced: boolean
+  pinned: boolean
+  starred: boolean
+  archived?: boolean
+  unread?: boolean
+}
+
+interface PendingMessage {
+  id: string
+  sessionId: string
+  content: string
+  createdAt: string
+  retries: number
+}
+
+interface Draft {
+  sessionId: string
+  text: string
+  updatedAt: number
+}
+
+interface KVEntry {
+  key: string
+  value: unknown
+}
+
+interface ErrorEntry {
+  id: string
+  message: string
+  stack?: string
+  timestamp: number
+}
+
+const DOCSTORE = '/docstore'
+
+function docUrl(collection: string, id?: string): string {
+  const base = `${DOCSTORE}/${collection}`
+  return id ? `${base}/${encodeURIComponent(id)}` : base
+}
+
+/**
+ * Guard for id-scoped docstore writes.
+ *
+ * `docUrl(collection, '')` collapses to the COLLECTION path, so a write with a
+ * falsy id hits the wrong route: PUT/PATCH → 405 Method Not Allowed (the
+ * `405 on PUT /docstore/sessions` storms), DELETE → wipes the whole collection.
+ * Callers sometimes pass an empty session id (e.g. `sessionIdRef.current`
+ * before the first session exists), so fail fast and log instead.
+ */
+function hasDocId(id: string | undefined, collection: string, op: string): boolean {
+  if (id) return true
+  logger.warning(`chatDB.${op} skipped — empty document id for "${collection}"`, {
+    collection,
+    op,
+  })
+  return false
+}
+
+// ── In-flight request deduplication ────────────────────────────────────
+// When multiple components mount simultaneously (React StrictMode,
+// parallel effects), they fire the same GET for the same KV key.
+// This map deduplicates them: only one HTTP request per key is in flight
+// at a time; subsequent callers receive the same promise.
+const _inflightKV = new Map<string, Promise<unknown>>()
+
+// ── In-flight write coalescing (last-write-wins) ──────────────────────
+// A slow server + a chatty caller (sidebar effects, settings flush) used to
+// stack one PUT per change into the same key.  When a write for a key is
+// already in flight, the newest value replaces the queued one and exactly
+// ONE follow-up PUT fires once the in-flight request settles — callers see
+// the combined promise.
+const _pendingKVWrite = new Map<string, { value: unknown; promise: Promise<void> | null }>()
+
+// ── Server circuit breaker ────────────────────────────────────────────
+// When the API server is unreachable every failed write re-throws, which
+// fires window.onerror, which calls chatDB.addError(), which fails again —
+// infinite cascade.  This flag breaks the cycle.
+
+/** Per-handle circuit breaker; a fresh instance isolates tests from shared state. */
+export class DbCircuitBreaker {
+  private _dead = false
+
+  isDead(): boolean {
+    return this._dead
+  }
+
+  markDead(err: unknown): void {
+    if (this._dead) return
+    this._dead = true
+    const msg = err instanceof Error ? err.message : String(err)
+    logger.warning('ManDB DocStore marked dead — all further error writes will be skipped', {
+      error: msg,
+    })
+  }
+}
+
+const _defaultBreaker = new DbCircuitBreaker()
+
+/** Returns true if the DocStore is known to be unavailable. */
+export function isDBDead(): boolean {
+  return _defaultBreaker.isDead()
+}
+
+function toStored(session: ChatSession): StoredChatSession {
+  return {
+    ...session,
+    messages: (session.messages ?? []).map((m) => ({
+      ...m,
+      timestamp: typeof m.timestamp === 'string' ? m.timestamp : m.timestamp.toISOString(),
+    })),
+  }
+}
+
+function fromStored(session: StoredChatSession): ChatSession {
+  return {
+    ...session,
+    messages: (session.messages ?? []).map((m) => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    })),
+  }
+}
+
+/** Create a chatDB handle over the shared DocStore REST API with an isolated breaker. */
+export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
+  return {
+    async saveSession(session: ChatSession): Promise<void> {
+      if (!hasDocId(session.id, 'sessions', 'saveSession')) return
+      const stored = toStored(session)
+      stored.updatedAt = new Date().toISOString()
+      stored.synced = false
+      await apiPut(docUrl('sessions', session.id), stored)
+    },
+
+    async loadSessions(): Promise<ChatSession[]> {
+      const sessions = await apiGet<StoredChatSession[]>(docUrl('sessions'))
+      return sessions
+        .slice()
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .map(fromStored)
+    },
+
+    async loadSession(id: string): Promise<ChatSession | undefined> {
+      if (!hasDocId(id, 'sessions', 'loadSession')) return undefined
+      const session = await apiGet<StoredChatSession | null>(docUrl('sessions', id))
+      return session ? fromStored(session) : undefined
+    },
+
+    async deleteSession(id: string): Promise<void> {
+      if (!hasDocId(id, 'sessions', 'deleteSession')) return
+      await apiDelete(docUrl('sessions', id))
+    },
+
+    async updateSession(
+      id: string,
+      updates: { starred?: boolean; name?: string; pinned?: boolean; archived?: boolean },
+    ): Promise<void> {
+      if (!hasDocId(id, 'sessions', 'updateSession')) return
+      await apiPatch(docUrl('sessions', id), {
+        ...(updates.starred !== undefined && { starred: updates.starred }),
+        ...(updates.name !== undefined && { name: updates.name }),
+        ...(updates.pinned !== undefined && { pinned: updates.pinned }),
+        ...(updates.archived !== undefined && { archived: updates.archived }),
+        updatedAt: new Date().toISOString(),
+      })
+    },
+
+    async clearAllSessions(): Promise<void> {
+      await apiDelete(docUrl('sessions'))
+    },
+
+    async getUnsyncedSessions(): Promise<ChatSession[]> {
+      const sessions = await apiGet<StoredChatSession[]>(docUrl('sessions'))
+      return sessions.filter((s) => s.synced === false).map(fromStored)
+    },
+
+    async markSynced(id: string): Promise<void> {
+      if (!hasDocId(id, 'sessions', 'markSynced')) return
+      await apiPatch(docUrl('sessions', id), { synced: true })
+    },
+
+    async markUnread(id: string, unread: boolean): Promise<void> {
+      if (!hasDocId(id, 'sessions', 'markUnread')) return
+      await apiPatch(docUrl('sessions', id), { unread })
+    },
+
+    async savePendingMessage(msg: PendingMessage): Promise<void> {
+      await apiPut(docUrl('pendingMessages', msg.id), msg)
+    },
+
+    async getPendingMessages(): Promise<PendingMessage[]> {
+      const msgs = await apiGet<PendingMessage[]>(docUrl('pendingMessages'))
+      return msgs.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    },
+
+    async deletePendingMessage(id: string): Promise<void> {
+      if (!hasDocId(id, 'pendingMessages', 'deletePendingMessage')) return
+      await apiDelete(docUrl('pendingMessages', id))
+    },
+
+    async clearPendingMessages(): Promise<void> {
+      await apiDelete(docUrl('pendingMessages'))
+    },
+
+    async searchAllSessions(
+      query: string,
+    ): Promise<Array<{ session: ChatSession; matches: ChatMessage[] }>> {
+      if (!query.trim()) return []
+      try {
+        const data = await apiGet<any>(
+          `/chat/sessions/search?q=${encodeURIComponent(query)}&limit=30`,
+        )
+        const results = Array.isArray(data) ? data : (data?.results ?? data?.data ?? [])
+        return results.map((r: any) => ({
+          session: {
+            id: r.id,
+            name: r.name || `Chat ${r.id}`,
+            messages: (r.matches || []).map((m: any) => ({
+              id: m.id || `msg_${Date.now()}`,
+              role: (m.role || 'user') as 'user' | 'assistant',
+              content: m.content || '',
+              timestamp: new Date(m.timestamp || Date.now()),
+            })),
+            createdAt: r.created_at || '',
+            updatedAt: r.updated_at || '',
+            synced: true,
+            starred: false,
+            pinned: false,
+          },
+          matches: (r.matches || []).map((m: any) => ({
+            id: m.id || `msg_${Date.now()}`,
+            role: (m.role || 'user') as 'user' | 'assistant',
+            content: m.content || '',
+            timestamp: new Date(m.timestamp || Date.now()),
+          })),
+        }))
+      } catch {
+        return []
+      }
+    },
+
+    async getKnowledge(): Promise<KnowledgeItem[]> {
+      const items = await apiGet<KnowledgeItem[]>(docUrl('knowledge'))
+      return items.slice().sort((a, b) => b.timestamp - a.timestamp)
+    },
+
+    async addKnowledge(item: KnowledgeItem): Promise<void> {
+      await apiPut(docUrl('knowledge', item.id), item)
+    },
+
+    async updateKnowledge(id: string, updates: { content?: string }): Promise<void> {
+      await apiPatch(docUrl('knowledge', id), updates)
+    },
+
+    async deleteKnowledge(id: string): Promise<void> {
+      await apiDelete(docUrl('knowledge', id))
+    },
+
+    async clearKnowledge(): Promise<void> {
+      await apiDelete(docUrl('knowledge'))
+    },
+
+    async importKnowledge(items: KnowledgeItem[]): Promise<void> {
+      await apiPost(docUrl('knowledge', 'bulk'), { docs: items })
+    },
+
+    async getBookmarks(): Promise<BookmarkedMessage[]> {
+      const items = await apiGet<BookmarkedMessage[]>(docUrl('bookmarks'))
+      return items.slice().sort((a, b) => b.timestamp - a.timestamp)
+    },
+
+    async addBookmark(item: BookmarkedMessage): Promise<void> {
+      await apiPut(docUrl('bookmarks', item.id), item)
+    },
+
+    async removeBookmark(id: string): Promise<void> {
+      await apiDelete(docUrl('bookmarks', id))
+    },
+
+    async clearBookmarks(): Promise<void> {
+      await apiDelete(docUrl('bookmarks'))
+    },
+
+    async getPrompts(): Promise<QuickPrompt[]> {
+      const prompts = await apiGet<QuickPrompt[]>(docUrl('prompts'))
+      return prompts.slice().sort((a, b) => b.createdAt - a.createdAt)
+    },
+
+    async savePrompt(prompt: QuickPrompt): Promise<void> {
+      await apiPut(docUrl('prompts', prompt.id), prompt)
+    },
+
+    async deletePrompt(id: string): Promise<void> {
+      await apiDelete(docUrl('prompts', id))
+    },
+
+    async clearPrompts(): Promise<void> {
+      await apiDelete(docUrl('prompts'))
+    },
+
+    async importPrompts(prompts: QuickPrompt[]): Promise<void> {
+      await apiPost(docUrl('prompts', 'bulk'), { docs: prompts })
+    },
+
+    async getDraft(sessionId: string): Promise<string> {
+      if (!hasDocId(sessionId, 'drafts', 'getDraft')) return ''
+      const draft = await apiGet<Draft | null>(docUrl('drafts', sessionId))
+      return draft?.text ?? ''
+    },
+
+    async saveDraft(sessionId: string, text: string): Promise<void> {
+      if (!hasDocId(sessionId, 'drafts', 'saveDraft')) return
+      if (!text) {
+        await apiDelete(docUrl('drafts', sessionId))
+      } else {
+        await apiPut(docUrl('drafts', sessionId), { sessionId, text, updatedAt: Date.now() })
+      }
+    },
+
+    async deleteDraft(sessionId: string): Promise<void> {
+      if (!hasDocId(sessionId, 'drafts', 'deleteDraft')) return
+      await apiDelete(docUrl('drafts', sessionId))
+    },
+
+    async getKV<T = unknown>(key: string): Promise<T | undefined> {
+      // Deduplicate concurrent reads for the same key
+      if (_inflightKV.has(key)) {
+        return _inflightKV.get(key)! as Promise<T | undefined>
+      }
+      const promise = apiGet<KVEntry | null>(docUrl('kv', key))
+        .then((entry) => entry?.value as T | undefined)
+        .finally(() => _inflightKV.delete(key))
+      _inflightKV.set(key, promise)
+      return promise
+    },
+
+    async setKV(key: string, value: unknown): Promise<void> {
+      if (!hasDocId(key, 'kv', 'setKV')) return
+      const pending = _pendingKVWrite.get(key)
+      if (pending) {
+        // Last-write-wins: fold this write into the in-flight one.
+        pending.value = value
+        return pending.promise!
+      }
+      const entry: { value: unknown; promise: Promise<void> | null } = { value, promise: null }
+      entry.promise = (async () => {
+        try {
+          let sent = value
+          for (;;) {
+            await apiPut(docUrl('kv', key), { key, value: sent })
+            if (Object.is(sent, entry.value)) break
+            sent = entry.value // a newer value arrived mid-flight — send it
+          }
+        } finally {
+          _pendingKVWrite.delete(key)
+        }
+      })()
+      _pendingKVWrite.set(key, entry)
+      return entry.promise
+    },
+
+    async deleteKV(key: string): Promise<void> {
+      if (!hasDocId(key, 'kv', 'deleteKV')) return
+      await apiDelete(docUrl('kv', key))
+    },
+
+    async addError(message: string, stack?: string): Promise<void> {
+      if (breaker.isDead()) return // circuit breaker — don't cascade
+      try {
+        await apiPut(docUrl('errors', `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`), {
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          message,
+          stack,
+          timestamp: Date.now(),
+        })
+      } catch (err: unknown) {
+        breaker.markDead(err)
+      }
+    },
+
+    async getErrors(limit = 20): Promise<ErrorEntry[]> {
+      if (breaker.isDead()) return []
+      try {
+        return await apiGet<ErrorEntry[]>(docUrl('errors'), {
+          sort: 'timestamp',
+          dir: '-1',
+          limit: String(limit),
+        })
+      } catch (err) {
+        logger.warning('chatDB.getErrors failed', { exception: String(err) })
+        return []
+      }
+    },
+
+    async clearErrors(): Promise<void> {
+      if (breaker.isDead()) return
+      try {
+        await apiDelete(docUrl('errors'))
+      } catch (err) {
+        logger.warning('chatDB.clearErrors failed', { exception: String(err) })
+      }
+    },
+
+    async getMessageNotes(sessionId: string): Promise<MessageNote[]> {
+      if (breaker.isDead()) return []
+      try {
+        return await apiGet<MessageNote[]>(docUrl('message-notes'), { session_id: sessionId })
+      } catch (err) {
+        logger.warning('chatDB.getMessageNotes failed', { exception: String(err) })
+        return []
+      }
+    },
+
+    async saveMessageNote(note: MessageNote): Promise<void> {
+      if (breaker.isDead()) return
+      try {
+        await apiPost(docUrl('message-notes'), note)
+      } catch (err) {
+        logger.warning('chatDB.saveMessageNote failed', { exception: String(err) })
+      }
+    },
+
+    async removeMessageNote(sessionId: string, messageId: string): Promise<void> {
+      if (breaker.isDead()) return
+      try {
+        await apiDelete(docUrl(`message-notes/${sessionId}/${messageId}`))
+      } catch (err) {
+        logger.warning('chatDB.removeMessageNote failed', { exception: String(err) })
+      }
+    },
+
+    async searchMessageNotes(query: string): Promise<MessageNote[]> {
+      if (breaker.isDead()) return []
+      try {
+        return await apiGet<MessageNote[]>(docUrl('message-notes/search'), { q: query })
+      } catch (err) {
+        logger.warning('chatDB.searchMessageNotes failed', { exception: String(err) })
+        return []
+      }
+    },
+  }
+}
+
+export const chatDB = createChatDB()

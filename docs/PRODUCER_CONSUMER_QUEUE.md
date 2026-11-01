@@ -40,7 +40,8 @@ q.stop(timeout=10.0)
 
 # Or drop remaining work immediately (set at construction)
 q_drop = ProducerConsumerQueue(
-    maxsize=64, num_consumers=2,
+    maxsize=64,
+    num_consumers=2,
     handler=process,
     shutdown_mode=ShutdownMode.DROP,
     name="drop-on-exit",
@@ -105,9 +106,9 @@ When `priority=True`, items are wrapped as `(priority, sequence, item)`. Lower p
 q = ProducerConsumerQueue(priority=True, num_consumers=2, handler=process)
 q.start()
 
-q.put(critical_work, priority=0)   # processed first
-q.put(normal_work, priority=1)     # processed second
-q.put(background_work, priority=2) # processed last
+q.put(critical_work, priority=0)  # processed first
+q.put(normal_work, priority=1)  # processed second
+q.put(background_work, priority=2)  # processed last
 ```
 
 ## Global queue

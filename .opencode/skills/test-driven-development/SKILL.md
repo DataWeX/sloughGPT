@@ -75,12 +75,14 @@ describe('retryOperation', () => {
 ```python
 def test_retries_failed_operations_3_times():
     attempts = 0
+
     def operation():
         nonlocal attempts
         attempts += 1
         if attempts < 3:
             raise ValueError("fail")
         return "success"
+
     result = retry_operation(operation)
     assert result == "success"
     assert attempts == 3
@@ -223,6 +225,7 @@ expect(elements.length).toBeGreaterThanOrEqual(1);
 import pytest
 from domain.training._internal.trainer_protocol import TrainResult
 
+
 def test_train_result_backward_compat():
     result = TrainResult(success=True, final_loss=0.5)
     assert result["checkpoint"] == result.model_path  # dict-like access
@@ -238,6 +241,7 @@ def mock_model_server():
     server._generate_sync = lambda *a, **kw: "mocked response"
     return server
 
+
 def test_generate_returns_response(mock_model_server):
     result = mock_model_server.generate("test")
     assert result == "mocked response"
@@ -247,6 +251,7 @@ def test_generate_returns_response(mock_model_server):
 
 ```python
 import pytest
+
 
 @pytest.mark.asyncio
 async def test_async_generate():

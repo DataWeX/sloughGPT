@@ -67,6 +67,7 @@ NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
    ```python
    # Python
    import logging
+
    logger = logging.getLogger(__name__)
    logger.debug("entering phase X, input=%s", type(input_data))
    ```

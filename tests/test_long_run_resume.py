@@ -36,7 +36,9 @@ def _write_corpus(tmp_path: Path) -> str:
     return str(p)
 
 
-def _trainer(data_path: str, tmp_path: Path, *, max_steps: int, epochs: int = 200) -> SloughGPTTrainer:
+def _trainer(
+    data_path: str, tmp_path: Path, *, max_steps: int, epochs: int = 200
+) -> SloughGPTTrainer:
     return SloughGPTTrainer(
         data_path=data_path,
         n_embed=32,
@@ -133,9 +135,7 @@ def test_crash_resume_continues_global_step(tmp_path: Path) -> None:
     # JSONL survived both segments (progress uses global_step, not step)
     rows = rec.read_all()
     assert len(rows) >= 2
-    steps_seen = [
-        r["global_step"] for r in rows if r.get("global_step") is not None
-    ]
+    steps_seen = [r["global_step"] for r in rows if r.get("global_step") is not None]
     assert steps_seen, rows
     assert max(steps_seen) >= step_a
     assert metrics_path.stat().st_size > 0

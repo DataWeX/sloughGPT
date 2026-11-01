@@ -369,10 +369,10 @@ from domain.training.optimized_trainer import Presets
 config = Presets.auto()
 
 # Specific hardware
-Presets.high_end_gpu()   # A100, H100, RTX 4090
+Presets.high_end_gpu()  # A100, H100, RTX 4090
 Presets.mid_range_gpu()  # RTX 3060, V100
 Presets.apple_silicon()  # M1/M2/M3
-Presets.cpu_only()       # CPU training
+Presets.cpu_only()  # CPU training
 ```
 
 ### Speedup Estimates

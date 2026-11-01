@@ -1,0 +1,112 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: 'class',
+  // Every top-level source dir of apps/web must be listed here. Tailwind only
+  // emits utilities it finds while scanning these globs, so an omitted dir
+  // silently drops its classes from the compiled CSS (no error, no warning).
+  // apps/web/lib/tailwind-content.test.ts enforces the invariant.
+  content: [
+    './app/**/*.{js,ts,jsx,tsx}',
+    './components/**/*.{js,ts,jsx,tsx}',
+    './features/**/*.{js,ts,jsx,tsx}',
+    './contexts/**/*.{js,ts,jsx,tsx}',
+    './hooks/**/*.{js,ts,jsx,tsx}',
+    './lib/**/*.{js,ts,jsx,tsx}',
+    './scripts/**/*.{js,ts,jsx,tsx}',
+    './types/**/*.{js,ts,jsx,tsx}',
+    './vite/**/*.{js,ts,jsx,tsx}',
+    '../../packages/strui/src/**/*.{js,ts,jsx,tsx}',
+  ],
+  theme: {
+    extend: {
+      transitionTimingFunction: {
+        smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+      fontFamily: {
+        sans: ['var(--font-rubik)', 'system-ui', 'sans-serif'],
+        numeric: ['var(--font-rubik)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        border: 'rgb(var(--border) / <alpha-value>)',
+        input: 'rgb(var(--input) / <alpha-value>)',
+        ring: 'rgb(var(--ring) / <alpha-value>)',
+        background: 'rgb(var(--background) / <alpha-value>)',
+        foreground: 'rgb(var(--foreground) / <alpha-value>)',
+        primary: {
+          DEFAULT: 'rgb(var(--primary) / <alpha-value>)',
+          foreground: 'rgb(var(--primary-foreground) / <alpha-value>)',
+        },
+        secondary: {
+          DEFAULT: 'rgb(var(--secondary) / <alpha-value>)',
+          foreground: 'rgb(var(--secondary-foreground) / <alpha-value>)',
+        },
+        muted: {
+          DEFAULT: 'rgb(var(--muted) / <alpha-value>)',
+          foreground: 'rgb(var(--muted-foreground) / <alpha-value>)',
+        },
+        accent: {
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          foreground: 'rgb(var(--accent-foreground) / <alpha-value>)',
+        },
+        card: {
+          DEFAULT: 'rgb(var(--card) / <alpha-value>)',
+          foreground: 'rgb(var(--card-foreground) / <alpha-value>)',
+        },
+        popover: {
+          DEFAULT: 'rgb(var(--popover) / <alpha-value>)',
+          foreground: 'rgb(var(--popover-foreground) / <alpha-value>)',
+        },
+        destructive: {
+          DEFAULT: 'rgb(var(--destructive) / <alpha-value>)',
+          foreground: 'rgb(var(--destructive-foreground) / <alpha-value>)',
+        },
+        success: 'rgb(var(--success) / <alpha-value>)',
+        warning: 'rgb(var(--warning) / <alpha-value>)',
+        info: 'rgb(var(--info) / <alpha-value>)',
+        chart: {
+          1: 'rgb(var(--chart-1) / <alpha-value>)',
+          2: 'rgb(var(--chart-2) / <alpha-value>)',
+          3: 'rgb(var(--chart-3) / <alpha-value>)',
+          4: 'rgb(var(--chart-4) / <alpha-value>)',
+          5: 'rgb(var(--chart-5) / <alpha-value>)',
+        },
+        // Terminal chrome (dait shell + Dev/startup panels). Deliberately FIXED
+        // dark ladder — does NOT follow the light/dark theme switch. See the
+        // `--term-*` block in globals.css.
+        term: {
+          surface: 'rgb(var(--term-surface) / <alpha-value>)',
+          'surface-raised': 'rgb(var(--term-surface-raised) / <alpha-value>)',
+          header: 'rgb(var(--term-header) / <alpha-value>)',
+          chip: 'rgb(var(--term-chip) / <alpha-value>)',
+          'text-strong': 'rgb(var(--term-text-strong) / <alpha-value>)',
+          text: 'rgb(var(--term-text) / <alpha-value>)',
+          'text-muted': 'rgb(var(--term-text-muted) / <alpha-value>)',
+          'text-dim': 'rgb(var(--term-text-dim) / <alpha-value>)',
+          'text-faint': 'rgb(var(--term-text-faint) / <alpha-value>)',
+          close: 'rgb(var(--term-close) / <alpha-value>)',
+          minimize: 'rgb(var(--term-minimize) / <alpha-value>)',
+          zoom: 'rgb(var(--term-zoom) / <alpha-value>)',
+          blue: 'rgb(var(--term-blue) / <alpha-value>)',
+          purple: 'rgb(var(--term-purple) / <alpha-value>)',
+          cyan: 'rgb(var(--term-cyan) / <alpha-value>)',
+        },
+      },
+      borderRadius: {
+        none: '0',
+        sm: '2px',
+        DEFAULT: 'var(--radius)',
+        md: 'var(--radius)',
+        lg: 'calc(var(--radius) + 4px)',
+        xl: 'calc(var(--radius) + 8px)',
+      },
+      boxShadow: {
+        sm: 'var(--shadow-sm)',
+        md: 'var(--shadow-md)',
+        lg: 'var(--shadow-lg)',
+        xl: 'var(--shadow-xl)',
+      },
+    },
+  },
+  plugins: [require('tailwindcss-animate')],
+}

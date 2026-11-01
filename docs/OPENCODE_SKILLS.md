@@ -77,6 +77,7 @@ class UIResponse:
     data: Any
     timestamp: float
 
+
 # Correct - with optional fields
 @dataclass
 class UIResponse:
@@ -104,15 +105,18 @@ class IWebInterface(ABC):
     async def start_server(self) -> bool:
         pass
 
+
 class WebInterface(IWebInterface):
     async def start_server(self) -> None:  # Mismatch!
         pass
+
 
 # Correct
 class IWebInterface(ABC):
     @abstractmethod
     async def start_server(self) -> None:
         pass
+
 
 class WebInterface(IWebInterface):
     async def start_server(self) -> None:
@@ -135,15 +139,18 @@ class IAuthenticationService(ABC):
     async def authenticate(self, username: str, password: str) -> Optional[str]:
         pass
 
+
 class AuthenticationService(IAuthenticationService):
     async def authenticate(self, credentials: Dict[str, str]) -> Optional[Any]:  # Mismatch
         pass
+
 
 # Correct
 class IAuthenticationService(ABC):
     @abstractmethod
     async def authenticate(self, credentials: Dict[str, str]) -> Optional[Any]:
         pass
+
 
 class AuthenticationService(IAuthenticationService):
     async def authenticate(self, credentials: Dict[str, str]) -> Optional[Any]:
@@ -169,6 +176,7 @@ class IMemoryManager(ABC):
     @abstractmethod
     async def retrieve_memory(self, memory_id: str) -> Optional[Any]:
         pass
+
 
 # Correct - with consolidate_memories
 class IMemoryManager(ABC):
@@ -205,9 +213,11 @@ class IDeploymentManager(ABC):
     async def scale(self, service_id: str, replicas: int) -> bool:
         pass
 
+
 class DeploymentManager(IDeploymentManager):
     async def deploy(self, config, environment) -> str:  # scale() missing!
         pass
+
 
 # Correct - All methods implemented
 class DeploymentManager(IDeploymentManager):
@@ -317,7 +327,9 @@ ruff check domain/ --fix
 
 ```python
 # noqa: E501 - For intentionally long lines
-very_long_line = "this_is_a_very_long_string_that_exceeds_the_100_character_limit_and_is_acceptable_in_this_case"
+very_long_line = (
+    "this_is_a_very_long_string_that_exceeds_the_100_character_limit_and_is_acceptable_in_this_case"
+)
 ```
 
 ---
@@ -389,6 +401,7 @@ domain/
 
 ```python
 from ...__init__ import IInterface, BaseComponent, ComponentException
+
 
 class ComponentName(BaseComponent, IInterface):
     """Component description"""
@@ -463,6 +476,7 @@ from .helper import HelperClass
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass
 class ConfigClass:
     field1: str
@@ -492,6 +506,7 @@ class UIResponse:
 
 ```python
 from enum import Enum
+
 
 class DatabaseType(Enum):
     SQLITE = "sqlite"
@@ -535,6 +550,7 @@ async def method_name(self) -> ReturnType:
 ```python
 import asyncio
 import pytest
+
 
 @pytest.mark.asyncio
 async def test_component_init():

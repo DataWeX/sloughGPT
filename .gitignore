@@ -278,3 +278,5 @@ y
 # avion journey-engine test artifacts
 arken_output/
 .resilient-state/
+test_dashboard.html
+apps/web/public/test_dashboard.html

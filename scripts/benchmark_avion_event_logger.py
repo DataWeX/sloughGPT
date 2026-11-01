@@ -79,13 +79,21 @@ def main() -> int:
     try:
         # 1. journal append (durability contract: flush per event)
         journal = EventJournal(workdir / "bench.jsonl")
-        _run("journal append (flush per event)", n, lambda k: [journal.append(_ev()) for _ in range(k)])
+        _run(
+            "journal append (flush per event)",
+            n,
+            lambda k: [journal.append(_ev()) for _ in range(k)],
+        )
         journal.close()
 
         # 2. fan-out
         _run("journal-only (no sinks)", n, lambda k: _fanout(workdir / "f0.jsonl", [], k))
         _run("journal + 1 sink", n, lambda k: _fanout(workdir / "f1.jsonl", [_Sink("s1")], k))
-        _run("journal + 5 sinks", n, lambda k: _fanout(workdir / "f5.jsonl", [_Sink(f"s{i}") for i in range(5)], k))
+        _run(
+            "journal + 5 sinks",
+            n,
+            lambda k: _fanout(workdir / "f5.jsonl", [_Sink(f"s{i}") for i in range(5)], k),
+        )
 
         # 3. isolation overhead: 1 failing + 1 healthy
         logger = EventLogger(
@@ -110,7 +118,11 @@ def main() -> int:
         # 5. fsync LAST, on purpose: a long fsync run congests the page
         # writeback and would throttle every scenario measured after it.
         fsync_journal = EventJournal(workdir / "bench_fsync.jsonl", fsync=True)
-        _run("journal append (+ fsync)", min(n, 1000), lambda k: [fsync_journal.append(_ev()) for _ in range(k)])
+        _run(
+            "journal append (+ fsync)",
+            min(n, 1000),
+            lambda k: [fsync_journal.append(_ev()) for _ in range(k)],
+        )
         fsync_journal.close()
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

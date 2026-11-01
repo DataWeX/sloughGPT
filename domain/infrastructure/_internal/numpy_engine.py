@@ -406,6 +406,140 @@ class NumpyEngine:
 
         return engine
 
+    @classmethod
+    def from_soul(
+        cls,
+        soul_path: str,
+        tokenizer: Any = None,
+        compress: bool = False,
+    ) -> "NumpyEngine":
+        """Load model from native .soul checkpoint (no HF)."""
+        from domain.inference._internal.slo_format import load_soul
+
+        soul, state_dict = load_soul(soul_path)
+        weights = {k: v for k, v in state_dict.items() if hasattr(v, "shape")}
+        if "lm_head.weight" not in weights and "tok_emb.weight" in weights:
+            weights = dict(weights)
+            weights["lm_head.weight"] = weights["tok_emb.weight"]
+
+        cfg = soul.metadata.get("config") or {}
+        meta = soul.metadata
+
+        n_embed = int(cfg.get("n_embed") or meta.get("n_embed") or 128)
+        n_layer = int(cfg.get("n_layer") or meta.get("n_layer") or 1)
+        n_head = int(cfg.get("n_head") or meta.get("n_head") or 4)
+        block_size = int(cfg.get("block_size") or meta.get("block_size") or 128)
+        vocab_size = int(meta.get("vocab_size") or cfg.get("vocab_size") or 256)
+
+        has_w3 = any(k.endswith(".ff.w3.weight") for k in weights)
+        has_gate = any(k.endswith(".ff.w1.weight") for k in weights)
+        n_inner = n_embed * 4
+        for k, v in weights.items():
+            if k.endswith(".ff.w1.weight") and getattr(v, "ndim", 0) == 2:
+                n_inner = int(v.shape[0])
+                break
+
+        use_rope = cfg.get("use_rope")
+        if use_rope is None:
+            use_rope = "pos_emb.weight" not in weights
+        norm_type = cfg.get("norm_type") or ("layer_norm" if "blocks.0.attn_norm.bias" in weights else "rms_norm")
+
+        config = {
+            "architectures": ["SloTransformer"],
+            "model_type": "sloughgpt",
+            "vocab_size": vocab_size,
+            "n_embed": n_embed,
+            "hidden_size": n_embed,
+            "n_layer": n_layer,
+            "num_hidden_layers": n_layer,
+            "n_head": n_head,
+            "num_attention_heads": n_head,
+            "n_positions": block_size,
+            "max_position_embeddings": block_size,
+            "n_inner": n_inner,
+            "intermediate_size": n_inner,
+            "use_rope": bool(use_rope),
+            "position_embedding_type": "rope" if use_rope else "absolute",
+            "rope_theta": float(cfg.get("rope_theta", 10000.0)),
+            "norm_type": norm_type,
+            "rms_norm_eps": float(cfg.get("rms_norm_eps", 1e-5)),
+            "hidden_act": "silu" if (has_w3 or has_gate) else "gelu",
+            "_name_or_path": soul_path,
+        }
+
+        if tokenizer is None:
+            tokenizer_meta = meta.get("tokenizer")
+            if (
+                isinstance(tokenizer_meta, dict)
+                and tokenizer_meta.get("type") == "token_tree"
+                and isinstance(tokenizer_meta.get("tree"), dict)
+            ):
+                from domain.training._internal.token_tree import TokenTree
+
+                class _TreeTokenizer:
+                    def __init__(self, tree):
+                        self.tree = tree
+                        self.eos_token_id = tree.eos_token_id
+                        self.bos_token_id = tree.bos_token_id
+
+                    def encode(self, text: str):
+                        return self.tree.encode(text)
+
+                    def decode(self, ids):
+                        return self.tree.decode(ids)
+
+                tokenizer = _TreeTokenizer(TokenTree.from_dict(tokenizer_meta["tree"]))
+            else:
+                stoi = meta.get("stoi")
+                itos = meta.get("itos")
+                if stoi and itos:
+                    class _CharTokenizer:
+                        def __init__(self, stoi_map, itos_list):
+                            self.stoi = {k: int(v) if isinstance(k, str) and k.lstrip("-").isdigit() is False and False else int(k) if isinstance(k, str) and k.lstrip("-").isdigit() else int(v) if not isinstance(k, str) else v for k,v in stoi_map.items()}
+                            self.itos = list(itos_list)
+                            self.eos_token_id = int(meta.get("eos_token_id", max(self.stoi.values()) if self.stoi else 0))
+
+                        def encode(self, text: str):
+                            ids = []
+                            for ch in text:
+                                if ch in self.stoi:
+                                    ids.append(int(self.stoi[ch]))
+                                else:
+                                    ids.append(0)
+                            return ids
+
+                        def decode(self, ids):
+                            out = []
+                            for i in ids:
+                                if 0 <= i < len(self.itos):
+                                    out.append(str(self.itos[i]))
+                                else:
+                                    out.append("?")
+                            return "".join(out)
+
+                    tokenizer = _CharTokenizer(stoi, itos)
+                else:
+                    from .morph_tokenizer import MorphTokenizer
+
+                    tokenizer = MorphTokenizer.from_pretrained("gpt2")
+
+        engine = cls(
+            config=config,
+            weights=weights,
+            tokenizer=tokenizer,
+            compress=compress,
+        )
+        logger.info(
+            "NumpyEngine.from_soul: %s, %d layers, vocab=%d rope=%s norm=%s",
+            soul_path,
+            n_layer,
+            vocab_size,
+            use_rope,
+            norm_type,
+            extra={"tag": "INFRA"},
+        )
+        return engine
+
     def _forward(
         self, token_ids: list[int], kv_cache: KVCache | None = None, start_pos: int = 0
     ) -> np.ndarray:

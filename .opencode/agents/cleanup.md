@@ -120,6 +120,7 @@ logger.info("Step %d/%d | Loss: %.4f", step, total, loss)
 ```python
 # Before
 """Module docstring."""
+
 import logging
 
 # After

@@ -302,9 +302,10 @@ class TestWorldWiring:
         b2 = SimBaby.from_dict(b.to_dict(), params=params)
         assert isinstance(b2.perceptron_cells, expected)
         for name in ("cells", "body", "entity", "move"):
-            assert getattr(b2, f"perceptron_{name}").to_dict() == getattr(
-                b, f"perceptron_{name}"
-            ).to_dict()
+            assert (
+                getattr(b2, f"perceptron_{name}").to_dict()
+                == getattr(b, f"perceptron_{name}").to_dict()
+            )
 
     @pytest.mark.parametrize("kind", sorted(_STACK_KINDS))
     def test_message_brain_roundtrips(self, kind):

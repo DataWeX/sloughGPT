@@ -212,7 +212,7 @@ Zero business logic, zero `_internal` imports (`grep -c _internal` must be 0):
 
 ```python
 from schemas.common import raise_error, safe_audit_log, success_response
-from domain.training import get_training_engine   # facade; function-local, lazy
+from domain.training import get_training_engine  # facade; function-local, lazy
 
 
 @router.delete("/training/checkpoints/{name}")

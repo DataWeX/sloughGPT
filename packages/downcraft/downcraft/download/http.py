@@ -389,9 +389,7 @@ def download_file(
                 # still carries a content coding slices the WIRE — its
                 # offsets can numerically equal ours while living in a
                 # different byte-space; appending would corrupt the file.
-                if _is_compressed_response(resp.headers) or _edge_content_encoding(
-                    resp.headers
-                ):
+                if _is_compressed_response(resp.headers) or _edge_content_encoding(resp.headers):
                     logger.warning(
                         "206 for %s carries a content coding (wire-space offsets), "
                         "restarting from 0",

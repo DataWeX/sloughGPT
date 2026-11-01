@@ -21,6 +21,7 @@ Use MogDB as the primary embedded persistence layer with the following pattern:
 ```python
 from mogdb import MogDB
 
+
 class MyService:
     def __init__(self, db_path=None):
         self._db = MogDB(db_path or DEFAULT_DB_PATH)

@@ -126,9 +126,12 @@ if is_compressed_file("file.lz4"):
 
 ```python
 from downcraft import (
-    compress_bytes, decompress_bytes,
-    compress_file, decompress_file,
-    compress_stream, decompress_stream,
+    compress_bytes,
+    decompress_bytes,
+    compress_file,
+    decompress_file,
+    compress_stream,
+    decompress_stream,
 )
 
 # Bytes
@@ -141,6 +144,7 @@ decompress_file("output.lz4", "restored.bin")
 
 # Streams
 import io
+
 src = io.BytesIO(b"data")
 dst = io.BytesIO()
 compress_stream(src, dst)
@@ -155,10 +159,12 @@ from downcraft import download
 result = download("https://example.com/bigfile.iso", "/tmp/bigfile.iso")
 print(result["status"])  # "complete"
 
+
 # With progress callback
 def on_progress(downloaded, total, speed_bps):
     pct = int(downloaded / total * 100) if total else 0
-    print(f"\r{pct}% @ {speed_bps/1e6:.1f} MB/s", end="")
+    print(f"\r{pct}% @ {speed_bps / 1e6:.1f} MB/s", end="")
+
 
 download("https://...", "/tmp/file", on_progress=on_progress)
 

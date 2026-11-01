@@ -857,10 +857,10 @@ Grants persist to `~/.config/shell_permissions.json`:
 from domain.shell._internal.permissions import ShellPermissions, Risk
 
 perms = ShellPermissions()
-perms.set_policy(Risk.DANGEROUS, "allow")   # allow all dangerous
-perms.set_policy(Risk.CRITICAL, "deny")     # keep critical blocked
-perms.grant("rm", persist=True)             # allow rm forever
-perms.revoke("rm")                          # remove rm grant
+perms.set_policy(Risk.DANGEROUS, "allow")  # allow all dangerous
+perms.set_policy(Risk.CRITICAL, "deny")  # keep critical blocked
+perms.grant("rm", persist=True)  # allow rm forever
+perms.revoke("rm")  # remove rm grant
 ```
 
 ---

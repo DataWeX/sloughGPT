@@ -1326,7 +1326,11 @@ class SloNetChatProvider:
     def _tokenizer_from_embedded(emb: dict):
         """Rebuild a char/token-tree tokenizer from SLNC-embedded metadata."""
         tok = emb.get("tokenizer")
-        if isinstance(tok, dict) and tok.get("type") == "token_tree" and isinstance(tok.get("tree"), dict):
+        if (
+            isinstance(tok, dict)
+            and tok.get("type") == "token_tree"
+            and isinstance(tok.get("tree"), dict)
+        ):
             from domain.training._internal.token_tree import TokenTree
 
             return _TreeTokenizer(TokenTree.from_dict(tok["tree"]))

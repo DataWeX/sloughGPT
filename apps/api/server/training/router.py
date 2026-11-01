@@ -48,6 +48,11 @@ from .feeds import router as feeds_router
 
 router.include_router(feeds_router)
 
+# Include the live feed/job observability stream (SSE)
+from .live_stream import router as live_stream_router
+
+router.include_router(live_stream_router)
+
 
 def _finetuned_dir() -> Path:
     """Absolute path to the HF fine-tuned models directory."""

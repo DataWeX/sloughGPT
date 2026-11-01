@@ -16,4 +16,5 @@ def test_sitemap_from_nonexistent():
 
 def test_module_export():
     from bawl import parse_sitemap
+
     assert callable(parse_sitemap)

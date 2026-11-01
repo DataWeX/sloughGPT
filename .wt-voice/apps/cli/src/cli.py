@@ -1,0 +1,1132 @@
+"""
+SloughGPT CLI — pure Python entry point with ANSI output.
+
+Commands organized into logical groups. All delegate to existing
+cmd_* functions in commands/ modules.
+"""
+
+import logging
+import os
+import signal
+import sys
+from pathlib import Path
+
+# bash backgrounds (`cmd &`) start with SIGINT set to SIG_IGN, and CPython
+# honours the inherited disposition — Ctrl+C during CLI startup would be
+# silently dropped until a command installs its own handler (see the
+# entry-point registration in commands/dev.py). default_int_handler
+# restores standard KeyboardInterrupt semantics for the whole window, so
+# early interrupts are honoured and `except KeyboardInterrupt` cleanup
+# paths in commands keep firing.
+signal.signal(signal.SIGINT, signal.default_int_handler)
+
+# Ensure repo root (domain shims), CLI core, and core-py domains are on the path
+_CLI_DIR = Path(__file__).resolve().parent
+_ROOT_DIR = _CLI_DIR.parent.parent.parent
+_CORE_PY_DIR = _ROOT_DIR / "packages" / "core-py"
+for _sys_path in [_CLI_DIR, str(_ROOT_DIR), str(_CORE_PY_DIR)]:
+    if str(_sys_path) not in sys.path:
+        sys.path.insert(0, str(_sys_path))
+
+# ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
+from domain.logging import (  # noqa: E402
+    BridgeHandler,
+    CLILogger,
+    set_global,
+    setup_logging,  # noqa: E402
+)
+
+setup_logging(enable_console=False, enable_output_buffer=False)
+log = CLILogger("slo")
+set_global(log)
+_bridge = BridgeHandler(log)
+logging.root.addHandler(_bridge)
+
+from core.framework import (
+    # constants
+    BOLD as _BOLD,
+)
+from core.framework import (
+    CYAN as _CYAN,
+)
+from core.framework import (
+    DIM as _DIM,
+)
+
+# ── CLI framework (replaces Click) ───────────────────────────────────
+from core.framework import (
+    Option,
+    click,
+    echo,
+)
+from core.framework import (
+    c as _c,
+)
+from core.framework import (
+    p as _p,
+)
+from core.helpers import (
+    ns as _ns,
+)
+from core.slo_cli import _SUGGESTIONS
+from core.version import format_version_display  # noqa: E402
+
+_TTY = sys.stdout.isatty()  # re-export for backward compat
+
+
+# ── Top-level CLI ─────────────────────────────────────────────────────
+
+
+@click.group(invoke_without_command=True)
+@click.version_option(package_name="sloughgpt", prog_name="sloughgpt")
+@click.option("--host", default="localhost", help="API hostname", show_default=True)
+@click.option("--port", default=8000, type=int, help="API port", show_default=True)
+@click.option("-c", "--config", default="config.yaml", help="Config path", show_default=True)
+@click.option("--json", "output_json", is_flag=True, help="JSON output for commands")
+@click.option("--no-color", is_flag=True, help="Disable ANSI color output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress non-essential output")
+@click.option("--timeout", default=10, type=int, help="HTTP timeout in seconds", show_default=True)
+@click.pass_context
+def cli(
+    ctx,
+    host: str,
+    port: int,
+    config: str,
+    output_json: bool,
+    no_color: bool,
+    quiet: bool,
+    timeout: int,
+):
+    """SloughGPT CLI — train, chat, serve, and manage models."""
+    ctx.ensure_object(dict)
+    ctx.obj["host"] = host
+    ctx.obj["port"] = port
+    ctx.obj["config"] = config
+    ctx.obj["json"] = output_json
+    ctx.obj["no_color"] = no_color
+    ctx.obj["quiet"] = quiet
+    ctx.obj["timeout"] = timeout
+
+    if no_color:
+        os.environ["NO_COLOR"] = "1"
+        os.environ["SLO_NO_COLOR"] = "1"
+
+    if ctx.invoked_subcommand is None:
+        _show_welcome_banner()
+
+
+def _show_welcome_banner():
+    """Show a polished welcome banner with version and quick start."""
+    import sys
+
+    # Get version
+    try:
+        version = format_version_display()
+    except Exception:
+        version = "dev"
+
+    # ANSI helpers
+    def _c(text, code):
+        if sys.stdout.isatty():
+            return f"{code}{text}\033[0m"
+        return text
+
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED = "\033[31m"
+    _MAGENTA = "\033[35m"
+
+    _write = sys.stdout.write
+    _flush = sys.stdout.flush
+
+    def _line(text=""):
+        _write(text + "\n")
+        _flush()
+
+    # ── ASCII art header ──────────────────────────────────
+    _line()
+    _line(f"  {_c('  ┌──────────────────────────────────────┐', _DIM)}")
+    _line(
+        f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('   ████████╗██╗     ██████╗            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('   ╚══██╔══╝██║     ██╔═══██╗           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ███████╗╚██████╔╝           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ╚═╝   ╚══════╝ ╚═════╝            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(f"  {_c('  └──────────────────────────────────────┘', _DIM)}")
+    _line()
+    _line(f"  {_c('  sloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
+    _line(f"  {_c('  ─────────────────────────────────────────', _DIM)}")
+    _line()
+
+    # Quick start commands
+    _line(f"  {_c('Quick Start:', _BOLD)}")
+    _line(f"    {_c('sloughgpt start', _CYAN)}        Getting started guide")
+    _line(f"    {_c('sloughgpt chat', _CYAN)}         Start chatting with AI")
+    _line(f"    {_c('sloughgpt model list', _CYAN)}   List available models")
+    _line(f"    {_c('sloughgpt shell', _CYAN)}        Interactive shell")
+    _line()
+
+    # Server status
+    _show_server_status()
+
+    _line()
+    _line(f"  {_c("Run 'sloughgpt --help' to see all commands", _DIM)}")
+    _line()
+
+
+def _show_server_status():
+    """Check and display server status."""
+    import sys
+
+    import requests
+
+    def _c(text, code):
+        if sys.stdout.isatty():
+            return f"{code}{text}\033[0m"
+        return text
+
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED = "\033[31m"
+
+    _write = sys.stdout.write
+    _flush = sys.stdout.flush
+
+    def _line(text=""):
+        _write(text + "\n")
+        _flush()
+
+    _line(f"  {_c('Server Status:', _BOLD)}")
+
+    try:
+        response = requests.get("http://localhost:8000/health", timeout=2)
+        if response.status_code == 200:
+            raw = response.json()
+            data = raw.get("data", raw)
+
+            if data.get("model_loaded"):
+                model = data.get("model_type", "unknown")
+                _line(f"    {_c('ok', _GREEN)} Server running (model: {model})")
+            else:
+                _line(f"    {_c('warn', _YELLOW)} Server running (no model loaded)")
+        else:
+            _line(f"    {_c('err', _RED)} Server unreachable")
+    except requests.exceptions.ConnectionError:
+        _line(f"    {_c('·', _DIM)} Server not running")
+    except Exception:
+        _line(f"    {_c('·', _DIM)} Server status unknown")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Welcome & Shell
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.command(help="Welcome guide with next steps")
+def start():
+    root = os.getcwd()
+    echo(f"""
+SloughGPT — getting started
+===========================
+
+  1. Install Python package:
+       python3 -m pip install -e ".[dev]"
+
+  2. Verify environment:
+       sloughgpt system mole
+
+  3. First training run:
+       sloughgpt train quick
+
+  4. HTTP API:
+       sloughgpt dev
+
+  5. Terminal UI:
+       sloughgpt tui
+
+  6. Web UI (separate terminal):
+       cd apps/web && npm install && npm run dev
+
+  7. Colab: sloughgpt_colab.ipynb
+
+Repository: {root}
+
+Version: {format_version_display()}
+""")
+
+
+from commands.logs import logs as _logs_cmd
+from commands.logs import monitor as _monitor_cmd
+
+
+# Wrap Click commands so our framework can dispatch to them
+class _ClickCommandWrapper:
+    """Wraps a Click command to work with our inline framework."""
+
+    def __init__(self, click_cmd):
+        self.click_cmd = click_cmd
+        self.name = click_cmd.name
+        self.help = click_cmd.help or ""
+        # Propagate click's hidden flag so migration aliases (e.g. `monitor`,
+        # merged into `logs --dashboard` — card 8182563a) dispatch but never
+        # appear in help listings.
+        self.hidden = getattr(click_cmd, "hidden", False)
+        self.options = []
+        self.arguments = []
+        # Extract params from Click command for display
+        for param in click_cmd.params:
+            if hasattr(param, "opts"):
+                names = param.opts
+                self.options.append(
+                    Option(
+                        names,
+                        help=param.help or "",
+                        default=param.default,
+                        is_flag=param.is_flag if hasattr(param, "is_flag") else False,
+                        type=type(param.type).__name__ if hasattr(param.type, "__name__") else str,
+                    )
+                )
+
+    def __call__(self, **kwargs):
+        # Build args list from kwargs
+        args = []
+        for k, v in kwargs.items():
+            if v is None:
+                continue
+            if isinstance(v, bool):
+                if v:
+                    args.append(f"--{k.replace('_', '-')}")
+            else:
+                args.append(f"--{k.replace('_', '-')}={v}")
+        self.click_cmd.main(args=args, standalone_mode=False)
+
+
+cli.add_command(_ClickCommandWrapper(_logs_cmd), "logs")
+cli.add_command(_ClickCommandWrapper(_monitor_cmd), "monitor")
+
+
+@cli.command(help="Launch interactive terminal UI (split-pane curses)")
+@click.pass_context
+def tui(ctx):
+    """Launch the split-pane curses TUI."""
+    ctx.invoke(shell, command=None, tui=True, line=False)
+
+
+@cli.command(help="Launch interactive shell REPL")
+@click.option("--command", "-c", help="Run a single command and exit")
+@click.option(
+    "--tui/--no-tui", default=None, is_flag=True, help="Curses TUI mode (default when TTY)"
+)
+@click.option("--line", is_flag=True, help="Force line-mode REPL (no TUI)")
+@click.pass_context
+def shell(ctx, command, tui, line):
+    """Launch the SloughGPT interactive shell REPL."""
+    from utils.helpers import ensure_server
+
+    actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
+    from domain.shell import DaitRuntime, ShellREPL
+
+    os = DaitRuntime(api_url=actual_url)
+    # Default to TUI when TTY, line mode when piped or --line
+    use_tui = True
+    if line:
+        use_tui = False
+    elif tui is not None:
+        use_tui = tui
+    elif not sys.stdout.isatty():
+        use_tui = False
+    repl = ShellREPL(os, use_tui=True if use_tui else None)
+    if command:
+        commands, is_bg, should_time = repl._parse_pipeline(command)
+        if is_bg:
+            repl._execute_background(command.rstrip("& ").strip())
+        elif len(commands) > 1:
+            repl._execute_pipeline(commands, should_time=should_time)
+        else:
+            expanded = repl._expand_alias(command)
+            out = repl._execute_single(expanded, "")
+            if out:
+                echo(out, nl=False)
+    else:
+        repl.run()
+
+
+@cli.command(help="Generate shell completion script")
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), default="bash")
+def completion(shell):
+    """Print a shell completion script. Source it to enable tab-completion.
+
+    \b
+    Examples:
+      eval "$(sloughgpt completion bash)"   # bash
+      eval "$(sloughgpt completion zsh)"    # zsh
+      sloughgpt completion fish | source    # fish
+    """
+    _shell = shell.lower()
+    if _shell == "bash":
+        echo(
+            f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace(
+                "{{COMPLETE}}", "_COMPLETE"
+            ).replace("{{prog}}", "sloughgpt")
+        )
+    elif _shell == "zsh":
+        echo(
+            f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace(
+                "{{COMPLETE}}", "_COMPLETE"
+            ).replace("{{prog}}", "sloughgpt")
+        )
+    elif _shell == "fish":
+        echo(f"source (_{{COMPLETE}}={_shell}_complete sloughgpt | psub)")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Serve & Chat
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.command(help="Interactive chat")
+@click.option("--no-serve", is_flag=True, help="Don't auto-start server")
+@click.pass_context
+def chat(ctx, no_serve):
+    from commands.chat import cmd_chat
+
+    args = _ns(
+        no_serve=no_serve,
+        auto_model=None,
+        load_mode="local",
+        device="auto",
+        max_tokens=64,
+        temperature=0.7,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
+    )
+    cmd_chat(args)
+
+
+@cli.command(help="One-shot text generation")
+@click.argument("prompt")
+@click.option("--model", metavar="NAME_OR_PATH", help="Model override")
+@click.option("--max-tokens", default=100, type=int, help="Max tokens", show_default=True)
+@click.option("--temperature", default=0.8, type=float, help="Temperature", show_default=True)
+@click.pass_context
+def generate(ctx, prompt, model, max_tokens, temperature):
+    from commands.chat import cmd_generate
+
+    args = _ns(
+        prompt=prompt,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
+    )
+    cmd_generate(args)
+
+
+@cli.command(help="Start API + Web dev servers")
+@click.option("--model", default=None, help="Model path")
+@click.option("--web-port", default=3000, type=int, help="Web dev server port")
+@click.option("--watch-web", is_flag=True, help="Watch web files for changes")
+@click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
+@click.pass_context
+def dev(ctx, model, web_port, watch_web, auto_download):
+    from commands.dev import cmd_dev
+
+    args = _ns(
+        model=model,
+        web_port=web_port,
+        watch_web=watch_web,
+        port=ctx.obj["port"],
+        host=ctx.obj["host"],
+        auto_download=auto_download,
+    )
+    cmd_dev(args)
+
+
+@cli.command(
+    help="Start HTTP inference server (with --web: full FastAPI + frontend, --mobile: API + React Native)"
+)
+@click.option("--host", default="localhost", help="Bind address", show_default=True)
+@click.option("--port", default=8000, type=int, help="API port", show_default=True)
+@click.option("--model", metavar="PATH", help="Model to preload")
+@click.option(
+    "--web", is_flag=True, help="Start full FastAPI server + Vite web UI and opens browser"
+)
+@click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
+@click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")
+@click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
+def serve(host, port, model, web, mobile, web_port, auto_download):
+    from commands.dev import cmd_serve
+
+    args = _ns(
+        host=host,
+        port=port,
+        model=model,
+        web=web,
+        mobile=mobile,
+        web_port=web_port,
+        auto_download=auto_download,
+    )
+    cmd_serve(args)
+
+
+@cli.command("hf-serve", hidden=True, help="Serve a HuggingFace model via API")
+@click.argument("model_name")
+@click.option("--mode", type=click.Choice(["api", "local"]), default="local")
+@click.option("--device", default="auto")
+@click.pass_context
+def hf_serve(ctx, model_name, mode, device):
+    from commands.dev import cmd_hf_serve
+
+    args = _ns(
+        model=model_name,
+        mode=mode,
+        device=device,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
+    )
+    cmd_hf_serve(args)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# model — list, inspect, download, export, and benchmark models
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.model import register as _register_model
+
+_register_model(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# dataset — list, import, export, and validate datasets
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.dataset import register as _register_dataset
+
+_register_dataset(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# train — training, evaluation, and monitoring
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.train import register as _register_train
+
+_register_train(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# token-tree — train, encode, decode, and query a tree tokenizer
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.token_tree import register as _register_token_tree
+
+_register_token_tree(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# checkpoint — list, load, delete training checkpoints
+# ═══════════════════════════════════════════════════════════════════════
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# checkpoint — training checkpoint management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.checkpoint import register as _register_checkpoint
+
+_register_checkpoint(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# knowledge — semantic knowledge operations
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.knowledge import register as _register_knowledge
+
+_register_knowledge(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# experiment — ML experiment tracking
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.experiment import register as _register_experiment
+
+_register_experiment(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# error — error monitoring
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.error import register as _register_error
+
+_register_error(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# logger — live error catch for the agent fix flow
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.logger import register as _register_logger
+
+_register_logger(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# memory — auto-memory layer management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.memory import register as _register_memory
+
+_register_memory(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# personality — soul personality files
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.personality import register as _register_personality
+
+_register_personality(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# adapter — per-user LoRA adapter management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.adapter import register as _register_adapter
+
+_register_adapter(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# feedback — export and prepare feedback data
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.feedback import register as _register_feedback
+
+_register_feedback(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# agent — manage and execute AI agents
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.agent import register as _register_agent
+
+_register_agent(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# session — chat session management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.session import register as _register_session
+
+_register_session(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# tokenizer — text tokenization
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.tokenizer import register as _register_tokenizer
+
+_register_tokenizer(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# vector — vector store for semantic search
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.vector import register as _register_vector
+
+_register_vector(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# system — system information and health
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.system import register as _register_system
+
+_register_system(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# docker — container management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.docker import register as _register_docker
+
+_register_docker(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# simulate — boot kernel, load model, run inference, dump metrics
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.command(help="Boot kernel, load model, run inference — hardware simulator")
+@click.option("--model", default="mock", help="Model name to load (default: mock)")
+@click.option("--prompt", default="Hello, world", help="Prompt for generation")
+@click.option("--max-tokens", default=20, type=int, help="Max tokens to generate")
+@click.option("--iterations", default=1, type=int, help="Number of inference iterations")
+@click.option("--layers", default=2, type=int, help="Number of transformer layers (mock model)")
+@click.option("--d-model", default=64, type=int, help="Model dimension (mock model)")
+@click.option("--vocab-size", default=256, type=int, help="Vocabulary size (mock model)")
+@click.option("--profile", is_flag=True, help="Show detailed timing profile")
+@click.option(
+    "--run-asm", "asm_source", default=None, help="Run VM assembly program instead of inference"
+)
+@click.option("--self-test", "do_self_test", is_flag=True, help="Run built-in VM self-test")
+@click.pass_context
+def simulate(
+    ctx,
+    model: str,
+    prompt: str,
+    max_tokens: int,
+    iterations: int,
+    layers: int,
+    d_model: int,
+    vocab_size: int,
+    profile: bool,
+    asm_source: str | None,
+    do_self_test: bool,
+):
+    """Boot the kernel, load a model, run inference, and print metrics."""
+    import sys
+    import time
+
+    import numpy as np
+
+    # ANSI helpers
+    _tty = sys.stdout.isatty()
+
+    def _c(text, code):
+        return f"{code}{text}\033[0m" if _tty else text
+
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _MAGENTA = "\033[35m"
+    _BLUE = "\033[34m"
+
+    def _p(text=""):
+        sys.stdout.write(text + "\n")
+        sys.stdout.flush()
+
+    def _table(headers, rows, col_styles=None):
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i in range(min(len(row), len(widths))):
+                widths[i] = max(widths[i], len(str(row[i])))
+        hdr = "  ".join(_c(h.ljust(widths[i]), _BOLD, _tty) for i, h in enumerate(headers))
+        sep = "  ".join("-" * w for w in widths)
+        _p(hdr)
+        _p(sep)
+        for row in rows:
+            cells = []
+            for i in range(len(headers)):
+                val = str(row[i]) if i < len(row) else ""
+                cells.append(val.ljust(widths[i]))
+            _p("  ".join(cells))
+
+    _p(f"\n{_c('Kernel Simulation', _BOLD + _CYAN)}\n")
+
+    # ── Self-test mode ──
+    if do_self_test:
+        from domain.shell import self_test
+
+        _p(f"{_c('Running VM self-test...', _BOLD)}\n")
+        results = self_test()
+        for line in results:
+            _p(line)
+        _p()
+        return
+
+    # ── Run assembly mode ──
+    if asm_source:
+        from domain.shell import VMRunner
+
+        _p(f"{_c('Running VM assembly...', _BOLD)}\n")
+        runner = VMRunner()
+        t0 = time.perf_counter()
+        output = runner.assemble_and_run(asm_source, trace=profile)
+        elapsed = time.perf_counter() - t0
+        for line in output:
+            _p(f"  {line}")
+        _p(
+            f"\n  {_c(f'Completed in {elapsed * 1000:.2f}ms, {runner.cpu._step_count} steps', _DIM)}"
+        )
+        if profile:
+            trace = runner.cpu.get_trace()
+            if trace:
+                _p()
+                _table(
+                    ["Step", "PC", "Instruction", "Registers"],
+                    [
+                        [
+                            str(e.cycle),
+                            str(e.pc),
+                            e.instruction,
+                            ", ".join(f"{k}={v}" for k, v in e.registers.items()),
+                        ]
+                        for e in trace[:50]
+                    ],
+                )
+                if len(trace) > 50:
+                    _p(f"  ... ({len(trace) - 50} more)")
+        _p()
+        return
+
+    # ── Boot ──
+    t0 = time.perf_counter()
+    from domain.shell import Kernel
+
+    k = Kernel()
+    boot_msg = k.boot()
+    t_boot = time.perf_counter() - t0
+    _p(f"  {_c('ok', _GREEN)} Booted in {t_boot * 1000:.1f}ms — {boot_msg}")
+
+    try:
+        # ── Register devices ──
+        k.register_devices()
+        _p(f"  {_c('ok', _GREEN)} {k.devices.stats()['total_devices']} devices registered")
+
+        # ── Load model ──
+        t1 = time.perf_counter()
+        if model == "mock":
+
+            class MockModel:
+                def __init__(self):
+                    self.call_count = 0
+                    self.total_tokens = 0
+
+                def __call__(self, input_ids):
+                    self.call_count += 1
+                    self.total_tokens += input_ids.size
+                    return np.random.randn(
+                        input_ids.shape[0], input_ids.shape[1], vocab_size
+                    ).astype(np.float32)
+
+                def generate_numpy(self, prompt, max_tokens=10, temperature=1.0, **kw):
+                    self.call_count += 1
+                    self.total_tokens += max_tokens
+                    return list(range(10, 10 + max_tokens))
+
+                def forward(self, inputs):
+                    self.call_count += 1
+                    ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
+                    self.total_tokens += ids.size
+                    return {
+                        "logits": np.random.randn(ids.shape[0], ids.shape[1], vocab_size).astype(
+                            np.float32
+                        )
+                    }
+
+            mock = MockModel()
+            k.engine.load_model(model, mock)
+        else:
+            from domain.shell import NPUDevice
+
+            npu = NPUDevice(name="npu")
+            npu.open()
+            result = npu.load_model(model, f"huggingface:{model}")
+            if not result.success:
+                _p(f"  {_c(f"⚠ Could not load '{model}': {result.error}", _YELLOW)}")
+                _p(
+                    f"  {_c('Falling back to mock model. Install transformers for real models.', _DIM)}"
+                )
+
+                class FallbackModel:
+                    def __init__(self):
+                        self.call_count = 0
+                        self.total_tokens = 0
+
+                    def __call__(self, input_ids):
+                        self.call_count += 1
+                        self.total_tokens += input_ids.size
+                        return np.random.randn(
+                            input_ids.shape[0], input_ids.shape[1], vocab_size
+                        ).astype(np.float32)
+
+                    def generate_numpy(self, prompt, max_tokens=10, temperature=1.0, **kw):
+                        self.call_count += 1
+                        self.total_tokens += max_tokens
+                        return list(range(10, 10 + max_tokens))
+
+                    def forward(self, inputs):
+                        self.call_count += 1
+                        ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
+                        self.total_tokens += ids.size
+                        return {
+                            "logits": np.random.randn(
+                                ids.shape[0], ids.shape[1], vocab_size
+                            ).astype(np.float32)
+                        }
+
+                k.engine.load_model(model, FallbackModel())
+            else:
+                provider = npu._models[model].provider
+                k.engine.load_model(model, provider)
+        t_load = time.perf_counter() - t1
+        _p(f"  {_c('ok', _GREEN)} Model '{model}' loaded in {t_load * 1000:.1f}ms")
+
+        # ── Tokenize ──
+        t2 = time.perf_counter()
+        tokens = k.tokenize(prompt)
+        t_tok = time.perf_counter() - t2
+        _p(
+            f"  {_c('ok', _GREEN)} Tokenized '{prompt[:40]}...' -> {len(tokens)} tokens in {t_tok * 1000:.2f}ms"
+        )
+
+        # ── Create inference process ──
+        from domain.shell import NeuralProcessType
+
+        proc = k.create_neural_process("sim-infer", NeuralProcessType.INFERENCE, model_name=model)
+
+        # ── Warmup ──
+        input_ids = np.array([tokens])
+        _ = k.forward(proc, {"input_ids": input_ids})
+
+        # ── Inference iterations ──
+        latencies = []
+        tokens_generated = []
+        for i in range(iterations):
+            t3 = time.perf_counter()
+            gen = k.generate(model, prompt, max_tokens=max_tokens)
+            t_inf = time.perf_counter() - t3
+            latencies.append(t_inf)
+            tokens_generated.append(gen["token_count"] if gen else 0)
+
+        # ── Metrics ──
+        avg_latency = sum(latencies) / len(latencies)
+        total_tokens = sum(tokens_generated)
+        throughput = total_tokens / sum(latencies) if sum(latencies) > 0 else 0
+
+        # ── KV Cache ──
+        cache = k.create_kv_cache("sim-cache", num_layers=layers, head_dim=d_model // 4)
+        cache.initialize(num_heads=4)
+        for step in range(min(10, max_tokens)):
+            k0 = np.random.randn(4, d_model // 4)
+            v0 = np.random.randn(4, d_model // 4)
+            cache.update(step % layers, k0, v0)
+            cache.advance(1)
+
+        # ── Neural stats ──
+        ns = k.neural_stats()
+
+        # ── Kernel stats ──
+        ks = k.stats()
+
+        # ── Print results ──
+        _p()
+        _table(
+            ["Metric", "Value"],
+            [
+                ["Boot time", f"{t_boot * 1000:.1f}ms"],
+                ["Model load", f"{t_load * 1000:.1f}ms"],
+                ["Tokenize", f"{t_tok * 1000:.2f}ms"],
+                ["Tokens in prompt", str(len(tokens))],
+                ["Iterations", str(iterations)],
+                ["Avg latency", f"{avg_latency * 1000:.1f}ms"],
+                ["Total tokens generated", str(total_tokens)],
+                ["Throughput", f"{throughput:.1f} tok/s"],
+                ["Processes", str(ks["process_count"])],
+                ["KV cache layers", str(ns["kv_caches"])],
+                ["KV cache memory", f"{ns['gradient_accumulator']['step_count']} steps"],
+                ["Uptime", f"{k.uptime:.2f}s"],
+            ],
+        )
+
+        if profile:
+            _p()
+            _table(
+                ["Iter", "Latency", "Tokens", "tok/s"],
+                [
+                    [
+                        str(i + 1),
+                        f"{lat * 1000:.1f}ms",
+                        str(tok),
+                        f"{tok / lat:.1f}" if lat > 0 else "0.0",
+                    ]
+                    for i, (lat, tok) in enumerate(zip(latencies, tokens_generated))
+                ],
+            )
+
+        _p(f"\n{_c('Simulation complete.', _BOLD + _GREEN)}\n")
+
+    finally:
+        k.shutdown()
+        _p(f"  {_c('Kernel shut down.', _DIM)}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Collections — data feed ingestion
+# ═══════════════════════════════════════════════════════════════════════
+# collect — data collection from files, URLs, RSS, and APIs
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.collect import register as _register_collect
+
+_register_collect(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# companion — AI companion management and chat
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.companion import register as _register_companion
+
+_register_companion(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# images — image generation and gallery
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.images import register as _register_images
+
+_register_images(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# multimodal — multimodal capabilities (vision, speech, video)
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.multimodal import register as _register_multimodal
+
+_register_multimodal(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# meta-weights — feedback-driven meta-weight adaptation
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.meta_weights import register as _register_meta_weights
+
+_register_meta_weights(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# learn — continual learning from web, feeds, and knowledge
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.learn import register as _register_learn
+
+_register_learn(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# world — Render and simulate the programmable world
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.world import register as _register_world
+
+_register_world(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# vm — x86 Virtual Machine console and management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.vm import register as _register_vm
+
+_register_vm(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# build — Buildroot image building
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.build import register as _register_build
+
+_register_build(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# voice — text-to-speech and speech-to-text
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.voice import register as _register_voice
+
+_register_voice(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# security — audit logs and API key management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.security import register as _register_security
+
+_register_security(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# docstore — server-side document store
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.docstore import register as _register_docstore
+
+_register_docstore(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# db — MogDB embedded database: migrate, sync, status
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.db import register as _register_db
+
+_register_db(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# feeds — RSS and JSON feed generation
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.feeds import register as _register_feeds
+
+_register_feeds(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# Entry point
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def main():
+    # Parse command path for post-execution suggestions
+    _argv = sys.argv[1:]
+    _cmd_parts = []
+    for _a in _argv:
+        if _a.startswith("-"):
+            break
+        _cmd_parts.append(_a)
+    _cmd_path = _cmd_parts[0] if _cmd_parts else ""
+
+    _exit_code = 0
+    try:
+        cli(obj={})
+    except SystemExit as e:
+        if e.code is None:
+            _exit_code = 0
+        elif isinstance(e.code, int):
+            _exit_code = e.code
+        else:
+            print(e.code, file=sys.stderr)
+            _exit_code = 1
+    except KeyboardInterrupt:
+        # Interrupted during dispatch, before a command handler took over.
+        _p()
+        _p(f"  {_c('Interrupted', _BOLD)}")
+        sys.exit(130)
+
+    # Show post-command suggestions (TTY only)
+    if _cmd_path and sys.stdout.isatty():
+        _tip = _SUGGESTIONS.get(_cmd_path)
+        if _tip:
+            _p()
+            _p(f"  {_c('💡', _DIM)} {_c('Tip:', _BOLD)} {_c(f'sloughgpt {_tip}', _CYAN)}")
+            _p()
+
+    if _exit_code:
+        sys.exit(_exit_code)
+
+
+if __name__ == "__main__":
+    main()

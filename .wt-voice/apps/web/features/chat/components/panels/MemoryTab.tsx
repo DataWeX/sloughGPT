@@ -1,0 +1,463 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState, memo } from 'react'
+import Link from '@/vite/next-compat/link'
+import { cn, Switch, Button, Spinner } from '@sloughgpt/strui'
+import { IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
+import { memoryController, type MemoryItem } from '@/lib/memory-controller'
+import { formatRelativeTime } from '@/lib/format-bytes'
+import { useToastStore } from '@/lib/toast-store'
+import { useChatMemory } from './useChatMemory'
+import { useMemoryData } from '@/hooks/useMemoryData'
+import { MemoryAddForm } from './MemoryAddForm'
+import { MemoryEditForm } from './MemoryEditForm'
+
+const MAX_VISIBLE = 8
+
+export const MemoryTab = memo(function MemoryTab() {
+  const addToast = useToastStore((s) => s.addToast)
+  const {
+    stats,
+    items,
+    loading,
+    searched,
+    searchResults,
+    setSearch,
+    search,
+    fetchData,
+    setSearchResults,
+    setSearched,
+    setItems,
+  } = useMemoryData()
+
+  const {
+    highlightedId,
+    copiedId,
+    consolidateMsg,
+    consolidating,
+    handleCopy,
+    handleConsolidate,
+    highlightItem,
+    pendingSseFact,
+    consumePendingSseFact,
+  } = useChatMemory(fetchData)
+
+  const [toggling, setToggling] = useState(false)
+  const [pendingClear, setPendingClear] = useState(false)
+  const [showAll, setShowAll] = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
+  const [activeTopic, setActiveTopic] = useState<string | null>(null)
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
+  const [editingItem, setEditingItem] = useState<MemoryItem | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (pendingSseFact) {
+      const fact = consumePendingSseFact()
+      if (fact) highlightItem(fact, items)
+    }
+  }, [pendingSseFact, items, consumePendingSseFact, highlightItem])
+
+  useEffect(() => {
+    if (!search) setShowAll(false)
+  }, [search])
+
+  const topics = useMemo(() => {
+    const seen = new Set<string>()
+    const list: string[] = []
+    for (const i of items) {
+      if (i.topic && !seen.has(i.topic)) {
+        seen.add(i.topic)
+        list.push(i.topic)
+      }
+    }
+    return list.sort((a, b) => a.localeCompare(b))
+  }, [items])
+
+  const browseList = useMemo(() => {
+    const base = [...items]
+    return base.sort((a, b) =>
+      sortOrder === 'newest' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp,
+    )
+  }, [items, sortOrder])
+
+  const topicFiltered = useMemo(() => {
+    const base = searchResults !== null ? searchResults : browseList
+    if (!activeTopic) return base
+    return base.filter((i) => i.topic === activeTopic)
+  }, [browseList, searchResults, activeTopic])
+
+  const displayed = showAll ? topicFiltered : topicFiltered.slice(0, MAX_VISIBLE)
+
+  const startEdit = useCallback((item: MemoryItem) => {
+    setShowAdd(false)
+    setEditingItem(item)
+  }, [])
+
+  const deleteItem = useCallback(
+    async (item: MemoryItem) => {
+      setItems((prev) => prev.filter((i) => i.id !== item.id))
+      setSearchResults(searchResults?.filter((i) => i.id !== item.id) ?? null)
+      try {
+        await memoryController.delete(item.id)
+      } catch {
+        await fetchData()
+      }
+    },
+    [searchResults, fetchData, setItems, setSearchResults],
+  )
+
+  const clearAll = useCallback(async () => {
+    setPendingClear(false)
+    try {
+      await memoryController.clear()
+    } catch {
+      await fetchData()
+    }
+  }, [fetchData])
+
+  const toggleEnabled = useCallback(
+    async (next: boolean) => {
+      setToggling(true)
+      try {
+        await memoryController.setEnabled(next)
+        await fetchData()
+      } finally {
+        setToggling(false)
+      }
+    },
+    [fetchData],
+  )
+
+  const enabled = stats?.enabled ?? true
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span
+              className={cn(
+                'inline-block h-1.5 w-1.5 rounded-full',
+                enabled ? 'bg-success' : 'bg-muted-foreground/50',
+              )}
+            />
+            {enabled
+              ? `${stats?.total_facts ?? items.length} fact${(stats?.total_facts ?? items.length) !== 1 ? 's' : ''}`
+              : 'Memory off'}
+          </span>
+          {enabled && items.length > 0 && (
+            <button
+              type="button"
+              onClick={handleConsolidate}
+              disabled={consolidating}
+              className="text-[10px] text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
+              title="Merge near-duplicate facts"
+            >
+              {consolidating ? 'Consolidating…' : 'Consolidate'}
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1 mr-1 pr-1.5 border-r border-border/60">
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+              Remember
+            </span>
+            <Switch
+              size="sm"
+              checked={enabled}
+              onCheckedChange={toggleEnabled}
+              disabled={toggling}
+              aria-label="Toggle automatic memory"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={fetchData}
+            disabled={loading}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
+            aria-label="Refresh memory"
+          >
+            <Spinner className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPendingClear(true)}
+            disabled={items.length === 0}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+            aria-label="Clear memory"
+          >
+            <IconTrash className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+
+      {consolidateMsg && <p className="text-[10px] text-muted-foreground">{consolidateMsg}</p>}
+
+      {enabled && (
+        <>
+          <div className="flex items-center gap-1.5">
+            <div className="relative flex-1">
+              <IconSearch className="h-3 w-3 text-muted-foreground absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search memory..."
+                aria-label="Search memory"
+                className="w-full h-7 pl-7 pr-6 rounded border border-border/40 bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Clear search"
+                >
+                  <IconX className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 shrink-0 text-[10px] px-2"
+              onClick={() => {
+                setShowAdd((v) => !v)
+                setEditingItem(null)
+              }}
+            >
+              {showAdd ? 'Close' : '+ Store'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 shrink-0 text-[10px] px-1.5 gap-1"
+              onClick={() => setSortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
+              disabled={searchResults !== null}
+              title={searchResults !== null ? 'Search results use relevance order' : undefined}
+              aria-label="Toggle memory sort order"
+            >
+              <IconClock className="h-3 w-3" />
+              {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+            </Button>
+          </div>
+
+          {showAdd && (
+            <MemoryAddForm
+              onAdded={() => {
+                setShowAdd(false)
+                fetchData()
+              }}
+              highlightItem={highlightItem}
+              items={items}
+            />
+          )}
+
+          {topics.length > 0 && (
+            <div
+              className="flex items-center gap-1 overflow-x-auto pb-0.5 -mx-1 px-1"
+              aria-label="Filter by topic"
+            >
+              <button
+                type="button"
+                onClick={() => setActiveTopic(null)}
+                className={cn(
+                  'shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors',
+                  activeTopic === null
+                    ? 'bg-primary/15 text-primary'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                )}
+              >
+                All
+              </button>
+              {topics.map((topic) => (
+                <button
+                  key={topic}
+                  type="button"
+                  onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
+                  className={cn(
+                    'shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors',
+                    activeTopic === topic
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                  )}
+                >
+                  {topic}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {editingItem && (
+            <MemoryEditForm
+              item={editingItem}
+              onSaved={() => {
+                setEditingItem(null)
+                fetchData()
+              }}
+              onCancelled={() => setEditingItem(null)}
+            />
+          )}
+        </>
+      )}
+
+      {loading ? (
+        <p className="text-[10px] text-muted-foreground text-center py-3">Loading memory…</p>
+      ) : !enabled ? (
+        <p className="text-xs text-muted-foreground text-center py-4">
+          Memory is off. Flip the Remember switch to start learning again.
+        </p>
+      ) : searched && searchResults !== null && searchResults.length === 0 ? (
+        <div className="text-center py-4">
+          <p className="text-xs text-muted-foreground">No memory matches that search.</p>
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            className="mt-1 text-[10px] text-primary hover:underline"
+            aria-label="Clear search"
+          >
+            Clear search
+          </button>
+        </div>
+      ) : topicFiltered.length === 0 ? (
+        <p className="text-xs text-muted-foreground text-center py-4">
+          {activeTopic
+            ? `No memory in the "${activeTopic}" topic.`
+            : 'Nothing remembered yet. The AI stores facts automatically as you chat.'}
+        </p>
+      ) : (
+        <>
+          <ul className="space-y-1">
+            {displayed.map((item) => (
+              <li
+                key={item.id}
+                className={cn(
+                  'group flex items-start justify-between gap-2 p-2 rounded bg-muted/30 border text-xs leading-relaxed transition-colors',
+                  item.id === highlightedId
+                    ? 'border-primary/60 bg-primary/10'
+                    : 'border-border/40',
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-1">
+                    <span
+                      className="block cursor-pointer select-text hover:text-foreground/80 transition-colors"
+                      title="Copy to clipboard"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleCopy(item.content, item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleCopy(item.content, item.id)
+                        }
+                      }}
+                    >
+                      {item.content.length > 160 ? item.content.slice(0, 160) + '…' : item.content}
+                    </span>
+                    {copiedId === item.id && (
+                      <span className="shrink-0 text-[9px] text-success font-medium pt-0.5">
+                        Copied
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    {item.topic && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                        {item.topic}
+                      </span>
+                    )}
+                    {item.source && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                        {item.source}
+                      </span>
+                    )}
+                    {typeof item.importance === 'number' && (
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium"
+                        title="Importance score"
+                      >
+                        importance {item.importance.toFixed(1)}
+                      </span>
+                    )}
+                    {item.timestamp > 0 && (
+                      <span
+                        className="text-[9px] text-muted-foreground font-mono"
+                        title={new Date(item.timestamp * 1000).toLocaleString()}
+                      >
+                        {formatRelativeTime(item.timestamp)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {typeof item.score === 'number' && searchResults !== null && (
+                    <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">
+                      {item.score.toFixed(2)}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => startEdit(item)}
+                    className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
+                    aria-label="Edit memory item"
+                  >
+                    <IconEdit className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteItem(item)}
+                    className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
+                    aria-label="Delete memory item"
+                  >
+                    <IconTrash className="h-3 w-3" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {searchResults === null && topicFiltered.length > MAX_VISIBLE && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
+              aria-expanded={showAll}
+            >
+              {showAll ? 'Show fewer' : `Show all ${topicFiltered.length}`}
+            </button>
+          )}
+        </>
+      )}
+
+      {pendingClear && (
+        <div className="flex items-center gap-1 border-t border-border/30 pt-2">
+          <span className="text-[10px] text-muted-foreground flex-1">Clear all stored memory?</span>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={clearAll}
+          >
+            Clear
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={() => setPendingClear(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      <Link
+        href="/knowledge"
+        prefetch={false}
+        className="block text-center text-[10px] text-muted-foreground hover:text-foreground pt-1 border-t border-border/30 transition-colors"
+      >
+        Manage memory →
+      </Link>
+    </div>
+  )
+})

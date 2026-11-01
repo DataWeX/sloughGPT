@@ -67,7 +67,13 @@ class Reflection:
 
 @dataclass
 class SelfEpisode:
-    """A single self-reflective episode."""
+    """A single self-reflective episode.
+
+    ``is_dream`` marks consolidation episodes the engine writes itself
+    (zero-input reflection over its own state) — experience for the inner
+    loop rather than a response to the world. Default False, so stores
+    written before dream support load unchanged.
+    """
 
     timestamp: float
     input_text: str
@@ -75,6 +81,7 @@ class SelfEpisode:
     qualia: dict[str, float]
     self_insight: str
     growth_delta: float
+    is_dream: bool = False
 
 
 class SelfModel:
@@ -295,6 +302,7 @@ class SelfModel:
                     "qualia": e.qualia,
                     "self_insight": e.self_insight,
                     "growth_delta": e.growth_delta,
+                    "is_dream": e.is_dream,
                 }
                 for e in self.episodes[-100:]  # keep last 100
             ],

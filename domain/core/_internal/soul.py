@@ -146,9 +146,11 @@ class SloEngine:
         self._semantic_cache: SemanticCache | None = None  # noqa: F821
         self._cache_enabled: bool = False
         self._consciousness: Any | None = None
+        self._knowledge_manager: Any | None = None
         self._init_cognitive()
         self._init_hd_memory()
         self._init_consciousness()
+        self._init_knowledge_manager()
 
         logger.info(
             "SloEngine initialized: soul=%s, device=%s",
@@ -213,6 +215,20 @@ class SloEngine:
         except Exception as e:
             logger.debug("Consciousness init skipped: %s", e)
             self._consciousness = None
+
+    def _init_knowledge_manager(self) -> None:
+        """Wire the unified KnowledgeManager over existing stores."""
+        try:
+            from domain.core._internal.knowledge_state import KnowledgeManager
+
+            self._knowledge_manager = KnowledgeManager(
+                hd_memory=self._hd_memory,
+                working_memory=self._working_memory,
+                logic_engine=self._logic_engine,
+            )
+        except Exception as e:
+            logger.debug("KnowledgeManager init skipped: %s", e)
+            self._knowledge_manager = None
 
     def _post_consciousness(
         self, prompt: str, response: str, reasoning_chain: list[str] | None = None

@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+dist/
+build/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Logs
+logs/
+*.log
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/
+
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Vite static build (deployed by the gateway as its document root; rebuilt by `npm run build:vite`)
+dist-vite/
+
+# Next.js build outputs (dev uses .next-dev, prod build uses .next)
+.next-dev/
+.next-build*/
+.hydration-dump.json

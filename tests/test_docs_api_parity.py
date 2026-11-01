@@ -9,6 +9,7 @@ The drift test monkeypatches ``CLAIMS_MD`` at a temp file rather than editing
 ``docs/DOC_VS_CODE_GAP_AUDIT.md``, so a failed assertion cannot leave the
 tracked doc modified.
 """
+
 from __future__ import annotations
 
 import importlib.util

@@ -396,10 +396,12 @@ class Collection:
         if len(query) == 1:
             field, cond = next(iter(query.items()))
             if isinstance(cond, dict) and field in self._sorted_indexes:
-                return set(self._sorted_indexes[field].range(
-                    gte=cond.get("$gte", cond.get("$gt")),
-                    lte=cond.get("$lte", cond.get("$lt")),
-                ))
+                return set(
+                    self._sorted_indexes[field].range(
+                        gte=cond.get("$gte", cond.get("$gt")),
+                        lte=cond.get("$lte", cond.get("$lt")),
+                    )
+                )
 
         # $or with indexable sub-queries
         if "$or" in query and len(query) == 1:
@@ -453,7 +455,8 @@ class Collection:
             if candidate_ids is not None:
                 if query:
                     results = [
-                        dict(d) for d_id, d in self._docs.items()
+                        dict(d)
+                        for d_id, d in self._docs.items()
                         if d_id in candidate_ids and match_document(d, query)
                     ]
                 else:

@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: sloughgpt-api
+    env: docker
+    dockerfilePath: ./infra/docker/Dockerfile
+    plan: free
+    branch: session/agent_4563443b-dfec-4a33-8ddd-a92fc5c84485
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: SLO_ENV
+        value: production
+      - key: SLO_LOG_LEVEL
+        value: INFO
+      - key: SLO_HOST
+        value: 0.0.0.0
+      - key: SLO_PORT
+        value: 8000
+      - key: SLO_AUTO_WORKFLOW
+        value: "false"

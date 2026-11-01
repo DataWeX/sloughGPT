@@ -4,6 +4,7 @@
 Auto-detects .venv, sets up sys.path, and runs the CLI.
 Works standalone (python3 cli.py) or via console_scripts (pip install -e .).
 """
+
 import os
 import sys
 from pathlib import Path

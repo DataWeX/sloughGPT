@@ -226,14 +226,16 @@ import pytest
 from unittest.mock import MagicMock
 
 # Add CLI src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 @pytest.fixture
 def fake_args():
     """Factory for creating mock CLI argument namespaces."""
+
     def _factory(**kwargs):
         return MagicMock(**kwargs)
+
     return _factory
 
 
@@ -241,14 +243,9 @@ def fake_args():
 def mock_api_server(monkeypatch):
     """Mock requests.get/post for API-dependent commands."""
     import requests
-    mock_get = MagicMock(return_value=MagicMock(
-        status_code=200,
-        json=lambda: {"status": "ok"}
-    ))
-    mock_post = MagicMock(return_value=MagicMock(
-        status_code=200,
-        json=lambda: {"status": "ok"}
-    ))
+
+    mock_get = MagicMock(return_value=MagicMock(status_code=200, json=lambda: {"status": "ok"}))
+    mock_post = MagicMock(return_value=MagicMock(status_code=200, json=lambda: {"status": "ok"}))
     monkeypatch.setattr(requests, "get", mock_get)
     monkeypatch.setattr(requests, "post", mock_post)
     return mock_get, mock_post
@@ -259,6 +256,7 @@ def fake_logger(monkeypatch):
     """Capture log output for assertion."""
     logs = []
     import core.version as ver
+
     # Patch logging to capture output
     return logs
 ```

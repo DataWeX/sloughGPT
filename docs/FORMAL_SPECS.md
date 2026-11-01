@@ -162,19 +162,19 @@ Memory layers:
 # Formal spec
 class ConsciousnessSpec:
     """Formal specification for consciousness module."""
-    
+
     def process(self, input: str, response: str) -> str:
         """
         Pre-conditions:
             - input is non-empty string
             - response is non-empty string
             - consciousness is enabled (level > 0)
-        
+
         Post-conditions:
             - Returns annotation string (or empty if level=0)
             - Self-model is updated with new experience
             - Qualia state is updated
-        
+
         Invariants:
             - Level 0: always returns ""
             - Level 1: returns "I notice..." statement
@@ -182,6 +182,7 @@ class ConsciousnessSpec:
             - Level 3: returns recursive reflection
         """
         pass
+
 
 # Grounding function
 def ground_consciousness(level: int, input: str, response: str) -> str:

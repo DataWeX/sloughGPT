@@ -1,0 +1,1482 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Local fonts - served from /public/fonts */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  src: url('/fonts/jetbrains-latin.woff2') format('woff2');
+  font-display: swap;
+}
+
+/* ── Base font ────────────────────────────────────────────────────── */
+@layer base {
+  body {
+    font-family: var(--font-rubik), system-ui, sans-serif;
+  }
+}
+
+/*
+ * Man — Noir Violet
+ * A warm, sophisticated palette with rich violet primary + warm terracotta accents.
+ * Light: warm cream paper with subtle violet tint.
+ * Dark: deep charcoal-violet with vibrant lilac accents.
+ * html.light / html.dark + theme-* accent chips (ThemeProvider).
+ */
+
+:root {
+  /* App shell */
+  --app-mobile-header-h: 3.25rem;
+  --app-bottom-nav-h: 3.5rem;
+  --sidebar-width: 13rem;
+  --sidebar-collapsed-width: 3rem;
+  --conv-sidebar-width: 16rem;
+  --tool-panel-width: 18rem;
+  /* Nav bookmark tab (AppLayout) protrudes past the nav edge into the
+     conversation panel. Single source of truth for that protrusion: the tab's
+     own width (AppLayout) and the panel's reserved left gutter
+     (ConversationSidebar) both derive from it, so they can never drift. */
+  --nav-tab-protrusion: 1.15rem;
+  /* Chat thread max width — full-bleed by default, responsive padding handles
+     readability. Set to 100% so the conversation spans the available column. */
+  --chat-thread-max: 100%;
+  --chat-bg: 246 242 237;
+  /* Content area max width for large screens */
+  --content-max-width: 80rem;
+  color-scheme: light;
+
+  /* Light — warm cream paper with violet undertone */
+  --background: 248 246 252;
+  --foreground: 25 22 36;
+  --card: 255 255 255;
+  --card-foreground: 25 22 36;
+  --popover: 255 255 255;
+  --popover-foreground: 25 22 36;
+  --primary: 124 82 196;
+  --primary-foreground: 250 248 255;
+  --secondary: 237 232 248;
+  --secondary-foreground: 42 37 55;
+  --muted: 244 242 248;
+  --muted-foreground: 130 122 150;
+  --accent: 236 145 95;
+  --accent-foreground: 250 248 255;
+  --ring: 124 82 196;
+  --border: 228 224 242;
+  --input: 228 224 242;
+  --radius: 6px;
+  --success: 52 176 125;
+  --warning: 236 168 60;
+  --destructive: 220 80 90;
+  --destructive-foreground: 250 248 255;
+  --info: 90 150 220;
+  --chart-1: 124 82 196;
+  --chart-2: 52 176 125;
+  --chart-3: 236 145 95;
+  --chart-4: 90 150 220;
+  --chart-5: 220 80 90;
+}
+
+/*
+ * Terminal chrome (dait shell + Dev/startup panels) — a deliberately FIXED
+ * dark ladder. The embedded terminal always renders dark, like a code-editor
+ * panel, independent of the light/dark app theme. These are NOT theme-switched:
+ * do NOT add html.dark overrides for them. Values are the extracted originals
+ * (macOS-echoing neutral grays + traffic lights), so this is a pure refactor.
+ *   Surfaces: panel → raised input → header → chip
+ *   Text:     strong → body → muted → dim → faint(placeholder)
+ *   Status:   traffic lights close/minimize/zoom double as error/warn/ok
+ *   Accents:  system blue (actions/progress) + HTTP-method purple/cyan
+ */
+:root {
+  --term-surface: 10 10 10;
+  --term-surface-raised: 17 17 17;
+  --term-header: 28 28 30;
+  --term-chip: 44 44 46;
+  --term-text-strong: 229 229 234;
+  --term-text: 199 199 204;
+  --term-text-muted: 142 142 147;
+  --term-text-dim: 99 99 102;
+  --term-text-faint: 72 72 74;
+  --term-close: 255 95 87;
+  --term-minimize: 254 188 46;
+  --term-zoom: 40 200 64;
+  --term-blue: 10 122 255;
+  --term-purple: 191 90 242;
+  --term-cyan: 90 200 250;
+}
+
+html.dark {
+  color-scheme: dark;
+  --chat-bg: 22 20 30;
+  --background: 17 15 24;
+  --foreground: 238 234 248;
+  --card: 28 25 38;
+  --card-foreground: 238 234 248;
+  --popover: 32 29 44;
+  --popover-foreground: 238 234 248;
+  --primary: 192 170 244;
+  --primary-foreground: 25 22 36;
+  --secondary: 50 44 68;
+  --secondary-foreground: 238 234 248;
+  --muted: 38 34 52;
+  --muted-foreground: 150 140 172;
+  --accent: 240 176 130;
+  --accent-foreground: 25 22 36;
+  --ring: 192 170 244;
+  --border: 52 46 72;
+  --input: 52 46 72;
+  --success: 72 192 140;
+  --warning: 240 192 80;
+  --destructive: 235 100 110;
+  --destructive-foreground: 25 22 36;
+  --info: 100 165 240;
+  --chart-1: 192 170 244;
+  --chart-2: 72 192 140;
+  --chart-3: 240 176 130;
+  --chart-4: 100 165 240;
+  --chart-5: 235 100 110;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+body {
+  color: rgb(var(--foreground));
+  background: rgb(var(--background));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Matches @man/strui — fewer accidental grey flashes on iOS tap targets. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Responsive root scale: 14px base (mobile) → 16px on md+ (desktop) */
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+@layer components {
+  .sl-shell-main {
+    background-color: rgb(var(--background));
+  }
+
+/* ── App Shell Layout ────────────────────────────────────── */
+/*
+ * Container hierarchy for the web application:
+ *   sl-app-shell    → fills viewport, contains everything
+ *   sl-app-body     → horizontal split: sidebar | main
+ *   sl-app-main     → content column (scrolls internally)
+ *   sl-app-content  → inner wrapper for page content
+ *
+ * Mobile (< lg): sidebar becomes a drawer overlay
+ * Desktop (≥ lg): sidebar is fixed-width, main fills remaining space
+ */
+.sl-app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  background-color: rgb(var(--background));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
+}
+
+.sl-app-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sl-app-main {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sl-app-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* Mobile header — visible below lg, fixed height */
+.sl-app-mobile-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  height: var(--app-mobile-header-h);
+  min-height: var(--app-mobile-header-h);
+  flex-shrink: 0;
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+  background-color: rgb(var(--background));
+}
+@media (min-width: 1024px) {
+  .sl-app-mobile-header {
+    display: none;
+  }
+}
+
+/* Desktop sidebar — hidden below lg */
+.sl-app-sidebar-desktop {
+  display: none;
+  height: 100%;
+  flex-shrink: 0;
+  width: var(--sidebar-width);
+  transition: width 200ms ease;
+}
+.sl-app-sidebar-desktop[data-collapsed="true"] {
+  width: var(--sidebar-collapsed-width);
+}
+@media (min-width: 1024px) {
+  .sl-app-sidebar-desktop {
+    display: flex;
+  }
+}
+
+/* Restarting banner */
+.sl-app-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  height: 1.75rem;
+  background-color: color-mix(in srgb, rgb(var(--warning)) 9%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--warning)) 20%, transparent);
+  font-size: 11px;
+  font-weight: 500;
+  /* Faded warning ink: full-saturation amber read as a glowing strip. The
+     status dot still carries the pure tone; the copy sits at 65% warning over
+     the page background so it stays legible without flaring. */
+  color: color-mix(in srgb, rgb(var(--warning)) 65%, rgb(var(--background)));
+}
+
+/* Mobile drawer backdrop */
+.sl-app-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: opacity 200ms ease;
+}
+@media (min-width: 1024px) {
+  .sl-app-drawer-backdrop {
+    display: none;
+  }
+}
+
+/* Mobile drawer panel */
+.sl-app-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 110;
+  display: flex;
+  width: min(var(--sidebar-width), min(18rem, 92vw));
+  max-width: 100%;
+  outline: none;
+  box-shadow: 0.25rem 0 1.5rem -0.25rem rgba(0, 0, 0, 0.28);
+  transition: transform 200ms ease;
+  overscroll-behavior: contain;
+}
+.sl-app-drawer::-webkit-scrollbar {
+  display: none;
+}
+.sl-app-drawer {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+@media (min-width: 1024px) {
+  .sl-app-drawer {
+    display: none;
+  }
+}
+
+/* ── Bottom Navigation Bar (mobile) ──────────────────────── */
+.sl-bottom-nav {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  height: var(--app-bottom-nav-h);
+  min-height: var(--app-bottom-nav-h);
+  flex-shrink: 0;
+  border-top: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+  background-color: color-mix(in srgb, rgb(var(--background)) 85%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 40;
+}
+.sl-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
+  color: rgb(var(--muted-foreground));
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 150ms ease, transform 100ms ease;
+  position: relative;
+}
+.sl-bottom-nav-item:active {
+  transform: scale(0.92);
+}
+.sl-bottom-nav-item:hover {
+  color: rgb(var(--foreground));
+}
+.sl-bottom-nav-item--active {
+  color: rgb(var(--primary));
+}
+.sl-bottom-nav-item--active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1.5rem;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background-color: rgb(var(--primary));
+}
+.sl-bottom-nav-label {
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  padding: 0 0.25rem;
+}
+@media (min-width: 1024px) {
+  .sl-bottom-nav { display: none; }
+}
+@media (max-width: 1023px) {
+  .sl-app-main { padding-bottom: var(--app-bottom-nav-h); }
+}
+
+/* ── Bottom Status Bar ──────────────────────────────────── */
+.sl-status-bar {
+  flex-shrink: 0;
+  border-top: 1px solid color-mix(in srgb, rgb(var(--border)) 30%, transparent);
+  background-color: color-mix(in srgb, rgb(var(--background)) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  backdrop-filter: blur(8px) saturate(120%);
+  font-size: 10px;
+  color: rgb(var(--muted-foreground));
+  z-index: 40;
+}
+.sl-status-bar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  background: rgb(var(--card));
+  border-top: 1px solid rgb(var(--border));
+  border-radius: 0;
+  transition: background-color 150ms ease;
+}
+.sl-status-bar-row:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted)) 50%, transparent);
+}
+@media (min-width: 640px) {
+  .sl-status-bar-row { height: 2rem; padding: 0 0.75rem; }
+}
+.sl-status-bar-status {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.sl-status-bar-status:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted)) 60%, transparent);
+  color: rgb(var(--foreground));
+}
+.sl-status-bar-status:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: -2px;
+}
+.sl-status-bar-dot {
+  display: inline-block;
+  height: 6px;
+  width: 6px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.sl-status-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+@media (min-width: 640px) {
+  .sl-status-bar-actions { gap: 0.5rem; }
+}
+.sl-status-bar-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  transition: background-color 150ms ease;
+}
+.sl-status-bar-metric:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted)) 50%, transparent);
+}
+.sl-status-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.25rem;
+  width: 1.25rem;
+  padding: 0;
+  border-radius: 0.25rem;
+  color: rgb(var(--muted-foreground));
+  transition: background-color 150ms ease, color 150ms ease;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.sl-status-bar-btn:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted)) 60%, transparent);
+  color: rgb(var(--foreground));
+}
+.sl-status-bar-btn:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: -2px;
+}
+.sl-status-bar-details {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-top: 1px solid color-mix(in srgb, rgb(var(--border)) 20%, transparent);
+  font-size: 9px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sl-status-bar-details::-webkit-scrollbar { display: none; }
+@media (min-width: 640px) {
+  .sl-status-bar-details { gap: 1rem; padding: 0.25rem 0.75rem; }
+}
+.sl-status-bar-detail-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+.sl-status-bar-detail-label {
+  color: rgb(var(--muted-foreground));
+  opacity: 0.6;
+}
+.sl-status-bar-detail-value {
+  color: rgb(var(--foreground));
+  font-weight: 500;
+}
+.sl-status-bar-detail-spacer {
+  flex: 1;
+}
+/* Badges inside status bar */
+.sl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 150ms ease;
+}
+.sl-badge-success {
+  background-color: color-mix(in srgb, rgb(var(--success)) 12%, transparent);
+  color: rgb(var(--success));
+}
+.sl-badge-success:hover {
+  background-color: color-mix(in srgb, rgb(var(--success)) 20%, transparent);
+}
+.sl-badge-destructive {
+  background-color: color-mix(in srgb, rgb(var(--destructive)) 12%, transparent);
+  color: rgb(var(--destructive));
+}
+.sl-badge-destructive:hover {
+  background-color: color-mix(in srgb, rgb(var(--destructive)) 20%, transparent);
+}
+.sl-badge-primary {
+  background-color: color-mix(in srgb, rgb(var(--primary)) 10%, transparent);
+  color: rgb(var(--primary));
+  opacity: 0.8;
+}
+.sl-badge-primary:hover {
+  background-color: color-mix(in srgb, rgb(var(--primary)) 18%, transparent);
+  opacity: 1;
+}
+.sl-badge-secondary {
+  background-color: color-mix(in srgb, rgb(var(--muted-foreground)) 10%, transparent);
+  color: rgb(var(--muted-foreground));
+}
+.sl-badge-secondary:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted-foreground)) 18%, transparent);
+}
+/* Hide on mobile: show only compact row */
+@media (max-width: 639px) {
+  .sl-status-bar-metric,
+  .sl-badge-primary,
+  .sl-status-bar-metric { display: none; }
+}
+/* Mobile: compact status bar */
+@media (max-width: 639px) {
+  .sl-status-bar-row { height: 1.5rem; font-size: 9px; }
+  .sl-status-bar-dot { height: 5px; width: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-status-bar-row,
+  .sl-status-bar-status,
+  .sl-status-bar-btn,
+  .sl-status-bar-metric,
+  .sl-badge {
+    transition: none;
+  }
+}
+
+/*
+ * sl-page — standard page content wrapper
+ * Used by non-chat pages (settings, models, training, etc.)
+ * Provides responsive padding; scrolling is handled by parent .sl-app-content.
+ * Inner centered column (.mx-auto max-w-*) controls width, not this wrapper.
+ */
+.sl-page {
+  @apply w-full text-foreground;
+  padding: 0.75rem;
+  background-color: rgb(var(--background));
+}
+@media (min-width: 640px) {
+  .sl-page { padding: 1rem; }
+}
+@media (min-width: 768px) {
+  .sl-page { padding: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .sl-page { padding: 2rem; }
+}
+
+  /**
+   * Chat history column — flat wash + one edge line (no lattice gradient:
+   * avoids banding / "striped blocks" next to the thread).
+   */
+  .sl-chat-rail {
+    border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 58%, transparent);
+    background-color: color-mix(in srgb, rgb(var(--background)) 88%, rgb(var(--muted)) 12%);
+    box-shadow: none;
+  }
+
+  .dark .sl-chat-rail {
+    background-color: color-mix(in srgb, rgb(var(--card)) 72%, transparent);
+    border-right-color: color-mix(in srgb, rgb(var(--border)) 55%, transparent);
+  }
+
+  /* Headings */
+  .sl-h1 {
+    @apply text-2xl md:text-3xl font-semibold tracking-tight text-foreground;
+  }
+}
+
+/* ── Toast ────────────────────────────────────────────── */
+.sl-toast-container {
+  @apply fixed right-3 z-50 flex flex-col gap-2;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+
+.sl-toast {
+  @apply relative flex cursor-pointer flex-col overflow-hidden border text-sm;
+  max-width: 22rem;
+  min-width: 16rem;
+  border-radius: 10px;
+  border-color: color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, rgb(var(--card)) 98%, rgb(var(--muted))) 0%,
+    color-mix(in srgb, rgb(var(--card)) 92%, rgb(var(--muted))) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 6px 16px rgba(0,0,0,0.08),
+    0 12px 32px rgba(0,0,0,0.06);
+  animation: sl-toast-in 0.3s cubic-bezier(0.21, 1.02, 0.73, 1) both;
+  pointer-events: auto;
+}
+
+.sl-toast:hover {
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 8px 24px rgba(0,0,0,0.12),
+    0 16px 48px rgba(0,0,0,0.08);
+}
+
+.sl-toast--exit {
+  animation: sl-toast-out 0.2s ease-in both;
+}
+
+@keyframes sl-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sl-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.25rem) scale(0.96);
+  }
+}
+
+.sl-toast__bar {
+  @apply absolute left-0 top-0 h-full w-[3px];
+}
+
+.sl-toast__body {
+  @apply flex items-start gap-2.5 px-3 py-2.5;
+}
+
+.sl-toast__icon {
+  @apply mt-0.5 h-4 w-4 shrink-0 flex items-center justify-center;
+  font-size: 15px;
+}
+
+.sl-toast__message {
+  @apply flex-1 text-sm leading-snug font-medium;
+  color: color-mix(in srgb, rgb(var(--foreground)) 92%, transparent);
+}
+
+.sl-toast__verbose {
+  @apply ml-0.5 inline text-[10px] underline opacity-55 hover:opacity-100 transition-opacity;
+  text-underline-offset: 2px;
+}
+
+.sl-toast__close {
+  @apply -mr-1 -mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md opacity-40 hover:opacity-100 hover:bg-muted/60 transition-all;
+}
+
+.sl-toast__undo {
+  @apply ml-1 shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors;
+}
+
+.sl-toast__verbose-block {
+  @apply border-t px-3 pb-2 pt-1.5 text-[10px] leading-tight overflow-x-auto max-h-20;
+  border-color: color-mix(in srgb, rgb(var(--border)) 42%, transparent);
+}
+
+.sl-toast__track {
+  @apply h-[2px] w-full bg-border/20;
+}
+
+.sl-toast__fill {
+  @apply h-full rounded-full transition-[width] duration-100 ease-linear;
+}
+
+@keyframes str-dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes scaleBar {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes sl-bar-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(420%); }
+}
+
+.sl-bar-shimmer {
+  animation: sl-bar-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes sl-dot-pulse {
+  0%, 100% { transform: scale(1.25); opacity: 1; }
+  50% { transform: scale(1.55); opacity: 0.65; }
+}
+
+.sl-dot-pulse {
+  animation: sl-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.sl-dot-wave {
+  animation: str-dot-bounce 1.2s ease-in-out infinite;
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.15); }
+  50% { box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.05); }
+}
+
+.trait-bar-inner {
+  transform-origin: left;
+  animation: scaleBar 0.5s ease-out forwards;
+}
+
+.stat-card {
+  animation: fadeSlideUp 0.4s ease-out both;
+}
+
+.badge-glow {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  /* End at `none` (not translateY(0)) so the element does not keep a
+     composited transform after the animation — a lingering transform would
+     make .sl-page the containing block for position:fixed descendants
+     (dialogs), breaking viewport-centered positioning. */
+  to { opacity: 1; transform: none; }
+}
+
+.view-pane {
+  animation: viewFadeIn 0.3s ease-out both;
+}
+
+/* ── Flashcard flip ──────────────────────────────────────────────── */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* ── Kanban Tray — ceramic/plastic finish ───────────────────────── */
+.sl-kanban-tray {
+  position: relative;
+}
+
+.sl-kanban-tray::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+html.dark .sl-kanban-tray::after {
+  box-shadow: 0 8px 40px -8px rgb(var(--primary) / 0.15);
+  opacity: 1;
+}
+
+.sl-kanban-tray-surface {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgb(var(--card)) 100%, white) 0%,
+      rgb(var(--card)) 40%,
+      color-mix(in srgb, rgb(var(--card)) 96%, black) 100%
+    );
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+}
+
+html.dark .sl-kanban-tray-surface {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgb(var(--card)) 100%, rgba(255, 255, 255, 0.04)) 0%,
+      rgb(var(--card)) 30%,
+      color-mix(in srgb, rgb(var(--card)) 94%, black) 100%
+    );
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 4px 16px rgba(0, 0, 0, 0.25),
+    0 12px 48px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .str-dot {
+    animation: none;
+    opacity: 0.75;
+  }
+  .sl-bar-shimmer {
+    animation: none;
+    opacity: 0.55;
+    transform: none;
+  }
+  .sl-dot-pulse,
+  .sl-dot-wave {
+    animation: none;
+  }
+  .sl-toast {
+    animation: none;
+  }
+  .sl-toast--exit {
+    animation: none;
+    opacity: 0;
+  }
+  .sl-interactive {
+    transition: none;
+  }
+  .sl-interactive:hover {
+    transform: none;
+  }
+  .sl-interactive:active {
+    transform: none;
+  }
+  .view-pane {
+    animation: none;
+  }
+}
+
+/*
+ * @man/strui host utilities — keep in sync with packages/strui/src/styles/globals.css
+ * (ChatThread uses str-safe-x + str-chat-scroll; PromptComposer uses str-safe-bottom + str-touch-target).
+ */
+@layer utilities {
+  .str-min-h-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .str-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .str-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .str-safe-left {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .str-safe-right {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .str-safe-x {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .str-safe-all {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .str-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .str-chat-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Interactive hover lift — apply to clickable cards/links */
+  .sl-interactive {
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .sl-interactive:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+  }
+  .sl-interactive:active {
+    transform: scale(0.985);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--muted));
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, rgb(var(--primary)) 30%, rgb(var(--border)));
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, rgb(var(--primary)) 55%, rgb(var(--border)));
+}
+
+::-webkit-scrollbar-corner {
+  background: rgb(var(--muted));
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, rgb(var(--primary)) 30%, rgb(var(--border))) rgb(var(--muted));
+}
+
+/* Auto-hide scrollbar — shows on scroll/hover, fades out */
+.custom-scrollbar-area {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.custom-scrollbar-area::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar-area::-webkit-scrollbar-thumb {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: color-mix(in srgb, rgb(var(--primary)) 30%, rgb(var(--border)));
+  border-radius: 9999px;
+}
+
+.custom-scrollbar-area:hover::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
+
+.custom-scrollbar-container {
+  overflow: auto;
+  position: relative;
+}
+
+.custom-scrollbar-container::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar-container::-webkit-scrollbar-thumb {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background: color-mix(in srgb, rgb(var(--primary)) 30%, rgb(var(--border)));
+  border-radius: 9999px;
+}
+
+.custom-scrollbar-container:hover::-webkit-scrollbar-thumb,
+.custom-scrollbar-container.custom-scrollbar-visible::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+::selection {
+  background: color-mix(in srgb, rgb(var(--primary)) 25%, transparent);
+  color: rgb(var(--foreground));
+}
+
+input,
+textarea,
+select {
+  font-size: 14px;
+}
+
+button {
+  font-size: 14px;
+}
+
+/* Global focus ring — catch all raw form/button elements without repeated utility classes */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--primary) / 0.3);
+  border-color: rgb(var(--primary) / 0.5);
+}
+
+/* Palettes — full-spectrum overrides applied via html class */
+html.palette-neural-precision {
+  --background: 240 242 247;
+  --foreground: 22 20 32;
+  --card: 255 255 255;
+  --card-foreground: 22 20 32;
+  --popover: 255 255 255;
+  --popover-foreground: 22 20 32;
+  --primary: 99 57 170;
+  --primary-foreground: 250 248 255;
+  --secondary: 228 232 242;
+  --secondary-foreground: 36 32 50;
+  --muted: 234 236 244;
+  --muted-foreground: 110 104 130;
+  --accent: 56 189 248;
+  --accent-foreground: 10 12 20;
+  --ring: 99 57 170;
+  --border: 218 222 236;
+  --input: 218 222 236;
+  --chart-1: 99 57 170;
+  --chart-2: 52 176 125;
+  --chart-3: 56 189 248;
+  --chart-4: 90 150 220;
+  --chart-5: 220 80 90;
+  --shadow-sm: 0 1px 2px rgba(22, 20, 32, 0.06);
+  --shadow-md: 0 4px 12px rgba(22, 20, 32, 0.08);
+  --shadow-lg: 0 8px 30px rgba(22, 20, 32, 0.10);
+  --shadow-xl: 0 16px 48px rgba(22, 20, 32, 0.14);
+}
+html.dark.palette-neural-precision {
+  --chat-bg: 15 14 22;
+  --background: 15 14 22;
+  --foreground: 234 232 242;
+  --card: 24 22 34;
+  --card-foreground: 234 232 242;
+  --popover: 30 27 42;
+  --popover-foreground: 234 232 242;
+  --primary: 160 128 216;
+  --primary-foreground: 15 14 22;
+  --secondary: 40 36 56;
+  --secondary-foreground: 234 232 242;
+  --muted: 34 30 48;
+  --muted-foreground: 140 132 164;
+  --accent: 80 200 255;
+  --accent-foreground: 10 12 20;
+  --ring: 160 128 216;
+  --border: 46 42 62;
+  --input: 46 42 62;
+  --chart-1: 160 128 216;
+  --chart-2: 72 192 140;
+  --chart-3: 80 200 255;
+  --chart-4: 100 165 240;
+  --chart-5: 235 100 110;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+
+/* Accent themes — website color for accented elements (message bubbles,
+   buttons, focus rings). Override --primary/--ring on <html> so the chosen
+   accent wins even when a palette class is present; the palette still
+   controls the rest of the color system (background, card, border, etc.). */
+/* ── Aura: Blue — calm ocean, trustworthy ─────────────────────── */
+html.theme-blue,
+html.dark.theme-blue {
+  --primary: 90 130 220;
+  --ring: 140 176 240;
+  --secondary: 230 237 250;
+  --secondary-foreground: 35 45 70;
+  --muted: 240 244 252;
+  --border: 218 228 248;
+  --input: 218 228 248;
+}
+html.dark.theme-blue {
+  --secondary: 38 48 72;
+  --muted: 30 38 58;
+  --border: 44 56 80;
+  --input: 44 56 80;
+}
+
+/* ── Aura: Purple — ethereal lilac, mystical ──────────────────── */
+html.theme-purple,
+html.dark.theme-purple {
+  --primary: 155 108 214;
+  --ring: 192 162 238;
+  --secondary: 240 232 252;
+  --secondary-foreground: 50 37 70;
+  --muted: 246 242 252;
+  --border: 230 222 248;
+  --input: 230 222 248;
+}
+html.dark.theme-purple {
+  --secondary: 50 40 72;
+  --muted: 40 34 58;
+  --border: 58 48 80;
+  --input: 58 48 80;
+}
+
+/* ── Aura: Pink — soft rose, delicate ─────────────────────────── */
+html.theme-pink,
+html.dark.theme-pink {
+  --primary: 218 130 170;
+  --ring: 238 178 206;
+  --secondary: 250 234 242;
+  --secondary-foreground: 70 35 52;
+  --muted: 252 244 248;
+  --border: 242 222 234;
+  --input: 242 222 234;
+}
+html.dark.theme-pink {
+  --secondary: 62 40 52;
+  --muted: 50 34 44;
+  --border: 72 48 62;
+  --input: 72 48 62;
+}
+
+/* ── Aura: Red — warm coral, energetic ────────────────────────── */
+html.theme-red,
+html.dark.theme-red {
+  --primary: 230 120 130;
+  --ring: 242 172 180;
+  --secondary: 250 234 236;
+  --secondary-foreground: 70 35 40;
+  --muted: 252 244 244;
+  --border: 242 222 224;
+  --input: 242 222 224;
+}
+html.dark.theme-red {
+  --secondary: 62 38 42;
+  --muted: 50 32 36;
+  --border: 72 46 50;
+  --input: 72 46 50;
+}
+
+/* ── Aura: Orange — peachy bread crust, warm bakery ───────────── */
+html.theme-orange,
+html.dark.theme-orange {
+  --primary: 236 155 90;
+  --ring: 244 194 144;
+  --secondary: 250 240 230;
+  --secondary-foreground: 70 50 30;
+  --muted: 252 246 240;
+  --border: 242 232 218;
+  --input: 242 232 218;
+}
+html.dark.theme-orange {
+  --secondary: 62 48 34;
+  --muted: 50 40 28;
+  --border: 72 56 40;
+  --input: 72 56 40;
+}
+
+/* ── Aura: Green — fresh mint, natural ────────────────────────── */
+html.theme-green,
+html.dark.theme-green {
+  --primary: 72 178 130;
+  --ring: 134 210 174;
+  --secondary: 232 248 240;
+  --secondary-foreground: 30 60 48;
+  --muted: 242 252 248;
+  --border: 218 240 230;
+  --input: 218 240 230;
+}
+html.dark.theme-green {
+  --secondary: 34 56 44;
+  --muted: 28 46 38;
+  --border: 42 66 52;
+  --input: 42 66 52;
+}
+
+/* ── Aura: Teal — cool dew, refreshing ────────────────────────── */
+html.theme-teal,
+html.dark.theme-teal {
+  --primary: 72 166 200;
+  --ring: 134 202 228;
+  --secondary: 232 244 250;
+  --secondary-foreground: 30 55 68;
+  --muted: 242 250 252;
+  --border: 218 236 244;
+  --input: 218 236 244;
+}
+html.dark.theme-teal {
+  --secondary: 34 50 62;
+  --muted: 28 42 52;
+  --border: 42 60 72;
+  --input: 42 60 72;
+}
+
+/* Shadow design tokens — layered depth system */
+:root {
+  --shadow-sm: 0 1px 2px rgba(25, 22, 36, 0.06);
+  --shadow-md: 0 4px 12px rgba(25, 22, 36, 0.08);
+  --shadow-lg: 0 8px 30px rgba(25, 22, 36, 0.10);
+  --shadow-xl: 0 16px 48px rgba(25, 22, 36, 0.14);
+}
+html.dark {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/**
+ * Shell navigation — light: opaque pastel lattice (matches main column, readable on busy UIs).
+ * Dark: glass (blur + translucent card) to sit on deep plum-gray.
+ */
+
+/*
+ * Pixel-perfect spacing reference:
+ *
+ * Touch targets: h-11 (44px) minimum — Apple HIG / Material
+ * Buttons: h-9 (36px), h-10 (40px), h-11 (44px), h-12 (48px)
+ * Icons: h-6 w-6 (24px), h-8 w-8 (32px), h-10 w-10 (40px)
+ * Gaps: gap-1 (4px), gap-2 (8px), gap-3 (12px), gap-4 (16px)
+ * Padding: px-2 py-1 (8px/4px), px-3 py-1.5 (12px/6px), px-4 py-2 (16px/8px)
+ * Border radius: 0 (sharp), rounded-md, rounded-lg, rounded-xl
+ *
+ * rounded-none: 0px — nav links, sidebar, inputs (default)
+ * rounded-md: 4px — buttons, small cards
+ * rounded-lg: 8px — cards, panels, modals
+ * rounded-xl: 12px — chat bubbles (AI)
+ * rounded-2xl: 16px — large chat bubbles
+ *
+ * Custom:
+ *   min-h-[2.25rem] = 36px (nav links)
+ *   min-h-[3.25rem] = 52px (headers)
+ *   min-h-[60px] = 60px (textareas)
+ */
+
+.sl-sidebar-surface {
+  background-color: color-mix(in srgb, rgb(var(--background)) 96%, rgb(var(--card)) 4%);
+  background-image:
+    radial-gradient(ellipse at 30% -10%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 110%, color-mix(in srgb, rgb(var(--accent)) 7%, transparent) 0%, transparent 40%);
+  border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 70%, transparent);
+  box-shadow: 2px 0 24px -12px color-mix(in srgb, rgb(var(--foreground)) 6%, transparent);
+}
+
+.dark .sl-sidebar-surface {
+  background-color: color-mix(in srgb, rgb(var(--background)) 94%, rgb(var(--card)) 6%);
+  background-image:
+    radial-gradient(ellipse at 30% -10%, color-mix(in srgb, rgb(var(--primary)) 10%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 110%, color-mix(in srgb, rgb(var(--accent)) 8%, transparent) 0%, transparent 40%);
+  border-right: 1px solid color-mix(in srgb, rgb(var(--border)) 70%, transparent);
+  box-shadow: 2px 0 24px -8px rgba(0, 0, 0, 0.3);
+}
+
+.sl-mobile-header {
+  background-color: rgb(var(--background));
+  background-image:
+    radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 35%, transparent);
+}
+
+.dark .sl-mobile-header {
+  background-color: rgb(var(--background));
+  background-image:
+    radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+}
+
+/* ── Prism syntax highlighting (Noir Violet) ──────────────────────── */
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #e0daf0;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  direction: ltr;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  tab-size: 2;
+  hyphens: none;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #8a80a0;
+}
+
+.token.punctuation {
+  color: #b0a8c4;
+}
+
+.token.namespace {
+  opacity: 0.8;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #ec915f;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #7cc88e;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #c4a8d8;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #c4aaf0;
+}
+
+.token.function,
+.token.class-name {
+  color: #ec915f;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #e8c87a;
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.entity {
+  cursor: help;
+}
+
+/* Light mode overrides */
+html.light code[class*="language-"],
+html.light pre[class*="language-"] {
+  color: #2d2640;
+}
+
+html.light .token.comment,
+html.light .token.prolog,
+html.light .token.doctype,
+html.light .token.cdata {
+  color: #7a7090;
+}
+
+html.light .token.punctuation {
+  color: #5a5070;
+}
+
+html.light .token.property,
+html.light .token.tag,
+html.light .token.boolean,
+html.light .token.number,
+html.light .token.constant,
+html.light .token.symbol,
+html.light .token.deleted {
+  color: #c45a20;
+}
+
+html.light .token.selector,
+html.light .token.attr-name,
+html.light .token.string,
+html.light .token.char,
+html.light .token.builtin,
+html.light .token.inserted {
+  color: #2a8a4a;
+}
+
+html.light .token.operator,
+html.light .token.entity,
+html.light .token.url,
+html.light .language-css .token.string,
+html.light .style .token.string {
+  color: #7c52c4;
+}
+
+html.light .token.atrule,
+html.light .token.attr-value,
+html.light .token.keyword {
+  color: #7c52c4;
+}
+
+html.light .token.function,
+html.light .token.class-name {
+  color: #c45a20;
+}
+
+html.light .token.regex,
+html.light .token.important,
+html.light .token.variable {
+  color: #8a6a20;
+}
+
+/* Voice hero orb — reduced motion: keep every state legible, drop the movement.
+   --voice-motion collapses the level-driven scale to a static base so the orb
+   still reads as listening/speaking without anything travelling on screen. */
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb,
+  .voice-orb * {
+    animation: none;
+    transition: none;
+  }
+  .voice-orb {
+    --voice-motion: 0;
+  }
+}

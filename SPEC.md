@@ -149,19 +149,18 @@ class TrainerProtocol(Protocol):
         resume: bool = False,
         resume_path: Optional[str] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
-    ) -> Dict[str, Any]:
-        ...
+    ) -> Dict[str, Any]: ...
 ```
 
 ### Model Interface
 
 ```python
 class ModelInterface(Protocol):
-    def forward(self, x: torch.Tensor, y: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        ...
+    def forward(
+        self, x: torch.Tensor, y: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]: ...
 
-    def generate(self, input_ids: torch.Tensor, max_new_tokens: int, **kwargs) -> torch.Tensor:
-        ...
+    def generate(self, input_ids: torch.Tensor, max_new_tokens: int, **kwargs) -> torch.Tensor: ...
 ```
 
 ## Entry Points

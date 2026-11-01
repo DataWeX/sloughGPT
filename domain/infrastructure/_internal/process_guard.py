@@ -58,8 +58,6 @@ def resolve_memory_limit_mb(slnc_path: str | None, configured: float | None = No
     return max(8192.0, size_mb * 8.0)
 
 
-
-
 def _accepts_return_tensors(tokenizer: Any) -> bool:
     """True when tokenizer.__call__ accepts return_tensors= (HF-style)."""
     try:
@@ -84,6 +82,7 @@ def _decode_supports_skip(tokenizer: Any) -> bool:
         )
     except (TypeError, ValueError):
         return False
+
 
 # ── Thread-mode worker ────────────────────────────────────────────────
 
@@ -133,9 +132,7 @@ class _ThreadWorker:
 
     def start(self) -> None:
         self._started_at = time.time()
-        self._thread = threading.Thread(
-            target=self._run, daemon=True, name=f"tw-{self.worker_id}"
-        )
+        self._thread = threading.Thread(target=self._run, daemon=True, name=f"tw-{self.worker_id}")
         self._thread.start()
 
         # Wait for ready signal
@@ -150,7 +147,9 @@ class _ThreadWorker:
                     raise RuntimeError(f"ThreadWorker[{self.worker_id}]: model load failed")
             except queue.Empty:
                 if self._thread and not self._thread.is_alive():
-                    raise RuntimeError(f"ThreadWorker[{self.worker_id}]: thread died during startup")
+                    raise RuntimeError(
+                        f"ThreadWorker[{self.worker_id}]: thread died during startup"
+                    )
                 continue
         raise RuntimeError(
             f"ThreadWorker[{self.worker_id}]: failed to start within {self._startup_timeout}s"
@@ -351,13 +350,9 @@ class _ThreadWorker:
         if tokenizer is None and model is not None:
             tokenizer = getattr(model, "_tokenizer", None) or getattr(model, "tokenizer", None)
         if model is None:
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: no provider or HF model loaded"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: no provider or HF model loaded")
         if tokenizer is None:
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: HF model has no tokenizer"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: HF model has no tokenizer")
         return tokenizer, model, "hf"
 
     @staticmethod
@@ -398,12 +393,12 @@ class _ThreadWorker:
             }
 
         if kind != "hf":
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: model has no generate_numpy"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: model has no generate_numpy")
         return self._hf_generate(tokenizer, model, prompt, kwargs, start)
 
-    def _hf_generate(self, tokenizer: Any, model: Any, prompt: str, kwargs: dict, start: float) -> dict:
+    def _hf_generate(
+        self, tokenizer: Any, model: Any, prompt: str, kwargs: dict, start: float
+    ) -> dict:
         """HF-style generate (callable tokenizer + model.generate)."""
         import time as _time
 
@@ -414,15 +409,15 @@ class _ThreadWorker:
         repetition_penalty = kwargs.get("repetition_penalty", 1.0)
 
         if not callable(tokenizer):
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: HF tokenizer is not callable"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: HF tokenizer is not callable")
         if not hasattr(model, "generate"):
-            raise RuntimeError(
-                f"ThreadWorker[{self.worker_id}]: HF model has no generate()"
-            )
+            raise RuntimeError(f"ThreadWorker[{self.worker_id}]: HF model has no generate()")
 
-        inputs = tokenizer(prompt, return_tensors="pt") if _accepts_return_tensors(tokenizer) else tokenizer(prompt)
+        inputs = (
+            tokenizer(prompt, return_tensors="pt")
+            if _accepts_return_tensors(tokenizer)
+            else tokenizer(prompt)
+        )
         if isinstance(inputs, dict) or hasattr(inputs, "keys"):
             input_ids = inputs["input_ids"]
             attention_mask = inputs.get("attention_mask") if hasattr(inputs, "get") else None
@@ -454,9 +449,11 @@ class _ThreadWorker:
         output_ids = model.generate(**gen_kwargs)
         prompt_len = int(input_ids.shape[-1]) if hasattr(input_ids, "shape") else 0
         generated = output_ids[0][prompt_len:]
-        text = tokenizer.decode(generated, skip_special_tokens=True) if _decode_supports_skip(
-            tokenizer
-        ) else tokenizer.decode(generated)
+        text = (
+            tokenizer.decode(generated, skip_special_tokens=True)
+            if _decode_supports_skip(tokenizer)
+            else tokenizer.decode(generated)
+        )
         try:
             n_tokens = len(generated)
         except TypeError:

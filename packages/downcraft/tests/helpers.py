@@ -242,9 +242,7 @@ class RangeHandler(BaseHTTPRequestHandler):
                 entry,
             )
 
-    def _respond(
-        self, status: int, headers: dict, body: bytes, path: str, entry: dict
-    ) -> None:
+    def _respond(self, status: int, headers: dict, body: bytes, path: str, entry: dict) -> None:
         """Send status+headers+body, honoring ``truncate_once`` crash injection."""
         self.send_response(status)
         for k, v in headers.items():
