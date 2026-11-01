@@ -36,7 +36,7 @@ def mole_env(monkeypatch, tmp_path):
     monkeypatch.setenv("SLO_API_URL", "http://localhost:8000")
     monkeypatch.setenv("SLO_JOURNEY_REPORT", str(tmp_path / "ux-flows-report.json"))
     monkeypatch.setenv("SLO_GATES_DIR", str(tmp_path / "gates"))
-    monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(tmp_path / "benchmarks"))
+    monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(tmp_path / "benchmarks"))
     monkeypatch.delenv("SLO_GATEWAY_URL", raising=False)
     monkeypatch.delenv("SLO_DOCTOR_REPORT", raising=False)
     monkeypatch.delenv("SLO_JOURNEY_CACHE", raising=False)
@@ -656,7 +656,7 @@ class TestBenchmarksProbe:
         now = time.time()
         _bench_record(d, "latency", "a.json", {"mean_ms": 100.0, "p95_ms": 200.0}, now - 60)
         _bench_record(d, "latency", "b.json", {"mean_ms": 150.0, "p95_ms": 210.0}, now)
-        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(d))
         result = benchmarks_probe.run_probe()
         assert result.ok is True
         finding = _finding(result, "benchmarks.latency")
@@ -670,7 +670,7 @@ class TestBenchmarksProbe:
         now = time.time()
         _bench_record(d, "latency", "a.json", {"mean_ms": 100.0, "p95_ms": 200.0}, now - 60)
         _bench_record(d, "latency", "b.json", {"mean_ms": 110.0, "p95_ms": 210.0}, now)
-        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(d))
         result = benchmarks_probe.run_probe()
         assert result.ok is True
         finding = _finding(result, "benchmarks.latency")
@@ -682,14 +682,14 @@ class TestBenchmarksProbe:
         now = time.time()
         _bench_record(d, "stability", "a.json", {"overall": 95.0}, now - 60)
         _bench_record(d, "stability", "b.json", {"overall": 89.0}, now)  # -6 > 5.0 abs
-        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(d))
         result = benchmarks_probe.run_probe()
         finding = _finding(result, "benchmarks.stability")
         assert finding.severity == Severity.WARN
         assert "overall" in finding.detail
 
     def test_missing_dir_is_info_and_probe_fails(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(tmp_path / "nope"))
+        monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(tmp_path / "nope"))
         result = benchmarks_probe.run_probe()
         assert result.ok is False
         assert result.error
@@ -698,7 +698,7 @@ class TestBenchmarksProbe:
     def test_single_record_is_silent(self, monkeypatch, tmp_path):
         d = tmp_path / "benchmarks"
         _bench_record(d, "latency", "a.json", {"mean_ms": 100.0}, time.time())
-        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(d))
         result = benchmarks_probe.run_probe()
         assert result.ok is True
         assert result.findings == []  # no baseline yet — no nagging
@@ -709,7 +709,7 @@ class TestBenchmarksProbe:
         now = time.time()
         _bench_record(d, "training", "a.json", {"loss": 1.0}, now - 60)
         _bench_record(d, "training", "b.json", {"loss": 9.0}, now)  # no thresholds → no verdict
-        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(d))
         result = benchmarks_probe.run_probe()
         assert result.ok is True
         assert result.findings == []
@@ -721,11 +721,26 @@ class TestBenchmarksProbe:
         kd = d / "latency"
         (kd / "b.json").write_text("{truncated", encoding="utf-8")
         os.utime(kd / "b.json", (now, now))
-        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        monkeypatch.setenv("SLO_BENCH_DATA_DIR", str(d))
         result = benchmarks_probe.run_probe()
         finding = _finding(result, "benchmarks.latency")
         assert finding.severity == Severity.WARN
         assert "unreadable" in finding.message
+
+    def test_default_dir_is_the_store_owners_not_repo_data(self):
+        """No-env default comes from the script itself (env-cleared capture).
+
+        The probe used to fall back to ``<repo>/data/benchmark_results`` —
+        a dir the store stopped writing when it moved to
+        ``SLO_BENCH_DATA_DIR``, so the probe reported "No benchmark
+        records yet" forever (card 20261031_170120). The capture clears
+        the env at load, so this holds whatever the caller's env is.
+        """
+        benchmarks_probe._bench()
+        d = benchmarks_probe._default_dir
+        assert d is not None
+        assert not str(d).startswith(str(benchmarks_probe._REPO_ROOT / "data"))
+        assert d.name == "benchmark_results" and "sloughgpt" in str(d)
 
 
 # ──────────────────────────────────────────────────────────────────

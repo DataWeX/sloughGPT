@@ -698,7 +698,63 @@ def check_inference(api: str) -> list[dict[str, Any]]:
                 ),
             }
         )
+    # Trend gate over the always-record series — ADDITIVE to the pairwise
+    # checks above (those catch a step change prev-vs-current; this catches
+    # drift across the window — two failure modes, one module owns the
+    # math). The "did not answer" early return above skips it: no health
+    # surface, no triage at all.
+    findings.extend(_trend_findings())
     return findings
+
+
+def _trend_findings() -> list[dict[str, Any]]:
+    """One compact finding from the recorded benchmark series (read-only).
+
+    ``scripts/benchmark_results.py`` owns the store, ``is_regression`` and
+    ``HIGHER_IS_BETTER`` — this borrows all three through a lazy import
+    (the doctor runs as a script with ``scripts/`` on ``sys.path``; the
+    contract test inserts that path itself) and never re-declares a
+    direction or threshold. Headline metric only (``decode_tok_s``),
+    same-source band: ci and local hardware/load differ, so mixing them
+    guarantees false alarms. Fewer than 3 same-source history values is
+    ``insufficient`` — reported ok, so a fresh store never trips
+    ``--strict``. If the store module is unavailable there is no series to
+    read and no finding; the health-surface findings above still stand.
+    """
+    try:
+        import benchmark_results as br
+    except ImportError:
+        return []
+
+    history = br.load_series("inference")
+    if not history:
+        return [
+            {
+                "severity": "ok",
+                "check": "inference-trend",
+                "message": (
+                    "decode trend: insufficient history (n=0, need >=3) — no benchmark records yet"
+                ),
+            }
+        ]
+    newest = history[-1]
+    # br._dig is benchmark_results' own accessor (root -> score/metrics ->
+    # dotted walk); one accessor, no second metric-path spelling to drift
+    current = br._dig(newest, "decode_tok_s")
+    if not isinstance(current, (int, float)) or isinstance(current, bool):
+        return []  # headline metric absent from the newest record — nothing to judge
+    source = br.record_source(newest)
+    # leave-one-out (history excludes the current run) + same-source band
+    prior = [r for r in history[:-1] if br.record_source(r) == source]
+    trend = br.trend_status("decode_tok_s", prior, float(current))
+    severity = "medium" if trend["status"] == "regressed" else "ok"
+    return [
+        {
+            "severity": severity,
+            "check": "inference-trend",
+            "message": f"decode trend [{source}]: {trend['message']}",
+        }
+    ]
 
 
 def report(findings: list[dict[str, Any]], out: Any = sys.stdout) -> int:

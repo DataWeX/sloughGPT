@@ -312,6 +312,138 @@ def is_regression(kind: str, new: dict, old: dict) -> bool:
     return False
 
 
+def record_source(rec: dict) -> str:
+    """Source stamp of a record; records predating the stamp are local.
+
+    The always-record store stamps ``source: ci`` when the CI env var is
+    set; everything migrated from per-checkout stores predates the stamp
+    and was produced locally.
+    """
+    return rec.get("source") or "local"
+
+
+def load_series(kind: str, source: str | None = None) -> list[dict]:
+    """Newest-last record series for a kind, optionally source-filtered.
+
+    Corrupt or unreadable files are skipped (a half-written record must
+    not take the whole reader down). ``source`` matches against
+    :func:`record_source` so pre-stamp records count as local.
+    """
+    d = RESULTS_DIR / kind
+    if not d.is_dir():
+        return []
+    out: list[dict] = []
+    for p in d.glob("*.json"):
+        try:
+            rec = load_result(p)
+        except Exception:
+            continue
+        if source is not None and record_source(rec) != source:
+            continue
+        out.append(rec)
+    out.sort(key=lambda r: str(r.get("timestamp") or ""))
+    return out
+
+
+def trend_status(
+    metric: str,
+    history: list[dict],
+    current: float,
+    *,
+    window: int = 10,
+    k: float = 3.0,
+) -> dict:
+    """Compare ``current`` against the trend of the preceding ``history``.
+
+    Leave-one-out by contract: ``history`` must EXCLUDE the run that
+    produced ``current`` — a value cannot judge itself against a band it
+    moved (that masks exactly the outliers this exists to catch).
+
+    Fit = least squares over the last ``window`` usable values of
+    ``metric`` (values fetched via :func:`_dig`, the same accessor
+    ``is_regression`` uses — a path that resolves to nothing contributes
+    no value); ``sigma`` = residual scatter about that line
+    (``n-2`` degrees of freedom), so the band is trend-adjusted: a steady
+    decline is not "healthy because σ is large". Status:
+
+        insufficient  fewer than 3 usable history values — say so, never
+                      alarm on a thin sample (fresh store, single run)
+        healthy       |current - trend| <= k·σ
+        regressed     beyond the band, in the bad direction for this
+                      metric (direction = membership in HIGHER_IS_BETTER,
+                      the SAME table is_regression uses — never a second
+                      direction list)
+        improved      beyond the band, good direction
+
+    σ = 0 (perfectly flat history): the band collapses to a point, so an
+    exact match is healthy and any deviation is flagged — a step change
+    off a zero-variance baseline is exactly what deserves a look.
+
+    Returns a dict: status, metric, current, trend, slope (per run),
+    sigma, z (current-trend)/σ, n, window, k, message (compact, no dump).
+    """
+    usable = [
+        v
+        for v in (_dig(r, metric) for r in history[-window:])
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
+    ]
+    n = len(usable)
+    if n < 3:
+        return {
+            "status": "insufficient",
+            "metric": metric,
+            "current": current,
+            "trend": None,
+            "slope": None,
+            "sigma": None,
+            "z": None,
+            "n": n,
+            "window": window,
+            "k": k,
+            "message": f"{metric}: insufficient history (n={n}, need >=3)",
+        }
+    xs = list(range(n))
+    x_bar = (n - 1) / 2
+    y_bar = sum(usable) / n
+    sxx = sum((x - x_bar) ** 2 for x in xs)
+    sxy = sum((x - x_bar) * (y - y_bar) for x, y in zip(xs, usable))
+    slope = sxy / sxx
+    intercept = y_bar - slope * x_bar
+    residuals = [y - (intercept + slope * x) for x, y in zip(xs, usable)]
+    sigma = (sum(e * e for e in residuals) / (n - 2)) ** 0.5
+    # one step past history = the current run's expected position
+    trend = intercept + slope * n
+    diff = current - trend
+    z = diff / sigma if sigma > 0 else (0.0 if diff == 0 else float("inf"))
+    if abs(diff) <= k * sigma:
+        status = "healthy"
+    else:
+        bad = diff < 0 if metric in HIGHER_IS_BETTER else diff > 0
+        status = "regressed" if bad else "improved"
+    dirn = "below" if diff < 0 else ("above" if diff > 0 else "at")
+    if status == "healthy":
+        msg = f"{metric}: {current:g} within {k:g}σ of trend {trend:g} (σ={sigma:g}, n={n})"
+    else:
+        word = {"regressed": "regression candidate", "improved": "improvement"}[status]
+        msg = (
+            f"{metric}: {current:g} is {abs(z):.1f}σ {dirn} trend {trend:g} "
+            f"(σ={sigma:g}, n={n}) — {word}, slope {slope:+.3g}/run"
+        )
+    return {
+        "status": status,
+        "metric": metric,
+        "current": current,
+        "trend": trend,
+        "slope": slope,
+        "sigma": sigma,
+        "z": z,
+        "n": n,
+        "window": window,
+        "k": k,
+        "message": msg,
+    }
+
+
 def do_record(args) -> int:
     """Persist a run from an existing JSON file, or run live if none given."""
     kind = args.kind
