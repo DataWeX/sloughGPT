@@ -44,17 +44,22 @@ interface CurrentStateFoldProps {
 }
 
 export function CurrentStateFold({ currentBeliefs, currentQualia }: CurrentStateFoldProps) {
-  if (Object.keys(currentBeliefs).length === 0 && Object.keys(currentQualia).length === 0) {
+  // Only finite numbers render bars — a shape drift upstream (e.g. an
+  // envelope stored whole) skips the bad entries instead of crashing the
+  // page (v.toFixed on a non-number blanked the dashboard once).
+  const beliefBars = Object.entries(currentBeliefs).filter(([, v]) => Number.isFinite(v))
+  const qualiaBars = Object.entries(currentQualia).filter(([, v]) => Number.isFinite(v))
+  if (beliefBars.length === 0 && qualiaBars.length === 0) {
     return null
   }
   return (
     <FoldSection heading="Current State">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
-        {Object.keys(currentBeliefs).length > 0 && (
+        {beliefBars.length > 0 && (
           <div>
             <div className="text-xs font-medium text-muted-foreground mb-2">Beliefs</div>
             <div className="space-y-1">
-              {Object.entries(currentBeliefs).map(([k, v]) => (
+              {beliefBars.map(([k, v]) => (
                 <div key={k} className="flex items-center gap-2 text-xs sm:text-sm">
                   <span className="capitalize w-20 sm:w-24">{k}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
@@ -74,11 +79,11 @@ export function CurrentStateFold({ currentBeliefs, currentQualia }: CurrentState
             </div>
           </div>
         )}
-        {Object.keys(currentQualia).length > 0 && (
+        {qualiaBars.length > 0 && (
           <div>
             <div className="text-xs font-medium text-muted-foreground mb-2">Qualia</div>
             <div className="space-y-1">
-              {Object.entries(currentQualia).map(([k, v]) => (
+              {qualiaBars.map(([k, v]) => (
                 <div key={k} className="flex items-center gap-2 text-xs sm:text-sm">
                   <span className="capitalize w-20 sm:w-24">{k}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">

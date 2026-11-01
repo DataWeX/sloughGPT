@@ -74,7 +74,10 @@ export function useConsciousnessDashboard() {
         if (sResult.value.self_beliefs) setCurrentBeliefs(sResult.value.self_beliefs)
       }
       if (qNowResult.status === 'fulfilled') {
-        if (qNowResult.value) setCurrentQualia(qNowResult.value)
+        // The endpoint wraps the flat map: {current: {valence…}, narrative,
+        // history_count}. Storing the whole envelope here crashed
+        // CurrentStateFold (v.toFixed on an object) and blanked the page.
+        if (qNowResult.value) setCurrentQualia(qNowResult.value.current ?? {})
       }
       if (statusResult.status === 'fulfilled') {
         if (statusResult.value.level !== undefined) setConsciousnessLevel(statusResult.value.level)

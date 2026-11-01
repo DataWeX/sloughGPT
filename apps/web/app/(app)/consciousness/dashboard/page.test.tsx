@@ -83,7 +83,14 @@ describe('ConsciousnessDashboardPage', () => {
     mockController.getBeliefsHistory.mockResolvedValue({ beliefs: [] as any })
     mockController.evaluate.mockResolvedValue(mockEvalReport as any)
     mockController.getSelfModel.mockResolvedValue({ self_beliefs: { competence: 0.7, helpfulness: 0.8 } } as any)
-    mockController.getQualia.mockResolvedValue({ valence: 0.5, arousal: 0.3 })
+    // Real backend shape: /consciousness/qualia wraps the flat map in an
+    // envelope — {current: {valence…}, narrative, history_count} (apiGet
+    // unwraps the outer {status,data}, not this inner `current`).
+    mockController.getQualia.mockResolvedValue({
+      current: { valence: 0.5, arousal: 0.3 },
+      narrative: 'I feel calm and measured.',
+      history_count: 0,
+    })
     mockController.getStatus.mockResolvedValue(mockStatus as any)
     mockController.seedData.mockResolvedValue({ seeded: true })
     mockController.reflect.mockResolvedValue({ reflection: 'Test reflection' })
@@ -199,6 +206,21 @@ describe('ConsciousnessDashboardPage', () => {
     render(<ConsciousnessDashboardPage />, { wrapper: TestWrapper })
     await waitFor(() => {
       expect(screen.getAllByText('Qualia History').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('renders current qualia bars from the /consciousness/qualia envelope', async () => {
+    // Regression guard for the blank-dashboard bug: the endpoint returns
+    // {current: {valence…}, narrative, history_count} — storing the whole
+    // envelope as the flat map crashed CurrentStateFold (v.toFixed on an
+    // object) and blanked the page.
+    render(<ConsciousnessDashboardPage />, { wrapper: TestWrapper })
+    await waitFor(() => {
+      // Labels render lowercase; `capitalize` is CSS-only.
+      expect(screen.getAllByText('valence').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('0.50').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('arousal').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('0.30').length).toBeGreaterThan(0)
     })
   })
 })
