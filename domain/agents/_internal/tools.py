@@ -415,6 +415,17 @@ class ToolRegistry:
 
     async def _run_code(self, language: str, code: str) -> dict[str, Any]:
         """Execute code in a subprocess with timeout."""
+        import sys
+
+        from domain.agents._internal.code_guard import is_allowed
+
+        # Same blocked-pattern check agents.py enforces before running
+        # model code — one shared list, both surfaces (parity, not a new
+        # restriction: agents.py already blocked eval/exec/pickle here).
+        safe, msg = is_allowed(code)
+        if not safe:
+            return {"output": "", "error": msg}
+
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".py" if language == "python" else ".sh", delete=False
         ) as f:
@@ -422,7 +433,7 @@ class ToolRegistry:
             f.flush()
             fname = f.name
         try:
-            cmd = ["python3", fname] if language == "python" else ["bash", fname]
+            cmd = [sys.executable, fname] if language == "python" else ["bash", fname]
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
