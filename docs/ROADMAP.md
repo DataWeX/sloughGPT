@@ -120,11 +120,21 @@ Definition of done — all four, each closing with a card ID + landed sha:
 - Every numbered model goal is resolved — owned milestones 12–14 and
   training delivery 15–19. **No open model goal remains; that is a decision
   point, not a resting place.**
-- Candidates awaiting a decision (not committed scope): hot-loop profiling
-  (goal 1's stated remnant — "profile and optimize hot loops"), scaling the
-  owned loop from convergence proof to a real unattended run, an
-  owned-vs-bootstrap quality benchmark, packaging Track A as a
-  distributable release.
+- **Candidates decided (user ruling, 2026-11-01, session card
+  `20261101_140449` → done):**
+  - **Committed** — hot-loop profiling (goal 1's stated remnant; gates the
+    deferred PyO3 kernel rewrite) → card `20261101_144012_hot-loop-profiling…`;
+    owned-vs-bootstrap quality benchmark (SloNet vs Qwen2.5-0.5B, one eval
+    set; makes "bootstrap, not destination" a measurement) → card
+    `20261101_144012_owned-vs-bootstrap…`; Track A packaging as a
+    distributable release (sequencing vs v1 open at pickup) → card
+    `20261101_144013_track-a-packaging…`.
+  - **Declined** — scaling the owned loop to a real unattended run: one box
+    serves inference and training; revisit with a bounded soak experiment
+    when the corpus is real.
+  - **Added as release mass** — model loading infrastructure must land
+    before v1 ships (user ruling) → card
+    `20261101_144013_model-loading-infrastructure…`, counted under Now.
 
 ## Later
 
