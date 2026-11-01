@@ -294,11 +294,34 @@ class ToolRegistry:
                         return name, {"data_path": m.group(1).strip(), "operation": "summary"}
         return None
 
-    async def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
-        """Execute a tool by name with given args."""
+    async def execute(
+        self,
+        name: str,
+        args: dict[str, Any],
+        approve: Callable[..., bool] | None = None,
+    ) -> ToolResult:
+        """Execute a tool by name with given args.
+
+        Approval gate (fail-closed): a spec with ``requires_approval=True``
+        is refused unless the caller passes an ``approve`` callable.
+        Presence of ``approve`` declares "approval was obtained upstream" —
+        AgentLoop prompts the human first (loop.py) and passes its approver
+        through; callers with no approver (multi-agent orchestration,
+        scripts, tests exercising the raw tool) get a refusal instead of an
+        unattended run. The check lives HERE, at the seam, because the spec
+        already carries the flag: one declaration, enforced for every
+        current and future caller — a caller-side check is exactly the
+        pattern this gate replaces (multi.py ran approval tools directly).
+        """
         spec = self._tools.get(name)
         if not spec:
             return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
+        if spec.requires_approval and approve is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"tool '{name}' requires approval (no approver supplied)",
+            )
         start = asyncio.get_event_loop().time()
         try:
             result = await spec.execute(**args)
