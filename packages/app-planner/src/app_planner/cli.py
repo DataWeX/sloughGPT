@@ -254,6 +254,46 @@ def _board_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def _board_index(args: argparse.Namespace) -> int:
+    """Rebuild the read-only MogDB query index from board.jsonl."""
+    from app_planner.board_index import BoardIndex
+
+    board_dir = Path(args.board_dir) if getattr(args, "board_dir", None) else None
+    index = BoardIndex(board_dir=board_dir)
+    try:
+        count = index.sync()
+    except Exception as e:  # noqa: BLE001 — report, never crash the CLI
+        print(f"Index unavailable (board.jsonl is still the source of truth): {e}", file=sys.stderr)
+        return 1
+    finally:
+        index.close()
+    print(f"Indexed {count} card(s) → {index.index_dir}")
+    return 0
+
+
+def _board_query(args: argparse.Namespace) -> int:
+    """Filter cards via the MogDB index, falling back to a file read."""
+    from app_planner.board_index import BoardIndex
+
+    board_dir = Path(args.board_dir) if getattr(args, "board_dir", None) else None
+    index = BoardIndex(board_dir=board_dir)
+    try:
+        cards = index.query(
+            column=getattr(args, "column", None),
+            priority=getattr(args, "priority", None),
+            assignee=getattr(args, "assignee", None),
+            tag=getattr(args, "tag", None),
+            text=getattr(args, "text", None),
+            limit=getattr(args, "limit", None),
+        )
+    finally:
+        index.close()
+    for card in cards:
+        print(f"{card.get('id', '?'):<55} {card.get('column', '?'):<8} {card.get('title', '')}")
+    print(f"{len(cards)} card(s)")
+    return 0
+
+
 # ── Sync ─────────────────────────────────────────────────────────────────
 
 
@@ -463,6 +503,15 @@ def build_parser() -> argparse.ArgumentParser:
     board_sub.add_parser("tags", help="List tags")
     board_sub.add_parser("stats", help="Show stats")
 
+    p = board_sub.add_parser("index", help="Rebuild the read-only MogDB query index")
+    p = board_sub.add_parser("query", help="Filter cards via the MogDB index (file fallback)")
+    p.add_argument("--column", default=None)
+    p.add_argument("--priority", default=None)
+    p.add_argument("--assignee", default=None)
+    p.add_argument("--tag", default=None)
+    p.add_argument("--text", default=None)
+    p.add_argument("--limit", type=int, default=None)
+
     # Sync
     sync_p = sub.add_parser("sync", help="Sync notes to board")
     sync_p.add_argument("--quiet", action="store_true")
@@ -578,6 +627,8 @@ def main(argv: list[str] | None = None) -> int:
         ("board", "rm"): _board_delete,
         ("board", "tags"): _board_tags,
         ("board", "stats"): _board_stats,
+        ("board", "index"): _board_index,
+        ("board", "query"): _board_query,
         ("kanban", "show"): _board_show,
         ("kanban", "ls"): _board_show,
         ("kanban", "add"): _board_add,
@@ -586,6 +637,8 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "rm"): _board_delete,
         ("kanban", "tags"): _board_tags,
         ("kanban", "stats"): _board_stats,
+        ("kanban", "index"): _board_index,
+        ("kanban", "query"): _board_query,
         ("sync", None): _sync,
         ("verify", None): _verify,
         ("migrate", None): _migrate,
