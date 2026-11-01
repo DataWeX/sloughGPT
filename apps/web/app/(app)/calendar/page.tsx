@@ -5,6 +5,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
+import { MiniCalendar } from '@/components/calendar/MiniCalendar'
 
 interface CalendarEvent {
   id: string
@@ -189,6 +190,10 @@ export default function CalendarPage() {
       loadingCards={4}
       maxWidth="max-w-5xl"
     >
+      <div className="mb-4">
+        <MiniCalendar selected={currentDate} onSelect={setCurrentDate} />
+      </div>
+
       <div className="space-y-2">
         {HOURS.map((hour) => {
           const hourEvents = getEventsForHour(hour)
