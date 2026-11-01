@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "b10e08eb189e5bfa8e545f7dafb272e0f834fee6",
+    "recorded_commit": "f95e2324332d2a6433a301387a98cd2823499415",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "1194a0eedfcb2e63b44f92f8e76f84a8e7d9682e"
+      "tree_hash": "9f8a38485cbfdf2bb84735ce558e8d49824dca9f"
     },
     "ai_personality": {
       "class": "feature",
@@ -106,7 +106,7 @@
       ],
       "note": "subscription/edge entitlement exposure",
       "debt": null,
-      "tree_hash": "6849480b732ca63c59aa7226d7771123cf6c45a6"
+      "tree_hash": "9847c780a6c4a4020595e93b252efa782bef963e"
     },
     "chat": {
       "class": "feature",
@@ -205,7 +205,7 @@
       ],
       "note": "base types/exports every domain builds on",
       "debt": null,
-      "tree_hash": "27fec39da904ac7ee0b6d2f7fb50ae83fc1688b6"
+      "tree_hash": "a257ba9ed6d9117e3ef0ae8bdaef4e69dbbc03bd"
     },
     "errors": {
       "class": "core-capability",
