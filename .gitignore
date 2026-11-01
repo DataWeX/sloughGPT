@@ -280,3 +280,11 @@ arken_output/
 .resilient-state/
 test_dashboard.html
 apps/web/public/test_dashboard.html
+
+# Worktrees and junk
+.wt-*/
+audit.log.*
+cards.
+urls.txt
+list[...]
+100M

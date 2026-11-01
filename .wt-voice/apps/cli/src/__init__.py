@@ -1,1 +1,0 @@
-"""SloughGPT CLI src package."""

@@ -1,1 +1,0 @@
-docs/policies/CODE_OF_CONDUCT.md
