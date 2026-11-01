@@ -144,6 +144,23 @@ def timestamp() -> str:
     return utc_now_iso()
 
 
+def _provenance() -> dict:
+    """Code+platform provenance block for a recorded run.
+
+    Adds the platform/config-fingerprint context that a bare commit hash
+    lacks — two runs on the same commit but different machines or quant
+    knobs are not comparable, and loadavg is already recorded separately as
+    the scheduler confounder. Best-effort: never fails a record.
+    """
+    try:
+        from domain.infrastructure._internal.artifact_registry import provenance_snapshot
+
+        return provenance_snapshot()
+    except Exception as exc:  # noqa: BLE001 — provenance must never fail a record
+        print(f"[WARN] provenance unavailable: {exc}", file=sys.stderr)
+        return {}
+
+
 def results_path(kind: str, model: str, stamp: str) -> Path:
     """Return file path for a run result."""
     safe_model = model.replace("/", "--")
@@ -502,6 +519,7 @@ def do_record(args) -> int:
             "commit": git_commit(),
             "timestamp": stamp,
             "source": "ci" if os.environ.get("CI") else "local",
+            "provenance": _provenance(),
             "runs": data.get("runs", args.runs),
             "passed": data.get("passed"),
             "score": data.get("score"),
@@ -516,6 +534,7 @@ def do_record(args) -> int:
             "commit": git_commit(),
             "timestamp": stamp,
             "source": "ci" if os.environ.get("CI") else "local",
+            "provenance": _provenance(),
             "metrics": data,
         }
 

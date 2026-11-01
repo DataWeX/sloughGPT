@@ -25,14 +25,17 @@ import hashlib
 import json
 import logging
 import os
+import platform
 import re
 import struct
+import subprocess
 import threading
 import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from domain.shared import repair_iso  # stdlib-only, no third-party imports
+from domain.shared import repair_iso, utc_now_iso  # stdlib-only, no third-party imports
 
 logger = logging.getLogger("slo.artifact_registry")
 
@@ -624,3 +627,316 @@ def verify_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
             "checks": checks or [{"file": artifact["path"], "result": "ok"}],
         },
     }
+
+
+# ── Provenance / lineage ────────────────────────────────────────────────
+#
+# Stage 3: attach *who/what produced this* to an artifact, and allow a
+# reverse walk back to roots. Deliberately append-only and read-only over
+# existing data: an artifact with no provenance sidecar is a normal, valid
+# state (every adapter written before this landed has none). Nothing here
+# gates or slows the model-weight path — provenance is a small JSON sidecar
+# written once at artifact creation, never read during inference/training.
+#
+# The lineage model mirrors ``token_tree.decompose``: each artifact stores
+# its direct ``parents`` (the artifact_ids it was derived from), and
+# ``lineage()`` walks that graph backwards to roots. A merge records its
+# inputs; the inputs themselves may have their own parents, so the walk is
+# recursive and cycle-guarded.
+
+PROVENANCE_SUFFIX = ".prov.json"
+
+# Config keys folded into the fingerprint — the knobs that change an
+# artifact's *meaning* (which model, which quantization, which adapter
+# rank). Extended deliberately, not exhaustively: this is a cheap identity
+# hint, not a full environment capture.
+_PROVENANCE_CONFIG_KEYS = (
+    "SLO_MODEL",
+    "SLO_QUANT",
+    "SLO_ADAPTER_RANK",
+    "SLO_ADAPTER_ALPHA",
+    "SLO_CACHE_DIR",
+    "SLO_BENCH_DATA_DIR",
+)
+
+_git_memo: dict[str, tuple[str | None, bool | None]] = {}
+_git_memo_lock = threading.Lock()
+
+
+def _git_state() -> tuple[str | None, bool | None]:
+    """Short commit + dirty flag for the repo root, memoized per process.
+
+    Memoized because provenance is stamped on artifact *creation* (cold,
+    off the hot path) but a long-lived server would otherwise shell out to
+    git on every record. Returns ``(None, None)`` outside a git checkout.
+    """
+    with _git_memo_lock:
+        hit = _git_memo.get("root")
+        if hit is not None:
+            return hit
+    commit: str | None = None
+    dirty: bool | None = None
+    try:
+        root = str(repo_root())
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            commit = out.stdout.strip()
+            # A commit hash is only meaningful together with cleanliness:
+            # a dirty tree means the artifact was NOT built from that hash.
+            st = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if st.returncode == 0:
+                dirty = bool(st.stdout.strip())
+    except Exception as exc:  # noqa: BLE001 — provenance must never raise
+        logger.debug("git state unavailable: %s", exc)
+    with _git_memo_lock:
+        _git_memo["root"] = (commit, dirty)
+    return commit, dirty
+
+
+def config_fingerprint() -> str:
+    """Stable hash of the provenance-relevant config (env knobs).
+
+    Identical config -> identical fingerprint, so two artifacts can be
+    compared for "were you built under the same settings?" without diffing
+    whole environments.
+    """
+    try:
+        payload = {k: os.environ.get(k, "") for k in _PROVENANCE_CONFIG_KEYS}
+        blob = json.dumps(payload, sort_keys=True).encode()
+        return hashlib.sha256(blob).hexdigest()[:16]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("config fingerprint unavailable: %s", exc)
+        return ""
+
+
+def provenance_snapshot() -> dict[str, Any]:
+    """Capture the current code+platform provenance.
+
+    Returns commit (or ``None``), dirty (``None`` when unknown), python
+    version, platform machine/system, hostname, and the config fingerprint.
+    Cheap and side-effect free; safe to call from any write path.
+    """
+    commit, dirty = _git_state()
+    try:
+        hostname = platform.node()
+    except Exception:  # noqa: BLE001
+        hostname = ""
+    return {
+        "commit": commit,
+        "dirty": dirty,
+        "python": platform.python_version(),
+        "platform": f"{platform.system()}-{platform.machine()}",
+        "hostname": hostname,
+        "config_fingerprint": config_fingerprint(),
+    }
+
+
+@dataclass
+class ProvenanceRecord:
+    """Immutable-ish provenance + lineage for one artifact.
+
+    ``parents`` holds artifact_ids (``kind:id``) this artifact derives from.
+    ``empty`` when there is no sidecar — the normal state for pre-existing
+    artifacts, which is why every accessor here is total.
+    """
+
+    artifact_id: str
+    kind: str
+    parents: list[str] = field(default_factory=list)
+    created_at: str = ""
+    commit: str | None = None
+    dirty: bool | None = None
+    python: str = ""
+    platform: str = ""
+    hostname: str = ""
+    config_fingerprint: str = ""
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "artifact_id": self.artifact_id,
+            "kind": self.kind,
+            "parents": list(self.parents),
+            "created_at": self.created_at,
+            "commit": self.commit,
+            "dirty": self.dirty,
+            "python": self.python,
+            "platform": self.platform,
+            "hostname": self.hostname,
+            "config_fingerprint": self.config_fingerprint,
+        }
+        if self.extra:
+            out["extra"] = dict(self.extra)
+        return out
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ProvenanceRecord:
+        parents = data.get("parents") or []
+        return cls(
+            artifact_id=str(data.get("artifact_id", "")),
+            kind=str(data.get("kind", "")),
+            parents=[str(p) for p in parents],
+            created_at=str(data.get("created_at", "")),
+            commit=data.get("commit"),
+            dirty=data.get("dirty"),
+            python=str(data.get("python", "")),
+            platform=str(data.get("platform", "")),
+            hostname=str(data.get("hostname", "")),
+            config_fingerprint=str(data.get("config_fingerprint", "")),
+            extra=dict(data.get("extra") or {}),
+        )
+
+
+def provenance_path(artifact_path: str | Path) -> Path:
+    """Sidecar path for an artifact: ``<file>.prov.json``."""
+    p = Path(artifact_path)
+    return p.with_name(p.name + PROVENANCE_SUFFIX)
+
+
+def write_provenance(
+    artifact_path: str | Path,
+    kind: str,
+    artifact_id: str,
+    *,
+    parents: list[str] | None = None,
+    extra: dict[str, Any] | None = None,
+) -> ProvenanceRecord:
+    """Stamp an artifact with a fresh provenance sidecar.
+
+    Captures the *current* git/platform state at write time. Overwrites any
+    existing sidecar (last writer wins) — provenance describes the most
+    recent derivation of the artifact at that path.
+    """
+    snap = provenance_snapshot()
+    record = ProvenanceRecord(
+        artifact_id=f"{kind}:{artifact_id}",
+        kind=kind,
+        parents=list(parents or []),
+        created_at=utc_now_iso(),
+        commit=snap["commit"],
+        dirty=snap["dirty"],
+        python=snap["python"],
+        platform=snap["platform"],
+        hostname=snap["hostname"],
+        config_fingerprint=snap["config_fingerprint"],
+        extra=dict(extra or {}),
+    )
+    sidecar = provenance_path(artifact_path)
+    try:
+        sidecar.write_text(json.dumps(record.to_dict(), indent=2), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001 — provenance must never break a save
+        logger.debug("Provenance write skipped for %s: %s", artifact_path, exc)
+    return record
+
+
+def read_provenance(artifact_path: str | Path) -> ProvenanceRecord | None:
+    """Read an artifact's provenance sidecar, or ``None`` when absent.
+
+    Total over missing/corrupt sidecars: a broken sidecar degrades to "no
+    provenance recorded" rather than raising, so a lineage walk over a
+    partially-stamped store still returns what it can.
+    """
+    sidecar = provenance_path(artifact_path)
+    if not sidecar.is_file():
+        return None
+    try:
+        data = json.loads(sidecar.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Unreadable provenance %s: %s", sidecar, exc)
+        return None
+    if not isinstance(data, dict):
+        return None
+    return ProvenanceRecord.from_dict(data)
+
+
+def lineage(
+    kind: str,
+    artifact_id: str,
+    *,
+    path: str | Path | None = None,
+    root_dir: str | Path | None = None,
+    max_depth: int = 32,
+) -> dict[str, Any]:
+    """Walk an artifact's parent graph back to its roots.
+
+    Returns a dict with the starting ``root`` artifact_id, every visited
+    ``nodes`` (artifact_id -> provenance dict), and ``roots`` (the artifact
+    ids with no further parents). Mirrors ``token_tree.decompose``: recursive
+    descent over recorded parents, cycle-guarded by a visited set and capped
+    at ``max_depth`` so a malformed graph cannot hang the caller.
+
+    ``path`` short-circuits resolution for the *starting* artifact when the
+    caller already knows its location. Without it, artifacts are found via
+    the registry's fixed scan roots — fine for default stores, wrong for a
+    ``PerUserLoRAStore`` constructed with a custom ``store_path``, which
+    would otherwise resolve to ``None`` and hide a real parent graph.
+
+    ``root_dir`` is the fallback base for resolving parents: when an
+    artifact is not under a registry scan root, ``root_dir/<id>`` is tried.
+    Pass the store directory so a lineage walk stays inside one store.
+
+    Artifacts with no provenance sidecar resolve to a node with empty
+    parents (a root), so the walk is total over pre-existing data.
+    """
+    start = f"{kind}:{artifact_id}"
+    visited: dict[str, dict[str, Any]] = {}
+    roots: list[str] = []
+    seen: set[str] = set()
+
+    def _resolve_path(aid: str, *, is_start: bool = False) -> Path | None:
+        if is_start and path is not None:
+            return Path(path)
+        if ":" not in aid:
+            return None
+        k, _, i = aid.partition(":")
+        p = resolve(k, i)
+        return Path(p) if p else None
+
+    def _walk(aid: str, depth: int, *, is_start: bool = False) -> None:
+        if aid in seen or depth > max_depth:
+            return
+        seen.add(aid)
+        resolved = _resolve_path(aid, is_start=is_start)
+        if resolved is None and root_dir is not None and ":" in aid:
+            # Store-relative fallback: a custom store_path (e.g. a test tmp
+            # dir or a per-tenant store) is not a registry scan root, so
+            # resolve() cannot see it. Fall back to root_dir/<id>.
+            candidate = Path(root_dir) / aid.partition(":")[2]
+            if candidate.is_file():
+                resolved = candidate
+        record = read_provenance(resolved) if resolved else None
+        if record is None:
+            # No sidecar (or unresolvable): treat as a root — total, not fatal.
+            visited[aid] = {
+                "artifact_id": aid,
+                "parents": [],
+                "resolved": resolved is not None,
+            }
+            roots.append(aid)
+            return
+        node = record.to_dict()
+        node["resolved"] = resolved is not None
+        visited[aid] = node
+        parents = record.parents
+        if not parents:
+            roots.append(aid)
+            return
+        for parent in parents:
+            _walk(parent, depth + 1)
+
+    _walk(start, 0, is_start=True)
+    # De-dup roots while preserving discovery order.
+    uniq_roots = list(dict.fromkeys(roots))
+    return {"root": start, "nodes": visited, "roots": uniq_roots, "depth": len(seen)}

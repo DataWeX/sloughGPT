@@ -207,3 +207,115 @@ class TestVerify:
         with _scan(tmp_path):
             result = reg.verify("download")
         assert result["summary"]["mismatch"] == 1
+
+
+class TestProvenance:
+    def test_snapshot_records_commit_and_platform(self):
+        snap = reg.provenance_snapshot()
+        # commit may be None outside a checkout; platform/python always present.
+        assert "commit" in snap and "dirty" in snap
+        assert snap["python"]
+        assert snap["platform"]
+        assert "config_fingerprint" in snap
+
+    def test_config_fingerprint_is_stable_and_env_sensitive(self, monkeypatch):
+        monkeypatch.setenv("SLO_QUANT", "int8")
+        first = reg.config_fingerprint()
+        assert first == reg.config_fingerprint()
+        monkeypatch.setenv("SLO_QUANT", "int4")
+        assert reg.config_fingerprint() != first
+
+    def test_write_then_read_roundtrip(self, tmp_path):
+        artifact = tmp_path / "child.npz"
+        artifact.write_bytes(b"\x00")
+        record = reg.write_provenance(
+            artifact, "adapter", "child.npz", parents=["adapter:a.npz"], extra={"k": 1}
+        )
+        assert record.parents == ["adapter:a.npz"]
+        read = reg.read_provenance(artifact)
+        assert read is not None
+        assert read.artifact_id == "adapter:child.npz"
+        assert read.parents == ["adapter:a.npz"]
+        assert read.extra == {"k": 1}
+
+    def test_read_missing_sidecar_is_none(self, tmp_path):
+        artifact = tmp_path / "plain.npz"
+        artifact.write_bytes(b"\x00")
+        assert reg.read_provenance(artifact) is None
+
+    def test_read_corrupt_sidecar_is_none_not_raise(self, tmp_path):
+        artifact = tmp_path / "bad.npz"
+        artifact.write_bytes(b"\x00")
+        reg.provenance_path(artifact).write_text("{not json")
+        assert reg.read_provenance(artifact) is None
+
+    def test_write_provenance_never_raises_on_unwritable(self, tmp_path):
+        # Point the sidecar at a directory so the write fails -> must not raise.
+        artifact = tmp_path / "x.npz"
+        artifact.write_bytes(b"\x00")
+        blocked = reg.provenance_path(artifact)
+        blocked.mkdir()  # a dir where a file is expected
+        record = reg.write_provenance(artifact, "adapter", "x.npz")
+        assert record.artifact_id == "adapter:x.npz"  # record still returned
+
+
+class TestLineage:
+    def test_walks_parents_to_roots(self, tmp_path):
+        roots = _roots(tmp_path)
+        adapters = roots["adapter"][0]
+        # Two parent adapters (lineage roots) + one child merging them.
+        for name in ("a.npz", "b.npz"):
+            p = adapters / name
+            p.write_bytes(b"\x00")
+            reg.write_provenance(p, "adapter", name, parents=[])
+        child = adapters / "child.npz"
+        child.write_bytes(b"\x00")
+        reg.write_provenance(
+            child, "adapter", "child.npz", parents=["adapter:a.npz", "adapter:b.npz"]
+        )
+
+        with _scan(tmp_path):
+            result = reg.lineage("adapter", "child.npz")
+        assert result["root"] == "adapter:child.npz"
+        assert set(result["roots"]) == {"adapter:a.npz", "adapter:b.npz"}
+        assert set(result["nodes"]) == {
+            "adapter:child.npz",
+            "adapter:a.npz",
+            "adapter:b.npz",
+        }
+
+    def test_no_sidecar_is_a_root(self, tmp_path):
+        roots = _roots(tmp_path)
+        (roots["adapter"][0] / "stamped.npz").write_bytes(b"\x00")
+        with _scan(tmp_path):
+            result = reg.lineage("adapter", "stamped.npz")
+        assert result["roots"] == ["adapter:stamped.npz"]
+        assert result["nodes"]["adapter:stamped.npz"]["parents"] == []
+
+    def test_cycle_does_not_hang(self, tmp_path):
+        roots = _roots(tmp_path)
+        adapters = roots["adapter"][0]
+        for name, parent in (("p.npz", "adapter:q.npz"), ("q.npz", "adapter:p.npz")):
+            p = adapters / name
+            p.write_bytes(b"\x00")
+            reg.write_provenance(p, "adapter", name, parents=[parent])
+        with _scan(tmp_path):
+            result = reg.lineage("adapter", "p.npz")
+        # Both visited exactly once; the cycle is cut by the seen-set.
+        assert set(result["nodes"]) == {"adapter:p.npz", "adapter:q.npz"}
+
+    def test_root_dir_resolves_outside_scan_roots(self, tmp_path):
+        # A store NOT under the registry's scan roots (custom store_path).
+        store = tmp_path / "custom_store"
+        store.mkdir()
+        child = store / "child.npz"
+        child.write_bytes(b"\x00")
+        reg.write_provenance(child, "adapter", "child.npz", parents=["adapter:parent.npz"])
+        parent = store / "parent.npz"
+        parent.write_bytes(b"\x00")
+        reg.write_provenance(parent, "adapter", "parent.npz", parents=[])
+
+        with _scan(tmp_path):
+            result = reg.lineage("adapter", "child.npz", path=child, root_dir=store)
+        assert result["roots"] == ["adapter:parent.npz"]
+        assert "adapter:parent.npz" in result["nodes"]
