@@ -19,6 +19,12 @@ All kernels are @njit(cache=True, nogil=True) — compiled once, cached to disk,
 and entered with the GIL released, so a thread-domain call never starves the
 host loop (probe: scripts/probe_gil_hold.py; card f30be275).
 
+NOTE — the compiled kernels are now OPT-IN (SLO_USE_NUMBA=1); by default the
+numpy fallbacks below are what run, because they measured ~1.8x faster
+end-to-end on this box. See _check_numba for the numbers and the reasoning.
+Everything below describes the compiled kernels, which is what you get once
+you opt in.
+
 Six of them additionally carry parallel=True + prange, for multi-core
 throughput (probe: scripts/probe_parallel_kernels.py,
 scripts/probe_parallel_small.py, scripts/probe_parallel_elementwise.py;
@@ -80,6 +86,16 @@ _DEFAULT_FALLBACK_BUDGET_MB = 64
 # inf-inf and 0/0 are the two ways a softmax silently poisons a whole row.
 _CAUSAL_MASK = np.float32(-1e9)
 
+# Opt-in switch for the compiled kernels. Off by default: see _check_numba for
+# the measurement behind that (compiled ran ~1.8x slower end-to-end here).
+_NUMBA_OPT_IN_ENV = "SLO_USE_NUMBA"
+_NUMBA_OPT_IN_TRUTHY = ("1", "true", "yes")
+
+
+def _numba_opted_in() -> bool:
+    """True when SLO_USE_NUMBA asks for the compiled kernels."""
+    return os.environ.get(_NUMBA_OPT_IN_ENV, "0").strip().lower() in _NUMBA_OPT_IN_TRUTHY
+
 
 def _prefill_fallback_budget() -> int:
     """Byte budget for the numpy prefill-attention fallback's temporaries.
@@ -122,36 +138,59 @@ def _prefill_fallback_budget() -> int:
 
 
 def _check_numba() -> bool:
-    """True when numba imports; warns ONCE when it does not.
+    """True when numba is BOTH available and opted in; warns once otherwise.
 
-    A silent ``False`` here cost an entire investigation on 2026-11-01: numba
-    installed under ``~/.local`` is invisible while ``PYTHONNOUSERSITE=1`` is
-    set (which the API server sets deliberately), so the server quietly ran
-    every fused kernel as numpy — including the attention prefill fallback,
-    which allocated O(seq^2) and was OOM-killed by the kernel at ~21 GB RSS.
+    **numba is opt-in, not opt-out.** Measured 2026-11-01 on this box
+    (Qwen2.5-0.5B, POST /chat, 15 rate-limit-safe samples per arm):
 
-    The numpy fallback is correct and is now memory-bounded, but silently
-    running it instead of the compiled path is never acceptable, so say so
-    out loud the first time it is observed.
+        numpy fallbacks : mean 13.4s   (SLO_USE_NUMBA unset)
+        compiled kernels: mean 24.5s   (SLO_USE_NUMBA=1)
+
+    i.e. the compiled kernels made end-to-end latency ~1.8x WORSE. The kernels
+    are deliberately serial -- see the note above on prange losing under load
+    and on einsum beating manual-loop attention -- so they give up the
+    multithreaded BLAS that the numpy fallbacks get for free. Attention alone
+    IS faster compiled in isolation (1.4-1.7x), so this may invert on a
+    many-core box; that uncertainty is why it is a flag and not a deletion.
+
+    Set ``SLO_USE_NUMBA=1`` to run the compiled kernels.
+
+    A silent ``False`` here still cost an entire investigation on 2026-11-01:
+    numba installed under ``~/.local`` is invisible while
+    ``PYTHONNOUSERSITE=1`` is set (which the API server sets deliberately), so
+    the server quietly ran every fused kernel as numpy -- including the
+    attention prefill fallback, whose unchunked form allocated O(seq^2) and was
+    OOM-killed by the kernel at ~21 GB RSS. The fallback is correct and is now
+    memory-bounded, but silently taking *either* path is never acceptable, so
+    say out loud which one is in use the first time it is observed.
     """
     global _NUMBA_AVAILABLE
     if _NUMBA_AVAILABLE is None:
-        try:
-            from numba import njit  # noqa: F401
-
-            _NUMBA_AVAILABLE = True
-        except ImportError as exc:
+        if not _numba_opted_in():
             _NUMBA_AVAILABLE = False
-            logger.warning(
-                "numba unavailable (%s: %s) — fused kernels falling back to numpy. "
-                "Prefill attention stays memory-bounded but is several times "
-                "slower. If unexpected, check that numba is installed in this "
-                "interpreter's own site-packages: PYTHONNOUSERSITE=1 hides "
-                "~/.local, where a user-site install lives.",
-                type(exc).__name__,
-                exc,
+            logger.info(
+                "numba disabled by default (SLO_USE_NUMBA is not set) — running "
+                "the numpy kernels. Measured ~1.8x faster than the compiled "
+                "path end-to-end on this box; set SLO_USE_NUMBA=1 to opt in.",
                 extra={"tag": "KERNELS"},
             )
+        else:
+            try:
+                from numba import njit  # noqa: F401
+
+                _NUMBA_AVAILABLE = True
+            except ImportError as exc:
+                _NUMBA_AVAILABLE = False
+                logger.warning(
+                    "SLO_USE_NUMBA=1 but numba unavailable (%s: %s) — falling "
+                    "back to the numpy kernels. If unexpected, check that numba "
+                    "is installed in this interpreter's own site-packages: "
+                    "PYTHONNOUSERSITE=1 hides ~/.local, where a user-site "
+                    "install lives.",
+                    type(exc).__name__,
+                    exc,
+                    extra={"tag": "KERNELS"},
+                )
     return _NUMBA_AVAILABLE
 
 
