@@ -51,20 +51,107 @@ einsum is kept for attention; numba is used for element-wise ops only.
 
 from __future__ import annotations
 
+import logging
+import os
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 _NUMBA_AVAILABLE: bool | None = None
 
+# Bytes in one float32 element, and the count of concurrent (H, blk, new_len)
+# temporaries the numpy prefill fallback holds live at once. Both are named
+# because the budget below is derived from them: if a future edit adds a fifth
+# temporary without bumping _FALLBACK_TEMP_COUNT, the chunk size silently
+# under-counts and prefill grows past the budget again with no error to warn us.
+_FALLBACK_ITEMSIZE = 4  # float32
+_FALLBACK_TEMP_COUNT = 4  # scores, scores+causal, exp, normalized
+
+# Default size of the prefill fallback budget, in megabytes. Named because it
+# is consumed in four places -- the env-var default, both fallback warnings,
+# and the regression test -- so writing it once here keeps those four in step.
+# Changing it to 128 must not leave a warning claiming 64.
+_DEFAULT_FALLBACK_BUDGET_MB = 64
+
+# Causal-mask additive sentinel for masked-out (future) key positions. -1e9 is
+# far below any real logit yet still finite, so exp(score - max) underflows to
+# exactly 0.0 in float32 rather than producing -inf or a NaN on division --
+# inf-inf and 0/0 are the two ways a softmax silently poisons a whole row.
+_CAUSAL_MASK = np.float32(-1e9)
+
+
+def _prefill_fallback_budget() -> int:
+    """Byte budget for the numpy prefill-attention fallback's temporaries.
+
+    Overridable with ``SLO_PREFILL_FALLBACK_BUDGET_MB`` (default
+    ``_DEFAULT_FALLBACK_BUDGET_MB``), matching the SLO_* runtime-tuning
+    convention used by the memory-pressure thresholds and the stack-dump
+    interval -- the right size depends on the machine, so it is not the
+    kernel's call to freeze.
+
+    The fallback runs only when numba is unavailable. It computes attention by
+    materializing (H, blk, new_len) float32 scores and softmaxing them. Unchunked
+    that was _FALLBACK_TEMP_COUNT temporaries of that shape -- at
+    seq_len = new_len = 8192 with H = 16 that is ~16 GB, which is what OOM-killed
+    the API server on 2026-11-01. Chunking over the query axis turns it into
+    _FALLBACK_TEMP_COUNT * H * blk * new_len * _FALLBACK_ITEMSIZE with `blk`
+    sized to this budget, so the allocation is bounded however long the prompt.
+    """
+    default_mb = float(_DEFAULT_FALLBACK_BUDGET_MB)
+    raw = os.environ.get("SLO_PREFILL_FALLBACK_BUDGET_MB", str(_DEFAULT_FALLBACK_BUDGET_MB))
+    try:
+        mb = float(raw)
+    except ValueError:
+        logger.warning(
+            "SLO_PREFILL_FALLBACK_BUDGET_MB=%r is not a number; using %g MB",
+            raw,
+            _DEFAULT_FALLBACK_BUDGET_MB,
+            extra={"tag": "KERNELS"},
+        )
+        mb = default_mb
+    if mb <= 0:
+        logger.warning(
+            "SLO_PREFILL_FALLBACK_BUDGET_MB=%r is not positive; using %g MB",
+            raw,
+            _DEFAULT_FALLBACK_BUDGET_MB,
+            extra={"tag": "KERNELS"},
+        )
+        mb = default_mb
+    return int(mb * 1024 * 1024)
+
 
 def _check_numba() -> bool:
+    """True when numba imports; warns ONCE when it does not.
+
+    A silent ``False`` here cost an entire investigation on 2026-11-01: numba
+    installed under ``~/.local`` is invisible while ``PYTHONNOUSERSITE=1`` is
+    set (which the API server sets deliberately), so the server quietly ran
+    every fused kernel as numpy — including the attention prefill fallback,
+    which allocated O(seq^2) and was OOM-killed by the kernel at ~21 GB RSS.
+
+    The numpy fallback is correct and is now memory-bounded, but silently
+    running it instead of the compiled path is never acceptable, so say so
+    out loud the first time it is observed.
+    """
     global _NUMBA_AVAILABLE
     if _NUMBA_AVAILABLE is None:
         try:
             from numba import njit  # noqa: F401
 
             _NUMBA_AVAILABLE = True
-        except ImportError:
+        except ImportError as exc:
             _NUMBA_AVAILABLE = False
+            logger.warning(
+                "numba unavailable (%s: %s) — fused kernels falling back to numpy. "
+                "Prefill attention stays memory-bounded but is several times "
+                "slower. If unexpected, check that numba is installed in this "
+                "interpreter's own site-packages: PYTHONNOUSERSITE=1 hides "
+                "~/.local, where a user-site install lives.",
+                type(exc).__name__,
+                exc,
+                extra={"tag": "KERNELS"},
+            )
     return _NUMBA_AVAILABLE
 
 
@@ -785,16 +872,36 @@ def fused_attention_multi(q, k, v, scale, H, E_head):
     if _nb_fused_attention_multi is not None:
         _nb_fused_attention_multi(q, k, v, out, scale, H, E_head, seq_len, new_len, reps)
     else:
-        # Numpy fallback (no numba): materialize the expansion explicitly
+        # Numpy fallback (no numba): CHUNKED over the query axis.
+        #
+        # Attention is independent per query position — query s attends only to
+        # keys n <= s — so a contiguous slice of queries can be computed on its
+        # own and yields results identical to the whole-matrix form. That is what
+        # makes this memory-bounded: the previous one-shot version materialized
+        # _FALLBACK_TEMP_COUNT concurrent (H, seq_len, new_len) float32 arrays,
+        # which at seq_len = new_len = 8192 and H = 16 is ~16 GB and got the API
+        # server OOM-killed by the kernel (2026-11-01). Temporaries here are
+        # (H, blk, new_len), with blk sized to the prefill fallback budget.
         if reps != 1:
             k = k[np.arange(H) // reps]
             v = v[np.arange(H) // reps]
-        scores = np.einsum("she,hne->hsn", q, k) * scale  # (H, seq, new_len)
-        causal = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
-        scores = scores + causal
-        attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
-        attn = attn / attn.sum(axis=-1, keepdims=True)
-        out = np.einsum("hsn,hne->she", attn, v)
+
+        per_chunk = max(1, H * new_len * _FALLBACK_ITEMSIZE * _FALLBACK_TEMP_COUNT)
+        blk = max(1, _prefill_fallback_budget() // per_chunk)
+
+        # Key indices are shared by every chunk; the mask broadcast is
+        # (blk, new_len) — H times smaller than scores, so it is cheap.
+        cols = np.arange(new_len, dtype=np.int64)[None, :]
+        for s0 in range(0, seq_len, blk):
+            s1 = min(s0 + blk, seq_len)
+            # Absolute query positions, so the causal mask stays correct across
+            # chunk boundaries (query s0+i sees keys n <= s0+i).
+            rows = np.arange(s0, s1, dtype=np.int64)[:, None]
+            scores = np.einsum("she,hne->hsn", q[s0:s1], k) * scale  # (H, blk, new_len)
+            scores += np.where(cols > rows, _CAUSAL_MASK, np.float32(0.0))
+            attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
+            attn = attn / attn.sum(axis=-1, keepdims=True)
+            out[s0:s1] = np.einsum("hsn,hne->she", attn, v)
     return out
 
 
