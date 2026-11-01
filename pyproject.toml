@@ -27,6 +27,14 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
+    # JIT kernels for the inference hot path (domain/training/_internal/slonet_kernels.py).
+    # Declared rather than assumed: a numba that is installed but invisible to the
+    # running interpreter is exactly how the 2026-11-01 API-server OOM happened --
+    # the kernels silently dropped to their numpy fallback, whose unchunked prefill
+    # allocated ~16 GB and was OOM-killed by the kernel. llvmlite is pinned alongside
+    # because the two are version-locked; it is otherwise numba's own dependency.
+    "numba>=0.67.0",
+    "llvmlite>=0.49.0",
     "fastapi>=0.104.0",
     "uvicorn>=0.24.0",
     "starlette>=0.27.0",
