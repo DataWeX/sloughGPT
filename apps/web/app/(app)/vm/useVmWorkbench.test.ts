@@ -108,6 +108,24 @@ describe('useVmWorkbench', () => {
     expect(result.current.maxSteps).toBe(5000)
   })
 
+  it('does not let hydration clobber an edit made while it was loading', async () => {
+    kvStore.set('vm-source', '; persisted program')
+    kvStore.set('vm-role', 'admin')
+
+    const { result } = renderHook(() => useVmWorkbench())
+    // Edit before the async load lands. The touched flag is set synchronously,
+    // so the load that resolves later must skip the source field…
+    act(() => {
+      result.current.setSource('; my edit')
+    })
+
+    await waitFor(() => expect(result.current.hydrated).toBe(true))
+
+    expect(result.current.source).toBe('; my edit')
+    // …while untouched fields still pick up the fresh server value.
+    expect(result.current.role).toBe('admin')
+  })
+
   it('persists edits once hydrated', async () => {
     const { result } = renderHook(() => useVmWorkbench())
     await waitFor(() => expect(result.current.hydrated).toBe(true))

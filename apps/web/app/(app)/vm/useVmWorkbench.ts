@@ -234,10 +234,12 @@ export function useVmWorkbench() {
     }
 
     const loadSource = async () => {
-      if (!sourceLoaded && !sourceTouched.current) {
-        const saved = await chatDB.getKV<string>('vm-source')
-        if (saved) setSourceRaw(saved)
-      }
+      if (sourceLoaded) return
+      const saved = await chatDB.getKV<string>('vm-source')
+      // Re-check the guard *after* the read: the user can type while it is
+      // still in flight, and applying unconditionally would clobber that edit.
+      // loadVmData applies its three values the same way (touched → skip).
+      if (!sourceTouched.current && saved) setSourceRaw(saved)
     }
 
     // A rejected KV read must not leave the page stuck on the loading
