@@ -2,23 +2,13 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "81ff51e533fdde2905a10d5dead92f8f288e99d1",
+    "recorded_commit": "c469eb0adf3ded73e44dd5e191192d584b315995",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
   },
-  "classes": [
-    "core-capability",
-    "feature",
-    "projection",
-    "misfiled"
-  ],
-  "facets": [
-    "cognitive",
-    "core",
-    "gateway",
-    "training"
-  ],
+  "classes": ["core-capability", "feature", "projection", "misfiled"],
+  "facets": ["cognitive", "core", "gateway", "training"],
   "ratchet": {
     "misfiled": 0,
     "projection": 0,
@@ -27,122 +17,71 @@
   "dirs": {
     "agents": {
       "class": "core-capability",
-      "facets": [
-        "cognitive",
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "domain/shell/"
-      ],
+      "facets": ["cognitive", "core"],
+      "consumers": ["tests/", "apps/api/", "domain/shell/"],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
       "tree_hash": "92901ebab940c47047848f9bd333051d21997b17"
     },
     "ai_personality": {
       "class": "feature",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/cli/"
-      ],
+      "facets": ["cognitive"],
+      "consumers": ["tests/", "apps/cli/"],
       "note": "persona config/behavior projection for chat",
       "debt": null,
       "tree_hash": "f907fdfdc605e315505270e3e040ebfb6c463400"
     },
     "api": {
       "class": "core-capability",
-      "facets": [
-        "gateway"
-      ],
-      "consumers": [
-        "apps/api/",
-        "tests/",
-        "domain/infrastructure/"
-      ],
+      "facets": ["gateway"],
+      "consumers": ["apps/api/", "tests/", "domain/infrastructure/"],
       "note": "HTTP endpoint projections of core contracts (edge exposure)",
       "debt": "overlap with infrastructure/ops — client/core boundary review pending",
       "tree_hash": "70963dc01c0639127301eb88eadeeb5571caecab"
     },
     "auth": {
       "class": "core-capability",
-      "facets": [
-        "gateway"
-      ],
-      "consumers": [
-        "apps/api/",
-        "domain/search/"
-      ],
+      "facets": ["gateway"],
+      "consumers": ["apps/api/", "domain/search/"],
       "note": "session/token checks at the edge (apps/api)",
       "debt": null,
       "tree_hash": "f5b4c6c900c797d674018f7f5ab61b3873836f97"
     },
     "benchmark": {
       "class": "feature",
-      "facets": [
-        "training"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/"
-      ],
+      "facets": ["training"],
+      "consumers": ["tests/", "apps/api/"],
       "note": "eval/regression harness (training-loop measurement)",
       "debt": null,
       "tree_hash": "eb618ed1a32f2fdde7c3b6899349f5b33abed69f"
     },
     "billing": {
       "class": "feature",
-      "facets": [
-        "gateway"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "domain/core/",
-        "domain/infrastructure/"
-      ],
+      "facets": ["gateway"],
+      "consumers": ["tests/", "apps/api/", "domain/core/", "domain/infrastructure/"],
       "note": "subscription/edge entitlement exposure",
       "debt": null,
       "tree_hash": "1a7cf9629b011b7d3982662db3dfa5dd10403c56"
     },
     "chat": {
       "class": "feature",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [
-        "tests/",
-        "scripts/",
-        "apps/api/"
-      ],
+      "facets": ["cognitive"],
+      "consumers": ["tests/", "scripts/", "apps/api/"],
       "note": "chat journey domain glue (feedback + context wiring)",
       "debt": null,
       "tree_hash": "bb88422a8930bc159d39c83e20d0819bfa257556"
     },
     "cognition": {
       "class": "core-capability",
-      "facets": [
-        "cognitive",
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "scripts/",
-        "domain/core/"
-      ],
+      "facets": ["cognitive", "core"],
+      "consumers": ["tests/", "apps/api/", "scripts/", "domain/core/"],
       "note": "reasoning core (24 py) — pair with cognitive/, consolidation card",
       "debt": "duplicate pair with cognitive/ — merge candidate",
       "tree_hash": "353a699af136ee7b3418aa2b4e95f8f57ec1aca5"
     },
     "cognitive": {
       "class": "core-capability",
-      "facets": [
-        "cognitive"
-      ],
+      "facets": ["cognitive"],
       "consumers": [],
       "note": "orphan duplicate of cognition/: zero external consumers found — first merge candidate",
       "debt": "duplicate pair with cognition/ — merge candidate",
@@ -150,36 +89,23 @@
     },
     "collections": {
       "class": "feature",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/cli/"
-      ],
+      "facets": ["cognitive"],
+      "consumers": ["tests/", "apps/cli/"],
       "note": "user data organization feature (cli-heavy)",
       "debt": null,
       "tree_hash": "02b2c4e1c8c81fe46341dcdf9fc0a34a0020cea3"
     },
     "companion": {
       "class": "feature",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/"
-      ],
+      "facets": ["cognitive"],
+      "consumers": ["tests/", "apps/api/"],
       "note": "companion persona feature",
       "debt": null,
       "tree_hash": "b15db7439fcf2928f513fbb7cc980969bd10b6d0"
     },
     "context": {
       "class": "core-capability",
-      "facets": [
-        "cognitive",
-        "core"
-      ],
+      "facets": ["cognitive", "core"],
       "consumers": [
         "tests/",
         "apps/api/",
@@ -193,53 +119,31 @@
     },
     "core": {
       "class": "core-capability",
-      "facets": [
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/cli/",
-        "apps/api/",
-        "scripts/",
-        "plugins/"
-      ],
+      "facets": ["core"],
+      "consumers": ["tests/", "apps/cli/", "apps/api/", "scripts/", "plugins/"],
       "note": "base types/exports every domain builds on",
       "debt": null,
       "tree_hash": "a257ba9ed6d9117e3ef0ae8bdaef4e69dbbc03bd"
     },
     "errors": {
       "class": "core-capability",
-      "facets": [
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/"
-      ],
+      "facets": ["core"],
+      "consumers": ["tests/", "apps/api/"],
       "note": "error contracts shared at every seam",
       "debt": null,
       "tree_hash": "7e72a6721c00e399be4448ed2ddfec98e29ab45c"
     },
     "feedback": {
       "class": "feature",
-      "facets": [
-        "cognitive",
-        "training"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "scripts/"
-      ],
+      "facets": ["cognitive", "training"],
+      "consumers": ["tests/", "apps/api/", "scripts/"],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
       "tree_hash": "82363afd766f25a9913bd378f47a92b2a04e3033"
     },
     "generation": {
       "class": "core-capability",
-      "facets": [
-        "core"
-      ],
+      "facets": ["core"],
       "consumers": [],
       "note": "thin generation seam (1 file, zero external importers — revisit on inference consolidation)",
       "debt": null,
@@ -247,10 +151,7 @@
     },
     "inference": {
       "class": "core-capability",
-      "facets": [
-        "core",
-        "training"
-      ],
+      "facets": ["core", "training"],
       "consumers": [
         "tests/",
         "apps/api/",
@@ -264,105 +165,55 @@
     },
     "infrastructure": {
       "class": "core-capability",
-      "facets": [
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "scripts/",
-        "domain/training/",
-        "domain/core/"
-      ],
+      "facets": ["core"],
+      "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
       "tree_hash": "971129094f4f672765675233177a68564d83bb75"
     },
     "knowledge": {
       "class": "core-capability",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [
-        "tests/",
-        "domain/learner/",
-        "apps/api/",
-        "domain/agents/",
-        "domain/search/"
-      ],
+      "facets": ["cognitive"],
+      "consumers": ["tests/", "domain/learner/", "apps/api/", "domain/agents/", "domain/search/"],
       "note": "knowledge base retrieval (feeds learner/agents)",
       "debt": null,
       "tree_hash": "e13a3cbff08ce7dd146ca09bceb8ce777bd4c67c"
     },
     "learner": {
       "class": "core-capability",
-      "facets": [
-        "training",
-        "cognitive"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "domain/knowledge/",
-        "domain/memory/",
-        "domain/core/"
-      ],
+      "facets": ["training", "cognitive"],
+      "consumers": ["tests/", "apps/api/", "domain/knowledge/", "domain/memory/", "domain/core/"],
       "note": "adaptive learning loop (training objective over cognitive memory)",
       "debt": null,
       "tree_hash": "573abfd2297c4418c7817418137f9eced1221754"
     },
     "logging": {
       "class": "core-capability",
-      "facets": [
-        "core"
-      ],
-      "consumers": [
-        "apps/cli/",
-        "tests/",
-        "apps/api/",
-        "domain/infrastructure/",
-        "domain/shell/"
-      ],
+      "facets": ["core"],
+      "consumers": ["apps/cli/", "tests/", "apps/api/", "domain/infrastructure/", "domain/shell/"],
       "note": "structured logging bootstrap",
       "debt": null,
       "tree_hash": "bace67f28f51af2ab74498301c2ef13cd70d1b1e"
     },
     "memory": {
       "class": "core-capability",
-      "facets": [
-        "cognitive",
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "domain/knowledge/",
-        "apps/cli/",
-        "domain/search/"
-      ],
+      "facets": ["cognitive", "core"],
+      "consumers": ["tests/", "apps/api/", "domain/knowledge/", "apps/cli/", "domain/search/"],
       "note": "memory store/read paths (cognitive reasoning over core persistence)",
       "debt": null,
       "tree_hash": "d82b5dd4850aa76ba6e70eccc0debe78c90e0955"
     },
     "mobile": {
       "class": "feature",
-      "facets": [
-        "gateway"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/"
-      ],
+      "facets": ["gateway"],
+      "consumers": ["tests/", "apps/api/"],
       "note": "server-side push notification service — misleading name, user ruling keep as-is (2026-10-31)",
       "debt": "misleading name — server push service, not a client; user ruling: keep",
       "tree_hash": "9c65a59060dbf14e3c5d55b083d3b76b856d6ccf"
     },
     "models": {
       "class": "core-capability",
-      "facets": [
-        "core",
-        "training"
-      ],
+      "facets": ["core", "training"],
       "consumers": [
         "tests/",
         "apps/api/",
@@ -376,80 +227,47 @@
     },
     "multimodal": {
       "class": "core-capability",
-      "facets": [
-        "core",
-        "training"
-      ],
-      "consumers": [
-        "tests/",
-        "scripts/",
-        "domain/agents/",
-        "domain/models/",
-        "domain/core/"
-      ],
+      "facets": ["core", "training"],
+      "consumers": ["tests/", "scripts/", "domain/agents/", "domain/models/", "domain/core/"],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
       "tree_hash": "1a44e3bfb373bddb83998750f4948d696628b414"
     },
     "ops": {
       "class": "core-capability",
-      "facets": [
-        "gateway"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/"
-      ],
+      "facets": ["gateway"],
+      "consumers": ["tests/", "apps/api/"],
       "note": "operator/health surface — overlap with api/infrastructure under review",
       "debt": "overlap with api/infrastructure — client/core boundary review pending",
       "tree_hash": "76a621b13813a011911b5c79d1bf06155a6dd8bb"
     },
     "plugins": {
       "class": "core-capability",
-      "facets": [
-        "core"
-      ],
-      "consumers": [
-        "apps/api/",
-        "plugins/",
-        "tests/"
-      ],
+      "facets": ["core"],
+      "consumers": ["apps/api/", "plugins/", "tests/"],
       "note": "plugin loading seam (microkernel registration)",
       "debt": null,
       "tree_hash": "eaf2e3d2e7d9a5778252b1da74486ef4fc951ee8"
     },
     "search": {
       "class": "core-capability",
-      "facets": [
-        "cognitive",
-        "core"
-      ],
-      "consumers": [
-        "apps/api/"
-      ],
+      "facets": ["cognitive", "core"],
+      "consumers": ["apps/api/"],
       "note": "retrieval engine (core path consumed by apps/api)",
       "debt": null,
       "tree_hash": "00df85c4b1abda7eefd730f68167eae54355ef8d"
     },
     "settings": {
       "class": "core-capability",
-      "facets": [
-        "gateway"
-      ],
-      "consumers": [
-        "apps/api/",
-        "tests/",
-        "domain/chat/"
-      ],
+      "facets": ["gateway"],
+      "consumers": ["apps/api/", "tests/", "domain/chat/"],
       "note": "settings service exposed through apps/api",
       "debt": null,
       "tree_hash": "6b50bbe5d907bdf00e96ad2b72d4be289682b334"
     },
     "shared": {
       "class": "core-capability",
-      "facets": [
-        "core"
-      ],
+      "facets": ["core"],
       "consumers": [
         "apps/api/",
         "tests/",
@@ -463,104 +281,56 @@
     },
     "shell": {
       "class": "core-capability",
-      "facets": [
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/cli/",
-        "apps/api/",
-        "scripts/"
-      ],
+      "facets": ["core"],
+      "consumers": ["tests/", "apps/cli/", "apps/api/", "scripts/"],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
       "tree_hash": "0d69c3d77a7b81d6c8e4d2f61160416693db20b1"
     },
     "slolib": {
       "class": "core-capability",
-      "facets": [
-        "core",
-        "training"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "packages/core-py/",
-        "scripts/",
-        "domain/training/"
-      ],
+      "facets": ["core", "training"],
+      "consumers": ["tests/", "apps/api/", "packages/core-py/", "scripts/", "domain/training/"],
       "note": "performance kernels (AVX2/numba) for inference+training",
       "debt": null,
-      "tree_hash": "7a7823bc6609608ad1f7fe75c69c47e4aaeddfee"
+      "tree_hash": "4071707bec5723af6476d72d348f57dbc83da404"
     },
     "soul": {
       "class": "feature",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [
-        "tests/",
-        "domain/core/",
-        "domain/inference/"
-      ],
+      "facets": ["cognitive"],
+      "consumers": ["tests/", "domain/core/", "domain/inference/"],
       "note": "persona/soul state (consciousness-adjacent, grandfathered name)",
       "debt": null,
       "tree_hash": "39ce44428c2da0198667fafea6fd5337cc12e868"
     },
     "testing": {
       "class": "feature",
-      "facets": [
-        "core"
-      ],
-      "consumers": [
-        "tests/"
-      ],
+      "facets": ["core"],
+      "consumers": ["tests/"],
       "note": "domain test utilities",
       "debt": null,
       "tree_hash": "acbbbf263c371d770538ad1911fe17fecf5eae15"
     },
     "tools": {
       "class": "feature",
-      "facets": [
-        "cognitive"
-      ],
-      "consumers": [
-        "apps/api/"
-      ],
+      "facets": ["cognitive"],
+      "consumers": ["apps/api/"],
       "note": "everyday tools engine (agent tier-1 — never site tooling)",
       "debt": null,
       "tree_hash": "4ea9d53ca64adde598798d0175efd5a221df884c"
     },
     "training": {
       "class": "core-capability",
-      "facets": [
-        "training",
-        "core"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "scripts/",
-        "domain/infrastructure/",
-        "apps/cli/"
-      ],
+      "facets": ["training", "core"],
+      "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "a36f6f4e542c00515612e5295526e7da6dc49f4a"
+      "tree_hash": "f451200e2a312bfd8f203f5c19e316dbc3bdd633"
     },
     "voice": {
       "class": "core-capability",
-      "facets": [
-        "core",
-        "training"
-      ],
-      "consumers": [
-        "tests/",
-        "apps/api/",
-        "scripts/",
-        "domain/core/",
-        "domain/generation/"
-      ],
+      "facets": ["core", "training"],
+      "consumers": ["tests/", "apps/api/", "scripts/", "domain/core/", "domain/generation/"],
       "note": "TTS/phoneme serving + phoneme training hooks",
       "debt": null,
       "tree_hash": "3be70d300e56f28351280f07e03a1979fe1a348f"

@@ -98,7 +98,11 @@ export const consciousnessController = {
     return apiGet<SelfModel>('/consciousness/self-model')
   },
 
-  async getQualia(): Promise<Record<string, number>> {
+  async getQualia(): Promise<{
+    current: Record<string, number>
+    narrative?: string
+    history_count?: number
+  }> {
     return apiGet('/consciousness/qualia')
   },
 

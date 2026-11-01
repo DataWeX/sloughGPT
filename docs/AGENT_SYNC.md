@@ -10,6 +10,8 @@ commits on main (pre-commit/pre-push block >5 ahead via
 `reset`-to-lane on main. Land with a PR (canonical) or push `HEAD:main` from
 your lane branch — your AGENT_SYNC entry rides that push.
 
+**2026-11-01 — OPENCODE (playful-harbor lane): ports are grafted, not murdered — `scripts/grab-port.sh` replaces `dev:restart`'s blind `kill -9`, identity-checked via the `X-Slo-Web-Tree` header.** User ruling after the wrong-port audit incident: "should be like grafting" — the old `dev:restart` (`lsof -ti :5173 | xargs kill -9`) would kill whatever it found, including another session's live server (pid 1603 in the incident) — and `kill -9` as a _first_ verb gives in-flight state (API training jobs are in-memory dict + SQLite JobStore) no drain/checkpoint window. **The defect was declaration-without-enforcement:** `vite.config.ts` already stamps every response with `X-Slo-Web-Tree: sha256(realpath(apps/web))[:16]` — a tree-identity token built for exactly this — but **grep found zero consumers**; nothing ever verified which checkout a port serves. **`grab-port.sh <port>`:** (1) resolve the holder via `lsof`; (2) curl the holder's `X-Slo-Web-Tree` and compare against this checkout's computed id — **match → ours to signal**: SIGTERM → poll for release (`GRAB_PORT_DRAIN`, default 5s) → SIGKILL only as escalation, mirroring `dev-stack.sh`'s existing TERM→wait→KILL family trait; **mismatch/absent → REFUSE** (print pid + full cmd + both tree ids, exit 1 — human decides; never signals). `apps/web/package.json` `dev:restart` now runs the helper (`&& npm run dev` — refusal stops the restart loudly). AGENTS.md Core Rules gains the one-line graft rule. **Tests (3/3):** free port → exit 0; foreign holder `:5173` (pid 1603, no header — old checkout) → refused, identified, **zero signals sent**; disposable our-tree server on `:59173` → grafted free via TERM, port verified released. **Scope note (per expert review):** script-level graft only guarantees future graceful stops get a drain window — mid-train _resumability_ (checkpoint to JobStore + rehydrate on boot) is a separate feature card, not this. `e2e:vite` still hardcodes 5173 in `start-server-and-test` — future reuse of this helper there is a follow-up, not a change.\n\n**2026-11-01 — OPENCODE (playful-harbor lane): consciousness dashboard blank-render FIXED — getQualia envelope unwrap + type truth + fold guard, pushed `HEAD:main` — card `20261101_115301_fix-consciousness-dashboard-blank-render-getqualia-envelope`.** Audit finding 3 (card `20261101_104216`, review): `/consciousness/dashboard` rendered title-only, crash-looping `TypeError: v.toFixed is not a function` in `CurrentStateFold`. **Root cause:** `consciousnessController.getQualia()` was typed `Promise<Record<string, number>>` but `/consciousness/qualia` returns `{current: {valence…}, narrative, history_count}` (apiGet unwraps only the outer `{status,data}` at `apps/lib/request.ts:255`); the hook stored the whole envelope as `currentQualia` and the fold called `.toFixed(2)` on the nested object. **Pre-existing** (identical line in pre-decomposition page.tsx:166 — the decompose moved it verbatim; the colocated test's mock replicated the wrong flat shape, so tests stayed green while prod was blank). **Fix:** (1) `lib/consciousness-controller.ts` — `getQualia()` return type now declares the real envelope; (2) `useConsciousnessDashboard.ts` — `setCurrentQualia(value.current ?? {})`; (3) `DashboardFolds.tsx` — `Number.isFinite` filter on both belief/qualia bar entries so future shape drift degrades to bars-skipped, never a blank page; (4) `page.test.tsx` — mock corrected to the real backend shape + new regression test asserting valence/arousal bars render (`0.50`/`0.30`). TDD: 15/16 red on the crashing mock → green 16/16 after fix. **Gates:** tsc 0, eslint 0 errors (warning delta 0 vs baseline), vitest 16/16, live re-screenshot on the fixed server: main text 84 → 1217 chars, zero page errors, full dashboard renders (summary cards, Response Quality 56/100, folds). **PITFALL — wrong-port screenshots:** the audit screenshots and first "verification" all hit `:5173`, which is **another session's dev server** (pid 1603, foreign checkout); our Vite has `strictPort: false` and silently moved to **:5174**. Symptom: crash stacks citing line numbers that don't exist in the on-disk file. Check `ss -tlnp | grep 517` and the dev-server log's "Local:" line before trusting any screenshot; pin the port explicitly in audit scripts.\n\n**2026-11-01 — OPENCODE (quiet-pixel lane): GPU matmul NumPy≥2 dispatch fix landed (PR #257, merged `4ab31b0a6`), plus two main-owned CI-red fixes landed by lane push (`git push origin HEAD:main`) — calendar `text-2xl` `562451dc5`, billing monthly-reset `1af8c0509` — branch `fix/gpu-matmul-numpy2-om` (merged), `fix/calendar-text2xl`, `fix/billing-monthly-reset`.** **GPU fix:** root cause of the slow training run (`job_c87a2dd6`, 0.4 steps/s, GPU never used) — NumPy≥2 added `np.ndarray.device`, so `hasattr(x, "device")` CuPy-detection guards misclassified CPU arrays → CuPy `TypeError` → silent CPU fallback. Fixed by type detection `isinstance(x, self._cp.ndarray)` in `domain/slolib/_internal/gpu.py` (primary) + `domain/training/_internal/gpu/accelerator.py` (legacy `CudaAcc`); 6 date-independent regression tests in `tests/test_gpu_matmul_regression.py` (fake-cupy fixture: `class ndarray` exposed + fp16-appropriate matmul tolerance). **Billing fix (real bug, date-gated):** `TokenAccount._maybe_reset` compared `.day != .day` with `last_daily_reset` defaulting to epoch 1970-01-01 (day 1) → on the 1st of any month the daily branch never refreshed, the month branch (same stale timestamp) fired **every call** and zeroed `monthly_used` — monthly limits went unenforced all day. Full-date `(year, month, day)` daily compare + `(year, month)` month compare (month stays keyed to `last_daily_reset` so u14-style fixtures keep semantics); 3 regression tests in `TestTokenAccountResets`, validated 4/4 fail pre-fix with synthetic timestamps. **Frontend fix:** `text-2xl` on a decorative emoji in `apps/web/app/(app)/calendar/page.tsx` (from main's `a788ee1ec`) broke `design-criteria.test.ts` on main — dropped to `text-base`, gate 20/20. **Pitfalls for the next session:** (1) `domain/domain-baseline.json` — **any rebase that pulls domain/ changes from main requires re-running `./scripts/python scripts/domain_baseline_rehash.py` and re-verifying `test_domain_baseline` BEFORE pushing** (main's `agents`/`core` drift twice); attribution: verify a pristine `origin/main` worktree shows the same drift before absorbing it, and rehash diffs must stay hashes-only (zero classification keys). (2) PR CI runs against the merge into main, so main's own reds (design-criteria, token tests) show on PRs — always attribute against pristine `origin/main` before assuming your change caused them. (3) `gh run view --job <id> --log-failed` intermittently returns 0 bytes; `gh api repos/DataWeX/sloughGPT/actions/jobs/<id>/logs` works. (4) Worktrees lack `node_modules` — vitest is hoisted to the main repo ROOT `node_modules`: symlink root + `apps/web` from `/home/mana/Documents/Default Project/sloughGPT`, run `$WT/node_modules/.bin/vitest` (never `npx`), then remove the symlinks.
+
 **2026-11-01 — OPENCODE (jolly-wizard lane): doctor-uses-history — Site Doctor's inference triage trends the always-record benchmark series (3σ, same-source, leave-one-out) + the mole probe's env-drift fixed in-card — cards `20261031_170120` (closed), `20261101_104653` (carded: naive_tok_s thresholds dead twice) — branch `feat/doctor-trend-sig`.** **Reader (one analysis home):** `scripts/benchmark_results.py` — beside `is_regression` — gains `record_source` (pre-stamp records = local), `load_series` (kind dir, corrupt skipped, timestamp-ascending, source filter) and `trend_status` (history EXCLUDES current = leave-one-out; least-squares over the last N=10 usable `_dig` values; σ = residual scatter n−2 df so the band is **trend-adjusted** — a steady decline on its own line is healthy, acceleration past it is not; k=3; statuses `insufficient` n<3 / `healthy` / `regressed` / `improved`, direction = membership in `HIGHER_IS_BETTER` — the SAME table `is_regression` uses, never a second list; σ=0 collapses the band to a point: exact match healthy, any step flagged, message reads "zero-variance trend" not "infs"). **Doctor:** `check_inference` appends ONE compact `inference-trend` finding after the ok-summary (the "/health/detailed did not answer" early return skips trend — documented); headline metric `decode_tok_s` only; current = newest record, history = same-`record_source` records excluding it; regressed → **medium** (trips `--strict`), healthy/improved/insufficient → **ok** (a fresh store never trips strict). Additive to pairwise `is_regression` — step vs drift, both failure modes, one module; the mole probe keeps pairwise untouched. **Mole env fix (user ruling "fix mole probe now"):** the probe read `SLO_BENCH_RESULTS_DIR` + `<repo>/data/benchmark_results` — a dir the store stopped writing when it moved to `SLO_BENCH_DATA_DIR`, so it reported "No benchmark records yet" forever. Now reads `SLO_BENCH_DATA_DIR` with **no second default**: `_bench()` captures the script's own canonical `RESULTS_DIR` at load with the env cleared (pristine, order-independent; no stale override survives a later env-unset tick); docstring + `docs/TESTING.md` updated; 8 test env renames + new default-dir regression test. **Carded, not fixed (`20261101_104653`, user ruling):** `naive_tok_s.32/256` thresholds are dead twice — `_dig`'s split walk starts at root so `metrics.naive_tok_s.32` never resolves (empirical: `_regression_deltas('inference')` returns only `decode_tok_s` — the two thresholds never evaluate), and they're absent from `HIGHER_IS_BETTER` so a speedup would flag as regression if they did. **Gates:** ruff check+format clean; `test_benchmark_results.py` **42 passed** (32+10 NEW: source/legacy-local, ascending+source filter, corrupt+missing-dir, n<3 insufficient, flat point-band, on-trend decline vs acceleration, noisy σ-band, window truncation, dotted path, lower-is-better); `test_site_doctor_probe.py` **22 passed** (16+6 NEW: step-down medium + `[local]`, within-band ok, empty n=0 ok, **same-source segregation n=1 with 4 priors present** — mixed sources would be n=4 regressed, 503 early-return skips trend, missing-headline → no finding; existing inference test now hermetic); `test_mole_probes.py` **62 passed** (61+1 default-dir); closure **185 passed**; real-data smoke: 6 local records → n=5 leave-one-out, σ=3.50 (the documented ±50% load swing), current 19.27 within 3σ of trend 17.86 → ok.
 
 **2026-11-01 — OPENCODE (jolly-wizard lane): hygiene batch — 2 stale cards closed with evidence + AGENTS.md's last dangling "Gene" word fixed — cards `20261029_023328` (CRITICAL board-dup → done), `1fcf6932` (gene.md-never-landed → done).** All three items were already resolved by landed work, just never recorded. **(1) Board-dup card:** repair landed (pre-repair `.kanban/board.jsonl.pre-repair-5e5c8ce36.bak` preserved; current origin board = 1147+ unique ids, schema first, `verify_chain()==[]`) + prevention landed on origin (`scripts/check_board_chain.py`, `tests/test_board_chain_gate.py`, "Board integrity" job in `ci.yml`) — and the gate proved itself in production this session: it caught an unsealed card edit (claim without reseal) and every rebase-conflict resolution resealed to exit 0. **(2) gene.md card:** ruling (a) executed under the user's rename — origin ships `.opencode/agents/gen.md` (ls-tree), `gene.md` absent, skill has 0 "Gene" refs, and this commit fixes AGENTS.md:130 ("Gene bounces it" → "Gen") — the trunk's last reference, now `grep -c Gene AGENTS.md` = 0: the docs describe exactly the coordinator that ships. **(3) Flagged, not touched:** a stalled local-only commit `025968003` (user, 05:28 UTC) adds the OLD-name `gene.md` onto local main — would land the coordinator twice; preserved at insurance ref `backup/local-main-gene-md-025968003`, owner to drop or reconcile.
@@ -810,26 +812,26 @@ decision): default = one-pass sweep + printed summary, `--watch` = cadence
   server). Gates and benchmarks now run on conda `sloughgpt` + `PYTHONPATH` —
   the root `.venv` is NOT authoritative (its green was hiding 2 zstd failures;
   `zstandard` is now installed into conda, user-approved).
-**2026-10-16 — startup benchmark gains the launcher path (branch
-`feat/notebook-web-ui`, card `85e15cc4` follow-up).** The card's serve
-launcher was landing in a concurrent session (`22cb8d1c4` + fixes
-`2e09f1a70`, `dcc0165c0`, `e883379bf`) while this session independently
-rebuilt it — duplicate caught at the gate by a path-based check
-(`git log main -- <owned paths>`, not commit-message grep), this session's
-implementation **discarded**, theirs kept. What survives is the measurement:
-`scripts/benchmark_startup.py --via {uvicorn,serve_ui}` boots the API through
-either the raw-uvicorn baseline or `scripts/serve_ui.py` and reports
-`time_to_health_s` / `time_to_ready_s` / `stop_latency_s` (shared
-`benchmark_results record` history). Same load window: health **3.01 s**
-baseline vs **3.89 s** launcher, ready 123.0 vs 123.9 (the app's own warm-up
-dominates both), stop **25.11 s → SIGKILL** (baseline — the app lifespan's
-PGQ engine swallows SIGTERM) vs **2.23 s** (launcher: bounded TERM→KILL +
-reap). Gate = `stop_latency_s ≤ 14 s` on the launcher path only, i.e. its own
-contract (wrapper escalation 5 s, `terminate_grace` 10, `stop()` reap 12).
-Landed by ff from `~/Documents/sloughgpt-api-std` (see Sync recipe). Deltas
-deliberately **not** landed here — port/host overrides and reuse-ownership of
-an already-running stack — are handed off in the card note for whichever
-session owns `scripts/serve_ui.py`.
+  **2026-10-16 — startup benchmark gains the launcher path (branch
+  `feat/notebook-web-ui`, card `85e15cc4` follow-up).** The card's serve
+  launcher was landing in a concurrent session (`22cb8d1c4` + fixes
+  `2e09f1a70`, `dcc0165c0`, `e883379bf`) while this session independently
+  rebuilt it — duplicate caught at the gate by a path-based check
+  (`git log main -- <owned paths>`, not commit-message grep), this session's
+  implementation **discarded**, theirs kept. What survives is the measurement:
+  `scripts/benchmark_startup.py --via {uvicorn,serve_ui}` boots the API through
+  either the raw-uvicorn baseline or `scripts/serve_ui.py` and reports
+  `time_to_health_s` / `time_to_ready_s` / `stop_latency_s` (shared
+  `benchmark_results record` history). Same load window: health **3.01 s**
+  baseline vs **3.89 s** launcher, ready 123.0 vs 123.9 (the app's own warm-up
+  dominates both), stop **25.11 s → SIGKILL** (baseline — the app lifespan's
+  PGQ engine swallows SIGTERM) vs **2.23 s** (launcher: bounded TERM→KILL +
+  reap). Gate = `stop_latency_s ≤ 14 s` on the launcher path only, i.e. its own
+  contract (wrapper escalation 5 s, `terminate_grace` 10, `stop()` reap 12).
+  Landed by ff from `~/Documents/sloughgpt-api-std` (see Sync recipe). Deltas
+  deliberately **not** landed here — port/host overrides and reuse-ownership of
+  an already-running stack — are handed off in the card note for whichever
+  session owns `scripts/serve_ui.py`.
 
 **2026-10-16 — MogDB full-sync mirror encode 2.6× faster (branch
 `feat/mogdb-sync-perf`, card `223f8de1`, source card
@@ -1653,13 +1655,13 @@ tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
   in the **shared checkout** recompiled the crate (1m10s → binary 10:50),
   `systemctl --user restart slough-gateway` (PID 171770), and `:8080/health`
   = `{status, gateway:"rust", sidecar{healthy,last_check,model_loaded,
-  model_name}, uptime_seconds}` matches this checkout's `HealthResponse`
+model_name}, uptime_seconds}` matches this checkout's `HealthResponse`
   (`src/main.rs:146`, handler `:380`; uptime=3s proves the fresh process
   serves it). `strings binary | grep edge-cascade` = 0; foreign `.d` stamps
   = 0. Unit `WorkingDirectory`/`ExecStart` already pointed at the shared
   checkout — no unit edits; edge-cascade worktree stays provenance reference
   only. Journal note (`~/.config/dev-notes/2026-10-01-*.md`) set `status:
-  done` by hand — **note the tooling gap: `PlannerStore` reads only
+done` by hand — **note the tooling gap: `PlannerStore` reads only
   `.dev-notes/notes.journal.jsonl`, it cannot see the legacy `.md` journal
   AGENTS.md calls source of truth, so CLI `note update` misses those** (the
   `08baf13f` board-sync owner may want this on their radar). From
@@ -1895,7 +1897,7 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   `is_ws_upgrade(request)` → `run_websocket` (session consumes the
   connection, no keep-alive after). Scope grounded on the API's real
   surface — `inference.py` `add_api_websocket_route("/ws/generate",
-  ws_generate)` with Starlette accept/receive_text/send_json/close, whose
+ws_generate)` with Starlette accept/receive_text/send_json/close, whose
   interop test pins that exact route shape end-to-end over a real socket.
   Two real bugs caught by RED tests then fixed: (1) cancelled-receive
   teardown deadlock — Starlette's `wait_for(receive,30s)` cancels a
@@ -1926,7 +1928,7 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   false-trip), body cap (`max_body` 64 MiB → 413; chunked counts;
   trailers capped), WS message cap (`ws_max_size` 16 MiB on declared
   frame length + fragment assembly → close 1009), `Expect:
-  100-continue` (interim only after validation; unknown → 417),
+100-continue` (interim only after validation; unknown → 417),
   uvicorn-format access log (`wire.access`, handler + ASGI + WS 101).
   Smuggling guards already existed from phase 1 — the only body gap
   was the cap. 15 new tests (`test_hardening.py` 13 + 2 WS-cap) →
@@ -1981,7 +1983,7 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   gelu 1.5-1.6x shipped; relu 0.97x NOT routed (kernel ships, stays
   engine-tested); matmul stays BLAS. CAPS reports reality: engine
   `native-cpu`, `native_ops = parity = [GELU, LAYER_NORM, RMS_NORM,
-  SOFTMAX]` (exact-set ratchet). TDD 19 RED -> GREEN; new
+SOFTMAX]` (exact-set ratchet). TDD 19 RED -> GREEN; new
   `test_tensor_native.py` (CPU parity, kill-switch spy, byte-identity
   fallbacks, GPU-vs-oracle on real CUDA); face stash-diff = 12
   pre-existing identical; ruff clean. shas `8050828ae` (routing),
@@ -1993,23 +1995,23 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   `scripts/benchmark_block_quantization.py` was the card's deliverable all
   along (exact title match) — fixed, ran, recorded: `zlib.crc32` seeds replace
   PYTHONHASHSEED `hash()` (history now comparable), cluster serialize measured
-  + **bit-exact integrity-gated** (stale block-only guard; series cards 01-03
-  landed `ClusterCodec` streams), median-of-rounds timings, JSON history
-  (`benchmark_block_quantization.json`, downcraft precedent). Verdict avg over
-  5 realistic NN shapes: **block_q4 5.33x / cos 0.99695 / 0.9 ms encode =
-  storage default**, **block_q8 3.20x / MSE 8.39e-09 = fidelity pick**,
-  cluster dominated (3.43x, 248 ms encode, ~275x slower) on weight-like data
-  — its niche is discrete/heavy-tailed input. Suite gate `-05`: pugqeep/
-  compressor 2020 tests **0 fail**; wire-py 83/83; canonical remainder 3784
-  tests with 8+2 reds **all stash-proven pre-existing** (drift-baseline lane
-  `56b49cf1`/`33773fce`); the 24 core-py collection errors pre-date the fork
-  (`merge-base` lacks `domain/shell/_internal/cmds/*` too — main gained them
-  after; zero deletions on my side). From `.wt-worldbrain`.
+  - **bit-exact integrity-gated** (stale block-only guard; series cards 01-03
+    landed `ClusterCodec` streams), median-of-rounds timings, JSON history
+    (`benchmark_block_quantization.json`, downcraft precedent). Verdict avg over
+    5 realistic NN shapes: **block_q4 5.33x / cos 0.99695 / 0.9 ms encode =
+    storage default**, **block_q8 3.20x / MSE 8.39e-09 = fidelity pick**,
+    cluster dominated (3.43x, 248 ms encode, ~275x slower) on weight-like data
+    — its niche is discrete/heavy-tailed input. Suite gate `-05`: pugqeep/
+    compressor 2020 tests **0 fail**; wire-py 83/83; canonical remainder 3784
+    tests with 8+2 reds **all stash-proven pre-existing** (drift-baseline lane
+    `56b49cf1`/`33773fce`); the 24 core-py collection errors pre-date the fork
+    (`merge-base` lacks `domain/shell/_internal/cmds/*` too — main gained them
+    after; zero deletions on my side). From `.wt-worldbrain`.
 
 - **2026-10-21 · vq-huffman-06 — `benchmark_vq_approaches.py` truth-up
   (stack tail `feat/npu-caps`, card `202365ec` created+closed this session).**
   The script's "current baseline" was its own local quantile-init `vq_core`
-  and it listed adaptive-k + k-means++ as *proposals* — both shipped by series
+  and it listed adaptive-k + k-means++ as _proposals_ — both shipped by series
   card 02. Re-anchored rows on the REAL `PointCompressor`
   (`shipped_vq` + `shipped_vq_k16`), kept `legacy_quantile_k16` as history,
   kept PQ/RVQ/FSQ as the exploration set (documented as-un-Huffman-coded);
@@ -2066,39 +2068,39 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   truth-up vs persist-Huffman wire-layout change). From `.wt-worldbrain`.
 
 - **2026-10-21 · pugqeep storage truth-up option B — Huffman persists (CLH1)
-  + honest nbytes (stack tail `feat/npu-caps`, card `d9028c8f` closed this
-  session).** The vq-huffman-07 follow-up landed as the user-chosen option B:
-  `ClusterCodec.serialize_params` writes the Huffman bitstream under a
-  self-identifying `CLH1` marker (legacy dense blobs keep parsing; the outer
-  type code `b"CLH1"` → old readers fail loudly instead of misparsing the
-  bitstream as dense assignments), `deserialize_params` rebuilds the tree,
-  decodes, and MATERIALIZES dense assignments so every params consumer
-  (dedup fingerprints, ratios, lazy slices, to_dict) sees the same shape a
-  fresh compression produces — huffman keys restored alongside, so
-  re-serialization is idempotent. `nbytes` rewritten to the payload
-  contract: residual in EVERY branch; the huffman branch counts the
-  persisted bitstream + tree JSON (was: a phantom bitstream counted + a real
-  residual omitted); invariants `nbytes <= len(to_bytes())` and
-  point-vs-residual-twin delta = exactly `residual.nbytes`. TDD: 11 contract
-  tests RED→GREEN (`test_pugqeep_huffman_wire.py`), full pugqeep suite 2151
-  green / 3 skipped, ruff clean; 3 stale pins updated with why-comments
-  (compressor nbytes formula + the 2 checkpoint `compression_ratio` pins).
-  Benchmarks re-recorded post-B (third history record; honest accounting,
-  `nbytes_gap` = 306 B per 6-layer config = headers only, under the new
-  512-B tripwire): **CLH1 lifts the shipped codec's honest ratio — knobs
-  sweep adaptive_k16 3.84x -> 4.50x, fixed_k16_rt0 3.90x -> 7.49x (+92% —
-  dense assignments were the dominant cost); vq-approaches shipped_vq
-  4.00x -> 5.75x, shipped_vq_k16 (lossless) 0.80x -> 0.90x, while PQ/RVQ/
-  FSQ/legacy rows are byte-identical pre/post — the wire change moves
-  exactly and only huffman-carrying cluster points.** DISCOVERY needing a user decision:
-  `compress_checkpoint`'s default rt=0.99 stores full-size float32 residuals
-  on real weights → honest ratio < 1.0 (0.86-0.91 measured) — checkpoint
-  "compression" INFLATES the library on disk; the old nbytes omission was
-  masking it. Options: lossy checkpoint path (rt=0) vs reframe the stat —
-  behavior change, deliberately out of this card's scope. Capacity nuance:
-  k=64 clears the 0.99 threshold on all 6 benchmark layers (0 residuals
-  fired, genuine compression) — the inflation is a low-k capacity effect.
-  From `.wt-worldbrain`.
+  - honest nbytes (stack tail `feat/npu-caps`, card `d9028c8f` closed this
+    session).** The vq-huffman-07 follow-up landed as the user-chosen option B:
+    `ClusterCodec.serialize_params` writes the Huffman bitstream under a
+    self-identifying `CLH1` marker (legacy dense blobs keep parsing; the outer
+    type code `b"CLH1"` → old readers fail loudly instead of misparsing the
+    bitstream as dense assignments), `deserialize_params` rebuilds the tree,
+    decodes, and MATERIALIZES dense assignments so every params consumer
+    (dedup fingerprints, ratios, lazy slices, to_dict) sees the same shape a
+    fresh compression produces — huffman keys restored alongside, so
+    re-serialization is idempotent. `nbytes` rewritten to the payload
+    contract: residual in EVERY branch; the huffman branch counts the
+    persisted bitstream + tree JSON (was: a phantom bitstream counted + a real
+    residual omitted); invariants `nbytes <= len(to_bytes())` and
+    point-vs-residual-twin delta = exactly `residual.nbytes`. TDD: 11 contract
+    tests RED→GREEN (`test_pugqeep_huffman_wire.py`), full pugqeep suite 2151
+    green / 3 skipped, ruff clean; 3 stale pins updated with why-comments
+    (compressor nbytes formula + the 2 checkpoint `compression_ratio` pins).
+    Benchmarks re-recorded post-B (third history record; honest accounting,
+    `nbytes_gap` = 306 B per 6-layer config = headers only, under the new
+    512-B tripwire): **CLH1 lifts the shipped codec's honest ratio — knobs
+    sweep adaptive_k16 3.84x -> 4.50x, fixed_k16_rt0 3.90x -> 7.49x (+92% —
+    dense assignments were the dominant cost); vq-approaches shipped_vq
+    4.00x -> 5.75x, shipped_vq_k16 (lossless) 0.80x -> 0.90x, while PQ/RVQ/
+    FSQ/legacy rows are byte-identical pre/post — the wire change moves
+    exactly and only huffman-carrying cluster points.** DISCOVERY needing a user decision:
+    `compress_checkpoint`'s default rt=0.99 stores full-size float32 residuals
+    on real weights → honest ratio < 1.0 (0.86-0.91 measured) — checkpoint
+    "compression" INFLATES the library on disk; the old nbytes omission was
+    masking it. Options: lossy checkpoint path (rt=0) vs reframe the stat —
+    behavior change, deliberately out of this card's scope. Capacity nuance:
+    k=64 clears the 0.99 threshold on all 6 benchmark layers (0 residuals
+    fired, genuine compression) — the inflation is a low-k capacity effect.
+    From `.wt-worldbrain`.
 
 - **2026-10-23 · lint + hygiene-gate + cleanup-row sweep (cards `lint-fix-01`
   closed, `ccad389e` test half landed; stack tail `feat/npu-caps`).** (1)
@@ -2126,7 +2128,7 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   a note with NO frontmatter status, so sync parked every "What Was Done"
   row in todo forever (root cause; `status: done` frontmatter on that note
   proposed, not done). Two rows were real, not stale: `domain/cognition/
-  _internal/rag.py` still reseeded the global RNG per `_default_embedding`
+_internal/rag.py` still reseeded the global RNG per `_default_embedding`
   (the note's RandomState fix had only landed on the deleted `core-py/domains`
   tree) → fixed as the note specified, byte-identical vectors, RED-proven
   (`76c815d06`, rag suites 247 green); plus the world_stream print above.
@@ -2176,7 +2178,7 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
 - **A child log opened with `open(path, "a")` poisons every log-derived
   metric**: `scripts/serve_ui.py` appends to `logs/serve_ui-api.log`, so the
   next reader of `Startup complete — server ready for requests` /
-  `Preload import failed` can measure a *previous* run's boot. Hit while
+  `Preload import failed` can measure a _previous_ run's boot. Hit while
   adding `benchmark_startup.py --via serve_ui`: time-to-ready read as 3.88 s
   off a stale marker (honest value 126.4 s) and the 25→5 s marker diff hid a
   real measurement bug. Fix: give the run its own log dir (the benchmark
@@ -2184,7 +2186,7 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
 - **Never force-update `main` to land your commit while another worktree sits
   on it at the old tip**: `git fetch . HEAD:main` / `git branch -f main` are
   refused for good reason — that worktree's next `git commit` re-points the
-  branch from *its* HEAD and would silently drop your commit from main's line.
+  branch from _its_ HEAD and would silently drop your commit from main's line.
   Land from the worktree that owns `main` (`~/Documents/sloughgpt-api-std`,
   see Sync recipe) after claiming it here first.
 - **Stale `main` behind a foreign worktree is untouchable.** `main` may be
@@ -2383,7 +2385,7 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   `executor.submit`): engine gains `resolve_resume_checkpoint` (raises
   ValueError; router maps to 422 — the one sanctioned mapping, identical
   messages), `run_recovery_training(config, on_progress, resume, events)
-  -> trainer` (closure keeps ALL job-store/controller/webhook state;
+-> trainer` (closure keeps ALL job-store/controller/webhook state;
   `resume` = pre-loaded bundle preserves "no second disk load"), and
   `executor_submit(fn, *args)`. **Zero `domain.training._internal` refs
   remain in the router — the boundary invariant (routers never import
@@ -2462,7 +2464,7 @@ workspace/data/` negation after the bare `data/` rule — the rule stays
   domain/search, Cmd+K palette, file-backed + API + sessions stores, live
   journey fix. Conflicts (5 total, all resolved deliberately): workspaces.py
   repo access = main's facade forms + branch's entries-filter structure;
-  routers/__init__ = main's generated manifest (re-generated, 55 modules
+  routers/**init** = main's generated manifest (re-generated, 55 modules
   incl. search); CommandPalette imports = union (kept main's revalidateAll);
   .gitignore = union; board/notes = main's (branch entries would corrupt the
   hash chain). **Caught a riding regression**: pick `d2cc97d74` carried the

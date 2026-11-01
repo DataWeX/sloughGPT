@@ -77,7 +77,9 @@ class _MetalAccelerator:
         a = np.asarray(arr)
         return a / (1 + np.exp(-np.clip(a, -500, 500)))
 
-    def layernorm(self, arr: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+    def layernorm(
+        self, arr: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
         a = np.asarray(arr)
         mean = a.mean(axis=-1, keepdims=True)
         var = a.var(axis=-1, keepdims=True)
@@ -88,7 +90,9 @@ class _MetalAccelerator:
         rms = np.sqrt(np.mean(a**2, axis=-1, keepdims=True) + eps)
         return (a / rms) * np.asarray(weight)
 
-    def attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray, scale: float = 1.0) -> np.ndarray:
+    def attention(
+        self, q: np.ndarray, k: np.ndarray, v: np.ndarray, scale: float = 1.0
+    ) -> np.ndarray:
         qd = np.asarray(q)
         kd = np.asarray(k)
         vd = np.asarray(v)
@@ -97,7 +101,12 @@ class _MetalAccelerator:
         return np.matmul(attn, vd)
 
     def scaled_dot_attention(
-        self, q: np.ndarray, k: np.ndarray, v: np.ndarray, mask: np.ndarray | None = None, scale: float | None = None
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        scale: float | None = None,
     ) -> np.ndarray:
         qd = np.asarray(q)
         kd = np.asarray(k)
@@ -129,12 +138,21 @@ class _MetalAccelerator:
         return float(-np.log(np.maximum(softmax[batch, targets_a], 1e-10)).mean())
 
     def conv2d(
-        self, input: np.ndarray, weight: np.ndarray, bias: np.ndarray | None = None, stride: int = 1, padding: int = 0
+        self,
+        input: np.ndarray,
+        weight: np.ndarray,
+        bias: np.ndarray | None = None,
+        stride: int = 1,
+        padding: int = 0,
     ) -> np.ndarray:
         return _CPUAccelerator._conv2d_impl(input, weight, bias, stride, padding)
 
     def max_pool2d(
-        self, input: np.ndarray, kernel_size: int | tuple[int, int] = 2, stride: int | tuple[int, int] | None = None, padding: int = 0
+        self,
+        input: np.ndarray,
+        kernel_size: int | tuple[int, int] = 2,
+        stride: int | tuple[int, int] | None = None,
+        padding: int = 0,
     ) -> np.ndarray:
         inp = np.asarray(input)
         n, c, h, w = inp.shape
@@ -203,7 +221,12 @@ class _CUDAAccelerator:
 
     def matmul(self, a: Any, b: Any) -> Any:
         if self._cp:
-            return self._cp.matmul(a, b)
+            # Convert numpy -> cupy before dispatch; cp.matmul rejects raw numpy
+            # (TypeError: expected cupy ndarray). Detect on-device arrays by type,
+            # not the ``.device`` attribute (NumPy >= 2 added ``ndarray.device``).
+            a_c = a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a)
+            b_c = b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b)
+            return self._cp.asnumpy(self._cp.matmul(a_c, b_c))
         return np.matmul(np.asarray(a), np.asarray(b))
 
     def add(self, a: Any, b: Any) -> Any:
@@ -246,7 +269,9 @@ class _CUDAAccelerator:
         n, c, h, w = input.shape
         oc, ic, kh, kw = weight.shape
         if padding > 0:
-            input = np.pad(input, [(0, 0), (0, 0), (padding, padding), (padding, padding)], mode="constant")
+            input = np.pad(
+                input, [(0, 0), (0, 0), (padding, padding), (padding, padding)], mode="constant"
+            )
         out_h = (input.shape[2] - kh) // stride + 1
         out_w = (input.shape[3] - kw) // stride + 1
         result = np.zeros((n, oc, out_h, out_w), dtype=np.float32)
@@ -294,7 +319,9 @@ class _CPUAccelerator:
     def silu(self, arr: np.ndarray) -> np.ndarray:
         return arr / (1 + np.exp(-arr))
 
-    def layernorm(self, arr: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+    def layernorm(
+        self, arr: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
         mean = arr.mean(axis=-1, keepdims=True)
         var = arr.var(axis=-1, keepdims=True)
         return ((arr - mean) / np.sqrt(var + eps)) * weight + bias
@@ -303,13 +330,20 @@ class _CPUAccelerator:
         rms = np.sqrt(np.mean(arr**2, axis=-1, keepdims=True) + eps)
         return (arr / rms) * weight
 
-    def attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray, scale: float = 1.0) -> np.ndarray:
+    def attention(
+        self, q: np.ndarray, k: np.ndarray, v: np.ndarray, scale: float = 1.0
+    ) -> np.ndarray:
         scores = np.matmul(q, k.T) * scale
         attn = self.softmax(scores, axis=-1)
         return np.matmul(attn, v)
 
     def scaled_dot_attention(
-        self, q: np.ndarray, k: np.ndarray, v: np.ndarray, mask: np.ndarray | None = None, scale: float | None = None
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        scale: float | None = None,
     ) -> np.ndarray:
         if scale is None:
             scale = 1.0 / np.sqrt(k.shape[-1])
@@ -326,7 +360,9 @@ class _CPUAccelerator:
         n, c, h, w = input.shape
         oc, ic, kh, kw = weight.shape
         if padding > 0:
-            input = np.pad(input, [(0, 0), (0, 0), (padding, padding), (padding, padding)], mode="constant")
+            input = np.pad(
+                input, [(0, 0), (0, 0), (padding, padding), (padding, padding)], mode="constant"
+            )
         out_h = (input.shape[2] - kh) // stride + 1
         out_w = (input.shape[3] - kw) // stride + 1
         result = np.zeros((n, oc, out_h, out_w), dtype=np.float32)
@@ -343,7 +379,12 @@ class _CPUAccelerator:
         return result
 
     def conv2d(
-        self, input: np.ndarray, weight: np.ndarray, bias: np.ndarray | None = None, stride: int = 1, padding: int = 0
+        self,
+        input: np.ndarray,
+        weight: np.ndarray,
+        bias: np.ndarray | None = None,
+        stride: int = 1,
+        padding: int = 0,
     ) -> np.ndarray:
         return _CPUAccelerator._conv2d_impl(input, weight, bias, stride, padding)
 
@@ -358,7 +399,9 @@ class _CPUAccelerator:
                     for ow in range(out_w):
                         ih = oh * stride
                         iw = ow * stride
-                        result[i, ch, oh, ow] = input[i, ch, ih : ih + kernel_size, iw : iw + kernel_size].max()
+                        result[i, ch, oh, ow] = input[
+                            i, ch, ih : ih + kernel_size, iw : iw + kernel_size
+                        ].max()
         return result
 
     def embedding(self, indices: np.ndarray, weight: np.ndarray) -> np.ndarray:
@@ -453,7 +496,11 @@ def solve_triangular(L: object, b: object, lower: bool = True) -> object:
             x[i] = (b[i] - sum(L[i, j] * x[j] for j in range(i))) / L[i, i] if L[i, i] != 0 else 0
     else:
         for i in range(n - 1, -1, -1):
-            x[i] = (b[i] - sum(L[i, j] * x[j] for j in range(i + 1, n))) / L[i, i] if L[i, i] != 0 else 0
+            x[i] = (
+                (b[i] - sum(L[i, j] * x[j] for j in range(i + 1, n))) / L[i, i]
+                if L[i, i] != 0
+                else 0
+            )
     return x
 
 
