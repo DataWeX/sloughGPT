@@ -42,6 +42,7 @@
   - `scripts/benchmark_results.py record/history/compare` — track results over time
   - If no benchmark exists for your change, create one in `scripts/` and document what it measures.
 - **Local `main` tracks `origin/main` — never let it drift.** Land on main via a PR (canonical) or commit on a lane branch and `git push origin HEAD:main`. Never build a stack of local-only commits on main (pre-commit/pre-push block **>5 ahead** via `scripts/check-main-sync.sh`; `SLO_MAIN_SYNC_SKIP=1` only when you mean it), and never `git reset` main onto a lane tip. Evidence: the 2026-10-27/28 fork — 149 local-only commits vs 35 pushed the other way = 8-file conflicts and a Next-era tree that would have reverted the Next removal if pushed.
+- **Art-style watch is standing**: on any UI change, audit against the Noir Violet design system (frontend-design skill) and flag drift — hardcoded colors, type-scale breaks, missing interaction states, AI-default patterns — before shipping.
 
 ## File Safety
 
