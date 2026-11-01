@@ -56,15 +56,21 @@ const HEX_BASELINE = [
 /**
  * Numeric rgb()/rgba() literals NOT routed through a token (`rgb(var(--…))`).
  * Same contract as HEX_BASELINE: each row is debt, may only shrink.
- * - magazine: the page IS the styleguide — Section 7 renders the DARK MODE
+ * - magazine: the styleguide IS the data — Section 7 renders the DARK MODE
  *   PREVIEW (pinned dark palette values are the content), and the swatch
  *   samples are literal palette entries. ThemeProvider-class data exemption.
+ *   Rows relocated 2026-11-01 by the page.tsx split: same 18 instances,
+ *   now across the section files (dark-preview 13, hero 4, tokens 1).
  * Decoration (elevation `--elevation-rgb`, sheen `--sheen-rgb`) and drag-state
  * semantic tints moved onto tokens 2026-10-24; world material hues onto the
  * categorical `--group-N` slots; compare chart fills now match their own
  * stroke tokens.
  */
-const RGB_BASELINE = ['app/(app)/magazine/page.tsx']
+const RGB_BASELINE = [
+  'app/(app)/magazine/magazine-dark-preview.tsx',
+  'app/(app)/magazine/magazine-hero.tsx',
+  'app/(app)/magazine/magazine-tokens.ts',
+]
 
 /**
  * Stock Tailwind palette utilities (the "AI-slop rainbow") — ZERO TOLERANCE
@@ -130,8 +136,10 @@ const TEXT_LG_TOTAL_CEILING = 27
 /**
  * `text-2xl` is reserved for `components/AppRouteHeader.tsx` (AppRouteHeader
  * page title). Baseline ratchet measured 2026-10-29: 41 instances / 17 files,
- * consciousness pages and the magazine styleguide page included as known
- * debt (magazine renders literal palette/type-scale samples — data class).
+ * consciousness pages and the magazine styleguide included as known debt
+ * (magazine renders literal palette/type-scale samples — data class; the
+ * 2026-11-01 page split moved its two instances to magazine-tokens.ts and
+ * magazine-hero.tsx, totals unchanged).
  */
 const TEXT_2XL_RE = /\btext-2xl\b/g
 
@@ -143,7 +151,6 @@ const TEXT_2XL_BASELINE: Record<string, number> = {
   'components/phoneme/ProgressSummary.tsx': 4,
   'components/phoneme/PhonemeComparison.tsx': 3,
   'components/phoneme/ScoringCard.tsx': 3,
-  'app/(app)/magazine/page.tsx': 2,
   'components/phoneme/MultipleChoiceQuiz.tsx': 2,
   'components/phoneme/ChallengeCard.tsx': 2,
   'app/(app)/consciousness/training/page.tsx': 1,
@@ -153,6 +160,8 @@ const TEXT_2XL_BASELINE: Record<string, number> = {
   'components/phoneme/PronunciationRecording.tsx': 1,
   'components/phoneme/FlashcardCard.tsx': 1,
   'features/chat/components/dialogs/ReadFileSection.tsx': 1,
+  'app/(app)/magazine/magazine-hero.tsx': 1,
+  'app/(app)/magazine/magazine-tokens.ts': 1,
 }
 
 const TEXT_2XL_TOTAL_CEILING = 41
