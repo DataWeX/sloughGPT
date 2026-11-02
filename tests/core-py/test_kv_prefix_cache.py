@@ -163,7 +163,9 @@ class TestPrefixCacheMatch:
         stats = cache.get_stats()
         assert stats["hits"] == 1
         assert stats["misses"] == 1
-        assert stats["hit_rate"] == 0.5
+        # Normalized like ResponseCache/SemanticCache: percent string + raw number.
+        assert stats["hit_rate"] == "50.0%"
+        assert stats["hit_rate_num"] == 0.5
 
 
 class TestPrefixCacheEviction:
@@ -195,6 +197,31 @@ class TestPrefixCacheEviction:
             cache.store(np.arange(BLOCK * 2, dtype=np.int64).reshape(1, -1), k, v, filled=BLOCK * 2)
             is False
         )
+
+
+class TestStatsSchema:
+    """Every cache answers the status bar with the same core vocabulary.
+
+    The two march in step so a dashboard (or the router facade) can render
+    ``enabled / entries / max_entries / hits / misses / hit_rate / evictions``
+    without knowing which cache produced the dict. ``hit_rate`` is a percent
+    string everywhere — the pre-existing ResponseCache/SemanticCache contract.
+    """
+
+    REQUIRED = {"enabled", "entries", "max_entries", "hits", "misses", "hit_rate", "evictions"}
+
+    def test_prefix_cache_exposes_the_shared_fields(self):
+        assert self.REQUIRED <= set(PrefixCache().get_stats())
+
+    def test_response_cache_exposes_the_shared_fields(self):
+        from domain.inference import ResponseCache
+
+        assert self.REQUIRED <= set(ResponseCache().get_stats())
+
+    def test_semantic_cache_exposes_the_shared_fields(self):
+        from domain.inference._internal.semantic_cache import SemanticCache
+
+        assert self.REQUIRED <= set(SemanticCache().get_stats())
 
 
 # ---------------------------------------------------------------------------

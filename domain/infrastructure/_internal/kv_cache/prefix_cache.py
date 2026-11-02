@@ -352,12 +352,16 @@ class PrefixCache:
             return len(self._entries)
 
     def get_stats(self) -> dict[str, Any]:
-        """Counters for the health/status surface."""
+        """Counters for the health/status surface — normalized to match the other
+        caches so dashboards and the router facade never key off shape quirks."""
         with self._lock:
             entries = len(self._entries)
             tokens = self._total_tokens_locked()
-            lookups = self._hits + self._partial_hits + self._misses
+            hits = self._hits + self._partial_hits
+            lookups = hits + self._misses
+            hit_rate_num = hits / lookups if lookups else 0.0
             return {
+                "enabled": True,
                 "entries": entries,
                 "cached_tokens": tokens,
                 "bytes": sum(s.nbytes for s in self._entries.values()),
@@ -365,11 +369,13 @@ class PrefixCache:
                 "max_tokens": self._max_tokens,
                 "min_tokens": self._min_tokens,
                 "block": self._block,
-                "hits": self._hits,
+                "hits": hits,
                 "partial_hits": self._partial_hits,
+                "exact_hits": self._hits,
                 "misses": self._misses,
                 "stores": self._stores,
                 "evictions": self._evictions,
                 "rejected": self._rejected,
-                "hit_rate": ((self._hits + self._partial_hits) / lookups) if lookups else 0.0,
+                "hit_rate": f"{hit_rate_num:.1%}",
+                "hit_rate_num": hit_rate_num,
             }

@@ -45,7 +45,7 @@ def _response_cache_snapshot() -> dict:
     failure mode (module missing, cache construction error) degrades to ``{}``.
     """
     try:
-        from domain.inference._internal.response_cache import get_response_cache
+        from domain.inference import get_response_cache
 
         return get_response_cache().get_stats()
     except Exception as e:  # pragma: no cover - defensive

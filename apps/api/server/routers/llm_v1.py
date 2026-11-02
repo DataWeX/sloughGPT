@@ -204,7 +204,7 @@ def _cache_key(
     which ``test_slonet_kv_cache`` pins as output-identical. The module's
     generation token already covers model load/unload/swap.
     """
-    from domain.inference._internal.response_cache import ResponseCache
+    from domain.inference import ResponseCache
 
     if req.stream:
         return None, "stream"
@@ -286,7 +286,7 @@ async def chat_completions(
     prompt_text = "\n".join(m["content"] for m in messages)
     start = datetime.datetime.now()
 
-    from domain.inference._internal.response_cache import get_response_cache
+    from domain.inference import get_response_cache
 
     cache = get_response_cache()
 

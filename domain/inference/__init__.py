@@ -89,6 +89,9 @@ __all__ = [
     "LAYER_PRIORITY",
     "analyze_image",
     "ImageAnalysis",
+    "ResponseCache",
+    "get_response_cache",
+    "reset_response_cache_for_tests",
 ]
 
 
@@ -113,6 +116,9 @@ def __getattr__(name):
         "soul": "domain.inference.generation",
         "engine": "domain.inference.generation",
         "extract_json": "domain.inference.generation",
+        "ResponseCache": "domain.inference._internal.response_cache",
+        "get_response_cache": "domain.inference._internal.response_cache",
+        "reset_response_cache_for_tests": "domain.inference._internal.response_cache",
     }
     if name in _lazy:
         import importlib
