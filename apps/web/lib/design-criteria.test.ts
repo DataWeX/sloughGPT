@@ -127,7 +127,7 @@ const TEXT_LG_BASELINE: Record<string, number> = {
   'app/(app)/consciousness/health/page.tsx': 4,
   'app/(app)/consciousness/compare/page.tsx': 3,
   'app/(app)/consciousness/analytics/page.tsx': 1,
-  'app/(app)/consciousness/docs/page.tsx': 1,
+  'app/(app)/consciousness/docs/docs-endpoint-list.tsx': 1,
   'app/(app)/consciousness/master/page.tsx': 1,
 }
 
