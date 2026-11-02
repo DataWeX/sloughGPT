@@ -107,9 +107,7 @@ def plan_auto_resume(
             )
         )
 
-    outcome = (
-        AutoResumeOutcome.RESUMED if to_resume else AutoResumeOutcome.SKIPPED
-    )
+    outcome = AutoResumeOutcome.RESUMED if to_resume else AutoResumeOutcome.SKIPPED
     return AutoResumePlan(outcome, to_resume, events)
 
 
@@ -133,9 +131,7 @@ def run_auto_resume(
     try:
         rows = store.get_recoverable_jobs()
     except Exception as e:
-        logger.warning(
-            "Auto-resume store fetch failed: %s", e, extra={"tag": "TRAIN"}
-        )
+        logger.warning("Auto-resume store fetch failed: %s", e, extra={"tag": "TRAIN"})
         rows = []
 
     plan = plan_auto_resume(
@@ -155,9 +151,7 @@ def run_auto_resume(
             recover(job_id)
             executed.append(job)
         except Exception as e:
-            logger.warning(
-                "Auto-resume refused for %s: %s", job_id, e, extra={"tag": "TRAIN"}
-            )
+            logger.warning("Auto-resume refused for %s: %s", job_id, e, extra={"tag": "TRAIN"})
             events.append(
                 make_event(
                     job_id,
@@ -183,7 +177,5 @@ def run_auto_resume(
     ] + events
     plan.to_resume = executed
     plan.events = merged
-    plan.outcome = (
-        AutoResumeOutcome.RESUMED if executed else AutoResumeOutcome.SKIPPED
-    )
+    plan.outcome = AutoResumeOutcome.RESUMED if executed else AutoResumeOutcome.SKIPPED
     return plan

@@ -129,9 +129,7 @@ def boot_snapshot(store: Any) -> list[dict[str, Any]]:
     try:
         rows = store.get_recoverable_jobs()
     except Exception as e:
-        logger.warning(
-            "Process-event snapshot failed: %s", e, extra={"tag": "TRAIN"}
-        )
+        logger.warning("Process-event snapshot failed: %s", e, extra={"tag": "TRAIN"})
         return []
     events: list[dict[str, Any]] = []
     for row in rows:

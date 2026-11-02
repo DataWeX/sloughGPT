@@ -153,8 +153,7 @@ class ServerConfig:
                 os.getenv("SLO_REGISTER_GENERATE_TIMEOUT", "120.0")
             ),
             enable_watchdog=os.getenv("SLO_WATCHDOG", "true").lower() == "true",
-            auto_resume=os.getenv("SLO_AUTO_RESUME", "false").lower()
-            in ("1", "true", "yes"),
+            auto_resume=os.getenv("SLO_AUTO_RESUME", "false").lower() in ("1", "true", "yes"),
             native_soul_path=os.getenv("SLO_NATIVE_SOUL_PATH", "").strip(),
             enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower()
             in ("1", "true", "yes"),
