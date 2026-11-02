@@ -833,6 +833,44 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `0f7873048`)
 
+- **2026-11-01 · prefill-OOM fix + numba opt-in landed (`HEAD:main`, 2 commits,
+  `a6c8f3b31` + `b70a0d085`).** Root-caused the "1 tok/s" report: numba 0.67.0
+  lived only in `~/.local`, invisible under the server's `PYTHONNOUSERSITE=1`,
+  so every fused kernel silently ran the numpy path — including the unchunked
+  prefill-attention fallback, which allocates O(seq²) and was OOM-killed by the
+  kernel at ~21 GB RSS on long prompts. Two commits, both rebased clean onto
+  origin/main and pushed with `HEAD:main`:
+  1. `fix(kernels): bound prefill-attention numpy fallback memory` — blockwise
+     chunking (technique learned from, not depending on, llama.cpp; no GGUF),
+     **16 GB → 0.06 GB** at seq 8192, bit-identical across 12 shapes (GQA
+     reps 1/4/8/16, both directions, chunk boundaries; worst abs diff 0.000e+00).
+     Budget env-tunable via `SLO_PREFILL_FALLBACK_BUDGET_MB`, single source
+     `_DEFAULT_FALLBACK_BUDGET_MB` (was 4 duplicated sites), named constants
+     throughout. numba/llvmlite declared in pyproject + requirements +
+     environment.yml. New suite `tests/core-py/test_prefill_fallback.py`
+     (29 tests: equivalence, causality, budget invariant, tracemalloc peak,
+     env fail-safe).
+  2. `perf(kernels): make numba opt-in (SLO_USE_NUMBA), numpy the default` —
+     measured, 15 rate-limit-safe samples/arm against Qwen2.5-0.5B POST /chat:
+     **numpy 13.4s mean vs compiled 24.5s mean** (~1.8x slower compiled
+     end-to-end — kernels are deliberately serial and forfeit multithreaded
+     BLAS). numba stays a declared dependency; only the runtime default
+     changed; `SLO_USE_NUMBA=1` opts in (fails safe on garbage). `_check_numba`
+     says out loud which path is in use. Side effect: the 4 stale kernel tests
+     (nb_embed/nb_add_pos/lm_head_argmax drift) pass again on the default path
+     — suite **128 passed / 1 skipped / 0 failed**; the skip is the numba-only
+     test at `test_slonet_kernels.py:194`, and under `SLO_USE_NUMBA=1` exactly
+     those 4 stale tests fail (carded).
+  **Bench traps recorded:** `/chat` is limited to 10 req/60s — stock
+  `scripts/benchmark_latency.py` fires 25 back-to-back, 15 of them 429, and
+  the 8.8 ms "min" was a rate-limit response (spaced harness:
+  `/tmp/opencode/bench_latency_spaced.py`, 7 s spacing); `/health`+`/ready`
+  return 200 ~20 s before the model loads — poll a real `POST /chat`.
+  **Two perf findings left carded, not ours:** (a) a separate ~5.6x latency
+  regression since Sep 30 (baseline `data/benchmark_latency_baseline.json`
+  mean 2.38s → 13.4s numpy today, survives quiet-box re-run, pre-dates this
+  work); (b) compiled-numba-is-slower (may invert on many-core boxes).
+
 - **2026-10-30 05:33Z · PR #251 `feat/swiglu-f32c-decode` → MERGED** — lands the
   stranded SWIGLU decode optimization (card `20261029_153804`, marked done):
   `_swiglu(h1, h3)` helper in `domain/training/_internal/slonet.py` (AVX2
