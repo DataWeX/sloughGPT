@@ -378,6 +378,99 @@ class TestProcessGuardMemoryMb:
         assert guard._memory_mb() is None
 
 
+class TestThreadWorkerKvSession:
+    """The caller's session id must reach the model, not just the IPC id.
+
+    `ThreadWorker.generate` mints its own session id to pair a reply with its
+    request; the caller's `session_id` keys cross-turn KV state and used to be
+    dropped entirely, so a direct provider `chat()` under a live guard
+    re-prefilled the whole prompt every turn.
+    """
+
+    @staticmethod
+    def _worker():
+        from domain.infrastructure._internal.model_config import ModelConfig
+        from domain.infrastructure._internal.process_guard import _ThreadWorker
+
+        return _ThreadWorker(ModelConfig(model_id="kv-unit"), worker_id="kv-unit")
+
+    @staticmethod
+    def _provider_model():
+        import numpy as np
+
+        prov = MagicMock()
+        prov._tokenizer.encode.return_value = [1, 2]
+        prov._tokenizer.decode.return_value = "out"
+        prov._tokenizer.eos_token_id = 0
+        prov._model.generate_numpy.return_value = np.array([[1, 2, 3]])
+        prov._model.generate_numpy_stream.return_value = iter([np.int64(7)])
+        return prov
+
+    def test_payload_keys_the_callers_session(self):
+        w = self._worker()
+        payload = w._payload({"session_id": "sess-1", "max_new_tokens": 7})
+        assert payload["kv_session_id"] == "sess-1"
+        assert payload["max_new_tokens"] == 7
+        # The IPC correlation id is minted in generate(), never copied here.
+        assert "session_id" not in payload
+
+    def test_payload_omits_kv_session_when_absent(self):
+        w = self._worker()
+        assert "kv_session_id" not in w._payload({})
+        assert "kv_session_id" not in w._payload({"session_id": ""})
+
+    def test_generate_fn_resumes_the_callers_session(self):
+        w = self._worker()
+        sentinel = object()
+        prov = self._provider_model()
+        prov._resolve_session_kv.return_value = sentinel
+        w._provider, w._hf_model, w._hf_tokenizer = prov, None, None
+
+        w._generate_fn("hi", kv_session_id="sess-1")
+
+        prov._resolve_session_kv.assert_called_once_with("sess-1")
+        assert prov._model.generate_numpy.call_args.kwargs["kv_state"] is sentinel
+
+    def test_generate_fn_without_session_passes_no_state(self):
+        w = self._worker()
+        prov = self._provider_model()
+        w._provider, w._hf_model, w._hf_tokenizer = prov, None, None
+
+        w._generate_fn("hi")
+
+        assert prov._model.generate_numpy.call_args.kwargs["kv_state"] is None
+        prov._resolve_session_kv.assert_not_called()
+
+    def test_stream_fn_resumes_the_callers_session(self):
+        w = self._worker()
+        sentinel = object()
+        prov = self._provider_model()
+        prov._resolve_session_kv.return_value = sentinel
+        w._provider, w._hf_model, w._hf_tokenizer = prov, None, None
+
+        assert list(w._stream_fn("hi", kv_session_id="sess-1")) == ["out"]
+
+        prov._resolve_session_kv.assert_called_once_with("sess-1")
+        assert prov._model.generate_numpy_stream.call_args.kwargs["kv_state"] is sentinel
+
+    def test_hf_mode_has_no_session_map(self):
+        """HF models keep a fresh state per call — the plumb must not invent one."""
+        import numpy as np
+
+        w = self._worker()
+        w._provider = None
+        w._hf_tokenizer = MagicMock()
+        w._hf_tokenizer.encode.return_value = [1]
+        w._hf_tokenizer.decode.return_value = "hf"
+        w._hf_tokenizer.eos_token_id = 0
+        w._hf_model = MagicMock()
+        w._hf_model.generate_numpy.return_value = np.array([[1, 2]])
+
+        w._generate_fn("hi", kv_session_id="sess-1")
+
+        assert w._hf_model.generate_numpy.call_args.kwargs["kv_state"] is None
+
+
 class TestThreadWorkerHFGenerate:
     """HF/thread mode: _generate_fn/_stream_fn must not assume provider."""
 

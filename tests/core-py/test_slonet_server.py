@@ -834,12 +834,14 @@ class _FakeGuard:
         self._alive = alive
         self.crash_cbs = []
         self.restart_cbs = []
+        self.calls: list[dict] = []
 
     @property
     def alive(self) -> bool:
         return self._alive
 
     def generate(self, prompt: str, **kwargs):
+        self.calls.append({"prompt": prompt, **kwargs})
         return {"text": f"guarded:{prompt}", "tokens_generated": 3, "elapsed_ms": 1.0}
 
     def generate_stream(self, prompt: str, **kwargs):
@@ -875,6 +877,19 @@ class TestProcessGuardDelegation:
         out = await guarded_server.generate("hi", max_new_tokens=10)
         assert out == "guarded:hi"
         mock_model.generate_numpy.assert_not_called()
+
+    async def test_generate_forwards_the_session_to_the_guard(self, guarded_server, guard):
+        """A session id must cross the guard boundary, not die at it.
+
+        Dropping it here was invisible: the call still returns text, the only
+        symptom is a full re-prefill every turn (the silent-no-op class).
+        """
+        await guarded_server.generate("hi", session_id="sess-1")
+        assert guard.calls[-1]["session_id"] == "sess-1"
+
+    async def test_generate_forwards_none_session_unchanged(self, guarded_server, guard):
+        await guarded_server.generate("hi")
+        assert guard.calls[-1]["session_id"] is None
 
     async def test_generate_falls_back_to_direct_model_when_guard_dead(
         self, mock_model, mock_tokenizer
