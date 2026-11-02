@@ -38,7 +38,7 @@ Systematic test coverage improvement for Python modules.
 ### Step 1: Measure
 
 ```bash
-python3 -m pytest tests/test_<module>*.py \
+./scripts/python -m pytest tests/test_<module>*.py \
   --cov=domain/<area>/<module> \
   --cov-report=term-missing -q
 ```
@@ -69,14 +69,14 @@ Only pragma provably unreachable branches:
 try:
     from optional_lib import something
 except ImportError:
-    pragma: no cover  # Optional dependency
+    # pragma: no cover
 ```
 
 ### Step 5: Verify
 
 ```bash
-python3 -m pytest tests/test_<module>*.py -q
-python3 -m py_compile domain/<area>/<module>.py
+./scripts/python -m pytest tests/test_<module>*.py -q
+./scripts/python -m py_compile domain/<area>/<module>.py
 ```
 
 ### Step 6: Report

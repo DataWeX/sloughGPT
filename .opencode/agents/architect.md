@@ -17,7 +17,7 @@ to reduce memory usage, improve performance, and enhance maintainability.
 1. Identify OOP anti-patterns in code
 2. Extract classes, add **slots**, create metaclasses
 3. Reduce memory and CPU overhead
-4. Verify no regressions with QA
+4. Verify no regressions with `qa-verifier`
 
 ## Scope
 
@@ -48,7 +48,7 @@ to reduce memory usage, improve performance, and enhance maintainability.
 2. **Plan** — Document specific changes and expected improvements
 3. **Implement** — Make changes incrementally, one at a time
 4. **Verify** — Run syntax checks, imports, and tests after each change
-5. **Sign-off** — Get QA approval before completing
+5. **Sign-off** — Get `qa-verifier` approval before completing
 
 ## Verification
 
@@ -71,4 +71,4 @@ cd apps/web && npm run test:lib
 - Make minimal, targeted changes
 - Preserve public APIs
 - Run verification after each change
-- Get QA sign-off before completing
+- Get `qa-verifier` sign-off before completing
