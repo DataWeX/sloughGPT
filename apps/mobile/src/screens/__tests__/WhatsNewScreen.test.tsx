@@ -70,12 +70,22 @@ describe('WhatsNewScreen', () => {
     });
   });
 
-  it('shows all 8 entries', async () => {
+  it('shows newest entries at the top', async () => {
     const {getByText} = await render(<WhatsNewScreen />);
     await waitFor(() => {
-      expect(getByText('Memory management')).toBeTruthy();
-      expect(getByText('Files & Model Registry')).toBeTruthy();
-      expect(getByText('Data collections')).toBeTruthy();
+      expect(getByText('Accessibility & polish pass')).toBeTruthy();
+      expect(getByText('More reliable streaming')).toBeTruthy();
+      expect(getByText('Chat retry & typing indicator')).toBeTruthy();
+      expect(getByText('Training ETA & cancellation')).toBeTruthy();
+      expect(getByText('Dark mode & startup fixes')).toBeTruthy();
+    });
+  });
+
+  it('still shows archived entries', async () => {
+    const {getByText} = await render(<WhatsNewScreen />);
+    await waitFor(() => {
+      expect(getByText('Deep linking')).toBeTruthy();
+      expect(getByText('Chat search with highlighting')).toBeTruthy();
     });
   });
 });
