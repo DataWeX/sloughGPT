@@ -106,10 +106,13 @@ Definition of done — all four, each closing with a card ID + landed sha:
   — a permanently red baseline stops being visible debt the day someone
   starts believing it.
 - **Routers out of `domain.*_internal*`** — 8 in scope, not the 2 the router
-  playbook claimed (measured 2026-10-01); card `97260724`.
-- **Feature-flag decision memo — NEEDS USER SIGN-OFF** — card `d94aea1c`: 10
-  kill/merge candidates among 25 flags that gate nothing; deletion requires
-  explicit approval.
+  playbook claimed (measured 2026-10-01); re-card
+  `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`
+  (supersedes lost `97260724`).
+- **Feature-flag kill/merge memo — declined (user ruling, 2026-11-02)** — no
+  memo, no deletion; the 10 flags that gate nothing stay as-is. Was card
+  `d94aea1c` (lost to churn), re-carded, then dropped by ruling; no open
+  action remains here.
 - **Frontend baseline debt** — the 2 pre-existing tsc errors
   (`PersonalityTrendChart.tsx` TS2869, missing `@vitejs/plugin-react`) and
   the `tests/web` `/valence/i` compare-page flake: close them or pin them as
