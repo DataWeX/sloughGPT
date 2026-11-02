@@ -248,10 +248,21 @@ def _check_memory_pressure() -> str | None:
         monitor = get_memory_pressure_monitor()
         level = monitor.check()
         if level == PressureLevel.EMERGENCY:
-            import psutil
+            # Report the sample that TRIGGERED the classification, never a
+            # fresh one. Re-reading psutil here printed "System memory at 56%"
+            # at 10:50:19 for a refusal classified on a 96.1% sample at
+            # 10:49:10 — a message that contradicted the very block it
+            # explained (journal, 2026-11-01).
+            reading = monitor.last_reading or {}
+            percent = reading.get("percent")
+            if percent is None:
+                import psutil
 
-            mem = psutil.virtual_memory()
-            result = f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
+                percent = psutil.virtual_memory().percent
+            result = (
+                f"System memory at {percent:.0f}% — too low for safe inference. "
+                "Free some memory and retry."
+            )
             with _memory_pressure_lock:
                 _memory_pressure_cache = result
                 _memory_pressure_cache_ts = now

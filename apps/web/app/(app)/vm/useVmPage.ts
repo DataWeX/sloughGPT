@@ -305,7 +305,10 @@ export function useVmPage() {
         setRunning(false)
       }
     },
-    [source, maxSteps, role, debug],
+    // keyboardInput is read inside — without it here, typing then pressing
+    // Run immediately sent the stale value from the last rebuild (real bug,
+    // caught by eslint's exhaustive-deps warning through the decomposition).
+    [source, maxSteps, role, debug, keyboardInput],
   )
 
   const handleLaunchTraining = useCallback(async () => {

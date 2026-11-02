@@ -621,3 +621,82 @@ class TestPersistence:
         assert adapter is not None
         assert adapter.feedback_count == 1
         assert adapter.W_a.shape == (4, 16)
+
+
+class TestAdapterProvenance:
+    """Provenance/lineage stamped on adapter create + aggregate (card 20261101_113742)."""
+
+    def _read_prov(self, store, user_id):
+        from domain.infrastructure._internal.artifact_registry import read_provenance
+
+        return read_provenance(store._get_adapter_path(user_id))
+
+    def test_create_adapter_stamps_root_provenance(self, store):
+        store.create_adapter("u1")
+        prov = self._read_prov(store, "u1")
+        assert prov is not None
+        assert prov.parents == []  # fresh adapter = lineage root
+        assert prov.artifact_id == "adapter:u1.npz"
+
+    def test_aggregate_child_records_parent_adapters(self, store):
+        for u in ("u1", "u2", "u3"):
+            store.create_adapter(u)
+            store.update_adapter(u, feedback_signal=1.0)
+        result = store.aggregate_best_adapters(
+            top_k=3, min_feedback_count=1, output_name="merged", run_eval=False
+        )
+        from domain.infrastructure._internal.artifact_registry import read_provenance
+
+        prov = read_provenance(result["output_path"])
+        assert prov is not None
+        assert set(prov.parents) == {"adapter:u1.npz", "adapter:u2.npz", "adapter:u3.npz"}
+        assert result["provenance"]["parents"] == prov.parents
+
+    def test_aggregate_child_lineage_walks_to_parent_roots(self, store):
+        for u in ("u1", "u2"):
+            store.create_adapter(u)
+            store.update_adapter(u, feedback_signal=1.0)
+        result = store.aggregate_best_adapters(
+            top_k=2, min_feedback_count=1, output_name="merged", run_eval=False
+        )
+        from pathlib import Path
+
+        from domain.infrastructure._internal.artifact_registry import lineage
+
+        child = Path(result["output_path"])
+        walk = lineage("adapter", child.name, path=child, root_dir=Path(store.store_path))
+        assert set(walk["roots"]) == {"adapter:u1.npz", "adapter:u2.npz"}
+        assert "adapter:merged.npz" in walk["nodes"]
+
+    def test_provenance_failure_never_breaks_merge(self, store, monkeypatch):
+        store.create_adapter("u1")
+        store.update_adapter("u1", feedback_signal=1.0)
+
+        def _boom(*a, **k):
+            raise RuntimeError("provenance unavailable")
+
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.artifact_registry.write_provenance",
+            _boom,
+        )
+        result = store.aggregate_best_adapters(
+            top_k=1, min_feedback_count=1, output_name="merged", run_eval=False
+        )
+        # Merge still succeeded; provenance just absent.
+        assert result["user_count"] == 1
+        assert result["provenance"] is None
+
+    def test_merge_is_append_only_for_preexisting_adapters(self, store):
+        # A pre-existing adapter (no sidecar) must not break the walk: it
+        # degrades to a root rather than raising.
+        from pathlib import Path
+
+        from domain.infrastructure._internal.artifact_registry import lineage
+
+        p = store._get_adapter_path("legacy")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        import numpy as np
+
+        np.savez(p, W_a=np.zeros((4, 16), np.float32), W_b=np.zeros((16, 4), np.float32))
+        walk = lineage("adapter", "legacy.npz", path=p, root_dir=Path(store.store_path))
+        assert walk["roots"] == ["adapter:legacy.npz"]
