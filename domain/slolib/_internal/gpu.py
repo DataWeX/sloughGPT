@@ -1110,8 +1110,12 @@ class _CUDABackend(_Accelerator):
                 )
             )
         if self._cp:
-            a_arr = a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a, dtype=self._dtype())
-            b_arr = b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b, dtype=self._dtype())
+            a_arr = (
+                a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a, dtype=self._dtype())
+            )
+            b_arr = (
+                b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b, dtype=self._dtype())
+            )
             return self._cp.asnumpy(self._cp.matmul(a_arr, b_arr)).astype(np.float32)
         return np.matmul(np.asarray(a), np.asarray(b))
 
