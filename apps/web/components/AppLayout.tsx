@@ -16,6 +16,8 @@ import { useApiMonitor } from '@/lib/api-monitor-store'
 import { RadixToastContainer } from '@/features/chat/components/feedback/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
 import { GlobalBanner } from '@/components/GlobalBanner'
+import { NotificationDock } from '@/components/NotificationDock'
+import { loadProcessSnapshot } from '@/lib/process-notifications'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
 import { useToastStore } from '@/lib/toast-store'
@@ -69,6 +71,14 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   // Initialize live health SSE stream
   useEffect(() => {
     return initLiveStatus()
+  }, [])
+
+  // Process-notification boot snapshot — SSE cannot deliver events that
+  // fired before this client connected (boot-time auto-resume), so the
+  // dock's initial state is the REST projection of durable state.
+  // Contract-versioned and failure-tolerant inside (never blocks boot).
+  useEffect(() => {
+    void loadProcessSnapshot()
   }, [])
 
   useEffect(() => {
@@ -232,6 +242,11 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           "restarting" notice is raised through the store (see effect above), so
           it never stacks a second row beside the boot-stall banner. */}
       <GlobalBanner />
+
+      {/* Process notifications — THIRD tier: multi-slot, process-backed,
+          action-first. Deliberately separate from the single-slot banner
+          above (one-banner invariant) and from transient toasts. */}
+      <NotificationDock />
 
       {/* Mobile header — full-width top bar on < lg */}
       <header className="sl-app-mobile-header">

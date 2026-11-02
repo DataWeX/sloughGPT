@@ -228,14 +228,38 @@ async def get_recoverable_jobs():
     }
 
 
-@router.post("/recovery/recover/{job_id}")
-async def recover_job(job_id: str):
+@router.get("/recovery/events")
+async def get_recovery_events():
+    """Process-notification snapshot for the dock (contract v1).
+
+    Boot-time events cannot ride the SSE streams — no client is connected
+    when they fire — so the frontend's initial notification state is this
+    REST projection of durable state (see training/process_events.py).
+    Live transitions after load ride the existing per-request SSE streams
+    and dedupe against these event_ids.
     """
-    Recover and restart an interrupted/failed job.
+    from training.process_events import CONTRACT_VERSION, boot_snapshot
+
+    store = get_job_store()
+    events = boot_snapshot(store)
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "count": len(events),
+        "events": events,
+    }
+
+
+def start_recovery(job_id: str) -> dict:
+    """Recover and restart an interrupted/failed job.
 
     Also accepts a 'recovering' job whose heartbeat went stale (a previous
     recovery run that died without completing). Resumes training from the last
     checkpoint if available.
+
+    This is the ONE recovery path: the HTTP endpoint delegates here, and the
+    boot-time auto-resume hook calls it too, so the validation above (fail-
+    closed against the job's CURRENT status) guards every dispatch — a stale
+    notification action and a boot race both hit the same wall.
     """
     store = get_job_store()
     job = store.get(job_id)
@@ -445,6 +469,13 @@ async def recover_job(job_id: str):
         "checkpoint_path": checkpoint_path,
         "message": f"Recovery started. Training restarting from checkpoint: {checkpoint_path or 'beginning'}",
     }
+
+
+@router.post("/recovery/recover/{job_id}")
+async def recover_job(job_id: str):
+    """HTTP projection of start_recovery() — validation and execution are
+    shared with the boot-time auto-resume hook, never re-implemented."""
+    return start_recovery(job_id)
 
 
 @router.delete("/recovery/abandon/{job_id}")
