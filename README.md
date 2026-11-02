@@ -12,7 +12,7 @@ Self-hosted LLM infrastructure with local model training, inference, and a web U
 - **Export and quantization** — GGUF (llama.rn mobile), ONNX, safetensors; FP16, INT8, INT4, Q4_K_M, Q5_K_M
 - **Dataset pipelines** — import from GitHub, HuggingFace, Kaggle, URL, or CSV; combine, preview, and version datasets
 - **Feedback-driven adaptation** — thumbs feedback trains per-user LoRA adapters, aggregated and evaluated automatically
-- **Interfaces** — Next.js web UI (`@sloughgpt/strui` component library), React Native mobile client, Python and TypeScript SDKs
+- **Interfaces** — Vite + React web UI (`@sloughgpt/strui` component library), React Native mobile client, Python and TypeScript SDKs
 
 ## Prerequisites
 
@@ -92,7 +92,7 @@ sloughgpt system status
 sloughGPT/
 ├── apps/
 │   ├── api/server/            # FastAPI backend
-│   ├── web/                   # Next.js frontend
+│   ├── web/                   # Vite + React frontend
 │   ├── cli/                   # CLI implementation
 │   ├── mobile/                # React Native app
 │   ├── gateway/               # Rust Axum gateway

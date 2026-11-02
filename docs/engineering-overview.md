@@ -12,7 +12,7 @@ Self-hosted LLM platform: train from scratch, serve, chat. One core engine, four
                     │                                  │
                     │  ┌────────┐  ┌────────┐         │
                     │  │  Web   │  │ Mobile │         │
-                    │  │ Next.js│  │ RN/Expo│         │
+                    │  │  Vite  │  │ RN/Expo│         │
                     │  └───┬────┘  └───┬────┘         │
                     │      │           │               │
                     │  ┌───┴────┐  ┌───┴────┐         │
@@ -99,7 +99,7 @@ Request → CorrelationId → ReadinessGate → RateLimit → Timeout → Router
 
 ### 3. Web App (`apps/web/`)
 
-Next.js 16 frontend. 59 routes.
+Vite + React frontend. 59 routes.
 
 **Data flow:**
 

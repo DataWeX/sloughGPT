@@ -77,7 +77,7 @@ You are an expert debugger for this project. Your job is:
 
 ```
 apps/api/server/        # FastAPI backend (Python 3.9+)
-apps/web/               # Next.js frontend
+apps/web/               # Vite + React frontend
 apps/web/app/(app)/     # Authenticated pages
 apps/web/components/    # UI components
 apps/web/lib/           # Utilities, controllers, stores

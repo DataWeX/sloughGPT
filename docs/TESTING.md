@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document covers the testing infrastructure for sloughGPT across both the Python backend and Next.js frontend.
+This document covers the testing infrastructure for sloughGPT across both the Python backend and Vite + React frontend.
 
 ## Test Overview
 
@@ -73,12 +73,15 @@ render(
 )
 ```
 
-**Next.js Navigation:**
+**Router navigation (`@/vite/next-compat/navigation`):**
 
 ```typescript
-vi.mock('next/navigation', () => ({
+// App code imports the router from the Vite compat shim, never from `next/*`,
+// so this is the module a test has to mock.
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
   usePathname: () => '/current/path',
+  useParams: () => ({}),
   useSearchParams: () => new URLSearchParams(),
 }))
 ```

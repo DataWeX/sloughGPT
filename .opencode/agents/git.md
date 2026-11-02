@@ -54,7 +54,7 @@ The project has strict layer boundaries:
 
 - `domain/` — Core logic, no HTTP deps
 - `apps/api/server/` — FastAPI routes, thin adapters
-- `apps/web/` — Next.js frontend, uses @sloughgpt/strui
+- `apps/web/` — Vite + React frontend, uses @sloughgpt/strui
 - `packages/strui/` — Shared component library
 
 Verify:
