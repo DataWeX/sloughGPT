@@ -11,8 +11,10 @@ Public API:
     ContextPart, BudgetedContext, budget_parts, render_context_block, estimate_tokens
     DEFAULT_KNOWLEDGE_BUDGET, LAYER_PRIORITY
     analyze_image, ImageAnalysis
+    ResponseCache, get_response_cache
     generation: LanguageClient, hosted, soul, engine, extract_json
 """
+
 from __future__ import annotations
 
 from domain.inference._internal.context_contract import (
@@ -88,6 +90,8 @@ __all__ = [
     "LAYER_PRIORITY",
     "analyze_image",
     "ImageAnalysis",
+    "ResponseCache",
+    "get_response_cache",
 ]
 
 
@@ -107,6 +111,8 @@ def __getattr__(name):
         "get_engine": "domain.inference._internal.native.engine",
         "analyze_image": "domain.inference._internal.image_capability",
         "ImageAnalysis": "domain.inference._internal.image_capability",
+        "ResponseCache": "domain.inference._internal.response_cache",
+        "get_response_cache": "domain.inference._internal.response_cache",
         "LanguageClient": "domain.inference.generation",
         "hosted": "domain.inference.generation",
         "soul": "domain.inference.generation",
