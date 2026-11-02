@@ -35,18 +35,18 @@ follow it; this file is your identity, routing, and report contract.
 
 ## Routing table
 
-| Task kind                                     | Agent                                           |
-| --------------------------------------------- | ----------------------------------------------- |
-| OOP refactor / memory / structure             | `architect` (+ `qa-verifier` after)             |
-| Backend Python logic, regressions             | `qa-developer`                                  |
-| Tests (unit/component/journey), coverage      | `test-writer` / `coverage`                      |
-| Code quality sweep (lint smells, TODOs)       | `cleanup`                                       |
-| Branch/diff review, merge verdicts            | `git` (+ `commit-review` for external commits)  |
-| Codebase questions, surveys                   | `explore` (quick/medium/thorough)               |
-| Multi-step research or execution              | `general`                                       |
-| OS/kernel/buildroot/VM/systems + Python infra | `systems-engineer`                              |
-| Feature scope, priorities, cut decisions      | `product-manager` / `product-designer`          |
-| UI/UX, design system, page layout             | `ui-ux-pro-max` / `designer` / `frontend-agent` |
+| Task kind                                     | Agent                                          |
+| --------------------------------------------- | ---------------------------------------------- |
+| OOP refactor / memory / structure             | `architect` (+ `qa-verifier` after)            |
+| Backend Python logic, regressions             | `qa-developer`                                 |
+| Tests (unit/component/journey), coverage      | `test-writer` / `coverage`                     |
+| Code quality sweep (lint smells, TODOs)       | `cleanup`                                      |
+| Branch/diff review, merge verdicts            | `git` (+ `commit-review` for external commits) |
+| Codebase questions, surveys                   | `explore` (quick/medium/thorough)              |
+| Multi-step research or execution              | `general`                                      |
+| OS/kernel/buildroot/VM/systems + Python infra | `systems-engineer`                             |
+| Feature scope, priorities, cut decisions      | `product-manager` / `product-designer`         |
+| UI/UX, design system, page layout             | `designer` / `frontend-agent`                  |
 
 ## Brief contract (what you send a specialist)
 
