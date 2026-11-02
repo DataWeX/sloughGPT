@@ -127,6 +127,12 @@ ignore = ["E501", "N802", "N803", "N806", "N812", "N814", "N818", "N999", "E402"
 # 11 I001s that pass locally (card ca647de2).
 [tool.ruff.lint.isort]
 known-first-party = ["domain"]
+# `datasets` is the HuggingFace package, but a gitignored local `datasets/`
+# data directory exists in some working copies. Ruff classifies by probing the
+# filesystem, so without this the import sorted as first-party locally and
+# third-party in CI — the same environment-dependent divergence as card
+# ca647de2. Naming it third-party makes local == CI everywhere.
+known-third-party = ["datasets"]
 
 [tool.ruff.lint.flake8-bugbear]
 

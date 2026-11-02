@@ -493,11 +493,17 @@ class StartupOrchestrator:
             stem = self._bg_tree.branch([proc])
             await asyncio.to_thread(stem._done_event.wait)
 
+        async def _auto_resume():
+            # Runs after READY's training_restore marked stale rows
+            # interrupted; config-gated inside (no-op unless SLO_AUTO_RESUME).
+            await _auto_resume_training()
+
         loader.on(Stage.BACKGROUND, "wandb", _init_wandb, timeout=30.0)
         loader.on(Stage.BACKGROUND, "multimodal", _init_multimodal, timeout=30.0)
         loader.on(Stage.BACKGROUND, "metrics", _init_metrics, timeout=10.0)
         loader.on(Stage.BACKGROUND, "autotrainer", _init_autotrainer, timeout=10.0)
         loader.on(Stage.BACKGROUND, "rag_ingest", _init_rag, timeout=60.0)
+        loader.on(Stage.BACKGROUND, "training_auto_resume", _auto_resume, timeout=30.0)
 
         # Stage 2 (READY) and Stage 3 (BACKGROUND) run *after* the socket binds.
         # uvicorn refuses connections until the lifespan yields, and READY blocks
@@ -1296,6 +1302,71 @@ async def _restore_training_runtime():
         await asyncio.to_thread(get_training_runtime().restore)
     except Exception as e:
         logger.warning("Training runtime restore failed: %s", e, extra={"tag": "START"})
+
+
+async def _auto_resume_training():
+    """Boot-time auto-resume of interrupted training jobs (decision 20261102_001425).
+
+    Runs AFTER restore() (which marks stale rows interrupted) and only when
+    config auto_resume is on (default off). The policy caps at one concurrent
+    resume and skips jobs without a loadable checkpoint; dispatch goes through
+    training.router.start_recovery — the same fail-closed path as the HTTP
+    endpoint, so a boot race never double-starts a job. Every decision emits
+    a process event (logged here; the dock reads them via /recovery/events).
+    """
+    try:
+        from config import ServerConfig
+
+        cfg = ServerConfig.from_env()
+        if not cfg.auto_resume:
+            return
+
+        from training.auto_resume import run_auto_resume
+        from training.job_store import get_job_store
+        from training.router import start_recovery
+
+        def _loadable(job: dict) -> bool:
+            """Checkpoint probe via the engine's resolver — recorded path
+            authoritative, corrupt files count as unloadable (the probe's
+            ValueError is the skip signal, not a crash)."""
+            from domain.training.engine import get_training_engine
+
+            config = job.get("config", {})
+            checkpoint_dir = (
+                job.get("checkpoint_dir") or config.get("checkpoint_dir") or "checkpoints"
+            )
+            get_training_engine().resolve_resume_checkpoint(
+                job.get("checkpoint_path") or "", checkpoint_dir
+            )
+            return True
+
+        def _execute():
+            plan = run_auto_resume(
+                get_job_store(),
+                enabled=True,
+                checkpoint_loadable=_loadable,
+                recover=start_recovery,
+            )
+            for ev in plan.events:
+                logger.info(
+                    "Auto-resume event: %s (%s) reason=%s",
+                    ev["event"],
+                    ev["process_id"],
+                    ev.get("reason", "-"),
+                    extra={"tag": "TRAIN"},
+                )
+            return plan
+
+        plan = await asyncio.to_thread(_execute)
+        logger.info(
+            "Boot auto-resume: outcome=%s resumed=%d events=%d",
+            plan.outcome.value,
+            len(plan.to_resume),
+            len(plan.events),
+            extra={"tag": "TRAIN"},
+        )
+    except Exception as e:
+        logger.warning("Boot auto-resume failed: %s", e, extra={"tag": "START"})
 
 
 def _sync_soul_traits():
