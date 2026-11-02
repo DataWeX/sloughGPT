@@ -1185,6 +1185,19 @@ class TestGpuBackends:
 class TestCudaWithFakeCupy:
     """Exercise the cupy-present dispatch arms with a numpy-backed cupy proxy."""
 
+    @pytest.fixture(autouse=True)
+    def _driver_present(self, monkeypatch):
+        """Pin the driver probe so the cupy arm is actually reachable.
+
+        `_CUDABackend.is_available()` short-circuits on `_cuda_driver_present()`
+        (dlopen `libcuda.so.1`) BEFORE importing cupy, so on a runner without
+        libcuda the fake `cupy` module in `sys.modules` is never consulted and
+        every arm here degenerates (is_available False, `_cp` None, vram 4.0).
+        That makes the suite green on a machine with the library installed and
+        red on CI — the class is about the cupy dispatch path, so pin the probe.
+        """
+        monkeypatch.setattr(slib, "_cuda_driver_present", lambda: True)
+
     class _CupArr:
         def __init__(self, data):
             self.data = np.asarray(data)
