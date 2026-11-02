@@ -178,6 +178,25 @@ describe('VMPage', () => {
     )
   })
 
+  it('passes freshly typed keyboard input to run (no stale closure)', async () => {
+    // Regression: handleRun's useCallback deps omitted keyboardInput, so
+    // typing into the Keyboard input and pressing Run immediately sent the
+    // value captured when the callback was last rebuilt (undefined/old).
+    const { container } = render(<VMPage />)
+    fireEvent.change(within(container).getAllByLabelText('Keyboard input')[0], {
+      target: { value: 'hello-guest' },
+    })
+    fireEvent.click(within(container).getAllByRole('button', { name: 'Run' })[0])
+
+    await waitFor(() => {
+      expect(screen.getByText('halted')).toBeInTheDocument()
+    })
+    expect(mockedRun).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ keyboardInput: 'hello-guest' }),
+    )
+  })
+
   it('switches program on button click', async () => {
     const { container } = render(<VMPage />)
     const countBtns = screen.getAllByRole('button', { name: 'count' })
