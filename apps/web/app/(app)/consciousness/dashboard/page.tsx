@@ -1,109 +1,79 @@
 'use client'
 
-/**
- * Consciousness Dashboard — composition root.
- *
- * State and IO live in `useConsciousnessDashboard`; rendering lives in the
- * `dashboard-*` siblings. This file only wires the two together, so adding a
- * section means adding a panel, not growing this page.
- */
+// Consciousness dashboard — thin composition. All state, fetching, and action
+// logic lives in ./useConsciousnessDashboard; section markup lives in
+// ./components/* (extracted by the page-decomposition refactor).
+
 import { PageContainer } from '@/components/PageContainer'
-import { useConsciousnessDashboard } from '@/hooks/useConsciousnessDashboard'
-import { DashboardActions, DashboardHeadline } from './dashboard-header'
-import { DashboardMetrics } from './dashboard-metrics'
-import { DashboardEvolution } from './dashboard-evolution'
-import { DashboardEpisodes, EpisodeDetailDialog } from './dashboard-episodes'
-import { DashboardState } from './dashboard-state'
+import { useLocale } from '@/hooks/useLocale'
+import { useConsciousnessDashboard } from './useConsciousnessDashboard'
+import { DashboardActions, DashboardHero } from './components/DashboardHero'
+import { DashboardSummary } from './components/DashboardSummary'
+import { DashboardCharts } from './components/DashboardCharts'
+import { EpisodesTimeline } from './components/EpisodesTimeline'
+import { EpisodeDetailDialog } from './components/EpisodeDetailDialog'
+import { ConsciousnessLevelFold, CurrentStateFold } from './components/DashboardFolds'
 
 export default function ConsciousnessDashboardPage() {
-  const {
-    loading,
-    episodes,
-    totalEpisodes,
-    qualiaHistory,
-    beliefsHistory,
-    evalReport,
-    currentBeliefs,
-    currentQualia,
-    consciousnessLevel,
-    isLive,
-    lastUpdate,
-    toggleLive,
-    seeding,
-    reflecting,
-    ratingEpisode,
-    exporting,
-    importing,
-    selectedEpisode,
-    setSelectedEpisode,
-    closeSelectedEpisode,
-    handleSeed,
-    handleReflect,
-    handleFeedback,
-    handleLevelChange,
-    handleExport,
-    handleImport,
-  } = useConsciousnessDashboard()
+  const { t } = useLocale()
+  const d = useConsciousnessDashboard()
 
-  if (loading) {
+  if (d.loading) {
     return <PageContainer title="Consciousness Dashboard" loadingGrid />
   }
 
   return (
     <PageContainer
       title={
-        <DashboardHeadline
-          isLive={isLive}
-          lastUpdate={lastUpdate}
-          onToggleLive={toggleLive}
+        <DashboardHero
+          isLive={d.isLive}
+          lastUpdate={d.lastUpdate}
+          toggleLive={d.toggleLive}
+          liveLabel={
+            d.isLive ? t('consciousness_dashboard.live') : t('consciousness_dashboard.autoRefresh')
+          }
         />
       }
       headerRight={
         <DashboardActions
-          seeding={seeding}
-          reflecting={reflecting}
-          exporting={exporting}
-          importing={importing}
-          onSeed={handleSeed}
-          onReflect={handleReflect}
-          onExport={handleExport}
-          onImport={handleImport}
+          seeding={d.seeding}
+          reflecting={d.reflecting}
+          exporting={d.exporting}
+          importing={d.importing}
+          onSeed={d.handleSeed}
+          onReflect={d.handleReflect}
+          onExport={d.handleExport}
+          onImport={d.handleImport}
         />
       }
     >
-      <DashboardMetrics
-        totalEpisodes={totalEpisodes}
-        episodes={episodes}
-        evalReport={evalReport}
-        consciousnessLevel={consciousnessLevel}
-        isLive={isLive}
+      <DashboardSummary
+        totalEpisodes={d.totalEpisodes}
+        score={d.score}
+        avgGrowth={d.avgGrowth}
+        consciousnessLevel={d.consciousnessLevel}
+        isLive={d.isLive}
+        evalReport={d.evalReport}
+        lastReflection={d.lastReflection}
       />
-
-      <DashboardEvolution
-        qualiaHistory={qualiaHistory}
-        beliefsHistory={beliefsHistory}
-        episodes={episodes}
+      <DashboardCharts
+        beliefsData={d.beliefsData}
+        qualiaData={d.qualiaData}
+        growthData={d.growthData}
       />
-
-      <DashboardEpisodes
-        episodes={episodes}
-        ratingEpisode={ratingEpisode}
-        onSelectEpisode={setSelectedEpisode}
-        onRate={handleFeedback}
+      <EpisodesTimeline
+        episodes={d.episodes}
+        ratingEpisode={d.ratingEpisode}
+        onRate={d.handleFeedback}
+        onSelect={d.setSelectedEpisode}
       />
-
-      <DashboardState
-        consciousnessLevel={consciousnessLevel}
-        currentBeliefs={currentBeliefs}
-        currentQualia={currentQualia}
-        onLevelChange={handleLevelChange}
-      />
-
+      <ConsciousnessLevelFold level={d.consciousnessLevel} onLevelChange={d.handleLevelChange} />
+      <CurrentStateFold currentBeliefs={d.currentBeliefs} currentQualia={d.currentQualia} />
       <EpisodeDetailDialog
-        episode={selectedEpisode}
-        episodes={episodes}
-        onClose={closeSelectedEpisode}
-        onRate={handleFeedback}
+        episode={d.selectedEpisode}
+        episodes={d.episodes}
+        onRate={d.handleFeedback}
+        onClose={() => d.setSelectedEpisode(null)}
       />
     </PageContainer>
   )

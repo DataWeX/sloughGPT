@@ -1,43 +1,31 @@
 'use client'
 
-/**
- * Dashboard header halves: the headline card rendered into `PageContainer`'s
- * `title` slot and the action cluster rendered into its `headerRight` slot.
- * Both are pure — live state, timestamps and handlers arrive as props from
- * `useConsciousnessDashboard`.
- */
-import { Button, Card, CardContent, StatusDot, Switch } from '@sloughgpt/strui'
-import { useLocale } from '@/hooks/useLocale'
-import { formatTimeAgo } from './dashboard-format'
+// Dashboard header pieces: the hero card (page title slot) and the header
+// action buttons. Extracted from page.tsx by the page-decomposition refactor.
 
-interface DashboardHeadlineProps {
+import { Button, Card, CardContent, StatusDot, Switch } from '@sloughgpt/strui'
+import { formatTimeAgo } from '../dashboard-data'
+
+interface DashboardHeroProps {
   isLive: boolean
   lastUpdate: number | null
-  onToggleLive: () => void
+  toggleLive: () => void
+  liveLabel: string
 }
 
-export function DashboardHeadline({ isLive, lastUpdate, onToggleLive }: DashboardHeadlineProps) {
-  const { t } = useLocale()
-
+export function DashboardHero({ isLive, lastUpdate, toggleLive, liveLabel }: DashboardHeroProps) {
   return (
     <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]">
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <StatusDot
-                tone="success"
-                pulse
-                showLabel
-                label={
-                  isLive ? t('consciousness_dashboard.live') : t('consciousness_dashboard.autoRefresh')
-                }
-              />
+              <StatusDot tone="success" pulse showLabel label={liveLabel} />
             </div>
             <h1 className="sl-h1">Consciousness Dashboard</h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Switch checked={isLive} onCheckedChange={onToggleLive} aria-label="Toggle live updates" />
+            <Switch checked={isLive} onCheckedChange={toggleLive} aria-label="Toggle live updates" />
           </div>
         </div>
         {lastUpdate && (

@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState, useMemo } from 'react'
-import { Button, Textarea } from '@sloughgpt/strui'
+import { Button, Textarea, cn } from '@sloughgpt/strui'
 import { Markdown } from './Markdown'
 
 interface MessageContentProps {
@@ -181,13 +181,27 @@ export const MessageContent = memo(function MessageContent({
         {searchQuery ? highlightText(visibleContent, searchQuery) : visibleContent}
       </p>
       {isCollapsible && isCollapsed && (
-        <span className="text-primary-foreground/50 select-none text-sm">…</span>
+        // user turns sit on the tinted card (bg-primary/10) — foreground-based
+        // tints would wash out there, so the affordance uses the primary hue
+        <span
+          className={cn(
+            'select-none text-sm',
+            role === 'user' ? 'text-primary/60' : 'text-primary-foreground/50',
+          )}
+        >
+          …
+        </span>
       )}
       {isCollapsible && (
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-xs font-medium text-primary-foreground/70 hover:text-primary-foreground transition-colors"
+          className={cn(
+            'active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset mt-1 text-xs font-medium transition-colors',
+            role === 'user'
+              ? 'text-primary/70 hover:text-primary'
+              : 'text-primary-foreground/70 hover:text-primary-foreground',
+          )}
           aria-expanded={!isCollapsed}
         >
           {isCollapsed ? `Show more (${content.length - collapsibleLength} more)` : 'Show less'}

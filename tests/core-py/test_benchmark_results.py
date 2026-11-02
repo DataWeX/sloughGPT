@@ -508,3 +508,159 @@ def test_migrate_missing_source_is_error(tmp_results, tmp_path, capsys):
 
     assert br.do_migrate(Args()) == 1
     assert "not a directory" in capsys.readouterr().err
+
+
+# ── doctor trend reader: record_source / load_series / trend_status ────────
+# (card 20261031_170120 — Site Doctor inference triage reads the
+# always-record series; trend gate is additive to pairwise is_regression)
+
+
+def _hist(*values, metric="decode_tok_s"):
+    """History records as load_result would return them (metric at root)."""
+    return [{metric: v} for v in values]
+
+
+def test_record_source_stamp_and_legacy_default(tmp_results):
+    """Pre-stamp records count as local; an explicit stamp wins."""
+    assert br.record_source({}) == "local"
+    assert br.record_source({"source": "local"}) == "local"
+    assert br.record_source({"source": "ci"}) == "ci"
+
+
+def test_load_series_sorts_ascending_and_filters_source(tmp_results):
+    write_result(
+        tmp_results,
+        "inference",
+        "m",
+        timestamp="2026-11-01T00:00:03Z",
+        source="local",
+        decode_tok_s=3,
+    )
+    write_result(
+        tmp_results,
+        "inference",
+        "m",
+        timestamp="2026-11-01T00:00:01Z",
+        source="local",
+        decode_tok_s=1,
+    )
+    write_result(
+        tmp_results,
+        "inference",
+        "m",
+        timestamp="2026-11-01T00:00:02Z",
+        source="ci",
+        decode_tok_s=2,
+    )
+    write_result(  # legacy record, no source stamp
+        tmp_results,
+        "inference",
+        "m",
+        timestamp="2026-11-01T00:00:04Z",
+        decode_tok_s=4,
+    )
+    all_recs = br.load_series("inference")
+    assert [r["decode_tok_s"] for r in all_recs] == [1, 2, 3, 4]  # oldest first
+    local = br.load_series("inference", source="local")
+    assert [r["decode_tok_s"] for r in local] == [1, 3, 4]  # legacy counts local
+    ci = br.load_series("inference", source="ci")
+    assert [r["decode_tok_s"] for r in ci] == [2]
+
+
+def test_load_series_missing_dir_and_corrupt_file(tmp_results):
+    """Absent dir -> empty series; a half-written record never sinks the read."""
+    assert br.load_series("inference") == []
+    (tmp_results / "inference").mkdir(parents=True)
+    (tmp_results / "inference" / "bad.json").write_text("{truncated", encoding="utf-8")
+    write_result(
+        tmp_results,
+        "inference",
+        "m",
+        timestamp="2026-11-01T00:00:01Z",
+        decode_tok_s=1,
+    )
+    recs = br.load_series("inference")
+    assert len(recs) == 1
+    assert recs[0]["decode_tok_s"] == 1
+
+
+def test_trend_insufficient_below_three_points():
+    """Thin sample says so — never a false alarm (fresh store, single run)."""
+    for n in (0, 1, 2):
+        out = br.trend_status("decode_tok_s", _hist(*([10.0] * n)), 10.0)
+        assert out["status"] == "insufficient", n
+        assert out["n"] == n
+        assert "insufficient" in out["message"]
+
+
+def test_trend_flat_series_point_band():
+    """sigma=0 collapses the band to a point: exact match healthy, any step flagged."""
+    history = _hist(*([10.0] * 5))
+    ok = br.trend_status("decode_tok_s", history, 10.0)
+    assert ok["status"] == "healthy"
+    assert ok["sigma"] == 0.0
+    assert ok["trend"] == 10.0
+    down = br.trend_status("decode_tok_s", history, 6.0)
+    assert down["status"] == "regressed"  # higher-is-better drop
+    assert down["message"]  # sigma=0 wording stays human, not "infs"
+    assert "infs" not in down["message"]
+    up = br.trend_status("decode_tok_s", history, 14.0)
+    assert up["status"] == "improved"  # higher-is-better rise
+
+
+def test_trend_on_trend_decline_is_healthy_but_acceleration_regresses():
+    """The band is trend-adjusted: a steady decline ON the line is not an alarm."""
+    history = _hist(20.0, 18.0, 16.0, 14.0, 12.0)  # perfect slope -2
+    on = br.trend_status("decode_tok_s", history, 10.0)  # continues the line
+    assert on["status"] == "healthy"
+    assert on["slope"] == pytest.approx(-2.0)
+    assert on["sigma"] == pytest.approx(0.0, abs=1e-9)
+    faster = br.trend_status("decode_tok_s", history, 6.0)  # below trend
+    assert faster["status"] == "regressed"
+    slower = br.trend_status("decode_tok_s", history, 14.0)  # above trend
+    assert slower["status"] == "improved"
+
+
+def test_trend_noisy_series_uses_sigma_band():
+    """Shared-box load noise widens sigma: k=3 decides, not raw deviation."""
+    values = [9.0, 11.0, 10.0, 9.5, 10.5, 10.0, 9.0, 11.0, 10.0, 10.0]
+    history = _hist(*values)
+    within = br.trend_status("decode_tok_s", history, 10.2)
+    assert within["status"] == "healthy"
+    assert within["sigma"] > 0
+    assert within["n"] == 10
+    bad = br.trend_status("decode_tok_s", history, 2.0)
+    assert bad["status"] == "regressed"
+    assert bad["z"] < -3  # beyond k*sigma in the bad direction
+    good = br.trend_status("decode_tok_s", history, 18.0)
+    assert good["status"] == "improved"
+
+
+def test_trend_window_truncates_to_last_n():
+    values = [10.0 + i for i in range(15)]  # 10..24
+    history = _hist(*values)
+    out = br.trend_status("decode_tok_s", history, 25.0, window=10)
+    assert out["n"] == 10 and out["window"] == 10
+    # last 10 are 15..24 (slope +1) -> next expected = 25, on-trend
+    assert out["status"] == "healthy"
+    assert out["trend"] == pytest.approx(25.0)
+
+
+def test_trend_dotted_metric_path():
+    history = [{"naive_tok_s": {"32": v}} for v in (100.0, 101.0, 99.0, 100.0)]
+    out = br.trend_status("naive_tok_s.32", history, 100.0)
+    assert out["status"] == "healthy"
+    assert out["n"] == 4
+    miss = br.trend_status("naive_tok_s.64", history, 100.0)
+    assert miss["status"] == "insufficient" and miss["n"] == 0
+
+
+def test_trend_lower_is_better_direction():
+    """Direction comes from HIGHER_IS_BETTER — a rise in mean_ms regresses."""
+    history = _hist(100.0, 101.0, 99.0, 100.0, 100.0, metric="mean_ms")
+    up = br.trend_status("mean_ms", history, 150.0)
+    assert up["status"] == "regressed"
+    down = br.trend_status("mean_ms", history, 50.0)
+    assert down["status"] == "improved"
+    steady = br.trend_status("mean_ms", history, 100.0)
+    assert steady["status"] == "healthy"

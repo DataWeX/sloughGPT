@@ -156,5 +156,8 @@ class AgentLoop:
                 }
             if not approve(call):
                 return {"output": "", "error": f"approval denied for tool '{call.name}'"}
-        result = await tools.execute(call.name, call.args)
+        # approver passed through: loop already prompted (L151-158) — the
+        # seam gate in ToolRegistry.execute sees a declared approver and
+        # lets the run through; callers without one are refused there.
+        result = await tools.execute(call.name, call.args, approve=approve)
         return {"output": result.output, "error": result.error}

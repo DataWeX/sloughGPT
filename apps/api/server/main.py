@@ -19,11 +19,12 @@ continue to work unchanged.
 
 from __future__ import annotations
 
-import faulthandler
 import logging
 import os
 import sys
+import threading
 import time
+import traceback
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -231,6 +232,53 @@ async def lifespan(app_inst: FastAPI):
         _cancel_stack_dump_timer()
 
 
+# fd the periodic dump writes to — a named seam so tests can capture it.
+_STACK_DUMP_FD = 2
+# The single dumper thread and its stop signal; install/cancel own them.
+_STACK_DUMP_STOP: threading.Event | None = None
+_STACK_DUMP_THREAD: threading.Thread | None = None
+
+
+def _dump_thread_stacks(fd: int = _STACK_DUMP_FD) -> None:
+    """Write every thread's Python stack to *fd* as one buffered write.
+
+    ``sys._current_frames()`` runs under the GIL, and frame teardown also
+    requires the GIL, so the snapshot can never observe a freed frame: the
+    returned frame objects pin themselves, and each frame holds a strong
+    ref to its parent (``f_back``), keeping the whole chain alive while we
+    format it. The GIL is the invariant the old implementation broke.
+
+    Replaced ``faulthandler.dump_traceback_later(interval, repeat=True)``,
+    whose C-level walk of raw ``_PyInterpreterFrame`` pointers runs from a
+    timer/signal context WITHOUT the GIL and races normal frame teardown.
+    That race was not theoretical: slough-api SIGSEGV'd 23 times over
+    2026-10-31..11-02 (every 4-14 min under load, and during idle
+    startup), and all 3 retained cores died at the identical instruction —
+    ``dump_frame``, ``Python/traceback.c:1259`` (``code->co_filename`` off
+    a stale frame), frames #0 offset ``python3.12 + 0x1a3c7b`` each.
+
+    Side effects:
+        - one ``os.write`` to *fd* (stderr by default → journald)
+    """
+    frames = sys._current_frames()
+    parts: list[str] = []
+    for tid, frame in frames.items():
+        if frame is None:
+            continue
+        parts.append(f"Thread 0x{tid:015x} (most recent call first):\n")
+        parts.extend(traceback.format_stack(frame))
+    os.write(fd, "".join(parts).encode("utf-8", "replace"))
+
+
+def _stack_dump_loop(interval: float, stop: threading.Event) -> None:
+    """Dump every *interval* seconds until *stop* is set; never raise."""
+    while not stop.wait(interval):
+        try:
+            _dump_thread_stacks()
+        except Exception as exc:
+            logger.warning("periodic stack dump failed: %s", exc, extra={"tag": "START"})
+
+
 def _install_stack_dump_timer() -> None:
     """Periodically dump all thread stacks to stderr when ``SLO_DUMP_STACKS=1``.
 
@@ -239,29 +287,56 @@ def _install_stack_dump_timer() -> None:
     loop). Off by default; interval configurable via ``SLO_DUMP_STACKS_INTERVAL``
     seconds (default 30).
 
+    Runs as a Python thread instead of faulthandler's repeating timer —
+    see ``_dump_thread_stacks`` for the crash this swap replaces. The
+    install is idempotent: a second call stops the previous dumper first.
+
     Side effects:
-        - registers a faulthandler repeating timer dumping to stderr
+        - starts one daemon thread writing stack dumps to stderr
     """
+    global _STACK_DUMP_STOP, _STACK_DUMP_THREAD
     if os.environ.get("SLO_DUMP_STACKS", "0").lower() not in ("1", "true", "yes"):
         return
     try:
         interval = float(os.environ.get("SLO_DUMP_STACKS_INTERVAL", "30"))
-        faulthandler.dump_traceback_later(interval, repeat=True)
+        _cancel_stack_dump_timer()
+        stop = threading.Event()
+        thread = threading.Thread(
+            target=_stack_dump_loop,
+            args=(interval, stop),
+            name="stack-dump",
+            daemon=True,
+        )
+        thread.start()
+        _STACK_DUMP_STOP, _STACK_DUMP_THREAD = stop, thread
         logger.info(
-            "faulthandler stack dump active every %ss (SLO_DUMP_STACKS=1)",
+            "stack dump active every %ss (SLO_DUMP_STACKS=1, gil-safe)",
             interval,
             extra={"tag": "START"},
         )
     except Exception as exc:
-        logger.warning("faulthandler stack dump not installed: %s", exc, extra={"tag": "START"})
+        logger.warning("stack dump thread not installed: %s", exc, extra={"tag": "START"})
 
 
 def _cancel_stack_dump_timer() -> None:
-    """Cancel the faulthandler dump timer installed by ``_install_stack_dump_timer``."""
+    """Stop the dumper thread installed by ``_install_stack_dump_timer``.
+
+    Idempotent — safe to call when nothing is installed (lifespan's
+    ``finally`` runs unconditionally). Joins briefly so a test or a fast
+    restart never races a half-written dump.
+    """
+    global _STACK_DUMP_STOP, _STACK_DUMP_THREAD
+    stop, thread = _STACK_DUMP_STOP, _STACK_DUMP_THREAD
+    _STACK_DUMP_STOP, _STACK_DUMP_THREAD = None, None
+    if stop is None or thread is None:
+        return
     try:
-        faulthandler.cancel_dump_traceback_later()
+        stop.set()
+        thread.join(timeout=5.0)
+        if thread.is_alive():
+            logger.warning("stack dump thread still draining after 5s")
     except Exception as e:
-        logger.warning("Faulthandler cancel failed: %s", e)
+        logger.warning("Stack dump cancel failed: %s", e)
 
 
 # ── FastAPI application ─────────────────────────────────────────────

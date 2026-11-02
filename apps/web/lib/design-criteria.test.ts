@@ -59,18 +59,16 @@ const HEX_BASELINE = [
  * - magazine: the styleguide IS the data — Section 7 renders the DARK MODE
  *   PREVIEW (pinned dark palette values are the content), and the swatch
  *   samples are literal palette entries. ThemeProvider-class data exemption.
- *   Rows relocated 2026-11-01 by the page.tsx split: same 18 instances,
- *   now across the section files (dark-preview 13, hero 4, tokens 1).
+ *   Rows relocated 2026-11-01 by the page.tsx split (dark-preview 13,
+ *   hero 4, tokens 1); the 2026-11-02 token migration then routed all 17
+ *   section-file instances through rgb(var(--…)), leaving only the
+ *   palette-data sample in tokens — rows for the fixed files deleted.
  * Decoration (elevation `--elevation-rgb`, sheen `--sheen-rgb`) and drag-state
  * semantic tints moved onto tokens 2026-10-24; world material hues onto the
  * categorical `--group-N` slots; compare chart fills now match their own
  * stroke tokens.
  */
-const RGB_BASELINE = [
-  'app/(app)/magazine/magazine-dark-preview.tsx',
-  'app/(app)/magazine/magazine-hero.tsx',
-  'app/(app)/magazine/magazine-tokens.ts',
-]
+const RGB_BASELINE = ['app/(app)/magazine/magazine-tokens.ts']
 
 /**
  * Stock Tailwind palette utilities (the "AI-slop rainbow") — ZERO TOLERANCE
@@ -127,11 +125,10 @@ const TEXT_LG_BASELINE: Record<string, number> = {
   'app/(app)/consciousness/health/page.tsx': 4,
   'app/(app)/consciousness/compare/page.tsx': 3,
   'app/(app)/consciousness/analytics/page.tsx': 1,
-  'app/(app)/consciousness/docs/docs-endpoint-list.tsx': 1,
   'app/(app)/consciousness/master/page.tsx': 1,
 }
 
-const TEXT_LG_TOTAL_CEILING = 27
+const TEXT_LG_TOTAL_CEILING = 26
 
 /**
  * `text-2xl` is reserved for `components/AppRouteHeader.tsx` (AppRouteHeader

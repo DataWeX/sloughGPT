@@ -3,8 +3,7 @@ Tests for cross-turn KV cache reuse via NumpyKVCache.
 
 Verifies that multi-turn generation with prefix reuse produces the same
 output as a full recomputation, and that fallback paths (empty state,
-mismatched quantize mode, prefix-mismatch, identical-prompt retry) also
-produce correct results.
+mismatched quantize mode, prefix-mismatch) also produce correct results.
 """
 
 import numpy as np
@@ -111,16 +110,27 @@ class TestNumpyKVCache:
         assert s == 2  # reuses first 2 cached positions
         assert kl == [2]
 
-    def test_resolve_identical_prompt_falls_back(self, tiny_model):
+    def test_resolve_identical_prompt_resumes_at_the_last_token(self, tiny_model):
+        """A fully-cached prompt resumes at prompt_len - 1, not 0.
+
+        Card 20261102_012822: this used to fall back to a full re-prefill
+        ("0 < s < prompt_len" failing when s == prompt_len), so a repeated
+        identical prompt recomputed all 482 tokens (~16 s on the live box)
+        even though the session state already held their K/V. Logits for the
+        LAST token are never stored, so exactly that one token must be
+        recomputed — an ordinary incremental decode step — and everything
+        before it is reused.
+        """
         state = tiny_model.new_kv_cache()
         state.prev_ids = np.array([[1, 2, 3]])
         state.kv_buf_k = [np.zeros((1, 5, 2, 64))]
         state.kv_len = [3]
         state.capacity = 5
         state.quantize_kv = False
-        ids = np.array([[1, 2, 3]])  # same prompt → degenerate case
-        _, _, _, _, _, s = tiny_model._resolve_kv_state(state, 1, 10, [2], 64, False, ids, 3)
-        assert s == 0  # falls back to fresh
+        ids = np.array([[1, 2, 3]])  # identical prompt → full-prefix match
+        _, _, _, _, kl, s = tiny_model._resolve_kv_state(state, 1, 10, [2], 64, False, ids, 3)
+        assert s == 2  # prompt_len - 1: only the final token is recomputed
+        assert kl == [2]
 
     def test_resolve_prefix_reuse(self, tiny_model):
         state = tiny_model.new_kv_cache()
@@ -171,6 +181,23 @@ class TestCrossTurnGenerateNumpy:
         out1 = tiny_model.generate_numpy(ids, **kw)
         out2 = tiny_model.generate_numpy(ids, **kw)
         np.testing.assert_array_equal(out1, out2)
+
+    def test_identical_prompt_resume_matches_fresh(self, tiny_model):
+        """Repeating the same prompt on a warm session is bit-identical to a cold run.
+
+        Correctness guard for the resume-at-prompt_len-1 path added for card
+        20261102_012822: recompute one token against a fully populated cache.
+        That branch never executed before the fix (it fell back to start=0),
+        so nothing else in the suite covers it.
+        """
+        ids = np.array([[10, 20, 30]])
+        kw = {"max_new_tokens": 8, "temperature": 0.0}
+        state = tiny_model.new_kv_cache()
+        warm = tiny_model.generate_numpy(ids, kv_state=state, **kw)
+        repeat = tiny_model.generate_numpy(ids, kv_state=state, **kw)
+        fresh = tiny_model.generate_numpy(ids, **kw)
+        np.testing.assert_array_equal(repeat, fresh)
+        np.testing.assert_array_equal(repeat, warm)
 
     def test_cross_turn_full_recompute_agree(self, tiny_model):
         """Turn-2 output using prefix reuse equals the full recompute from scratch."""
@@ -224,6 +251,23 @@ class TestCrossTurnGenerateNumpy:
         out_reuse = tiny_model.generate_numpy(ids2, kv_state=state, **kw)
         out_fresh = tiny_model.generate_numpy(ids2, **kw)
         np.testing.assert_array_equal(out_reuse, out_fresh)
+
+    def test_identical_prompt_stream_resume_matches_fresh(self, tiny_model):
+        """The /v1 path is stream-shaped: a full-prompt resume must hold there too.
+
+        ``generate_numpy_stream`` shares ``_resolve_kv_state`` with the
+        non-stream path, so the resume-at-prompt_len-1 branch added for card
+        20261102_012822 executes in the pump that serves /v1. Guard output
+        identity against a cold stream, not just that it ran.
+        """
+        ids = np.array([[10, 20, 30]])
+        kw = {"max_new_tokens": 8, "temperature": 0.0, "eos_token": None}
+        state = tiny_model.new_kv_cache()
+        warm = list(tiny_model.generate_numpy_stream(ids, kv_state=state, **kw))
+        repeat = list(tiny_model.generate_numpy_stream(ids, kv_state=state, **kw))
+        fresh = list(tiny_model.generate_numpy_stream(ids, **kw))
+        assert repeat == warm
+        assert repeat == fresh
 
     def test_prefill_len_one(self, tiny_model):
         """When reuse produces prefill_len=1 (one new token), single-token step works."""

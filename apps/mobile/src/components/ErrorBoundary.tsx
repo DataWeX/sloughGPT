@@ -49,7 +49,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     icon: {
       fontSize: 48,
       marginBottom: 16,
-      color: colors.error || '#EF4444',
+      color: colors.error,
       fontWeight: '700',
     },
     title: {
@@ -68,7 +68,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     stackContainer: {
       backgroundColor: colors.card,
       borderWidth: 1,
-      borderColor: colors.border || 'rgba(255,255,255,0.1)',
+      borderColor: colors.border,
       borderRadius: 8,
       padding: 12,
       marginBottom: 24,
@@ -93,7 +93,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     buttonText: {
       fontSize: 15,
       fontWeight: '600',
-      color: '#FFFFFF',
+      color: colors.white,
     },
   })
 }

@@ -72,10 +72,11 @@ function setupMocks() {
   ;(window as any).AudioContext = vi.fn((opts?: { sampleRate?: number }) => ({
     sampleRate: opts?.sampleRate ?? 48000,
     createAnalyser: () => ({
-      fftSize: 256,
+      fftSize: 1024,
       smoothingTimeConstant: 0.4,
-      frequencyBinCount: 128,
+      frequencyBinCount: 512,
       getByteFrequencyData: vi.fn(),
+      getByteTimeDomainData: vi.fn(),
       connect: vi.fn(),
     }),
     createMediaStreamSource: () => ({ connect: vi.fn(), disconnect: mockDisconnect }),

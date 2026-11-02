@@ -1,19 +1,18 @@
 'use client'
 
-/**
- * VM Console — composition root.
- *
- * State and IO live in `useVmWorkbench`; rendering lives in the `vm-*`
- * siblings next to this file. Only the tab shell belongs here.
- */
+// VM console — thin composition. All state, chatDB hydration, the training
+// poller, and the run/launch handlers live in ./useVmPage; the assembly and
+// browser tab markup lives in ./components/* (extracted by the
+// page-decomposition refactor).
+
 import { PageContainer } from '@/components/PageContainer'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@sloughgpt/strui'
-import { useVmWorkbench } from './useVmWorkbench'
-import { AssemblyTab } from './vm-assembly-tab'
-import { BrowserTab } from './vm-browser-tab'
+import { useVmPage } from './useVmPage'
+import { VmAssemblyTab } from './components/VmAssemblyTab'
+import { VmBrowserTab } from './components/VmBrowserTab'
 
 export default function VMPage() {
-  const vm = useVmWorkbench()
+  const vm = useVmPage()
 
   return (
     <PageContainer
@@ -28,11 +27,11 @@ export default function VMPage() {
         </TabsList>
 
         <TabsContent value="assembly">
-          <AssemblyTab vm={vm} />
+          <VmAssemblyTab vm={vm} />
         </TabsContent>
 
         <TabsContent value="browser">
-          <BrowserTab />
+          <VmBrowserTab />
         </TabsContent>
       </Tabs>
     </PageContainer>

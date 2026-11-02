@@ -22,14 +22,14 @@ export function MagazineHero() {
             <div className="flex justify-center">
               <div
                 className="h-20 w-20 rounded-xl shadow-lg transition-transform hover:scale-105"
-                style={{ backgroundColor: 'rgb(124, 82, 196)' }}
+                style={{ backgroundColor: 'rgb(var(--primary))' }}
                 role="img"
                 aria-label="Primary violet color swatch"
               />
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-                <span style={{ color: 'rgb(124, 82, 196)' }}>Noir</span>{' '}
+                <span style={{ color: 'rgb(var(--primary))' }}>Noir</span>{' '}
                 <span style={{ color: 'rgb(var(--foreground))' }}>Violet</span>
               </h1>
               <p className="mt-2 text-sm" style={{ color: 'rgb(var(--muted-foreground))' }}>
@@ -42,8 +42,8 @@ export function MagazineHero() {
               <Badge
                 variant="outline"
                 style={{
-                  borderColor: 'rgb(236, 145, 95)',
-                  color: 'rgb(236, 145, 95)',
+                  borderColor: 'rgb(var(--accent))',
+                  color: 'rgb(var(--accent))',
                 }}
               >
                 Accent: Terracotta

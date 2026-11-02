@@ -56,7 +56,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full max-w-md bg-card border-l border-border shadow-lg overflow-y-auto">
         <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">Edit Note</h2>
+          <h2 className="text-base font-medium">Edit Note</h2>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <IconX className="h-4 w-4" />
           </Button>

@@ -521,6 +521,8 @@ export function ChatScreen() {
           </YStack>
         ) : (
           <Pressable
+            accessibilityLabel="Dismiss keyboard"
+            accessibilityRole="button"
             style={{ flex: 1, backgroundColor: a.chatBackground || 'var(--background)' }}
             onPress={() => Keyboard.dismiss()}
           >

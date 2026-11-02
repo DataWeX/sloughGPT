@@ -294,11 +294,34 @@ class ToolRegistry:
                         return name, {"data_path": m.group(1).strip(), "operation": "summary"}
         return None
 
-    async def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
-        """Execute a tool by name with given args."""
+    async def execute(
+        self,
+        name: str,
+        args: dict[str, Any],
+        approve: Callable[..., bool] | None = None,
+    ) -> ToolResult:
+        """Execute a tool by name with given args.
+
+        Approval gate (fail-closed): a spec with ``requires_approval=True``
+        is refused unless the caller passes an ``approve`` callable.
+        Presence of ``approve`` declares "approval was obtained upstream" —
+        AgentLoop prompts the human first (loop.py) and passes its approver
+        through; callers with no approver (multi-agent orchestration,
+        scripts, tests exercising the raw tool) get a refusal instead of an
+        unattended run. The check lives HERE, at the seam, because the spec
+        already carries the flag: one declaration, enforced for every
+        current and future caller — a caller-side check is exactly the
+        pattern this gate replaces (multi.py ran approval tools directly).
+        """
         spec = self._tools.get(name)
         if not spec:
             return ToolResult(success=False, output="", error=f"Unknown tool: {name}")
+        if spec.requires_approval and approve is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"tool '{name}' requires approval (no approver supplied)",
+            )
         start = asyncio.get_event_loop().time()
         try:
             result = await spec.execute(**args)
@@ -415,6 +438,17 @@ class ToolRegistry:
 
     async def _run_code(self, language: str, code: str) -> dict[str, Any]:
         """Execute code in a subprocess with timeout."""
+        import sys
+
+        from domain.agents._internal.code_guard import is_allowed
+
+        # Same blocked-pattern check agents.py enforces before running
+        # model code — one shared list, both surfaces (parity, not a new
+        # restriction: agents.py already blocked eval/exec/pickle here).
+        safe, msg = is_allowed(code)
+        if not safe:
+            return {"output": "", "error": msg}
+
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".py" if language == "python" else ".sh", delete=False
         ) as f:
@@ -422,7 +456,7 @@ class ToolRegistry:
             f.flush()
             fname = f.name
         try:
-            cmd = ["python3", fname] if language == "python" else ["bash", fname]
+            cmd = [sys.executable, fname] if language == "python" else ["bash", fname]
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
@@ -447,6 +481,12 @@ class ToolRegistry:
     async def _run_file_read(self, path: str) -> dict[str, Any]:
         """Read a file from the workspace."""
         import os
+
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(path)
+        if violation:
+            return {"output": "", "error": violation}
 
         try:
             resolved = os.path.abspath(path)
@@ -542,6 +582,12 @@ class ToolRegistry:
         """Analyze an image via the inference image-capability facade."""
         import os
 
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(image_path)
+        if violation:
+            return {"output": "", "error": violation}
+
         try:
             from domain.inference import analyze_image
 
@@ -586,6 +632,12 @@ class ToolRegistry:
         """Analyze a CSV/JSON/JSONL data file."""
         import json
         import os
+
+        from domain.agents._internal.path_guard import path_violation
+
+        violation = path_violation(data_path)
+        if violation:
+            return {"output": "", "error": violation}
 
         try:
             if not os.path.exists(data_path):

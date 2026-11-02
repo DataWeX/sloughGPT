@@ -86,6 +86,10 @@ export const CONTRACTS = {
           "description": "Model id (routing ignored)",
           "type": "string"
         },
+        "session_id": {
+          "description": "Serving-session key for cross-turn KV-cache reuse (optional)",
+          "type": "string"
+        },
         "stream": {
           "description": "Streaming toggle",
           "type": "boolean"

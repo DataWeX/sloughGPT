@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from domain.agents._internal import code_guard
+
 logger = logging.getLogger("slo.agents")
 
 
@@ -52,18 +54,9 @@ class SecurityConfig:
 class SecurityBoundary:
     """Security boundaries for safe execution."""
 
-    BLOCKED_PATTERNS = [
-        r"import\s+os\s*.*remove",
-        r"import\s+shutil\s*.*rmtree",
-        r"subprocess\s*\..*shell\s*=\s*True",
-        r"__import__\s*\(\s*['\"]os['\"]",
-        r"eval\s*\(",
-        r"exec\s*\(",
-        r"open\s*\([^)]*\br\/w",
-        r"pickle",
-        r"marshal",
-        r"compile\s*\(",
-    ]
+    #: Aliased to the SHARED list in ``code_guard`` — one list, both tool
+    #: surfaces; the chat run_code tool consults the same patterns.
+    BLOCKED_PATTERNS = code_guard.BLOCKED_PATTERNS
 
     ALLOWED_DIRS = [
         "data",
@@ -77,11 +70,13 @@ class SecurityBoundary:
         self._blocked_re = [re.compile(p) for p in self.BLOCKED_PATTERNS]
 
     def is_allowed(self, code: str) -> tuple[bool, str]:
-        """Check if code is safe to execute."""
-        for pattern in self._blocked_re:
-            if pattern.search(code):
-                return False, f"Blocked pattern: {pattern.pattern}"
-        return True, ""
+        """Check if code is safe to execute.
+
+        Delegates to the shared ``code_guard`` so both tool surfaces run
+        one list and one loop; ``self._blocked_re`` is the instance view
+        of that same list (kept for callers that inspect it).
+        """
+        return code_guard.is_allowed(code)
 
     @contextmanager
     def resource_limit(self, tool: str):
@@ -187,34 +182,13 @@ class ToolRunner:
     def _path_violation(self, path: str) -> str | None:
         """Deny model-supplied paths: sensitive locations, then allowlist.
 
-        The model decides which path a file tool touches — unguarded that
-        includes ``~/.ssh`` and repo ``.env`` files. When
-        ``SecurityConfig.allowed_directories`` is configured it is enforced
-        as an allowlist (resolved paths, prefix-bound on separators);
-        otherwise only the sensitive blocklist applies.
+        Delegates to the shared ``path_guard`` (also enforced by tools.py's
+        ToolRegistry) so both tool surfaces keep ONE blocklist; this method
+        only supplies this agent's allowlist config.
         """
-        resolved = os.path.realpath(path)
-        home = os.path.realpath(os.path.expanduser("~"))
-        for name in (".ssh", ".gnupg", ".aws", ".kube", ".docker"):
-            blocked = os.path.join(home, name)
-            if resolved == blocked or resolved.startswith(blocked + os.sep):
-                return f"sensitive directory denied: {path}"
-        base = os.path.basename(resolved)
-        if base.startswith(".env") or base in {
-            "shadow",
-            "gshadow",
-            "id_rsa",
-            "id_ed25519",
-            "id_ecdsa",
-            "credentials",
-        }:
-            return f"sensitive file denied: {path}"
-        allowed = self.security.config.allowed_directories
-        if allowed:
-            roots = [os.path.realpath(a) for a in allowed]
-            if not any(resolved == root or resolved.startswith(root + os.sep) for root in roots):
-                return f"path outside allowed_directories: {path}"
-        return None
+        from domain.agents._internal.path_guard import path_violation
+
+        return path_violation(path, self.security.config.allowed_directories)
 
     async def _run_code(
         self,

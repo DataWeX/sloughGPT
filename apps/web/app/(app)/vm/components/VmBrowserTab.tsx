@@ -1,10 +1,12 @@
 'use client'
 
-/** Browser VM tab: the v86 Linux terminal. */
+// Browser VM tab content: v86 intro card + the terminal panel. Extracted from
+// page.tsx by the page-decomposition refactor.
+
 import { Card, CardContent } from '@sloughgpt/strui'
 import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
 
-export function BrowserTab() {
+export function VmBrowserTab() {
   return (
     <div className="space-y-4">
       <Card>

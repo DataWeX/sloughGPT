@@ -1,38 +1,40 @@
 'use client'
 
-/**
- * Focal metrics + the Response Quality / Reflection pair.
- *
- * Derivation lives here rather than in the page: `score` and `avgGrowth` are
- * shaped from the raw episode/eval payloads this panel receives, so the page
- * only forwards data.
- */
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, cn, KpiGrid, SectionHeader, StatCard } from '@sloughgpt/strui'
-import type { Episode, EvalReport } from '@/hooks/useConsciousnessDashboard'
-import { levelName } from './dashboard-format'
+// Focal metrics + response quality/reflection cards. Extracted from page.tsx
+// by the page-decomposition refactor — pure presentation over hook outputs.
 
-interface DashboardMetricsProps {
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  KpiGrid,
+  SectionHeader,
+  StatCard,
+  cn,
+} from '@sloughgpt/strui'
+import { levelName, type EvalReport } from '../dashboard-data'
+
+interface DashboardSummaryProps {
   totalEpisodes: number
-  episodes: Episode[]
-  evalReport: EvalReport | null
+  score: number | null
+  avgGrowth: string
   consciousnessLevel: number
   isLive: boolean
+  evalReport: EvalReport | null
+  lastReflection: string | null
 }
 
-export function DashboardMetrics({
+export function DashboardSummary({
   totalEpisodes,
-  episodes,
-  evalReport,
+  score,
+  avgGrowth,
   consciousnessLevel,
   isLive,
-}: DashboardMetricsProps) {
-  const score = evalReport ? evalReport.overall_score : null
-
-  const avgGrowth =
-    episodes.length > 0
-      ? `${((episodes.reduce((s, e) => s + e.growth_delta, 0) / episodes.length) * 100).toFixed(1)}%`
-      : '—'
-
+  evalReport,
+  lastReflection,
+}: DashboardSummaryProps) {
   return (
     <>
       {/* Focal metrics */}
@@ -103,22 +105,13 @@ export function DashboardMetrics({
             <CardDescription>What the system is thinking right now</CardDescription>
           </CardHeader>
           <CardContent>
-            {(() => {
-              // `last_reflection` rides the report's index signature; the
-              // explicit cast keeps it a renderable string instead of unknown.
-              const lastReflection =
-                (evalReport?.last_reflection as string | undefined) ||
-                episodes[episodes.length - 1]?.self_insight
-              return lastReflection ? (
-                <div className="text-sm italic text-muted-foreground">
-                  &quot;{lastReflection}&quot;
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  No reflections yet. Click &quot;Reflect&quot; to generate one.
-                </div>
-              )
-            })()}
+            {lastReflection ? (
+              <div className="text-sm italic text-muted-foreground">&quot;{lastReflection}&quot;</div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                No reflections yet. Click &quot;Reflect&quot; to generate one.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

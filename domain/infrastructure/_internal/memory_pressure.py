@@ -74,6 +74,11 @@ class MemoryPressureMonitor:
         self._idle_releases: int = 0
         self._gc_forced: int = 0
         self._last_level: PressureLevel = PressureLevel.NORMAL
+        # The sample that produced _last_level. Kept alongside the level
+        # because a level without its reading cannot be reported honestly:
+        # callers used to re-read psutil when building user-facing messages
+        # and quoted a number that never triggered anything (2026-11-01).
+        self._last_reading: dict | None = None
         self._last_warning_logged: float = 0.0
         self._last_critical_logged: float = 0.0
         self._last_emergency_logged: float = 0.0
@@ -92,6 +97,20 @@ class MemoryPressureMonitor:
     @property
     def emergency_threshold(self) -> float:
         return self._emergency
+
+    @property
+    def last_reading(self) -> dict | None:
+        """The memory sample that produced the current pressure level.
+
+        A copy, not live state: ``None`` before the first check, otherwise
+        ``{percent, available_mb, total_mb, rss_mb, level, ts}``. Callers that
+        must explain a refusal (the inference router's EMERGENCY message) read
+        this instead of sampling psutil again — a second sample can disagree
+        with the one that blocked the request, and then the message
+        contradicts the refusal.
+        """
+        with self._lock:
+            return dict(self._last_reading) if self._last_reading is not None else None
 
     def configure(
         self,
@@ -151,6 +170,18 @@ class MemoryPressureMonitor:
         with self._lock:
             prev_level = self._last_level
             self._last_level = level
+            # Record the sample this level was classified from. When the
+            # interval cache answers a later call, the level AND the reading
+            # it came from are both the earlier ones — they stay a matched
+            # pair, which is the whole point.
+            self._last_reading = {
+                "percent": float(mem.percent),
+                "available_mb": int(mem.available // (1024 * 1024)),
+                "total_mb": int(getattr(mem, "total", 0) // (1024 * 1024)),
+                "rss_mb": round(process_rss_mb, 1),
+                "level": level.value,
+                "ts": now,
+            }
 
         if level == PressureLevel.WARNING and prev_level != PressureLevel.WARNING:
             self._on_warning(mem.percent, mem.available, process_rss_mb)

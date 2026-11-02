@@ -1,32 +1,25 @@
 'use client'
 
-/**
- * Stateful core of the VM Console.
- *
- * Owns IO and state only — the assembly run/step handlers, training-job
- * polling, chatDB persistence (with the *Touched guard that stops hydration
- * from clobbering edits) and the dataset listing. The tab panels own render.
- *
- * Page-local rather than in `hooks/` because it depends on the page-local
- * `DEFAULT_PROGRAMS` / train-config tables, and because unlike consciousness
- * (which has a `useConsciousness*` family up there) this page has no such
- * family to join.
- */
+// Stateful core of the VM console page, extracted from page.tsx by the
+// page-decomposition refactor: all state, chatDB hydration/persistence, the
+// training-job poller, and the run/launch handlers live here — the page and
+// its components stay presentational.
+
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { vmController, type VMRunResult, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { chatDB } from '@/lib/db'
-import { DEFAULT_PROGRAMS } from './vm-programs'
 import {
   DEFAULT_MAX_STEPS,
+  DEFAULT_PROGRAMS,
   DEFAULT_TRAIN_CONFIG,
   buildTrainSource,
   clampSteps,
   clampTrainConfig,
   type TrainConfig,
-} from './vm-train-config'
+} from './vm-data'
 
 async function loadRole(): Promise<string> {
   try {
@@ -59,7 +52,8 @@ async function loadTrainConfig(): Promise<TrainConfig> {
   }
   return DEFAULT_TRAIN_CONFIG
 }
-export function useVmWorkbench() {
+
+export function useVmPage() {
   const [vmMode, setVmMode] = useState<'assembly' | 'browser'>('assembly')
   const [source, setSourceRaw] = useState(DEFAULT_PROGRAMS.hello)
   const [result, setResult] = useState<VMRunResult | null>(null)
@@ -313,7 +307,10 @@ export function useVmWorkbench() {
         setRunning(false)
       }
     },
-    [source, maxSteps, role, debug],
+    // keyboardInput is read inside — without it here, typing then pressing
+    // Run immediately sent the stale value from the last rebuild (real bug,
+    // caught by eslint's exhaustive-deps warning through the decomposition).
+    [source, maxSteps, role, debug, keyboardInput],
   )
 
   const handleLaunchTraining = useCallback(async () => {
@@ -337,7 +334,6 @@ export function useVmWorkbench() {
   return {
     vmMode,
     setVmMode,
-    hydrated,
     source,
     setSource,
     result,
@@ -355,6 +351,8 @@ export function useVmWorkbench() {
     setShowRef,
     copied,
     setCopied,
+    copiedTimerRef,
+    textareaRef,
     trainingJob,
     trainConfig,
     setTrainConfig,
@@ -363,15 +361,12 @@ export function useVmWorkbench() {
     setCustomDataset,
     launchedJob,
     setLaunchedJob,
-    textareaRef,
-    copiedTimerRef,
+    permissionDenied,
     handleRun,
+    handleStopTraining,
     handleLaunchTraining,
     handleKeyDown,
-    handleStopTraining,
-    permissionDenied,
   }
 }
 
-/** The contract the VM tab panels render against. */
-export type VmWorkbench = ReturnType<typeof useVmWorkbench>
+export type VmPageState = ReturnType<typeof useVmPage>

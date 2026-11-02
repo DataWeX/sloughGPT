@@ -324,12 +324,12 @@ export function ChatModeBar({
             <Icon
               name={m.icon as any}
               size={14}
-              color={mode === m.value ? '#FFFFFF' : colors.textMuted}
+              color={mode === m.value ? colors.textOnPrimary : colors.textMuted}
             />
             <Text
               {...T.label}
               fontWeight={mode === m.value ? '600' : '500'}
-              color={mode === m.value ? '#FFFFFF' : colors.textMuted}
+              color={mode === m.value ? colors.textOnPrimary : colors.textMuted}
             >
               {m.label}
             </Text>

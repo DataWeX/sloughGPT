@@ -39,6 +39,22 @@ const INTERRUPT_CHECK_MS = 100
 const MIC_LEVEL_EMIT_MS = 120
 const MIC_LEVEL_BUCKETS = 10
 
+/**
+ * Per-frame audio features for visuals (the center-stage warble). Published on
+ * the same two-channel rule as `micLevelRef`: the monitor writes every frame,
+ * visuals sample on their own rAF loop, React never re-renders at audio rate.
+ */
+export interface VoiceAudioFeatures {
+  /** 0–1 smoothed RMS loudness */
+  intensity: number
+  /** Fundamental frequency in Hz; 0 while unvoiced/noisy */
+  pitch: number
+  /** 0–1 normalized spectral centroid (brightness) */
+  timbre: number
+}
+
+const ZERO_FEATURES: VoiceAudioFeatures = { intensity: 0, pitch: 0, timbre: 0 }
+
 // ── Voice Settings ────────────────────────────────────────────────────
 
 export interface VoiceSettings {
@@ -70,11 +86,44 @@ const DEFAULT_SETTINGS: VoiceSettings = {
 
 // ── Audio Level Monitor ───────────────────────────────────────────────
 
+/**
+ * Fundamental-frequency detection via normalized autocorrelation over the
+ * byte time-domain window. Returns 0 when the frame is unvoiced or noisy —
+ * the caller treats that as "hold the last pitch".
+ */
+function detectPitch(buf: Uint8Array, sampleRate: number): number {
+  const n = buf.length
+  const minLag = Math.floor(sampleRate / 400) // human voice ceiling: 400 Hz
+  const maxLag = Math.min(Math.floor(sampleRate / 70), n - 1) // floor: 70 Hz
+  if (maxLag <= minLag) return 0
+  let bestLag = 0
+  let bestCorr = 0
+  for (let lag = minLag; lag <= maxLag; lag += 2) {
+    let corr = 0
+    let energy = 0
+    for (let i = 0; i + lag < n; i += 2) {
+      const a = buf[i] - 128
+      const b = buf[i + lag] - 128
+      corr += a * b
+      energy += a * a
+    }
+    if (energy === 0) continue
+    const norm = corr / energy // 0..1 — period-matched frames score high
+    if (norm > bestCorr) {
+      bestCorr = norm
+      bestLag = lag
+    }
+  }
+  if (bestCorr < 0.3 || !bestLag) return 0 // unvoiced: no confident period
+  return sampleRate / bestLag
+}
+
 function createAudioLevelMonitor(): {
   start: (stream: MediaStream) => void
   stop: () => void
   getLevel: () => number
   onLevel: ((level: number) => void) | null
+  onFeatures: ((features: VoiceAudioFeatures) => void) | null
 } {
   let analyser: AnalyserNode | null = null
   let source: MediaStreamAudioSourceNode | null = null
@@ -84,24 +133,68 @@ function createAudioLevelMonitor(): {
 
   return {
     onLevel: null,
+    onFeatures: null,
     getLevel: () => level,
     start(stream: MediaStream) {
       try {
         ctx = new AudioContext()
         analyser = ctx.createAnalyser()
-        analyser.fftSize = 256
+        // 1024-sample window: the 70 Hz pitch floor needs a ~630-sample lag,
+        // which the old 256 fftSize could not hold. `level` stays the mean of
+        // the same 0–Nyquist spectrum (bin count scales with fftSize), so
+        // interrupt detection semantics are unchanged.
+        analyser.fftSize = 1024
         analyser.smoothingTimeConstant = 0.4
         source = ctx.createMediaStreamSource(stream)
         source.connect(analyser)
 
-        const dataArray = new Uint8Array(analyser.frequencyBinCount)
+        const sampleRate = ctx.sampleRate
+        const freqData = new Uint8Array(analyser.frequencyBinCount)
+        const timeData = new Uint8Array(analyser.fftSize)
+        const binHz = sampleRate / analyser.fftSize
+        let intensity = 0
+        let pitch = 0
+        let timbre = 0
+
         const tick = () => {
           if (!analyser) return
-          analyser.getByteFrequencyData(dataArray)
+          analyser.getByteFrequencyData(freqData)
           let sum = 0
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
-          level = sum / dataArray.length / 255
+          for (let i = 0; i < freqData.length; i++) sum += freqData[i]
+          level = sum / freqData.length / 255
           this.onLevel?.(level)
+
+          if (this.onFeatures) {
+            analyser.getByteTimeDomainData(timeData)
+
+            // Intensity: RMS around the 128 silence midpoint, lightly smoothed.
+            let sq = 0
+            for (let i = 0; i < timeData.length; i++) {
+              const v = (timeData[i] - 128) / 128
+              sq += v * v
+            }
+            const rms = Math.min(1, Math.sqrt(sq / timeData.length) * 4)
+            intensity += (rms - intensity) * 0.3
+
+            // Timbre: spectral centroid mapped 0..1 over 0–8 kHz.
+            let num = 0
+            let den = 0
+            for (let i = 0; i < freqData.length; i++) {
+              const m = freqData[i]
+              if (m > 16) {
+                num += i * m
+                den += m
+              }
+            }
+            const centroid = den > 0 ? Math.min(1, ((num / den) * binHz) / 8000) : 0
+            timbre += (centroid - timbre) * 0.1
+
+            // Pitch: EMA over voiced frames; detectPitch's 0 decays the
+            // estimate toward silence instead of jumping.
+            pitch += (detectPitch(timeData, sampleRate) - pitch) * 0.25
+
+            this.onFeatures?.({ intensity, pitch, timbre })
+          }
           raf = requestAnimationFrame(tick)
         }
         tick()
@@ -160,6 +253,8 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   const audioMonitorRef = useRef(createAudioLevelMonitor())
   /** Per-frame mic level (0–1) — read imperatively by visuals, never rendered from. */
   const micLevelRef = useRef(0)
+  /** Per-frame features (intensity/pitch/timbre) — the warble's signal, same ref channel. */
+  const audioFeaturesRef = useRef<VoiceAudioFeatures>({ ...ZERO_FEATURES })
   const lastMicLevelEmitRef = useRef(0)
   const micStreamRef = useRef<MediaStream | null>(null)
   const interruptCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -225,6 +320,9 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
         const bucketed = Math.round(level * MIC_LEVEL_BUCKETS) / MIC_LEVEL_BUCKETS
         setMicLevel((prev) => (prev === bucketed ? prev : bucketed))
       }
+      audioMonitorRef.current.onFeatures = (features) => {
+        audioFeaturesRef.current = features
+      }
       audioMonitorRef.current.start(stream)
     } catch {
       // Mic not available — visual-only mode
@@ -234,7 +332,9 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   const stopMic = useCallback(() => {
     audioMonitorRef.current.stop()
     audioMonitorRef.current.onLevel = null
+    audioMonitorRef.current.onFeatures = null
     micLevelRef.current = 0
+    audioFeaturesRef.current = { ...ZERO_FEATURES }
     setMicLevel(0)
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop())
@@ -545,6 +645,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
     conversation,
     micLevel,
     micLevelRef,
+    audioFeaturesRef,
     settings,
     availableVoices,
     updateSettings,

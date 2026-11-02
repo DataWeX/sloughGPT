@@ -190,6 +190,10 @@ class PerUserLoRAStore:
             # Save to disk
             self._save_adapter(adapter)
 
+            # Provenance: a fresh adapter has no parents — it is a lineage
+            # root. Stamped so later merges can cite it as an input.
+            self._stamp_provenance(adapter, parents=[])
+
             # Update DB
             self._update_metadata(adapter)
 
@@ -321,6 +325,29 @@ class PerUserLoRAStore:
             updated_at=adapter.updated_at,
             feedback_count=adapter.feedback_count,
         )
+
+    def _stamp_provenance(
+        self, adapter: UserAdapter, *, parents: list[str], extra: dict[str, Any] | None = None
+    ) -> None:
+        """Write a provenance sidecar for an adapter. Never raises.
+
+        Keeps provenance stamping in one place so every adapter write path
+        (create, aggregate) records the same fields. Best-effort: a failed
+        stamp is logged at debug and the adapter save still succeeds.
+        """
+        try:
+            from domain.infrastructure._internal.artifact_registry import write_provenance
+
+            adapter_path = self._get_adapter_path(adapter.user_id)
+            write_provenance(
+                adapter_path,
+                "adapter",
+                adapter_path.name,
+                parents=parents,
+                extra=extra,
+            )
+        except Exception as exc:  # noqa: BLE001 — provenance must never fail a save
+            logger.debug("Provenance stamp skipped for %s: %s", adapter.user_id, exc)
 
     def _update_metadata(self, adapter: UserAdapter):
         """Update adapter metadata in the MogDB store (upsert by user_id)."""
@@ -571,6 +598,7 @@ class PerUserLoRAStore:
             merged_W_b /= total_weight
 
         output_path = self.store_path / f"{output_name}.npz"
+        source_users = [a["user_id"] for a in top_adapters]
         np.savez(
             output_path,
             W_a=merged_W_a,
@@ -578,15 +606,38 @@ class PerUserLoRAStore:
             rank=self.adapter_rank,
             alpha=self.adapter_alpha,
             user_count=len(top_adapters),
-            source_users=[a["user_id"] for a in top_adapters],
+            source_users=source_users,
             aggregated_at=str(time.time()),
         )
+
+        # Provenance: record the parent adapters this merge was derived from,
+        # so the aggregated child can be traced back to its inputs + the code
+        # that built it. Append-only sidecar — never on the weight hot path.
+        provenance = None
+        try:
+            from domain.infrastructure._internal.artifact_registry import write_provenance
+
+            parent_ids = [f"adapter:{self._get_adapter_path(uid).name}" for uid in source_users]
+            provenance = write_provenance(
+                output_path,
+                "adapter",
+                output_path.name,
+                parents=parent_ids,
+                extra={
+                    "aggregated_from": "aggregate_best_adapters",
+                    "top_k": top_k,
+                    "min_feedback_count": min_feedback_count,
+                },
+            ).to_dict()
+        except Exception as exc:  # noqa: BLE001 — provenance must never fail a merge
+            logger.debug("Provenance stamp skipped for %s: %s", output_path, exc)
 
         result = {
             "output_path": str(output_path),
             "user_count": len(top_adapters),
             "total_feedback": sum(a["feedback_count"] for a in top_adapters),
-            "source_users": [a["user_id"] for a in top_adapters],
+            "source_users": source_users,
+            "provenance": provenance,
             "weights": {
                 "W_a": merged_W_a,
                 "W_b": merged_W_b,

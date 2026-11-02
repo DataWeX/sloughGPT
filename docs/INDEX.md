@@ -34,6 +34,7 @@ Single source of truth for navigation. Read this first.
 | Doc                         | Purpose                                                    |
 | --------------------------- | ---------------------------------------------------------- |
 | **FEATURES.md**             | Feature list                                               |
+| **moodboards/voice-warble.html** | Mood board #2 — voice warble (aura + echo stack, open in browser) |
 | **moodboards/widgets.html** | Mood board #1 — widgets (visual ideation, open in browser) |
 | **NAVIGATION_AND_SOULS.md** | Soul/personality system                                    |
 | **SHELL.md**                | CLI shell                                                  |
@@ -85,6 +86,7 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 | **USER_PERSONA.md**          | Who we build for                                                                                             |
 | **USER_JOURNEYS.md**         | User flows                                                                                                   |
 | **UX_FLOWS.md**              | UX patterns                                                                                                  |
+| **MOBILE_AI_UI_SOP.md**      | SOP: AI + mobile UI development practice                                                                     |
 | **DEVELOPER_GUIDE.md**       | Developer guide                                                                                              |
 | **DOC_VS_CODE_GAP_AUDIT.md** | API doc-vs-code audit + parity script                                                                        |
 

@@ -12,18 +12,21 @@ export function MagazineDarkPreview() {
         <SectionHeader number="07" title="Dark Mode Preview" />
 
         <div
-          className="magazine-card rounded-lg border p-6"
+          className="magazine-card magazine-dark-preview rounded-lg border p-6"
           style={{
-            backgroundColor: 'rgb(17, 15, 24)',
-            borderColor: 'rgb(52, 46, 72)',
+            backgroundColor: 'rgb(var(--background))',
+            borderColor: 'rgb(var(--border))',
           }}
         >
           <div className="space-y-4">
             <div className="flex items-baseline justify-between">
-              <h3 className="text-base font-medium" style={{ color: 'rgb(238, 234, 248)' }}>
+              <h3 className="text-base font-medium" style={{ color: 'rgb(var(--foreground))' }}>
                 Dark Mode Palette
               </h3>
-              <span className="font-mono text-[10px]" style={{ color: 'rgb(150, 140, 172)' }}>
+              <span
+                className="font-mono text-[10px]"
+                style={{ color: 'rgb(var(--muted-foreground))' }}
+              >
                 html.dark
               </span>
             </div>
@@ -45,8 +48,8 @@ export function MagazineDarkPreview() {
                 type="button"
                 className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
                 style={{
-                  backgroundColor: 'rgb(192, 170, 244)',
-                  color: 'rgb(25, 22, 36)',
+                  backgroundColor: 'rgb(var(--primary))',
+                  color: 'rgb(var(--primary-foreground))',
                 }}
               >
                 Primary Button
@@ -55,8 +58,8 @@ export function MagazineDarkPreview() {
                 type="button"
                 className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
                 style={{
-                  borderColor: 'rgb(52, 46, 72)',
-                  color: 'rgb(238, 234, 248)',
+                  borderColor: 'rgb(var(--border))',
+                  color: 'rgb(var(--foreground))',
                 }}
               >
                 Outline Button
@@ -64,8 +67,8 @@ export function MagazineDarkPreview() {
               <span
                 className="rounded-md px-2 py-0.5 text-[10px] font-medium"
                 style={{
-                  backgroundColor: 'rgb(72, 192, 140)',
-                  color: 'rgb(25, 22, 36)',
+                  backgroundColor: 'rgb(var(--success))',
+                  color: 'rgb(var(--primary-foreground))',
                 }}
               >
                 Success Badge
@@ -73,14 +76,14 @@ export function MagazineDarkPreview() {
               <span
                 className="rounded-md px-2 py-0.5 text-[10px] font-medium"
                 style={{
-                  backgroundColor: 'rgb(240, 176, 130)',
-                  color: 'rgb(25, 22, 36)',
+                  backgroundColor: 'rgb(var(--accent))',
+                  color: 'rgb(var(--primary-foreground))',
                 }}
               >
                 Accent Badge
               </span>
             </div>
-            <p className="text-xs" style={{ color: 'rgb(150, 140, 172)' }}>
+            <p className="text-xs" style={{ color: 'rgb(var(--muted-foreground))' }}>
               Body text in muted foreground. Warm, deep charcoal-violet with vibrant lilac accents.
             </p>
           </div>

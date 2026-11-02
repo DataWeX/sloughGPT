@@ -1,11 +1,42 @@
-/**
- * Shared formatters and chart-color tokens for the Consciousness Dashboard.
- *
- * These are module-level constants with no React or IO dependency, so they
- * live apart from the panels: `dashboard-evolution.tsx` and
- * `dashboard-state.tsx` both paint series with the same colors, and the
- * header, metrics and episode panels all format timestamps the same way.
- */
+// Shared data shapes, chart palettes, and formatters for the consciousness
+// dashboard. Extracted from page.tsx by the page-decomposition refactor;
+// everything here is pure — no React, no controllers.
+
+export interface Episode {
+  timestamp: number
+  input_text: string
+  self_insight: string
+  growth_delta: number
+  qualia: Record<string, number>
+}
+
+export interface QualiaPoint {
+  timestamp: number
+  valence: number
+  arousal: number
+  novelty: number
+  coherence: number
+}
+
+export interface BeliefsPoint {
+  timestamp: number
+  step: number
+  competence: number
+  helpfulness: number
+  creativity: number
+  accuracy: number
+  empathy: number
+}
+
+export interface EvalReport {
+  overall_score: number
+  diagnostics: string[]
+  [key: string]: unknown
+}
+
+export type BeliefsChartPoint = BeliefsPoint & { time: string }
+export type QualiaChartPoint = QualiaPoint & { time: string }
+export type GrowthChartPoint = { time: string; growth: number; cumulative: number }
 
 // Chart series routed through the theme tokens — chart-N follows the active
 // theme/palette, so the dashboard never hardcodes a hue of its own.

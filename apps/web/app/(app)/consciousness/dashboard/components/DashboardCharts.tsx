@@ -1,24 +1,9 @@
 'use client'
 
-/**
- * The Evolution section: beliefs, qualia and growth charts.
- *
- * Chart series are derived here from the raw history payloads — timestamps get
- * their display labels and episodes get their cumulative growth — so the page
- * never has to know how a chart wants its data shaped.
- */
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+// Evolution charts: beliefs line chart, qualia area chart, growth trajectory.
+// Extracted from page.tsx by the page-decomposition refactor. Series colors
+// come from dashboard-data (theme chart tokens), never hardcoded hues.
+
 import {
   Card,
   CardContent,
@@ -27,51 +12,40 @@ import {
   CardTitle,
   SectionHeader,
 } from '@sloughgpt/strui'
-import type { Episode, QualiaPoint, BeliefsPoint } from '@/hooks/useConsciousnessDashboard'
-import { BELIEF_COLORS, QUALIA_COLORS, formatTime } from './dashboard-format'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+} from 'recharts'
+import {
+  BELIEF_COLORS,
+  QUALIA_COLORS,
+  type BeliefsChartPoint,
+  type GrowthChartPoint,
+  type QualiaChartPoint,
+} from '../dashboard-data'
 
-interface DashboardEvolutionProps {
-  qualiaHistory: QualiaPoint[]
-  beliefsHistory: BeliefsPoint[]
-  episodes: Episode[]
+interface DashboardChartsProps {
+  beliefsData: BeliefsChartPoint[]
+  qualiaData: QualiaChartPoint[]
+  growthData: GrowthChartPoint[]
 }
 
-const CHART_TOOLTIP_STYLE = {
-  backgroundColor: 'rgb(var(--card))',
-  border: '1px solid rgb(var(--border))',
-  borderRadius: '8px',
-  fontSize: '12px',
-}
-
-const EMPTY_SERIES_MESSAGE =
-  'Need at least 2 data points. Chat with consciousness enabled to generate data.'
-
-export function DashboardEvolution({ qualiaHistory, beliefsHistory, episodes }: DashboardEvolutionProps) {
-  // Qualia chart data with time labels
-  const qualiaData = qualiaHistory.map((q) => ({
-    ...q,
-    time: formatTime(q.timestamp),
-  }))
-
-  // Beliefs chart data with time labels
-  const beliefsData = beliefsHistory.map((b) => ({
-    ...b,
-    time: formatTime(b.timestamp),
-  }))
-
-  // Growth data from episodes
-  const growthData = episodes.map((ep) => ({
-    time: formatTime(ep.timestamp),
-    growth: ep.growth_delta,
-    cumulative: episodes
-      .slice(0, episodes.indexOf(ep) + 1)
-      .reduce((sum, e) => sum + e.growth_delta, 0),
-  }))
-
+export function DashboardCharts({ beliefsData, qualiaData, growthData }: DashboardChartsProps) {
   return (
     <>
-      <SectionHeader title="Evolution" description="Beliefs, qualia, and growth over interactions" />
-
+      {/* Evolution */}
+      <SectionHeader
+        title="Evolution"
+        description="Beliefs, qualia, and growth over interactions"
+      />
       <Card>
         <CardHeader>
           <CardTitle>Beliefs Evolution</CardTitle>
@@ -87,8 +61,19 @@ export function DashboardEvolution({ qualiaHistory, beliefsHistory, episodes }: 
                   tick={{ fontSize: 10 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
-                <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <YAxis
+                  domain={[0, 1]}
+                  tick={{ fontSize: 10 }}
+                  stroke="rgb(var(--muted-foreground))"
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgb(var(--card))',
+                    border: '1px solid rgb(var(--border))',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
+                />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 {Object.entries(BELIEF_COLORS).map(([key, color]) => (
                   <Line
@@ -105,7 +90,7 @@ export function DashboardEvolution({ qualiaHistory, beliefsHistory, episodes }: 
             </ResponsiveContainer>
           ) : (
             <div className="flex h-48 sm:h-64 items-center justify-center text-sm text-muted-foreground">
-              {EMPTY_SERIES_MESSAGE}
+              Need at least 2 data points. Chat with consciousness enabled to generate data.
             </div>
           )}
         </CardContent>
@@ -126,8 +111,19 @@ export function DashboardEvolution({ qualiaHistory, beliefsHistory, episodes }: 
                   tick={{ fontSize: 10 }}
                   stroke="rgb(var(--muted-foreground))"
                 />
-                <YAxis domain={[-1, 1]} tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <YAxis
+                  domain={[-1, 1]}
+                  tick={{ fontSize: 10 }}
+                  stroke="rgb(var(--muted-foreground))"
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgb(var(--card))',
+                    border: '1px solid rgb(var(--border))',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
+                />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 {Object.entries(QUALIA_COLORS).map(([key, color]) => (
                   <Area
@@ -144,7 +140,7 @@ export function DashboardEvolution({ qualiaHistory, beliefsHistory, episodes }: 
             </ResponsiveContainer>
           ) : (
             <div className="flex h-48 sm:h-64 items-center justify-center text-sm text-muted-foreground">
-              {EMPTY_SERIES_MESSAGE}
+              Need at least 2 data points. Chat with consciousness enabled to generate data.
             </div>
           )}
         </CardContent>
@@ -160,9 +156,20 @@ export function DashboardEvolution({ qualiaHistory, beliefsHistory, episodes }: 
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={growthData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
-                <XAxis dataKey="time" tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  stroke="rgb(var(--muted-foreground))"
+                />
                 <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgb(var(--card))',
+                    border: '1px solid rgb(var(--border))',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
+                />
                 <Area
                   type="monotone"
                   dataKey="cumulative"
