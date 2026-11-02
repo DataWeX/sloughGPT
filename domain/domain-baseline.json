@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "37d1fb1c2b10908aa96210e954f7026b9fe31555",
+    "recorded_commit": "9373e5f729479a327d415719b239fb472b9c82d1",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -301,7 +301,7 @@
       "consumers": ["tests/", "domain/core/", "domain/inference/"],
       "note": "persona/soul state (consciousness-adjacent, grandfathered name)",
       "debt": null,
-      "tree_hash": "39ce44428c2da0198667fafea6fd5337cc12e868"
+      "tree_hash": "e1070b5bc1956cc8a267daa353dd11aeb2738193"
     },
     "testing": {
       "class": "feature",
