@@ -83,6 +83,45 @@ class TestProbeOnce:
         finally:
             fx.teardown()
 
+    def test_reset_serves_the_new_probe_not_a_stale_completion_event(self, monkeypatch):
+        """reset_accelerator() must rebind the MODULE-LEVEL completion event.
+
+        Regression found while landing this port onto main (2026-11-02): the
+        rebind `_PROBE_DONE = threading.Event()` was written without
+        `_PROBE_DONE` in the function's `global` statement, so it created a
+        LOCAL and the module kept epoch 1's **already-set** event. Every
+        post-reset `get_accelerator()` then saw `wait()` return immediately
+        with `_BACKEND` still None (the new probe had not finished yet),
+        printed "probe failed", and latched the CPU fallback — CUDA silently
+        dropped for the rest of the process. `test_reset_allows_fresh_reprobe`
+        stayed green because it only counts probe calls; this asserts which
+        backend was actually served.
+        """
+
+        class _Sentinel(gpu_mod._CPUBackend):
+            """Distinguishable from the CPU fallback (type is _CPUBackend)."""
+
+        probe_result = _Sentinel()
+
+        def slow_probe():
+            # Slow enough that a STALE (already-set) completion event cannot be
+            # masked by the new probe finishing first — the race is real: a
+            # trivial fake detector won it and hid the bug.
+            time.sleep(0.05)
+            return probe_result
+
+        fx = _ProbeFixture(monkeypatch, slow_probe)
+        try:
+            assert get_accelerator() is probe_result
+            reset_accelerator()
+            assert get_accelerator() is probe_result, (
+                "post-reset call served the CPU fallback: the stale epoch-1 "
+                "completion event answered before the new probe finished"
+            )
+            assert len(fx.calls) == 2
+        finally:
+            fx.teardown()
+
 
 class TestBoundedWait:
     def test_hung_probe_serves_cpu_fallback_within_bound(self, monkeypatch):

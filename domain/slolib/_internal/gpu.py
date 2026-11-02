@@ -175,7 +175,13 @@ def prewarm_accelerator() -> None:
 
 
 def reset_accelerator() -> None:
-    global _BACKEND, _PROBE_GEN, _PROBE_STARTED, _PROBE_LATCHED, _CPU_FALLBACK
+    # _PROBE_DONE MUST be in this list: without it the rebind below creates a
+    # function-local and the module keeps the previous epoch's already-SET
+    # event, so the next get_accelerator() sees wait() return instantly with
+    # _BACKEND still None and latches the CPU fallback — CUDA silently gone for
+    # the process (found 2026-11-02 when this probe landed on main; the fork's
+    # suite was green because it counted probe calls, not served backends).
+    global _BACKEND, _PROBE_GEN, _PROBE_STARTED, _PROBE_LATCHED, _CPU_FALLBACK, _PROBE_DONE
     with _PROBE_LOCK:
         _PROBE_GEN += 1  # discard any in-flight probe from the old epoch
         _BACKEND = None
