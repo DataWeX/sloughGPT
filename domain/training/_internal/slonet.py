@@ -26,6 +26,7 @@ import numpy as np
 from domain.inference._internal.forward_pass import ForwardPassResult
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
+from domain.infrastructure._internal.kv_cache.prefix_cache import PrefixCache
 from domain.shared import align_dim_ff, find_repo_root  # noqa: F401 — kept for compatibility
 
 logger = logging.getLogger("slo.slonet")
@@ -5735,6 +5736,12 @@ class SloTransformer(SloNet):
         self.max_seq_len = max_seq_len
         self.tie_weights = tie_weights
         self._kv_caches: list[tuple[np.ndarray, np.ndarray] | None] = [None] * n_layer
+        # Rung A (card 20261102_023531): a KV prefix belongs to the *tokens*,
+        # not to the session id that happened to produce it, so two clients
+        # sharing a system prompt share the prefill. Weights-scoped because
+        # K/V is a function of the weights: a swap drops the table with the
+        # instance. ``SLO_KV_PREFIX_CACHE=0`` turns it off on a live box.
+        self._prefix_cache: PrefixCache | None = PrefixCache.from_env()
 
         # Absolute positional embedding (GPT-2 style, optional)
         self.pos_emb: SloEmbedding | None = None
@@ -6064,6 +6071,14 @@ class SloTransformer(SloNet):
         else:
             start = 0
 
+        if start == 0 and self._prefix_cache is not None:
+            # Rung A: the same token prefix arriving from a DIFFERENT session or
+            # route. Token-exact by construction — the table compares ids, so it
+            # can only resume on a sequence whose K/V was actually computed.
+            state, start = self._adopt_cached_prefix(
+                state, input_ids, prompt_len, n_blocks, nkv, head_dim, total_len, use_kvq
+            )
+
         if start == 0:
             if state is None:
                 state = NumpyKVState()
@@ -6089,6 +6104,120 @@ class SloTransformer(SloNet):
             state.kv_len,
             start,
         )
+
+    # ── cross-session prefix sharing (card 20261102_023531) ───────────────
+
+    def _adopt_cached_prefix(
+        self,
+        state,
+        input_ids: np.ndarray,
+        prompt_len: int,
+        n_blocks: int,
+        nkv: list[int],
+        head_dim: int,
+        total_len: int,
+        use_kvq: bool,
+    ):
+        """Install a prefix cached by *another* session or route into ``state``.
+
+        Returns ``(state, start)``; ``start`` is 0 on any miss, so the caller
+        falls through to a normal full prefill. This is the one place the model
+        touches the table, and every rejection is total and silent: a wrong
+        adopt produces fluent wrong output, so anything that does not verify
+        exactly is a miss. Cheaper to be slow than to be plausible.
+
+        The prefix is **copied** into buffers this state owns (``bind`` allocates
+        them), never aliased, because generation writes at ``start`` and beyond —
+        aliasing would let one session overwrite the snapshot other sessions read.
+        """
+        cache = self._prefix_cache
+        if cache is None:
+            return state, 0
+
+        found = cache.match(input_ids)
+        if found is None:
+            return state, 0
+        snap, matched = found
+
+        # A model swapped under the table: dims or quantize mode changed, so the
+        # stored K/V was computed by different weights. Never transplant it.
+        if snap.n_layers != n_blocks or snap.head_dim != head_dim:
+            return state, 0
+        if snap.quantized != use_kvq:
+            return state, 0
+        if use_kvq and any(s is None for s in snap.sk):
+            return state, 0
+        if snap.filled < matched:
+            return state, 0
+
+        # Same rule as a session resume: the final prompt token's logits were
+        # never stored, so recomputing one token is the contract.
+        cut = min(matched, prompt_len - 1)
+        if cut < 1:
+            return state, 0
+
+        if state is None:
+            state = NumpyKVState()
+        state.backend.bind(n_blocks, total_len, nkv, head_dim, use_kvq)
+        for i in range(n_blocks):
+            state.kv_buf_k[i][:, :cut] = snap.k[i][:, :cut]
+            state.kv_buf_v[i][:, :cut] = snap.v[i][:, :cut]
+            if use_kvq:
+                state.kv_scale_k[i][:, :cut] = snap.sk[i][:, :cut]
+                state.kv_scale_v[i][:, :cut] = snap.sv[i][:, :cut]
+        state.backend.lens[:] = [cut] * n_blocks
+        state.prev_ids = np.array(snap.ids[:, :cut], copy=True)
+        return state, cut
+
+    def _prefix_harvest(self, ids, k, v, sk, sv, filled: int, quantized: bool) -> None:
+        """Offer a just-finished generation's prefix to the cross-session table.
+
+        Called at generation *end*, deliberately not on the next request: the
+        payoff belongs to a different session that shares the prefix, and a
+        one-shot client never comes back to trigger a lazy harvest. An abandoned
+        stream is therefore not harvested — a miss costs latency, never
+        correctness, so that is the right side to fail on.
+
+        Takes the raw buffers rather than a ``kv_state`` on purpose: the
+        headline client is the *session-less* one (``kv_state is None``, the
+        normal ``/v1`` call). Harvesting only states would mean only sessions
+        contribute, and a session already resumes from its own KV — the table
+        would save nothing for anyone. So every finished generation offers its
+        prefix, session or not.
+
+        A cache must never fail a generation: everything is swallowed and the
+        table simply misses next time. A cache that raises on the hot path is
+        worse than no cache.
+        """
+        cache = self._prefix_cache
+        if cache is None or ids is None or not k or k[0] is None:
+            return
+        try:
+            cache.store(
+                ids,
+                k,
+                v,
+                sk,
+                sv,
+                filled=int(filled),
+                quantized=bool(quantized),
+            )
+        except Exception as e:  # pragma: no cover - defensive
+            logger.debug("prefix cache harvest skipped: %s", e)
+
+    def clear_prefix_cache(self) -> int:
+        """Drop every shared prefix (weights changed). Returns entries dropped."""
+        cache = self._prefix_cache
+        if cache is None:
+            return 0
+        n = len(cache)
+        cache.clear()
+        return n
+
+    def prefix_cache_stats(self) -> dict:
+        """Counters for the health/status surface; ``{}`` when disabled."""
+        cache = self._prefix_cache
+        return cache.get_stats() if cache is not None else {}
 
     def _generate_numpy_lora(
         self,
@@ -6923,6 +7052,15 @@ class SloTransformer(SloNet):
                 _gen_metrics.finalize()
                 if kv_state is not None:
                     kv_state.prev_ids = out_buf[:, : prompt_len + step + 1].copy()
+                self._prefix_harvest(
+                    out_buf,
+                    kv_buf_k,
+                    kv_buf_v,
+                    kv_scale_k,
+                    kv_scale_v,
+                    kv_len[0],
+                    _use_kvq,
+                )
                 return GenerateResult(out_buf[:, : prompt_len + step + 1], _gen_metrics)
 
         _gen_metrics.n_tokens = max_gen
@@ -6930,6 +7068,9 @@ class SloTransformer(SloNet):
         _gen_metrics.finalize()
         if kv_state is not None:
             kv_state.prev_ids = out_buf.copy()
+        self._prefix_harvest(
+            out_buf, kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len[0], _use_kvq
+        )
         return GenerateResult(out_buf, _gen_metrics)
 
     def generate_numpy_stream(
@@ -7454,6 +7595,15 @@ class SloTransformer(SloNet):
                     if kv_state is not None:
                         kv_state.prev_ids = out_buf[:, : prompt_len + step + 1].copy()
                     if next_id in _stop_ids and step > 0:
+                        self._prefix_harvest(
+                            out_buf,
+                            kv_buf_k,
+                            kv_buf_v,
+                            kv_scale_k,
+                            kv_scale_v,
+                            kv_len[0],
+                            _use_kvq,
+                        )
                         return
                     yield (next_id, logits) if return_logprobs else next_id
                     continue
@@ -7479,6 +7629,9 @@ class SloTransformer(SloNet):
             if next_id in _stop_ids and step > 0:
                 _gen_metrics.t_end = time.perf_counter()
                 _gen_metrics.finalize()
+                self._prefix_harvest(
+                    out_buf, kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len[0], _use_kvq
+                )
                 return
             if _gen_metrics.n_tokens == 0:
                 _gen_metrics.t_first_token = time.perf_counter()
@@ -7487,6 +7640,9 @@ class SloTransformer(SloNet):
 
         _gen_metrics.t_end = time.perf_counter()
         _gen_metrics.finalize()
+        self._prefix_harvest(
+            out_buf, kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len[0], _use_kvq
+        )
         self._last_stream_metrics = _gen_metrics
 
     def state_dict(self) -> dict[str, np.ndarray]:
@@ -7547,6 +7703,10 @@ class SloTransformer(SloNet):
                     min_d = min(p.data.shape[0], arr.shape[0])
                     p.data[:min_d] = arr[:min_d]
                     loaded.add(key)
+        if loaded:
+            # New weights invalidate every cached prefix: K/V is a function of
+            # the weights, so a reused snapshot would be fluent wrong output.
+            self.clear_prefix_cache()
         if strict and len(loaded) < len(state_dict):
             missing = [k for k in state_dict if k not in loaded]
         return missing

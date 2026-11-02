@@ -53,6 +53,27 @@ def _response_cache_snapshot() -> dict:
         return {}
 
 
+def _prefix_cache_snapshot() -> dict:
+    """Cross-session KV prefix-table stats for the status bar; never breaks health.
+
+    Same argument as ``_response_cache_snapshot``: a cache nobody can observe
+    becomes an unexplained latency cliff. This one has a second job — it proves
+    that *session-less* traffic is actually contributing prefixes, which is the
+    only way the table can ever save a prefill (a session already resumes from
+    its own KV). Absent model, foreign-process engine, or stats failure all
+    degrade to ``{}``.
+    """
+    try:
+        import state as server_state
+
+        model = server_state.model
+        stats = getattr(model, "prefix_cache_stats", None)
+        return stats() if callable(stats) else {}
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("prefix cache stats unavailable: %s", e)
+        return {}
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -820,6 +841,7 @@ class HealthRouter:
                 "memory_percent": None,
             }
         data["response_cache"] = _response_cache_snapshot()
+        data["kv_prefix_cache"] = _prefix_cache_snapshot()
         return success_response(data=data)
 
     def _build_health_snapshot(self, ctrl) -> dict:
