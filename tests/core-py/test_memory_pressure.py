@@ -303,3 +303,56 @@ class TestMemoryPressureMonitor:
         assert m._classify(85.0) == PressureLevel.WARNING
         m.configure(emergency=83.0)
         assert m._classify(85.0) == PressureLevel.EMERGENCY  # 85 >= 83
+
+
+class TestLastReading:
+    """The monitor must own the sample that produced the level.
+
+    Regression: `routers/inference.py` re-read `psutil.virtual_memory()`
+    when building its EMERGENCY message, so the text quoted a *fresh*
+    reading (56%) while the classification that blocked the request came
+    from an earlier one (96.1%). The monitor is the single source of
+    truth for pressure, so it must also be the single source of truth
+    for the number in the message.
+    """
+
+    def _mem(self, percent: float):
+        mem = MagicMock()
+        mem.percent = percent
+        mem.available = 1_000_000_000
+        mem.total = 16_000_000_000
+        return mem
+
+    def test_none_before_first_check(self):
+        assert MemoryPressureMonitor().last_reading is None
+
+    def test_records_the_reading_that_classified(self):
+        m = MemoryPressureMonitor()
+        with patch("psutil.virtual_memory", return_value=self._mem(96.1)):
+            level = m.check()
+        assert level == PressureLevel.EMERGENCY
+        reading = m.last_reading
+        assert reading is not None
+        assert reading["percent"] == pytest.approx(96.1)
+        assert reading["level"] == "emergency"
+
+    def test_interval_cache_keeps_the_triggering_reading(self):
+        """A cached `check()` answers from the earlier sample — so must the reading.
+
+        This is the exact production shape: classification at 10:49:10 on a
+        96.1% sample, a burst of requests inside the interval answered from
+        the cache, and memory back down to 56% by 10:50:19.
+        """
+        m = MemoryPressureMonitor(check_interval_s=999)
+        with patch("psutil.virtual_memory", return_value=self._mem(96.1)):
+            assert m.check() == PressureLevel.EMERGENCY
+        with patch("psutil.virtual_memory", return_value=self._mem(56.0)):
+            assert m.check() == PressureLevel.EMERGENCY
+        assert m.last_reading["percent"] == pytest.approx(96.1)
+
+    def test_reading_is_a_copy_not_live_state(self):
+        m = MemoryPressureMonitor()
+        with patch("psutil.virtual_memory", return_value=self._mem(96.1)):
+            m.check()
+        m.last_reading["percent"] = 0.0
+        assert m.last_reading["percent"] == pytest.approx(96.1)

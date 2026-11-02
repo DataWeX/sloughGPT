@@ -1016,3 +1016,44 @@ class TestModelStateReadiness:
 
         assert ms["ready"] is False
         assert ms["code"] == "E_MODEL_LOADING"
+
+
+class TestMemoryPressureMessage:
+    """The block message must quote the reading that triggered it.
+
+    Regression (card 20261101_110410, journal 2026-11-01): classification
+    fired at 10:49:10 on 96.1% RSS (19074 MB), then the message served at
+    10:50:19 said "System memory at 56%" because inference.py re-read
+    psutil instead of asking the monitor. A user reading 56% is told the
+    machine has plenty of memory while the request is refused — the
+    message actively contradicts the refusal.
+    """
+
+    def test_message_quotes_the_classifying_reading(self):
+        from apps.api.server.routers import inference as inf
+        from domain.infrastructure._internal.memory_pressure import PressureLevel
+
+        monitor = MagicMock()
+        monitor.check.return_value = PressureLevel.EMERGENCY
+        monitor.last_reading = {"percent": 96.1, "level": "emergency"}
+
+        # A later, unrelated reading — this is what the old code printed.
+        later = MagicMock()
+        later.percent = 56.0
+
+        with (
+            patch.object(inf, "_memory_pressure_cache", None),
+            patch.object(inf, "_memory_pressure_cache_ts", 0.0),
+            patch(
+                "domain.infrastructure.memory_pressure.get_memory_pressure_monitor",
+                return_value=monitor,
+            ),
+            patch("psutil.virtual_memory", return_value=later) as fresh_read,
+        ):
+            message = inf._check_memory_pressure()
+
+        assert message is not None
+        assert "96%" in message
+        assert "56%" not in message
+        # The fix is the removal of the second, contradicting read.
+        fresh_read.assert_not_called()
