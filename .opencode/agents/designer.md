@@ -27,6 +27,10 @@ this file never has to duplicate them:
 4. `.opencode/skills/component-state-completeness/SKILL.md` — required interactive
    states (hover/focus/active/disabled/loading/success)
 5. `.opencode/skills/responsive-design/SKILL.md` — breakpoint + touch-target rules
+6. `.opencode/skills/component-generation/SKILL.md` — how new React components
+   match existing `@sloughgpt/strui` patterns and TS conventions
+7. `.opencode/skills/moodboard/SKILL.md` — design-research/ideation pipeline when
+   the brief is open-ended (visual references and variant sketches, chat output)
 
 You own the criteria; you do not duplicate their tables here.
 
