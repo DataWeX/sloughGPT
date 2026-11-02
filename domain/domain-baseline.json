@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "9373e5f729479a327d415719b239fb472b9c82d1",
+    "recorded_commit": "92558bde0258aaa554491e6bc926ce258e608e79",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -139,7 +139,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/"],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "19850e1eab081ae90c3b6768c66281f76b249ce1"
+      "tree_hash": "734cdf2276c2afd82dc9cff14a23f1f3ba030b99"
     },
     "generation": {
       "class": "core-capability",
@@ -325,7 +325,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "17041734bbb71ae52ff56e4ee3156cbc5f671230"
+      "tree_hash": "84b425d2244f754f9d08440aa9b37fbe95c4fa3a"
     },
     "voice": {
       "class": "core-capability",
@@ -333,7 +333,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/core/", "domain/generation/"],
       "note": "TTS/phoneme serving + phoneme training hooks",
       "debt": null,
-      "tree_hash": "3be70d300e56f28351280f07e03a1979fe1a348f"
+      "tree_hash": "3365f21630554404a10a149a98e460d7b0de549d"
     }
   }
 }

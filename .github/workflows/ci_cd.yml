@@ -3,6 +3,11 @@ name: CI/CD
 on:
   push:
     branches: [main, develop]
+    # Same rule as CI: bookkeeping pushes do not need the build/deploy suite.
+    paths-ignore:
+      - ".kanban/**"
+      - "docs/**"
+      - "**.md"
   pull_request:
   release:
     types: [published]
@@ -10,7 +15,9 @@ on:
 
 concurrency:
   group: sloughgpt-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Cancel only superseded PR runs; a main run is a distinct commit that needs
+  # its own verdict (card 20261102_025758).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PYTHON_VERSION: "3.12"

@@ -149,19 +149,36 @@ def load_corpus(path) -> list[str]:
 
 
 def load_response_logs(log_dir) -> list[str]:
-    """Project chat response logs (responses_*.jsonl) into corpus texts.
+    """Project chat response logs into corpus texts.
 
-    Reads ResponseTracker's daily files: both assistant_response and
-    user_message become one flattened line each, deduped in first-seen order.
+    MogDB first for the canonical store (chronological docs); JSONL shards
+    otherwise — both paths dedupe assistant_response and user_message as one
+    flattened line each, in first-seen order.
     """
     import json
     from pathlib import Path
 
+    texts: list[str] = []
+    seen: set[str] = set()
+
+    def _add(record: dict) -> None:
+        for key in ("assistant_response", "user_message"):
+            text = " ".join(str(record.get(key) or "").split())
+            if text and text not in seen:
+                seen.add(text)
+                texts.append(text)
+
+    from domain.feedback._internal.response_tracker import read_response_docs
+
+    docs = read_response_docs(Path(log_dir))
+    if docs is not None:
+        for record in docs:
+            _add(record)
+        return texts
+
     directory = Path(log_dir)
     if not directory.is_dir():
         return []
-    texts: list[str] = []
-    seen: set[str] = set()
     for path in sorted(directory.glob("responses_*.jsonl")):
         for raw in path.read_text(encoding="utf-8").splitlines():
             raw = raw.strip()
@@ -171,11 +188,7 @@ def load_response_logs(log_dir) -> list[str]:
                 record = json.loads(raw)
             except ValueError:
                 continue
-            for key in ("assistant_response", "user_message"):
-                text = " ".join(str(record.get(key) or "").split())
-                if text and text not in seen:
-                    seen.add(text)
-                    texts.append(text)
+            _add(record)
     return texts
 
 

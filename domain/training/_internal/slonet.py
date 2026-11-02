@@ -6016,6 +6016,8 @@ class SloTransformer(SloNet):
         When ``state`` holds a completed output whose token prefix matches the
         start of ``input_ids``, the cached K/V for that shared prefix is kept
         and only the appended suffix is recomputed (``start`` = prefix length).
+        A full-prompt match resumes at ``prompt_len - 1`` — the last token's
+        logits are never stored, so contractually one token is recomputed.
         The buffers are grown in place when ``total_len`` exceeds the current
         capacity; the prefix data is preserved on growth.
 
@@ -6046,8 +6048,17 @@ class SloTransformer(SloNet):
             # it), so cap start at the actual cache fill length.
             cache_filled = state.kv_len[0] if state.kv_len else 0
             s = min(s, cache_filled)
-            if 0 < s < prompt_len:
-                start = s
+            # A FULL-prompt match (s == prompt_len) is not a degenerate case to
+            # be thrown away — it means every prompt token is already cached, so
+            # resume at prompt_len - 1 and recompute exactly one token. Logits
+            # for the final prompt token are never stored, and an incremental
+            # decode step is how the next token is produced anyway, so this is
+            # the same work a normal step does. Requiring strictly `s <
+            # prompt_len` re-prefilled the ENTIRE prompt on every identical
+            # repeat (~16 s for 482 tokens on the live box) while the K/V for
+            # nearly all of it sat in the session state (card 20261102_012822).
+            if 0 < s:
+                start = min(s, prompt_len - 1)
             else:
                 start = 0
         else:

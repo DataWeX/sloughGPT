@@ -10,6 +10,81 @@ export interface WhatsNewItem {
 
 export const whatsNewItems: WhatsNewItem[] = [
   {
+    id: 'workspace-switcher',
+    title: 'New workspace switcher',
+    description:
+      'Switching workspaces is now a lightweight inline switcher — faster to open and no dedicated pages to load.',
+    icon: '📁',
+    date: '2026-10-30',
+    tags: ['Navigation', 'UX'],
+  },
+  {
+    id: 'kv-cache-session',
+    title: 'Faster multi-turn API calls',
+    description:
+      'The /v1 chat/completions endpoint now accepts a session_id, so API clients reuse the KV-cache across turns instead of recomputing every request.',
+    icon: '⚡',
+    date: '2026-10-29',
+    tags: ['API', 'Performance'],
+  },
+  {
+    id: 'fail-closed-auth',
+    title: 'Security hardening',
+    description:
+      'Authentication now fails closed — if auth is misconfigured, requests are denied rather than allowed through. Safer defaults across the app.',
+    icon: '🔒',
+    date: '2026-10-28',
+    tags: ['Security'],
+  },
+  {
+    id: 'rag-chunking',
+    title: 'Better knowledge recall',
+    description:
+      'Knowledge injection now chunks documents with fine-grained character windows sized to the prompt budget — more relevant context in every chat.',
+    icon: '🧩',
+    date: '2026-10-24',
+    tags: ['Knowledge', 'AI'],
+  },
+  {
+    id: 'kanban-3d',
+    title: '3D kanban board',
+    description:
+      'An immersive 3D view of the project board with auto-fitting camera — switch view modes on the Kanban page to try it.',
+    icon: '🗂️',
+    date: '2026-10-23',
+    href: '/kanban',
+    tags: ['Page', 'Kanban'],
+  },
+  {
+    id: 'interactive-kanban',
+    title: 'Interactive kanban board',
+    description:
+      'Move cards between columns directly on the board — transitions are validated by the engine, and card notes are hash-chained for tamper evidence.',
+    icon: '✅',
+    date: '2026-10-22',
+    href: '/kanban',
+    tags: ['Kanban', 'UX'],
+  },
+  {
+    id: 'fast-boot',
+    title: 'Faster startup',
+    description:
+      'The app boots from a single /bootstrap request and the startup progress overlay stops polling as soon as the server is ready.',
+    icon: '🚀',
+    date: '2026-10-21',
+    tags: ['Performance', 'UX'],
+  },
+  {
+    id: 'chat-transcript',
+    title: 'Chat transcript redesign',
+    description:
+      'The chat transcript now uses a log-entry style layout with a reading gutter, and shows per-turn stream metrics under each response.',
+    icon: '📝',
+    date: '2026-10-16',
+    href: '/chat',
+    tags: ['Chat', 'UX'],
+  },
+  {
     id: 'whats-new-tour',
     title: 'Guided feature tour',
     description:

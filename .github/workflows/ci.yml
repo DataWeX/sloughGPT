@@ -3,13 +3,23 @@ name: CI
 on:
   push:
     branches: [main]
+    # Bookkeeping commits (kanban sync, docs) must not start the suite. Before
+    # this filter, parallel sessions pushing every 1-5 minutes meant main never
+    # finished a single run (card 20261102_025758).
+    paths-ignore:
+      - ".kanban/**"
+      - "docs/**"
+      - "**.md"
   pull_request:
     branches: [main]
   workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # PRs cancel their own superseded run. Main does NOT: every main run is a
+  # different commit and needs its own verdict, and cancelling it meant 24
+  # consecutive `cancelled` runs with no result for main.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   typecheck:
