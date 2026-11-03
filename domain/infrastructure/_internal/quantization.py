@@ -29,6 +29,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -823,41 +826,89 @@ class Quantine:
             extra={"tag": "INFRA"},
         )
 
+    #: Cap on DEFLATE inflation threads (override: SLO_QUANT_LOAD_WORKERS).
+    _DEFAULT_LOAD_WORKERS = min(8, os.cpu_count() or 4)
+
+    @classmethod
+    def _load_worker_count(cls, n_arrays: int) -> int:
+        """Threads to use for parallel npz inflation (never more than entries)."""
+        try:
+            cap = int(os.environ.get("SLO_QUANT_LOAD_WORKERS", ""))
+        except ValueError:
+            cap = 0
+        if cap <= 0:
+            cap = cls._DEFAULT_LOAD_WORKERS
+        return max(1, min(cap, n_arrays))
+
     def load_weights(self, path: str) -> dict[str, TensorInfo]:
         """Load quantized weight arrays from .npz archive.
+
+        The 338-entry Qwen2.5-0.5B archive is DEFLATE-compressed (505 MB raw /
+        421 MB stored, ratio only 1.15× — int8 weights are high entropy). One
+        zlib stream inflates at ~82 MB/s, so a serial loop costs ~8 s per boot.
+        zlib releases the GIL, so the entries are inflated concurrently, each
+        worker on its own ``NpzFile`` (a shared handle serialises reads through
+        ``zipfile``'s internal lock and buys nothing).
 
         Returns:
             dict of ``{tensor_name: TensorInfo}`` — ready for set_quantized_weight()
         """
-        data = np.load(path, allow_pickle=True)
-        result = {}
-        # Collect all unique tensor names (those without _meta_ prefix)
-        names = set()
-        for key in data:
-            if key.startswith("_meta_"):
-                names.add(key[len("_meta_") :])
-            else:
-                names.add(key)
-        for name in sorted(names):
-            meta_key = f"_meta_{name}"
-            if meta_key not in data:
+        t0 = time.monotonic()
+        with np.load(path, allow_pickle=True) as inventory:
+            keys = list(inventory.files)
+        names = sorted({k[len("_meta_") :] if k.startswith("_meta_") else k for k in keys})
+        meta_keys = set(keys)
+
+        workers = self._load_worker_count(len(names))
+        # Interleave rather than chunk: the handful of large tensors (lm_head
+        # alone is 136 MB) then spread across workers instead of serialising.
+        chunks = [names[i::workers] for i in range(workers)] if names else []
+
+        def _load_chunk(chunk: list[str]) -> dict[str, tuple[np.ndarray, QuantMeta]]:
+            loaded: dict[str, tuple[np.ndarray, QuantMeta]] = {}
+            with np.load(path, allow_pickle=True) as zf:
+                for name in chunk:
+                    meta_key = f"_meta_{name}"
+                    if meta_key not in meta_keys:
+                        continue
+                    meta = QuantMeta.from_dict(json.loads(str(zf[meta_key].item())))
+                    arr = np.asarray(zf[name])
+                    # np.load already hands back C-contiguous writable arrays;
+                    # the old unconditional .copy(order="C") was a redundant
+                    # 505 MB memcpy and a matching transient peak in RSS.
+                    if not arr.flags.c_contiguous:
+                        arr = np.ascontiguousarray(arr)
+                    loaded[name] = (arr, meta)
+            return loaded
+
+        if workers <= 1:
+            parts = [_load_chunk(names)]
+        else:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="quant-load") as pool:
+                parts = list(pool.map(_load_chunk, chunks))
+
+        flat: dict[str, tuple[np.ndarray, QuantMeta]] = {}
+        for part in parts:
+            flat.update(part)
+
+        result: dict[str, TensorInfo] = {}
+        for name in names:
+            if name not in flat:
                 logger.warning(
                     "Quantine: missing metadata for %s, skipping", name, extra={"tag": "INFRA"}
                 )
                 continue
-            meta_dict = json.loads(str(data[meta_key].item()))
-            meta = QuantMeta.from_dict(meta_dict)
-            arr = data[name]
-            # Ensure array is contiguous (npz may return read-only views)
-            arr = np.asarray(arr).copy(order="C")
+            arr, meta = flat[name]
             result[name] = TensorInfo(name=name, array=arr, meta=meta)
             # Track error metrics so summary() reflects the loaded weights
             self._error_report[name] = meta
-        data.close()
+
         logger.info(
-            "Quantine: loaded %d quantized weight arrays from %s",
+            "Quantine: loaded %d quantized weight arrays from %s in %.2fs (%d workers)",
             len(result),
             path,
+            time.monotonic() - t0,
+            workers,
             extra={"tag": "INFRA"},
         )
         return result

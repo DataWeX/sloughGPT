@@ -410,3 +410,87 @@ def test_suggest_format_without_avx2(monkeypatch):
         min_speed_ratio=0.0,
     )
     assert "format" in res
+
+
+# ---------------------------------------------------------------------------
+# Quantine.load_weights — parallel npz inflate (card 20261103_082215)
+# ---------------------------------------------------------------------------
+def _quant_roundtrip(path, n=6, bits=8):
+    """Quantize n arrays of different shapes, save, return the source infos."""
+    engine = Quantine(bits=bits, mode="asymmetric")
+    infos = {}
+    for i in range(n):
+        arr = (np.random.RandomState(i).randn(8 * i + 8, 16) * 3).astype(np.float32)
+        infos[f"blocks.{i}.w"] = engine.quantize(name=f"blocks.{i}.w", arr=arr)
+    engine.save_weights(str(path), infos)
+    return infos
+
+
+def test_load_weights_parallel_matches_serial(tmp_path, monkeypatch):
+    """Parallel inflation must produce byte-identical arrays + metadata."""
+    path = tmp_path / "model.quant.npz"
+    source = _quant_roundtrip(path, n=8)
+
+    monkeypatch.setenv("SLO_QUANT_LOAD_WORKERS", "1")
+    serial = Quantine().load_weights(str(path))
+
+    monkeypatch.setenv("SLO_QUANT_LOAD_WORKERS", "8")
+    parallel = Quantine().load_weights(str(path))
+
+    assert sorted(parallel) == sorted(serial) == sorted(source)
+    for name, info in parallel.items():
+        ref = serial[name]
+        assert info.array.dtype == ref.array.dtype
+        assert info.array.shape == ref.array.shape
+        assert np.array_equal(info.array, ref.array)
+        assert info.meta.scale == ref.meta.scale
+        assert info.meta.bits == ref.meta.bits
+        assert info.meta.original_shape == ref.meta.original_shape
+
+
+def test_load_weights_returns_contiguous_writable_arrays(tmp_path):
+    """Callers use the arrays directly in GEMM; the redundant copy is gone but
+    contiguity and writability must still hold."""
+    path = tmp_path / "model.quant.npz"
+    _quant_roundtrip(path)
+    loaded = Quantine().load_weights(str(path))
+    assert loaded
+    for info in loaded.values():
+        assert info.array.flags.c_contiguous
+        assert info.array.flags.writeable
+
+
+def test_load_weights_records_error_report(tmp_path):
+    path = tmp_path / "model.quant.npz"
+    source = _quant_roundtrip(path, n=3)
+    engine = Quantine()
+    loaded = engine.load_weights(str(path))
+    assert set(engine._error_report) == set(loaded)
+    assert len(loaded) == len(source)
+
+
+def test_load_weights_skips_tensor_without_metadata(tmp_path, caplog):
+    path = tmp_path / "model.quant.npz"
+    _quant_roundtrip(path, n=2)
+    # Add an array with no matching _meta_ entry.
+    with np.load(path, allow_pickle=True) as data:
+        arrays = {k: data[k] for k in data.files}
+    arrays["orphan"] = np.zeros((4, 4), dtype=np.int8)
+    np.savez_compressed(path, **arrays)
+
+    loaded = Quantine().load_weights(str(path))
+    assert "orphan" not in loaded
+    assert "orphan" not in Quantine()._error_report
+
+
+def test_load_worker_count_caps_and_overrides(monkeypatch):
+    monkeypatch.delenv("SLO_QUANT_LOAD_WORKERS", raising=False)
+    assert Quantine._load_worker_count(1000) == Quantine._DEFAULT_LOAD_WORKERS
+    assert Quantine._load_worker_count(2) == 2
+
+    monkeypatch.setenv("SLO_QUANT_LOAD_WORKERS", "3")
+    assert Quantine._load_worker_count(1000) == 3
+    assert Quantine._load_worker_count(1) == 1
+
+    monkeypatch.setenv("SLO_QUANT_LOAD_WORKERS", "not-a-number")
+    assert Quantine._load_worker_count(1000) == Quantine._DEFAULT_LOAD_WORKERS
