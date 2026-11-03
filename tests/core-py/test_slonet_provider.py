@@ -684,6 +684,32 @@ class TestGenerate:
         p = _make_provider()
         assert p.generate_batch([], max_tokens=3) == []
 
+    def test_missing_eos_id_is_not_substituted_with_token_zero(self):
+        """`eos_token_id or 0` made token 0 ("!" in Qwen) a stop token.
+
+        Any answer containing "!" would be truncated at that point. A missing
+        eos id must travel as None; chat_stop_ids still supplies the real
+        turn-end markers.
+        """
+        tok = MockTokenizer()
+        tok.eos_token_id = None
+        tok.chat_stop_ids = lambda: (7,)
+        model = MockModel()
+        seen = {}
+        original = model.generate_numpy
+
+        def spy(input_ids, **kwargs):
+            seen.update(kwargs)
+            return original(input_ids, **kwargs)
+
+        model.generate_numpy = spy
+        p = _make_provider(_model=model, _tokenizer=tok)
+
+        p.generate("hello", max_tokens=3)
+
+        assert seen["eos_token"] is None
+        assert 7 in tuple(seen["extra_stop_ids"])
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # tokenize / detokenize / count_tokens

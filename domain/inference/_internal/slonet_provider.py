@@ -1541,7 +1541,7 @@ class SloNetChatProvider:
             top_k=top_k,
             top_p=top_p,
             repetition_penalty=repetition_penalty,
-            eos_token=self._tokenizer.eos_token_id or 0,
+            eos_token=self._tokenizer.eos_token_id,
             extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
         )
         return self._tokenizer.decode(result[0].tolist())
@@ -1631,7 +1631,7 @@ class SloNetChatProvider:
             top_k=top_k,
             top_p=top_p,
             repetition_penalty=repetition_penalty,
-            eos_token=self._tokenizer.eos_token_id or 0,
+            eos_token=self._tokenizer.eos_token_id,
             extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
             kv_state=kv_state,
         )
@@ -1697,7 +1697,7 @@ class SloNetChatProvider:
 
         prompt = self._build_prompt(messages)
         token_ids = self._tokenizer.encode(prompt)
-        eos_id = self._tokenizer.eos_token_id or 0
+        eos_id = self._tokenizer.eos_token_id
         top_k = kwargs.get("top_k")
         top_p = kwargs.get("top_p")
         repetition_penalty = kwargs.get("repetition_penalty", 1.0)
@@ -1864,7 +1864,7 @@ class SloNetChatProvider:
 
         prompt_tokens = self._tokenizer.encode(prompt)
         input_ids = np.array([prompt_tokens], dtype=np.int64)
-        eos_id = self._tokenizer.eos_token_id or 0
+        eos_id = self._tokenizer.eos_token_id
 
         # Copy model weights for reference
         m = self._get_model()
@@ -1944,7 +1944,7 @@ class SloNetChatProvider:
 
         prompt_tokens = self._tokenizer.encode(prompt)
         input_ids = np.array([prompt_tokens], dtype=np.int64)
-        eos_id = self._tokenizer.eos_token_id or 0
+        eos_id = self._tokenizer.eos_token_id
 
         generated_ids = []
         buffer = ""

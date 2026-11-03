@@ -339,7 +339,7 @@ class SlonetDevice(Device):
             top_k=int(top_k) if top_k is not None else None,
             top_p=float(top_p) if top_p is not None else None,
             repetition_penalty=float(repetition_penalty),
-            eos_token=self._provider._tokenizer.eos_token_id or 0,
+            eos_token=self._provider._tokenizer.eos_token_id,
         )
         return result[0]
 
