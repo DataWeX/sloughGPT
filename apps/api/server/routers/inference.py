@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from collections.abc import AsyncIterator, Collection
@@ -220,6 +221,38 @@ def _trim_messages_to_budget(
 
     kept.reverse()
     return system_msgs + kept
+
+
+def _append_volatile_context(messages: list[dict[str, Any]], block: str) -> list[dict[str, Any]]:
+    """Attach per-turn context to the LAST user turn instead of the prefix.
+
+    Context used to be folded into the system prompt and inserted at index 0,
+    which means the token prefix changed on every request. That silently
+    defeats cross-turn KV reuse — ``_resolve_kv_state`` and ``PrefixCache``
+    both match on prefix tokens, so a changing head re-prefills the whole
+    prompt (measured: 43.0 s cold vs 1.26 s warm on a 482-token prompt).
+
+    Retrieval results, learned facts and RAG blocks are all per-turn by
+    nature, so they belong at the tail: the head stays byte-identical per
+    session and the facts still reach the model in the same request.
+
+    Mutates and returns ``messages``. Handles both string content and the
+    multi-part list content used for image requests.
+    """
+    if not block:
+        return messages
+
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") != "user":
+            continue
+        content = messages[i].get("content")
+        if isinstance(content, list):
+            content.append({"type": "text", "text": block})
+        else:
+            base = content if isinstance(content, str) else str(content or "")
+            messages[i]["content"] = f"{base}\n\n{block}" if base.strip() else block
+        return messages
+    return messages
 
 
 _memory_pressure_cache: str | None = None
@@ -467,6 +500,28 @@ _META_WEIGHT_BOUNDS: dict[str, tuple[float, float]] = {
 }
 
 
+# Feedback must steer *context*, not sampling. `domain/context` owns that:
+# TraitWeightsConfig is clamped to [0,1] by construction and its managers
+# render prompt text, which is readable and reversible per request. This
+# sampler-side nudge duplicates that responsibility one layer down, where an
+# unbounded integrator turned 473 thumbs-up into `repetition_penalty 0.8` —
+# a value that REWARDS already-emitted tokens, so a finished answer replayed
+# until `max_tokens` (card 20261102_001621). Off by default; set
+# SLO_META_WEIGHT_NUDGE=1 to restore the old behaviour while the context path
+# is measured.
+_META_WEIGHT_NUDGE_ENV = "SLO_META_WEIGHT_NUDGE"
+_META_WEIGHT_NUDGE_DEFAULT = "0"
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def _meta_weight_nudge_enabled() -> bool:
+    """Whether feedback may still move sampling parameters."""
+    return (
+        os.environ.get(_META_WEIGHT_NUDGE_ENV, _META_WEIGHT_NUDGE_DEFAULT).strip().lower()
+        in _TRUTHY
+    )
+
+
 def _apply_meta_weights(
     temperature: float,
     top_p: float,
@@ -490,6 +545,13 @@ def _apply_meta_weights(
     derived one.
 
     Returns a dict of parameters to pass to the provider.
+
+    Disabled by default: ``SLO_META_WEIGHT_NUDGE=0`` returns the caller's
+    parameters untouched. Feedback steering belongs to the context stack
+    (``domain/context`` trait weights -> ``ContextCore`` -> prompt), where the
+    space is bounded [0,1] and the effect is readable text rather than a
+    sampler corner every request inherits. Set the env var to ``1`` to restore
+    the sampler-side nudge for A/B measurement.
     """
     import time
 
@@ -499,6 +561,9 @@ def _apply_meta_weights(
         "top_k": top_k,
         "repetition_penalty": repetition_penalty,
     }
+
+    if not _meta_weight_nudge_enabled():
+        return dict(requested)
     cache_key = f"{user_id}:{hash(user_message)}"
     now = time.monotonic()
 
@@ -915,6 +980,24 @@ class InferenceRouter:
                 self._context_core = get_context_core()
             except ImportError:
                 return None
+            # Connect the trait-weight steering path (feedback -> trait
+            # weights -> managers -> ContextCore). It was designed and never
+            # wired: set_managers() had only test callers, so the frame
+            # carried no steering while a duplicate sampler-side integrator
+            # did run (card 20261103_071231). Fail-open — context steering is
+            # an enhancement, never a precondition for inference.
+            try:
+                from domain.context import ensure_managers
+
+                attached = ensure_managers(self._context_core)
+                if attached:
+                    logger.info(
+                        "ContextCore managers attached: %s",
+                        ",".join(sorted(attached)),
+                        extra={"tag": "INF"},
+                    )
+            except Exception as e:
+                logger.warning("Context manager wiring failed: %s", e)
         if (
             self._context_core
             and self._vector_store_ref
@@ -1987,17 +2070,18 @@ class InferenceRouter:
             except Exception as e:
                 logger.debug("Knowledge enrichment failed: %s", e)
 
+        # Per-turn context accumulates here and rides the LAST user turn (see
+        # _append_volatile_context) — never the system prompt, which is the
+        # token prefix every cross-turn KV reuse matches on.
+        volatile_blocks: list[str] = []
+
         all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
         if all_knowledge:
             k_text = "\n".join(f"- {k}" for k in all_knowledge)
-            system_prompt = (
-                f"{system_prompt}\n\nUse the following context to answer:\n{k_text}"
-                if system_prompt
-                else f"Use the following context to answer:\n{k_text}"
-            )
+            volatile_blocks.append(f"Use the following context to answer:\n{k_text}")
 
         # Production RAG — retrieve relevant context from ingested documents
-        # and inject it as a leading system block (gated on req.use_rag).
+        # and attach it to the volatile tail (gated on req.use_rag).
         if req.use_rag:
             try:
                 from domain.cognition import is_rag_service_ready
@@ -2017,7 +2101,7 @@ class InferenceRouter:
                                 len(rag_block),
                                 _RAG_CONTEXT_MAX_CHARS,
                             )
-                            messages.insert(0, {"role": "system", "content": rag_block})
+                            volatile_blocks.append(rag_block)
             except Exception as e:
                 logger.debug("RAG query skipped: %s", e)
 
@@ -2034,6 +2118,10 @@ class InferenceRouter:
             user_id=req.user_id or "default",
             explicit=req.model_fields_set,
         )
+        # Attach per-turn context to the last user turn BEFORE the budget trim,
+        # so the trimmer counts those tokens instead of the block arriving
+        # after the budget was already spent.
+        messages = _append_volatile_context(messages, "\n\n".join(volatile_blocks))
         messages = _trim_messages_to_budget(
             messages, _gen_config.max_context_length, req.max_tokens
         )

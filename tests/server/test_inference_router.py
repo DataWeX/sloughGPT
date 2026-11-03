@@ -1057,3 +1057,92 @@ class TestMemoryPressureMessage:
         assert "56%" not in message
         # The fix is the removal of the second, contradicting read.
         fresh_read.assert_not_called()
+
+
+class TestAppendVolatileContext:
+    """Per-turn context rides the LAST user turn, never the system prefix.
+
+    KV reuse matches on prefix tokens: ``_resolve_kv_state`` and PrefixCache
+    both compare head tokens. Folding knowledge/frame/RAG into the system
+    prompt changed the prefix on every request, so each turn re-prefilled the
+    whole prompt (measured 43.0s cold vs 1.26s warm on a 482-token prompt).
+    Retrieval results are per-turn by nature, so they belong at the tail.
+    """
+
+    @staticmethod
+    def _fn():
+        from apps.api.server.routers import inference as inf
+
+        return inf._append_volatile_context
+
+    def test_block_is_appended_to_the_last_user_turn(self):
+        append = self._fn()
+        messages = [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "answer"},
+            {"role": "user", "content": "second"},
+        ]
+
+        out = append(messages, "CONTEXT")
+
+        assert out[-1]["content"] == "second\n\nCONTEXT"
+        # Earlier turns are untouched — only the tail grows.
+        assert out[0]["content"] == "first"
+        assert out[1]["content"] == "answer"
+
+    def test_head_is_identical_across_turns_with_different_context(self):
+        """The actual regression: prefix stability, not string plumbing."""
+        append = self._fn()
+        head = {"role": "system", "content": "You are sloughGPT."}
+
+        turn_one = append([head, {"role": "user", "content": "q1"}], "fact A")
+        turn_two = append([head, {"role": "user", "content": "q2"}], "fact B")
+
+        assert turn_one[0] == turn_two[0], "system prefix drifted between turns"
+        assert "fact A" not in turn_one[0]["content"]
+        assert "fact B" not in turn_two[0]["content"]
+
+    @pytest.mark.parametrize("block", ["", None])
+    def test_empty_block_is_a_noop(self, block):
+        append = self._fn()
+        messages = [{"role": "user", "content": "hi"}]
+
+        assert append(messages, block) == [{"role": "user", "content": "hi"}]
+
+    def test_multipart_content_gets_an_extra_text_part(self):
+        append = self._fn()
+        messages = [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": "what is this?"}],
+            }
+        ]
+
+        out = append(messages, "CONTEXT")
+
+        assert isinstance(out[-1]["content"], list)
+        assert out[-1]["content"][-1] == {"type": "text", "text": "CONTEXT"}
+        assert out[-1]["content"][0]["text"] == "what is this?"
+
+    def test_no_user_message_is_a_noop(self):
+        append = self._fn()
+        messages = [{"role": "assistant", "content": "unprompted"}]
+
+        assert append(messages, "CONTEXT") == [{"role": "assistant", "content": "unprompted"}]
+
+    def test_trim_budget_counts_the_volatile_block(self):
+        """Attach before trimming, or the trimmer spends budget it cannot see."""
+        from apps.api.server.routers import inference as inf
+
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "u" * 40},
+        ]
+        block = "C" * 4000
+        inf._append_volatile_context(messages, block)
+
+        # Budget that fits the system prompt but not the volatile tail: the
+        # trimmer must see the tail and drop it rather than silently overflow.
+        trimmed = inf._trim_messages_to_budget(messages, max_context=100, max_new_tokens=10)
+
+        assert all("C" * 4000 not in str(m.get("content")) for m in trimmed)
