@@ -188,3 +188,38 @@ export const CONTRACTS = {
 } as const satisfies Record<string, ContractDescriptor>
 
 export type ContractName = keyof typeof CONTRACTS
+
+// ── Process-event contract — projection of training/process_events.py
+// (EVENT_SCHEMA / ACTION_SCHEMA / vocabularies). One declaration, two
+// halves: edit the Python schema, then regenerate — never edit here.
+
+/** Intents a projected action may carry (`ACTION_INTENTS`). */
+export type ProcessActionIntent = "recover" | "cancel" | "navigate" | "dismiss"
+
+/** One entry of an event's action surface (`ACTION_SCHEMA`). */
+export interface ProcessAction {
+  id: string
+  label: string
+  intent: ProcessActionIntent
+}
+
+/** Values the `state` field carries (`STATES`). */
+export type ProcessState = "interrupted" | "failed" | "running"
+
+/** Values the `event` field carries (`EVENTS`). */
+export type ProcessEventName = "interrupted" | "failed" | "running" | "auto_train_started" | "auto_resume_skipped"
+
+/** A projected process event — exactly `EVENT_SCHEMA`, nothing else. */
+export interface ProcessEvent {
+  event_id: string
+  kind: "training"
+  process_id: string
+  event: ProcessEventName
+  state: ProcessState
+  actions: ProcessAction[]
+  process_link: string
+  title: string
+  contract_version: number
+  name?: string
+  reason?: string
+}

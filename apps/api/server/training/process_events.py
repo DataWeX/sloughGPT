@@ -25,6 +25,14 @@ logger = logging.getLogger("slo")
 CONTRACT_VERSION = 1
 PROJECTOR_KIND = "training"
 
+# ── Vocabularies (card 20261102_110421) — the closed sets a projected
+# event may draw from. The TS projection (contracts.gen.ts) and the
+# dock's exhaustive tone map key off these; a new value must be declared
+# here first and the parity tests re-run against it.
+ACTION_INTENTS = ("recover", "cancel", "navigate", "dismiss")
+# Values the `state` field carries (job states that notify).
+STATES = ("interrupted", "failed", "running")
+
 # The process's real command surface, per state. Entries are structured
 # (id/label/intent) so consumers render actions instead of plain text and
 # dispatch goes through the normal controller layer. An action listed here
@@ -60,6 +68,48 @@ _TITLES: dict[str, str] = {
     "auto_resume_skipped": "Auto-resume skipped",
 }
 
+# Derived so the table cannot drift from the vocabulary it feeds: the
+# `event` field's values are exactly the titled events.
+EVENTS: tuple[str, ...] = tuple(_TITLES)
+
+# ── The one declaration of the envelope (card 20261102_110421) ────────
+# field -> (ts type, required). This is THE source for the event shape:
+# scripts/gen_ts_contracts.py projects it into contracts.gen.ts
+# (ProcessAction/ProcessEvent, all three frontend consumers) so the TS
+# half is generated, never hand-written; make_event rejects anything not
+# declared here at the single construction point. TS types may reference
+# the emitted aliases (ProcessAction[], ProcessState, ProcessEventName)
+# or the token PROJECTOR_KIND (resolved to its literal at generation).
+EVENT_SCHEMA: dict[str, tuple[str, bool]] = {
+    "event_id": ("string", True),
+    "kind": ("PROJECTOR_KIND", True),
+    "process_id": ("string", True),
+    "event": ("ProcessEventName", True),
+    "state": ("ProcessState", True),
+    "actions": ("ProcessAction[]", True),
+    "process_link": ("string", True),
+    "title": ("string", True),
+    "contract_version": ("number", True),
+    "name": ("string", False),
+    "reason": ("string", False),
+}
+
+_REQUIRED_FIELDS = frozenset(
+    f for f, (_t, required) in EVENT_SCHEMA.items() if required
+)
+_OPTIONAL_FIELDS = frozenset(
+    f for f, (_t, required) in EVENT_SCHEMA.items() if not required
+)
+
+# The action sub-object's declaration — same discipline as EVENT_SCHEMA:
+# scripts/gen_ts_contracts.py renders ProcessAction from this, and the
+# parity tests assert every table action matches it exactly.
+ACTION_SCHEMA: dict[str, tuple[str, bool]] = {
+    "id": ("string", True),
+    "label": ("string", True),
+    "intent": ("ProcessActionIntent", True),
+}
+
 
 def action_surface(state: str) -> list[dict[str, str]]:
     """The structured command surface for a process state (fresh copies)."""
@@ -82,7 +132,29 @@ def make_event(
     may project a different surface than its state name when the
     notification is about a transition (e.g. auto_train_started carries
     the running surface).
+
+    Contract (card 20261102_110421): the emitted keys are exactly
+    EVENT_SCHEMA's required fields, extras must be declared optional
+    fields, and event/state/surface must be in the declared vocabularies.
+    A producer that invents anything raises HERE — the single construction
+    point — instead of shipping a field the schema (and its generated TS
+    half) has never heard of.
     """
+    unknown = set(extra) - _OPTIONAL_FIELDS
+    if unknown:
+        raise ValueError(
+            f"undeclared event fields: {sorted(unknown)} — add them to EVENT_SCHEMA"
+        )
+    if state not in STATES:
+        raise ValueError(f"unknown state: {state!r} — add it to STATES")
+    if event not in EVENTS:
+        raise ValueError(f"unknown event: {event!r} — add a title to _TITLES")
+    effective_surface = surface or state
+    if effective_surface not in _ACTIONS_BY_STATE:
+        raise ValueError(
+            f"unknown action surface: {effective_surface!r} — "
+            "add it to _ACTIONS_BY_STATE"
+        )
     return {
         "event_id": f"{PROJECTOR_KIND}:{process_id}:{event}",
         "kind": PROJECTOR_KIND,

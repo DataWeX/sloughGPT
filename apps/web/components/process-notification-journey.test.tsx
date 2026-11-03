@@ -105,6 +105,7 @@ const BOOT_SNAPSHOT = {
       ],
       process_link: '/training/job/job-42',
       title: 'Training interrupted',
+      contract_version: 1,
       name: 'distill-run',
     },
   ],

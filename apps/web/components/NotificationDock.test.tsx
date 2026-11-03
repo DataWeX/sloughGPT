@@ -41,6 +41,7 @@ const event = (overrides: Partial<ProcessEvent> = {}): ProcessEvent => ({
   ],
   process_link: '/training/job/j1',
   title: 'Training interrupted',
+  contract_version: 1,
   ...overrides,
 })
 

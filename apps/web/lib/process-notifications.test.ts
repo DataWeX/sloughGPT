@@ -55,6 +55,7 @@ const interruptedEvent = (overrides: Partial<ProcessEvent> = {}): ProcessEvent =
   ],
   process_link: '/training/job/j1',
   title: 'Training interrupted',
+  contract_version: 1,
   ...overrides,
 })
 
@@ -108,13 +109,12 @@ describe('ingestProcessEvents — dedupe by event_id', () => {
     expect(notes[0].actions.map((a) => a.id)).toEqual(['cancel', 'view_logs'])
   })
 
-  it('drops events that the backend marks as resolved (empty action set + resolved)', () => {
+  it('drops settled events (empty action surface)', () => {
     ingestProcessEvents([
       interruptedEvent({
-        event: 'completed',
-        state: 'completed',
+        event: 'interrupted',
+        state: 'interrupted',
         actions: [],
-        resolved: true,
       }),
     ])
     expect(getProcessNotifications()).toHaveLength(0)
