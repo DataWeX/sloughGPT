@@ -53,6 +53,12 @@ jobs:
         run: ruff format --check packages/core-py/ apps/api/server/ --exclude '__pycache__'
       - name: Mypy type check
         run: mypy packages/core-py/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
+      # Build-context rot: a COPY source that is missing, or excluded by
+      # .dockerignore, kills `docker build` — caught here on every commit,
+      # because moving a directory breaks a Dockerfile without editing it
+      # (card 20261027_070731_infra-dockerfile-rot-gate).
+      - name: Dockerfile build-context check
+        run: python scripts/check_dockerfile_contexts.py
 
   # ─── Core Python tests (packages/core-py) ───────────────────────
   test-core-py:
