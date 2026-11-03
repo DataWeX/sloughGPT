@@ -961,7 +961,7 @@ class TestTryLazyGuardAutoload:
     def test_provider_creation_failure_returns_false(self):
         mod = self._import()
         mock_slonet = MagicMock()
-        mock_slonet.SloNetChatProvider.from_slnc.side_effect = RuntimeError("boom")
+        mock_slonet.SloNetChatProvider.lazy_from_slnc.side_effect = RuntimeError("boom")
         with (
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
@@ -977,7 +977,9 @@ class TestTryLazyGuardAutoload:
     def test_guard_creation_failure_still_succeeds(self):
         mod = self._import()
         mock_slonet = MagicMock()
-        mock_slonet.from_slnc.return_value = MagicMock(_model=MagicMock(), _tokenizer=MagicMock())
+        mock_slonet.lazy_from_slnc.return_value = MagicMock(
+            _model=MagicMock(), _tokenizer=MagicMock()
+        )
         with (
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
@@ -998,6 +1000,7 @@ class TestTryLazyGuardAutoload:
             patch("domain.models._internal.provider.setup_providers"),
             patch("controllers.models.get_models_controller"),
             patch("domain.infrastructure.server_state.get_server_state"),
+            patch.object(mod, "_start_parent_preload"),
         ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is True
 
@@ -1007,7 +1010,7 @@ class TestTryLazyGuardAutoload:
         guard = MagicMock()
         provider = MagicMock(_model=MagicMock(), _tokenizer=MagicMock())
         mock_slonet = MagicMock()
-        mock_slonet.SloNetChatProvider.from_slnc.return_value = provider
+        mock_slonet.SloNetChatProvider.lazy_from_slnc.return_value = provider
         mock_models = MagicMock()
         with (
             patch.dict("sys.modules", {"state": state}),
@@ -1032,6 +1035,7 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"domain.models._internal.provider": mock_models}),
             patch("controllers.models.get_models_controller") as mock_ctrl,
             patch("domain.infrastructure.server_state.get_server_state"),
+            patch.object(mod, "_start_parent_preload") as mock_preload,
         ):
             result = mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2"))
         assert result is True
@@ -1039,6 +1043,134 @@ class TestTryLazyGuardAutoload:
         guard.start.assert_called_once()
         mock_models.setup_providers.assert_called_once()
         mock_ctrl.return_value.adopt_process_guard.assert_called_once_with(guard, "gpt2")
+        # Header-only construction: the eager loader must never be touched, and
+        # the background materialiser is scheduled exactly once.
+        mock_slonet.SloNetChatProvider.lazy_from_slnc.assert_called_once()
+        mock_slonet.SloNetChatProvider.from_slnc.assert_not_called()
+        mock_preload.assert_called_once_with("gpt2")
+
+    def test_lazy_construction_leaves_model_none(self):
+        """Ready must mean 'provider installed', not '2.5 GB resident'."""
+        mod = self._import()
+        state = types.SimpleNamespace(model=None, provider=None, model_type=None, tokenizer=None)
+        provider = MagicMock(_model=None, _tokenizer=MagicMock())
+        mock_slonet = MagicMock()
+        mock_slonet.SloNetChatProvider.lazy_from_slnc.return_value = provider
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch(
+                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                return_value=Path("/fake"),
+            ),
+            patch("os.path.exists", return_value=True),
+            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
+            patch("domain.infrastructure.process_guard.ProcessGuard", return_value=MagicMock()),
+            patch(
+                "domain.infrastructure._internal.process_guard.resolve_memory_limit_mb",
+                return_value=64.0,
+            ),
+            patch(
+                "domain.infrastructure.model_registry.get_model_registry",
+                return_value=MagicMock(),
+            ),
+            patch.dict("sys.modules", {"domain.models._internal.provider": MagicMock()}),
+            patch("controllers.models.get_models_controller"),
+            patch("domain.infrastructure.server_state.get_server_state"),
+            patch.object(mod, "_start_parent_preload"),
+        ):
+            assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is True
+        assert state.provider is provider
+        assert state.model is None
+        assert state.tokenizer is provider._tokenizer
+
+    def _reset_preload_state(self, mod):
+        """Shutdown hook tests latch the module-level flag; start each clean."""
+        mod._shutting_down.clear()
+        mod._parent_preload_timer = None
+
+    def test_preload_publishes_materialised_model(self):
+        """The background preload flips model from None to resident."""
+        mod = self._import()
+        self._reset_preload_state(mod)
+
+        class _FakeProvider:
+            def __init__(self):
+                self._model = None
+                self.calls = 0
+
+            def materialize_model(self):
+                self.calls += 1
+                self._model = object()
+                return self._model
+
+        provider = _FakeProvider()
+        state = types.SimpleNamespace(model=None, provider=provider)
+        core = MagicMock()
+        with (
+            patch.dict("sys.modules", {"state": state}),
+            patch("domain.infrastructure.server_state.get_server_state", return_value=core),
+        ):
+            assert mod._preload_parent_weights("gpt2") is True
+        assert provider.calls == 1
+        assert state.model is provider._model
+        core.model.set.assert_called_once_with(provider._model)
+
+    def test_preload_without_provider_returns_false(self):
+        mod = self._import()
+        self._reset_preload_state(mod)
+        state = types.SimpleNamespace(model=None, provider=None)
+        with patch.dict("sys.modules", {"state": state}):
+            assert mod._preload_parent_weights("gpt2") is False
+
+    def test_preload_skipped_when_shutting_down(self):
+        mod = self._import()
+        self._reset_preload_state(mod)
+
+        class _Provider:
+            calls = 0
+
+            def materialize_model(self):  # pragma: no cover - must not run
+                self.calls += 1
+
+        provider = _Provider()
+        state = types.SimpleNamespace(model=None, provider=provider)
+        mod._shutting_down.set()
+        try:
+            with patch.dict("sys.modules", {"state": state}):
+                assert mod._preload_parent_weights("gpt2") is False
+        finally:
+            mod._shutting_down.clear()
+        assert provider.calls == 0
+
+    def test_cancel_parent_preload_cancels_pending_timer(self):
+        mod = self._import()
+        timer = MagicMock()
+        mod._parent_preload_timer = timer
+        try:
+            assert mod._cancel_parent_preload("test") is True
+        finally:
+            mod._shutting_down.clear()
+        timer.cancel.assert_called_once()
+        assert mod._parent_preload_timer is None
+        # Idempotent: nothing pending -> False, still latches the shutdown flag.
+        assert mod._cancel_parent_preload("test") is False
+        mod._shutting_down.clear()
+
+    def test_model_loaded_gate_accepts_provider_only(self):
+        """The lifecycle gate must agree with /health on the lazy path."""
+        mod = self._import()
+        orch = mod.StartupOrchestrator(FastAPI(), ServerConfig(autoload_model="off"))
+        with patch.dict(
+            "sys.modules", {"state": types.SimpleNamespace(model=None, provider=object())}
+        ):
+            assert orch._is_model_loaded() is True
+        with patch.dict(
+            "sys.modules", {"state": types.SimpleNamespace(model=object(), provider=None)}
+        ):
+            assert orch._is_model_loaded() is True
+        with patch.dict("sys.modules", {"state": types.SimpleNamespace(model=None, provider=None)}):
+            assert orch._is_model_loaded() is False
 
 
 # ── run() direct fallback (no lifecycle) ──────────────────────────────────────
