@@ -123,14 +123,16 @@ class TestGenerateEndpoint:
         assert kwargs["repetition_penalty"] == 1.1
 
     def test_generate_nudges_params_left_at_default(self, client, mock_provider, monkeypatch):
-        """Feedback may only move params the caller left at their default."""
+        """Feedback may only move params the caller left at their default.
+
+        The sampler-side nudge ships dark (SLO_META_WEIGHT_NUDGE=0, card
+        20261103_071231); this test asserts the nudge path, so it opts in
+        exactly like tests/test_meta_weights_clamp.py does. The dark default
+        is covered there by TestNudgeIsDarkByDefault.
+        """
         from domain.feedback import MetaWeights
 
-        # The sampler-side nudge ships dark (SLO_META_WEIGHT_NUDGE=0, card
-        # 20261102_001621); this test covers the endpoint plumbing of the
-        # kept A/B path, so open the gate explicitly.
         monkeypatch.setenv("SLO_META_WEIGHT_NUDGE", "1")
-
         with patch("domain.feedback.get_meta_weight_manager") as manager:
             manager.return_value.get_adjustment.return_value = MetaWeights(temperature=0.77)
             manager.return_value.neutral_weights = MetaWeights()
@@ -149,13 +151,15 @@ class TestGenerateEndpoint:
         assert kwargs["repetition_penalty"] == pytest.approx(1.15)
 
     def test_generate_telemetry_records_sent_temperature(self, client, mock_provider, monkeypatch):
-        """Telemetry must record what the provider actually received."""
+        """Telemetry must record what the provider actually received.
+
+        Nudge path -> opt in to SLO_META_WEIGHT_NUDGE=1 (see the sibling
+        test above); telemetry must then echo the nudged value, not the
+        request default.
+        """
         from domain.feedback import MetaWeights
 
-        # Same gate as the nudge test above: dark by default, =1 is the
-        # kept A/B path whose telemetry wiring this test verifies.
         monkeypatch.setenv("SLO_META_WEIGHT_NUDGE", "1")
-
         with (
             patch("domain.feedback.get_meta_weight_manager") as manager,
             patch("apps.api.server.routers.inference.capture") as capture_mock,

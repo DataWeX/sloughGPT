@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "b4a343b7a22e36c3f4e7c5a3870e486f051cb545",
+    "recorded_commit": "177a301677c4da84daf17be64073c8cc27479f95",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -161,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "94377df9766bee7164717dd04dfdc330aba33c21"
+      "tree_hash": "289805f5182b9163a62616b432e5199337534070"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -169,7 +169,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "f8692bc3113d14e60ede45a2f1238eb775376fcd"
+      "tree_hash": "4db4172ce6e343e8093dce7c67e090a742fb63c9"
     },
     "knowledge": {
       "class": "core-capability",

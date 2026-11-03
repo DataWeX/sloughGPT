@@ -680,6 +680,8 @@ class StartupOrchestrator:
                         exc_info=True,
                         extra={"tag": "START"},
                     )
+                # Runs inside the PGQ model-load worker (never the uvicorn
+                # loop), so the cold soul-index parse cannot starve the loop.
                 _sync_soul_traits()
                 logger.info(
                     "Inference engine ready: %s (subprocess mode)",

@@ -174,8 +174,23 @@ async def lifespan(app_inst: FastAPI):
 
         threading.Thread(target=_rag_init_and_ingest, daemon=True, name="rag-init").start()
 
-        # Start background daemons (moved from pre-uvicorn to post-startup)
-        _start_feedback_workflow()
+        # Warm the soul index off the critical path. SloManager no longer scans
+        # in __init__ (a trained .soul embeds ~41 MB of Adam optimizer state as
+        # JSON — ~2.2 s per file, 11 s observed on the 2026-11-03 cold start).
+        try:
+            from domain.inference._internal.slo_manager import warm_soul_index_async
+
+            warm_soul_index_async()
+        except Exception as e:
+            logger.debug("Soul index warm skipped: %s", e, extra={"tag": "START"})
+
+        # Start background daemons (moved from pre-uvicorn to post-startup).
+        # The feedback workflow parses/aggregates adapters before returning
+        # (observed ~9 s of the 40 s cold start), so it runs on a daemon thread
+        # like rag-init above — background work must not gate readiness.
+        threading.Thread(
+            target=_start_feedback_workflow, daemon=True, name="feedback-workflow"
+        ).start()
         _start_health_monitor()
         _start_watchdog()
 
