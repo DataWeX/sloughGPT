@@ -149,7 +149,7 @@ PUSH EAX
 PUSH EBX
 PUSH ECX
 MOV EBX, 10
-XOR ECX, 0
+XOR ECX, ECX
 
 .digit_loop:
 XOR EDX, EDX
@@ -314,10 +314,10 @@ INC ESI
 JMP .sieve_loop
 
 .sieve_done:
-; Display primes on VGA
+; Display primes on VGA — print each prime as decimal (multi-digit safe;
+; SIL is not a register this assembler encodes, so convert ESI properly)
 MOV ESI, 2
 MOV EDI, 0xB8000
-MOV AH, 0x0B
 
 .print_loop:
 CMP ESI, 51
@@ -325,12 +325,37 @@ JGE .done
 MOV AL, [sieve + ESI]
 TEST AL, AL
 JZ .skip
-MOV AL, SIL
-ADD AL, 48
+
+PUSH EBX
+PUSH ECX
+PUSH EDX
+MOV EAX, ESI
+MOV EBX, 10
+XOR ECX, ECX
+
+.digit_loop:
+XOR EDX, EDX
+DIV EBX
+ADD DL, 48
+PUSH EDX
+INC ECX
+TEST EAX, EAX
+JNZ .digit_loop
+
+MOV AH, 0x0B
+.write_loop:
+POP EDX
+MOV AL, DL
 STOSW
+LOOP .write_loop
+
 ; space
 MOV WORD [ES:EDI], 0x0B20
 ADD EDI, 2
+
+POP EDX
+POP ECX
+POP EBX
 
 .skip:
 INC ESI
@@ -471,3 +496,105 @@ INT 0x80
 MOV [0x5004], EAX
 HLT`,
 }
+
+// ── Pre-run showcase (card 20261102_014255, audit finding 1) ─────────────
+// What each sample program does BEFORE the first run, so the empty pre-run
+// state is legible. `output` values on kind:'captured' entries are REAL
+// outputs captured through the same X86VirtualSystem path apps/api's
+// /vm/run uses (harness /tmp/opencode/capture_showcase.py, run
+// 2026-11-03) — never invented. Programs with no textual output
+// (train / train-status return only EAX) are kind:'sample' and MUST stay
+// labeled as such: never present a sample as a live result.
+
+export type ShowcaseKind = 'captured' | 'sample'
+
+export interface ShowcaseEntry {
+  /** Key into DEFAULT_PROGRAMS — clicking the entry loads this source. */
+  name: string
+  /** One-line description of what the program does. */
+  description: string
+  /** Real captured output, or an explicitly-labeled sample (kind:'sample'). */
+  output: string
+  kind: ShowcaseKind
+  /** Extra honesty note (step budgets, sample semantics). */
+  note?: string
+}
+
+export const SHOWCASE: ShowcaseEntry[] = [
+  {
+    name: 'hello',
+    description: 'Write "Hello, VM!" to the VGA screen',
+    output: 'Hello, VM!',
+    kind: 'captured',
+  },
+  {
+    name: 'count',
+    description: 'Count 0–9, one digit at a time, to the VGA screen',
+    output: '0123456789',
+    kind: 'captured',
+  },
+  {
+    name: 'fib',
+    description: 'First 10 Fibonacci numbers, space-separated',
+    output: '0 1 1 2 3 5 8 13 21 34',
+    kind: 'captured',
+  },
+  {
+    name: 'sort',
+    description: 'Bubble-sort 8 shuffled bytes, display the sorted array',
+    output: '12345789',
+    kind: 'captured',
+  },
+  {
+    name: 'vga_color',
+    description: 'Rainbow stripe pattern across the whole screen (colored VGA)',
+    output:
+      '********************************************************************************\n********************************************************************************\n********************************************************************************\n…',
+    kind: 'captured',
+    note: 'All 25 rows need ~8,179 steps; the default 5,000 stops at ~16 rows (3 shown). The stripes are colors — run it to see them.',
+  },
+  {
+    name: 'rainbow',
+    description: 'Rainbow-colored "HELLO VM!" text on VGA',
+    output: 'HELLO VM!',
+    kind: 'captured',
+  },
+  {
+    name: 'primes',
+    description: 'Sieve of Eratosthenes — primes up to 50',
+    output: '2 3 5 7 11 13 17 19 23 29 31 37 41 43 47',
+    kind: 'captured',
+  },
+  {
+    name: 'calculator',
+    description: 'Compute 7×8+5 and display the result',
+    output: '61',
+    kind: 'captured',
+  },
+  {
+    name: 'factorial',
+    description: 'Compute 6! = 720 and display it',
+    output: '720',
+    kind: 'captured',
+  },
+  {
+    name: 'guess',
+    description: 'Number guessing game (pre-set answer 5)',
+    output: 'Answer is 5!',
+    kind: 'captured',
+  },
+  {
+    name: 'train',
+    description: 'Launch a training job via SYS_TRAIN_START (needs ADMIN role)',
+    output: 'EAX = job_id (>= 1); -2 if the role denies it',
+    kind: 'sample',
+    note: 'Prints nothing — the job id comes back in EAX and the Training card polls it.',
+  },
+  {
+    name: 'train-status',
+    description: 'Poll a training job via SYS_TRAIN_STATUS + GET_RESULT (needs ADMIN role)',
+    output: 'EAX: 0 running | 1 completed | 2 failed | -1 not found',
+    kind: 'sample',
+    note: 'Prints nothing — status/result come back in EAX and guest memory, shown in the Training cards.',
+  },
+]

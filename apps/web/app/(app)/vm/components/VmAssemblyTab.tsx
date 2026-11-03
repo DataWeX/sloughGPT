@@ -11,6 +11,7 @@ import { DEFAULT_PROGRAMS, MAX_STEPS_LIMIT, clampSteps } from '../vm-data'
 import type { VmPageState } from '../useVmPage'
 import { VmEditor } from './VmEditor'
 import { VmResultColumn } from './VmResultColumn'
+import { VmShowcase } from './VmShowcase'
 import { VmTrace } from './VmTrace'
 import { VmReference } from './VmReference'
 
@@ -161,6 +162,10 @@ export function VmAssemblyTab({ vm }: { vm: VmPageState }) {
           onLaunchTraining={vm.handleLaunchTraining}
         />
       </div>
+
+      {/* Pre-run showcase: real captured outputs for the 12 programs.
+          Replaced by the live result the moment a run completes. */}
+      {!result && <VmShowcase onLoad={(name) => vm.setSource(DEFAULT_PROGRAMS[name] ?? name)} />}
 
       {/* Trace */}
       <VmTrace trace={result?.trace} />
