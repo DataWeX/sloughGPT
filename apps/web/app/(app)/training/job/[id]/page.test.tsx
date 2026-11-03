@@ -131,7 +131,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/training/job/job-1',
 }))
-vi.mock('@/vite/next-compat/navigation', () => ({
+vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'job-1' }),
   useRouter: () => stableRouter,
   useSearchParams: () => new URLSearchParams(),
@@ -155,7 +155,7 @@ vi.mock('@/lib/download-utils', () => ({
   downloadJson: mockDownloadJson,
 }))
 vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="loss-chart" /> }))
-vi.mock('@/vite/next-compat/dynamic', () => ({
+vi.mock('next/dynamic', () => ({
   default: () => () => <div data-testid="loss-chart" />,
 }))
 import Page from './page'
