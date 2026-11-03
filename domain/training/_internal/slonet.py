@@ -957,6 +957,8 @@ def _pow(a, p):
 
 
 def _matmul(a, b):
+    from domain.slolib._internal.gpu import count_dispatch
+
     a_data = a.data if isinstance(a, Tensor) else np.asarray(a)
     b_data = b.data if isinstance(b, Tensor) else np.asarray(b)
     a_req = isinstance(a, Tensor) and a.requires_grad
@@ -975,14 +977,25 @@ def _matmul(a, b):
     if _use_acc:
         try:
             result = acc.matmul(a_data, b_data)
+            # Path attribution for StepTrace: exactly one of {gpu, cpu} per
+            # eligible matmul; a failed accelerator attempt records BOTH the
+            # fallback and the CPU work that replaced it (the job_c87a2dd6
+            # signature — silent degradation must leave a trace).
+            count_dispatch("gpu_matmuls")
         except Exception as exc:
             import logging
 
             logging.getLogger("slo.training").warning(
                 "GPU matmul failed, falling back to CPU: %s", exc
             )
+            count_dispatch("fallbacks")
+            count_dispatch("cpu_matmuls")
             result = np.matmul(a_data, b_data)
     else:
+        # Only accelerator-eligible matmuls are attributed: tiny matmuls go
+        # to the CPU by design (dispatch overhead), not as a degradation.
+        if out_elems >= 16384:
+            count_dispatch("cpu_matmuls")
         result = np.matmul(a_data, b_data)
     out = Tensor(result, requires_grad=a_req or b_req, _children=children, _copy=False)
     _a_shape = a_data.shape
