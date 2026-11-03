@@ -665,38 +665,44 @@ async def _build_context_frame(
     context_info: dict = {}
     frame = None
 
-    skip_context = False
+    # Retrieval *layers* need facts; the frame itself does not. Trait-weight
+    # steering rides the same frame (``ContextFrame.system_extra``), so
+    # skipping the build whenever the knowledge store was empty is exactly how
+    # feedback -> prompt stayed decorative: on a fresh install the store has
+    # zero facts, so ``_apply_managers`` never ran. Build the frame every turn
+    # and switch only the expensive layers off.
+    has_facts = True
     try:
-        if get_memory_service().stats().get("total_facts", 0) == 0:
-            skip_context = True
+        has_facts = get_memory_service().stats().get("total_facts", 0) > 0
     except Exception as e:
         logger.debug("Knowledge memory check failed: %s", e)
 
-    if not skip_context:
-        ctx_core.set_session_id(session_id)
+    ctx_core.set_session_id(session_id)
+    if has_facts:
         ctx_core.add_message("user", user_msg)
-        try:
-            frame = await asyncio.wait_for(
-                ctx_core.build_context_frame(
-                    include_rag=True,
-                    include_memory=True,
-                    query=user_msg,
-                ),
-                timeout=5.0,
-            )
-        except TimeoutError:
-            logger.warning(
-                "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
-                corr_id,
-            )
-            frame = None
+    try:
+        frame = await asyncio.wait_for(
+            ctx_core.build_context_frame(
+                include_rag=has_facts,
+                include_memory=has_facts,
+                query=user_msg,
+            ),
+            timeout=5.0,
+        )
+    except TimeoutError:
+        logger.warning(
+            "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
+            corr_id,
+        )
+        frame = None
 
-        if frame is not None:
-            context_info = {
-                "layers": [l.layer_type for l in frame.layers],
-                "total_tokens": frame.total_tokens,
-                "max_tokens": frame.max_tokens,
-            }
+    if frame is not None:
+        context_info = {
+            "layers": [l.layer_type for l in frame.layers],
+            "total_tokens": frame.total_tokens,
+            "max_tokens": frame.max_tokens,
+            "system_extra_chars": len(frame.system_extra),
+        }
 
     return frame, context_info
 
@@ -2056,6 +2062,16 @@ class InferenceRouter:
             for layer in frame.layers:
                 if layer.layer_type in ("memory", "rag") and layer.content:
                     frame_context.append(layer.content)
+
+        # Trait-weight steering goes in the STABLE HEAD, not the volatile tail.
+        # It is derived from the user's feedback profile, so it changes only
+        # when feedback changes — which keeps the token prefix reusable while
+        # still letting feedback reach the prompt (the one authority: trait
+        # weights -> managers -> frame -> here).
+        if frame and frame.system_extra:
+            system_prompt = (
+                f"{system_prompt}\n{frame.system_extra}" if system_prompt else frame.system_extra
+            )
 
         # Knowledge enrichment — only when the frame carried no memory/rag
         # layer content; facts learned live feed the prompt otherwise.

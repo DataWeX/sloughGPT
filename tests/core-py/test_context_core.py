@@ -947,3 +947,41 @@ class TestContextCoreAdditional:
         )
         assert len(frame.id) == 12
         assert all(c in "0123456789abcdef" for c in frame.id)
+
+
+class TestFrameCarriesTraitSteering:
+    """`system_extra` is the whole point of applying managers to a frame.
+
+    `system_prompt` = base + extra (so `to_prompt()` keeps working), while
+    `system_extra` alone is the steering a consumer with its OWN system prompt
+    needs — the chat router uses the caller's, so it cannot take the base.
+    """
+
+    def test_no_managers_means_no_extra(self):
+        import asyncio
+
+        cc = ContextCore(memory_enabled=False, rag_enabled=False)
+        frame = asyncio.run(cc.build_context_frame(include_rag=False, include_memory=False))
+
+        assert frame.system_extra == ""
+        assert frame.system_prompt == cc.system_prompt
+
+    def test_managers_fill_extra_and_the_rendered_prompt(self):
+        import asyncio
+
+        from domain.infrastructure._internal.context_core import ContextCore
+
+        class _Manager:
+            def apply(self, base_prompt: str = "") -> str:
+                return "\n[STEER] be terse"
+
+        cc = ContextCore(memory_enabled=False, rag_enabled=False)
+        cc.set_managers(personality=_Manager())
+
+        frame = asyncio.run(cc.build_context_frame(include_rag=False, include_memory=False))
+
+        assert frame.system_extra == "\n[STEER] be terse"
+        assert frame.system_prompt.endswith("[STEER] be terse")
+        assert frame.system_prompt.startswith(cc.system_prompt)
+        # Token accounting must include the steering it just added.
+        assert frame.total_tokens >= len(frame.system_prompt) // 4
