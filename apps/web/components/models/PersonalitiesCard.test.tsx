@@ -4,8 +4,13 @@ import React from 'react'
 import type * as Strui from '@sloughgpt/strui'
 
 const mockPush = vi.fn()
+<<<<<<< Updated upstream
 vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+=======
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+>>>>>>> Stashed changes
 
 vi.mock('@sloughgpt/strui', async () => {
   const actual = await vi.importActual<typeof Strui>('@sloughgpt/strui')

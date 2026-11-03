@@ -3,8 +3,13 @@ import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 
 const mockPush = vi.fn()
+<<<<<<< Updated upstream
 vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+=======
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+>>>>>>> Stashed changes
 
 import { TrainingHistory } from './TrainingHistory'
 
