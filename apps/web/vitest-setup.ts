@@ -10,7 +10,7 @@ import { afterEach, vi } from 'vitest'
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 
 // react-router Link needs a Router context; unit tests render leaves without one.
-vi.mock('@/vite/next-compat/link', () => ({
+vi.mock('next/link', () => ({
   default: ({
     href,
     children,
