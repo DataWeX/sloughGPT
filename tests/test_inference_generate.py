@@ -122,14 +122,17 @@ class TestGenerateEndpoint:
         assert kwargs["top_k"] == 20
         assert kwargs["repetition_penalty"] == 1.1
 
-    def test_generate_nudges_params_left_at_default(self, client, mock_provider):
+    def test_generate_nudges_params_left_at_default(self, client, mock_provider, monkeypatch):
         """Feedback may only move params the caller left at their default."""
         from domain.feedback import MetaWeights
 
+        # The sampler-side nudge ships dark (SLO_META_WEIGHT_NUDGE=0, card
+        # 20261102_001621); this test covers the endpoint plumbing of the
+        # kept A/B path, so open the gate explicitly.
+        monkeypatch.setenv("SLO_META_WEIGHT_NUDGE", "1")
+
         with patch("domain.feedback.get_meta_weight_manager") as manager:
-            manager.return_value.get_adjustment.return_value = MetaWeights(
-                temperature=0.77
-            )
+            manager.return_value.get_adjustment.return_value = MetaWeights(temperature=0.77)
             manager.return_value.neutral_weights = MetaWeights()
             client.post(
                 "/inference/generate",
@@ -145,17 +148,19 @@ class TestGenerateEndpoint:
         assert kwargs["top_k"] == 40
         assert kwargs["repetition_penalty"] == pytest.approx(1.15)
 
-    def test_generate_telemetry_records_sent_temperature(self, client, mock_provider):
+    def test_generate_telemetry_records_sent_temperature(self, client, mock_provider, monkeypatch):
         """Telemetry must record what the provider actually received."""
         from domain.feedback import MetaWeights
+
+        # Same gate as the nudge test above: dark by default, =1 is the
+        # kept A/B path whose telemetry wiring this test verifies.
+        monkeypatch.setenv("SLO_META_WEIGHT_NUDGE", "1")
 
         with (
             patch("domain.feedback.get_meta_weight_manager") as manager,
             patch("apps.api.server.routers.inference.capture") as capture_mock,
         ):
-            manager.return_value.get_adjustment.return_value = MetaWeights(
-                temperature=1.05
-            )
+            manager.return_value.get_adjustment.return_value = MetaWeights(temperature=1.05)
             manager.return_value.neutral_weights = MetaWeights()
             client.post(
                 "/inference/generate",

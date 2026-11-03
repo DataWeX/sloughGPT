@@ -121,6 +121,11 @@ class TestSimpleEmbed:
         outs = []
         for seed in ("0", "12345"):
             env = dict(os.environ, PYTHONHASHSEED=seed)
+            # pytest's `pythonpath` ini (pytest.ini) seeds only THIS process —
+            # propagate the resolved import path so the subprocess imports the
+            # same source tree (mogdb and the other repo packages are not
+            # site-installed in every environment that runs this suite).
+            env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
             outs.append(
                 subprocess.run(
                     [sys.executable, "-c", code],
