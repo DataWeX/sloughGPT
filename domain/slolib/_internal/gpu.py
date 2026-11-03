@@ -30,6 +30,36 @@ logger = logging.getLogger("slo.gpu")
 
 
 # =============================================================================
+# DISPATCH COUNTERS — where did the matmuls actually run? (StepTrace tripwire)
+# =============================================================================
+# Cumulative counters for the per-step reduction set (see
+# domain/training/_internal/trace.py). The training path counts path
+# attribution at the slonet._matmul seam; the CuPy backend counts the
+# host<->device byte traffic it performs. Read via dispatch_stats() — a
+# snapshot copy, never reset — and diff before/after a window for that
+# window's delta (read-only snapshots keep concurrent readers safe; no
+# hidden global state mutation).
+
+_DISPATCH_STATS: dict[str, int] = {
+    "gpu_matmuls": 0,  # eligible matmuls computed on an accelerator
+    "cpu_matmuls": 0,  # eligible matmuls computed on the CPU
+    "fallbacks": 0,  # accelerator attempts that raised and degraded to CPU
+    "h2d_bytes": 0,  # host->device transfer payload (matmul path, v1 scope)
+    "d2h_bytes": 0,  # device->host transfer payload (matmul path, v1 scope)
+}
+
+
+def count_dispatch(key: str, amount: int = 1) -> None:
+    """Increment a dispatch counter. Unknown keys raise (typo protection)."""
+    _DISPATCH_STATS[key] += amount
+
+
+def dispatch_stats() -> dict[str, int]:
+    """Snapshot of the cumulative dispatch counters (a copy — never resets)."""
+    return dict(_DISPATCH_STATS)
+
+
+# =============================================================================
 # BUFFER POOL — reuse numpy arrays to reduce allocation overhead
 # =============================================================================
 
@@ -1130,12 +1160,15 @@ class _CUDABackend(_Accelerator):
         # can no longer tell a CPU numpy array from a GPU cupy one and would skip the
         # host->device transfer, feeding raw numpy into cp.matmul (TypeError -> CPU fallback).
         if self._cp and not self._fp16_mode:
-            return self._cp.asnumpy(
-                self._cp.matmul(
-                    a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a),
-                    b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b),
-                )
-            )
+            a_dev = a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a)
+            b_dev = b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b)
+            if a_dev is not a:
+                count_dispatch("h2d_bytes", int(getattr(a_dev, "nbytes", getattr(a, "nbytes", 0))))
+            if b_dev is not b:
+                count_dispatch("h2d_bytes", int(getattr(b_dev, "nbytes", getattr(b, "nbytes", 0))))
+            out = self._cp.asnumpy(self._cp.matmul(a_dev, b_dev))
+            count_dispatch("d2h_bytes", int(out.nbytes))
+            return out
         if self._cp:
             a_arr = (
                 a if isinstance(a, self._cp.ndarray) else self._cp.asarray(a, dtype=self._dtype())
@@ -1143,7 +1176,13 @@ class _CUDABackend(_Accelerator):
             b_arr = (
                 b if isinstance(b, self._cp.ndarray) else self._cp.asarray(b, dtype=self._dtype())
             )
-            return self._cp.asnumpy(self._cp.matmul(a_arr, b_arr)).astype(np.float32)
+            if a_arr is not a:
+                count_dispatch("h2d_bytes", int(getattr(a_arr, "nbytes", getattr(a, "nbytes", 0))))
+            if b_arr is not b:
+                count_dispatch("h2d_bytes", int(getattr(b_arr, "nbytes", getattr(b, "nbytes", 0))))
+            out = self._cp.asnumpy(self._cp.matmul(a_arr, b_arr))
+            count_dispatch("d2h_bytes", int(out.nbytes))
+            return out.astype(np.float32)
         return np.matmul(np.asarray(a), np.asarray(b))
 
     def scaled_dot_attention(
