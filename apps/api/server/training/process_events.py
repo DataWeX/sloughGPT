@@ -94,12 +94,8 @@ EVENT_SCHEMA: dict[str, tuple[str, bool]] = {
     "reason": ("string", False),
 }
 
-_REQUIRED_FIELDS = frozenset(
-    f for f, (_t, required) in EVENT_SCHEMA.items() if required
-)
-_OPTIONAL_FIELDS = frozenset(
-    f for f, (_t, required) in EVENT_SCHEMA.items() if not required
-)
+_REQUIRED_FIELDS = frozenset(f for f, (_t, required) in EVENT_SCHEMA.items() if required)
+_OPTIONAL_FIELDS = frozenset(f for f, (_t, required) in EVENT_SCHEMA.items() if not required)
 
 # The action sub-object's declaration — same discipline as EVENT_SCHEMA:
 # scripts/gen_ts_contracts.py renders ProcessAction from this, and the
@@ -142,9 +138,7 @@ def make_event(
     """
     unknown = set(extra) - _OPTIONAL_FIELDS
     if unknown:
-        raise ValueError(
-            f"undeclared event fields: {sorted(unknown)} — add them to EVENT_SCHEMA"
-        )
+        raise ValueError(f"undeclared event fields: {sorted(unknown)} — add them to EVENT_SCHEMA")
     if state not in STATES:
         raise ValueError(f"unknown state: {state!r} — add it to STATES")
     if event not in EVENTS:
@@ -152,8 +146,7 @@ def make_event(
     effective_surface = surface or state
     if effective_surface not in _ACTIONS_BY_STATE:
         raise ValueError(
-            f"unknown action surface: {effective_surface!r} — "
-            "add it to _ACTIONS_BY_STATE"
+            f"unknown action surface: {effective_surface!r} — add it to _ACTIONS_BY_STATE"
         )
     return {
         "event_id": f"{PROJECTOR_KIND}:{process_id}:{event}",
