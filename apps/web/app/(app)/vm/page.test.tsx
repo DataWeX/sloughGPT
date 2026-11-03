@@ -44,6 +44,7 @@ import { vmController } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { chatDB } from '@/lib/db'
 import VMPage from './page'
+import { DEFAULT_PROGRAMS } from './vm-data'
 
 const mockedRun = vi.mocked(vmController.run)
 const mockedTrainingJob = vi.mocked(vmController.trainingJob)
@@ -1004,5 +1005,54 @@ describe('VMPage', () => {
   it('defaults to assembly mode with textarea', () => {
     const { container } = render(<VMPage />)
     expect(container.querySelector('textarea')).toBeInTheDocument()
+  })
+
+  describe('pre-run showcase', () => {
+    it('renders one entry per sample program, each with real captured output', () => {
+      const { container } = render(<VMPage />)
+      const showcase = within(container).getByTestId('vm-showcase')
+      expect(within(showcase).getAllByRole('button')).toHaveLength(
+        Object.keys(DEFAULT_PROGRAMS).length,
+      )
+      expect(within(showcase).getByText('Hello, VM!')).toBeInTheDocument()
+      expect(within(showcase).getByText('0 1 1 2 3 5 8 13 21 34')).toBeInTheDocument()
+      expect(
+        within(showcase).getByText('2 3 5 7 11 13 17 19 23 29 31 37 41 43 47'),
+      ).toBeInTheDocument()
+      expect(within(showcase).getByText('Answer is 5!')).toBeInTheDocument()
+    })
+
+    it('labels the no-stdout train programs as samples, not live results', () => {
+      render(<VMPage />)
+      const showcase = screen.getByTestId('vm-showcase')
+      // train + train-status return no text — explicitly labeled 'sample'
+      expect(within(showcase).getAllByText('sample')).toHaveLength(2)
+      expect(within(showcase).getAllByText('captured')).toHaveLength(
+        Object.keys(DEFAULT_PROGRAMS).length - 2,
+      )
+    })
+
+    it('notes the vga_color step-budget caveat', () => {
+      render(<VMPage />)
+      expect(screen.getByTestId('vm-showcase')).toHaveTextContent(/8,179 steps/)
+    })
+
+    it('loads a program into the editor when its showcase entry is clicked', () => {
+      const { container } = render(<VMPage />)
+      const showcase = screen.getByTestId('vm-showcase')
+      fireEvent.click(within(showcase).getByRole('button', { name: 'Load factorial program' }))
+      expect(container.querySelector('textarea')!.value).toContain('6! = 720')
+    })
+
+    it('run replaces the showcase with the real result', async () => {
+      render(<VMPage />)
+      expect(screen.getByTestId('vm-showcase')).toBeInTheDocument()
+
+      fireEvent.click(screen.getAllByRole('button', { name: 'Run' })[0])
+      await waitFor(() => {
+        expect(screen.getByText('halted')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('vm-showcase')).not.toBeInTheDocument()
+    })
   })
 })
