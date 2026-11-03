@@ -156,6 +156,57 @@ def measure_training(
     }
 
 
+# ── corpus ───────────────────────────────────────────────────────────────────
+
+
+def resolve_corpus(repo_root, cache_root=None) -> tuple["Path", str]:
+    """Pick the training/eval corpus: OUR tokens first, never a silent swap.
+
+    Order: own ``docs/**/*.md`` (this project's own prose — 'learn from our
+    tokens') → external tinyshakespeare from the cache root → synthetic
+    alphabet cycle (last resort, labeled). Returns (path, source-label);
+    own-docs/tinyshakespeare corpora are materialised under ``/tmp/slobench-gap``
+    with a deterministic (sorted) merge so scores stay reproducible.
+    """
+    repo_root = Path(repo_root)
+    out_dir = Path("/tmp/slobench-gap")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    md_files = sorted((repo_root / "docs").rglob("*.md"))
+    if md_files:
+        merged = out_dir / "own-docs-corpus.txt"
+        merged.write_text(
+            "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in md_files),
+            encoding="utf-8",
+        )
+        return merged, "own-docs"
+
+    if cache_root is None:
+        from domain.training._internal.cache_tags import get_cache_root
+
+        cache_root = get_cache_root()
+    shakespeare = Path(cache_root) / "tinyshakespeare" / "corpus.jsonl"
+    if shakespeare.exists():
+        import json as _json
+
+        texts = []
+        for line in shakespeare.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                texts.append(_json.loads(line).get("text", ""))
+            except _json.JSONDecodeError:
+                continue
+        merged = out_dir / "tinyshakespeare-corpus.txt"
+        merged.write_text("\n".join(texts), encoding="utf-8")
+        return merged, "tinyshakespeare"
+
+    synthetic = out_dir / "synthetic-corpus.txt"
+    cycle = "abcdefghij"
+    synthetic.write_text("".join(cycle[i % len(cycle)] for i in range(20000)), encoding="utf-8")
+    return synthetic, "synthetic"
+
+
 # ── report ───────────────────────────────────────────────────────────────────
 
 
@@ -166,6 +217,7 @@ def build_report(
     model: dict,
     target: str = DEFAULT_TARGET,
     decode_slo: float = DEFAULT_DECODE_SLO_TPS,
+    corpus_source: str = "unknown",
 ) -> dict:
     """Assemble the gap report and render a verdict against the stated SLO."""
     verdict = "meets_slo" if inference["decode_tps"] >= decode_slo else "below_slo"
@@ -174,6 +226,7 @@ def build_report(
         "decode_slo_tps": decode_slo,
         "verdict": verdict,
         "model": model,
+        "corpus": {"source": corpus_source},
         "inference": inference,
         "training": training,
         "eval": eval,
@@ -191,6 +244,7 @@ def format_report(report: dict) -> str:
         f"  SloNet gap benchmark — target: {report['target']}",
         "=" * 72,
         f"  Model:   {m['config']}  ({m['params']:,} params)",
+        f"  Corpus:  {report['corpus']['source']}",
         f"  Infer:   decode {i['decode_tps']} tok/s  prefill {i['prefill_tps']} tok/s"
         f"  ({i['tokens']} tokens in {i['elapsed_s']}s)",
         f"  Train:   {t['tokens_per_s']} tok/s  ({t['steps']} steps, final loss {t['final_loss']})",
@@ -204,12 +258,6 @@ def format_report(report: dict) -> str:
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
-
-
-def _synthetic_corpus(path: Path) -> None:
-    """Fallback corpus when tinyshakespeare isn't on disk (gate-style cycle)."""
-    cycle = "abcdefghij"
-    path.write_text("".join(cycle[i % len(cycle)] for i in range(20000)), encoding="utf-8")
 
 
 def main() -> None:
@@ -229,17 +277,11 @@ def main() -> None:
 
     n_embed, n_layer, n_head, block_size = SIZES[args.size]
 
-    # Corpus: prefer tinyshakespeare (same candidates as the training bench).
+    # Corpus: OUR docs first ('learn from our tokens'), then tinyshakespeare,
+    # then synthetic — the source is recorded in the report, never silent.
     repo = Path(__file__).resolve().parents[1]
-    candidates = [
-        repo / "data" / "datasets" / "tinyshakespeare" / "input.txt",
-        repo / "data" / "tinyshakespeare" / "input.txt",
-    ]
-    corpus = next((p for p in candidates if p.exists()), None)
-    if corpus is None:
-        corpus = Path("/tmp/slobench-gap-corpus.txt")
-        _synthetic_corpus(corpus)
-        print(f"(tinyshakespeare not found — synthetic corpus at {corpus})")
+    corpus, corpus_source = resolve_corpus(repo)
+    print(f"Corpus: {corpus_source} ({corpus})")
 
     # Eval split: last 10% of the corpus, held out from training.
     text = Path(corpus).read_text(encoding="utf-8")
@@ -301,6 +343,7 @@ def main() -> None:
         model={"params": n_params, "config": model_cfg, "size": args.size},
         target=args.target,
         decode_slo=args.decode_slo,
+        corpus_source=corpus_source,
     )
 
     out = Path(args.results)

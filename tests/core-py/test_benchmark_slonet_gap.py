@@ -126,6 +126,64 @@ def test_verdict_meets_slo_passes():
     assert report["verdict"] == "meets_slo"
 
 
+# ── corpus resolution (learn from OUR tokens — card follow-up 2026-11-03) ────
+
+
+def test_resolve_corpus_prefers_own_docs(tmp_path):
+    """Our own docs/*.md win — 'learn from our tokens', never a stranger's."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("# Alpha docs", encoding="utf-8")
+    (tmp_path / "docs" / "b.md").write_text("Beta content", encoding="utf-8")
+    path, source = bg.resolve_corpus(tmp_path, cache_root=tmp_path / "no-cache")
+    assert source == "own-docs"
+    text = path.read_text(encoding="utf-8")
+    assert "# Alpha docs" in text and "Beta content" in text
+    # Deterministic order — sorted, so the corpus (and its ppl) is reproducible.
+    assert text.index("Alpha") < text.index("Beta")
+
+
+def test_resolve_corpus_falls_back_to_tinyshakespeare(tmp_path):
+    """No own docs → external tinyshakespeare from the cache root, labeled."""
+    cache = tmp_path / "cache" / "tinyshakespeare"
+    cache.mkdir(parents=True)
+    (cache / "corpus.jsonl").write_text('{"text":"hello"}', encoding="utf-8")
+    path, source = bg.resolve_corpus(tmp_path / "empty-repo", cache_root=tmp_path / "cache")
+    assert source == "tinyshakespeare"
+    assert path.exists()
+
+
+def test_resolve_corpus_synthetic_is_last_resort(tmp_path):
+    """Nothing else on disk → synthetic cycle, but labeled as synthetic."""
+    path, source = bg.resolve_corpus(tmp_path / "empty", cache_root=tmp_path / "no-cache")
+    assert source == "synthetic"
+    text = path.read_text(encoding="utf-8")
+    assert len(text) >= 1000
+
+
+def test_own_docs_corpus_skips_non_markdown(tmp_path):
+    """Only prose docs/*.md feed the corpus — no binaries, no lockfiles."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "real.md").write_text("keep me", encoding="utf-8")
+    (tmp_path / "docs" / "noise.txt").write_text("drop me", encoding="utf-8")
+    path, source = bg.resolve_corpus(tmp_path, cache_root=tmp_path / "no-cache")
+    text = path.read_text(encoding="utf-8")
+    assert "keep me" in text
+    assert "drop me" not in text
+
+
+def test_report_records_corpus_source():
+    """The report must SAY which corpus the score came from — no silent swaps."""
+    report = bg.build_report(
+        inference={"tokens": 1, "decode_tps": 1.0, "prefill_tps": 1.0, "elapsed_s": 1.0},
+        training={"tokens": 1, "tokens_per_s": 1.0, "steps": 1, "final_loss": 1.0},
+        eval={"mean_loss": 1.0, "perplexity": 1.0, "num_token_positions": 1},
+        model={"params": 1, "config": "x"},
+        target="t",
+        corpus_source="own-docs",
+    )
+    assert report["corpus"]["source"] == "own-docs"
+
+
 def test_default_decode_slo_is_stated_for_v86():
     """The v86 target's default SLO is explicit in the module — not implied."""
     assert bg.DEFAULT_TARGET == "v86-browser-vm"
