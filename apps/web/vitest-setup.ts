@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { afterEach, vi } from 'vitest'
 
 // react-router Link needs a Router context; unit tests render leaves without one.
-vi.mock('@/vite/next-compat/link', () => ({
+vi.mock('next/link', () => ({
   default: ({
     href,
     children,
