@@ -46,6 +46,16 @@ def extreme_manager(monkeypatch: pytest.MonkeyPatch):
     return _install
 
 
+@pytest.fixture(autouse=True)
+def _nudge_enabled(monkeypatch: pytest.MonkeyPatch):
+    """The sampler-side nudge ships dark (SLO_META_WEIGHT_NUDGE=0).
+
+    These tests assert the nudge arithmetic, so they opt in explicitly. The
+    default-off behaviour has its own tests in TestNudgeIsDarkByDefault.
+    """
+    monkeypatch.setenv("SLO_META_WEIGHT_NUDGE", "1")
+
+
 def _fresh_user_id() -> str:
     # Nudges are cached per (user_id, hash(message)) for 5s — a unique user id
     # keeps tests independent without touching the shared cache under its lock.
@@ -108,3 +118,49 @@ class TestMetaWeightClamps:
                 assert metas["Ge"].ge == lo, f"{param} lower bound drifted"
             if "Le" in metas:
                 assert metas["Le"].le == hi, f"{param} upper bound drifted"
+
+
+class TestNudgeIsDarkByDefault:
+    """Feedback steers CONTEXT, not sampling (card 20261103_071231).
+
+    The sampler nudge duplicated a responsibility ``domain/context`` already
+    owns one layer up, and an unbounded integrator turned 473 thumbs-up into
+    ``repetition_penalty 0.8`` — a value that rewards tokens the model already
+    emitted, so a finished answer replayed until ``max_tokens``.
+    """
+
+    REQUEST = {
+        "temperature": 0.7,
+        "top_p": 0.85,
+        "top_k": 40,
+        "repetition_penalty": 1.15,
+    }
+
+    def _call(self, user_id: str) -> dict:
+        return _apply_meta_weights(
+            **self.REQUEST,
+            user_message="a unique message for the dark-nudge test",
+            user_id=user_id,
+        )
+
+    @pytest.mark.parametrize("value", [None, "0", "false", "off", ""])
+    def test_disabled_returns_the_callers_parameters_untouched(
+        self, monkeypatch, extreme_manager, value
+    ):
+        if value is None:
+            monkeypatch.delenv("SLO_META_WEIGHT_NUDGE", raising=False)
+        else:
+            monkeypatch.setenv("SLO_META_WEIGHT_NUDGE", value)
+        # An extreme manager must have no effect at all while the gate is shut.
+        extreme_manager(temp=3.0, top_p=1.2, top_k=5.0, rep=0.2)
+
+        assert self._call(_fresh_user_id()) == self.REQUEST
+
+    def test_enabled_applies_the_nudge(self, monkeypatch, extreme_manager):
+        monkeypatch.setenv("SLO_META_WEIGHT_NUDGE", "1")
+        extreme_manager(temp=3.0, top_p=1.2, top_k=5.0, rep=0.2)
+
+        out = self._call(_fresh_user_id())
+
+        assert out["temperature"] == pytest.approx(2.0)
+        assert out["repetition_penalty"] == pytest.approx(0.5)

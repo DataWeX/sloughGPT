@@ -16,6 +16,7 @@ from domain.context._internal.managers import (
     TraitWeightsConfig,
     _describe_trait,
     _if_above,
+    ensure_managers,
     reset_trait_config,
 )
 
@@ -698,3 +699,60 @@ class TestResetTraitConfig:
         from domain.context._internal.managers import _trait_config
 
         assert _trait_config is None
+
+
+# ── ensure_managers ────────────────────────────────────────────────────
+
+
+class TestEnsureManagers:
+    """The seam the design described and never connected (card 20261103_071231).
+
+    ``ContextCore.set_managers()`` existed with only test callers, so
+    ``_apply_managers()`` never ran in production and the frame carried no
+    trait steering — while a duplicate sampler-side feedback integrator did
+    run and could saturate into a repetition reward.
+    """
+
+    def test_none_core_is_a_noop(self):
+        assert ensure_managers(None) == {}
+
+    def test_attaches_all_four_managers(self):
+        from unittest.mock import MagicMock
+
+        core = MagicMock()
+        attached = ensure_managers(core)
+
+        assert set(attached) == {"personality", "memory", "style", "task"}
+        kwargs = core.set_managers.call_args.kwargs
+        assert isinstance(kwargs["personality"], PersonalityManager)
+        assert isinstance(kwargs["memory"], MemoryManager)
+        assert isinstance(kwargs["style"], StyleManager)
+        assert isinstance(kwargs["task"], TaskManager)
+
+    def test_explicit_config_reaches_every_manager(self):
+        from unittest.mock import MagicMock
+
+        cfg = TraitWeightsConfig()
+        core = MagicMock()
+        ensure_managers(core, cfg)
+
+        kwargs = core.set_managers.call_args.kwargs
+        assert all(manager._config is cfg for manager in kwargs.values())
+
+    def test_frame_reflects_trait_weights(self):
+        """Wiring is real only if the generated context changes with the weights."""
+        from domain.infrastructure._internal.context_core import ContextCore
+
+        cfg = TraitWeightsConfig()
+        core = ContextCore(memory_enabled=False, rag_enabled=False)
+        ensure_managers(core, cfg)
+
+        neutral = core._apply_managers("hello")["system_extra"]
+
+        cfg.set("warmth", 1.0)
+        cfg.set("creativity", 1.0)
+        cfg.set("directness", 1.0)
+        warm = core._apply_managers("hello")["system_extra"]
+
+        assert warm.strip(), "managers produced no prompt text after wiring"
+        assert warm != neutral, "trait weights did not reach the context frame"

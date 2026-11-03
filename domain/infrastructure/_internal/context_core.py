@@ -49,6 +49,13 @@ class ContextFrame:
     total_tokens: int
     max_tokens: int
     created_at: str
+    # Manager-generated steering, WITHOUT ``ContextCore.system_prompt``'s own
+    # preamble. ``system_prompt`` above is base + this (see
+    # ``build_context_frame``), so consumers that already have their own
+    # system prompt — the chat router uses the caller's — take this field and
+    # leave the default preamble behind. That is what makes feedback reach the
+    # prompt without overwriting caller intent.
+    system_extra: str = ""
 
     def to_prompt(self) -> str:
         """Render as model input string."""
@@ -478,9 +485,12 @@ Be concise, accurate, and helpful."""
         query: str = "",
     ) -> ContextFrame:
         """Build a complete context frame, applying context managers."""
-        # Apply managers
+        # Apply managers. They run on every frame — trait steering is a
+        # separate concern from retrieval, so an empty vector store must not
+        # disable it (that coupling is what kept this seam dead).
         manager_mods = self._apply_managers(query)
-        system_prompt = self.system_prompt + manager_mods.get("system_extra", "")
+        system_extra = manager_mods.get("system_extra", "")
+        system_prompt = self.system_prompt + system_extra
 
         frame_id = hashlib.md5(f"{datetime.now().isoformat()}{query}".encode()).hexdigest()[:12]
         layers: list[ContextLayer] = []
@@ -547,6 +557,7 @@ Be concise, accurate, and helpful."""
             total_tokens=used_tokens,
             max_tokens=self.max_tokens,
             created_at=datetime.now().isoformat(),
+            system_extra=system_extra,
         )
 
         self.frame_history.append(frame)

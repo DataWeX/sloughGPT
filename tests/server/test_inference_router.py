@@ -2,6 +2,7 @@
 Tests for the inference router — chat, generate, sessions.
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -1057,3 +1058,226 @@ class TestMemoryPressureMessage:
         assert "56%" not in message
         # The fix is the removal of the second, contradicting read.
         fresh_read.assert_not_called()
+
+
+class TestAppendVolatileContext:
+    """Per-turn context rides the LAST user turn, never the system prefix.
+
+    KV reuse matches on prefix tokens: ``_resolve_kv_state`` and PrefixCache
+    both compare head tokens. Folding knowledge/frame/RAG into the system
+    prompt changed the prefix on every request, so each turn re-prefilled the
+    whole prompt (measured 43.0s cold vs 1.26s warm on a 482-token prompt).
+    Retrieval results are per-turn by nature, so they belong at the tail.
+    """
+
+    @staticmethod
+    def _fn():
+        from apps.api.server.routers import inference as inf
+
+        return inf._append_volatile_context
+
+    def test_block_is_appended_to_the_last_user_turn(self):
+        append = self._fn()
+        messages = [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "answer"},
+            {"role": "user", "content": "second"},
+        ]
+
+        out = append(messages, "CONTEXT")
+
+        assert out[-1]["content"] == "second\n\nCONTEXT"
+        # Earlier turns are untouched — only the tail grows.
+        assert out[0]["content"] == "first"
+        assert out[1]["content"] == "answer"
+
+    def test_head_is_identical_across_turns_with_different_context(self):
+        """The actual regression: prefix stability, not string plumbing."""
+        append = self._fn()
+        head = {"role": "system", "content": "You are sloughGPT."}
+
+        turn_one = append([head, {"role": "user", "content": "q1"}], "fact A")
+        turn_two = append([head, {"role": "user", "content": "q2"}], "fact B")
+
+        assert turn_one[0] == turn_two[0], "system prefix drifted between turns"
+        assert "fact A" not in turn_one[0]["content"]
+        assert "fact B" not in turn_two[0]["content"]
+
+    @pytest.mark.parametrize("block", ["", None])
+    def test_empty_block_is_a_noop(self, block):
+        append = self._fn()
+        messages = [{"role": "user", "content": "hi"}]
+
+        assert append(messages, block) == [{"role": "user", "content": "hi"}]
+
+    def test_multipart_content_gets_an_extra_text_part(self):
+        append = self._fn()
+        messages = [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": "what is this?"}],
+            }
+        ]
+
+        out = append(messages, "CONTEXT")
+
+        assert isinstance(out[-1]["content"], list)
+        assert out[-1]["content"][-1] == {"type": "text", "text": "CONTEXT"}
+        assert out[-1]["content"][0]["text"] == "what is this?"
+
+    def test_no_user_message_is_a_noop(self):
+        append = self._fn()
+        messages = [{"role": "assistant", "content": "unprompted"}]
+
+        assert append(messages, "CONTEXT") == [{"role": "assistant", "content": "unprompted"}]
+
+    def test_trim_budget_counts_the_volatile_block(self):
+        """Attach before trimming, or the trimmer spends budget it cannot see."""
+        from apps.api.server.routers import inference as inf
+
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "u" * 40},
+        ]
+        block = "C" * 4000
+        inf._append_volatile_context(messages, block)
+
+        # Budget that fits the system prompt but not the volatile tail: the
+        # trimmer must see the tail and drop it rather than silently overflow.
+        trimmed = inf._trim_messages_to_budget(messages, max_context=100, max_new_tokens=10)
+
+        assert all("C" * 4000 not in str(m.get("content")) for m in trimmed)
+
+
+class TestTraitSteeringReachesThePrompt:
+    """feedback -> TraitWeightsConfig -> managers -> ContextFrame -> prompt.
+
+    Wiring the managers was only half the path: ``stream_turn`` used to read
+    the frame's retrieval *layers* and discard ``frame.system_prompt``, and
+    ``_build_context_frame`` skipped the build entirely while the knowledge
+    store held zero facts. Both left the seam decorative on a fresh install.
+    """
+
+    STEERING = "\n[PERSONALITY INSTRUCTIONS]\n- Be direct and warm."
+
+    @staticmethod
+    def _frame():
+        from domain.infrastructure._internal.context_core import ContextFrame
+
+        return ContextFrame(
+            id="f1",
+            system_prompt="base" + TestTraitSteeringReachesThePrompt.STEERING,
+            layers=[],
+            total_tokens=10,
+            max_tokens=2048,
+            created_at="2026-11-03T00:00:00",
+            system_extra=TestTraitSteeringReachesThePrompt.STEERING,
+        )
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_steering_rides_the_system_turn_not_the_user_turn(self, mock_get_provider, client):
+        captured: dict = {}
+
+        async def _chat_stream(messages, **kwargs):
+            captured["messages"] = messages
+            yield "ok"
+
+        provider = MagicMock()
+        provider.chat_stream = _chat_stream
+        mock_get_provider.return_value = provider
+
+        with patch(
+            "apps.api.server.routers.inference._build_context_frame",
+            AsyncMock(return_value=(self._frame(), {})),
+        ):
+            client.post(
+                "/chat",
+                json={"messages": [{"role": "user", "content": "hi"}], "use_context_core": True},
+            )
+
+        messages = captured["messages"]
+        system = next(m for m in messages if m["role"] == "system")
+        user = next(m for m in messages if m["role"] == "user")
+        assert "PERSONALITY INSTRUCTIONS" in system["content"]
+        assert "PERSONALITY INSTRUCTIONS" not in user["content"]
+        # Head placement is the point: trait steering is stable per feedback
+        # profile, so it must stay out of the per-turn volatile tail.
+        assert messages[0]["role"] == "system"
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_steering_creates_a_system_turn_when_the_caller_sent_none(
+        self, mock_get_provider, client
+    ):
+        captured: dict = {}
+
+        async def _chat_stream(messages, **kwargs):
+            captured["messages"] = messages
+            yield "ok"
+
+        provider = MagicMock()
+        provider.chat_stream = _chat_stream
+        mock_get_provider.return_value = provider
+
+        with patch(
+            "apps.api.server.routers.inference._build_context_frame",
+            AsyncMock(return_value=(self._frame(), {})),
+        ):
+            client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}]})
+
+        system = next(m for m in captured["messages"] if m["role"] == "system")
+        assert system["content"].strip() == TestTraitSteeringReachesThePrompt.STEERING.strip()
+
+
+class TestFrameBuildsWithoutFacts:
+    """Empty knowledge store must not disable trait steering."""
+
+    def test_empty_memory_still_builds_the_frame_with_layers_off(self):
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        from apps.api.server.routers import inference as inf
+
+        core = MagicMock()
+        core.build_context_frame = _AsyncMock(return_value=MagicMock(layers=[], system_extra="x"))
+
+        memory_service = MagicMock()
+        memory_service.stats.return_value = {"total_facts": 0}
+
+        with patch.object(inf, "get_memory_service", return_value=memory_service):
+            frame, info = asyncio.run(
+                inf._build_context_frame(core, "sess", "hello", corr_id="test")
+            )
+
+        assert frame is not None
+        kwargs = core.build_context_frame.call_args.kwargs
+        assert kwargs["include_rag"] is False
+        assert kwargs["include_memory"] is False
+        assert info["system_extra_chars"] == 1
+        # No facts means no session message bookkeeping either.
+        core.add_message.assert_not_called()
+
+    def test_facts_keep_both_layers_on(self):
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        from apps.api.server.routers import inference as inf
+
+        core = MagicMock()
+        core.build_context_frame = _AsyncMock(return_value=MagicMock(layers=[], system_extra=""))
+
+        memory_service = MagicMock()
+        memory_service.stats.return_value = {"total_facts": 3}
+
+        with patch.object(inf, "get_memory_service", return_value=memory_service):
+            asyncio.run(inf._build_context_frame(core, "sess", "hello", corr_id="test"))
+
+        kwargs = core.build_context_frame.call_args.kwargs
+        assert kwargs["include_rag"] is True
+        assert kwargs["include_memory"] is True
+        core.add_message.assert_called_once()

@@ -445,6 +445,49 @@ def reset_trait_config() -> None:
     _trait_config = None
 
 
+def ensure_managers(core: Any, config: TraitWeightsConfig | None = None) -> dict[str, str]:
+    """Attach the four trait-driven managers to a ContextCore instance.
+
+    This is the seam the architecture always described and never connected::
+
+        feedback -> TraitWeightsConfig.update() -> managers read weights
+                 -> ContextCore applies -> prompt
+
+    ``ContextCore.set_managers()`` already existed, but had **only test
+    callers** — so ``_apply_managers()`` never ran in production and the frame
+    carried no trait steering. Meanwhile a *second* feedback integrator
+    (``domain/feedback/_internal/meta_weights.py`` → sampler parameters) did
+    run, and because it integrated unbounded floats into a shared, model-
+    agnostic gain it could saturate to ``repetition_penalty 0.8`` — which
+    rewards tokens the model already emitted and makes a finished answer
+    replay forever (card 20261102_001621).
+
+    Trait weights are clamped to [0.0, 1.0] by construction, so the worst this
+    path can express is a strong preference rendered as prompt text — readable
+    and reversible per request, instead of a sampler corner every request
+    inherits.
+
+    Args:
+        core: the ContextCore singleton (``domain.infrastructure.get_context_core()``).
+        config: trait weights to read; defaults to the shared singleton.
+
+    Returns:
+        Names of the attached managers (``{}`` when ``core`` is falsy).
+    """
+    if core is None:
+        return {}
+
+    cfg = config if config is not None else get_trait_config()
+    managers = {
+        "personality": PersonalityManager(cfg),
+        "memory": MemoryManager(cfg),
+        "style": StyleManager(cfg),
+        "task": TaskManager(cfg),
+    }
+    core.set_managers(**managers)
+    return {name: type(mgr).__name__ for name, mgr in managers.items()}
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 

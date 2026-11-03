@@ -8,12 +8,7 @@ The injected block must fit a small prompt budget or be truncated.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "api" / "server"))
-
-from routers.inference import _RAG_CONTEXT_MAX_CHARS, _build_rag_block
+from apps.api.server.routers.inference import _RAG_CONTEXT_MAX_CHARS, _build_rag_block
 
 
 def _rag_result(ctx: str, n: int = 5) -> dict:
