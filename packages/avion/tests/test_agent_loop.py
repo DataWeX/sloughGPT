@@ -7,7 +7,10 @@ These lock in the tightened-loop contract:
 * predictions retry, side-effecting actions never do;
 * transcripts are claimed per run (never clobbered) and write failures
   are counted instead of killing the run;
-* ``on_step`` callbacks are contained (counted, degraded, revived).
+* ``on_step`` callbacks are contained (counted, degraded, revived);
+* DONE/FAIL are dispatched as ``on_event`` events, and a handler's
+  ``continue_run`` veto is the only thing that keeps a run alive past a
+  terminal action.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ import tempfile
 import time
 
 import pytest
-from avion.ai import Action, ActionType, Agent, AgentConfig, EchoModel
+from avion.ai import Action, ActionType, Agent, AgentConfig, AgentEvent, EchoModel
 from test_autoclicker import FakeBackend
 
 HANG = 30.0  # seconds a wedged implementation would sleep for
@@ -69,6 +72,20 @@ class BrokenModel:
     async def predict_action(self, **kwargs):
         self.calls += 1
         raise RuntimeError("down")
+
+
+class RecordingModel:
+    """Answers DONE whenever asked, remembering the task it was given."""
+
+    model_name = "recording"
+    supports_vision = False
+
+    def __init__(self):
+        self.tasks: list[str] = []
+
+    async def predict_action(self, *, task, **kwargs):
+        self.tasks.append(task)
+        return Action(ActionType.DONE)
 
 
 class FlakyModel:
@@ -462,3 +479,248 @@ class TestReentrancy:
         result = run(scenario())
         assert result.success is True
         assert result.transcript_path.endswith("first.jsonl")
+
+
+class TestTerminalEvents:
+    """DONE/FAIL as events: observed by default, extended on veto."""
+
+    def test_done_event_is_dispatched_and_the_run_still_ends(self):
+        # Registering a handler changes nothing about termination: without
+        # a veto the loop breaks exactly as it always did.
+        events: list[AgentEvent] = []
+        agent = _agent([Action(ActionType.DONE)], save_trajectories=False)
+        agent.on_event(events.append)
+
+        result = run(agent.run("t"))
+        run(agent.stop())
+
+        assert [e.kind for e in events] == ["done"]
+        assert events[0].continue_run is False
+        assert result.stop_reason == "done"
+        assert result.success is True
+
+    def test_continue_run_veto_loops_the_agent_through_another_exercise(self):
+        agent = _agent(
+            [
+                Action(ActionType.MOUSE_CLICK, {"x": 1, "y": 1}),
+                Action(ActionType.DONE),
+                Action(ActionType.MOUSE_CLICK, {"x": 2, "y": 2}),
+                Action(ActionType.DONE),
+            ],
+            max_steps=10,
+            save_trajectories=False,
+        )
+        seen: list[str] = []
+
+        def next_exercise(event: AgentEvent) -> None:
+            seen.append(event.kind)
+            event.continue_run = len(seen) == 1  # claim the first, end on the second
+
+        agent.on_event(next_exercise)
+        result = run(agent.run("t"))
+        run(agent.stop())
+
+        assert seen == ["done", "done"]
+        assert result.steps_taken == 4  # the run did not stop at step 2
+        assert result.stop_reason == "done"
+
+    def test_fail_event_carries_the_reason_and_the_last_terminal_wins(self):
+        agent = _agent(
+            [
+                Action(ActionType.DONE),
+                Action(ActionType.FAIL, reasoning="second exercise impossible"),
+            ],
+            max_steps=10,
+            save_trajectories=False,
+        )
+        events: list[AgentEvent] = []
+
+        def handler(event: AgentEvent) -> None:
+            events.append(event)
+            event.continue_run = event.kind == "done"
+
+        agent.on_event(handler)
+
+        result = run(agent.run("t"))
+        run(agent.stop())
+
+        assert [e.kind for e in events] == ["done", "fail"]
+        assert events[1].reason == "second exercise impossible"
+        assert result.stop_reason == "fail"
+        assert result.success is False  # continuing past DONE did not bank the win
+
+    def test_goal_check_reason_reaches_the_done_event(self):
+        agent = _agent([Action(ActionType.DONE)], save_trajectories=False)
+        events: list[AgentEvent] = []
+        agent.on_event(events.append)
+
+        result = run(agent.run("t", context={"goal": [{"kind": "text_present", "value": "nope"}]}))
+        run(agent.stop())
+
+        assert events[0].kind == "done"
+        assert events[0].reason  # unverified goal reports why
+        assert result.stop_reason == "unverified"
+
+    def test_event_handler_is_contained_and_degrades(self):
+        agent = _agent(
+            [Action(ActionType.DONE)],
+            save_trajectories=False,
+            callback_degrade_after=1,
+        )
+        agent.on_event(lambda _e: 1 / 0)
+
+        result = run(agent.run("t"))
+        run(agent.stop())
+
+        assert result.success is True  # a broken handler never breaks the run
+        status = agent.callback_status("event")[0]
+        assert status["failures"] == 1
+        assert status["disabled"] is True
+
+    def test_step_and_event_callback_status_are_separate_lists(self):
+        agent = _agent([Action(ActionType.DONE)], save_trajectories=False)
+        agent.on_step(lambda _s: None)
+        agent.on_event(lambda _e: None)
+
+        run(agent.run("t"))
+        run(agent.stop())
+
+        assert agent.callback_status() == [{"index": 0, "failures": 0, "disabled": False}]
+        assert agent.callback_status("event") == [{"index": 0, "failures": 0, "disabled": False}]
+
+    def test_handover_reprompts_the_agent_with_the_next_exercise(self):
+        model = RecordingModel()
+        agent = _agent(model=model, max_steps=5, save_trajectories=False)
+        claims: list[str] = []
+
+        def next_exercise(event: AgentEvent) -> None:
+            claims.append(event.kind)
+            if len(claims) == 1:
+                event.continue_run = True
+                event.task = "two"  # the agent must work on this one now
+
+        agent.on_event(next_exercise)
+        result = run(agent.run("one"))
+        run(agent.stop())
+
+        assert model.tasks == ["one", "two"]
+        assert result.task == "two"
+        assert result.steps_taken == 2
+        assert result.exercises_claimed == {"done": 1, "fail": 0}
+        assert result.to_dict()["exercises_claimed"] == {"done": 1, "fail": 0}
+
+    def test_goal_handover_verifies_the_new_exercise_and_spares_the_caller(self):
+        agent = _agent(
+            [Action(ActionType.DONE), Action(ActionType.DONE)],
+            max_steps=5,
+            save_trajectories=False,
+        )
+        seen: list[int] = []
+
+        def next_exercise(event: AgentEvent) -> None:
+            seen.append(len(seen))
+            if len(seen) == 1:
+                event.continue_run = True
+                event.goal = [{"kind": "text_present", "value": "never on this page"}]
+
+        agent.on_event(next_exercise)
+        caller_context = {"goal": []}
+        result = run(agent.run("one", context=caller_context))
+        run(agent.stop())
+
+        # First DONE had no goal to check; the handed-over goal dooms the second.
+        assert result.stop_reason == "unverified"
+        assert result.success is False
+        assert result.exercises_claimed["done"] == 1
+        assert caller_context == {"goal": []}  # the caller's dict was copied, not used
+
+
+# Lives here rather than in test_curriculum.py because the runner needs a
+# started Agent: AgentBackend/_agent/RecordingModel are already defined above.
+class TestExerciseRunner:
+    def test_one_agent_is_driven_through_every_proposal(self):
+        from avion.ai.curriculum import ExerciseRunner, TaskProposal
+
+        model = RecordingModel()
+        agent = _agent(model=model, max_steps=10, save_trajectories=False)
+        runner = ExerciseRunner(
+            [
+                TaskProposal(task="alpha", source="untried"),
+                TaskProposal(task="beta", source="retry-failure"),
+                TaskProposal(task="gamma", source="extend"),
+            ]
+        )
+        agent.on_event(runner.handle)
+        first = runner.start()
+
+        result = run(agent.run(first.task))
+        run(agent.stop())
+
+        assert first.task == "alpha"
+        assert model.tasks == ["alpha", "beta", "gamma"]  # re-prompted each time
+        assert [r.task for r in runner.records] == ["alpha", "beta", "gamma"]
+        assert [r.outcome for r in runner.records] == ["done", "done", "done"]
+        assert [r.source for r in runner.records] == ["untried", "retry-failure", "extend"]
+        assert [r.steps_taken for r in runner.records] == [1, 1, 1]
+        assert runner.summary() == {"done": 3}
+        assert result.steps_taken == 3
+        assert result.task == "gamma"  # only the last exercise is on the result
+
+    def test_a_handed_over_goal_records_unverified(self):
+        from avion.ai.curriculum import ExerciseRunner, TaskProposal
+
+        agent = _agent(
+            [Action(ActionType.DONE), Action(ActionType.DONE)],
+            max_steps=10,
+            save_trajectories=False,
+        )
+        runner = ExerciseRunner(
+            [
+                TaskProposal(task="alpha"),
+                TaskProposal(task="beta", goal=[{"kind": "text_present", "value": "never here"}]),
+            ]
+        )
+        agent.on_event(runner.handle)
+        result = run(agent.run(runner.start().task))
+        run(agent.stop())
+
+        assert [r.outcome for r in runner.records] == ["done", "unverified"]
+        assert runner.records[1].reason  # says why the page disagreed
+        assert runner.summary() == {"done": 1, "unverified": 1}
+        assert result.stop_reason == "unverified"
+        assert result.success is False
+
+    def test_an_exercise_that_never_ended_is_still_recorded(self):
+        from avion.ai.curriculum import ExerciseRunner, TaskProposal
+
+        agent = _agent(model=EndlessClickModel(), max_steps=3, save_trajectories=False)
+        runner = ExerciseRunner(
+            [TaskProposal(task="alpha"), TaskProposal(task="beta", source="extend")]
+        )
+        agent.on_event(runner.handle)
+        result = run(agent.run(runner.start().task))
+        run(agent.stop())
+
+        runner.finish(result.steps_taken, result.stop_reason)
+        assert [r.outcome for r in runner.records] == ["unfinished"]
+        assert runner.records[0].reason == "max_steps"
+        assert runner.records[0].steps_taken == 3
+        assert runner.summary() == {"unfinished": 1}
+
+        # finish() is idempotent: the in-flight exercise is no longer open.
+        runner.finish(result.steps_taken, result.stop_reason)
+        assert len(runner.records) == 1
+
+    def test_an_empty_queue_never_vetoes(self):
+        from avion.ai.curriculum import ExerciseRunner
+
+        agent = _agent([Action(ActionType.DONE)], save_trajectories=False)
+        runner = ExerciseRunner([])
+        agent.on_event(runner.handle)
+
+        assert runner.start() is None
+        result = run(agent.run("alpha"))
+        run(agent.stop())
+
+        assert runner.records == []  # nothing was in flight to record
+        assert result.stop_reason == "done"

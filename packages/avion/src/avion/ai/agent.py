@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from avion.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
@@ -92,6 +92,10 @@ class AgentResult:
     challenge: dict[str, Any] | None = None  # set when stop_reason == "needs_human"
     transcript_path: str = ""  # where this run's transcript landed ('' = not saved)
     transcript_failures: int = 0  # write/close errors counted, never fatal
+    # Terminal events an on_event handler claimed instead of ending the run,
+    # by kind. A continued run covered 1 + sum(this) exercises; `task` is the
+    # last one it was working on.
+    exercises_claimed: dict[str, int] = field(default_factory=dict)
 
     def summary(self) -> str:
         return (
@@ -115,8 +119,85 @@ class AgentResult:
             "challenge": self.challenge,
             "transcript_path": self.transcript_path,
             "transcript_failures": self.transcript_failures,
+            "exercises_claimed": self.exercises_claimed,
             "trajectory": self.trajectory.to_dict(),
         }
+
+
+@dataclass
+class AgentEvent:
+    """A terminal loop event: the model said DONE or FAIL.
+
+    ``continue_run`` is the callback's veto. The loop breaks on a terminal
+    action unless a callback sets it, which is how an exercise runner keeps
+    one agent alive across many tasks instead of re-entering ``run()``.
+
+    Continuing without changing ``task`` would keep prompting the exercise
+    that just finished, so a handler that vetoes should also hand over the
+    next one: ``task`` replaces the prompt for subsequent steps, and ``goal``
+    replaces the goal the next DONE is verified against. Both are ignored
+    unless the run actually continues.
+    """
+
+    kind: str  # "done" | "fail"
+    step: Step
+    trajectory: Trajectory
+    reason: str = ""
+    continue_run: bool = False
+    task: str = ""
+    goal: list[dict[str, str]] | None = None
+
+
+class _Hooks:
+    """Callback list with per-run degrade bookkeeping.
+
+    Two lists need identical containment rules (step observers and terminal
+    event handlers): an observer may never break the run it watches, so
+    failures are counted and, past a consecutive threshold, the callback is
+    skipped for the rest of the run and revived at the next one.
+    """
+
+    __slots__ = ("callbacks", "failures", "consecutive", "disabled")
+
+    def __init__(self) -> None:
+        self.callbacks: list[Callable] = []
+        self.failures: list[int] = []
+        self.consecutive: list[int] = []
+        self.disabled: list[bool] = []
+
+    def add(self, callback: Callable) -> None:
+        self.callbacks.append(callback)
+        self.failures.append(0)
+        self.consecutive.append(0)
+        self.disabled.append(False)
+
+    def start_run(self) -> None:
+        self.consecutive = [0] * len(self.callbacks)
+        self.disabled = [False] * len(self.callbacks)
+
+    def dispatch(self, payload: Any, degrade_after: int) -> None:
+        for index, callback in enumerate(self.callbacks):
+            if self.disabled[index]:
+                continue
+            try:
+                callback(payload)
+            except Exception:
+                self.failures[index] += 1
+                self.consecutive[index] += 1
+                if self.consecutive[index] >= max(1, degrade_after):
+                    self.disabled[index] = True
+            else:
+                self.consecutive[index] = 0
+
+    def status(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "index": index,
+                "failures": self.failures[index],
+                "disabled": self.disabled[index],
+            }
+            for index in range(len(self.callbacks))
+        ]
 
 
 def _action_signature(action: Action) -> str:
@@ -160,11 +241,8 @@ class Agent:
         self._last_screenshot_b64 = ""
         self._step_count = 0
         self._transcript_failures = 0
-        self._callbacks: list[Callable] = []
-        # Parallel to _callbacks: totals, consecutive failures, degraded flag.
-        self._cb_failures: list[int] = []
-        self._cb_consecutive: list[int] = []
-        self._cb_disabled: list[bool] = []
+        self._step_hooks = _Hooks()
+        self._terminal_hooks = _Hooks()
 
     @property
     def model(self) -> VisionModel:
@@ -199,21 +277,31 @@ class Agent:
         consecutive failures it is skipped for the rest of the run
         (revived at the next run start). See ``callback_status()``.
         """
-        self._callbacks.append(callback)
-        self._cb_failures.append(0)
-        self._cb_consecutive.append(0)
-        self._cb_disabled.append(False)
+        self._step_hooks.add(callback)
 
-    def callback_status(self) -> list[dict[str, Any]]:
-        """Per-callback health: cumulative failures + degraded flag."""
-        return [
-            {
-                "index": index,
-                "failures": self._cb_failures[index],
-                "disabled": self._cb_disabled[index],
-            }
-            for index in range(len(self._callbacks))
-        ]
+    def on_event(self, callback: Callable[[AgentEvent], None]) -> None:
+        """Register a handler for terminal DONE/FAIL events.
+
+        The handler receives an ``AgentEvent`` in place of the loop's hard
+        break, and decides what happens next: leave ``continue_run`` alone
+        and the run ends as it always did; set it and the loop keeps going,
+        so one agent can be driven through a sequence of exercises without
+        tearing down its backend between them. Hand over the next exercise on
+        ``event.task`` and ``event.goal`` — continuing without a re-prompt
+        would ask for the exercise that just finished. The last terminal
+        event wins for ``trajectory.success``. Same containment rules as
+        ``on_step``.
+        """
+        self._terminal_hooks.add(callback)
+
+    def callback_status(self, kind: str = "step") -> list[dict[str, Any]]:
+        """Per-callback health: cumulative failures + degraded flag.
+
+        ``kind`` selects the list: "step" (``on_step`` observers, the
+        default) or "event" (``on_event`` terminal handlers).
+        """
+        hooks = self._terminal_hooks if kind == "event" else self._step_hooks
+        return hooks.status()
 
     async def start(self, backend=None) -> None:
         """Initialize the backend and interaction controllers.
@@ -267,15 +355,21 @@ class Agent:
         self._step_count = 0
         self._transcript_failures = 0
         # Every run gives degraded callbacks a fresh chance; failure
-        # totals in _cb_failures keep accumulating.
-        self._cb_consecutive = [0] * len(self._callbacks)
-        self._cb_disabled = [False] * len(self._callbacks)
+        # totals keep accumulating.
+        self._step_hooks.start_run()
+        self._terminal_hooks.start_run()
 
-        trajectory = Trajectory(task=task, metadata=context or {})
+        # Copied, not aliased: a handler handing over the next exercise
+        # rewrites the goal, and the caller's dict is none of its business.
+        run_context = dict(context or {})
+        trajectory = Trajectory(task=task, metadata=run_context)
         stop_reason = "aborted"
         run_start = time.monotonic()
         start_time = time.perf_counter()
         recent_signatures: list[str] = []
+        # Terminal events the handler claimed, i.e. exercises beyond the one
+        # passed to run(). A continued run is not 1 task / 1 transcript.
+        exercise_counts = {"done": 0, "fail": 0}
         challenge: dict[str, Any] | None = None
 
         transcript_path = ""
@@ -344,7 +438,7 @@ class Agent:
                 if validation_error is None and action.action_type == ActionType.DONE:
                     try:
                         goal_error = await self._bounded(
-                            lambda: self._check_goal(context), run_start
+                            lambda: self._check_goal(run_context), run_start
                         )
                     except _StepTimeout as exc:
                         # Honest failure: an unverified goal must never
@@ -422,37 +516,48 @@ class Agent:
                         # (Tier-1 containment): count it, keep going.
                         self._transcript_failures += 1
 
-                for index, cb in enumerate(self._callbacks):
-                    if self._cb_disabled[index]:
-                        continue
-                    try:
-                        cb(step)
-                    except Exception:
-                        # An observer may never break the observed run:
-                        # count, then degrade after the threshold.
-                        self._cb_failures[index] += 1
-                        self._cb_consecutive[index] += 1
-                        if self._cb_consecutive[index] >= max(
-                            1, self._config.callback_degrade_after
-                        ):
-                            self._cb_disabled[index] = True
-                    else:
-                        self._cb_consecutive[index] = 0
+                # An observer may never break the observed run: counting
+                # and degradation live in _Hooks.dispatch.
+                self._step_hooks.dispatch(step, self._config.callback_degrade_after)
 
-                if action.action_type == ActionType.DONE:
-                    if goal_error:
-                        trajectory.success = False
-                        trajectory.metadata["error"] = goal_error
-                        stop_reason = "unverified"
+                if action.action_type in (ActionType.DONE, ActionType.FAIL):
+                    kind = action.action_type.value
+                    if action.action_type == ActionType.DONE:
+                        if goal_error:
+                            trajectory.success = False
+                            trajectory.metadata["error"] = goal_error
+                            stop_reason = "unverified"
+                        else:
+                            trajectory.success = True
+                            stop_reason = "done"
+                        reason = goal_error
                     else:
-                        trajectory.success = True
-                        stop_reason = "done"
-                    break
-                if action.action_type == ActionType.FAIL:
-                    trajectory.success = False
-                    trajectory.metadata["error"] = action.reasoning
-                    stop_reason = "fail"
-                    break
+                        trajectory.success = False
+                        trajectory.metadata["error"] = action.reasoning
+                        stop_reason = "fail"
+                        reason = action.reasoning
+
+                    event = AgentEvent(
+                        kind=kind,
+                        step=step,
+                        trajectory=trajectory,
+                        reason=reason,
+                    )
+                    self._terminal_hooks.dispatch(event, self._config.callback_degrade_after)
+                    if not event.continue_run:
+                        break
+                    # A handler claimed the terminal event: the run moves on
+                    # to the next exercise, and prompts for it — reusing the
+                    # finished task's wording would ask for the same thing
+                    # again. Clearing the signatures keeps the no-progress
+                    # guard from reading the new exercise's first action as a
+                    # repeat of the last one.
+                    exercise_counts[kind] += 1
+                    if event.task:
+                        task = event.task
+                    if event.goal is not None:
+                        run_context["goal"] = event.goal
+                    recent_signatures.clear()
 
                 if self._config.action_delay_ms > 0:
                     # Bounded: even the inter-step delay cannot overshoot
@@ -490,6 +595,7 @@ class Agent:
             challenge=challenge,
             transcript_path=transcript_path,
             transcript_failures=self._transcript_failures,
+            exercises_claimed=dict(exercise_counts),
         )
 
     # ── Bounded execution ──────────────────────────────────────────────
