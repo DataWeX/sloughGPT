@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document covers the testing infrastructure for sloughGPT across both the Python backend and Next.js frontend.
+This document covers the testing infrastructure for sloughGPT across both the Python backend and Vite + React frontend.
 
 ## Test Overview
 
@@ -73,12 +73,15 @@ render(
 )
 ```
 
-**Next.js Navigation:**
+**Router navigation (`@/vite/next-compat/navigation`):**
 
 ```typescript
-vi.mock('next/navigation', () => ({
+// App code imports the router from the Vite compat shim, never from `next/*`,
+// so this is the module a test has to mock.
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
   usePathname: () => '/current/path',
+  useParams: () => ({}),
   useSearchParams: () => new URLSearchParams(),
 }))
 ```
@@ -139,12 +142,12 @@ describe('MyComponent', () => {
 
 Four test roots are canonical on `main` (do not invent others):
 
-| Root | Contents |
-|------|----------|
-| `tests/` | flat root — `tests/server/`, `tests/contract/`, and other root-level tests |
-| `packages/core-py/tests/` | core-py unit tests (in-tree `pytest.ini` applies there) |
-| `apps/api/server/tests/` | API-server tests |
-| `apps/cli/tests` | CLI tests |
+| Root                      | Contents                                                                   |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `tests/`                  | flat root — `tests/server/`, `tests/contract/`, and other root-level tests |
+| `packages/core-py/tests/` | core-py unit tests (in-tree `pytest.ini` applies there)                    |
+| `apps/api/server/tests/`  | API-server tests                                                           |
+| `apps/cli/tests`          | CLI tests                                                                  |
 
 - Root `pytest.ini` declares the first three: `testpaths = packages/core-py/tests tests apps/cli/tests`;
   CI jobs run pytest from their own working directory.

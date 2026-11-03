@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "a51fbbcf7a3e21a87399d69c112c1fe3067dc45f",
+    "recorded_commit": "a6b28e0d0dc2962b362816df9d98933636161814",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -139,7 +139,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/"],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "734cdf2276c2afd82dc9cff14a23f1f3ba030b99"
+      "tree_hash": "5d3dd26115e217b6c54568f76f5013c6cfaa9bcc"
     },
     "generation": {
       "class": "core-capability",
@@ -161,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "01e2e7db9f7e0a28b94f969cdc5636fe350d4608"
+      "tree_hash": "94377df9766bee7164717dd04dfdc330aba33c21"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -169,7 +169,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "447173be563dca9ff740e8ee764bb4a6567866bf"
+      "tree_hash": "026033970b26fbb0aaa6412e30068c2f5bc8343a"
     },
     "knowledge": {
       "class": "core-capability",
@@ -285,7 +285,7 @@
       "consumers": ["tests/", "apps/cli/", "apps/api/", "scripts/"],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "0d69c3d77a7b81d6c8e4d2f61160416693db20b1"
+      "tree_hash": "f4f498004a3426707ba6ddac72a4f740734395c5"
     },
     "slolib": {
       "class": "core-capability",

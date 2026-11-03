@@ -25,13 +25,16 @@ import {
   useProcessNotifications,
   type ProcessAction,
   type ProcessNotification,
+  type ProcessState,
 } from '@/lib/process-notifications'
 
-const STATE_TONE: Record<string, StatusDotTone> = {
+/** Exhaustive by type (Record over ProcessState): a state added to the
+ * backend STATES vocabulary without a tone here fails `tsc`, never a
+ * silent default (card 20261102_110421). */
+const STATE_TONE: Record<ProcessState, StatusDotTone> = {
   interrupted: 'warning',
   failed: 'destructive',
   running: 'success',
-  auto_resume_skipped: 'warning',
 }
 
 function actionKindClass(intent: ProcessAction['intent']): string {
@@ -40,7 +43,7 @@ function actionKindClass(intent: ProcessAction['intent']): string {
 }
 
 const DockEntry = memo(function DockEntry({ note }: { note: ProcessNotification }) {
-  const tone = STATE_TONE[note.state] ?? 'warning'
+  const tone = STATE_TONE[note.state]
   const eventId = note.event_id
   const failed = note.stale === true
   const sent = note.dispatched === true

@@ -87,6 +87,51 @@ class TestSimpleEmbed:
         b = mgr._simple_embed("dogs are okay")
         assert not np.allclose(a, b)
 
+    def test_order_insensitive(self):
+        """Bag-of-words: the same words in another order are the same point.
+
+        The old fallback indexed by position (`vector[i] = hash(word_i)`), so
+        word order dominated similarity and equal words at different positions
+        looked unrelated.
+        """
+        mgr = MetaWeightManager.__new__(MetaWeightManager)
+        mgr.embedding_dim = 128
+        a = mgr._simple_embed("alpha beta gamma")
+        b = mgr._simple_embed("gamma beta alpha")
+        np.testing.assert_allclose(a, b)
+
+    def test_stable_across_processes(self):
+        """Embeddings must not depend on the process hash seed.
+
+        The old fallback used builtin `hash()`, which Python salts per process:
+        the same feedback text embedded before and after a restart landed in
+        different places, so similarity search silently returned garbage.
+        """
+        import os
+        import subprocess
+        import sys
+
+        code = (
+            "from domain.feedback._internal.meta_weights import MetaWeightManager\n"
+            "m = MetaWeightManager.__new__(MetaWeightManager)\n"
+            "m.embedding_dim = 32\n"
+            "v = m._simple_embed('count 1 to 10 one per line')\n"
+            "print(','.join(f'{x:.6f}' for x in v))\n"
+        )
+        outs = []
+        for seed in ("0", "12345"):
+            env = dict(os.environ, PYTHONHASHSEED=seed)
+            outs.append(
+                subprocess.run(
+                    [sys.executable, "-c", code],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    check=True,
+                ).stdout.strip()
+            )
+        assert outs[0] == outs[1]
+
 
 # ── Aggregate patterns ─────────────────────────────────────────────────
 
@@ -196,7 +241,9 @@ class TestWeightClamping:
         mgr.db.get_user_meta_weights.return_value = {"repetition_boost": -5.0}
         mgr.db.find_similar_messages.return_value = []
         w = mgr.get_adjustment("test", rating="thumbs_up")
-        assert w.repetition_penalty >= 0.8
+        # Floor is 1.0, not 0.8: a penalty < 1 REWARDS already-emitted tokens,
+        # which is the verbatim-replay loop class (card 20261102_001621).
+        assert w.repetition_penalty >= 1.0
         assert w.repetition_penalty <= 1.3
 
     def test_top_p_clamped(self):

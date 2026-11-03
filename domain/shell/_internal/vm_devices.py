@@ -36,30 +36,33 @@ class TensorDevice(Device):
 
     def __init__(self, weights=None):
         self._weights = dict(weights) if weights else {}
-        self._ops = OpTable("TensorDevice", {
-            "matmul": self._matmul,
-            "relu": self._relu,
-            "softmax": self._softmax,
-            "sigmoid": self._sigmoid,
-            "tanh": self._tanh,
-            "add": self._add,
-            "mul": self._mul,
-            "sub": self._sub,
-            "neg": self._neg,
-            "abs": self._abs,
-            "sum": self._sum,
-            "mean": self._mean,
-            "max": self._max,
-            "argmax": self._argmax,
-            "norm": self._norm,
-            "load": self._load_weight,
-            "store": self._store_weight,
-            "shape": self._shape,
-            "zeros": self._zeros,
-            "randn": self._randn,
-            "forward": self._forward,
-            "info": self.info,
-        })
+        self._ops = OpTable(
+            "TensorDevice",
+            {
+                "matmul": self._matmul,
+                "relu": self._relu,
+                "softmax": self._softmax,
+                "sigmoid": self._sigmoid,
+                "tanh": self._tanh,
+                "add": self._add,
+                "mul": self._mul,
+                "sub": self._sub,
+                "neg": self._neg,
+                "abs": self._abs,
+                "sum": self._sum,
+                "mean": self._mean,
+                "max": self._max,
+                "argmax": self._argmax,
+                "norm": self._norm,
+                "load": self._load_weight,
+                "store": self._store_weight,
+                "shape": self._shape,
+                "zeros": self._zeros,
+                "randn": self._randn,
+                "forward": self._forward,
+                "info": self.info,
+            },
+        )
 
     def info(self):
         return {
@@ -304,14 +307,17 @@ class SlonetDevice(Device):
 
     def __init__(self, provider):
         self._provider = provider
-        self._ops = OpTable("SlonetDevice", {
-            "tokenize": self._tokenize,
-            "detokenize": self._detokenize,
-            "generate": self._generate,
-            "generate_stream": self._generate_stream,
-            "forward": self._forward,
-            "info": self._info,
-        })
+        self._ops = OpTable(
+            "SlonetDevice",
+            {
+                "tokenize": self._tokenize,
+                "detokenize": self._detokenize,
+                "generate": self._generate,
+                "generate_stream": self._generate_stream,
+                "forward": self._forward,
+                "info": self._info,
+            },
+        )
 
     def _tokenize(self, text):
         tokens = self._provider._tokenizer.encode(str(text))
@@ -340,7 +346,7 @@ class SlonetDevice(Device):
             top_k=int(top_k) if top_k is not None else None,
             top_p=float(top_p) if top_p is not None else None,
             repetition_penalty=float(repetition_penalty),
-            eos_token=self._provider._tokenizer.eos_token_id or 0,
+            eos_token=self._provider._tokenizer.eos_token_id,
         )
         return result[0]
 
@@ -401,11 +407,14 @@ class MultimodalDevice(Device):
     def __init__(self, engine, arena: TensorArena | None = None):
         self._engine = engine
         self._arena: TensorArena = arena if arena is not None else TensorArena()
-        self._ops = OpTable("MultimodalDevice", {
-            "generate": self._generate,
-            "embed": self._embed,
-            "info": self._info,
-        })
+        self._ops = OpTable(
+            "MultimodalDevice",
+            {
+                "generate": self._generate,
+                "embed": self._embed,
+                "info": self._info,
+            },
+        )
 
     def _generate(self, image_np=None, max_len=20, temperature=1.0):
         image_np = resolve(image_np, self._arena)
@@ -454,10 +463,13 @@ class EngineDevice(Device):
     def __init__(self, engine, engine_name="engine"):
         self._engine = engine
         self._name = engine_name
-        self._ops = OpTable(f"EngineDevice({self._name})", {
-            "generate": self._generate,
-            "info": self._info,
-        })
+        self._ops = OpTable(
+            f"EngineDevice({self._name})",
+            {
+                "generate": self._generate,
+                "info": self._info,
+            },
+        )
 
     def _generate(self, prompt, max_tokens=50, temperature=1.0, **kwargs):
         return self._engine.generate(
@@ -535,18 +547,21 @@ class SlonetTrainingDevice(Device):
             "checkpoint_dir": "checkpoints",
         }
 
-        self._ops = OpTable("SlonetTrainingDevice", {
-            "train": self._train,
-            "eval": self._eval,
-            "save": self._save,
-            "load": self._load,
-            "config": self._config_op,
-            "info": self._info,
-            "tokenize": self._tokenize,
-            "detokenize": self._detokenize,
-            "generate": self._generate,
-            "forward": self._forward,
-        })
+        self._ops = OpTable(
+            "SlonetTrainingDevice",
+            {
+                "train": self._train,
+                "eval": self._eval,
+                "save": self._save,
+                "load": self._load,
+                "config": self._config_op,
+                "info": self._info,
+                "tokenize": self._tokenize,
+                "detokenize": self._detokenize,
+                "generate": self._generate,
+                "forward": self._forward,
+            },
+        )
 
     def _ensure_model(self):
         if self._model is None:
@@ -828,33 +843,36 @@ class NPUVMDevice(Device):
 
     def __init__(self, npu_device):
         self._npu = npu_device
-        self._ops = OpTable("NPUVMDevice", {
-            "load_model": self._load_model,
-            "unload_model": self._unload_model,
-            "tokenize": self._tokenize,
-            "detokenize": self._detokenize,
-            "generate": self._generate,
-            "forward": self._forward,
-            "embed": self._embed,
-            "train_step": self._train_step,
-            "profile": self._profile,
-            "checkpoint": self._checkpoint,
-            "restore": self._restore,
-            "list_checkpoints": self._list_checkpoints,
-            "delete_checkpoint": self._delete_checkpoint,
-            "save_checkpoint": self._save_checkpoint,
-            "load_checkpoint": self._load_checkpoint,
-            "quantize": self._quantize,
-            "dequantize": self._dequantize,
-            "clear_cache": self._clear_cache,
-            "health": self._health,
-            "batch": self._batch,
-            "attention_maps": self._attention_maps,
-            "compare": self._compare,
-            "layers": self._layers,
-            "benchmark": self._benchmark,
-            "info": self._info,
-        })
+        self._ops = OpTable(
+            "NPUVMDevice",
+            {
+                "load_model": self._load_model,
+                "unload_model": self._unload_model,
+                "tokenize": self._tokenize,
+                "detokenize": self._detokenize,
+                "generate": self._generate,
+                "forward": self._forward,
+                "embed": self._embed,
+                "train_step": self._train_step,
+                "profile": self._profile,
+                "checkpoint": self._checkpoint,
+                "restore": self._restore,
+                "list_checkpoints": self._list_checkpoints,
+                "delete_checkpoint": self._delete_checkpoint,
+                "save_checkpoint": self._save_checkpoint,
+                "load_checkpoint": self._load_checkpoint,
+                "quantize": self._quantize,
+                "dequantize": self._dequantize,
+                "clear_cache": self._clear_cache,
+                "health": self._health,
+                "batch": self._batch,
+                "attention_maps": self._attention_maps,
+                "compare": self._compare,
+                "layers": self._layers,
+                "benchmark": self._benchmark,
+                "info": self._info,
+            },
+        )
 
     # VM op -> (kernel NPU ioctl command, extractor from the op's own argument
     # order to the ioctl's). Only ops the kernel NPU can actually serve are

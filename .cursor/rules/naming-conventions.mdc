@@ -20,7 +20,7 @@ alwaysApply: true
 - **Hooks**: `use` + `PascalCase` segment in camelCase (`useAuthStore`).
 - **Functions, variables, object keys** in TS/JS: `camelCase` (`inferV1`, `getTrainingJobs`, `maxStepsInput`).
 - **Types / interfaces**: `PascalCase` (`StandardInferRequest`, `TrainDatasetRef`).
-- **Route segments**: follow Next.js app router conventions; keep folder names lowercase with hyphens only if you add marketing routes (this app mostly uses lowercase single segments).
+- **Route segments**: follow the Vite SPA route conventions (React Router under `app/`); keep folder names lowercase with hyphens only if you add marketing routes (this app mostly uses lowercase single segments).
 - **Env vars**: `SCREAMING_SNAKE`, prefixed e.g. `NEXT_PUBLIC_` for browser.
 
 ## HTTP / JSON (API contracts)

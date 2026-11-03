@@ -137,6 +137,61 @@ def build_source() -> str:
         " as const satisfies Record<string, ContractDescriptor>\n"
         "\n"
         "export type ContractName = keyof typeof CONTRACTS\n"
+        f"{event_types_source()}"
+    )
+
+
+def event_types_source() -> str:
+    """Project the process-event schema into TS declarations.
+
+    The envelope's second projection (``training/process_events.py``
+    EVENT_SCHEMA / ACTION_SCHEMA / vocabularies): ONE Python declaration,
+    byte-identical interfaces in every consumer artifact — rendered on
+    the same freshness gate as CONTRACTS, so a schema change that isn't
+    regenerated fails ``--check`` exactly like a descriptor change.
+    """
+    from training import process_events as pe  # noqa: PLC0415 — after sys.path bootstrap
+
+    def resolve(raw: str) -> str:
+        # PROJECTOR_KIND is a token meaning "the kind literal"; every
+        # other type name is an alias this block itself emits.
+        if raw == "PROJECTOR_KIND":
+            return json.dumps(pe.PROJECTOR_KIND)
+        return raw
+
+    def fields(schema: dict[str, tuple[str, bool]]) -> str:
+        return "\n".join(
+            f"  {name}{'' if required else '?'}: {resolve(raw)}"
+            for name, (raw, required) in schema.items()
+        )
+
+    def union(values: tuple[str, ...]) -> str:
+        return " | ".join(json.dumps(v) for v in values)
+
+    return (
+        "\n"
+        "// ── Process-event contract — projection of training/process_events.py\n"
+        "// (EVENT_SCHEMA / ACTION_SCHEMA / vocabularies). One declaration, two\n"
+        "// halves: edit the Python schema, then regenerate — never edit here.\n"
+        "\n"
+        "/** Intents a projected action may carry (`ACTION_INTENTS`). */\n"
+        f"export type ProcessActionIntent = {union(pe.ACTION_INTENTS)}\n"
+        "\n"
+        "/** One entry of an event's action surface (`ACTION_SCHEMA`). */\n"
+        "export interface ProcessAction {\n"
+        f"{fields(pe.ACTION_SCHEMA)}\n"
+        "}\n"
+        "\n"
+        "/** Values the `state` field carries (`STATES`). */\n"
+        f"export type ProcessState = {union(pe.STATES)}\n"
+        "\n"
+        "/** Values the `event` field carries (`EVENTS`). */\n"
+        f"export type ProcessEventName = {union(pe.EVENTS)}\n"
+        "\n"
+        "/** A projected process event — exactly `EVENT_SCHEMA`, nothing else. */\n"
+        "export interface ProcessEvent {\n"
+        f"{fields(pe.EVENT_SCHEMA)}\n"
+        "}\n"
     )
 
 

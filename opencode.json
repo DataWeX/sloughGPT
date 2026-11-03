@@ -89,7 +89,7 @@
       "hidden": true
     },
     "ui-ux-pro-max": {
-      "description": "Elite UI/UX engineering agent for the Noir Violet design system. Specializes in Next.js pages, @sloughgpt/strui components, responsive layout, accessibility, and design-system enforcement.",
+      "description": "Elite UI/UX engineering agent for the Noir Violet design system. Specializes in Vite + React pages, @sloughgpt/strui components, responsive layout, accessibility, and design-system enforcement.",
       "mode": "subagent",
       "hidden": false
     },

@@ -12,10 +12,18 @@ from __future__ import annotations
 import pytest
 from training.job_store import JobStore
 from training.process_events import (
+    _ACTIONS_BY_STATE,
+    _TITLES,
+    ACTION_INTENTS,
+    ACTION_SCHEMA,
     CONTRACT_VERSION,
+    EVENT_SCHEMA,
+    EVENTS,
     PROJECTOR_KIND,
+    STATES,
     action_ids,
     boot_snapshot,
+    make_event,
     project_job_event,
 )
 
@@ -103,10 +111,11 @@ class TestActionSurface:
 
     def test_every_action_is_structured(self):
         ev = project_job_event({"id": "j1", "status": "interrupted"})
+        required = {f for f, (_t, req) in ACTION_SCHEMA.items() if req}
         for action in ev["actions"]:
-            assert set(action) == {"id", "label", "intent"}
+            assert set(action) == required
             assert action["label"]
-            assert action["intent"] in ("recover", "cancel", "navigate", "dismiss")
+            assert action["intent"] in ACTION_INTENTS
 
 
 class TestBootSnapshot:
@@ -135,3 +144,82 @@ class TestBootSnapshot:
 
     def test_contract_version_stable(self):
         assert CONTRACT_VERSION == 1
+
+
+class TestContractSchema:
+    """One EVENT_SCHEMA source (card 20261102_110421): the schema, the
+    vocabularies and the projector must not drift apart. The TS half of
+    the projection (``contracts.gen.ts`` ProcessEvent) is generated from
+    this same declaration by scripts/gen_ts_contracts.py — two hand-
+    written copies of one envelope is the drift this replaces.
+    """
+
+    @staticmethod
+    def _required() -> set:
+        return {f for f, (_t, req) in EVENT_SCHEMA.items() if req}
+
+    @staticmethod
+    def _optional() -> set:
+        return {f for f, (_t, req) in EVENT_SCHEMA.items() if not req}
+
+    def test_required_fields_are_exactly_the_bare_make_event_output(self):
+        ev = make_event("j1", "interrupted", "interrupted")
+        assert set(ev) == self._required()
+
+    def test_optional_fields_are_exactly_the_declared_extras(self):
+        ev = make_event(
+            "j1",
+            "auto_resume_skipped",
+            "interrupted",
+            surface="skipped",
+            reason="no loadable checkpoint",
+            name="distill",
+        )
+        assert set(ev) == self._required() | self._optional()
+        assert self._optional() == {"reason", "name"}
+
+    def test_undeclared_extra_field_is_rejected(self):
+        """A producer inventing a field (e.g. the frontend-only ``resolved``
+        that never existed on the wire) must fail at construction, not
+        drift silently past the schema."""
+        with pytest.raises(ValueError, match="undeclared"):
+            make_event("j1", "interrupted", "interrupted", resolved=True)
+
+    def test_unknown_state_event_and_surface_are_rejected(self):
+        with pytest.raises(ValueError, match="state"):
+            make_event("j1", "interrupted", "completed")
+        with pytest.raises(ValueError, match="event"):
+            make_event("j1", "not_a_title", "interrupted")
+        with pytest.raises(ValueError, match="surface"):
+            make_event("j1", "interrupted", "interrupted", surface="bogus")
+
+    def test_every_table_intent_is_declared(self):
+        intents = {a["intent"] for surface in _ACTIONS_BY_STATE.values() for a in surface}
+        assert intents <= set(ACTION_INTENTS)
+
+    def test_every_table_action_matches_the_action_schema(self):
+        """The action sub-object has ONE declaration too (ACTION_SCHEMA) —
+        the generated TS ProcessAction is rendered from it."""
+        required = {f for f, (_t, req) in ACTION_SCHEMA.items() if req}
+        assert required == {"id", "label", "intent"}
+        for surface in _ACTIONS_BY_STATE.values():
+            for action in surface:
+                assert set(action) == required
+
+    def test_vocabularies_agree_with_the_tables(self):
+        assert set(EVENTS) == set(_TITLES)
+        assert set(STATES) <= set(_ACTIONS_BY_STATE)
+        assert set(STATES) <= set(EVENTS)
+
+    def test_every_projected_event_stays_within_schema_and_vocab(self, store):
+        _interrupted_row(store, "j1")
+        required = self._required()
+        events = boot_snapshot(store)
+        assert events, "fixture should project at least one event"
+        for ev in events:
+            assert required <= set(ev)
+            assert set(ev) <= required | self._optional()
+            assert ev["state"] in STATES
+            assert ev["event"] in EVENTS
+            for action in ev["actions"]:
+                assert action["intent"] in ACTION_INTENTS

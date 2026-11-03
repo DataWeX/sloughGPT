@@ -16,7 +16,7 @@
       "options": { "cwd": "${workspaceFolder}/apps/web" },
       "group": "none",
       "problemMatcher": [],
-      "detail": "Start Next.js dev server on port 3000"
+      "detail": "Start Vite dev server on port 5173"
     },
     {
       "label": "Start Stack (API + Web)",

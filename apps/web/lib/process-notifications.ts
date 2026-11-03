@@ -31,27 +31,19 @@ import { useStore } from 'zustand'
 import { apiGet } from '@/lib/http-client'
 import { trainingController } from '@/lib/training-controller'
 
-/** Contract shape — mirrors training/process_events.py (CONTRACT_VERSION 1). */
-export interface ProcessAction {
-  id: string
-  label: string
-  intent: 'recover' | 'cancel' | 'navigate' | 'dismiss'
-}
-
-export interface ProcessEvent {
-  event_id: string
-  kind: string
-  process_id: string
-  event: string
-  state: string
-  actions: ProcessAction[]
-  process_link: string
-  title: string
-  /** Backend marks an event resolved (settled process) — drop it. */
-  resolved?: boolean
-  reason?: string
-  name?: string
-}
+/**
+ * Contract shape — GENERATED from training/process_events.py
+ * (EVENT_SCHEMA / ACTION_SCHEMA, card 20261102_110421) via
+ * scripts/gen_ts_contracts.py. Never hand-edit these here; regenerate.
+ */
+export type {
+  ProcessAction,
+  ProcessActionIntent,
+  ProcessEvent,
+  ProcessEventName,
+  ProcessState,
+} from '@/lib/protocol/contracts.gen'
+import type { ProcessEvent } from '@/lib/protocol/contracts.gen'
 
 export interface ProcessNotification extends ProcessEvent {
   /** Set after a successful dispatch (action ran, awaiting state sync). */
@@ -62,7 +54,8 @@ export interface ProcessNotification extends ProcessEvent {
 
 interface ProcessNotificationStore {
   notifications: ProcessNotification[]
-  /** Project events in: dedupe by event_id, update in place, drop resolved. */
+  /** Project events in: dedupe by event_id, update in place, drop settled
+   * (empty action surface — the backend's settled-guard). */
   ingest: (events: ProcessEvent[]) => void
   dismiss: (eventId: string) => void
   clear: () => void
@@ -73,18 +66,18 @@ const processNotificationStore = createStore<ProcessNotificationStore>((set) => 
 
   ingest: (events) => {
     if (!events?.length) return
-    const resolvedIds = new Set(
-      events.filter((e) => e.resolved || e.actions.length === 0).map((e) => e.event_id),
-    )
+    // Settled guard: a projection with no actions carries no command
+    // surface — the process is done and renders nothing.
+    const settledIds = new Set(events.filter((e) => e.actions.length === 0).map((e) => e.event_id))
     set((prev) => {
-      // Start from existing minus anything this batch marks resolved or
+      // Start from existing minus anything this batch settles or
       // re-projects with a fresh action surface.
       const incoming = new Map(events.map((e) => [e.event_id, e]))
       const kept = prev.notifications.filter(
-        (n) => !incoming.has(n.event_id) && !resolvedIds.has(n.event_id),
+        (n) => !incoming.has(n.event_id) && !settledIds.has(n.event_id),
       )
       const updated = events
-        .filter((e) => !e.resolved && e.actions.length > 0)
+        .filter((e) => e.actions.length > 0)
         .map((e) => {
           const existing = prev.notifications.find((n) => n.event_id === e.event_id)
           // A re-projection is fresh server truth: drop stale/dispatched

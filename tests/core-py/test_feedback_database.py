@@ -495,6 +495,61 @@ class TestUserMetaWeights:
         user_ids = {w["user_id"] for w in all_weights}
         assert user_ids == {"alice", "bob"}
 
+    def test_boosts_saturate(self, db):
+        """Feedback is an integrator; it must not integrate without bound.
+
+        Measured on the live profile before this existed: 473 thumbs-up vs 10
+        thumbs-down had accumulated temperature_boost 9.26, repetition_boost
+        -9.26 and top_k_boost -450, which clamps downstream to temperature 1.5
+        / top_k 5 / repetition_penalty 0.8 — a corner that rewards verbatim
+        repetition, so answers replayed instead of ending (card 20261102_001621).
+        """
+        for _ in range(100):
+            weights = db.update_user_meta_weights("alice", "thumbs_up")
+
+        assert weights["thumbs_up_count"] == 100
+        assert weights["temperature_boost"] == pytest.approx(0.3)
+        assert weights["repetition_boost"] == pytest.approx(-0.15)
+        assert weights["top_k_boost"] == pytest.approx(-12.0)
+        assert weights["top_p_boost"] == pytest.approx(0.15)
+
+    def test_saturated_boosts_stay_coherent_when_applied(self, db):
+        """The cap band exists so the neutral weights stay in a sane region."""
+        from domain.feedback._internal.meta_weights import MetaWeights
+
+        for _ in range(100):
+            weights = db.update_user_meta_weights("alice", "thumbs_up")
+        neutral = MetaWeights()
+        assert neutral.temperature + weights["temperature_boost"] <= 1.0 + 1e-9
+        assert neutral.repetition_penalty + weights["repetition_boost"] >= 1.0 - 1e-9
+        assert neutral.top_k + weights["top_k_boost"] >= 20
+
+    def test_legacy_runaway_row_clamped_on_read(self, db):
+        """Rows written before the cap still hold runaway values — repair at
+        the read seam so existing profiles are fixed without a migration."""
+        db._meta_weights.insert_one(
+            {
+                "_id": "legacy",
+                "user_id": "legacy",
+                "temperature_boost": 9.26,
+                "repetition_boost": -9.26,
+                "top_p_boost": 4.5,
+                "top_k_boost": -450.0,
+                "style_bias": 9.0,
+                "confidence_boost": 4.5,
+                "thumbs_up_count": 473,
+                "thumbs_down_count": 10,
+            }
+        )
+
+        weights = db.get_user_meta_weights("legacy")
+
+        assert weights["temperature_boost"] == pytest.approx(0.3)
+        assert weights["repetition_boost"] == pytest.approx(-0.15)
+        assert weights["top_k_boost"] == pytest.approx(-12.0)
+        # Raw counts stay intact: they are history, not a sampling parameter.
+        assert weights["thumbs_up_count"] == 473
+
     def test_custom_deltas(self, db):
         weights = db.update_user_meta_weights(
             "alice",
@@ -505,8 +560,11 @@ class TestUserMetaWeights:
             top_k_delta=5.0,
         )
         assert weights["temperature_boost"] == pytest.approx(0.1)
-        assert weights["repetition_boost"] == pytest.approx(-0.2)
-        assert weights["top_p_boost"] == pytest.approx(0.3)
+        # The cap is an integration bound on the STORED boost, so it also
+        # bounds a caller-supplied delta: repetition_delta 0.2 lands at the
+        # 0.15 cap and top_p_delta 0.3 at 0.15.
+        assert weights["repetition_boost"] == pytest.approx(-0.15)
+        assert weights["top_p_boost"] == pytest.approx(0.15)
         assert weights["top_k_boost"] == pytest.approx(-5.0)
 
     def test_created_at_set(self, db):

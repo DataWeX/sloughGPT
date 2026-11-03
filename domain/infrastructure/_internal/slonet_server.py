@@ -352,7 +352,12 @@ class SloNetServer:
                     top_k=top_k,
                     top_p=top_p,
                     repetition_penalty=repetition_penalty,
-                    eos_token=self._tokenizer.eos_token_id or 0,
+                    # No `or 0` fallback: token 0 is a real vocabulary entry
+                    # ("!" in Qwen), so a missing eos id silently turned every
+                    # "!" into a stop token and truncated the answer. None is
+                    # the honest "no eos id"; chat_stop_ids still carries the
+                    # real turn-end markers.
+                    eos_token=self._tokenizer.eos_token_id,
                     extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
                     kv_state=kv_state,
                     quantize_kv=self._quantize_kv,
@@ -442,7 +447,7 @@ class SloNetServer:
                 len(tokens),
             )
             input_ids = np.array([tokens], dtype=np.int64)
-            eos_id = self._tokenizer.eos_token_id or 0
+            eos_id = self._tokenizer.eos_token_id
             _t_kv = _time.monotonic()
             kv_state = self._resolve_kv_state(session_id)
             logger.debug(

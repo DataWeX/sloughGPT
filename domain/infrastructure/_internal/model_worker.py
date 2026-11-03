@@ -31,6 +31,7 @@ Architecture::
     │  ModelServer │  (unchanged)
     └──────────────┘
 """
+
 from __future__ import annotations
 
 import gc
@@ -350,7 +351,7 @@ def _slo_worker_main(
                 top_k=top_k,
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
-                eos_token=provider._tokenizer.eos_token_id or 0,
+                eos_token=provider._tokenizer.eos_token_id,
                 extra_stop_ids=getattr(provider._tokenizer, "chat_stop_ids", lambda: ())(),
             )
         finally:
@@ -398,7 +399,7 @@ def _slo_worker_main(
         for tok_id in provider._model.generate_numpy_stream(
             input_ids,
             max_new_tokens=max_new_tokens,
-            eos_token=provider._tokenizer.eos_token_id or 0,
+            eos_token=provider._tokenizer.eos_token_id,
             extra_stop_ids=getattr(provider._tokenizer, "chat_stop_ids", lambda: ())(),
             temperature=temperature,
             top_k=top_k,

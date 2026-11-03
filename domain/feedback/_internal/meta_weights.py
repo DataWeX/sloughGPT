@@ -116,14 +116,30 @@ class MetaWeightManager:
             return self._simple_embed(text)
 
     def _simple_embed(self, text: str) -> np.ndarray:
-        """
-        Simple embedding using word hash (fallback when no sentence-transformers).
-        """
-        words = text.lower().split()
-        vector = np.zeros(self.embedding_dim)
+        """Deterministic bag-of-words fallback (signed feature hashing).
 
-        for i, word in enumerate(words[: self.embedding_dim]):
-            vector[i] = hash(word) % 100 / 100.0
+        Used when sentence-transformers is unavailable. Two properties matter:
+        the same text must always produce the same vector, and similar text
+        must land close together.
+
+        Python's builtin ``hash()`` is salted per process, so the previous
+        implementation produced a different embedding for the same text after
+        every restart — stored feedback rows and live queries then lived in
+        different spaces and the similarity search silently returned arbitrary
+        patterns. It was also position-indexed (``vector[i] = hash(word_i)``),
+        which makes word order dominate and equal words at different positions
+        look unrelated. Feature hashing into a fixed width with a signed
+        accumulator is order-insensitive and stable across processes.
+        """
+        import hashlib
+
+        vector = np.zeros(self.embedding_dim)
+        for word in text.lower().split():
+            digest = hashlib.blake2b(word.encode("utf-8"), digest_size=8).digest()
+            value = int.from_bytes(digest, "big")
+            index = value % self.embedding_dim
+            sign = 1.0 if (value >> 63) & 1 else -1.0
+            vector[index] += sign
 
         # Normalize
         norm = np.linalg.norm(vector)
@@ -241,9 +257,12 @@ class MetaWeightManager:
             weights.style_bias += adjustments.get("style_bias", 0)
             weights.confidence_boost += adjustments.get("confidence_boost", 0)
 
-            # Clamp to safe ranges
+            # Clamp to safe ranges. `repetition_penalty` never goes below 1.0:
+            # a value < 1 REWARDS tokens the model already emitted, which is
+            # exactly how a completed answer turns into a verbatim replay loop
+            # that never emits its turn-end token (card 20261102_001621).
             weights.temperature = max(0.1, min(1.5, weights.temperature))
-            weights.repetition_penalty = max(0.8, min(1.3, weights.repetition_penalty))
+            weights.repetition_penalty = max(1.0, min(1.3, weights.repetition_penalty))
             weights.top_p = max(0.1, min(1.0, weights.top_p))
             weights.top_k = max(5, min(200, weights.top_k))
             weights.style_bias = max(-1.0, min(1.0, weights.style_bias))
