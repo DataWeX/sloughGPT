@@ -4,7 +4,7 @@ import React from 'react'
 
 const mockPush = vi.fn()
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
-vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 
 import { TrainingHistory } from './TrainingHistory'
 
