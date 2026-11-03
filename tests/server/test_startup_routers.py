@@ -470,7 +470,7 @@ class TestModelLoadedGuard:
         with (
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.infrastructure.model_resolver.get_model_dir",
                 return_value=Path("/nonexistent-dir"),
             ) as mock_dir,
             patch("os.path.exists", return_value=False),
@@ -951,7 +951,7 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.infrastructure.model_resolver.get_model_dir",
                 return_value=Path("/missing"),
             ),
             patch("os.path.exists", return_value=False),
@@ -966,7 +966,7 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.infrastructure.model_resolver.get_model_dir",
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
@@ -984,7 +984,7 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.infrastructure.model_resolver.get_model_dir",
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
@@ -1016,7 +1016,7 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": state}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.infrastructure.model_resolver.get_model_dir",
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
@@ -1060,7 +1060,7 @@ class TestTryLazyGuardAutoload:
             patch.dict("sys.modules", {"state": state}),
             patch("config.get_process_guard_enabled", return_value=True),
             patch(
-                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                "domain.infrastructure.model_resolver.get_model_dir",
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
