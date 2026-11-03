@@ -58,9 +58,40 @@ class TestCrossTurnBenchmark:
             kv_state=state,
         )
 
-    def test_two_turn_speedup(self, tiny_model):
-        """Two-turn conversation: measure speedup from KV cache reuse."""
+    def _record_recomputes(self, model, monkeypatch):
+        """Capture ``(prompt_len, start)`` for every generate call.
+
+        ``_resolve_kv_state`` already computes the resume point; recomputed
+        tokens = ``prompt_len - start`` is the exact work a cache skips.
+        That is the property a cache benchmark must gate on — wall clock on a
+        1-block/64-dim model is single-digit ms where scheduler noise dwarfs
+        the signal (observed flake: 0.62x while the cache was not slower).
+        Observation only: the real method runs unchanged, we just read its
+        return.
+        """
+        records: list[tuple[int, int]] = []
+        orig = model._resolve_kv_state
+
+        def spy(*args, **kwargs):
+            out = orig(*args, **kwargs)
+            prompt_len = kwargs.get("prompt_len") if "prompt_len" in kwargs else args[7]
+            records.append((int(prompt_len), int(out[-1])))
+            return out
+
+        monkeypatch.setattr(model, "_resolve_kv_state", spy)
+        return records
+
+    def test_two_turn_speedup(self, tiny_model, monkeypatch):
+        """Two-turn conversation: the cache's property is WORK SKIPPED, not ms.
+
+        Gates on recomputed tokens — exact and free — instead of wall clock:
+        a 1-block/64-dim model finishes a turn in single-digit ms, so a clock
+        threshold measures scheduler noise (observed 0.62x in a combined run
+        while the cache was in fact not slower). Timings are still printed
+        for humans (run with -s); they are just never asserted on.
+        """
         m = tiny_model
+        records = self._record_recomputes(m, monkeypatch)
         ids1 = np.array([[10, 20, 30, 40, 50]])
         max_new = 10
 
@@ -85,6 +116,13 @@ class TestCrossTurnBenchmark:
         r2_cached = self._generate_cached(m, state, ids2c, max_new)
         t2_cached = time.perf_counter() - t0
 
+        # Full-prompt repeat into the same state: every token is already
+        # cached, so exactly one token is recomputed (card 20261102_012822 —
+        # this used to re-prefill the entire prompt).
+        t0 = time.perf_counter()
+        self._generate_cached(m, state, ids1, max_new)
+        t_repeat = time.perf_counter() - t0
+
         total_fresh = t1_fresh + t2_fresh
         total_cached = t1_cached + t2_cached
         speedup = total_fresh / total_cached if total_cached > 0 else float("inf")
@@ -96,20 +134,49 @@ class TestCrossTurnBenchmark:
         print(f"Turn 1 (cached):  {t1_cached * 1000:8.2f} ms  |  {r1c.shape[1]} tokens out")
         print(f"Turn 2 (fresh):   {t2_fresh * 1000:8.2f} ms  |  {r2_fresh.shape[1]} tokens out")
         print(f"Turn 2 (cached):  {t2_cached * 1000:8.2f} ms  |  {r2_cached.shape[1]} tokens out")
+        print(f"Repeat (cached):  {t_repeat * 1000:8.2f} ms")
         print(f"{'─' * 60}")
         print(f"Total fresh:      {total_fresh * 1000:8.2f} ms")
         print(f"Total cached:     {total_cached * 1000:8.2f} ms")
         print(f"Speedup:          {speedup:8.2f}x")
         print(f"{'=' * 60}")
 
-        assert total_cached <= total_fresh * 1.5, (
-            f"KV cache should not be slower: cached={total_cached * 1000:.2f}ms "
-            f"vs fresh={total_fresh * 1000:.2f}ms"
-        )
+        # Exact work per call: (prompt_len, start) in call order —
+        # fresh turn1, fresh turn2, cached turn1 (cold state), cached turn2,
+        # full-prompt repeat.
+        recomputed = [prompt_len - start for prompt_len, start in records]
+        fresh_t1, fresh_t2, cached_t1, cached_t2, repeat = recomputed
+        prompt1_len = int(ids1.shape[1])
+        prompt2_len = int(ids2.shape[1])
 
-    def test_three_turn_cumulative_speedup(self, tiny_model):
-        """Three-turn conversation: cumulative speedup should grow."""
+        assert len(records) == 5, f"expected 5 generate calls, saw {len(records)}"
+        # No cache (kv_state=None) re-prefills everything, every time.
+        assert fresh_t1 == prompt1_len, f"fresh turn1 recomputed {fresh_t1}, want {prompt1_len}"
+        assert fresh_t2 == prompt2_len, f"fresh turn2 recomputed {fresh_t2}, want {prompt2_len}"
+        # A cold state is a full prefill — the cache pays once, then skips.
+        assert cached_t1 == prompt1_len, (
+            f"cold cached turn1 recomputed {cached_t1}, want {prompt1_len}"
+        )
+        # Turn 2 recomputes only the appended token plus the previous turn's
+        # last generated token (never cached: KV for it is never computed).
+        # Everything else — the whole shared prefix — comes from the cache.
+        assert cached_t2 == 2, (
+            f"cached turn2 recomputed {cached_t2}, want 2 (append + uncached last)"
+        )
+        assert cached_t2 < fresh_t2, "cache must skip work vs the fresh path"
+        # Full-prompt match resumes at prompt_len - 1: exactly one token.
+        assert repeat == 1, f"full-prompt repeat recomputed {repeat}, want 1"
+
+    def test_three_turn_cumulative_speedup(self, tiny_model, monkeypatch):
+        """Three-turn conversation: cumulative recomputed tokens must stay flat.
+
+        Turn 1 prefills once; every later cached turn recomputes only the
+        append (+ the one never-cached last token), while the fresh path
+        re-prefills the whole growing prompt each turn. Timings are printed,
+        never asserted (same scheduler-noise trap as test_two_turn_speedup).
+        """
         m = tiny_model
+        records = self._record_recomputes(m, monkeypatch)
         ids = np.array([[10, 20, 30]])
         max_new = 8
 
@@ -144,7 +211,26 @@ class TestCrossTurnBenchmark:
         print(f"Speedup:       {speedup:8.2f}x")
         print(f"{'=' * 60}")
 
-        assert speedup >= 0.85, f"Three-turn should not regress >15%, got {speedup:.2f}x"
+        # Calls interleave fresh/cached per turn: [f1, c1, f2, c2, f3, c3].
+        recomputed = [prompt_len - start for prompt_len, start in records]
+        fresh_recomputed = recomputed[0::2]
+        cached_recomputed = recomputed[1::2]
+        prompt_lens = [records[i][0] for i in range(0, len(records), 2)]
+
+        assert len(records) == 6, f"expected 6 generate calls, saw {len(records)}"
+        # Fresh re-prefills the whole (growing) prompt every turn.
+        assert fresh_recomputed == prompt_lens, (
+            f"fresh recomputed {fresh_recomputed}, want full prompts {prompt_lens}"
+        )
+        # Cached: one prefill up front, then append-only recomputes.
+        assert cached_recomputed == [prompt_lens[0], 2, 2], (
+            f"cached recomputed {cached_recomputed}, want [{prompt_lens[0]}, 2, 2]"
+        )
+        # Cumulative work must keep growing apart, not just win once.
+        assert sum(cached_recomputed) * 2 < sum(fresh_recomputed), (
+            f"cumulative cached {sum(cached_recomputed)} must be less than half "
+            f"of fresh {sum(fresh_recomputed)}"
+        )
 
     def test_stream_matches_batch(self, tiny_model):
         """Streaming path produces same token count as batch path."""
