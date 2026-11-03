@@ -315,6 +315,11 @@ class SloNetServer:
                 top_p=top_p,
                 top_k=top_k,
                 repetition_penalty=repetition_penalty,
+                # The guard branch used to drop this, so a direct provider
+                # `chat()` under a live guard re-prefilled every turn. The
+                # worker resolves the session's KV (same model instance in
+                # thread mode) instead of starting from a fresh state.
+                session_id=session_id,
             )
             full = result.get("text", "")
             # Worker may return full decode (prompt+gen) — strip a real prefix echo only.

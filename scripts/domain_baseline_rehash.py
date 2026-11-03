@@ -38,9 +38,22 @@ def git(*args: str) -> str:
 
 
 def dir_hashes() -> dict[str, str]:
+    """Hash every domain subdir that exists in HEAD.
+
+    HEAD is the source of truth, not the working tree: the baseline describes
+    *committed* contents, so a stale on-disk dir (e.g. a ``__pycache__``-only
+    leftover after a move such as ``domain/journeys`` -> ``journeys/``) has no
+    tree to hash and used to abort the whole rehash with ``rev-parse``.
+    """
     names = sorted(
-        p.name for p in (REPO / "domain").iterdir() if p.is_dir() and p.name not in PRUNE
+        n
+        for n in git("ls-tree", "-d", "--name-only", "HEAD:domain").splitlines()
+        if n and n not in PRUNE
     )
+    on_disk = {p.name for p in (REPO / "domain").iterdir() if p.is_dir()}
+    untracked = sorted(on_disk - set(names) - PRUNE)
+    if untracked:
+        print(f"note: ignoring domain dirs absent from HEAD: {untracked}", file=sys.stderr)
     return {n: git("rev-parse", f"HEAD:domain/{n}") for n in names}
 
 

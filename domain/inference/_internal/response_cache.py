@@ -296,6 +296,7 @@ class ResponseCache:
             total = self._stats["hits"] + self._stats["misses"]
             hit_rate = self._stats["hits"] / total if total > 0 else 0.0
             return {
+                "enabled": True,
                 "generation": current_generation(),
                 "entries": len(self._entries),
                 "max_entries": self.max_entries,

@@ -417,6 +417,13 @@ class TestReadResponseDocs:
             lambda: tmp_path / "response_logs",
         )
         (tmp_path / "response_logs").mkdir()
+        # read_response_docs resolves the process-global tracker, which another
+        # test file may already have populated with its own docs; patch it to an
+        # empty collection so "empty journal" means empty, not "whatever ran first".
+        monkeypatch.setattr(
+            "domain.feedback._internal.response_tracker._response_tracker",
+            ResponseTracker(log_dir=str(tmp_path / "response_logs")),
+        )
         assert read_response_docs(tmp_path / "response_logs") is None
 
     def test_canonical_dir_returns_docs(self, tmp_path, monkeypatch):

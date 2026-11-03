@@ -11,7 +11,6 @@ Public API:
     ContextPart, BudgetedContext, budget_parts, render_context_block, estimate_tokens
     DEFAULT_KNOWLEDGE_BUDGET, LAYER_PRIORITY
     analyze_image, ImageAnalysis
-    ResponseCache, get_response_cache
     generation: LanguageClient, hosted, soul, engine, extract_json
 """
 
@@ -92,6 +91,7 @@ __all__ = [
     "ImageAnalysis",
     "ResponseCache",
     "get_response_cache",
+    "reset_response_cache_for_tests",
 ]
 
 
@@ -111,13 +111,14 @@ def __getattr__(name):
         "get_engine": "domain.inference._internal.native.engine",
         "analyze_image": "domain.inference._internal.image_capability",
         "ImageAnalysis": "domain.inference._internal.image_capability",
-        "ResponseCache": "domain.inference._internal.response_cache",
-        "get_response_cache": "domain.inference._internal.response_cache",
         "LanguageClient": "domain.inference.generation",
         "hosted": "domain.inference.generation",
         "soul": "domain.inference.generation",
         "engine": "domain.inference.generation",
         "extract_json": "domain.inference.generation",
+        "ResponseCache": "domain.inference._internal.response_cache",
+        "get_response_cache": "domain.inference._internal.response_cache",
+        "reset_response_cache_for_tests": "domain.inference._internal.response_cache",
     }
     if name in _lazy:
         import importlib

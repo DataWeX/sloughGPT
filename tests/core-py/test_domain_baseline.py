@@ -42,8 +42,27 @@ def _load() -> dict:
     return json.loads(BASELINE.read_text(encoding="utf-8"))
 
 
+def _has_source(path: Path) -> bool:
+    """True when *path* holds anything besides interpreter litter.
+
+    A dir left behind by a move keeps only ``__pycache__`` and is not a package
+    anymore — cataloguing it would demand a class/facets review for a directory
+    that ships no code (this is why ``domain/journeys`` failed the gate locally
+    after moving to ``journeys/``). HEAD is the other half of the contract:
+    ``_git_tree`` hashes committed contents, so an untracked leftover has no
+    tree to review either.
+    """
+    return any(
+        not (PRUNE & {part.name for part in rel.parents})
+        for rel in path.rglob("*")
+        if rel.is_file()
+    )
+
+
 def _on_disk() -> list[str]:
-    return sorted(p.name for p in DOMAIN.iterdir() if p.is_dir() and p.name not in PRUNE)
+    return sorted(
+        p.name for p in DOMAIN.iterdir() if p.is_dir() and p.name not in PRUNE and _has_source(p)
+    )
 
 
 def _git_tree(name: str) -> str:

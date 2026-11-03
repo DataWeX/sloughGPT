@@ -71,7 +71,10 @@ export function useConsciousnessDashboard() {
         setEvalReport(eResult.value ?? null)
       }
       if (sResult.status === 'fulfilled') {
-        if (sResult.value.self_beliefs) setCurrentBeliefs(sResult.value.self_beliefs)
+        // Wire field is `beliefs` (routers/consciousness.py get_self_model
+        // returns `beliefs: dict(sm.self_beliefs)`); `self_beliefs` never
+        // existed on the response, so this branch silently never ran.
+        if (sResult.value.beliefs) setCurrentBeliefs(sResult.value.beliefs)
       }
       if (qNowResult.status === 'fulfilled') {
         // The endpoint wraps the flat map: {current: {valence…}, narrative,

@@ -82,9 +82,21 @@ describe('ConsciousnessDashboardPage', () => {
     mockController.getQualiaHistory.mockResolvedValue({ history: [] as any })
     mockController.getBeliefsHistory.mockResolvedValue({ beliefs: [] as any })
     mockController.evaluate.mockResolvedValue(mockEvalReport as any)
+    // Real wire shape: get_self_model returns identity/beliefs/doubts/
+    // episode_count (beliefs is the numeric self-belief map — the old
+    // `self_beliefs` key existed only in mocks, so the beliefs panel never
+    // populated from this branch).
     mockController.getSelfModel.mockResolvedValue({
-      self_beliefs: { competence: 0.7, helpfulness: 0.8 },
-    } as any)
+      identity: {
+        name: 'SloughGPT',
+        capabilities: ['analysis'],
+        limitations: [],
+        values: ['honesty'],
+      },
+      beliefs: { competence: 0.7, helpfulness: 0.8 },
+      doubts: ['am I truly understanding?'],
+      episode_count: 42,
+    })
     // Real backend shape: /consciousness/qualia wraps the flat map in an
     // envelope — {current: {valence…}, narrative, history_count} (apiGet
     // unwraps the outer {status,data}, not this inner `current`).
@@ -223,6 +235,15 @@ describe('ConsciousnessDashboardPage', () => {
       expect(screen.getAllByText('0.50').length).toBeGreaterThan(0)
       expect(screen.getAllByText('arousal').length).toBeGreaterThan(0)
       expect(screen.getAllByText('0.30').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('populates the beliefs panel from self-model `beliefs` (was `self_beliefs`)', async () => {
+    render(<ConsciousnessDashboardPage />, { wrapper: TestWrapper })
+    await waitFor(() => {
+      expect(screen.getAllByText('Beliefs').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('70%').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('80%').length).toBeGreaterThan(0)
     })
   })
 })

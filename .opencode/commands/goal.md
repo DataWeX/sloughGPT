@@ -1,6 +1,6 @@
 ---
 description: Autonomous goal loop — classify, then act→verify→re-assess until the definition of done is met (Claude-Code-style)
-agent: build
+agent: gen
 ---
 
 Autonomous execution of this goal: $ARGUMENTS
