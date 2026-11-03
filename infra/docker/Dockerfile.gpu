@@ -24,7 +24,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.11 /usr/bin/python
 
-RUN python3 -m venv /opt/venv
+# `python3` here is jammy's 3.10, but the apt line above installs
+# python3.11-venv only — `python3 -m venv` died with "ensurepip is not
+# available" the first time anyone built this file (rot gate, 2026-11-03).
+# Build the venv with the interpreter the image actually ships.
+RUN python3.11 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY apps/api/server/requirements.txt /tmp/requirements-api.txt
