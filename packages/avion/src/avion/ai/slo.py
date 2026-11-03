@@ -89,7 +89,13 @@ def _history_text(history: list[Step] | None, budget: int | None = None) -> str:
     for s in steps[-_HISTORY_STEPS:]:
         if s.action is None:
             continue
-        lines.append(f"- {s.action.action_type.value} {s.action.params} => {s.observation[:120]}")
+        # The action's reasoning travels with the line: when a step was
+        # rejected (unknown action name, missing params), that explanation
+        # is the only feedback the next step gets.
+        why = f" ({s.action.reasoning[:120]})" if s.action.reasoning else ""
+        lines.append(
+            f"- {s.action.action_type.value} {s.action.params} => {s.observation[:120]}{why}"
+        )
     text = "\n".join(lines) or "(no actions yet)"
     if budget is not None and len(text) > budget:
         text = "...[trimmed]\n" + text[-budget:]
@@ -112,9 +118,11 @@ def _cards_text(available: list[ActionType] | None) -> str:
 def parse_action(text: str) -> Action:
     """Parse model output into an Action.
 
-    Garbage never kills a run: unparseable output becomes a short WAIT
-    (the no-progress guard stops persistent nonsense), unknown types
-    become FAIL, invalid params become WAIT with the validation error.
+    Garbage never kills a run: unparseable output, an invented action name
+    and invalid params all become a short WAIT carrying the error, so the
+    next step sees its mistake and can correct it (the no-progress guard
+    stops persistent nonsense). FAIL stays reserved for the model actually
+    giving up.
     """
     data = _extract_json(text)
     if data is None:
@@ -128,9 +136,11 @@ def parse_action(text: str) -> Action:
     try:
         action_type = ActionType(raw_type)
     except ValueError:
+        known = ", ".join(at.value for at in ActionType)
         return Action(
-            action_type=ActionType.FAIL,
-            reasoning=f"unknown action_type {raw_type!r}",
+            action_type=ActionType.WAIT,
+            params={"ms": 500},
+            reasoning=f"unknown action_type {raw_type!r}, retrying. Known: {known}",
             confidence=0.2,
         )
     action = Action(

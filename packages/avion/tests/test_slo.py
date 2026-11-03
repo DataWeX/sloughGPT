@@ -32,6 +32,22 @@ class TestPrompt:
         assert "clicked" in prompt
         assert "button" in prompt
 
+    def test_history_shows_why_a_step_was_rejected(self):
+        from avion.ai.models import Action, Step
+
+        history = [
+            Step(
+                step_number=0,
+                action=Action(
+                    ActionType.WAIT,
+                    {"ms": 500},
+                    reasoning="unknown action_type 'teleport', retrying",
+                ),
+                observation="Waited 500ms",
+            )
+        ]
+        assert "unknown action_type" in build_prompt("t", None, history)
+
     def test_empty_state(self):
         prompt = build_prompt("do it")
         assert "(first step)" in prompt
@@ -103,9 +119,13 @@ class TestParse:
         assert a.action_type == ActionType.WAIT
         assert a.confidence < 0.5
 
-    def test_unknown_type_becomes_fail(self):
+    def test_unknown_type_becomes_wait_with_the_names_to_choose_from(self):
+        # An invented action name is the same class of mistake as invalid
+        # params: recoverable, so it must not end the run.
         a = parse_action('{"action_type": "teleport"}')
-        assert a.action_type == ActionType.FAIL
+        assert a.action_type == ActionType.WAIT
+        assert "teleport" in a.reasoning
+        assert "mouse_click" in a.reasoning and "done" in a.reasoning
 
     def test_invalid_params_become_wait(self):
         a = parse_action('{"action_type": "mouse_click", "params": {}}')
