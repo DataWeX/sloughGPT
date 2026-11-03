@@ -941,3 +941,142 @@ class TestSloManagerBinaryFormat:
         # config_len=0 means no JSON to parse; text fallback may handle it.
         souls = m.list_souls()
         assert isinstance(souls, list)
+
+
+# ---------------------------------------------------------------------------
+# SloManager — lazy scan + persisted index (card 20261103_085029)
+# ---------------------------------------------------------------------------
+class TestSloManagerLazyIndex:
+    """Construction must not parse souls; the index must be reused and invalidated.
+
+    The regression being locked in: ``SloManager.__init__`` used to parse every
+    candidate synchronously. A trained ``.soul`` embeds its Adam optimizer state
+    as JSON (~41 MB), so one ``json.loads`` costs ~2.2 s and the whole scan cost
+    11 s of the 2026-11-03 cold start, before the server answered /health.
+    """
+
+    def test_init_does_not_scan(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        m = SloManager(souls_dir=str(tmp_path))
+        assert m._scanned is False
+        assert m._souls_cache == {}
+        assert not m._index_file.exists()
+
+    def test_first_access_scans(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        m = SloManager(souls_dir=str(tmp_path))
+        assert [s.name for s in m.list_souls()] == ["a"]
+        assert m._scanned is True
+
+    def test_index_written_beside_non_repo_souls_dir(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        m = SloManager(souls_dir=str(tmp_path))
+        m.warm()
+        # Never the repo's data/ index: a test must not rewrite production state.
+        assert m._index_file == tmp_path / ".soul_index.json"
+        assert m._index_file.exists()
+
+    def test_second_manager_uses_index_and_agrees(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a", "description": "first"})
+        _write_soul_binary(tmp_path / "b.soul", {"name": "b", "description": "second"})
+        first = SloManager(souls_dir=str(tmp_path))
+        cold = {s.name: s.description for s in first.list_souls()}
+
+        second = SloManager(souls_dir=str(tmp_path))
+        warm = {s.name: s.description for s in second.list_souls()}
+        assert warm == cold
+
+    def test_index_avoids_reparsing(self, tmp_path, monkeypatch):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        SloManager(souls_dir=str(tmp_path)).warm()  # build the index
+
+        calls = []
+        original = SloManager._parse_soul_info
+        monkeypatch.setattr(
+            SloManager,
+            "_parse_soul_info",
+            lambda self, path: calls.append(path) or original(self, path),
+        )
+        again = SloManager(souls_dir=str(tmp_path))
+        assert [s.name for s in again.list_souls()] == ["a"]
+        assert calls == [], "indexed scan must not re-parse unchanged files"
+
+    def test_changed_file_is_reparsed(self, tmp_path):
+        soul = tmp_path / "a.soul"
+        _write_soul_binary(soul, {"name": "a", "description": "old"})
+        SloManager(souls_dir=str(tmp_path)).warm()
+
+        _write_soul_binary(soul, {"name": "a", "description": "new-and-longer"})
+        # mtime/size invalidation: a rewritten soul must not serve stale metadata.
+        again = SloManager(souls_dir=str(tmp_path))
+        assert again.get_soul("a").description == "new-and-longer"
+
+    def test_deleted_file_dropped_from_index(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        gone = tmp_path / "b.soul"
+        _write_soul_binary(gone, {"name": "b"})
+        SloManager(souls_dir=str(tmp_path)).warm()
+        gone.unlink()
+
+        again = SloManager(souls_dir=str(tmp_path))
+        assert [s.name for s in again.list_souls()] == ["a"]
+        assert str(gone) not in again._index_file.read_text()
+
+    def test_corrupt_index_falls_back_to_parse(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        (tmp_path / ".soul_index.json").write_text("{not json")
+        m = SloManager(souls_dir=str(tmp_path))
+        assert [s.name for s in m.list_souls()] == ["a"]
+
+    def test_unknown_index_version_ignored(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        m = SloManager(souls_dir=str(tmp_path))
+        m.warm()
+        m._index_file.write_text('{"version": 999, "entries": {}}')
+        again = SloManager(souls_dir=str(tmp_path))
+        assert [s.name for s in again.list_souls()] == ["a"]
+
+    def test_rescan_sees_new_file(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        m = SloManager(souls_dir=str(tmp_path))
+        assert [s.name for s in m.list_souls()] == ["a"]
+
+        _write_soul_binary(tmp_path / "b.soul", {"name": "b"})
+        assert [s.name for s in m.rescan_souls()] == ["a", "b"]
+
+    def test_preference_restored_on_first_scan(self, tmp_path, monkeypatch):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        m = SloManager(souls_dir=str(tmp_path))
+        pref = tmp_path / "pref"
+        pref.write_text("a")
+        monkeypatch.setattr(m, "_preference_file", pref)
+        # The preference is applied at the end of the (deferred) scan.
+        assert m.get_current_soul().name == "a"
+
+    def test_warm_is_idempotent(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        m = SloManager(souls_dir=str(tmp_path))
+        assert m.warm() == 1
+        assert m.warm() == 1
+
+    def test_warm_soul_index_async_disabled_by_env(self, monkeypatch):
+        from domain.inference._internal import slo_manager as mod
+
+        monkeypatch.setenv("SLO_SOUL_INDEX_WARM", "0")
+        assert mod.warm_soul_index_async() is None
+
+    def test_warm_soul_index_async_returns_thread(self, monkeypatch, tmp_path):
+        from domain.inference._internal import slo_manager as mod
+
+        monkeypatch.delenv("SLO_SOUL_INDEX_WARM", raising=False)
+        old = mod._slo_manager
+        try:
+            mod._slo_manager = SloManager(souls_dir=str(tmp_path))
+            thread = mod.warm_soul_index_async()
+            assert thread is not None
+            thread.join(timeout=10)
+            assert mod._slo_manager._scanned is True
+            # Already scanned: no second thread.
+            assert mod.warm_soul_index_async() is None
+        finally:
+            mod._slo_manager = old

@@ -12,7 +12,8 @@ import logging
 import os
 import struct
 import threading
-from dataclasses import dataclass, field
+import time
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,12 @@ class SloInfo:
     generation_params: dict[str, Any] = field(default_factory=dict)
 
 
+#: SloInfo attributes persisted in the on-disk soul index. ``loaded_at`` is
+#: runtime-only (it changes on every switch) and would dirty the index.
+_INDEXED_FIELDS: tuple[str, ...] = tuple(f.name for f in fields(SloInfo) if f.name != "loaded_at")
+_INDEX_VERSION = 1
+
+
 class SloManager:
     """
     Hot-swappable soul/personality manager.
@@ -70,62 +77,196 @@ class SloManager:
         self._preference_file = (
             find_repo_root(Path(__file__).resolve()) / "data" / ".soul_preference"
         )
+        # Persisted scan index. Lives in ``data/`` for the repo's own models dir
+        # (gitignored, canonical cache location); any other souls dir — tests,
+        # alternate checkpoints — keeps it beside its own data so a test run can
+        # never rewrite the production index.
+        repo_root = find_repo_root(Path(__file__).resolve())
+        index_override = os.environ.get("SLO_SOUL_INDEX_PATH")
+        if index_override:
+            self._index_file = Path(index_override)
+        elif self.slos_dir.resolve() == (repo_root / "models").resolve():
+            self._index_file = repo_root / "data" / ".soul_index.json"
+        else:
+            self._index_file = self.slos_dir / ".soul_index.json"
+        self._scan_lock = threading.Lock()
+        self._scanned = False
 
-        # Load cached souls
-        self._scan_souls()
+        # The scan is deliberately NOT run here. Each candidate soul embeds a
+        # JSON config header that can be tens of MB (a trained ``.soul`` carries
+        # ``metadata.training_state.optimizer`` — the Adam moments — as JSON
+        # floats, ~41 MB per file, and ``json.loads`` on that costs ~2.2 s).
+        # On the 2026-11-03 cold start this cost 11 s of the 40 s boot, before
+        # the server accepted a single request. Inventory is not readiness:
+        # ``_ensure_scanned()`` populates the cache on first real use, and the
+        # ``(path, mtime, size) → SloInfo`` index below makes every boot after
+        # the first pay only a ``stat`` per candidate.
+        #
+        # The preference is restored at the end of ``_scan_souls()`` because it
+        # can only be validated against a populated cache.
 
-        # Load saved preference
-        self._load_preference()
+    def _ensure_scanned(self) -> None:
+        """Populate the soul cache on first use (lazy ``_scan_souls``)."""
+        if not self._scanned:
+            self._scan_souls()
 
-    def _scan_souls(self) -> None:
-        """Scan for available .slo (personality profiles) and .soul (checkpoint) files.
+    # ── persisted index ──────────────────────────────────────────────────
+    # Keyed by absolute path so parallel worktrees (each with its own models/
+    # and data/) never share entries. Entries are invalidated by (mtime, size).
 
-        Skips the scan if the cache is already populated (idempotent).
-        Call ``rescan_souls()`` to force a refresh.
+    def _index_read(self) -> dict[str, Any]:
+        """Read the persisted soul index, or ``{}`` when absent/corrupt."""
+        try:
+            raw = json.loads(self._index_file.read_text())
+        except FileNotFoundError:
+            return {}
+        except Exception as e:
+            logger.debug("Soul index unreadable, rebuilding: %s", e, extra={"tag": "SOUL"})
+            return {}
+        if not isinstance(raw, dict) or raw.get("version") != _INDEX_VERSION:
+            return {}
+        entries = raw.get("entries")
+        return entries if isinstance(entries, dict) else {}
+
+    def _index_write(self, entries: dict[str, Any]) -> None:
+        """Persist the soul index atomically (last writer wins)."""
+        try:
+            self._index_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._index_file.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps({"version": _INDEX_VERSION, "entries": entries}))
+            os.replace(tmp, self._index_file)
+        except Exception as e:
+            logger.debug("Failed to write soul index: %s", e, extra={"tag": "SOUL"})
+
+    def _info_to_entry(self, info: SloInfo) -> dict[str, Any]:
+        """Serialise a ``SloInfo`` into its index representation."""
+        raw = asdict(info)
+        return {k: raw[k] for k in _INDEXED_FIELDS if k in raw}
+
+    def _info_from_entry(self, entry: Any) -> SloInfo | None:
+        """Rebuild a ``SloInfo`` from an index entry (``None`` if unusable)."""
+        if not isinstance(entry, dict):
+            return None
+        kwargs = {k: v for k, v in entry.items() if k in _INDEXED_FIELDS}
+        try:
+            return SloInfo(**kwargs)
+        except TypeError:
+            return None
+
+    def _soul_candidates(self) -> list[str]:
+        """Absolute paths of every candidate soul file, deduped, deterministic.
+
+        Order is the historical precedence: the recursive ``.slo``/``.soul``
+        glob over the souls dir first, then the ``souls/`` profile subdirectory.
+        ``glob`` order is filesystem-dependent, so it is sorted here — a
+        duplicate name must resolve the same way on every boot.
         """
-        if self._souls_cache:
-            return
+        paths: list[str] = []
+        seen: set[str] = set()
 
-        if not self.slos_dir.exists():
-            logger.warning("Slos directory not found: %s", self.slos_dir, extra={"tag": "SOUL"})
-            return
+        def _add(path: str) -> None:
+            abspath = os.path.abspath(path)
+            if abspath not in seen:
+                seen.add(abspath)
+                paths.append(abspath)
 
-        # Find personality profiles (.slo) and checkpoint files (.soul) — recursive
-        for ext in ("**/*.slo", "**/*.soul"):
-            for sou_path in glob.glob(str(self.slos_dir / ext), recursive=True):
-                try:
-                    soul_info = self._parse_soul_info(sou_path)
-                    if soul_info:
-                        self._souls_cache[soul_info.name] = soul_info
-                except (
-                    Exception
-                ) as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
-                    logger.debug("Failed to parse soul %s: %s", sou_path, e)  # pragma: no cover
+        if self.slos_dir.exists():
+            for ext in ("**/*.slo", "**/*.soul"):
+                for soul_path in sorted(glob.glob(str(self.slos_dir / ext), recursive=True)):
+                    _add(soul_path)
 
-        # Find text profile files in souls/ subdirectory (both .slo and .soul)
         soul_candidates = [self.slos_dir / "souls"]
-        # Try to resolve from this file's location to repo root
         for p in Path(__file__).resolve().parents:
             candidate = p / "models" / "souls"
             if candidate.exists() and candidate not in soul_candidates:
                 soul_candidates.append(candidate)
                 break
         for candidate in soul_candidates:
-            if candidate.exists():
-                for ext in ("*.slo", "*.soul"):
-                    for soul_path in glob.glob(str(candidate / ext)):
-                        try:
-                            soul_info = self._parse_soul_info(soul_path)
-                            if soul_info and soul_info.name not in self._souls_cache:
-                                self._souls_cache[soul_info.name] = soul_info
-                        except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
-                            logger.debug(
-                                "Failed to parse soul profile %s: %s", soul_path, e
-                            )  # pragma: no cover
+            if not candidate.exists():
+                continue
+            for ext in ("*.slo", "*.soul"):
+                for soul_path in sorted(glob.glob(str(candidate / ext))):
+                    _add(soul_path)
+        return paths
 
-        if not hasattr(self, "_scanned"):
-            logger.info("Found %s souls", len(self._souls_cache), extra={"tag": "SOUL"})
+    def _scan_souls(self) -> None:
+        """Scan for available .slo (personality profiles) and .soul checkpoints.
+
+        Idempotent and thread-safe: the result is cached until
+        ``rescan_souls()`` clears it. Parsed metadata is kept in
+        ``data/.soul_index.json`` keyed by ``(abspath, mtime_ns, size)``, so a
+        restart with unchanged soul files stats each candidate and parses none.
+        """
+        if self._scanned:
+            return
+
+        with self._scan_lock:
+            if self._scanned:
+                return
+            self._scan_locked()
+
+    def _scan_locked(self) -> None:
+        """Body of ``_scan_souls``; caller holds ``_scan_lock``."""
+        if not self.slos_dir.exists():
+            logger.warning("Slos directory not found: %s", self.slos_dir, extra={"tag": "SOUL"})
             self._scanned = True
+            self._load_preference()
+            return
+
+        started = time.monotonic()
+        candidates = self._soul_candidates()
+        index = self._index_read()
+        new_index: dict[str, Any] = {}
+        parsed = 0
+
+        for path in candidates:
+            try:
+                st = os.stat(path)
+            except OSError:
+                continue
+            entry = index.get(path)
+            info: SloInfo | None = None
+            if (
+                isinstance(entry, dict)
+                and entry.get("mtime_ns") == st.st_mtime_ns
+                and entry.get("size") == st.st_size
+            ):
+                info = self._info_from_entry(entry.get("info"))
+            if info is None:
+                try:
+                    info = self._parse_soul_info(path)
+                except (
+                    Exception
+                ) as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
+                    logger.debug("Failed to parse soul %s: %s", path, e)  # pragma: no cover
+                    info = None
+                parsed += 1
+            if info is None:
+                continue
+
+            new_index[path] = {
+                "mtime_ns": st.st_mtime_ns,
+                "size": st.st_size,
+                "info": self._info_to_entry(info),
+            }
+            # First candidate wins on duplicate names (historical behaviour:
+            # ``<name>.soul`` beats ``<name>.soul.soul`` copies of the same soul).
+            if info.name not in self._souls_cache:
+                self._souls_cache[info.name] = info
+
+        if new_index != index:
+            self._index_write(new_index)
+
+        self._scanned = True
+        logger.info(
+            "Found %s souls (%s parsed, %s indexed, %.2fs)",
+            len(self._souls_cache),
+            parsed,
+            len(candidates) - parsed,
+            time.monotonic() - started,
+            extra={"tag": "SOUL"},
+        )
+        self._load_preference()
 
     def _parse_soul_info(self, sou_path: str) -> SloInfo | None:
         """Parse soul file for metadata.
@@ -253,16 +394,29 @@ class SloManager:
         Clears the cached results and re-globs the filesystem.  Call after
         soul files are created, deleted, or renamed.
         """
-        self._souls_cache.clear()
+        with self._scan_lock:
+            self._souls_cache.clear()
+            self._scanned = False
         self._scan_souls()
         return list(self._souls_cache.values())
 
+    def warm(self) -> int:
+        """Populate the soul cache eagerly (used by the startup warm thread).
+
+        Returns the number of souls discovered. Safe to call concurrently with
+        request handlers — ``_scan_souls`` serialises on ``_scan_lock``.
+        """
+        self._ensure_scanned()
+        return len(self._souls_cache)
+
     def get_soul(self, name: str) -> SloInfo | None:
         """Get soul by name."""
+        self._ensure_scanned()
         return self._souls_cache.get(name)
 
     def get_current_soul(self) -> SloInfo | None:
         """Get currently active soul."""
+        self._ensure_scanned()
         if self._current_soul:
             return self._souls_cache.get(self._current_soul)
         return None
@@ -273,6 +427,7 @@ class SloManager:
 
         Returns info about the new soul.
         """
+        self._ensure_scanned()
         if name not in self._souls_cache:
             return {
                 "success": False,
@@ -322,6 +477,7 @@ class SloManager:
 
     def create_default_souls(self) -> None:
         """Create default souls if none exist."""
+        self._ensure_scanned()
         default_souls = [
             {
                 "name": "assistant",
@@ -362,6 +518,7 @@ class SloManager:
 
     def get_stats(self) -> dict[str, Any]:
         """Get soul manager statistics."""
+        self._ensure_scanned()
         return {
             "total_souls": len(self._souls_cache),
             "current_soul": self._current_soul,
@@ -391,25 +548,16 @@ class SloManager:
 
         # Override with soul file's personality if loaded
         if soul:
-            if soul.personality:
-                for k, v in soul.personality.items():
-                    if k in result.get("personality", {}):
-                        result["personality"][k] = v
-
-            # Read metadata from the .slo/.soul file
-            try:
-                with open(soul.path, "rb") as f:
-                    magic = f.read(4)
-                    if magic in (b"SOUL",):
-                        meta_len = struct.unpack("<I", f.read(4))[0]
-                        meta = json.loads(f.read(meta_len))
-                        for group in ("personality", "cognition", "emotion"):
-                            if group in meta:
-                                for k, v in meta[group].items():
-                                    if k in result.get(group, {}):
-                                        result[group][k] = v
-            except Exception as e:
-                logger.warning("Failed to merge trait weights from soul: %s", e)
+            # Use the values already parsed (and indexed) by ``_scan_souls``.
+            # Re-opening the file here meant a second ``json.loads`` of the
+            # ~41 MB config header on every request that renders trait weights.
+            for group in ("personality", "cognition", "emotion"):
+                cached = getattr(soul, group) or {}
+                if not isinstance(cached, dict):
+                    continue
+                for k, v in cached.items():
+                    if k in result.get(group, {}) and isinstance(v, (int, float)):
+                        result[group][k] = v
 
         # Overlay live values from TraitWeightsConfig (feedback-driven)
         try:
@@ -441,6 +589,39 @@ def get_slo_manager() -> SloManager:
             if _slo_manager is None:
                 _slo_manager = SloManager()
     return _slo_manager
+
+
+def warm_soul_index_async() -> threading.Thread | None:
+    """Warm the soul index on a daemon thread (startup hook; never blocks boot).
+
+    Readiness must not be gated on soul inventory: a trained ``.soul`` embeds
+    its Adam optimizer state as JSON (~41 MB), and parsing one costs ~2.2 s.
+    Running this from ``main.py`` startup keeps that off the critical path while
+    still making the first ``/souls`` request free.
+
+    Caveat: ``json.loads`` is C code and holds the GIL, so the cold (first-ever)
+    build still causes short latency spikes while it runs. Every boot after the
+    first hits ``data/.soul_index.json`` and parses nothing. Set
+    ``SLO_SOUL_INDEX_WARM=0`` to skip warming entirely.
+
+    Returns the thread, or ``None`` when the cache was already populated.
+    """
+    if os.environ.get("SLO_SOUL_INDEX_WARM", "1").lower() in ("0", "false", "no"):
+        return None
+    manager = get_slo_manager()
+    if manager._scanned:
+        return None
+
+    def _warm() -> None:
+        try:
+            logger.info("Warming soul index", extra={"tag": "SOUL"})
+            manager.warm()
+        except Exception as e:  # pragma: no cover — never break boot
+            logger.warning("Soul index warm failed: %s", e, extra={"tag": "SOUL"})
+
+    thread = threading.Thread(target=_warm, daemon=True, name="soul-index-warm")
+    thread.start()
+    return thread
 
 
 def switch_soul(name: str) -> dict[str, Any]:
