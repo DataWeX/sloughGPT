@@ -118,14 +118,14 @@ class TestSimpleEmbed:
             "v = m._simple_embed('count 1 to 10 one per line')\n"
             "print(','.join(f'{x:.6f}' for x in v))\n"
         )
+        # pytest.ini's `pythonpath = ...` patches only the parent's sys.path;
+        # the child sees env vars alone, and `domain.feedback.__init__` pulls
+        # in `mogdb` (never pip-installed in CI's test-core-py job). Mirror
+        # the parent's import path so the subprocess imports the same tree.
+        child_pythonpath = os.pathsep.join(p for p in sys.path if p)
         outs = []
         for seed in ("0", "12345"):
-            env = dict(os.environ, PYTHONHASHSEED=seed)
-            # pytest's `pythonpath` ini (pytest.ini) seeds only THIS process —
-            # propagate the resolved import path so the subprocess imports the
-            # same source tree (mogdb and the other repo packages are not
-            # site-installed in every environment that runs this suite).
-            env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+            env = dict(os.environ, PYTHONHASHSEED=seed, PYTHONPATH=child_pythonpath)
             outs.append(
                 subprocess.run(
                     [sys.executable, "-c", code],
