@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "67364e35d35b6269f158efcb15379f25d40e1a72",
+    "recorded_commit": "9996116f60c129e36b9160b78a8213b66cc0a448",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -115,7 +115,7 @@
       ],
       "note": "context assembly for generation (cognitive+core)",
       "debt": null,
-      "tree_hash": "1134c1054f0d81b26eea4ab2ab3b89cf76512f43"
+      "tree_hash": "a01263afcf740cc1d88aea1f621cc8c3d39aaf3a"
     },
     "core": {
       "class": "core-capability",
