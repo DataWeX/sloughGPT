@@ -150,7 +150,7 @@ export function OrchestrationPanel({
                 <div key={task.id} className="flex items-center gap-2 rounded-lg border border-border/40 px-2.5 py-2 text-[11px]">
                   <span className={cn(
                     'inline-block h-2 w-2 shrink-0 rounded-full',
-                    status === 'completed' ? 'bg-success' : status === 'in_progress' ? 'bg-warning animate-pulse' : status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30',
+                    status === 'completed' ? 'bg-success' : status === 'live' ? 'bg-warning animate-pulse' : status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30',
                   )} />
                   <span className="font-medium text-[10px] min-w-[64px] text-muted-foreground">{task.agent}</span>
                   <span className="flex-1 truncate">{task.description}</span>

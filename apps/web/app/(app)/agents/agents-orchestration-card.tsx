@@ -192,7 +192,7 @@ export function OrchestrationCard({
                         'inline-block h-2 w-2 shrink-0 rounded-full',
                         status === 'completed'
                           ? 'bg-success'
-                          : status === 'in_progress'
+                          : status === 'live'
                             ? 'bg-warning animate-pulse'
                             : status === 'failed'
                               ? 'bg-destructive'

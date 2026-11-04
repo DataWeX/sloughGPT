@@ -184,20 +184,20 @@ class TestAgentTask:
 class TestTaskStatus:
     def test_values(self):
         assert TaskStatus.PENDING == "pending"
-        assert TaskStatus.IN_PROGRESS == "in_progress"
+        assert TaskStatus.LIVE == "live"
         assert TaskStatus.COMPLETED == "completed"
         assert TaskStatus.FAILED == "failed"
 
     def test_all_values_are_strings(self):
         assert isinstance(TaskStatus.PENDING, str)
-        assert isinstance(TaskStatus.IN_PROGRESS, str)
+        assert isinstance(TaskStatus.LIVE, str)
         assert isinstance(TaskStatus.COMPLETED, str)
         assert isinstance(TaskStatus.FAILED, str)
 
     def test_unique_values(self):
         values = [
             TaskStatus.PENDING,
-            TaskStatus.IN_PROGRESS,
+            TaskStatus.LIVE,
             TaskStatus.COMPLETED,
             TaskStatus.FAILED,
         ]
@@ -206,14 +206,14 @@ class TestTaskStatus:
     def test_count(self):
         values = [
             TaskStatus.PENDING,
-            TaskStatus.IN_PROGRESS,
+            TaskStatus.LIVE,
             TaskStatus.COMPLETED,
             TaskStatus.FAILED,
         ]
         assert len(values) == 4
 
     def test_can_be_used_in_set(self):
-        s = {TaskStatus.PENDING, TaskStatus.IN_PROGRESS}
+        s = {TaskStatus.PENDING, TaskStatus.LIVE}
         assert len(s) == 2
 
     def test_can_be_compared_directly(self):
