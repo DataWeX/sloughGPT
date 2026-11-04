@@ -6,7 +6,9 @@ conversion, verification, and the singleton accessor.
 """
 
 import json
+import os
 import struct
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -364,3 +366,223 @@ class TestModelLoaderSingleton:
                 quant_mode="symmetric",
                 verify=True,
             )
+
+
+def _write_identity_soul(
+    path: Path,
+    *,
+    base_model: str = "sloughgpt",
+    dataset_signature: str = "",
+) -> str:
+    """Write a weights-less ``.soul`` with a given identity; return its hash."""
+    from domain.inference._internal.slo_format import SloProfile, save_soul
+
+    profile = SloProfile(
+        name=path.stem,
+        base_model=base_model,
+        lineage=base_model or "nanogpt",
+        dataset_signature=dataset_signature,
+    )
+    save_soul(None, str(path), soul_profile=profile, weights_only=True)
+    return profile.integrity_hash
+
+
+class TestModelLoaderSoulResolution:
+    """A native ``.soul`` is loaded only when ``model_id`` actually names it.
+
+    The previous resolver took the newest-mtime ``.soul`` whatever was asked
+    for, so a request for one model could be answered by another and reported
+    under the requested id (wrong-artifact class).
+    """
+
+    @staticmethod
+    def _loader(tmp_path, monkeypatch):
+        """Loader rooted in a temp tree + a recording ``from_soul`` fake."""
+        cache = tmp_path / "hf-cache"
+        cache.mkdir(exist_ok=True)
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_resolver.get_model_dir",
+            lambda model_id: cache,
+        )
+        calls: list[str] = []
+
+        def _from_soul(path, model_id="sloughgpt", **kwargs):
+            calls.append(str(path))
+            provider = MagicMock()
+            provider._model = MagicMock()
+            provider._tokenizer = MagicMock()
+            return provider
+
+        monkeypatch.setattr(
+            "domain.inference._internal.slonet_provider.SloNetChatProvider.from_soul",
+            _from_soul,
+        )
+        return ModelLoader(models_dir=tmp_path / "models"), calls
+
+    @staticmethod
+    def _native(tmp_path) -> Path:
+        native = tmp_path / "models" / "slonet-native"
+        native.mkdir(parents=True)
+        return native
+
+    def test_resolves_requested_checkpoint_not_newest_mtime(self, tmp_path, monkeypatch):
+        """The named checkpoint loads even when another one is newer."""
+        native = self._native(tmp_path)
+        requested = native / "run-b.soul"
+        _write_identity_soul(requested, dataset_signature="b" * 64)
+        newer = native / "run-a.soul"
+        _write_identity_soul(newer, dataset_signature="a" * 64)
+        os.utime(requested, (time.time() - 3600, time.time() - 3600))
+        os.utime(newer, (time.time(), time.time()))
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load("run-b", verify=False)
+
+        assert result.success, result.error
+        assert result.metrics["soul_path"].endswith("run-b.soul")
+        assert result.metrics["matched_by"] == "name"
+        assert calls == [str(requested)]
+
+    def test_unrelated_huggingface_id_never_loads_a_soul(self, tmp_path, monkeypatch):
+        """A Qwen request must never be answered by a local native checkpoint."""
+        native = self._native(tmp_path)
+        _write_identity_soul(native / "tinyshakespeare_1.soul")
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load("Qwen/Qwen2.5-0.5B-Instruct", verify=False)
+
+        assert not result.success
+        assert calls == []
+        assert "No .slnc or .soul file found" in result.error
+
+    def test_unknown_plain_name_falls_through_to_slnc(self, tmp_path, monkeypatch):
+        """Valid-looking ids that name no soul keep the old .slnc behaviour."""
+        native = self._native(tmp_path)
+        _write_identity_soul(native / "run-a.soul")
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load("gpt2", verify=False)
+
+        assert not result.success
+        assert calls == []
+        assert "No .slnc or .soul file found for gpt2" in result.error
+
+    def test_integrity_hash_prefix_resolves(self, tmp_path, monkeypatch):
+        """``hash:<prefix>`` addresses exactly the matching checkpoint."""
+        native = self._native(tmp_path)
+        _write_identity_soul(native / "run-a.soul", dataset_signature="a" * 64)
+        wanted_hash = _write_identity_soul(native / "run-b.soul", dataset_signature="b" * 64)
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load(f"hash:{wanted_hash[:12]}", verify=False)
+
+        assert result.success, result.error
+        assert result.metrics["soul_path"].endswith("run-b.soul")
+        assert result.metrics["matched_by"] == "hash"
+        assert result.metrics["integrity_hash"] == wanted_hash
+        assert len(calls) == 1
+
+    def test_dataset_signature_resolves_equivalent_runs(self, tmp_path, monkeypatch):
+        """Same dataset hash ⇒ interchangeable retrains; pick is deterministic."""
+        native = self._native(tmp_path)
+        signature = "c" * 64
+        _write_identity_soul(native / "run-b.soul", dataset_signature=signature)
+        _write_identity_soul(native / "run-a.soul", dataset_signature=signature)
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load(f"dataset:{signature}", verify=False)
+
+        assert result.success, result.error
+        assert result.metrics["candidate_count"] == 2
+        assert result.metrics["soul_path"].endswith("run-a.soul")
+        assert len(calls) == 1
+
+    def test_family_alias_refuses_when_dataset_signatures_differ(self, tmp_path, monkeypatch):
+        """Two models on different data are not interchangeable — refuse."""
+        native = self._native(tmp_path)
+        _write_identity_soul(native / "run-a.soul", dataset_signature="a" * 64)
+        _write_identity_soul(native / "run-b.soul", dataset_signature="b" * 64)
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load("sloughgpt", verify=False)
+
+        assert not result.success
+        assert "not interchangeable" in result.error
+        assert "run-a" in result.error and "run-b" in result.error
+        assert calls == []
+
+    def test_family_alias_refuses_when_dataset_signature_unrecorded(self, tmp_path, monkeypatch):
+        """An unrecorded dataset hash cannot prove equivalence — refuse."""
+        native = self._native(tmp_path)
+        _write_identity_soul(native / "tinyshakespeare_1.soul", dataset_signature="")
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load("sloughgpt", verify=False)
+
+        assert not result.success
+        assert "dataset=unrecorded" in result.error
+        assert calls == []
+
+    def test_family_alias_resolves_when_candidates_are_equivalent(self, tmp_path, monkeypatch):
+        """One model, one recorded dataset ⇒ the family id is unambiguous."""
+        native = self._native(tmp_path)
+        signature = "d" * 64
+        _write_identity_soul(native / "run-a.soul", dataset_signature=signature)
+        _write_identity_soul(native / "run-b.soul", dataset_signature=signature)
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load("sloughgpt", verify=False)
+
+        assert result.success, result.error
+        assert result.metrics["matched_by"] == "alias"
+        assert result.metrics["candidate_count"] == 2
+        assert len(calls) == 1
+
+    def test_soul_name_path_escape_is_not_a_soul_request(self, tmp_path, monkeypatch):
+        """A path is not a checkpoint name and must not be resolved."""
+        native = self._native(tmp_path)
+        _write_identity_soul(native / "run-a.soul")
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        for request in ("../run-a", "..\\run-a", "dir/run-a"):
+            result = loader.load(request, verify=False)
+            assert not result.success, request
+        assert calls == []
+
+    def test_hash_prefix_matching_several_artifacts_is_refused(self, tmp_path, monkeypatch):
+        """An ambiguous hash prefix is not a licence to pick one arbitrarily."""
+        native = self._native(tmp_path)
+        _write_identity_soul(native / "run-a.soul")
+        _write_identity_soul(native / "run-b.soul")
+
+        shared = "abcdef012345"
+        identities = {
+            "run-a.soul": {"integrity_hash": shared + "aaaa", "base_model": "sloughgpt"},
+            "run-b.soul": {"integrity_hash": shared + "bbbb", "base_model": "sloughgpt"},
+        }
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.model_loader._soul_identity",
+            lambda path: identities[Path(path).name],
+        )
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load(f"hash:{shared}", verify=False)
+
+        assert not result.success
+        assert "ambiguous" in result.error
+        assert "run-a" in result.error and "run-b" in result.error
+        assert calls == []
+
+    def test_named_checkpoint_wins_over_the_family_alias_it_shares(self, tmp_path, monkeypatch):
+        """``sloughgpt.soul`` is an explicit artifact, not a family id request."""
+        native = self._native(tmp_path)
+        _write_identity_soul(native / "run-a.soul", dataset_signature="a" * 64)
+        _write_identity_soul(native / "sloughgpt.soul")
+
+        loader, calls = self._loader(tmp_path, monkeypatch)
+        result = loader.load("sloughgpt", verify=False)
+
+        assert result.success, result.error
+        assert result.metrics["soul_path"].endswith("sloughgpt.soul")
+        assert result.metrics["matched_by"] == "name"
+        assert len(calls) == 1

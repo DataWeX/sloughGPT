@@ -676,6 +676,99 @@ def save_soul(
     return output_path
 
 
+#: Top-level header fields that describe *which artifact this is* rather than
+#: its payload. All of them are written before ``metadata``, which can carry
+#: tens of megabytes of training/optimizer state.
+SOUL_IDENTITY_KEYS: tuple[str, ...] = (
+    "name",
+    "version",
+    "born_at",
+    "lineage",
+    "base_model",
+    "training_dataset",
+    "dataset_signature",
+    "epochs_trained",
+    "final_train_loss",
+    "final_val_loss",
+    "integrity_hash",
+)
+
+#: How much of the header an identity lookup is willing to read. The identity
+#: keys sit in the first few kilobytes (``metadata`` is the last key), so a
+#: truncated read is enough — and must never be mistaken for a corrupt file.
+_SOUL_IDENTITY_PREFIX_BYTES = 64 * 1024
+
+
+def read_soul_identity(path: str | os.PathLike[str]) -> dict[str, Any]:
+    """Read a ``.soul`` file's identity fields without parsing its weights.
+
+    ``save_soul`` serialises the profile as a single JSON object and writes
+    ``metadata`` (training state, optimizer buffers) last. That tail can run to
+    ~40 MB, so ``json.loads`` on a whole header costs >1 s per checkpoint — too
+    much to pay for a name, a hash or a dataset signature when scanning a
+    directory.
+
+    This reads a bounded prefix and walks the top-level object with
+    ``raw_decode``, stopping once the identity fields are in hand. A header that
+    fits entirely in the prefix is parsed exactly instead.
+
+    Args:
+        path: Path to a ``.soul`` file.
+
+    Returns:
+        Mapping of the identity keys that are present; ``{}`` for anything that
+        is not a readable ``.soul`` file.
+    """
+    try:
+        with open(path, "rb") as fh:
+            if fh.read(4) != SOU_MAGIC:
+                return {}
+            fh.read(4)  # format version — not part of the identity
+            raw_len = fh.read(4)
+            if len(raw_len) < 4:
+                return {}
+            header_len = struct.unpack("<I", raw_len)[0]
+            chunk = fh.read(min(header_len, _SOUL_IDENTITY_PREFIX_BYTES))
+    except OSError:
+        return {}
+
+    if header_len <= len(chunk):
+        try:
+            parsed = json.loads(chunk.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            return {}
+        return {key: parsed[key] for key in SOUL_IDENTITY_KEYS if key in parsed}
+
+    text = chunk.decode("utf-8", "ignore")
+    decoder = json.JSONDecoder()
+    identity: dict[str, Any] = {}
+    try:
+        index = text.index("{") + 1
+        while index < len(text):
+            while index < len(text) and text[index] in " \t\r\n,":
+                index += 1
+            if index >= len(text) or text[index] == "}":
+                break
+            key, index = decoder.raw_decode(text, index)
+            while index < len(text) and text[index] in " \t\r\n":
+                index += 1
+            if index >= len(text) or text[index] != ":":
+                break
+            index += 1
+            while index < len(text) and text[index] in " \t\r\n":
+                index += 1
+            value, index = decoder.raw_decode(text, index)
+            if isinstance(key, str) and key in SOUL_IDENTITY_KEYS:
+                identity[key] = value
+            if len(identity) == len(SOUL_IDENTITY_KEYS):
+                break
+    except (IndexError, ValueError):
+        # A truncated value (the metadata tail) or a malformed header — keep
+        # whatever was read before it; the caller validates on load anyway.
+        pass
+    return identity
+
+
 def load_soul(sou_path: str):
     """Load a .soul file and return (SloProfile, state_dict).
 
@@ -880,6 +973,8 @@ __all__ = [
     "create_soul_profile",
     "save_soul",
     "load_soul",
+    "read_soul_identity",
+    "SOUL_IDENTITY_KEYS",
     "write_v3_sou",
     "generate_sample_dialogue",
     "SOU_MAGIC",
