@@ -560,3 +560,59 @@ class TestTrainingConvergence:
             losses.append(float(loss.data))
         assert losses[-1] < losses[0], f"No convergence: {losses[0]:.4f} -> {losses[-1]:.4f}"
         assert losses[-1] < 0.1, f"Loss too high at end: {losses[-1]:.4f}"
+
+
+class TestRepeatedBackward:
+    """A backward pass must never inherit the previous pass's gradients.
+
+    Regression (card 20261104_084408): ``SloLinear._get_weight_T`` cached the
+    transposed weight as a *graph node* on the layer. That node is not in
+    ``parameters()``, so ``zero_grads`` never cleared its gradient, and every
+    ``backward()`` added the new term on top of the previous step's. The real
+    weight's gradient then grew 1x, 2x, 3x with the step count — invisible at
+    step 1, and poison for every run after it.
+    """
+
+    def _grads(self, model, x, y) -> list[np.ndarray]:
+        from domain.training._internal.training_handler import zero_grads
+
+        zero_grads(model.parameters())
+        logits, _ = model.forward(Tensor(x, _copy=False))
+        loss = cross_entropy(logits.reshape(-1, 256), Tensor(y.reshape(-1)))
+        loss.backward()
+        return [
+            np.array(p.grad.data, copy=True) if p.grad is not None else None
+            for p in model.parameters()
+        ]
+
+    def test_repeated_backward_does_not_accumulate(self):
+        np.random.seed(0)
+        model = SloTransformer(
+            vocab_size=256,
+            n_embed=64,
+            n_layer=2,
+            n_head=2,
+            block_size=32,
+            dropout=0.0,
+        )
+        x = np.random.randint(0, 256, (4, 32))
+        y = np.random.randint(0, 256, (4, 32))
+
+        first = self._grads(model, x, y)
+        for repeat in range(3):
+            again = self._grads(model, x, y)
+            for index, (expected, actual) in enumerate(zip(first, again, strict=True)):
+                if expected is None:
+                    assert actual is None, f"param {index}: grad appeared on repeat {repeat + 1}"
+                    continue
+                np.testing.assert_allclose(
+                    actual,
+                    expected,
+                    rtol=1e-6,
+                    atol=1e-9,
+                    err_msg=(
+                        f"param {index} (shape {expected.shape}): gradient on repeat "
+                        f"{repeat + 1} differs from the first pass — a graph node is "
+                        "leaking state between backward passes"
+                    ),
+                )

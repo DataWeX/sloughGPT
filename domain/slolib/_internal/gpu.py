@@ -238,7 +238,122 @@ def set_accelerator_precision(mode: str = "auto") -> str:
     return acc.set_precision(mode)
 
 
+# =============================================================================
+# EXPLICIT SELECTION + PER-THREAD PIN
+# =============================================================================
+#
+# ``SLO_ACCEL_BACKEND`` is a declaration, not a hint. Unset/``auto`` keeps the
+# historical priority order (CUDA > Metal > OpenCL > CPU) byte-identical; any
+# other value either resolves or fails. Silent degradation is the class the
+# dispatch counters were added for — a run that *thought* it was on the GPU and
+# quietly was not is worse than a run that refuses at boot.
+
+_BACKEND_ALIASES = {
+    "cupy": "cuda",
+    "gpu": "cuda",
+    "nvidia": "cuda",
+    "mps": "metal",
+    "apple": "metal",
+    "numpy": "cpu",
+}
+
+
+def requested_backend() -> str:
+    """Backend named by ``SLO_ACCEL_BACKEND`` (lower-case, ``auto`` when unset)."""
+    return os.environ.get("SLO_ACCEL_BACKEND", "auto").strip().lower() or "auto"
+
+
+def _backend_factory(name: str):
+    return {
+        "cpu": _CPUBackend,
+        "cuda": _CUDABackend,
+        "metal": _MetalBackend,
+        "opencl": _OpenCLBackend,
+        "torch": _TorchBackend,
+    }.get(name)
+
+
+def select_backend(name: str) -> _Accelerator:
+    """Build the named backend or raise — never fall back silently.
+
+    Raises:
+        ValueError: unknown backend name.
+        RuntimeError: known backend, unavailable on this host (``torch`` not
+            installed, no CUDA driver, no Metal platform, ...).
+    """
+    key = str(name or "").strip().lower()
+    key = _BACKEND_ALIASES.get(key, key)
+    factory = _backend_factory(key)
+    if factory is None:
+        raise ValueError(
+            f"unknown accelerator backend {name!r}; known: auto, cpu, cuda, metal, "
+            f"opencl, torch (aliases: {', '.join(sorted(_BACKEND_ALIASES))})"
+        )
+    acc = factory()
+    if not acc.is_available():
+        raise RuntimeError(f"accelerator backend {key!r} is not available on this host")
+    return acc
+
+
+def accelerator_for(device: str = "auto") -> _Accelerator:
+    """Resolve a declared device string to a backend instance.
+
+    ``"auto"`` asks the detector (bounded probe, CPU fallback). Everything else
+    is a declaration: it resolves or raises (see :func:`select_backend`).
+    """
+    key = str(device or "auto").strip().lower()
+    if key in ("", "auto"):
+        return get_accelerator()
+    return select_backend(key)
+
+
+#: Per-thread backend pin. Training runs in worker threads, so the pin is
+#: thread-scoped: a ``device="cpu"`` run cannot silence the GPU for inference
+#: or for a second job in the same process.
+_TLS = threading.local()
+
+
+def override_accelerator() -> _Accelerator | None:
+    """The backend pinned to *this* thread, or ``None`` (global detection)."""
+    return getattr(_TLS, "accelerator", None)
+
+
+def push_accelerator(acc: _Accelerator | None) -> _Accelerator | None:
+    """Pin *acc* for this thread; returns the previous pin (pass it to pop)."""
+    previous = override_accelerator()
+    _TLS.accelerator = acc
+    return previous
+
+
+def pop_accelerator(previous: _Accelerator | None) -> None:
+    """Restore the pin returned by :func:`push_accelerator`."""
+    _TLS.accelerator = previous
+
+
 def _detect_best_backend() -> _Accelerator:
+    # A declared backend wins over detection. When it is unavailable the probe
+    # (a daemon thread at boot) logs an error and serves CPU; the loud failure
+    # for training is ``accelerator_for``, which raises instead.
+    requested = requested_backend()
+    if requested not in ("", "auto"):
+        try:
+            selected = select_backend(requested)
+            logger.info(
+                "Accelerator: SLO_ACCEL_BACKEND=%s selected %s",
+                requested,
+                selected.name,
+                extra={"tag": "GPU"},
+            )
+            return selected
+        except Exception as e:
+            logger.error(
+                "SLO_ACCEL_BACKEND=%s unavailable (%s) — serving the CPU backend",
+                requested,
+                e,
+                extra={"tag": "GPU"},
+            )
+            return _cpu_fallback()
+
     candidates: list[tuple[str, _Accelerator, int]] = []
 
     # --- Metal (macOS) ---
@@ -1232,6 +1347,260 @@ class _CUDABackend(_Accelerator):
                 * (1 + self._cp.tanh(self._cp.sqrt(2 / self._cp.pi) * (x_c + 0.044715 * x_c**3)))
             )
         return super().gelu(x)
+
+
+# =============================================================================
+# TORCH BACKEND (optional — CUDA / MPS / CPU through one tensor library)
+# =============================================================================
+#
+# Opt-in only: ``SLO_ACCEL_BACKEND=torch`` (or ``device="torch"`` on a training
+# request). Both torch and CuPy are deliberately *not* import-time dependencies
+# — a missing library degrades at selection, never at import.
+#
+# This is a kernel, not a trainer. The single training loop and the hand-written
+# autograd graph stay exactly where they are; torch only computes the ops the
+# engine already dispatches (``slonet._matmul`` / ``_accel_op``), numpy in and
+# numpy out, so ``SloughGPTModel`` and every checkpoint format are untouched.
+# Parity with the NumPy reference is asserted by
+# ``tests/core-py/test_train_device_parity.py`` — same init, same batches, same
+# loss trajectory — because an accelerator that is merely plausible is worse
+# than none.
+
+
+class _TorchBackend(_Accelerator):
+    """PyTorch compute backend (CUDA, MPS, or CPU).
+
+    Install: ``pip install torch`` (CPU wheel is enough for parity; a CUDA
+    wheel is only needed for speed). Availability is decided once, at
+    selection: a broken driver fails there instead of mid-training-step.
+    """
+
+    name = "torch"
+    _fp16_available = True
+
+    def __init__(self, device: str = "auto"):
+        self._torch = None
+        self._device = None
+        self._requested = device
+
+    # ── availability ────────────────────────────────────────────────────
+
+    def is_available(self) -> bool:
+        try:
+            import torch
+        except Exception as e:
+            logger.debug("torch skipped: %s", e)
+            return False
+        try:
+            if self._requested not in ("", "auto"):
+                dev = torch.device(self._requested)
+            elif torch.cuda.is_available():
+                dev = torch.device("cuda")
+            elif getattr(torch.backends, "mps", None) is not None and (
+                torch.backends.mps.is_available()
+            ):
+                dev = torch.device("mps")
+            else:
+                dev = torch.device("cpu")
+            torch.zeros(1, device=dev)  # force init: fail here, not mid-step
+            self._torch = torch
+            self._device = dev
+            return True
+        except Exception as e:
+            logger.warning("torch backend unavailable on %s: %s", self._requested, e)
+            return False
+
+    @property
+    def device_type(self) -> str:  # type: ignore[override]
+        if self._device is not None and self._device.type != "cpu":
+            return "gpu"
+        return "cpu"
+
+    @property
+    def compute_tier(self) -> str:  # type: ignore[override]
+        vram = self.vram_gb()
+        if vram >= 8:
+            return "full"
+        if vram >= 4:
+            return "medium"
+        return "lite"
+
+    def vram_gb(self) -> float:
+        if self._torch is not None and self._device is not None and self._device.type == "cuda":
+            try:
+                free, total = self._torch.cuda.mem_get_info(self._device)
+                return total / (1024**3)
+            except Exception as e:
+                logger.debug("torch VRAM detection failed: %s", e)
+        return 0.0
+
+    def memory_hint(self) -> dict[str, Any]:
+        return {
+            "backend": "torch",
+            "device": str(self._device),
+            "vram_gb": self.vram_gb(),
+            "tier": self.compute_tier,
+        }
+
+    def sync(self) -> None:
+        if self._torch is None or self._device is None:
+            return
+        if self._device.type == "cuda":
+            self._torch.cuda.synchronize(self._device)
+        elif self._device.type == "mps":
+            self._torch.mps.synchronize()
+
+    # ── transfer ────────────────────────────────────────────────────────
+
+    def _dtype(self):
+        return self._torch.float16 if self._fp16_mode else self._torch.float32
+
+    def _to_tensor(self, arr: Any):
+        if isinstance(arr, self._torch.Tensor):
+            return arr if arr.device == self._device else arr.to(self._device)
+        return self._torch.as_tensor(np.asarray(arr), dtype=self._dtype(), device=self._device)
+
+    def _from_tensor(self, tensor) -> np.ndarray:
+        return tensor.detach().to("cpu").to(self._torch.float32).numpy()
+
+    def to_device(self, arr: np.ndarray) -> Any:
+        return self._to_tensor(arr)
+
+    def from_device(self, arr: Any) -> np.ndarray:
+        if isinstance(arr, self._torch.Tensor):
+            return self._from_tensor(arr)
+        return np.asarray(arr)
+
+    # ── ops the training engine dispatches ──────────────────────────────
+
+    def matmul(self, a: Any, b: Any) -> np.ndarray:
+        if self._fp16_mode and self._device.type == "cpu":
+            return np.matmul(np.asarray(a), np.asarray(b))  # fp16 on CPU is slower
+        a_t = self._to_tensor(a)
+        b_t = self._to_tensor(b)
+        if not isinstance(a, self._torch.Tensor):
+            count_dispatch("h2d_bytes", int(a_t.numel() * a_t.element_size()))
+        if not isinstance(b, self._torch.Tensor):
+            count_dispatch("h2d_bytes", int(b_t.numel() * b_t.element_size()))
+        out = self._torch.matmul(a_t, b_t)
+        count_dispatch("d2h_bytes", int(out.numel() * out.element_size()))
+        return self._from_tensor(out)
+
+    def add(self, a: Any, b: Any) -> np.ndarray:
+        return self._from_tensor(self._to_tensor(a) + self._to_tensor(b))
+
+    def sub(self, a: Any, b: Any) -> np.ndarray:
+        return self._from_tensor(self._to_tensor(a) - self._to_tensor(b))
+
+    def mul(self, a: Any, b: Any) -> np.ndarray:
+        return self._from_tensor(self._to_tensor(a) * self._to_tensor(b))
+
+    def div(self, a: Any, b: Any) -> np.ndarray:
+        return self._from_tensor(self._to_tensor(a) / self._to_tensor(b))
+
+    def pow(self, a: Any, p: float) -> np.ndarray:
+        return self._from_tensor(self._to_tensor(a) ** p)
+
+    def sqrt(self, a: Any) -> np.ndarray:
+        return self._from_tensor(self._torch.sqrt(self._to_tensor(a)))
+
+    def exp(self, a: Any) -> np.ndarray:
+        return self._from_tensor(self._torch.exp(self._to_tensor(a)))
+
+    def log(self, a: Any) -> np.ndarray:
+        return self._from_tensor(self._torch.log(self._to_tensor(a)))
+
+    def sum(self, a: Any, axis: int | None = None) -> np.ndarray:
+        out = self._to_tensor(a).sum() if axis is None else self._to_tensor(a).sum(dim=axis)
+        return self._from_tensor(out)
+
+    def mean(self, a: Any, axis: int | None = None) -> np.ndarray:
+        out = self._to_tensor(a).mean() if axis is None else self._to_tensor(a).mean(dim=axis)
+        return self._from_tensor(out)
+
+    def max(self, a: Any, axis: int | None = None) -> np.ndarray:
+        out = self._to_tensor(a).max() if axis is None else self._to_tensor(a).max(dim=axis).values
+        return self._from_tensor(out)
+
+    def min(self, a: Any, axis: int | None = None) -> np.ndarray:
+        out = self._to_tensor(a).min() if axis is None else self._to_tensor(a).min(dim=axis).values
+        return self._from_tensor(out)
+
+    def abs(self, a: Any) -> np.ndarray:
+        return self._from_tensor(self._torch.abs(self._to_tensor(a)))
+
+    def neg(self, a: Any) -> np.ndarray:
+        return self._from_tensor(-self._to_tensor(a))
+
+    def clamp(self, a: Any, lo: float, hi: float) -> np.ndarray:
+        return self._from_tensor(self._torch.clamp(self._to_tensor(a), lo, hi))
+
+    def where(self, cond: Any, a: Any, b: Any) -> np.ndarray:
+        cond_t = self._to_tensor(np.asarray(cond).astype(np.float32)).bool()
+        return self._from_tensor(self._torch.where(cond_t, self._to_tensor(a), self._to_tensor(b)))
+
+    def softmax(self, a: Any, axis: int = -1) -> np.ndarray:
+        return self._from_tensor(
+            self._torch.softmax(self._to_tensor(a), dim=axis, dtype=self._torch.float32)
+        )
+
+    def log_softmax(self, a: Any, axis: int = -1) -> np.ndarray:
+        return self._from_tensor(
+            self._torch.log_softmax(self._to_tensor(a), dim=axis, dtype=self._torch.float32)
+        )
+
+    def layer_norm(self, x: Any, weight: Any, bias: Any, eps: float = 1e-5) -> np.ndarray:
+        x_t = self._to_tensor(x)
+        out = self._torch.nn.functional.layer_norm(
+            x_t,
+            (x_t.shape[-1],),
+            weight=self._to_tensor(weight),
+            bias=self._to_tensor(bias),
+            eps=eps,
+        )
+        return self._from_tensor(out)
+
+    def rms_norm(self, x: Any, weight: Any, eps: float = 1e-5) -> np.ndarray:
+        x_t = self._to_tensor(x)
+        rms = self._torch.sqrt(self._torch.mean(x_t * x_t, dim=-1, keepdim=True) + eps)
+        return self._from_tensor((x_t / rms) * self._to_tensor(weight))
+
+    def gelu(self, x: Any) -> np.ndarray:
+        x_t = self._to_tensor(x)
+        return self._from_tensor(self._torch.nn.functional.gelu(x_t, approximate="tanh"))
+
+    def silu(self, x: Any) -> np.ndarray:
+        x_t = self._to_tensor(x)
+        return self._from_tensor(self._torch.nn.functional.silu(x_t))
+
+    def relu(self, x: Any) -> np.ndarray:
+        return self._from_tensor(self._torch.relu(self._to_tensor(x)))
+
+    def sigmoid(self, x: Any) -> np.ndarray:
+        return self._from_tensor(self._torch.sigmoid(self._to_tensor(x)))
+
+    def tanh(self, x: Any) -> np.ndarray:
+        return self._from_tensor(self._torch.tanh(self._to_tensor(x)))
+
+    def embedding_lookup(self, indices: Any, weight: Any) -> np.ndarray:
+        idx_t = self._torch.as_tensor(np.asarray(indices).astype(np.int64), device=self._device)
+        return self._from_tensor(
+            self._torch.nn.functional.embedding(idx_t, self._to_tensor(weight))
+        )
+
+    def embedding(self, indices: Any, weight: Any) -> np.ndarray:
+        return self.embedding_lookup(indices, weight)
+
+    def cross_entropy(self, logits: Any, targets: Any) -> float:
+        logits_t = self._to_tensor(logits).reshape(-1, np.asarray(logits).shape[-1])
+        targets_t = self._torch.as_tensor(
+            np.asarray(targets).astype(np.int64).flatten(), device=self._device
+        )
+        if targets_t.numel() != logits_t.shape[0]:
+            return super().cross_entropy(np.asarray(logits), np.asarray(targets))
+        return float(
+            self._torch.nn.functional.cross_entropy(logits_t, targets_t).detach().cpu().item()
+        )
 
 
 # =============================================================================

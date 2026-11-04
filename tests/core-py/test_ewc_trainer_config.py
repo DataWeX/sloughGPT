@@ -276,8 +276,15 @@ class TestTrainerConfig:
         assert tc.epochs == 20
 
     def test_auto_device(self):
+        """``auto`` is preserved for ``_setup_device`` — it is no longer collapsed.
+
+        Collapsing here made the field inert: the trainer claimed CPU while the
+        accelerator probe was free to run GPU matmuls, and the resolved device
+        was never recorded. Resolution (and the loud refusal for an unavailable
+        declaration) lives in ``SloughGPTTrainer._setup_device``.
+        """
         tc = TrainerConfig(device="auto")
-        assert tc.device == "cpu"
+        assert tc.device == "auto"
 
     def test_n_head_default(self):
         tc = TrainerConfig()
