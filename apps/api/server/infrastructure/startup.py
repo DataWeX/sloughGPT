@@ -2210,11 +2210,21 @@ def _start_inference_engine(cfg) -> Any | None:
     engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
     try:
-        proc = subprocess.Popen(
+        # Process kind: the engine child is an engine-supervised command —
+        # live status via engine.list_processes(), and Engine.stop()/atexit
+        # reaps it if shutdown never runs (docs/plans/
+        # 2026-09-20-execution-consolidation.md, routing kind "process").
+        # text=False keeps byte-mode stderr: the capture thread below
+        # decodes bytes, exactly as with the raw Popen this replaces.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        proc = get_engine().spawn_command(
             engine_cmd,
+            name="inference-engine",
+            cwd=os.getcwd(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            cwd=os.getcwd(),
+            text=False,
         )
         import collections
 
@@ -2356,11 +2366,15 @@ def _make_engine_restart_fn(cfg):
         engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
         try:
-            proc = subprocess.Popen(
+            from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+            proc = get_engine().spawn_command(
                 engine_cmd,
+                name="inference-engine",
+                cwd=os.getcwd(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                cwd=os.getcwd(),
+                text=False,
             )
             import state as server_state
 
