@@ -34,59 +34,59 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 
 ### Light Mode
 
-| Token | RGB | Usage |
-|-------|-----|-------|
-| `--background` | `248 246 252` | Page background (warm cream with violet tint) |
-| `--foreground` | `25 22 36` | Primary text |
-| `--card` | `255 255 255` | Card/panel backgrounds |
-| `--card-foreground` | `25 22 36` | Text on cards |
-| `--primary` | `124 82 196` | Buttons, links, active states |
-| `--primary-foreground` | `250 248 255` | Text on primary |
-| `--secondary` | `237 232 248` | Secondary backgrounds |
-| `--secondary-foreground` | `42 37 55` | Text on secondary |
-| `--muted` | `244 242 248` | Subtle backgrounds |
-| `--muted-foreground` | `130 122 150` | Captions, secondary text |
-| `--accent` | `236 145 95` | Highlights, warnings, accents |
-| `--accent-foreground` | `250 248 255` | Text on accent |
-| `--border` | `228 224 242` | Borders, dividers |
-| `--input` | `228 224 242` | Input borders |
-| `--ring` | `124 82 196` | Focus rings |
-| `--success` | `52 176 125` | Success states |
-| `--warning` | `236 168 60` | Warning states |
-| `--destructive` | `220 80 90` | Errors, destructive actions |
+| Token                    | RGB           | Usage                                         |
+| ------------------------ | ------------- | --------------------------------------------- |
+| `--background`           | `248 246 252` | Page background (warm cream with violet tint) |
+| `--foreground`           | `25 22 36`    | Primary text                                  |
+| `--card`                 | `255 255 255` | Card/panel backgrounds                        |
+| `--card-foreground`      | `25 22 36`    | Text on cards                                 |
+| `--primary`              | `124 82 196`  | Buttons, links, active states                 |
+| `--primary-foreground`   | `250 248 255` | Text on primary                               |
+| `--secondary`            | `237 232 248` | Secondary backgrounds                         |
+| `--secondary-foreground` | `42 37 55`    | Text on secondary                             |
+| `--muted`                | `244 242 248` | Subtle backgrounds                            |
+| `--muted-foreground`     | `130 122 150` | Captions, secondary text                      |
+| `--accent`               | `236 145 95`  | Highlights, warnings, accents                 |
+| `--accent-foreground`    | `250 248 255` | Text on accent                                |
+| `--border`               | `228 224 242` | Borders, dividers                             |
+| `--input`                | `228 224 242` | Input borders                                 |
+| `--ring`                 | `124 82 196`  | Focus rings                                   |
+| `--success`              | `52 176 125`  | Success states                                |
+| `--warning`              | `236 168 60`  | Warning states                                |
+| `--destructive`          | `220 80 90`   | Errors, destructive actions                   |
 
 ### Dark Mode
 
-| Token | RGB | Usage |
-|-------|-----|-------|
-| `--background` | `17 15 24` | Page background (deep charcoal-violet) |
-| `--foreground` | `238 234 248` | Primary text |
-| `--card` | `28 25 38` | Card/panel backgrounds |
-| `--card-foreground` | `238 234 248` | Text on cards |
-| `--primary` | `192 170 244` | Buttons, links, active states |
-| `--primary-foreground` | `25 22 36` | Text on primary |
-| `--secondary` | `50 44 68` | Secondary backgrounds |
-| `--secondary-foreground` | `238 234 248` | Text on secondary |
-| `--muted` | `38 34 52` | Subtle backgrounds |
-| `--muted-foreground` | `150 140 172` | Captions, secondary text |
-| `--accent` | `240 176 130` | Highlights, warnings, accents |
-| `--accent-foreground` | `25 22 36` | Text on accent |
-| `--border` | `52 46 72` | Borders, dividers |
-| `--input` | `52 46 72` | Input borders |
-| `--ring` | `192 170 244` | Focus rings |
-| `--success` | `72 192 140` | Success states |
-| `--warning` | `240 192 80` | Warning states |
-| `--destructive` | `235 100 110` | Errors, destructive actions |
+| Token                    | RGB           | Usage                                  |
+| ------------------------ | ------------- | -------------------------------------- |
+| `--background`           | `17 15 24`    | Page background (deep charcoal-violet) |
+| `--foreground`           | `238 234 248` | Primary text                           |
+| `--card`                 | `28 25 38`    | Card/panel backgrounds                 |
+| `--card-foreground`      | `238 234 248` | Text on cards                          |
+| `--primary`              | `192 170 244` | Buttons, links, active states          |
+| `--primary-foreground`   | `25 22 36`    | Text on primary                        |
+| `--secondary`            | `50 44 68`    | Secondary backgrounds                  |
+| `--secondary-foreground` | `238 234 248` | Text on secondary                      |
+| `--muted`                | `38 34 52`    | Subtle backgrounds                     |
+| `--muted-foreground`     | `150 140 172` | Captions, secondary text               |
+| `--accent`               | `240 176 130` | Highlights, warnings, accents          |
+| `--accent-foreground`    | `25 22 36`    | Text on accent                         |
+| `--border`               | `52 46 72`    | Borders, dividers                      |
+| `--input`                | `52 46 72`    | Input borders                          |
+| `--ring`                 | `192 170 244` | Focus rings                            |
+| `--success`              | `72 192 140`  | Success states                         |
+| `--warning`              | `240 192 80`  | Warning states                         |
+| `--destructive`          | `235 100 110` | Errors, destructive actions            |
 
 ### Chart Colors
 
-| Token | Light | Dark |
-|-------|-------|------|
+| Token       | Light        | Dark          |
+| ----------- | ------------ | ------------- |
 | `--chart-1` | `124 82 196` | `192 170 244` |
-| `--chart-2` | `52 176 125` | `72 192 140` |
+| `--chart-2` | `52 176 125` | `72 192 140`  |
 | `--chart-3` | `236 145 95` | `240 176 130` |
 | `--chart-4` | `90 150 220` | `100 165 240` |
-| `--chart-5` | `220 80 90` | `235 100 110` |
+| `--chart-5` | `220 80 90`  | `235 100 110` |
 
 **Chart rule:** every chart series, legend swatch, progress bar, and per-item accent references a chart or semantic token — `stroke="var(--chart-1)"`, `backgroundColor: 'var(--chart-N)'`, `bg-success`/`bg-warning`/`bg-destructive`. Color constants at the top of a component (`const COLORS = { a: '#6366f1' }`) are forbidden; define them as `{ a: 'var(--chart-1)' }` so they follow theme and palette like everything else.
 
@@ -94,15 +94,15 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 
 Each accent theme is a full aura — not just a primary color swap. Themes override `--primary`, `--ring`, `--secondary`, `--secondary-foreground`, `--muted`, `--border`, and `--input` to shift the entire UI atmosphere.
 
-| Theme | Aura | Primary | Mood |
-|-------|------|---------|------|
-| `theme-blue` | Periwinkle | `90 130 220` | Calm ocean, trustworthy |
-| `theme-purple` | Lilac | `155 108 214` | Ethereal lilac, mystical |
-| `theme-pink` | Rose | `218 130 170` | Soft rose, delicate |
-| `theme-red` | Coral | `230 120 130` | Warm coral, energetic |
-| `theme-orange` | Peach | `236 155 90` | Peachy bread crust, warm bakery |
-| `theme-green` | Mint | `72 178 130` | Fresh mint, natural |
-| `theme-teal` | Dew | `72 166 200` | Cool dew, refreshing |
+| Theme          | Aura       | Primary       | Mood                            |
+| -------------- | ---------- | ------------- | ------------------------------- |
+| `theme-blue`   | Periwinkle | `90 130 220`  | Calm ocean, trustworthy         |
+| `theme-purple` | Lilac      | `155 108 214` | Ethereal lilac, mystical        |
+| `theme-pink`   | Rose       | `218 130 170` | Soft rose, delicate             |
+| `theme-red`    | Coral      | `230 120 130` | Warm coral, energetic           |
+| `theme-orange` | Peach      | `236 155 90`  | Peachy bread crust, warm bakery |
+| `theme-green`  | Mint       | `72 178 130`  | Fresh mint, natural             |
+| `theme-teal`   | Dew        | `72 166 200`  | Cool dew, refreshing            |
 
 Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool tints to match the aura. Dark mode variants deepen these shifts.
 
@@ -110,22 +110,22 @@ Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool t
 
 ### Font Families
 
-| Role | Font | Fallback |
-|------|------|----------|
-| Body | Rubik (`--font-rubik`) | system-ui, sans-serif |
-| Numeric | Lato (`--font-lato`) | system-ui, sans-serif |
-| Code | JetBrains Mono (`--font-jetbrains-mono`) | ui-monospace, monospace |
+| Role    | Font                                     | Fallback                |
+| ------- | ---------------------------------------- | ----------------------- |
+| Body    | Rubik (`--font-rubik`)                   | system-ui, sans-serif   |
+| Numeric | Lato (`--font-lato`)                     | system-ui, sans-serif   |
+| Code    | JetBrains Mono (`--font-jetbrains-mono`) | ui-monospace, monospace |
 
 ### Type Scale
 
-| Role | Class | Weight | Usage |
-|------|-------|--------|-------|
-| Page title | `text-2xl md:text-3xl font-semibold` | 600 | Only in `AppRouteHeaderLead` |
-| Section title | `text-base font-medium` | 500 | Card headers |
-| Body | `text-sm` | 400 | Primary content |
-| Caption | `text-xs text-muted-foreground` | 400 | Timestamps, secondary info |
-| Label | `text-xs font-medium uppercase tracking-wider` | 500 | Form labels |
-| Badge | `text-[10px] font-medium` | 500 | Status badges, tags |
+| Role          | Class                                          | Weight | Usage                        |
+| ------------- | ---------------------------------------------- | ------ | ---------------------------- |
+| Page title    | `text-2xl md:text-3xl font-semibold`           | 600    | Only in `AppRouteHeaderLead` |
+| Section title | `text-base font-medium`                        | 500    | Card headers                 |
+| Body          | `text-sm`                                      | 400    | Primary content              |
+| Caption       | `text-xs text-muted-foreground`                | 400    | Timestamps, secondary info   |
+| Label         | `text-xs font-medium uppercase tracking-wider` | 500    | Form labels                  |
+| Badge         | `text-[10px] font-medium`                      | 500    | Status badges, tags          |
 
 ### Rules
 
@@ -139,23 +139,23 @@ Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool t
 
 ### Page Layout
 
-| Token | Class | Value |
-|-------|-------|-------|
-| Page wrapper | `sl-page` | `p-4 sm:p-6 md:p-8` |
-| Max content width | `max-w-4xl` | 896px |
-| Between sections | `space-y-4` | 16px |
-| Between cards | `space-y-4` | 16px |
+| Token             | Class       | Value               |
+| ----------------- | ----------- | ------------------- |
+| Page wrapper      | `sl-page`   | `p-4 sm:p-6 md:p-8` |
+| Max content width | `max-w-4xl` | 896px               |
+| Between sections  | `space-y-4` | 16px                |
+| Between cards     | `space-y-4` | 16px                |
 
 ### Component Spacing
 
-| Context | Class |
-|---------|-------|
-| Card padding | `p-4` or `p-6` |
-| Card header/content gap | `space-y-2` |
-| Button gap | `gap-2` |
-| Form field gap | `space-y-2` |
-| Inline group | `flex items-center gap-2` |
-| Grid gap | `gap-4` |
+| Context                 | Class                     |
+| ----------------------- | ------------------------- |
+| Card padding            | `p-4` or `p-6`            |
+| Card header/content gap | `space-y-2`               |
+| Button gap              | `gap-2`                   |
+| Form field gap          | `space-y-2`               |
+| Inline group            | `flex items-center gap-2` |
+| Grid gap                | `gap-4`                   |
 
 ### Rules
 
@@ -165,20 +165,20 @@ Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool t
 
 ## Border Radius
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--radius` | `6px` | Default for all components |
-| `rounded-sm` | `2px` | Subtle rounding |
-| `rounded-lg` | `10px` | Modals, large panels |
-| `rounded-xl` | `14px` | Feature cards |
+| Token        | Value  | Usage                      |
+| ------------ | ------ | -------------------------- |
+| `--radius`   | `6px`  | Default for all components |
+| `rounded-sm` | `2px`  | Subtle rounding            |
+| `rounded-lg` | `10px` | Modals, large panels       |
+| `rounded-xl` | `14px` | Feature cards              |
 
 ## Shadows
 
-| Token | Usage |
-|-------|-------|
+| Token       | Usage                            |
+| ----------- | -------------------------------- |
 | `shadow-sm` | Subtle elevation (cards at rest) |
-| `shadow-md` | Hover states, dropdowns |
-| `shadow-lg` | Modals, popovers |
+| `shadow-md` | Hover states, dropdowns          |
+| `shadow-lg` | Modals, popovers                 |
 | `shadow-xl` | Command palette, floating panels |
 
 ## Component Patterns
@@ -188,7 +188,7 @@ Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool t
 ```tsx
 import { Card, CardHeader, CardTitle, CardContent } from '@anthropic/strui/card'
 
-<Card>
+;<Card>
   <CardHeader>
     <CardTitle className="text-base">Section Title</CardTitle>
   </CardHeader>
@@ -222,7 +222,7 @@ import { Button } from '@anthropic/strui/button'
 import { Input } from '@anthropic/strui/input'
 import { Label } from '@anthropic/strui/label'
 
-<div className="space-y-2">
+;<div className="space-y-2">
   <Label htmlFor="name">Name</Label>
   <Input id="name" placeholder="Enter name" />
 </div>
@@ -243,55 +243,73 @@ import { Badge } from '@anthropic/strui/badge'
 sloughGPT's visual signature is **one strong layout primitive, repeated**:
 the annotated log entry. Every list of things a user reads turn-by-turn —
 chat transcripts, the kanban board, later anything else — composes through
-the same three-zone anatomy, so the silhouette (gutter + flowing text +
-metadata margin) is recognizably sloughGPT even shrunk to black and white.
+the same anatomy, so the silhouette is recognizably sloughGPT even shrunk to
+black and white.
+
+**Chat was re-ruled Direction B (user ruling 2026-11-03, "visual consistency
+please")**: transcripts render through a shared `MessageFrame` — one shape
+(`rounded-2xl`, never pills) and one radius for both roles; only alignment
+and tint differ, and the metadata is a footer **inside** the frame. The old
+three-zone chat anatomy (turn-number gutter + prose + detached right margin)
+is retired. Board entries keep the gutter + margin anatomy below — the ruling
+changed the chat projection, not the primitive.
 
 ```
-┌ gutter ┐ content (document-like)              ┐ margin (mono metadata) ┐
-│  07    │ The words are the interface.         │ role · model · 2.1 t/s │
-│        │ Assistant prose has NO bubble chrome.│ ● live · 148 tok       │
+chat (MessageFrame):
+┌── user: right-aligned, bg-primary/10 border-primary/20, rounded-2xl ──┐
+│ words + footer (role · model · 2.1 t/s · 148 tok · timestamp)        │
+└──────────────────────────────────────────────────────────────────────┘
+
+board (gutter + content + margin):
+┌ gutter ┐ content (ledger line)             ┐ margin (mono metadata) ┐
+│ a3f9   │ The words are the interface.      │ priority · Maya · Fri  │
 ```
 
-- **Gutter** (`font-mono text-[10px] text-muted-foreground/50`): stable
-  position marker — turn number in chat, hash/id prefix on board entries.
-- **Content**: assistant turns are flowing prose with no card or bubble;
-  user turns are the only contained element (right-aligned tinted card in
-  chat). Board entries sit in their column like ledger lines, not floating
-  rounded cards.
-- **Margin** (`font-mono text-[10px] text-muted-foreground/60`): metadata as
-  first-class typography beside the content it describes (Tufte sidenote
-  model) — per-turn tok/s, token count, latency, model; card priority,
-  assignee, due date. Live/in-flight state is a `StatusDot tone="primary"
-  pulse`; WIP overflow is `StatusDot tone="destructive" pulse`.
+- **MessageFrame** (`features/chat/components/messages/MessageFrame.tsx`):
+  the one surface every chat message renders through. User =
+  right-aligned `bg-primary/10 border-primary/20`; assistant = left-aligned
+  `bg-card border-border`; both `rounded-2xl`. Renderers **compose** it and
+  never re-decide chrome. No message index/turn numbers — the sub-decision
+  removed the gutter numbering entirely.
+- **Gutter** (`font-mono text-[10px] text-muted-foreground/50`, board):
+  stable position marker — hash/id prefix on board entries.
+- **Content**: board entries sit in their column like ledger lines, not
+  floating rounded cards.
+- **Margin** (`font-mono text-[10px] text-muted-foreground/60`, board):
+  metadata as first-class typography beside the content it describes (Tufte
+  sidenote model) — card priority, assignee, due date. Live/in-flight state
+  is a `StatusDot tone="primary" pulse`; WIP overflow is
+  `StatusDot tone="destructive" pulse`. In chat the same metadata lives in
+  the frame footer (`data-message-frame-footer`).
 
-Reference implementations: `features/chat/components/messages/MessageBubble.tsx`
-(chat turn), `components/planner/CardItem.tsx` + `Tray.tsx` (board entry +
-column). Per-turn chat metrics arrive via `streamChatResponse`'s `onMeta`
+Reference implementations: `features/chat/components/messages/MessageFrame.tsx`
+(composed by `MessageBubble.tsx`, `MessageContent.tsx`, `MessageRenderer.tsx`),
+`components/planner/CardItem.tsx` + `Tray.tsx` (board entry + column).
+Per-turn chat metrics arrive via `streamChatResponse`'s `onMeta`
 (`{tokens, elapsedMs}`) and live on `ChatMessage.metrics`.
 
 Rules for new surfaces adopting the primitive:
 
-1. Three zones, always — never re-introduce a bubble/bubble pair.
-2. Metadata goes in the margin, never as badges stacked under the content.
-3. One margin annotation per fact; no icon+label pairs (icon-only with
+1. Chat messages compose `MessageFrame` — never hand-roll message chrome,
+   never re-introduce a bubble/bubble pair, never `rounded-full` pills.
+2. Chat metadata goes in the frame footer, inside the surface — never as a
+   detached margin, never as badges stacked under the content.
+3. Board surfaces keep three zones (gutter + content + margin); one margin
+   annotation per fact; no icon+label pairs (icon-only with
    `aria-label`/`title` is fine).
-4. Gutter is `aria-hidden`; the margin carries the accessible text.
+4. Board gutter is `aria-hidden`; the margin carries the accessible text.
 
 ### Page Template
 
 ```tsx
 <div className="sl-page mx-auto max-w-4xl">
-  <AppRouteHeader
-    left={<AppRouteHeaderLead title="Page Title" subtitle="Description" />}
-  />
+  <AppRouteHeader left={<AppRouteHeaderLead title="Page Title" subtitle="Description" />} />
   <div className="space-y-4">
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Section</CardTitle>
       </CardHeader>
-      <CardContent>
-        {/* Content */}
-      </CardContent>
+      <CardContent>{/* Content */}</CardContent>
     </Card>
   </div>
 </div>
@@ -303,20 +321,20 @@ Rules for new surfaces adopting the primitive:
 
 Every clickable element must have a hover state:
 
-| Element | Hover Class |
-|---------|-------------|
-| Button | `hover:bg-primary/90` |
+| Element          | Hover Class                               |
+| ---------------- | ----------------------------------------- |
+| Button           | `hover:bg-primary/90`                     |
 | Card (clickable) | `hover:border-primary/50 hover:shadow-md` |
-| Link | `hover:text-primary/80` |
-| List item | `hover:bg-muted` |
-| Icon button | `hover:bg-muted hover:text-foreground` |
+| Link             | `hover:text-primary/80`                   |
+| List item        | `hover:bg-muted`                          |
+| Icon button      | `hover:bg-muted hover:text-foreground`    |
 
 ### Focus
 
 All interactive elements must have visible focus:
 
 ```tsx
-className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+className = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
 ```
 
 ### Disabled
@@ -324,7 +342,7 @@ className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offse
 Disabled elements use reduced opacity:
 
 ```tsx
-className="opacity-40 pointer-events-none"
+className = 'opacity-40 pointer-events-none'
 ```
 
 ## Animation
@@ -336,29 +354,29 @@ className="opacity-40 pointer-events-none"
 
 ## Forbidden Patterns
 
-| Never | Use Instead |
-|-------|-------------|
-| `#hex` colors | `rgb(var(--token))` or Tailwind classes |
-| `text-gray-500` | `text-muted-foreground` |
-| `bg-white` | `bg-card` |
-| `border-gray-200` | `border-border` |
-| `text-lg` in body | `text-sm` or `text-base` |
-| `px-8 py-6` on page | `sl-page` class |
-| Inline `style={{}}` | Tailwind classes |
-| `console.log` in production | Remove before commit |
-| Custom color variables | Use existing tokens |
-| New font families | Use Rubik, Lato, or JetBrains Mono |
-| `rounded-full` on cards | Use `rounded` or `rounded-lg` |
-| Animations without motion check | Add `motion-reduce:` variants |
+| Never                                                                                         | Use Instead                                                                         |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `#hex` colors                                                                                 | `rgb(var(--token))` or Tailwind classes                                             |
+| `text-gray-500`                                                                               | `text-muted-foreground`                                                             |
+| `bg-white`                                                                                    | `bg-card`                                                                           |
+| `border-gray-200`                                                                             | `border-border`                                                                     |
+| `text-lg` in body                                                                             | `text-sm` or `text-base`                                                            |
+| `px-8 py-6` on page                                                                           | `sl-page` class                                                                     |
+| Inline `style={{}}`                                                                           | Tailwind classes                                                                    |
+| `console.log` in production                                                                   | Remove before commit                                                                |
+| Custom color variables                                                                        | Use existing tokens                                                                 |
+| New font families                                                                             | Use Rubik, Lato, or JetBrains Mono                                                  |
+| `rounded-full` on cards                                                                       | Use `rounded` or `rounded-lg`                                                       |
+| Animations without motion check                                                               | Add `motion-reduce:` variants                                                       |
 | Stock Tailwind palette (`text-green-500`, `bg-red-400`, `border-blue-500`, `text-indigo-600`) | Semantic tokens (`text-success`, `bg-destructive`, `border-border`, `text-primary`) |
-| Hex in chart series / progress bars (`#6366f1`, `#22c55e`) | `var(--chart-N)` / `bg-success` / `bg-warning` / `bg-destructive` |
-| Loud AI-default hero gradients (vivid purple→indigo at full opacity) | Token-tinted ambient washes only (below) |
-| "Actions" card in the page body | `PageContainer headerRight` |
-| Five identical stat cards (`Card` + `text-2xl`) | `KpiGrid` + `StatCard` |
-| Stat numbers at `text-2xl` in body | `StatCard` value (owns its own scale) |
-| Live/status conveyed as raw text + `bg-green-400` dot | `StatusDot` (`tone="success" pulse`) |
-| Secondary controls stacked as cards | `FoldSection` (collapsible) |
-| A row/stack of more than two flat cards with no hierarchy | `SectionHeader`, `KpiGrid`, or rethink the layout |
+| Hex in chart series / progress bars (`#6366f1`, `#22c55e`)                                    | `var(--chart-N)` / `bg-success` / `bg-warning` / `bg-destructive`                   |
+| Loud AI-default hero gradients (vivid purple→indigo at full opacity)                          | Token-tinted ambient washes only (below)                                            |
+| "Actions" card in the page body                                                               | `PageContainer headerRight`                                                         |
+| Five identical stat cards (`Card` + `text-2xl`)                                               | `KpiGrid` + `StatCard`                                                              |
+| Stat numbers at `text-2xl` in body                                                            | `StatCard` value (owns its own scale)                                               |
+| Live/status conveyed as raw text + `bg-green-400` dot                                         | `StatusDot` (`tone="success" pulse`)                                                |
+| Secondary controls stacked as cards                                                           | `FoldSection` (collapsible)                                                         |
+| A row/stack of more than two flat cards with no hierarchy                                     | `SectionHeader`, `KpiGrid`, or rethink the layout                                   |
 
 ## AI Agent Rules
 
@@ -407,8 +425,11 @@ grep -rn '#[0-9a-fA-F]\{3,8\}' apps/web/ --include='*.tsx' | grep -v '.test.\|st
 # Hex chart/list constants at top of a component (forbidden)
 grep -rn "': '#" apps/web/components apps/web/app --include='*.tsx' | grep -v '.test.'
 
-# Chat transcript must stay bubble-free (the log-entry primitive)
+# Chat transcript must stay bubble-free (MessageFrame — Direction B ruling)
 grep -rnE 'rounded-(br|bl)-md|chat-bubble' apps/web/features/chat/components/messages/ --include='*.tsx' | grep -v '.test.'   # must be zero
+
+# Chat messages must render through the shared MessageFrame (no hand-rolled chrome)
+grep -rLn 'MessageFrame' apps/web/features/chat/components/messages/MessageBubble.tsx apps/web/features/chat/components/messages/MessageContent.tsx apps/web/features/chat/components/MessageRenderer.tsx   # must print nothing
 
 # Planner must not pin hues (non-negotiable #1)
 grep -rn 'hsl(' apps/web/components/planner --include='*.tsx' | grep -v '.test.'   # must be zero

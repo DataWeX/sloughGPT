@@ -444,28 +444,20 @@ describe('MessageBubble', () => {
     expect(article).toHaveAttribute('aria-live', 'assertive')
   })
 
-  describe('transcript anatomy (log-entry primitive)', () => {
-    it('renders the gutter turn number, zero-padded', () => {
-      const { container } = render(
-        <MessageBubble
-          content="hi"
-          role="assistant"
-          timestamp={new Date()}
-          showTimestamp
-          turnNumber={7}
-        />,
+  describe('transcript frame (MessageFrame — Direction B, ruling 2026-11-03)', () => {
+    it('renders both roles through MessageFrame', () => {
+      const user = render(
+        <MessageBubble content="q" role="user" timestamp={new Date()} showTimestamp />,
       )
-      expect(container.textContent).toContain('07')
+      expect(user.container.querySelector('[data-message-frame="user"]')).not.toBeNull()
+      cleanup()
+      const assistant = render(
+        <MessageBubble content="a" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      expect(assistant.container.querySelector('[data-message-frame="assistant"]')).not.toBeNull()
     })
 
-    it('hides the gutter when no turnNumber is given', () => {
-      const { container } = render(
-        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
-      )
-      expect(container.textContent).not.toMatch(/\b00\b/)
-    })
-
-    it('renders per-turn metrics in the margin as tok/s · tokens · seconds', () => {
+    it('keeps metadata (role label, metrics) in the frame footer, not a detached gutter', () => {
       const { container } = render(
         <MessageBubble
           content="hi"
@@ -475,7 +467,18 @@ describe('MessageBubble', () => {
           metrics={{ tokens: 100, elapsedMs: 2000 }}
         />,
       )
-      expect(container.textContent).toContain('50.0 tok/s · 100 tok · 2.0s')
+      const frame = container.querySelector('[data-message-frame]')!
+      const footer = frame.querySelector('[data-message-frame-footer]')!
+      expect(footer.textContent).toContain('Assistant')
+      expect(footer.textContent).toContain('50.0 tok/s · 100 tok · 2.0s')
+    })
+
+    it('renders no message index numbers (sub-decision: removed entirely)', () => {
+      const { container } = render(
+        <MessageBubble content="hi" role="assistant" timestamp={new Date()} showTimestamp />,
+      )
+      // The old gutter printed zero-padded turn numbers (07, 11, 13…).
+      expect(container.textContent).not.toMatch(/\b0\d\b/)
     })
 
     it('omits metrics text when metrics are absent or zero-elapsed', () => {

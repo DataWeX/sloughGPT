@@ -368,7 +368,6 @@ export const ChatScreen = memo(function ChatScreen({
             showTimestamp={true}
             model={model}
             images={message.images}
-            turnNumber={index + 1}
             metrics={message.metrics}
             onCopy={onCopy}
             onThumbsUp={onThumbsUp}
