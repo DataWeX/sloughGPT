@@ -27,7 +27,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if [ "$#" -eq 0 ]; then
-  set -- -p no:randomly packages/core-py/tests
+  # 2026-10-25 test-tree consolidation: tests live at the unified tests/ root
+  # (packages/core-py/tests is gone — the old default errored on bare invoke).
+  # Collect everything; testmon forceselect then narrows to the changed closure.
+  set -- -p no:randomly tests
 fi
 
 if [ "${RUN_ALL:-0}" = "1" ]; then
