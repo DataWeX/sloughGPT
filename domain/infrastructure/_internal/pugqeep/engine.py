@@ -1855,6 +1855,12 @@ class Engine:
     def install_signal_handlers(self) -> None:
         import signal
 
+        # signal.signal() only works on the main thread — engines created
+        # lazily from worker threads (e.g. get_engine()) must not crash.
+        if threading.current_thread() is not threading.main_thread():
+            logger.debug("Engine[%s]: non-main thread; skipping signal handlers", self.name)
+            return
+
         self._old_signal_handlers = {
             signal.SIGTERM: signal.getsignal(signal.SIGTERM),
             signal.SIGINT: signal.getsignal(signal.SIGINT),

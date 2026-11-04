@@ -553,8 +553,7 @@ def _start_health_monitor() -> None:
 
         interval = int(os.environ.get("SLO_HEALTH_INTERVAL", "300"))
         monitor = get_health_monitor()
-        thread = monitor.start_auto_monitoring(interval_seconds=interval)
-        thread.name = "health-monitor"
+        monitor.start_auto_monitoring(interval_seconds=interval)
         logger.info(
             "Model health monitor started",
             extra={"context": {"interval_seconds": interval}, "tag": "START"},
