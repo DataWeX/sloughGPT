@@ -53,7 +53,8 @@ review flag.
      `spawn_command`; `_cmd_api_only`/`_cmd_api_and_*` migrate when next
      touched) → shell command execution (`routers/shell.py`,
      `shell/repl.py` background jobs, `shell/runtime.py`, `init.py`) →
-     `startup.py` engine-child `Popen`s.
+     `startup.py` engine-child (**done** — initial + restart launch sites
+     via `spawn_command`).
    - **3B — thread/FAF kind (~25 sites)**: short-lived in-process work →
      FAF pool or engine thread mode (`main.py` rag-init, preloader,
      feedback loops, collectors, warmups, probes).
