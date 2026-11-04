@@ -81,7 +81,7 @@ export function Sidebar({
                   {t('app.name')}
                 </span>
                 {!isDrawer && (
-                  <span className="text-[8px] uppercase leading-tight tracking-wider text-muted-foreground/60">
+                  <span className="text-[8px] uppercase leading-tight tracking-wider text-muted-foreground">
                     {t('app.console')}
                   </span>
                 )}
@@ -117,7 +117,7 @@ export function Sidebar({
                     <div className="my-2 border-t border-border/30 dark:border-border/40" />
                   )}
                   {!isCollapsed && (
-                    <p className="mb-1 mt-2.5 px-2.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground/60 first:mt-0.5">
+                    <p className="mb-1 mt-2.5 px-2.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground first:mt-0.5">
                       {t(section.labelKey)}
                     </p>
                   )}

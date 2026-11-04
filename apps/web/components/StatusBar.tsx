@@ -266,10 +266,7 @@ export function StatusBar() {
               className="sl-badge sl-badge-secondary"
               title={`Consciousness: ${consciousnessStatus.level}/3 | Mood: ${getQualiaMood(consciousnessStatus.current_qualia)}`}
             >
-              <span
-                className="h-1 w-1 rounded-full bg-violet-400 animate-pulse"
-                aria-hidden="true"
-              />
+              <span className="h-1 w-1 rounded-full bg-primary animate-pulse" aria-hidden="true" />
               {getQualiaMood(consciousnessStatus.current_qualia) || `L${consciousnessStatus.level}`}
             </span>
           )}
