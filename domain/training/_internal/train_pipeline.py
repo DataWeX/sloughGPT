@@ -44,6 +44,7 @@ try:
     from domain.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
+from domain.shared._internal.feature_flags import is_enabled
 from domain.slolib._internal.gpu import dispatch_stats
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.experience_adapter import (
@@ -1981,6 +1982,17 @@ class SloughGPTTrainer:
             sps = self._steps_per_sec()
             eta = None if sps <= 0 else max(0, int((denom - self.global_step) / sps))
             last_trace = self.get_step_trace()
+            # step_trace flag gates only the trace-derived residency keys —
+            # absent (not lying zeros) when off; "device" is unconditional.
+            residency = (
+                {
+                    "gpu_matmuls": last_trace.gpu_matmuls if last_trace else 0,
+                    "cpu_matmuls": last_trace.cpu_matmuls if last_trace else 0,
+                    "fallbacks": last_trace.fallbacks if last_trace else 0,
+                }
+                if is_enabled("step_trace")
+                else {}
+            )
             try:
                 on_progress(
                     {
@@ -2002,9 +2014,7 @@ class SloughGPTTrainer:
                         # StepTrace residency tripwires (additive): which path
                         # did this step's eligible matmuls actually take?
                         "device": str(self.device),
-                        "gpu_matmuls": last_trace.gpu_matmuls if last_trace else 0,
-                        "cpu_matmuls": last_trace.cpu_matmuls if last_trace else 0,
-                        "fallbacks": last_trace.fallbacks if last_trace else 0,
+                        **residency,
                     }
                 )
             except Exception:
@@ -2100,16 +2110,21 @@ class SloughGPTTrainer:
                         self._is_training = False
                         break
 
-                dispatch_before = dispatch_stats()
+                # Emission seam for the step_trace flag: the dispatch counters
+                # in slolib.gpu accumulate unconditionally — only assembling the
+                # receipt into the ring is gated (tripwire stays live when off).
+                trace_on = is_enabled("step_trace")
+                dispatch_before = dispatch_stats() if trace_on else {}
                 metrics = self.train_step()
                 train_loss += metrics["loss"]
                 self.global_step += 1
                 # Per-step reduction-set receipt: counters delta across exactly
                 # this step's compute (eval/selfgen/log work lands outside the
                 # snapshot window), plus control signals and replay anchors.
-                self._step_traces.append(
-                    self._assemble_step_trace(metrics, dispatch_before, dispatch_stats())
-                )
+                if trace_on:
+                    self._step_traces.append(
+                        self._assemble_step_trace(metrics, dispatch_before, dispatch_stats())
+                    )
 
                 # Self-gen flywheel: generate gated continuations with the
                 # live model on schedule; failures never stop the run.

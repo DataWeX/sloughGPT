@@ -22,5 +22,6 @@
   "semantic_cache": "enabled",
   "llm_nlp": "experimental",
   "feature_flags": "enabled",
-  "slonet_provider_tests": "enabled"
+  "slonet_provider_tests": "enabled",
+  "step_trace": "enabled"
 }
