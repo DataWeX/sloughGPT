@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import multiprocessing
+import subprocess
 import threading
 import time
 import uuid
@@ -61,6 +62,9 @@ _MSG_READY = "__READY__"
 _MSG_HEARTBEAT = "__HEARTBEAT__"
 _MSG_ERROR = "__ERROR__"
 _MSG_RESULT = "__RESULT__"
+
+# External-command supervision (spawn_command): SIGTERM -> SIGKILL grace.
+_CMD_KILL_GRACE = 2.0
 
 
 class ProcessStatus(Enum):
@@ -883,6 +887,183 @@ class SubprocessProcess:
         return self._stderr
 
 
+def _command_target() -> None:
+    """Placeholder ``fn`` for external commands.
+
+    The work runs in the child OS process, not as a callable — ``fn``
+    exists only because ``Process`` is fn-shaped; invoking it is a bug.
+    """
+    raise RuntimeError("external commands run in their own process")
+
+
+@dataclass
+class CommandProcess(Process):
+    """An external OS command supervised by the Engine — the process kind.
+
+    ``spawn(subprocess=True)`` runs a *Python fn* in a fresh interpreter
+    and hands its output back post-hoc; a supervised server (``uvicorn``,
+    ``npm run dev``) needs the opposite contract: the command itself is
+    the unit of work, its output must be readable *while it runs*, and
+    the caller drives it through ``poll()``/``terminate()`` exactly as
+    with a raw ``subprocess.Popen``.
+
+    Contract:
+      - **Eager start**: the child spawns inside ``Engine.spawn_command``
+        — never queued for dispatch, so no run-loop poll latency and no
+        pool worker is held for the child's lifetime.
+      - **The caller owns the live streams** (an I/O pump thread reading
+        ``stdout``/``stderr``), same as raw Popen — a PIPE nobody drains
+        blocks the child.
+      - **The engine's run loop reaps** (``_reap``): status transitions,
+        completion metrics, and ``timeout`` enforcement never depend on
+        the caller polling. ``poll()``/``wait()`` finalize too — both
+        paths idempotent under ``_finalize_lock`` (first caller wins).
+      - **``cancel()``** (``Engine.stop()``, atexit) terminates the child
+        with a bounded SIGTERM→SIGKILL so no orphan outlives the engine.
+    """
+
+    argv: list[str] = field(default_factory=list)
+    _popen: Any = field(default=None, repr=False)
+    _deadline: float | None = field(default=None, repr=False)
+    _timed_out: bool = field(default=False, repr=False)
+    # Any, not threading.RLock: RLock is a factory function at runtime and
+    # does not annotate cleanly as a type.
+    _finalize_lock: Any = field(default_factory=threading.RLock, repr=False)
+
+    # ── Popen surface (duck-typed superset of the raw handle) ──
+
+    @property
+    def pid(self) -> int | None:
+        return self._popen.pid if self._popen is not None else None
+
+    @property
+    def returncode(self) -> int | None:
+        return self._popen.returncode if self._popen is not None else None
+
+    @property
+    def stdout(self) -> Any:
+        return self._popen.stdout if self._popen is not None else None
+
+    @property
+    def stderr(self) -> Any:
+        return self._popen.stderr if self._popen is not None else None
+
+    @property
+    def is_alive(self) -> bool:
+        return self._popen is not None and self._popen.poll() is None
+
+    def poll(self) -> int | None:
+        """Reap once: return the exit code, finalizing status if exited."""
+        if self._popen is None:
+            return self.returncode
+        rc: int | None = self._popen.poll()
+        if rc is not None:
+            self._finalize(rc)
+        return rc
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self._popen is None:
+            raise ProcessLookupError("command was never started")
+        rc: int = self._popen.wait(timeout=timeout)
+        self._finalize(rc)
+        return rc
+
+    def terminate(self) -> None:
+        """SIGTERM the child (raw, like ``Popen.terminate``).
+
+        Status follows via the next reap — this is the signal, not the
+        lifecycle transition.
+        """
+        if self.is_alive:
+            try:
+                self._popen.terminate()
+            except OSError:
+                pass
+
+    def kill(self) -> None:
+        if self.is_alive:
+            try:
+                self._popen.kill()
+            except OSError:
+                pass
+
+    # ── Engine supervision ──
+
+    def _reap(self) -> None:
+        """Poll the child once and enforce ``timeout``. Idempotent, non-blocking.
+
+        Called every run-loop tick so supervision does not depend on the
+        caller polling; ``poll()``/``wait()`` call it too. The timeout
+        path is signal-only (SIGTERM, then SIGKILL a grace period later)
+        so the dispatch loop never blocks on a hung child.
+        """
+        if self._popen is None or self.is_done:
+            return
+        rc = self._popen.poll()
+        if rc is not None:
+            self._finalize(rc)
+            return
+        if self._deadline is not None:
+            now = time.monotonic()
+            if now > self._deadline:
+                if not self._timed_out:
+                    self._timed_out = True
+                    logger.warning(
+                        "Command '%s' exceeded timeout %.1fs — SIGTERM",
+                        self.name,
+                        self.timeout or 0.0,
+                    )
+                    self.terminate()
+                elif now > self._deadline + _CMD_KILL_GRACE:
+                    self.kill()
+
+    def _finalize(self, rc: int) -> None:
+        """First caller wins: exit code -> status + callbacks (idempotent)."""
+        with self._finalize_lock:
+            if self.is_done:
+                return
+            if self._timed_out:
+                self.fail(f"command timed out after {self.timeout}s")
+            elif rc == 0:
+                self.complete(rc)
+            else:
+                self.fail(f"command exited with code {rc}")
+
+    def cancel(self) -> None:
+        """Terminate the child (bounded SIGTERM→SIGKILL), then cancel.
+
+        ``Engine.stop()``/atexit take this path — no orphan may outlive
+        the engine. If the child already exited, the reap finalizes it
+        and the cancel is a no-op: its real exit status wins.
+        """
+        with self._finalize_lock:
+            self._reap()
+            if self.is_done:
+                return
+            self._terminate_child()
+            super().cancel()
+
+    def _terminate_child(self, grace: float = _CMD_KILL_GRACE) -> None:
+        if self._popen is None:
+            return
+        try:
+            if self._popen.poll() is None:
+                self._popen.terminate()
+                try:
+                    self._popen.wait(timeout=grace)
+                except subprocess.TimeoutExpired:
+                    self._popen.kill()
+                    self._popen.wait(timeout=1.0)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["argv"] = list(self.argv)
+        d["returncode"] = self.returncode
+        return d
+
+
 class ProcessGroup:
     """Batch operations on a set of processes."""
 
@@ -1440,6 +1621,8 @@ class Engine:
                 active = sum(t.active_stems for t in self._trees.values())
 
             for proc in list(self._processes.values()):
+                if isinstance(proc, CommandProcess):
+                    proc._reap()
                 if proc.is_done and proc not in self._completed:
                     self._completed.append(proc)
                     if proc.status == ProcessStatus.COMPLETED:
@@ -1680,6 +1863,65 @@ class Engine:
         elif hasattr(self, "_subprocess_config"):
             del self._subprocess_config
 
+        return proc
+
+    def spawn_command(
+        self,
+        argv: list[str],
+        *,
+        name: str = "",
+        cwd: str | None = None,
+        env: dict | None = None,
+        stdout: Any = subprocess.PIPE,
+        stderr: Any = subprocess.STDOUT,
+        text: bool = True,
+        timeout: float | None = None,
+    ) -> CommandProcess:
+        """Start an external command under engine supervision (eager).
+
+        The external-command flavor of the ``process`` routing kind
+        (routing table: ``docs/plans/2026-09-20-execution-consolidation.md``).
+        Unlike ``spawn(subprocess=True)`` — a Python fn whose output
+        arrives post-hoc — the child starts *here* (no dispatch latency,
+        no pool worker held), streams live through ``proc.stdout`` /
+        ``proc.stderr``, and is driven with raw-Popen semantics
+        (``poll`` / ``returncode`` / ``terminate``) while the run loop
+        reaps it into the process registry (status, metrics,
+        ``list_processes``, ``timeout``).
+
+        ``stdout``/``stderr`` are passed straight to ``subprocess.Popen``
+        (defaults: merged stdout→PIPE, the supervised-server shape).
+        """
+        if isinstance(argv, (str, bytes)):
+            raise TypeError("spawn_command takes an argv list, not a string")
+        if not argv:
+            raise ValueError("spawn_command requires a non-empty argv")
+
+        proc = CommandProcess(
+            fn=_command_target,
+            argv=[str(a) for a in argv],
+            name=name or str(argv[0]),
+            timeout=timeout,
+        )
+        # Popen first: a missing executable must raise to the caller
+        # (raw-Popen behaviour) without leaving a registered dead entry.
+        proc._popen = subprocess.Popen(
+            argv, cwd=cwd, env=env, stdout=stdout, stderr=stderr, text=text
+        )
+        proc._pid = proc._popen.pid
+        if timeout is not None:
+            proc._deadline = time.monotonic() + timeout
+        proc.running()
+
+        self._processes[proc.id] = proc
+        self._metrics.record_spawn()
+        logger.debug(
+            "Engine[%s]: spawned command %s (%s) -> pid %s",
+            self.name,
+            proc.id,
+            proc.name,
+            proc._pid,
+        )
         return proc
 
     def group(self, name: str) -> ProcessGroup:
