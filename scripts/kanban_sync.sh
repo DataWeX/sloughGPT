@@ -50,8 +50,23 @@ while [ "$attempt" -le "$ATTEMPTS" ]; do
   fi
 
   # Producer: mirror canonical -> .kanban/board.jsonl + .dev-notes/ + manifest.
-  PYTHONPATH="$WT/packages/app-planner/src" \
-    "$WT/scripts/python" -m app_planner.cli export --repo "$WT" >/dev/null
+  # The module dir is DISCOVERED, not pinned: this script runs from whichever
+  # checkout owns the installed unit while exporting a worktree reset to
+  # origin/main, so a package rename landing on main would otherwise freeze
+  # the 5-minute producer until that other checkout happens to pull.
+  PRODUCER_SRC=""
+  for d in "$WT"/packages/*/src; do
+    if [ -d "$d/grib" ]; then
+      PRODUCER_SRC="$d"
+      break
+    fi
+  done
+  if [ -z "$PRODUCER_SRC" ]; then
+    echo "kanban-sync: no package under $WT/packages provides the grib module" >&2
+    exit 1
+  fi
+  PYTHONPATH="$PRODUCER_SRC" \
+    "$WT/scripts/python" -m grib.cli export --repo "$WT" >/dev/null
 
   # -f: .dev-notes/*.md stays gitignored (.gitignore:277) so ordinary sessions
   # never commit stale copies; the producer force-adds the canonical mirror.

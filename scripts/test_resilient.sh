@@ -51,7 +51,7 @@ PY="${SLO_PYTHON:-/home/mana/miniconda3/envs/sloughgpt/bin/python}"
 cd "$REPO_ROOT" || exit 2
 export PYTHONNOUSERSITE=1
 # canonical gate PYTHONPATH (AGENT_SYNC a76143735); keep any caller extras after
-_canon="$PWD:$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server:$PWD/packages/mogdb/src:$PWD/apps/cli/src:$PWD/packages/sdk-py:$PWD/packages/app-planner/src"
+_canon="$PWD:$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server:$PWD/packages/mogdb/src:$PWD/apps/cli/src:$PWD/packages/sdk-py:$PWD/packages/grib/src"
 export PYTHONPATH="$_canon${PYTHONPATH:+:$PYTHONPATH}"
 
 # Idle fork-deadlocked child killer (from babysitter.sh): kills children of a
