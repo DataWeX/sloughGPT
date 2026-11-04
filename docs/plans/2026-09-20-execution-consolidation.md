@@ -29,9 +29,12 @@ One dispatch surface in `domain/infrastructure`, kind-routed:
 - `background-task` → infra `TaskQueue` (priority, pause/resume, needs loop)
 - `compute-batch` → pugqeep `ParallelExecutor` (drain-blocking array work)
 - `fire-and-forget` → bounded shared pool (fixed size, daemon, never blocks)
-- `process` → pugqeep `Engine.spawn()` / `run_subprocess()` (long-lived,
-  supervised, isolated work — restart, watchdog, timeout, metrics come
-  from `SubprocessProcess`/`GuardTree`, not per-site hand-rolls)
+- `process` → pugqeep `Engine.spawn()` / `run_subprocess()` (Python fns —
+  restart, watchdog, timeout, metrics come from
+  `SubprocessProcess`/`GuardTree`, not per-site hand-rolls) and
+  `Engine.spawn_command()` (external commands: eager `Popen` at call
+  time, live stdout/stderr, raw-Popen `poll`/`terminate`, run-loop
+  reaping + `timeout`; landed 2026-11-04, first consumer `cmd_dev`)
 
 Call-site rule: pick by need (tracking? priority? drain result? nothing?),
 never by import habit. `threading.Thread(` at a call site becomes a
@@ -45,8 +48,10 @@ review flag.
    `threading.Thread(target=` in `apps/` + `domain/` (allowlist file).
 3. Migrate raw-thread sites one by one, in two passes (audit2026-11-04, ~130 production call sites):
    - **3A — process kind (~30 sites)**: long-lived supervised work →
-     `engine.spawn()` / `run_subprocess()`. Priority order: `dev.py`
-     server supervision → shell command execution (`routers/shell.py`,
+     `engine.spawn()` / `run_subprocess()` / `spawn_command()`. Priority
+     order: `dev.py` server supervision (**done for `cmd_dev`** api+web —
+     `spawn_command`; `_cmd_api_only`/`_cmd_api_and_*` migrate when next
+     touched) → shell command execution (`routers/shell.py`,
      `shell/repl.py` background jobs, `shell/runtime.py`, `init.py`) →
      `startup.py` engine-child `Popen`s.
    - **3B — thread/FAF kind (~25 sites)**: short-lived in-process work →
