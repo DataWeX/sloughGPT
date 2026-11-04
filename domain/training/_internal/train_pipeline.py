@@ -45,7 +45,7 @@ try:
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domain.shared._internal.feature_flags import is_enabled
-from domain.slolib._internal.gpu import dispatch_stats
+from domain.slolib._internal.gpu import dispatch_stats, known_backends, removed_backend_reason
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.experience_adapter import (
     is_experience_source,
@@ -426,25 +426,24 @@ class TrainerConfig:
 
     # Device — resolved by ``SloughGPTTrainer._setup_device`` (see there).
     # ``"cpu"`` (default) pins the NumPy backend for the run; ``"auto"`` is the
-    # opt-in to whatever the accelerator probe found; ``"cuda"``/``"torch"``/
-    # ``"metal"`` are declarations that either resolve or refuse loudly.
+    # opt-in to whatever the accelerator probe found; ``"cuda"``/``"metal"``/
+    # ``"opencl"`` are declarations that either resolve or refuse loudly.
+    # The accepted vocabulary comes from ``gpu.known_backends()`` — one
+    # declaration, so this field cannot drift from the seam behind it.
     device: str = "cpu"
 
     def __post_init__(self):
         # ``None``/blank come from API payloads that did not set device.
         self.device = str(self.device).strip().lower() if self.device else "cpu"
-        _known_devices = {
-            "auto",
-            "cpu",
-            "cuda",
-            "cupy",
-            "gpu",
-            "torch",
-            "metal",
-            "mps",
-        }
-        if self.device not in _known_devices:
-            raise ValueError(f"device must be one of {sorted(_known_devices)}, got {self.device!r}")
+        # ``torch`` was removed (SloNet's NumPy engine is the only training
+        # backend); say so instead of listing it as a typo.
+        removed = removed_backend_reason(self.device)
+        if removed is not None:
+            raise ValueError(f"device={self.device!r} is not supported: {removed}")
+        if self.device != "auto" and self.device not in known_backends():
+            raise ValueError(
+                f"device must be 'auto' or one of {sorted(known_backends())}, got {self.device!r}"
+            )
 
         # Validate hyperparameters
         if self.learning_rate <= 0:
@@ -1224,7 +1223,7 @@ class SloughGPTTrainer:
         second model: ``"cpu"`` pins NumPy for this run (a GPU host must not
         silently take over — that is what ``"cpu"`` already claimed and, before
         this, did not do), ``"auto"`` takes the accelerator probe's choice, and
-        ``"cuda"``/``"torch"``/``"metal"`` are declarations that either resolve
+        ``"cuda"``/``"metal"``/``"opencl"`` are declarations that either resolve
         or raise. ``train/evaluate/generate`` push the resolved backend as a
         thread-local pin, so two jobs in one process cannot fight over it.
         """

@@ -17,13 +17,13 @@ What this proves, and why it is separate from the per-op GPU tests:
   comparator a backend with a deliberate 1% matmul error and asserts it is
   reported as a mismatch. A parity gate that cannot fail is decoration.
 
-Torch is optional: ``select_backend("torch")`` skips the arm when torch is not
-installed, and CI/CPU-only hosts still run the NumPy, pin, and self-test arms.
+Torch was removed (SloNet's NumPy engine is the only training backend), so the
+accelerator arm covers the in-repo GPU kernels; ``test_torch_is_refused`` pins
+that the removal is a loud refusal and not a silent fallback to NumPy.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import threading
 
 import numpy as np
@@ -41,7 +41,7 @@ from domain.slolib._internal.gpu import (
 
 _LOSS_TOL = 2e-3
 _PARAM_TOL = 5e-3
-_BACKEND_NAMES = ("cuda", "torch")
+_BACKEND_NAMES = ("cuda",)
 
 
 # =============================================================================
@@ -144,9 +144,9 @@ def test_cpu_resolves_to_the_numpy_backend():
     assert accelerator_for("cpu").name == "cpu"
 
 
-def test_auto_is_never_torch_unless_asked():
-    """Default detection keeps the historical priority order."""
-    assert accelerator_for("auto").name != "torch"
+def test_auto_never_resolves_to_a_removed_backend():
+    """Default detection keeps the historical priority order — torch is gone."""
+    assert accelerator_for("auto").name in g.known_backends()
 
 
 def test_unknown_backend_refuses():
@@ -193,17 +193,59 @@ def test_setup_device_records_the_resolved_backend():
     assert trainer._accelerator.name == "cpu"
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("torch") is not None,
-    reason="torch is installed here; the refusal path needs it absent",
-)
+def _unavailable_declaration() -> str | None:
+    """A known backend this host cannot serve (``None`` if every one can)."""
+    for name in ("metal", "opencl"):
+        try:
+            select_backend(name)
+        except RuntimeError:
+            return name
+        except ValueError:  # pragma: no cover — both names are declared
+            continue
+    return None
+
+
 def test_setup_device_refuses_an_unavailable_declaration():
+    """An explicit device this host cannot serve raises — it never degrades."""
     from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
 
+    name = _unavailable_declaration()
+    if name is None:  # pragma: no cover — a host with every backend available
+        pytest.skip("every declared backend is available here")
+
     trainer = object.__new__(SloughGPTTrainer)
-    trainer.config = TrainerConfig(device="torch")
-    with pytest.raises(RuntimeError):
+    trainer.config = TrainerConfig(device=name)
+    with pytest.raises(RuntimeError) as exc:
         trainer._setup_device()
+    assert name in str(exc.value)
+
+
+def test_torch_is_refused():
+    """Removed means refused with the reason — never "unknown name", never NumPy.
+
+    Torch was dropped in favour of SloNet's own NumPy engine. The failure mode
+    this pins is the quiet one: a declaration that keeps working by silently
+    resolving to the CPU backend would leave a user training on NumPy while
+    believing they were on a GPU.
+    """
+    from domain.training._internal.train_pipeline import TrainerConfig
+
+    for name in ("torch", "pytorch"):
+        with pytest.raises(ValueError, match="torch was removed"):
+            select_backend(name)
+        with pytest.raises(ValueError, match="torch was removed"):
+            accelerator_for(name)
+        with pytest.raises(ValueError, match="torch was removed"):
+            TrainerConfig(device=name)
+
+    assert "torch" not in g.known_backends()
+    assert "torch" not in {cls.name for cls in g._backend_classes().values()}
+
+
+def test_removed_backend_in_the_env_still_boots(monkeypatch):
+    """Boot must not die on a stale SLO_ACCEL_BACKEND left in a shell profile."""
+    monkeypatch.setenv("SLO_ACCEL_BACKEND", "torch")
+    assert g._detect_best_backend().name == "cpu"
 
 
 # =============================================================================
