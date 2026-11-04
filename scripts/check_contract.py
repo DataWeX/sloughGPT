@@ -10,6 +10,10 @@ Two layers, deliberately different weights:
       JSON Schema terms (validated by AST — no imports, so CI needs no deps);
     * each descriptor's name appears in a server test (the contract is only
       real if something exercises it);
+    * the declaration-style ratchet: hand-built route declarations (``@router.get``
+      decorators, ``add_api_route`` calls) must equal the grandfathered counts in
+      ``handbuilt-routes-baseline.json`` — new sites fail, migrations must shrink
+      the baseline in the same reviewed edit;
     * runtime: every registry entry is actually served, i.e. the projection
       ``create_router`` claims matches the routes FastAPI registers.
 
@@ -39,6 +43,7 @@ SERVER_DIR = ROOT / "apps" / "api" / "server"
 ROUTERS_DIR = SERVER_DIR / "routers"
 TESTS_DIR = SERVER_DIR / "tests"
 BASELINE_PATH = SERVER_DIR / "contract-baseline.json"
+DECLARATION_BASELINE_PATH = SERVER_DIR / "handbuilt-routes-baseline.json"
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import gen_router_manifest as manifest_mod  # noqa: E402  (sibling script, not a package)
@@ -156,6 +161,142 @@ def contract_tests_exist(name: str, tests: Path) -> bool:
     return False
 
 
+# ── declaration-style ratchet (the endpoint rule's mechanical half) ────
+#
+# Routes are projections of a descriptor (create_router). The grandfathered
+# hand-built backlog — decorators and add_api_route calls — is frozen in
+# handbuilt-routes-baseline.json and may only shrink; a new hand-built site
+# anywhere in the server tree fails the gate.
+
+HANDBUILT_DECORATOR_METHODS = frozenset(
+    {"get", "post", "put", "patch", "delete", "head", "options", "api_route", "websocket", "route"}
+)
+HANDBUILT_CALL_METHODS = frozenset({"add_api_route", "add_websocket_route", "add_route"})
+# create_router's own projection internals — the one legitimate add_api_route.
+PROJECTION_INTERNAL_FILES = frozenset({"infrastructure/contract.py"})
+
+
+def _site_label(func: ast.AST, prefix: str) -> str:
+    try:
+        return f"{prefix}{ast.unparse(func)}"
+    except Exception:  # noqa: BLE001 — a label is never worth failing the gate over
+        return prefix or "<call>"
+
+
+def find_handbuilt_declarations(source: str) -> list[tuple[int, str]]:
+    """``(lineno, label)`` for every route declaration that bypasses create_router.
+
+    Decorators (``@router.get(...)``) and direct registration calls
+    (``router.add_api_route(...)``) are the hand-built shapes; ``create_router``
+    and ``include_router`` are the seam and are never counted.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        for deco in getattr(node, "decorator_list", ()):
+            func = deco.func if isinstance(deco, ast.Call) else deco
+            if isinstance(func, ast.Attribute):
+                attr = func.attr
+            elif isinstance(func, ast.Name):
+                attr = func.id
+            else:
+                attr = ""
+            if attr in HANDBUILT_DECORATOR_METHODS:
+                found.append((getattr(node, "lineno", 0), _site_label(func, "@")))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in HANDBUILT_CALL_METHODS:
+                found.append((node.lineno, _site_label(node.func, "")))
+    return found
+
+
+def scan_handbuilt(server_dir: Path) -> dict[str, list[tuple[int, str]]]:
+    """Every server module's hand-built declaration sites, keyed by relative path.
+
+    Scope: the whole server tree — test fixtures build throwaway apps by design,
+    and ``infrastructure/contract.py`` is the projection engine itself.
+    """
+    sites: dict[str, list[tuple[int, str]]] = {}
+    for path in sorted(server_dir.rglob("*.py")):
+        rel = path.relative_to(server_dir).as_posix()
+        if path.name.startswith("_"):
+            continue
+        if "tests" in path.relative_to(server_dir).parts:
+            continue
+        if rel in PROJECTION_INTERNAL_FILES:
+            continue
+        try:
+            source = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        found = find_handbuilt_declarations(source)
+        if found:
+            sites[rel] = found
+    return sites
+
+
+def check_declaration_style(
+    sites: dict[str, list[tuple[int, str]]], baseline_files: dict[str, int]
+) -> list[str]:
+    """Ratchet: hand-built counts equal the baseline — may only shrink, with review.
+
+    * a file with MORE sites than its baseline entry (or no entry at all) is a
+      new hand-built route — exactly what the endpoint rule exists to stop;
+    * a file with FEWER sites, or a baseline entry with none left, is a
+      migration — the baseline must shrink to record it, as a reviewed edit.
+    """
+    violations: list[str] = []
+    way_out = "declare a ToolSpec + create_router instead (docs/TRANSPORT_PROJECTIONS.md)"
+    for rel in sorted(sites):
+        actual = len(sites[rel])
+        allowed = baseline_files.get(rel, 0)
+        if actual > allowed:
+            lines = ", ".join(str(lineno) for lineno, _ in sites[rel][:6])
+            suffix = ", …" if actual - allowed > 6 else ""
+            violations.append(
+                f"{rel}: {actual} hand-built route declaration(s), baseline allows "
+                f"{allowed} — new hand-built site(s) at line(s) {lines}{suffix}; "
+                f"{way_out} (or add a reviewed entry to {DECLARATION_BASELINE_PATH.name})"
+            )
+        elif actual < allowed:
+            violations.append(
+                f"{rel}: {actual} hand-built site(s), baseline records {allowed} — "
+                f"migration detected; shrink the baseline entry (the baseline may only shrink)"
+            )
+    for rel in sorted(set(baseline_files) - set(sites)):
+        violations.append(
+            f"{rel}: baseline entry with no hand-built declarations left — "
+            f"remove it (the baseline may only shrink)"
+        )
+    return violations
+
+
+def write_declaration_baseline() -> int:
+    """Record today's hand-built counts as the grandfathered ratchet baseline."""
+    sites = scan_handbuilt(SERVER_DIR)
+    files = {rel: len(found) for rel, found in sorted(sites.items())}
+    DECLARATION_BASELINE_PATH.write_text(
+        json.dumps(
+            {
+                "note": (
+                    "Grandfathered hand-built route declarations for "
+                    "scripts/check_contract.py — the endpoint rule's ratchet: "
+                    "counts may only shrink, as a reviewed edit. Regenerate with "
+                    "--write-declaration-baseline."
+                ),
+                "total": sum(files.values()),
+                "files": files,
+            },
+            indent=1,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return len(files)
+
+
 def run_static() -> int:
     """Stdlib-only checks: manifest freshness + descriptor literals + test presence."""
     print("── static contract checks (AST, no imports)")
@@ -204,6 +345,24 @@ def run_static() -> int:
     )
     for name, module in sorted(names_seen.items()):
         print(f"   ✓ {name} ({module})")
+
+    # Declaration-style ratchet: the grandfathered hand-built backlog is
+    # frozen in a baseline; new decorator/add_api_route sites fail CI.
+    declared_sites = scan_handbuilt(SERVER_DIR)
+    if DECLARATION_BASELINE_PATH.is_file():
+        stored = json.loads(DECLARATION_BASELINE_PATH.read_text(encoding="utf-8"))
+        style_violations = check_declaration_style(declared_sites, stored.get("files", {}))
+    else:
+        style_violations = [
+            f"missing {DECLARATION_BASELINE_PATH.name} — generate it with "
+            f"check_contract.py --write-declaration-baseline"
+        ]
+    failures.extend(style_violations)
+    total_sites = sum(len(found) for found in declared_sites.values())
+    print(
+        f"   hand-built declarations: {total_sites} in {len(declared_sites)} module(s) "
+        f"(grandfathered baseline — may only shrink)"
+    )
 
     if failures:
         print(f"\n✗ {len(failures)} blocking contract violation(s):", file=sys.stderr)
@@ -495,8 +654,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime", action="store_true", help="import the app and cross-check")
     parser.add_argument("--baseline", type=Path, default=BASELINE_PATH)
     parser.add_argument("--write-baseline", action="store_true", help="record current routes")
+    parser.add_argument(
+        "--write-declaration-baseline",
+        action="store_true",
+        help="record current hand-built declaration counts (the ratchet baseline)",
+    )
     parser.add_argument("--json", type=Path, help="write a machine-readable artifact")
     args = parser.parse_args(argv)
+
+    if args.write_declaration_baseline:
+        count = write_declaration_baseline()
+        sites = scan_handbuilt(SERVER_DIR)
+        total = sum(len(found) for found in sites.values())
+        print(
+            f"   wrote {DECLARATION_BASELINE_PATH.relative_to(ROOT)} "
+            f"({count} module(s), {total} hand-built site(s))"
+        )
 
     run_static_mode = args.static or not args.runtime
     run_runtime_mode = args.runtime or not args.static
