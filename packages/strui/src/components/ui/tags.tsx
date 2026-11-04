@@ -91,7 +91,7 @@ export function Chip({
           }}
           className={cn(
             'ml-0.5 flex items-center justify-center rounded-full transition-opacity',
-            'hover:opacity-70 focus:outline-none focus:ring-1 focus:ring-primary/50',
+            'hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             disabled && 'pointer-events-none',
           )}
         >

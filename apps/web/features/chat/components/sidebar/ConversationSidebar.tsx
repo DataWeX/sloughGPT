@@ -397,7 +397,7 @@ function SidebarContent({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations…"
-            className="w-full h-8 rounded bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
+            className="w-full h-8 rounded bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset transition-colors"
             aria-label="Search conversations"
           />
         </div>

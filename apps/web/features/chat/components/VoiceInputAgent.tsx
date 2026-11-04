@@ -236,7 +236,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
             <textarea
               value={transcript}
               onChange={(e) => setTranscript(e.target.value)}
-              className="w-full h-24 text-sm bg-transparent border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+              className="w-full h-24 text-sm bg-transparent border rounded-lg px-3 py-2 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               placeholder="Transcript will appear here..."
             />
             <div className="flex justify-end mt-2">

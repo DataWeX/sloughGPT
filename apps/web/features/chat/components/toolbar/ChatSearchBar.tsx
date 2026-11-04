@@ -28,7 +28,7 @@ export function ChatSearchBar() {
         placeholder="Search..."
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
-        className="w-full pl-7 pr-6 py-1.5 text-xs rounded-lg border border-input bg-background/80 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50 transition-shadow hover:shadow-sm"
+        className="w-full pl-7 pr-6 py-1.5 text-xs rounded-lg border border-input bg-background/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset placeholder:text-muted-foreground/50 transition-shadow hover:shadow-sm"
         aria-label="Search messages"
       />
       {searchQuery && (
