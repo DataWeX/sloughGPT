@@ -210,6 +210,44 @@ def resolve_corpus(repo_root, cache_root=None) -> tuple["Path", str]:
 # ── report ───────────────────────────────────────────────────────────────────
 
 
+def load_target_calibration(paths: list[str]) -> dict | None:
+    """Read v86 factor report(s) (scripts/benchmark_v86_factor.py output).
+
+    Representative = first non-x87 entry (the guest has SSE2 and an
+    in-guest decode compiles for it); x87 is carried as the floor case
+    (i386 default build — worst plausible emulation). With no paths,
+    nothing to calibrate with: None.
+    """
+    if not paths:
+        return None
+    entries = []
+    for p in paths:
+        data = json.loads(Path(p).read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or "factor" not in data:
+            raise ValueError(f"factor report {p} has no 'factor'")
+        entries.append(
+            {
+                "path": str(p),
+                # Reports written before the fp_mode field existed were run
+                # with the benchmark's default compile mode: x87.
+                "fp_mode": data.get("fp_mode", "x87"),
+                "factor": data["factor"],
+                "v86_decode_tps": data.get("v86_decode_tps"),
+                "assumption": data.get("assumption"),
+            }
+        )
+    floor = next((e for e in entries if e["fp_mode"] == "x87"), None)
+    rep = next((e for e in entries if e["fp_mode"] != "x87"), entries[0])
+    cal = dict(rep)
+    cal["source"] = [e["path"] for e in entries]
+    cal["floor"] = (
+        {"fp_mode": floor["fp_mode"], "factor": floor["factor"]}
+        if floor is not None and floor is not rep
+        else None
+    )
+    return cal
+
+
 def build_report(
     inference: dict,
     training: dict,
@@ -218,19 +256,39 @@ def build_report(
     target: str = DEFAULT_TARGET,
     decode_slo: float = DEFAULT_DECODE_SLO_TPS,
     corpus_source: str = "unknown",
+    target_calibration: dict | None = None,
 ) -> dict:
-    """Assemble the gap report and render a verdict against the stated SLO."""
-    verdict = "meets_slo" if inference["decode_tps"] >= decode_slo else "below_slo"
-    return {
+    """Assemble the gap report and render a verdict against the stated SLO.
+
+    With a measured calibration (card 20261103_121721 C3) the verdict is
+    stated ON the target machine — decode/factor — never on bare metal;
+    without one, the verdict keeps the historical bare-metal comparison
+    and says so via verdict_basis.
+    """
+    report = {
         "target": target,
         "decode_slo_tps": decode_slo,
-        "verdict": verdict,
+        "verdict": "meets_slo" if inference["decode_tps"] >= decode_slo else "below_slo",
+        "verdict_basis": "bare_metal_proxy",
         "model": model,
         "corpus": {"source": corpus_source},
-        "inference": inference,
+        "inference": dict(inference),
         "training": training,
         "eval": eval,
     }
+    if target_calibration is not None:
+        factor = target_calibration["factor"]
+        on_target = inference["decode_tps"] / factor
+        report["inference"]["decode_tps_on_target"] = on_target
+        report["verdict"] = "meets_slo" if on_target >= decode_slo else "below_slo"
+        report["verdict_basis"] = "calibrated_target"
+        report["target_calibration"] = target_calibration
+        floor = target_calibration.get("floor")
+        if floor:
+            on_floor = inference["decode_tps"] / floor["factor"]
+            report["inference"]["decode_tps_on_target_floor"] = on_floor
+            report["floor_case_verdict"] = "meets_slo" if on_floor >= decode_slo else "below_slo"
+    return report
 
 
 def format_report(report: dict) -> str:
@@ -251,7 +309,21 @@ def format_report(report: dict) -> str:
         f"  Eval:    loss {e['mean_loss']}  ppl {e['perplexity']}"
         f"  ({e['num_token_positions']} positions)",
         f"  SLO:     {report['decode_slo_tps']} decode tok/s for {report['target']}",
-        f"  VERDICT: {report['verdict'].upper()}",
+    ]
+    if "decode_tps_on_target" in i:
+        cal = report["target_calibration"]
+        lines.append(
+            f"  Target:  bare metal {i['decode_tps']} -> ~{i['decode_tps_on_target']:.2f}"
+            f" tok/s on {report['target']} (x{cal['factor']:.1f} {cal['fp_mode']})"
+        )
+        if "decode_tps_on_target_floor" in i:
+            lines.append(
+                f"  Floor:   x87-only build -> ~{i['decode_tps_on_target_floor']:.2f}"
+                f" tok/s ({report['floor_case_verdict']})"
+            )
+    lines += [
+        f"  VERDICT: {report['verdict'].upper()}"
+        f" [{report.get('verdict_basis', 'bare_metal_proxy')}]",
         "=" * 72,
     ]
     return "\n".join(lines)
@@ -272,6 +344,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--results", default="/tmp/slobench/gap_report.json", help="report JSON path"
+    )
+    parser.add_argument(
+        "--factor-report",
+        action="append",
+        default=None,
+        metavar="JSON",
+        help="v86 factor report (repeatable): non-x87 = representative estimate, x87 = floor case",
     )
     args = parser.parse_args()
 
@@ -344,6 +423,7 @@ def main() -> None:
         target=args.target,
         decode_slo=args.decode_slo,
         corpus_source=corpus_source,
+        target_calibration=load_target_calibration(args.factor_report),
     )
 
     out = Path(args.results)

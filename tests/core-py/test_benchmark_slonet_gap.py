@@ -190,3 +190,128 @@ def test_default_decode_slo_is_stated_for_v86():
     assert bg.DEFAULT_DECODE_SLO_TPS > 0
     # v86 is emulated x86: its budget is a FRACTION of bare metal.
     assert bg.DEFAULT_DECODE_SLO_TPS <= 10.0
+
+
+# ── target calibration (card 20261103_121721, C3 — the number ON the machine) ─
+
+
+def _calibration_pair(tmp_path):
+    """Two factor reports as benchmark_v86_factor writes them: the
+    representative SSE2 path and the conservative x87 floor."""
+    sse2 = tmp_path / "factor_sse2.json"
+    sse2.write_text(
+        json.dumps(
+            {
+                "fp_mode": "sse2",
+                "factor": 40.0,
+                "v86_decode_tps": 9.2,
+                "assumption": "calibrated estimate",
+            }
+        )
+    )
+    x87 = tmp_path / "factor_x87.json"
+    x87.write_text(json.dumps({"fp_mode": "x87", "factor": 180.0}))
+    return [str(sse2), str(x87)]
+
+
+def test_load_target_calibration_prefers_representative_fp_mode(tmp_path):
+    cal = bg.load_target_calibration(_calibration_pair(tmp_path))
+    assert cal["factor"] == 40.0
+    assert cal["fp_mode"] == "sse2"
+    assert cal["floor"]["fp_mode"] == "x87"
+    assert cal["floor"]["factor"] == 180.0
+    assert len(cal["source"]) == 2
+
+
+def test_build_report_with_calibration_verdicts_on_the_target():
+    """The old verdict compared BARE-METAL decode to the v86 floor —
+    with a measured factor the verdict must use the on-target estimate."""
+    cal = {
+        "fp_mode": "sse2",
+        "factor": 40.0,
+        "source": ["x"],
+        "floor": {"fp_mode": "x87", "factor": 180.0},
+    }
+    report = bg.build_report(
+        inference={"tokens": 8, "decode_tps": 360.0, "prefill_tps": 40.0, "elapsed_s": 0.1},
+        training={"tokens": 100, "tokens_per_s": 50.0, "steps": 1, "final_loss": 2.0},
+        eval={"mean_loss": 2.0, "perplexity": 7.4, "num_token_positions": 10},
+        model={"params": 1, "config": "x"},
+        target="v86-browser-vm",
+        decode_slo=3.0,
+        target_calibration=cal,
+    )
+    # 360 / 40 = 9.0 on target -> meets; bare metal (360) would "meet" trivially
+    assert report["inference"]["decode_tps_on_target"] == 9.0
+    assert report["verdict"] == "meets_slo"
+    assert report["verdict_basis"] == "calibrated_target"
+    # conservative floor case is recorded: 360 / 180 = 2.0 -> below
+    assert report["inference"]["decode_tps_on_target_floor"] == 2.0
+    assert report["floor_case_verdict"] == "below_slo"
+    # the input dict must not be mutated
+    assert "decode_tps_on_target" not in {
+        "tokens": 8,
+        "decode_tps": 360.0,
+        "prefill_tps": 40.0,
+        "elapsed_s": 0.1,
+    }
+
+
+def test_build_report_calibrated_verdict_can_miss():
+    """Estimate under the SLO -> below_slo even though bare metal passes."""
+    cal = {"fp_mode": "sse2", "factor": 400.0, "source": ["x"]}
+    report = bg.build_report(
+        inference={"tokens": 8, "decode_tps": 360.0, "prefill_tps": 40.0, "elapsed_s": 0.1},
+        training={"tokens": 1, "tokens_per_s": 1.0, "steps": 1, "final_loss": 1.0},
+        eval={"mean_loss": 1.0, "perplexity": 1.0, "num_token_positions": 1},
+        model={"params": 1, "config": "x"},
+        decode_slo=3.0,
+        target_calibration=cal,
+    )
+    assert report["verdict"] == "below_slo"  # 360/400 = 0.9 < 3.0
+    assert report["inference"]["decode_tps_on_target"] == 0.9
+
+
+def test_build_report_without_calibration_keeps_bare_metal_basis():
+    report = bg.build_report(
+        inference={"tokens": 8, "decode_tps": 6.0, "prefill_tps": 40.0, "elapsed_s": 1.3},
+        training={"tokens": 1, "tokens_per_s": 1.0, "steps": 1, "final_loss": 1.0},
+        eval={"mean_loss": 1.0, "perplexity": 1.0, "num_token_positions": 1},
+        model={"params": 1, "config": "x"},
+        decode_slo=5.0,
+    )
+    assert report["verdict"] == "meets_slo"
+    assert report["verdict_basis"] == "bare_metal_proxy"
+    assert "decode_tps_on_target" not in report["inference"]
+
+
+def test_format_report_shows_the_on_target_estimate():
+    cal = {
+        "fp_mode": "sse2",
+        "factor": 40.0,
+        "source": ["x"],
+        "floor": {"fp_mode": "x87", "factor": 180.0},
+    }
+    report = bg.build_report(
+        inference={"tokens": 8, "decode_tps": 360.0, "prefill_tps": 40.0, "elapsed_s": 0.1},
+        training={"tokens": 1, "tokens_per_s": 1.0, "steps": 1, "final_loss": 1.0},
+        eval={"mean_loss": 1.0, "perplexity": 1.0, "num_token_positions": 1},
+        model={"params": 1, "config": "x"},
+        decode_slo=3.0,
+        target_calibration=cal,
+    )
+    text = bg.format_report(report)
+    assert "bare metal" in text
+    assert "on v86-browser-vm" in text
+    assert "x87" in text  # floor case surfaced, not hidden
+
+
+def test_load_target_calibration_treats_missing_fp_mode_as_x87(tmp_path):
+    """Reports written before the fp_mode field existed were run with the
+    benchmark's default compile mode — x87 — and must classify as the
+    floor case, not vanish from the verdict."""
+    old = tmp_path / "old.json"
+    old.write_text(json.dumps({"factor": 181.7}))
+    cal = bg.load_target_calibration([str(old)])
+    assert cal["fp_mode"] == "x87"
+    assert cal["factor"] == 181.7
