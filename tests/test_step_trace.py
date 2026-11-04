@@ -248,3 +248,47 @@ class TestTrainerTraceIntegration:
         assert trace.gpu_matmuls == 0
         assert trace.cpu_matmuls >= 1
         assert trace.fallbacks == 0
+
+
+class TestStepTraceFlag:
+    """``step_trace`` feature flag — emission is gated, counters are not.
+
+    Env vars and feature flags never mix: the flag lives in the registry
+    (``config/feature_flags.json`` + ``_register_defaults``), and its
+    per-process override is the registry's own generated ``SLO_FF_*`` seam.
+    The dispatch counters in ``gpu.py`` stay unconditional behind any gate —
+    the step-1 tripwire must survive the flag being switched off.
+    """
+
+    def test_flag_registered_and_enabled_by_default(self, monkeypatch):
+        from domain.shared._internal.feature_flags import FeatureFlags, is_enabled
+
+        monkeypatch.delenv("SLO_FF_STEP_TRACE", raising=False)
+        assert "step_trace" in FeatureFlags.list_all(), "step_trace flag not registered"
+        assert is_enabled("step_trace") is True, "flag must default to enabled (tripwire)"
+
+    def test_flag_off_skips_emission_but_counters_still_count(self, tmp_path, monkeypatch):
+        import domain.training._internal.slonet as slonet
+
+        # Force the CPU path so residency counters are visibly live.
+        monkeypatch.setattr(slonet, "_get_accelerator", lambda: None)
+        monkeypatch.setenv("SLO_FF_STEP_TRACE", "0")
+
+        before = dispatch_stats()["cpu_matmuls"]
+        trainer = _tiny_trainer(tmp_path, monkeypatch)
+        payloads: list[dict] = []
+        trainer.train(on_progress=payloads.append)
+
+        # Gated: no receipt was assembled into the ring.
+        assert trainer.get_step_trace() is None, "ring must stay empty when flag is off"
+
+        # Gated: progress payload omits residency keys (absence, not lying zeros).
+        assert payloads, "expected at least one progress emit"
+        last = payloads[-1]
+        for key in ("gpu_matmuls", "cpu_matmuls", "fallbacks"):
+            assert key not in last, f"{key} must be absent when flag is off"
+        assert "device" in last, "device is not trace-derived and stays unconditional"
+
+        # NOT gated: the tripwire counters still accumulated during this run.
+        after = dispatch_stats()["cpu_matmuls"]
+        assert after - before >= 1, "dispatch counters must count with the flag off"
