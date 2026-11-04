@@ -122,7 +122,7 @@ export function KnowledgeItemsList({ wb }: { wb: KnowledgeWorkbench }) {
                         <div>
                           <textarea
                             className={cn(
-                              'w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40',
+                              'w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                               editErrors.content
                                 ? 'border-destructive ring-destructive/20'
                                 : 'border-input',

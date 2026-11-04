@@ -28,17 +28,19 @@ export const ConversationBranching = memo(function ConversationBranching({
   const [editContent, setEditContent] = useState('')
   const [previewMessages, setPreviewMessages] = useState<BranchPreview[]>([])
 
-  const currentIndex = messages.findIndex(m => m.id === currentMessageId)
+  const currentIndex = messages.findIndex((m) => m.id === currentMessageId)
 
   const handleOpen = useCallback(() => {
     if (currentIndex < 0) return
 
     const branchMessages = messages.slice(0, currentIndex + 1)
-    setPreviewMessages(branchMessages.map(m => ({
-      id: m.id,
-      role: m.role,
-      content: m.content.slice(0, 100),
-    })))
+    setPreviewMessages(
+      branchMessages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content.slice(0, 100),
+      })),
+    )
     setEditContent('')
     setOpen(true)
   }, [messages, currentIndex])
@@ -72,7 +74,10 @@ export const ConversationBranching = memo(function ConversationBranching({
       <Button
         variant="ghost"
         size="sm"
-        className={cn('text-[10px] h-5 text-muted-foreground/50 hover:text-muted-foreground', className)}
+        className={cn(
+          'text-[10px] h-5 text-muted-foreground/50 hover:text-muted-foreground',
+          className,
+        )}
         onClick={handleOpen}
       >
         Branch from here
@@ -86,7 +91,13 @@ export const ConversationBranching = memo(function ConversationBranching({
         <span className="text-[10px] font-medium text-muted-foreground">
           Branch from message {currentIndex + 1} of {messages.length}
         </span>
-        <Button variant="ghost" size="icon-sm" className="h-4 w-4" onClick={handleCancel} aria-label="Close">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="h-4 w-4"
+          onClick={handleCancel}
+          aria-label="Close"
+        >
           <IconX className="h-2.5 w-2.5" />
         </Button>
       </div>
@@ -109,8 +120,9 @@ export const ConversationBranching = memo(function ConversationBranching({
       <textarea
         value={editContent}
         onChange={(e) => setEditContent(e.target.value)}
-        placeholder="Enter a different prompt to branch..." aria-label="Branch prompt"
-        className="w-full text-xs bg-transparent border rounded px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 min-h-[40px]"
+        placeholder="Enter a different prompt to branch..."
+        aria-label="Branch prompt"
+        className="w-full text-xs bg-transparent border rounded px-2 py-1 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset min-h-[40px]"
         autoFocus
       />
 
@@ -125,12 +137,7 @@ export const ConversationBranching = memo(function ConversationBranching({
           <IconCheck className="h-3 w-3 mr-1" />
           Create Branch
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-[10px] h-5"
-          onClick={handleCancel}
-        >
+        <Button variant="ghost" size="sm" className="text-[10px] h-5" onClick={handleCancel}>
           Cancel
         </Button>
       </div>

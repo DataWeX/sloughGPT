@@ -174,7 +174,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
             onChange={(e) => setKnowledgeSearch(e.target.value)}
             placeholder="Search snippets..."
             aria-label="Search knowledge snippets"
-            className="h-6 w-full rounded border border-border/60 bg-background pl-6 pr-2 text-[10px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            className="h-6 w-full rounded border border-border/60 bg-background pl-6 pr-2 text-[10px] placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           />
           {knowledgeSearch && (
             <button
@@ -192,7 +192,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
       {showAddKnowledge && (
         <div className="space-y-1">
           <textarea
-            className="w-full p-2 text-xs border border-input rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+            className="w-full p-2 text-xs border border-input rounded-lg resize-none h-16 bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             placeholder="Enter a fact the AI should know..."
             value={newKnowledge}
             onChange={(e) => setNewKnowledge(e.target.value)}
@@ -238,7 +238,7 @@ export const KnowledgeTab = memo(function KnowledgeTab({
                   <textarea
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
-                    className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    className="w-full h-16 resize-none rounded border border-border/60 bg-muted/30 p-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                     aria-label="Edit knowledge snippet"
                   />
                   <div className="flex gap-1">

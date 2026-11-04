@@ -9,6 +9,7 @@ import {
   IconRefresh,
   IconEdit,
   IconStar,
+  IconSmile,
   IconTrash,
   IconThumbUp,
   IconThumbDown,
@@ -393,7 +394,7 @@ export const MessageActions = memo(function MessageActions({
             className="p-2"
             aria-label="Add reaction"
           >
-            <span className="text-sm">😊</span>
+            <IconSmile className="h-4 w-4" aria-hidden="true" />
           </Button>
           {showEmojiPicker && (
             <div className="absolute bottom-full left-0 mb-1 flex gap-0.5 bg-popover/95 backdrop-blur-sm border border-border/40 rounded-lg p-1 shadow-xl z-50">

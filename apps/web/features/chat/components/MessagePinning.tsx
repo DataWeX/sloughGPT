@@ -195,7 +195,7 @@ export const MessagePinning = memo(function MessagePinning({
                       value={noteDraft}
                       onChange={(e) => setNoteDraft(e.target.value)}
                       placeholder="Add a note..."
-                      className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleSaveNote()
                         if (e.key === 'Escape') handleCancelNote()
