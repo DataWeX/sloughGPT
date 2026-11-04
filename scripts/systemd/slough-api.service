@@ -26,11 +26,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/mana/Documents/Default Project/sloughGPT
-# Hang diagnosis: dump every thread's stack to stderr on an interval so a
-# stalled server self-reports which line is blocking the event loop
-# (apps/api/server/main.py:_install_stack_dump_timer; lands in the journal).
-Environment=SLO_DUMP_STACKS=1
-Environment=SLO_DUMP_STACKS_INTERVAL=30
+# Hang diagnosis (DISABLED 2026-11-04 — code default is off): dumping every
+# thread's stack to stderr on an interval let a stalled server self-report
+# which line was blocking the event loop (apps/api/server/main.py
+# :_install_stack_dump_timer → journal), at a 30s journal cost. Re-enable
+# with BOTH lines:
+#   Environment=SLO_DUMP_STACKS=1
+#   Environment=SLO_DUMP_STACKS_INTERVAL=30
 # User-site must never shadow the pinned conda env (AGENTS.md mandates
 # PYTHONNOUSERSITE=1 for every test run for exactly this reason — a stray
 # `tests` package in ~/.local/lib once took pytest itself down). The
