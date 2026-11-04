@@ -58,6 +58,10 @@ measured code disagrees with any value, the script exits 1.
 # 93->95. Cause confirmed by diff: 1dfa183e7 (health one-verdict port, card
 # aa482267, +68/-4 in controllers/health.py) landed without refreshing this
 # block; no other controllers_* value moved.
+# Re-measured 2026-11-04: controllers_lines 2908->2918. Cause confirmed by
+# diff: 289ca6686 (datasets structured listing, card 20261104_060023,
+# +14/-4 in controllers/datasets.py) landed on main without refreshing this
+# block; controllers_defs unchanged (95).
 # Once in sync these act
 # as a DOWNWARD ratchet: the router/controller conformance work (card
 # b22e878a) lowers them as it lands, and any climb shows up as an alarm.
@@ -73,7 +77,7 @@ routers_internal_files=0
 routers_internal_stmts=0
 routers_internal_in_scope_files=0
 controllers_files=5
-controllers_lines=2908
+controllers_lines=2918
 controllers_defs=95
 controllers_internal_files=0
 controllers_internal_stmts=0
