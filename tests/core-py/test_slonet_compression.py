@@ -21,11 +21,20 @@ class TestSloLinearWeightOps:
         wt = lin._get_weight_T()
         assert wt.shape == (10, 5)
 
-    def test_get_weight_T_cached(self):
+    def test_get_weight_T_is_not_a_cached_graph_node(self):
+        """Each forward pass gets its own transpose node.
+
+        The node was once cached on the layer and reused across graphs; it is
+        not in ``parameters()``, so its gradient was never cleared and every
+        backward pass added to the previous one (see
+        ``test_repeated_backward_does_not_accumulate``).
+        """
         lin = SloLinear(10, 5)
         wt1 = lin._get_weight_T()
         wt2 = lin._get_weight_T()
-        assert wt1 is wt2
+        assert wt1 is not wt2
+        assert np.shares_memory(wt1.data, lin.weight.data)
+        assert np.array_equal(wt1.data, wt2.data)
 
     def test_get_weight_T_contig(self):
         lin = SloLinear(10, 5)

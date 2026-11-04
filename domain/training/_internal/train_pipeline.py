@@ -424,12 +424,27 @@ class TrainerConfig:
     owned_tool_weight: float = 0.3
     owned_memory_weight: float = 0.2
 
-    # Device — SloNet training is pure numpy and always runs on the CPU.
+    # Device — resolved by ``SloughGPTTrainer._setup_device`` (see there).
+    # ``"cpu"`` (default) pins the NumPy backend for the run; ``"auto"`` is the
+    # opt-in to whatever the accelerator probe found; ``"cuda"``/``"torch"``/
+    # ``"metal"`` are declarations that either resolve or refuse loudly.
     device: str = "cpu"
 
     def __post_init__(self):
-        if self.device == "auto":
-            self.device = "cpu"
+        # ``None``/blank come from API payloads that did not set device.
+        self.device = str(self.device).strip().lower() if self.device else "cpu"
+        _known_devices = {
+            "auto",
+            "cpu",
+            "cuda",
+            "cupy",
+            "gpu",
+            "torch",
+            "metal",
+            "mps",
+        }
+        if self.device not in _known_devices:
+            raise ValueError(f"device must be one of {sorted(_known_devices)}, got {self.device!r}")
 
         # Validate hyperparameters
         if self.learning_rate <= 0:
@@ -921,6 +936,30 @@ def _gc_parked_step(fn):
     return wrapper
 
 
+def _device_scoped(fn):
+    """Pin this trainer's resolved accelerator for the duration of the call.
+
+    ``slonet._get_accelerator()`` consults a thread-local pin before global
+    detection. Training runs in a worker thread, so the pin is scoped to that
+    run: ``device="cpu"`` silences the GPU for this job only and leaves
+    inference (or a second job) in the same process untouched. Reading
+    ``self._accelerator`` at call time keeps the decorator harmless for objects
+    that never ran ``_setup_device`` (``__new__`` test doubles).
+    """
+
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        from domain.slolib._internal.gpu import pop_accelerator, push_accelerator
+
+        previous = push_accelerator(getattr(self, "_accelerator", None))
+        try:
+            return fn(self, *args, **kwargs)
+        finally:
+            pop_accelerator(previous)
+
+    return wrapper
+
+
 class SloughGPTTrainer:
     """
     Unified trainer for SloughGPTModel (pure NumPy / SloNet).
@@ -1179,8 +1218,33 @@ class SloughGPTTrainer:
         )
 
     def _setup_device(self) -> str:
-        """SloNet training is pure numpy and always runs on the CPU."""
-        return "cpu"
+        """Resolve ``TrainerConfig.device`` to a real backend and record it.
+
+        The autograd engine is NumPy, so a device is *a compute backend*, not a
+        second model: ``"cpu"`` pins NumPy for this run (a GPU host must not
+        silently take over — that is what ``"cpu"`` already claimed and, before
+        this, did not do), ``"auto"`` takes the accelerator probe's choice, and
+        ``"cuda"``/``"torch"``/``"metal"`` are declarations that either resolve
+        or raise. ``train/evaluate/generate`` push the resolved backend as a
+        thread-local pin, so two jobs in one process cannot fight over it.
+        """
+        from domain.slolib._internal.gpu import accelerator_for
+
+        try:
+            accelerator = accelerator_for(self.config.device)
+        except (RuntimeError, ValueError) as e:
+            raise RuntimeError(
+                f"device={self.config.device!r} cannot be used on this host: {e}"
+            ) from e
+        self._accelerator = accelerator
+        logger.info(
+            "Device: requested=%s resolved=%s (%s)",
+            self.config.device,
+            accelerator.name,
+            accelerator.device_type,
+            extra={"tag": "TRAIN"},
+        )
+        return accelerator.name
 
     def _create_model(self):
         """Create and setup the model (optionally wrapped with LoRA)."""
@@ -1700,6 +1764,7 @@ class SloughGPTTrainer:
                 return trace
         return None
 
+    @_device_scoped
     def evaluate(self, num_batches: int = 10) -> dict[str, float]:
         """Evaluate the model on the validation split.
 
@@ -1867,6 +1932,7 @@ class SloughGPTTrainer:
         return f"{s}s"
 
     @_gc_parked
+    @_device_scoped
     def train(
         self,
         resume: bool = False,
@@ -2765,6 +2831,7 @@ class SloughGPTTrainer:
         thread.join(timeout=timeout)
         return not thread.is_alive()
 
+    @_device_scoped
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
         self.model.eval()
