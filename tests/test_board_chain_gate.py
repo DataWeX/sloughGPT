@@ -15,10 +15,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-sys.path.insert(0, str(REPO_ROOT / "packages" / "app-planner" / "src"))
+sys.path.insert(0, str(REPO_ROOT / "packages" / "grib" / "src"))
 
 import check_board_chain as gate  # noqa: E402
-from app_planner.store import PlannerStore  # noqa: E402
+from grib.store import PlannerStore  # noqa: E402
 
 
 def _write(board_file: Path, lines: list[str]) -> Path:

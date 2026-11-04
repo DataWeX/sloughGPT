@@ -96,7 +96,7 @@ export function readBoard(workspaceId?: string): Board {
 }
 
 function overlayAppPlannerFeed(board: Board, workspaceId?: string): void {
-  const feedDir = join(kanbanDir(workspaceId), 'app-planner-feed')
+  const feedDir = join(kanbanDir(workspaceId), 'grib-feed')
   if (!existsSync(feedDir)) return
   const feedFile = join(feedDir, 'board.json')
   if (!existsSync(feedFile)) return
