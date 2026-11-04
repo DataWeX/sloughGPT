@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "8619c4924c60a236098ac8d09a49acdee118714c",
+    "recorded_commit": "0576757efa7cf56acef007ee787224254356fab4",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -293,7 +293,7 @@
       "consumers": ["tests/", "apps/api/", "packages/core-py/", "scripts/", "domain/training/"],
       "note": "performance kernels (AVX2/numba) for inference+training",
       "debt": null,
-      "tree_hash": "82d3d50780888edc3e6edce0a303809881701209"
+      "tree_hash": "0f8854eb97eca2f5d1c4a270a298bf05c8dd267d"
     },
     "soul": {
       "class": "feature",
@@ -325,7 +325,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "1dccacfeb92862deb0a377c3829790eba4f71f36"
+      "tree_hash": "3def72848e9299adf94d9863caa0e2e82a2089ae"
     },
     "voice": {
       "class": "core-capability",
