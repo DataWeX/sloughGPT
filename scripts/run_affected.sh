@@ -31,7 +31,11 @@ if [ "$#" -eq 0 ]; then
 fi
 
 if [ "${RUN_ALL:-0}" = "1" ]; then
-  TESTMON_FLAG="--testmon-no-changes"           # run all, ignore changes, re-record
+  # --testmon-noselect = "don't deselect anything, still collect + write"
+  # (pytest-testmon 2.2 renamed this; the old --testmon-no-changes does not
+  # exist there, so RUN_ALL=1 died with "unrecognized arguments" and the
+  # documented full-run-and-re-record path was dead).
+  TESTMON_FLAG="--testmon-noselect"             # run all, ignore changes, re-record
 else
   # forceselect, not plain --testmon: pytest.ini bakes `-m "not slow"` into
   # addopts, and testmon silently deactivates SELECTION whenever -m/-k/--lf
