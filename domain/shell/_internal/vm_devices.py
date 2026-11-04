@@ -872,11 +872,18 @@ class NPUVMDevice(Device):
     # VM op -> (kernel NPU ioctl command, extractor from the op's own argument
     # order to the ioctl's). Only ops the kernel NPU can actually serve are
     # listed; anything else resolves by method name or fails as a DeviceFault.
+    # generate passes its max_tokens through (the docstring promises
+    # ``generate, qwen, Hello, 50`` — dropping the third arg silently ran
+    # every VM generate at the default budget).
     _IOCTL_MAP = {
         "load_model": ("LOAD", lambda a: (a[1], a[0])),
         "unload_model": ("UNLOAD", lambda a: (a[0],)),
-        "generate": ("CALL", lambda a: (a[0], a[1])),
+        "generate": ("CALL", lambda a: (a[0], a[1], a[2]) if len(a) > 2 else (a[0], a[1])),
         "batch": ("BATCH", lambda a: (a[0], a[1])),
+        "tokenize": ("TOKENIZE", lambda a: a),
+        "detokenize": ("DETOKENIZE", lambda a: a),
+        "embed": ("EMBED", lambda a: a),
+        "forward": ("FORWARD", lambda a: a),
         "quantize": ("QUANTIZE", lambda a: (a[0], a[1])),
         "save_checkpoint": ("CHECKPOINT_SAVE", lambda a: (a[0], a[1])),
         "load_checkpoint": ("CHECKPOINT_LOAD", lambda a: (a[0], a[1])),

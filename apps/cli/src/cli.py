@@ -849,7 +849,11 @@ def simulate(
 
             npu = NPUDevice(name="npu")
             npu.open()
-            result = npu.load_model(model, f"huggingface:{model}")
+            # LOAD takes (path, name). An explicit .slnc path loads for real;
+            # an HF id is not a device file, so LOAD fails and the existing
+            # mock fallback below reports it (the NPU loads files, not ids).
+            source = model if model.endswith(".slnc") else f"huggingface:{model}"
+            result = npu.ioctl("LOAD", source, model)
             if not result.success:
                 _p(f"  {_c(f"⚠ Could not load '{model}': {result.error}", _YELLOW)}")
                 _p(
@@ -885,7 +889,7 @@ def simulate(
 
                 k.engine.load_model(model, FallbackModel())
             else:
-                provider = npu._models[model].provider
+                provider = npu.model(model).provider
                 k.engine.load_model(model, provider)
         t_load = time.perf_counter() - t1
         _p(f"  {_c('ok', _GREEN)} Model '{model}' loaded in {t_load * 1000:.1f}ms")
