@@ -113,11 +113,17 @@ payload volume, not waste. Absolute cost stays sub-3µs on the DEV_CALL path.
 - `ruff check` clean on all changed files; `mypy` clean on the NPU modules.
   (`ruff format` on `vm_devices.py` is pre-existing red at base — not reformatted, to keep the diff honest.)
 
-**OPEN FINDING — needs approval (not implemented)**
-`NPUVMDevice` advertises `tokenize`, `embed`, `forward` in its own docstring
+**RESOLVED FINDING (user approved 2026-11-04)**
+`NPUVMDevice` advertises `tokenize`, `detokenize`, `embed`, `forward` in its own docstring
 (`DEV_CALL R2, R0, tokenize, qwen, Hello world` …), but verified against the REAL device with the
-REAL model: all three raise `DeviceFault: NPU: op not supported`. `detokenize` same class.
-Neither historical NPU class ever had them — a **pre-existing** gap, not a regression from this card.
-`info`, `generate`, `load_model`, `unload_model` all work.
-Proposed fix (small): add `tokenize`/`detokenize`/`embed`/`forward` delegation methods on the
-unified `NPUDevice` that forward to the loaded provider. Awaiting user go-ahead per approval rule.
+REAL model: all four raised `DeviceFault: NPU: op not supported`. Neither historical NPU class ever
+had them — a **pre-existing** gap, not a regression from this card.
+Implemented: four ops on the unified `NPUDevice` (`tokenize`/`detokenize`/`embed`/`forward`),
+exposed as ioctl `TOKENIZE`/`DETOKENIZE`/`EMBED`/`FORWARD` (14 → 18 commands) **and** wired into
+`NPUVMDevice._IOCTL_MAP`, so both seams reach one implementation instead of the old
+method-fallback that only test doubles satisfied. `_forward_logits` resolves all three provider
+generations (`forward_numpy` → private `_get_model().forward_pass()` → error), which also fixed
+`_execute_tokens`: `SloNetChatProvider` exposes no numpy forward at all, so the token→logits path
+was as broken as `forward` was.
+Verified on real Qwen: `tokenize → [9707, 1879]`, `embed` finite vector, `forward` logits
+`(1, seq, vocab)` finite; all six ops in the VM docstring now work end-to-end.
