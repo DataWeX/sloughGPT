@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "706e267eaae6131906fefbf62b050280d37fb29e",
+    "recorded_commit": "2f57c7277f6a70fd480dd649ff870248d399d2fe",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -159,7 +159,7 @@
       ],
       "note": "user data organization feature (cli-heavy)",
       "debt": null,
-      "tree_hash": "b857d3fd615a77ae9b2eddd5529055e9c56b8e75"
+      "tree_hash": "43ad0e94d5785f93b5309582feb1bb5bade6bd66"
     },
     "companion": {
       "class": "feature",
@@ -233,7 +233,7 @@
       ],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "987dbef372bfe5d17c2ab87d0ec71e9309adf3a6"
+      "tree_hash": "311cf0d7affac210e8b4abc67f1ba8dc019de07f"
     },
     "generation": {
       "class": "core-capability",
@@ -260,7 +260,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "2581d4091d38462b9cf2d5bafb0935a1e4180522"
+      "tree_hash": "2258fdc48d20034cc7e06283f553b6577fc3dd52"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -276,7 +276,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "63ee46fbe3349ca39e3902dffeb5a657dbde3ed8"
+      "tree_hash": "5375f4dec9c6a3be0b49f9479dbc37f8530e91d4"
     },
     "knowledge": {
       "class": "core-capability",
@@ -309,7 +309,7 @@
       ],
       "note": "adaptive learning loop (training objective over cognitive memory)",
       "debt": null,
-      "tree_hash": "347050605f6cccaa46acc550f434a287461923a9"
+      "tree_hash": "55b3c162b24879219f8bbdd5f75dfec42667f358"
     },
     "logging": {
       "class": "core-capability",
@@ -342,7 +342,7 @@
       ],
       "note": "memory store/read paths (cognitive reasoning over core persistence)",
       "debt": null,
-      "tree_hash": "216fa848e5c6745a52e4833e529c0a86dd1c35cd"
+      "tree_hash": "33f29883ca0890362ffd33a967ff67f96c3a3e81"
     },
     "mobile": {
       "class": "feature",
@@ -389,7 +389,7 @@
       ],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
-      "tree_hash": "026d0819be56f2e393c08e89d53a9458acfd218e"
+      "tree_hash": "8066c9daefae8621c477a6fbff4c80eaf12ded34"
     },
     "ops": {
       "class": "core-capability",
@@ -546,7 +546,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "38fe4d57faf00345dabc86be544c8e27d2c96320"
+      "tree_hash": "2a796002687300e31dd03000b3b2b3b045a99a1a"
     },
     "voice": {
       "class": "core-capability",
