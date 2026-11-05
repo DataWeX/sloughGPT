@@ -64,6 +64,40 @@ def _clear_chat_response_cache():
     _chat_response_cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _stop_infra_threads():
+    """L3: stop leaked infra background threads after each test (root suite).
+
+    The mirror of tests/core-py/conftest.py's fixture (aabe3dd09) — that
+    conftest never loads for `tests/`, so the root suite leaked the same
+    threads: the CI `test-root` job finished all tests in ~2.5 min, then
+    hung at interpreter exit with `feedback-scheduler`/engine threads
+    alive, holding the CI/CD concurrency group for hours (card
+    20261102_025758). Only subsystems this test imported are touched.
+    """
+    yield
+    workflow_mod = sys.modules.get("domain.feedback._internal.workflow")
+    if workflow_mod is not None:
+        stop_all = getattr(workflow_mod, "stop_all_workflows", None)
+        if stop_all is not None:
+            stop_all()
+    faf_mod = sys.modules.get("domain.infrastructure._internal.fire_and_forget")
+    if faf_mod is not None:
+        reset = getattr(faf_mod, "reset_pool", None)
+        if reset is not None:
+            reset()
+    idle_mod = sys.modules.get("domain.infrastructure._internal.idle_manager")
+    if idle_mod is not None:
+        stop_all = getattr(idle_mod, "stop_all_idle_managers", None)
+        if stop_all is not None:
+            stop_all()
+    pugqeep_mod = sys.modules.get("domain.infrastructure._internal.pugqeep.engine")
+    if pugqeep_mod is not None:
+        stop_all = getattr(pugqeep_mod, "stop_all_pugqeep", None)
+        if stop_all is not None:
+            stop_all()
+
+
 @pytest.fixture
 def api_base_url() -> str:
     """Base URL for API tests."""
