@@ -223,6 +223,103 @@ class TestPrepareData:
 
 
 # =============================================================================
+# prepare_data — JSONL datasets (train-on-dataset, card 20261104_165743)
+# =============================================================================
+
+
+class TestPrepareDataJsonl:
+    """A ``.jsonl`` corpus yields its records' ``text`` joined by newlines.
+
+    Cached datasets (e.g. tinyshakespeare, 32,777 records) are JSONL with a
+    ``text`` field per record — the trainer must read the text, never the
+    JSON syntax around it.
+    """
+
+    TEXT_A = (
+        "the quick brown fox jumps over the lazy dog and runs across the meadow "
+        "again and again while the dog sleeps soundly in the warm sun all day long. "
+    )
+    TEXT_B = (
+        "pack my box with five dozen liquor jugs sphinx of black quartz judge my vow "
+        "how vexingly quick daft zebras jump over the lazy dwarf and the sun sets. "
+    )
+
+    def _write_jsonl(self, tmp_path, lines):
+        p = tmp_path / "corpus.jsonl"
+        p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return str(p)
+
+    def test_jsonl_reads_text_fields_not_json_syntax(self, tmp_path):
+        path = self._write_jsonl(
+            tmp_path,
+            [json.dumps({"text": self.TEXT_A}), json.dumps({"text": self.TEXT_B})],
+        )
+        data, n_chars, stoi, itos = prepare_data(path, block_size=8)
+        joined = self.TEXT_A + "\n" + self.TEXT_B
+        assert len(data) == len(joined)
+        assert n_chars == len(set(joined))
+        assert stoi == {c: i for i, c in enumerate(sorted(set(joined)))}
+        # JSON syntax must not leak into the vocabulary
+        for syntax in ("{", "}", '"', ":"):
+            assert syntax not in stoi
+
+    def test_jsonl_skips_malformed_lines(self, tmp_path):
+        path = self._write_jsonl(
+            tmp_path,
+            [
+                json.dumps({"text": self.TEXT_A}),
+                "{not valid json",
+                json.dumps({"text": self.TEXT_B}),
+            ],
+        )
+        data, *_ = prepare_data(path, block_size=8)
+        joined = self.TEXT_A + "\n" + self.TEXT_B
+        assert len(data) == len(joined)
+
+    def test_jsonl_skips_records_without_text_field(self, tmp_path):
+        path = self._write_jsonl(
+            tmp_path,
+            [
+                json.dumps({"text": self.TEXT_A}),
+                json.dumps({"role": "user", "content": "no text field here"}),
+                json.dumps({"text": self.TEXT_B}),
+            ],
+        )
+        data, *_ = prepare_data(path, block_size=8)
+        joined = self.TEXT_A + "\n" + self.TEXT_B
+        assert len(data) == len(joined)
+
+    def test_jsonl_without_text_fields_reads_raw(self, tmp_path):
+        """Grandfathered shapes (pair datasets) keep the pre-existing raw read.
+
+        Only records with a ``text`` field are extracted; a jsonl without
+        any trains exactly as it did before this branch existed.
+        """
+        pairs = [
+            json.dumps({"user": "What is AI?", "assistant": "AI is artificial intelligence."})
+        ] * 15
+        path = self._write_jsonl(tmp_path, pairs)
+        raw = "\n".join(pairs) + "\n"
+        assert len(raw) >= 200  # passes validate_training_data on the raw read
+        data, *_ = prepare_data(path, block_size=8)
+        assert len(data) == len(raw)
+
+    def test_empty_jsonl_raises_empty(self, tmp_path):
+        p = tmp_path / "corpus.jsonl"
+        p.write_text("", encoding="utf-8")
+        with pytest.raises(ValueError, match="empty"):
+            prepare_data(str(p), block_size=8)
+
+    def test_txt_path_still_read_raw(self, tmp_path):
+        """Regression: plain-text files keep their byte-exact raw read."""
+        p = tmp_path / "corpus.txt"
+        p.write_text(DATA_TEXT, encoding="utf-8")
+        data, n_chars, *_ = prepare_data(str(p), block_size=8)
+        assert len(data) == len(DATA_TEXT)
+        assert n_chars == len(set(DATA_TEXT))
+
+
+# =============================================================================
 # TrainerConfig
 # =============================================================================
 

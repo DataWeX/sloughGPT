@@ -23,6 +23,7 @@ Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import math
 import os
@@ -306,7 +307,32 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
                     f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
                 )
         with open(path, encoding="utf-8") as f:
-            text = f.read()
+            if path.suffix == ".jsonl":
+                # Canonical text corpora (e.g. tinyshakespeare's 32,777
+                # cached records) carry the corpus in each record's `text`
+                # field — extract it, never the JSON syntax around it.
+                # Only `text` is extracted: other record shapes (pair
+                # datasets like user/assistant …) keep their pre-existing
+                # raw-read behaviour. Malformed lines and records without
+                # `text` are skipped; join with newlines. When no record
+                # has a text field, fall back to the raw read.
+                raw = f.read()
+                texts = []
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict):
+                        t = rec.get("text")
+                        if isinstance(t, str) and t:
+                            texts.append(t)
+                text = "\n".join(texts) if texts else raw
+            else:
+                text = f.read()
 
     if tokenizer is not None:
         data = np.asarray(tokenizer.encode(text), dtype=np.int64)
