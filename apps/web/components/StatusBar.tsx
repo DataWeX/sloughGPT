@@ -275,10 +275,13 @@ export function StatusBar() {
           )}
 
           {/* Token rate or inference count */}
-          {isOnline && health?.tokens_per_sec ? (
-            <span className="sl-status-bar-metric tabular-nums">
+          {isOnline && (health?.latest_inference_latency_ms != null || health?.tokens_per_sec) ? (
+            <span className="sl-status-bar-metric tabular-nums whitespace-nowrap">
               <span className="h-1 w-1 rounded-full bg-success animate-pulse" aria-hidden="true" />
-              {health.tokens_per_sec.toFixed(0)} tok/s
+              {health.latest_inference_latency_ms != null
+                ? `${health.latest_inference_latency_ms.toFixed(0)} ms · `
+                : ''}
+              {(health.latest_tokens_per_sec ?? health.tokens_per_sec).toFixed(1)} tok/s
             </span>
           ) : isOnline && health?.inference_count != null ? (
             <span className="sl-status-bar-metric tabular-nums">
