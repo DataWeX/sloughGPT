@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('@/vite/next-compat/navigation', () => ({
+vi.mock('next/navigation', () => ({
   usePathname: () => '/chat',
   useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn() }),
 }))
