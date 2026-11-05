@@ -1,0 +1,244 @@
+{
+  "metadata": {
+    "spec": "docs/plans/2026-09-20-execution-consolidation.md",
+    "stage": "2 (lint hint) — allowlist built from the 2026-11-04 audit inventory, classified 2026-11-05",
+    "kinds": {
+      "grandfathered": "charter grandfather: execution infra, server accept/pump loops, I/O pumps bound to a live handle",
+      "deferred": "charter ruling: migrate when the site is next touched",
+      "followup": "stage-3/4 migration candidate the audit parked — greppable backlog"
+    },
+    "site_count": 54
+  },
+  "entries": {
+    "apps/api/server/infrastructure/inference_pool.py::InferencePool.run_generator": {
+      "reason": "producer thread feeding a result queue, joined under a deadline — pump bound to a live handle",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::_start_engine_watcher": {
+      "reason": "watcher loop bound to the engine child process handle",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::_start_inference_engine": {
+      "reason": "engine-stderr capture pump bound to the engine child handle",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::_start_parent_preload": {
+      "reason": "FOLLOWUP: delayed must-run one-shot (Timer -> Thread, delay avoids GIL starvation at uvicorn bind); migrate to engine.spawn once delay semantics exist",
+      "kind": "followup",
+      "count": 1
+    },
+    "apps/api/server/main.py::_install_stack_dump_timer": {
+      "reason": "stack-dump dumper — explicitly ruled grandfathered in the spec (3B loop batch)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/shell.py::_stream_events": {
+      "reason": "explicitly ruled not-an-isolation-case — drives the in-process REPL singleton, thread-mode by necessity (spec 3A)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/cli/src/commands/dev.py::cmd_dev": {
+      "reason": "spawn_command migration landed for api/web children; remaining threads are _read_stream pumps on child pipes + a readiness poll — bound to live handles",
+      "kind": "grandfathered",
+      "count": 3
+    },
+    "apps/cli/src/commands/dev.py::_cmd_api_only": {
+      "reason": "deferred by the spec: _cmd_api_* variants migrate when next touched (3A)",
+      "kind": "deferred",
+      "count": 1
+    },
+    "apps/cli/src/commands/dev.py::_cmd_api_and_mobile": {
+      "reason": "deferred by the spec: _cmd_api_* variants migrate when next touched (3A)",
+      "kind": "deferred",
+      "count": 3
+    },
+    "apps/cli/src/commands/dev.py::_cmd_api_and_web": {
+      "reason": "deferred by the spec: _cmd_api_* variants migrate when next touched (3A)",
+      "kind": "deferred",
+      "count": 4
+    },
+    "apps/cli/src/core/tui.py::DevDashboard.serve": {
+      "reason": "FOLLOWUP: one-shot server restart from a keypress — short-lived in-process work, 3B shape, missed by both batches",
+      "kind": "followup",
+      "count": 1
+    },
+    "apps/cli/src/utils/helpers.py::ensure_server": {
+      "reason": "child stderr pump bound to the spawned server handle",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/cli/src/utils/progress.py::Spinner.start": {
+      "reason": "TTY animation loop bound to the rendered bar — I/O pump",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/inference/_internal/slonet_provider.py::SloNetChatProvider.chat_stream": {
+      "reason": "producer pump feeding the chat-stream result queue",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/fire_and_forget.py::FireAndForgetPool.__init__": {
+      "reason": "FAF pool worker — execution infra itself (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/idle_manager.py::IdleManager._ensure_running": {
+      "reason": "FOLLOWUP: long-lived idle-check loop — spawn_loop shape from the 3B loop batch, not in the batch's 8 sites",
+      "kind": "followup",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/idle_manager.py::IdleManager.touch_async": {
+      "reason": "routes through the bg queue first (put_nowait); raw Thread only as fallback when the queue rejects — bounded fallback path",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/inference_client.py::InferenceClient.chat_stream": {
+      "reason": "socket reader pump bound to the live connection",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/inference_engine.py::InferenceEngine._handle_stream_start": {
+      "reason": "stream pump bound to the live request socket",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/inference_engine.py::InferenceEngine._run": {
+      "reason": "per-client accept/pump — server loop (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/inference_engine.py::InferenceEngine.start": {
+      "reason": "inference engine accept loop — the subsystem's own loop (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_server.py::LocalBackend.generate_stream": {
+      "reason": "generate thread joined while the main side drains chunks — pump bound to a live streamer",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_server.py::ModelServer.__init__": {
+      "reason": "FOLLOWUP: must-run warmup one-shot — 3B one-shot shape (slonet _run_warmup migrated, this did not)",
+      "kind": "followup",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_server.py::ModelServer._wrap_generator_as_streamer": {
+      "reason": "generator-to-queue pump bound to the live generator",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_server.py::ModelServer.generate_stream": {
+      "reason": "asyncio-loop bridge pump bound to the live stream",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_server.py::ModelServer.swap_model": {
+      "reason": "FOLLOWUP: re-warmup one-shot after model swap — same shape as __init__ warmup",
+      "kind": "followup",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_worker.py::_hf_worker_main._stream": {
+      "reason": "model.generate thread bound to the live streamer — pump",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_worker.py::_slo_worker_main._generate": {
+      "reason": "heartbeat tick pump — worker-internal loop",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/process_guard.py::ProcessGuard.start": {
+      "reason": "process_guard monitor — execution infra itself (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/process_guard.py::_ThreadWorker.start": {
+      "reason": "process_guard pool worker — execution infra itself (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/producer_consumer.py::ProducerConsumerQueue.start": {
+      "reason": "producer-consumer primitive — execution infra itself (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/pugqeep/engine.py::Engine.run_background": {
+      "reason": "pugqeep engine internals — execution infra itself (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/pugqeep/engine.py::ProcessMonitor.start": {
+      "reason": "pugqeep engine internals — execution infra itself (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/pugqeep/engine.py::SubprocessProcess.start": {
+      "reason": "pugqeep engine internals — stdout reader + watchdog bound to the live child pipes (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "domain/infrastructure/_internal/pugqeep/engine.py::Tree._execute": {
+      "reason": "pugqeep engine internals — pool worker (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/slonet_server.py::SloNetServer.generate_stream": {
+      "reason": "stream pump bound to the live stream handle",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/watchdog.py::HealthWatchdog.start": {
+      "reason": "health watchdog — execution infra itself (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/memory/_internal/knowledge_store.py::KnowledgeMemory._run_async": {
+      "reason": "FOLLOWUP: sync-over-async bridge (fresh event loop, join immediately) — feeds the stage-4 TaskQueue sync-bridge open question",
+      "kind": "followup",
+      "count": 1
+    },
+    "domain/shell/_internal/console.py::_Spinner.__enter__": {
+      "reason": "TTY spinner pump — I/O pump bound to the rendered frame",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/shell/_internal/init.py::ServiceManager.start": {
+      "reason": "waitpid pump bound to the spawned service child handle",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/shell/_internal/interactive.py::_InteractiveSpinner.__enter__": {
+      "reason": "TTY spinner pump — I/O pump bound to the rendered frame",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/shell/_internal/kernel.py::Kernel.tick": {
+      "reason": "shell kernel's own per-process runner (proc._thread owned by the proc) — subsystem execution infra",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/shell/_internal/repl.py::ShellREPL._cmd_load": {
+      "reason": "FOLLOWUP: one-shot model load joined via is_alive progress poll — spawn handle shape, missed by the 3B one-shot batch",
+      "kind": "followup",
+      "count": 1
+    },
+    "domain/shell/_internal/runtime.py::APIServerProcess.start": {
+      "reason": "child stderr pump bound to the spawned API server handle",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/shell/_internal/tui_repl.py::TuiRepl._main": {
+      "reason": "TUI REPL main loop — the subsystem's own loop (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/shell/_internal/vm.py::X86Shell.start": {
+      "reason": "VM execution loop — the subsystem's own loop (charter grandfather)",
+      "kind": "grandfathered",
+      "count": 1
+    }
+  }
+}
