@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "3f9c684db7f437c8805f0684c223c14336af5957",
+    "recorded_commit": "a3b33af5838757ec15d94e23902d1a84d56d9595",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -21,7 +21,7 @@
       "consumers": ["tests/", "apps/api/", "domain/shell/"],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "9f8a38485cbfdf2bb84735ce558e8d49824dca9f"
+      "tree_hash": "2f452842a1243a6b1eb88f699a18efa0695f8914"
     },
     "ai_personality": {
       "class": "feature",
@@ -139,7 +139,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/"],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "50c8c53be74fec62322b3458e1d0468328bcf2bb"
+      "tree_hash": "b6635b8cb8817655595267e5b2ef80af975022a5"
     },
     "generation": {
       "class": "core-capability",
@@ -161,7 +161,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "289805f5182b9163a62616b432e5199337534070"
+      "tree_hash": "2581d4091d38462b9cf2d5bafb0935a1e4180522"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -169,7 +169,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "b7ca084163b8defa5705d9544c9858f938fd0fde"
+      "tree_hash": "715d1c513d7c1ab104dfaa30ea3c2f8c1aca51e6"
     },
     "knowledge": {
       "class": "core-capability",
@@ -277,7 +277,7 @@
       ],
       "note": "cross-cutting helpers (most-consumed domain)",
       "debt": null,
-      "tree_hash": "39f769b88f612e051adef1f3fee6155035608431"
+      "tree_hash": "f084f8fa6dbaa5e78a7f3eea72cf6b1ce6f28f67"
     },
     "shell": {
       "class": "core-capability",
@@ -293,7 +293,7 @@
       "consumers": ["tests/", "apps/api/", "packages/core-py/", "scripts/", "domain/training/"],
       "note": "performance kernels (AVX2/numba) for inference+training",
       "debt": null,
-      "tree_hash": "3dba9fcc429a9d0277b1557627c53e2a9b887740"
+      "tree_hash": "0f8854eb97eca2f5d1c4a270a298bf05c8dd267d"
     },
     "soul": {
       "class": "feature",
@@ -325,7 +325,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/infrastructure/", "apps/cli/"],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "8d3d382736a849436202874351feebf83da439ea"
+      "tree_hash": "05590f154d404a408aa3a7da23d96aec7045a9db"
     },
     "voice": {
       "class": "core-capability",

@@ -283,7 +283,7 @@ export default function ConsciousnessTrainingPage() {
               className="w-full"
             >
               {training
-                ? t('consciousness_training.training_in_progress')
+                ? t('consciousness_training.training_live')
                 : t('consciousness_training.start_training')}
             </Button>
           </CardContent>

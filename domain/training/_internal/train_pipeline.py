@@ -29,6 +29,7 @@ import os
 import threading
 import time
 import warnings
+from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,8 @@ try:
     from domain.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
+from domain.shared._internal.feature_flags import is_enabled
+from domain.slolib._internal.gpu import dispatch_stats, known_backends, removed_backend_reason
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.experience_adapter import (
     is_experience_source,
@@ -56,6 +59,7 @@ from domain.training._internal.step_strategy import (
     OwnedObjectiveStrategy,
     StepStrategy,
 )
+from domain.training._internal.trace import StepTrace, fingerprint_batch
 from domain.training._internal.trainer_protocol import TrainResult
 from domain.training._internal.training_feed import is_feed_source, load_feed_text
 from domain.training._internal.training_handler import (
@@ -420,12 +424,26 @@ class TrainerConfig:
     owned_tool_weight: float = 0.3
     owned_memory_weight: float = 0.2
 
-    # Device — SloNet training is pure numpy and always runs on the CPU.
+    # Device — resolved by ``SloughGPTTrainer._setup_device`` (see there).
+    # ``"cpu"`` (default) pins the NumPy backend for the run; ``"auto"`` is the
+    # opt-in to whatever the accelerator probe found; ``"cuda"``/``"metal"``/
+    # ``"opencl"`` are declarations that either resolve or refuse loudly.
+    # The accepted vocabulary comes from ``gpu.known_backends()`` — one
+    # declaration, so this field cannot drift from the seam behind it.
     device: str = "cpu"
 
     def __post_init__(self):
-        if self.device == "auto":
-            self.device = "cpu"
+        # ``None``/blank come from API payloads that did not set device.
+        self.device = str(self.device).strip().lower() if self.device else "cpu"
+        # ``torch`` was removed (SloNet's NumPy engine is the only training
+        # backend); say so instead of listing it as a typo.
+        removed = removed_backend_reason(self.device)
+        if removed is not None:
+            raise ValueError(f"device={self.device!r} is not supported: {removed}")
+        if self.device != "auto" and self.device not in known_backends():
+            raise ValueError(
+                f"device must be 'auto' or one of {sorted(known_backends())}, got {self.device!r}"
+            )
 
         # Validate hyperparameters
         if self.learning_rate <= 0:
@@ -917,6 +935,30 @@ def _gc_parked_step(fn):
     return wrapper
 
 
+def _device_scoped(fn):
+    """Pin this trainer's resolved accelerator for the duration of the call.
+
+    ``slonet._get_accelerator()`` consults a thread-local pin before global
+    detection. Training runs in a worker thread, so the pin is scoped to that
+    run: ``device="cpu"`` silences the GPU for this job only and leaves
+    inference (or a second job) in the same process untouched. Reading
+    ``self._accelerator`` at call time keeps the decorator harmless for objects
+    that never ran ``_setup_device`` (``__new__`` test doubles).
+    """
+
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        from domain.slolib._internal.gpu import pop_accelerator, push_accelerator
+
+        previous = push_accelerator(getattr(self, "_accelerator", None))
+        try:
+            return fn(self, *args, **kwargs)
+        finally:
+            pop_accelerator(previous)
+
+    return wrapper
+
+
 class SloughGPTTrainer:
     """
     Unified trainer for SloughGPTModel (pure NumPy / SloNet).
@@ -1038,6 +1080,13 @@ class SloughGPTTrainer:
         self._early_stopped = False  # True if early stopping triggered
         self._quality_scores: list[float] = []  # rolling quality scores of training data
         self._avg_quality: float | None = None  # running average quality
+        # Per-step reduction set (see trace.py): bounded ring of the last 128
+        # StepTrace receipts + the grad norm of the current step (None until
+        # an accumulation boundary computes one).
+        self._step_traces: deque[StepTrace] = deque(maxlen=128)
+        self._last_grad_norm: float | None = None
+        self._trace_fingerprint: str = ""
+        self._trace_tokens: int = 0
 
         self.device = self._setup_device()
         self.config.device = self.device
@@ -1168,8 +1217,33 @@ class SloughGPTTrainer:
         )
 
     def _setup_device(self) -> str:
-        """SloNet training is pure numpy and always runs on the CPU."""
-        return "cpu"
+        """Resolve ``TrainerConfig.device`` to a real backend and record it.
+
+        The autograd engine is NumPy, so a device is *a compute backend*, not a
+        second model: ``"cpu"`` pins NumPy for this run (a GPU host must not
+        silently take over — that is what ``"cpu"`` already claimed and, before
+        this, did not do), ``"auto"`` takes the accelerator probe's choice, and
+        ``"cuda"``/``"metal"``/``"opencl"`` are declarations that either resolve
+        or raise. ``train/evaluate/generate`` push the resolved backend as a
+        thread-local pin, so two jobs in one process cannot fight over it.
+        """
+        from domain.slolib._internal.gpu import accelerator_for
+
+        try:
+            accelerator = accelerator_for(self.config.device)
+        except (RuntimeError, ValueError) as e:
+            raise RuntimeError(
+                f"device={self.config.device!r} cannot be used on this host: {e}"
+            ) from e
+        self._accelerator = accelerator
+        logger.info(
+            "Device: requested=%s resolved=%s (%s)",
+            self.config.device,
+            accelerator.name,
+            accelerator.device_type,
+            extra={"tag": "TRAIN"},
+        )
+        return accelerator.name
 
     def _create_model(self):
         """Create and setup the model (optionally wrapped with LoRA)."""
@@ -1548,8 +1622,13 @@ class SloughGPTTrainer:
         """Execute a single training step on the pure numpy SloNet path."""
         model = self.training_model
         model.train()
+        self._last_grad_norm = None  # fresh step; set below if a boundary clips
 
         x, y = self.get_batch("train")
+        # Replay anchors for this step's StepTrace (cheap blake2b receipt —
+        # raw batches are never shipped, they are regenerable from these).
+        self._trace_fingerprint = fingerprint_batch(x)
+        self._trace_tokens = int(x.size)
         scale_factor = 1.0 / self.config.gradient_accumulation_steps
 
         logits, loss = model(x, y)
@@ -1612,6 +1691,7 @@ class SloughGPTTrainer:
             params = [p for p in model.parameters() if p.grad is not None]
             if self.config.max_grad_norm > 0 and params:
                 total_norm = clip_gradients(params, self.config.max_grad_norm)
+                self._last_grad_norm = float(total_norm)
 
                 # Record gradient norm to training monitor
                 try:
@@ -1632,6 +1712,58 @@ class SloughGPTTrainer:
 
         return metrics
 
+    def _assemble_step_trace(
+        self,
+        metrics: dict[str, float],
+        dispatch_before: dict[str, int],
+        dispatch_after: dict[str, int],
+    ) -> StepTrace:
+        """Build one step's reduction-set receipt (see trace.py).
+
+        Counter fields are deltas across the caller's snapshot window —
+        exactly the compute between ``dispatch_before`` and ``dispatch_after``
+        — so eval/selfgen/logging between steps never pollutes a step's
+        residency numbers.
+        """
+        lr = self.scheduler.get_last_lr()[0] if self.scheduler else self.config.learning_rate
+        delta = {k: dispatch_after[k] - dispatch_before[k] for k in dispatch_before}
+        return StepTrace(
+            step=int(self.global_step),
+            batch_fingerprint=self._trace_fingerprint,
+            tokens_this_step=self._trace_tokens,
+            loss=float(metrics["loss"]),
+            raw_loss=float(metrics.get("raw_loss", metrics["loss"])),
+            lr=float(lr),
+            grad_norm=self._last_grad_norm,
+            skipped=bool(metrics.get("skipped", False)),
+            steps_per_s=round(self._steps_per_sec(), 3),
+            device=str(self.device),
+            gpu_matmuls=int(delta["gpu_matmuls"]),
+            cpu_matmuls=int(delta["cpu_matmuls"]),
+            fallbacks=int(delta["fallbacks"]),
+            h2d_bytes=int(delta["h2d_bytes"]),
+            d2h_bytes=int(delta["d2h_bytes"]),
+        )
+
+    def get_step_trace(self, step: int | None = None) -> StepTrace | None:
+        """The reduction-set receipt for ``step`` (default: the latest).
+
+        Returns None before the first step or when ``step`` has aged out of
+        the bounded ring (last 128 steps). This is the debug surface: after
+        any "why is training slow?" report, step 1's trace answers which
+        path the matmuls took.
+        """
+        traces = getattr(self, "_step_traces", None)
+        if not traces:
+            return None
+        if step is None:
+            return traces[-1]
+        for trace in reversed(traces):
+            if trace.step == step:
+                return trace
+        return None
+
+    @_device_scoped
     def evaluate(self, num_batches: int = 10) -> dict[str, float]:
         """Evaluate the model on the validation split.
 
@@ -1799,6 +1931,7 @@ class SloughGPTTrainer:
         return f"{s}s"
 
     @_gc_parked
+    @_device_scoped
     def train(
         self,
         resume: bool = False,
@@ -1913,6 +2046,18 @@ class SloughGPTTrainer:
             lr = self.scheduler.get_last_lr()[0] if self.scheduler else self.config.learning_rate
             sps = self._steps_per_sec()
             eta = None if sps <= 0 else max(0, int((denom - self.global_step) / sps))
+            last_trace = self.get_step_trace()
+            # step_trace flag gates only the trace-derived residency keys —
+            # absent (not lying zeros) when off; "device" is unconditional.
+            residency = (
+                {
+                    "gpu_matmuls": last_trace.gpu_matmuls if last_trace else 0,
+                    "cpu_matmuls": last_trace.cpu_matmuls if last_trace else 0,
+                    "fallbacks": last_trace.fallbacks if last_trace else 0,
+                }
+                if is_enabled("step_trace")
+                else {}
+            )
             try:
                 on_progress(
                     {
@@ -1931,6 +2076,10 @@ class SloughGPTTrainer:
                         "done": done,
                         "done_reason": done_reason,
                         "avg_quality": self._avg_quality,
+                        # StepTrace residency tripwires (additive): which path
+                        # did this step's eligible matmuls actually take?
+                        "device": str(self.device),
+                        **residency,
                     }
                 )
             except Exception:
@@ -2026,9 +2175,21 @@ class SloughGPTTrainer:
                         self._is_training = False
                         break
 
+                # Emission seam for the step_trace flag: the dispatch counters
+                # in slolib.gpu accumulate unconditionally — only assembling the
+                # receipt into the ring is gated (tripwire stays live when off).
+                trace_on = is_enabled("step_trace")
+                dispatch_before = dispatch_stats() if trace_on else {}
                 metrics = self.train_step()
                 train_loss += metrics["loss"]
                 self.global_step += 1
+                # Per-step reduction-set receipt: counters delta across exactly
+                # this step's compute (eval/selfgen/log work lands outside the
+                # snapshot window), plus control signals and replay anchors.
+                if trace_on:
+                    self._step_traces.append(
+                        self._assemble_step_trace(metrics, dispatch_before, dispatch_stats())
+                    )
 
                 # Self-gen flywheel: generate gated continuations with the
                 # live model on schedule; failures never stop the run.
@@ -2669,6 +2830,7 @@ class SloughGPTTrainer:
         thread.join(timeout=timeout)
         return not thread.is_alive()
 
+    @_device_scoped
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
         self.model.eval()

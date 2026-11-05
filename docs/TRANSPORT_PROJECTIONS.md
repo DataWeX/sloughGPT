@@ -96,7 +96,8 @@ Registering a capability is a **registry entry, never an endpoint project**.
   external utility tooling (Mole and other app-internal helpers). Both
   are descriptors; only the first is visible to the model.
 - **Grandfathered, not purged** — the 57 existing routers migrate only when
-  next touched (Router Playbook rule 5).
+  next touched (Router Playbook rule 5), and the hand-built declaration
+  count is frozen by the ratchet above: 697 sites, may only shrink.
 
 ## Where it stands
 
@@ -106,8 +107,32 @@ Registering a capability is a **registry entry, never an endpoint project**.
 | `ToolRegistry` (agent-facing projection)      | ✅ reads the descriptor                                                     |
 | `create_router(spec, route, handler)` emission | ✅ `infrastructure/contract.py` — pilot: `GET /contracts`                      |
 | Boot-time self-registration                   | ✅ generated `routers/_manifest.py` + `scripts/gen_router_manifest.py --check`  |
-| CI contract check (descriptor + OpenAPI diff) | ✅ descriptor/registry blocking, route-baseline diff report-only (parity script still reports the doc backlog) |
+| CI contract check (descriptor + OpenAPI diff) | ✅ descriptor/registry blocking, route-baseline diff report-only, **declaration-style ratchet blocking** — new hand-built sites fail against `handbuilt-routes-baseline.json` |
 | TS projection of the contract                 | ❌ `http-client.ts` hand-writes every endpoint                                  |
+
+### Census — hand-built route declarations (2026-11-04)
+
+Measured by the ratchet's own scanner (`check_contract.py --static`):
+
+| Where                   | Hand-built sites | Modules |
+| ----------------------- | ---------------: | ------: |
+| `routers/*.py`          |              629 |      60 |
+| `training/*.py`         |               67 |      14 |
+| `main.py`               |                1 |       1 |
+| **grandfathered total** |          **697** |  **75** |
+
+Largest offenders: `models.py` 42, `settings.py` 41, `consciousness.py` 35,
+`kb.py` 34, `mobile.py` 33. Out of scope by design: test fixtures (149
+sites — throwaway apps by design) and `infrastructure/contract.py` (the
+projection's own `add_api_route`). `create_router` is used by exactly one
+module today — `routers/contracts.py`, the pilot. Known
+declared-but-hand-registered offender: `routers/llm_v1.py` (3 `ToolSpec`s,
+3 `add_api_route` sites).
+
+**The ratchet:** any new `@router.get` / `add_api_route` site — in a new
+file or a grandfathered one — fails `check_contract.py --static`. Migration
+is the only way down, and each shrink lands as a reviewed baseline edit
+(`--write-declaration-baseline` regenerates).
 
 Grandfather note: `get_all_routers()`'s deferred-import list exists for a real
 reason (90 s → 8 s cold start) — self-registration must preserve lazy loading,

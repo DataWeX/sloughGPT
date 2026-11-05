@@ -27,11 +27,18 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if [ "$#" -eq 0 ]; then
-  set -- -p no:randomly packages/core-py/tests
+  # 2026-10-25 test-tree consolidation: tests live at the unified tests/ root
+  # (packages/core-py/tests is gone — the old default errored on bare invoke).
+  # Collect everything; testmon forceselect then narrows to the changed closure.
+  set -- -p no:randomly tests
 fi
 
 if [ "${RUN_ALL:-0}" = "1" ]; then
-  TESTMON_FLAG="--testmon-no-changes"           # run all, ignore changes, re-record
+  # --testmon-noselect = "don't deselect anything, still collect + write"
+  # (pytest-testmon 2.2 renamed this; the old --testmon-no-changes does not
+  # exist there, so RUN_ALL=1 died with "unrecognized arguments" and the
+  # documented full-run-and-re-record path was dead).
+  TESTMON_FLAG="--testmon-noselect"             # run all, ignore changes, re-record
 else
   # forceselect, not plain --testmon: pytest.ini bakes `-m "not slow"` into
   # addopts, and testmon silently deactivates SELECTION whenever -m/-k/--lf

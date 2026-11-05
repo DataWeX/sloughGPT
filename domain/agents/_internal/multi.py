@@ -101,7 +101,7 @@ DEFAULT_AGENTS: dict[str, SpecializedAgent] = {
 
 class TaskStatus:
     PENDING = "pending"
-    IN_PROGRESS = "in_progress"
+    LIVE = "live"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -201,7 +201,7 @@ class MultiAgentOrchestrator:
                 future_map = {}
                 for tid in task_ids:
                     task = task_map[tid]
-                    task.status = TaskStatus.IN_PROGRESS
+                    task.status = TaskStatus.LIVE
                     dep_context = self._build_dep_context(task, task_map, results_ctx)
                     future = pool.submit(self._run_agent, task, goal, dep_context)
                     future_map[future] = task
@@ -246,7 +246,7 @@ class MultiAgentOrchestrator:
 
             async def run_task(tid: str) -> None:
                 task = task_map[tid]
-                task.status = TaskStatus.IN_PROGRESS
+                task.status = TaskStatus.LIVE
                 dep_context = self._build_dep_context(task, task_map, results_ctx)
                 try:
                     result = await self._async_run_agent(task, goal, dep_context)

@@ -248,4 +248,32 @@ describe('MessageContent', () => {
     fireEvent.click(screen.getByText(/Show more/))
     expect(screen.getByText('Show less')).toBeDefined()
   })
+
+  // ── MessageFrame enforcement (Direction B, ruling 2026-11-03) ───────
+  // Both roles must render through the shared frame — chrome is never
+  // re-decided here. See messages/MessageFrame.tsx.
+
+  it('renders the user role through MessageFrame', () => {
+    const { container } = render(<MessageContent content="Hello world" role="user" />)
+    const frame = container.querySelector('[data-message-frame="user"]')
+    expect(frame).not.toBeNull()
+    expect(frame!.textContent).toContain('Hello world')
+  })
+
+  it('renders the assistant role through MessageFrame', () => {
+    const { container } = render(<MessageContent content="Hello world" role="assistant" />)
+    const frame = container.querySelector('[data-message-frame="assistant"]')
+    expect(frame).not.toBeNull()
+    expect(frame!.textContent).toContain('Hello world')
+  })
+
+  it('renders the metadata footer inside the frame when given', () => {
+    const { container } = render(
+      <MessageContent content="Hello" role="assistant" footer={<span>gpt2 · 12 tok</span>} />,
+    )
+    const frame = container.querySelector('[data-message-frame]')!
+    const footer = frame.querySelector('[data-message-frame-footer]')
+    expect(footer).not.toBeNull()
+    expect(footer!.textContent).toContain('gpt2 · 12 tok')
+  })
 })

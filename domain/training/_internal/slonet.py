@@ -260,8 +260,21 @@ def _broadcast_forward(t: np.ndarray, target_shape: tuple) -> np.ndarray:
 
 
 def _get_accelerator():
-    """Get GPU accelerator, lazy-loaded. Tries slolib/gpu first, then old accelerator."""
+    """Get GPU accelerator, lazy-loaded. Tries slolib/gpu first, then old accelerator.
+
+    A thread-local pin (``domain.slolib._internal.gpu.push_accelerator``) wins
+    over both caches. That is how one training run honours ``device="cpu"`` on
+    a GPU host without switching the accelerator off for every other thread.
+    """
     global _ACCELERATOR
+    try:
+        from domain.slolib._internal.gpu import override_accelerator
+
+        pinned = override_accelerator()
+        if pinned is not None:
+            return None if pinned.name == "cpu" else pinned
+    except Exception as e:  # pragma: no cover - pin layer must never break math
+        logger.debug("Accelerator pin unavailable: %s", e)
     if _ACCELERATOR is not None:
         return _ACCELERATOR if _ACCELERATOR != "none" else None
     try:
@@ -957,6 +970,8 @@ def _pow(a, p):
 
 
 def _matmul(a, b):
+    from domain.slolib._internal.gpu import count_dispatch
+
     a_data = a.data if isinstance(a, Tensor) else np.asarray(a)
     b_data = b.data if isinstance(b, Tensor) else np.asarray(b)
     a_req = isinstance(a, Tensor) and a.requires_grad
@@ -975,14 +990,25 @@ def _matmul(a, b):
     if _use_acc:
         try:
             result = acc.matmul(a_data, b_data)
+            # Path attribution for StepTrace: exactly one of {gpu, cpu} per
+            # eligible matmul; a failed accelerator attempt records BOTH the
+            # fallback and the CPU work that replaced it (the job_c87a2dd6
+            # signature — silent degradation must leave a trace).
+            count_dispatch("gpu_matmuls")
         except Exception as exc:
             import logging
 
             logging.getLogger("slo.training").warning(
                 "GPU matmul failed, falling back to CPU: %s", exc
             )
+            count_dispatch("fallbacks")
+            count_dispatch("cpu_matmuls")
             result = np.matmul(a_data, b_data)
     else:
+        # Only accelerator-eligible matmuls are attributed: tiny matmuls go
+        # to the CPU by design (dispatch overhead), not as a degradation.
+        if out_elems >= 16384:
+            count_dispatch("cpu_matmuls")
         result = np.matmul(a_data, b_data)
     out = Tensor(result, requires_grad=a_req or b_req, _children=children, _copy=False)
     _a_shape = a_data.shape
@@ -1840,7 +1866,6 @@ class SloLinear(SloLayer):
             self.bias = zeros((out_f,), requires_grad=True)
         self.out_features = out_f
         self.in_features = in_f
-        self._weight_T = None
         self._weight_T_contig = None  # cached contiguous (K, N) transpose for numpy GEMM
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
         self._quant_info = None  # TensorInfo for quantized weight
@@ -1857,19 +1882,31 @@ class SloLinear(SloLayer):
         return new
 
     def _get_weight_T(self) -> Tensor:
-        if self._weight_T is None:
-            self._weight_T = self.weight.T()
-        return self._weight_T
+        """Return a fresh ``(K, N)`` transpose node for *this* forward pass.
+
+        This used to be cached on the layer as a graph node. A cached node is a
+        node of *every* graph that reuses it: it is not in ``parameters()``, so
+        ``zero_grads`` never cleared it, and each ``backward()`` added the new
+        gradient on top of the previous step's (``_matmul`` allocates
+        ``ga`` and the transpose backward does ``a.grad.data += tg``). The real
+        weight's gradient then grew linearly with the step count — 1x, 2x, 3x —
+        invisible at step 1, slowly poisoning every training run.
+
+        Building the node per forward pass costs one object allocation; the
+        transpose itself is a strided view, never a copy. The cached transpose
+        *data* used by the inference paths is ``_get_weight_T_contig``.
+        """
+        return self.weight.T()
 
     def _get_weight_T_contig(self) -> np.ndarray:
         """Return a cached contiguous transposed weight matrix.
 
-        Unlike _get_weight_T (a strided view), this returns a contiguous
-        (K, N) copy so numpy `x @ W_T` uses the optimized GEMM kernel.
+        Unlike _get_weight_T (a strided view, rebuilt per forward pass), this
+        returns a contiguous (K, N) copy so numpy `x @ W_T` uses the optimized
+        GEMM kernel.
         The cache is built once per layer and reused across generate calls;
         it is invalidated when the weight is replaced (set_quantized_weight,
-        set_point_weight). In-place updates to weight.data are NOT reflected
-        (same staleness semantics as _get_weight_T).
+        set_point_weight). In-place updates to weight.data are NOT reflected.
 
         Returns:
             np.ndarray: (K, N) contiguous float32 array of weight.data.T
@@ -1941,7 +1978,6 @@ class SloLinear(SloLayer):
             return True
         self._freed_shape = tuple(self.weight.data.shape)
         self.weight.data = np.zeros((1,), dtype=np.float32)
-        self._weight_T = None
         self._weight_T_contig = None
         return True
 

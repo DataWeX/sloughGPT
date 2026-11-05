@@ -329,10 +329,17 @@ class StartupOrchestrator:
         return self._lifecycle
 
     def _is_model_loaded(self) -> bool:
-        """Check if a model is loaded (either via autoload or manually)."""
+        """Check if a model is loaded (either via autoload or manually).
+
+        "Loaded" means the server can serve: an eager load puts the model on
+        ``server_state.model``, while the lazy-guard path installs a provider
+        and materialises weights in the background. Both are serving states,
+        so both must satisfy the gate — matching ``/health``'s own definition
+        (``model is not None or provider is not None``).
+        """
         import state as server_state
 
-        return server_state.model is not None
+        return server_state.model is not None or server_state.provider is not None
 
     async def run(self):
         """Execute startup in 3 stages via StagedLoader.
@@ -1242,6 +1249,9 @@ class StartupOrchestrator:
 
     async def _shutdown_process_guard(self):
         """Stop any active ProcessGuard so worker subprocesses exit cleanly."""
+        # A pending parent preload must not fire during shutdown: it holds the
+        # GIL for the whole 2.5 GB read, which turned a stop into 25 s.
+        _cancel_parent_preload("process_guard_shutdown")
         try:
             from controllers.models import get_models_controller
 
@@ -1387,84 +1397,149 @@ def _sync_soul_traits():
         )
 
 
-def _start_parent_preload(model_type: str):
-    """Background preload of parent weights after lazy-guard autoload.
+# Delay before the parent materialises weights: uvicorn's loop.create_server()
+# hangs when the event loop is starved by heavy C-extension weight loading, and
+# the soul-index warm thread wants the disk first.
+_PARENT_PRELOAD_DELAY_S = 15.0
 
-    Materializes parent weights while the guard still serves requests.
-    The preload is delayed by 15 seconds to avoid holding the GIL while
-    uvicorn binds the server socket (``loop.create_server()`` hangs when
-    the event loop is starved by heavy C-extension weight loading).
+# The scheduled preload must be cancellable: materialising 2.5 GB holds the GIL
+# for the whole read, so a timer that fires during a graceful stop turns that
+# stop into "wait for the weight load". (The baseline SIGTERM-ignoring teardown
+# measured by benchmark_startup.py is a separate, pre-existing behaviour.)
+_parent_preload_timer: threading.Timer | None = None
+_shutting_down = threading.Event()
+
+
+def _cancel_parent_preload(reason: str = "shutdown") -> bool:
+    """Cancel a pending preload so shutdown is never blocked by a weight read.
+
+    Returns True when a pending timer was cancelled. A preload already running
+    cannot be interrupted (the GIL is held inside the weight load) — that is
+    why the delay exists in the first place.
+    """
+    global _parent_preload_timer
+    _shutting_down.set()
+    timer = _parent_preload_timer
+    if timer is None:
+        return False
+    _parent_preload_timer = None
+    timer.cancel()
+    logger.info("Parent preload cancelled (%s)", reason, extra={"tag": "START"})
+    return True
+
+
+def _preload_parent_weights(model_type: str) -> bool:
+    """Materialise the parent's weights, then release the guard's copy.
+
+    The post-ready half of lazy-guard autoload: readiness was already reported
+    (the header-only provider serves), so this runs on its own daemon thread and
+    never gates anything. On success the resident model is published to
+    ``server_state.model`` so ``/health``'s ``model_loaded`` flips from
+    provider-only to materialised.
+
+    Returns True when weights are resident afterwards.
     """
     import time
 
     import state as server_state
 
-    def _preload():
-        try:
-            provider = getattr(server_state, "provider", None)
-            if provider is None:
-                logger.debug(
-                    "Parent preload: no provider on server_state, skipping", extra={"tag": "START"}
-                )
-                return
+    if _shutting_down.is_set():
+        logger.debug("Parent preload: server is shutting down, skipping", extra={"tag": "START"})
+        return False
 
-            # Materialize the parent weights WHILE guard still serves requests.
-            _st = time.monotonic()
-            provider.materialize_model()
-            elapsed = time.monotonic() - _st
-            logger.info(
-                "Parent preload complete: %s in %.1fs — in-process ready",
-                model_type,
-                elapsed,
-                extra={"tag": "START"},
-            )
-
-            # NOW stop the guard to release the subprocess copy.
-            try:
-                server = getattr(provider, "_server", None)
-                if server is not None:
-                    guard = getattr(server, "_process_guard", None)
-                    if guard is not None and getattr(guard, "alive", False):
-                        guard.stop()
-                        logger.info(
-                            "Parent preload: stopped guard after materialization (release subprocess copy)",
-                            extra={"tag": "START"},
-                        )
-            except Exception as exc:
-                logger.debug(
-                    "Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"}
-                )
-        except Exception as e:
+    try:
+        provider = getattr(server_state, "provider", None)
+        if provider is None:
             logger.debug(
-                "Parent preload failed (will materialize on first request): %s",
-                e,
-                extra={"tag": "START"},
+                "Parent preload: no provider on server_state, skipping", extra={"tag": "START"}
             )
+            return False
 
-    # Delay parent preload by 15s so uvicorn's loop.create_server() can
-    # bind the socket before heavy GIL-holding weight materialization starts.
-    _delay = 15.0
+        # Materialize the parent weights WHILE the guard still serves requests.
+        _st = time.monotonic()
+        provider.materialize_model()
+        elapsed = time.monotonic() - _st
+
+        model = getattr(provider, "_model", None)
+        if model is not None:
+            server_state.model = model
+            try:
+                from domain.infrastructure.server_state import get_server_state
+
+                get_server_state().model.set(model)
+            except Exception as exc:
+                logger.debug("Parent preload: core mirror failed: %s", exc, extra={"tag": "START"})
+        logger.info(
+            "Parent preload complete: %s in %.1fs — weights resident",
+            model_type,
+            elapsed,
+            extra={"tag": "START"},
+        )
+
+        # NOW stop the guard: the parent owns the weights, so the guard's copy
+        # is redundant (and in THREAD mode it is the same object).
+        try:
+            server = getattr(provider, "_server", None)
+            if server is not None:
+                guard = getattr(server, "_process_guard", None)
+                if guard is not None and getattr(guard, "alive", False):
+                    guard.stop()
+                    logger.info(
+                        "Parent preload: stopped guard after materialization (parent owns weights)",
+                        extra={"tag": "START"},
+                    )
+        except Exception as exc:
+            logger.debug(
+                "Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"}
+            )
+        return model is not None
+    except Exception as e:
+        logger.debug(
+            "Parent preload failed (will materialize on first request): %s",
+            e,
+            extra={"tag": "START"},
+        )
+        return False
+
+
+def _start_parent_preload(model_type: str, delay_s: float | None = None):
+    """Schedule ``_preload_parent_weights`` on a daemon timer after ready.
+
+    The delay lets uvicorn bind the socket and the soul-index warm thread use
+    the disk before the 2.5 GB weight read starts. Both the timer and the
+    thread are daemons: a preload that outlives its process must not hold it
+    open (a non-daemon ``threading.Timer`` would).
+    """
+    _delay = _PARENT_PRELOAD_DELAY_S if delay_s is None else delay_s
+    global _parent_preload_timer
+    _shutting_down.clear()  # a fresh boot is not shutting down
     logger.info(
         "Parent preload: scheduling in %.0fs (avoid GIL starvation of uvicorn bind)",
         _delay,
         extra={"tag": "START"},
     )
-    threading.Timer(
+    timer = threading.Timer(
         _delay,
         lambda: threading.Thread(
-            target=_preload, daemon=True, name=f"parent-preload-{model_type.split('/')[-1]}"
+            target=_preload_parent_weights,
+            args=(model_type,),
+            daemon=True,
+            name=f"parent-preload-{model_type.split('/')[-1]}",
         ).start(),
-    ).start()
+    )
+    timer.daemon = True
+    _parent_preload_timer = timer
+    timer.start()
 
 
 def _try_lazy_guard_autoload(cfg) -> bool:
     """Defer the parent weight load when a ProcessGuard + .slnc are available.
 
     Creates a header-only lazy ``SloNetChatProvider`` (no weight pages faulted
-    into the parent) and a ``ProcessGuard`` whose worker process loads the
-    weights. The parent process stays near-idle; inference is served by the
-    guard worker; if the guard dies, the parent materializes weights on demand
-    via the lazy provider's ``_get_model()``.
+    into the parent) and a ``ProcessGuard`` whose worker thread serves
+    inference. The parent process stays near-idle at ready; weights are
+    materialised afterwards by ``_start_parent_preload`` (or on first request
+    via the lazy provider's ``_get_model()``).
 
     Returns:
         True when the lazy fast path was applied, False to fall back to the
@@ -1506,7 +1581,13 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     try:
         from domain.inference._internal.slonet_provider import SloNetChatProvider
 
-        provider = SloNetChatProvider.from_slnc(
+        # Header-only: config + tensor table, no weight pages faulted in.
+        # This used to call from_slnc(), which materialised the full 2.5 GB in
+        # the parent at boot — exactly the cost this path exists to defer.
+        # lazy_from_slnc() is the documented "intended construction path for
+        # the server autoload with a ProcessGuard"; _start_parent_preload is
+        # its companion (and was, until now, orphaned dead code).
+        provider = SloNetChatProvider.lazy_from_slnc(
             slnc_path,
             model_id=model_type,
             quantize=cfg.quantize_slonet,
@@ -1517,22 +1598,24 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         )
     except Exception as e:
         logger.warning(
-            "Lazy-guard autoload: model load failed (%s) — falling back to eager load",
+            "Lazy-guard autoload: provider construction failed (%s) — falling back to eager load",
             e,
             extra={"tag": "START"},
         )
         return False
 
     server_state.model_type = model_type
-    server_state.model = provider._model
+    # No resident weights yet: the provider is the ready handle, and
+    # server_state.model deliberately stays None until materialisation.
     server_state.provider = provider
+    server_state.model = None
     server_state.tokenizer = getattr(provider, "_tokenizer", None)
 
     try:
         from domain.infrastructure.server_state import get_server_state
 
         core = get_server_state()
-        core.model.set(provider)
+        core.provider.set(provider)
         core.model_type.set(model_type)
     except Exception as e:
         logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
@@ -1615,10 +1698,15 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         return False
 
     logger.info(
-        "Lazy-guard autoload active for %s (loaded in PGQ thread)",
+        "Lazy-guard autoload active for %s (header-only; weights materialise in background)",
         model_type,
         extra={"tag": "START"},
     )
+    # Readiness is already true — the provider is a serving handle. The weight
+    # materialisation runs after a short delay so the 2.5 GB read can neither
+    # hold the GIL while uvicorn binds the socket nor contend with the soul
+    # index warm thread for disk.
+    _start_parent_preload(model_type)
     return True
 
 
@@ -2122,11 +2210,21 @@ def _start_inference_engine(cfg) -> Any | None:
     engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
     try:
-        proc = subprocess.Popen(
+        # Process kind: the engine child is an engine-supervised command —
+        # live status via engine.list_processes(), and Engine.stop()/atexit
+        # reaps it if shutdown never runs (docs/plans/
+        # 2026-09-20-execution-consolidation.md, routing kind "process").
+        # text=False keeps byte-mode stderr: the capture thread below
+        # decodes bytes, exactly as with the raw Popen this replaces.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        proc = get_engine().spawn_command(
             engine_cmd,
+            name="inference-engine",
+            cwd=os.getcwd(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            cwd=os.getcwd(),
+            text=False,
         )
         import collections
 
@@ -2268,11 +2366,15 @@ def _make_engine_restart_fn(cfg):
         engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
         try:
-            proc = subprocess.Popen(
+            from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+            proc = get_engine().spawn_command(
                 engine_cmd,
+                name="inference-engine",
+                cwd=os.getcwd(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                cwd=os.getcwd(),
+                text=False,
             )
             import state as server_state
 

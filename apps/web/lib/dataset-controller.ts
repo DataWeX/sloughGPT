@@ -60,6 +60,8 @@ export interface Dataset {
   mime?: string
   size: number
   samples?: number
+  /** False when the entry has no training corpus inside (empty import, weights-only dir). */
+  has_corpus?: boolean
   created_at: string
   updated_at?: string
   tags?: string[]

@@ -132,16 +132,20 @@ vi.mock('@/vite/next-compat/navigation', () => ({
   useParams: () => ({ id: 'test' }),
 }))
 
-vi.mock('@/lib/dataset-controller', () => ({
-  datasetController: {
-    list: mockList,
-    delete: mockDelete,
-    preview: vi.fn(),
-    search: mockSearch,
-    listVersions: mockListVersions,
-    export: mockExport,
-  },
-}))
+vi.mock('@/lib/dataset-controller', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/dataset-controller')>()
+  return {
+    ...actual,
+    datasetController: {
+      list: mockList,
+      delete: mockDelete,
+      preview: vi.fn(),
+      search: mockSearch,
+      listVersions: mockListVersions,
+      export: mockExport,
+    },
+  }
+})
 
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
