@@ -664,18 +664,54 @@ class TestSignalHandling:
         engine.restore_signal_handlers()
         engine.stop()
 
-    def test_signal_handler_sets_running_false(self):
+    def test_engine_does_not_install_handlers_by_default(self):
+        """A library must not own process signals from its constructor.
+
+        The API's SIGTERM hijack (card 20261104_070434) was exactly this:
+        ``Engine()`` replaced uvicorn's ``capture_signals`` handler during
+        lifespan, so nothing except SIGKILL could ever end the process and
+        every FastAPI shutdown hook was dead code in production.
+        """
+        before = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT))
+        engine = Engine("test")
+        try:
+            after = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT))
+            assert after == before
+            assert engine._signal_handlers_installed is False
+        finally:
+            engine.stop()
+
+    def test_signal_handler_stops_engine_and_chains_to_previous(self):
+        """After stopping the engine the previously-installed handler must run.
+
+        The host that installed first (uvicorn's ``handle_exit``, a runner's
+        supervisor) owns process shutdown — our handler may not be a dead end.
+        """
         engine = Engine("test")
         engine._running = True
-        engine.install_signal_handlers()
+        seen: list[int] = []
 
-        # Simulate SIGTERM by calling the handler directly
-        old_handler = signal.getsignal(signal.SIGTERM)
-        if callable(old_handler):
-            old_handler(signal.SIGTERM, None)
+        def host_handler(signum, _frame):
+            seen.append(signum)
 
-        assert engine._running is False
-        engine.restore_signal_handlers()
+        originals = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
+        try:
+            signal.signal(signal.SIGTERM, host_handler)
+            engine.install_signal_handlers()
+
+            # Simulate delivery by calling the installed handler directly
+            # (bound methods compare by identity-of-self, not object identity)
+            handler = signal.getsignal(signal.SIGTERM)
+            assert handler == engine._handle_signal
+            handler(signal.SIGTERM, None)
+
+            assert engine._running is False
+            assert seen == [signal.SIGTERM]
+        finally:
+            engine.restore_signal_handlers()
+            for sig, old in originals.items():
+                signal.signal(sig, old)
+            engine.stop()
 
 
 # ── SubprocessProcess pipe protocol ─────────────────────────────

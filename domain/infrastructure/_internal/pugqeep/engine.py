@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import multiprocessing
+import os
 import subprocess
 import threading
 import time
@@ -1376,7 +1377,9 @@ class Engine:
     of parallel tasks. Points carry function-calling capacity.
     """
 
-    def __init__(self, name: str = "main", max_trees: int = 16, config=None):
+    def __init__(
+        self, name: str = "main", max_trees: int = 16, config=None, install_signals: bool = False
+    ):
         if config is not None:
             self.name = config.name
             self.max_trees = config.max_trees
@@ -1413,7 +1416,13 @@ class Engine:
             )
             self._monitor.start()
 
-        self.install_signal_handlers()
+        # A library must not own process-wide signals from a constructor —
+        # hosts (uvicorn's capture_signals, an IPython kernel, a runner's
+        # supervisor) install theirs first, and an unchained replacement is
+        # what made the API ignore SIGTERM (card 20261104_070434).
+        # Standalone runners opt in explicitly via install_signal_handlers().
+        if install_signals:
+            self.install_signal_handlers()
         _engines.add(self)
 
     @property
@@ -2105,7 +2114,16 @@ class Engine:
             json.dump(state, f, indent=2, default=str)
 
     def install_signal_handlers(self) -> None:
+        """Claim SIGTERM/SIGINT for this engine (explicit, owner-driven).
+
+        Never called from the constructor: installing is the *host runner's*
+        decision. Idempotent — re-installing would save our own handler as
+        "previous" and make _handle_signal chain into itself.
+        """
         import signal
+
+        if self._signal_handlers_installed:
+            return
 
         # signal.signal() only works on the main thread — engines created
         # lazily from worker threads (e.g. get_engine()) must not crash.
@@ -2130,8 +2148,31 @@ class Engine:
         self._signal_handlers_installed = False
 
     def _handle_signal(self, signum, frame) -> None:
+        """Stop the engine, then hand the signal back to whoever owned it.
+
+        The handler must not be a dead end: a host installed before us
+        (uvicorn's capture_signals -> handle_exit, a runner's supervisor) is
+        chained so its graceful shutdown still runs. With no host handler
+        (SIG_DFL) the default disposition is restored and the signal re-raised,
+        so a process running only this engine behaves as if we never
+        installed. SIG_IGN stays ignored.
+        """
         self._running = False
-        self.stop()
+        try:
+            self.stop()
+        finally:
+            import signal
+
+            prev = self._old_signal_handlers.get(signum)
+            if callable(prev):
+                prev(signum, frame)
+            elif prev is signal.SIG_IGN:
+                pass  # the signal was ignored before us — keep ignoring it
+            elif prev is signal.SIG_DFL:
+                signal.signal(signum, signal.SIG_DFL)
+                os.kill(os.getpid(), signum)
+            # prev is None: handlers not installed or already restored — a
+            # stale direct call; stopping the engine is all we can honestly do.
 
     def _deps_met(self, proc: Process) -> bool:
         if not proc.depends_on:
