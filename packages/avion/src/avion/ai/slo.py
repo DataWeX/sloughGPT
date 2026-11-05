@@ -81,6 +81,37 @@ def _tree_text(tree: dict[str, Any] | None, budget: int | None = None) -> str:
     return text
 
 
+_FLATTEN_CHARS = 4000
+
+
+def flatten_tree_text(tree: dict[str, Any] | None, max_chars: int = _FLATTEN_CHARS) -> str:
+    """Every name and text value in a {role, name, children} tree, one per line.
+
+    The evaluate-less stand-in for document.body.innerText, and deliberately
+    not _tree_text: that renders JSON for the model to read structure in, and a
+    JSON blob is the wrong thing to substring-match a goal against. Deduped
+    because accessibility trees repeat a label at every level that shows it.
+    """
+    if not tree:
+        return ""
+    seen: set[str] = set()
+    lines: list[str] = []
+    total = 0
+    stack = [tree]
+    while stack:
+        node = stack.pop(0)
+        for key in ("name", "text"):
+            value = str(node.get(key, "") or "").strip()
+            if value and value not in seen:
+                seen.add(value)
+                total += len(value) + 1
+                if total > max_chars:
+                    return "\n".join(lines)
+                lines.append(value)
+        stack.extend(node.get("children") or [])
+    return "\n".join(lines)
+
+
 def _history_text(history: list[Step] | None, budget: int | None = None) -> str:
     steps = history or []
     if not steps:

@@ -167,9 +167,16 @@ class CdpBackend:
 
     name = "cdp"
 
-    def __init__(self, cdp_url: str = "ws://localhost:9222", target_url: str = "about:blank"):
+    def __init__(
+        self,
+        cdp_url: str = "ws://localhost:9222",
+        target_url: str = "about:blank",
+        *,
+        tree_char_budget: int = 1400,
+    ):
         self._cdp_url = cdp_url
         self._target_url = target_url
+        self._tree_char_budget = tree_char_budget
         self._ws = None
         self._msg_id = 0
         self._console: list[dict[str, Any]] = []
@@ -673,7 +680,15 @@ class CdpBackend:
                 return False
             await asyncio.sleep(0.2)
 
-    async def get_accessibility_tree(self) -> dict[str, Any]:
-        await self._send("Accessibility.enable")
-        res = await self._send("Accessibility.getFullAXTree")
-        return {"nodes": res.get("nodes", [])}
+    async def get_accessibility_tree(self) -> dict[str, Any] | None:
+        """The page as {role, name, children}, like every other backend.
+
+        This used to return Accessibility.getFullAXTree's raw {"nodes": [...]}
+        with childIds — the right transport, in a shape no walker can read:
+        ai/choice.py's walk() and ai/slo.py's renderer both expect the nested
+        {role, name, children} contract, so the browser had a tree and never
+        used it. axtree is where that normalization lives.
+        """
+        from avion.backends.axtree import fetch_ax_tree
+
+        return await fetch_ax_tree(self._send, char_budget=self._tree_char_budget)

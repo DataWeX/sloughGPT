@@ -344,7 +344,7 @@ class Agent:
                 if validation_error is None and action.action_type == ActionType.DONE:
                     try:
                         goal_error = await self._bounded(
-                            lambda: self._check_goal(context), run_start
+                            lambda: self._check_goal(context, a11y_tree), run_start
                         )
                     except _StepTimeout as exc:
                         # Honest failure: an unverified goal must never
@@ -713,8 +713,16 @@ class Agent:
 
     # ── Goal verification ─────────────────────────────────────────────
 
-    async def _check_goal(self, context: dict[str, Any] | None) -> str:
-        """Verify the run goal against the live page. '' = pass/no goal."""
+    async def _check_goal(
+        self, context: dict[str, Any] | None, tree: dict[str, Any] | None = None
+    ) -> str:
+        """Verify the run goal against the live page. '' = pass/no goal.
+
+        tree is the step's accessibility snapshot, used only when the backend
+        cannot run JS. Without that fallback a desktop run — which now sees,
+        but has no document.body — could never verify anything, and every DONE
+        would come back unverified.
+        """
         goal = (context or {}).get("goal")
         if not goal:
             return ""
@@ -726,6 +734,10 @@ class Agent:
             text = str(await self._backend.evaluate("document.body.innerText") or "")
         except Exception:
             text = ""
+        if not text and tree:
+            from avion.ai.slo import flatten_tree_text
+
+            text = flatten_tree_text(tree)
 
         async def find(locator):
             try:

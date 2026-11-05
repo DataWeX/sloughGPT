@@ -95,6 +95,13 @@ class ElementLocator:
         )
 
     @classmethod
+    def placeholder(cls, placeholder: str, description: str = "") -> ElementLocator:
+        return cls(
+            selectors=(Selector(SelectorStrategy.PLACEHOLDER, placeholder),),
+            description=description,
+        )
+
+    @classmethod
     def chain(cls, *locators: ElementLocator, description: str = "") -> ElementLocator:
         """Chain multiple locators — tries each in order."""
         all_selectors = []

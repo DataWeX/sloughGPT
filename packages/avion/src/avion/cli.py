@@ -189,20 +189,35 @@ async def _cmd_snapshot(b) -> int:
     print(f"URL:   {url}")
     print(f"Title: {title}")
     tree = await b.get_accessibility_tree()
-    nodes = tree.get("nodes", [])
-    lines = []
-    for node in nodes:
-        role = (node.get("role") or {}).get("value", "")
-        name = (node.get("name") or {}).get("value", "")
-        if not name or role in ("none", "presentation", "InlineTextBox"):
-            continue
-        lines.append(f"  {role:<14} {name[:80]}")
-    print(f"A11y:  {len(nodes)} nodes, {len(lines)} named")
+    if not tree:
+        # A backend without an accessibility API says so; an empty listing here
+        # would read as "the page has nothing on it".
+        print("A11y:  none exposed by this backend")
+        return 0
+    lines = _snapshot_lines(tree)
+    print(f"A11y:  {len(lines)} named nodes")
     for line in lines[:40]:
         print(line)
     if len(lines) > 40:
         print(f"  ... {len(lines) - 40} more")
     return 0
+
+
+def _snapshot_lines(tree: dict[str, Any], indent: str = "  ") -> list[str]:
+    """One indented line per node that says where it is or what it holds.
+
+    The tree is the normalized {role, name, children} shape every backend
+    emits, not Chrome's raw AX nodes, which this command used to unpack.
+    """
+    name = str(tree.get("name") or tree.get("text") or "")
+    pos = tree.get("pos")
+    lines = []
+    if name or pos:
+        role = str(tree.get("role", "generic"))
+        lines.append(f"{indent}{role:<14} {name[:80]}{' @ ' + pos if pos else ''}")
+    for child in tree.get("children") or []:
+        lines.extend(_snapshot_lines(child, indent + "  "))
+    return lines
 
 
 async def _cmd_click(b, value: str, by: str) -> int:

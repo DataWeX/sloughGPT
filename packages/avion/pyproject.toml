@@ -12,6 +12,11 @@ dependencies = []
 [project.optional-dependencies]
 playwright = ["playwright>=1.40"]
 cdp = ["websockets>=12"]
+# Observation on Linux is native AT-SPI and needs no extra. This is the action
+# path plus the bindings: on Debian/Ubuntu the working install is
+# `apt install python3-gi gir1.2-atspi-2.0 python3-pyautogui`, because a pip
+# build of PyGObject needs meson/cairo headers most machines lack.
+desktop = ["PyGObject>=3.48", "pyautogui>=0.9.54", "Pillow>=10"]
 dev = ["pytest>=7", "pytest-asyncio>=0.21"]
 
 [project.scripts]

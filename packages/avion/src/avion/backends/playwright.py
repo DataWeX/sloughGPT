@@ -28,7 +28,13 @@ class PlaywrightBackend:
         await backend.stop()
     """
 
-    def __init__(self, headless: bool = True, browser_type: str = "chromium"):
+    def __init__(
+        self,
+        headless: bool = True,
+        browser_type: str = "chromium",
+        *,
+        tree_char_budget: int = 1400,
+    ):
         self._headless = headless
         self._browser_type = browser_type
         self._playwright = None
@@ -37,6 +43,9 @@ class PlaywrightBackend:
         self._pages: dict[str, Any] = {}
         self._tab_seq = 0
         self._mocker = None
+        self._cdp = None
+        self._cdp_page = None
+        self._tree_char_budget = tree_char_budget
 
     @property
     def name(self) -> str:
@@ -56,6 +65,7 @@ class PlaywrightBackend:
         self._register_page(self._page)
 
     async def stop(self) -> None:
+        await self._detach_cdp()
         if self._page:
             await self._page.close()
         if self._browser:
@@ -225,8 +235,51 @@ class PlaywrightBackend:
     async def evaluate(self, expression: str) -> Any:
         return await self._page.evaluate(expression)
 
-    async def get_accessibility_tree(self) -> dict[str, Any]:
-        return await self._page.accessibility.snapshot()
+    async def get_accessibility_tree(self) -> dict[str, Any] | None:
+        """The page as {role, name, children}, over CDP.
+
+        Playwright 1.62 removed ``page.accessibility``, and the AttributeError
+        that has replaced it was swallowed by the agent's capture into None:
+        every browser run since has been prompted "(no accessibility tree)"
+        while the page was right there. Accessibility.getFullAXTree is the
+        supported route, and avion.backends.axtree turns it into the same shape
+        the desktop and CDP backends emit.
+
+        Chromium only — other engines have no CDP, and None is truer than an
+        invented tree.
+        """
+        from avion.backends.axtree import fetch_ax_tree
+
+        session = await self._cdp_session()
+        if session is None:
+            return None
+        return await fetch_ax_tree(session.send, char_budget=self._tree_char_budget)
+
+    async def _cdp_session(self):
+        """One CDP session per page, reused across steps; None if there is none.
+
+        A new session per observation would leak one per step, and the page
+        changes when a tab is activated, so the cache is keyed on the page.
+        """
+        if self._page is None:
+            return None
+        if self._cdp is not None and self._cdp_page is self._page:
+            return self._cdp
+        await self._detach_cdp()
+        try:
+            self._cdp = await self._page.context.new_cdp_session(self._page)
+        except Exception:
+            return None
+        self._cdp_page = self._page
+        return self._cdp
+
+    async def _detach_cdp(self) -> None:
+        session, self._cdp, self._cdp_page = self._cdp, None, None
+        if session is not None:
+            try:
+                await session.detach()
+            except Exception:
+                pass
 
     # ── Page controls (PageControls protocol) ─────────────────────────────
 

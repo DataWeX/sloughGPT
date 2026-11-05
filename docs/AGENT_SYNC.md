@@ -1701,6 +1701,64 @@ tool_call/tool_result* → final` as `agent-loop` frames, in-band 503 without
 
 ## In flight
 
+- **2026-11-04 · root session, avion observation (UNCOMMITTED in the root
+  checkout — the hazard `46db1bac7`'s entry warned about is now three files
+  deep).** Observation only; nothing about how actions are performed changed.
+  (1) `backends/desktop.py` reads AT-SPI 2.0 instead of admitting it has no
+  tree (`require_actions=False` observes on a box with no pyautogui;
+  `get_url()` returns `""` on purpose so `url_contains` fails loudly rather
+  than passing on a window title). (2) **`PlaywrightBackend.get_accessibility_tree`
+  had been dead since Playwright 1.62 deleted `page.accessibility`** — the
+  AttributeError was swallowed by `Agent._capture_accessibility_tree` into
+  `None`, so every browser run since was prompted `(no accessibility tree)`
+  while the page sat right there. Proved live: captured `predict_action`
+  kwargs showed `tree is None`. (3) New `backends/axtree.py` is now the single
+  home of the observation specification — the eleven-word role vocabulary, the
+  word-set classifier that maps both AT-SPI's "push button" and CDP's
+  "pushButton"/"RootWebArea" into it, the prune/rank/fit-to-budget helpers, and
+  `fetch_ax_tree(send)` over `Accessibility.getFullAXTree` + `DOM.getBoxModel`.
+  `desktop.py`, `playwright.py` (via `page.context.new_cdp_session`) and
+  `cdp.py` all use it; `cdp.py` used to return raw `{"nodes": [...]}` with
+  childIds, a shape `ai/choice.py`'s walk() could not read. Chromium only —
+  Firefox/WebKit have no CDP and get `None`. (4) Coordinates are one field on
+  actionable nodes, `"pos": "x,y,WxH"`, written by `pos_of` and read by
+  `parse_pos`; `ai/models.py`'s rule-based policy was still reading the removed
+  snapshot's `bbox`, so it now reads `pos` (test fixture moved with it).
+  (5) `ai/agent.py::_check_goal(context, tree)` falls back to
+  `ai/slo.py::flatten_tree_text(tree)` when a backend has no `evaluate`, which
+  is what makes `text_present` goals verifiable on the desktop and on any
+  evaluate-less backend. (6) The node itself has one writer now,
+  `axtree.pack(role, name=…, text=…, pos=…, children=…, omitted=…)`, called by
+  `desktop.py::_to_dict` and `axtree::_convert`; the two copies of the key
+  policy had already drifted (desktop wrote `name` _or_ `text`, the browser
+  wrote both) and both dropped `"role"` from any unnamed `text` node — which on
+  a browser page is a _group_, so three of the live page's nodes arrived as bare
+  `{"children": [...]}`. A role is now dropped only from a childless, unnamed
+  text leaf; every structural node says what it is, whichever toolkit walked it.
+  **Gates:** 639 passed/1 skipped across every avion suite that does not launch
+  Chromium (`test_axtree.py` (new, 56) `test_ai.py` `test_desktop_tree.py`
+  `test_slo.py` `test_choice.py` `test_backends.py` `test_tools.py` + the rest),
+  ruff check and format clean on `src`+`tests`; whole avion suite 669 passed with
+  **14 failures that are all
+  `launch.py:127 TimeoutError: no readable DevToolsActivePort`** (Chromium
+  cannot start with a profile dir on this box; pre-existing, none of those
+  files touch observation). **Live evidence the gap closed:** on
+  `ff/site/index.html` the browser tree is now
+  `textbox "new note" pos 320,114,254x39` + `button "Add note" 578,114,91x39` +
+  `button "Clear list" 320,169,87x39`, every node carrying a role,
+  `propose_candidates` yields real
+  choices, and the served 0.5B policy answered `mouse_click{x:320,y:169}` — a
+  coordinate that exists only in the tree. It clicked the wrong control and the
+  batch then stopped on `no_progress`/`fail`: **observation is fixed, the
+  policy is not.** Desktop side: `ff/desktop_observe.py` exits 3 with
+  "no usable tree" whenever the focused window is Electron/OpenCode-shaped
+  (one named frame, zero children, `_signal_count < 2`) — that is the thin
+  signal the plan predicted, not a crash. **Known follow-ups:**
+  `ChoiceAgent`'s candidates on desktop resolve through `find_element`, which
+  `DesktopBackend` still lacks (documented at `choice.py::propose_candidates`);
+  `page_challenge` stays a no-op on desktop; a `pos`-based coordinate fallback
+  for `click_text` is the clean next step for acting, not seeing.
+
 - **2026-10-31 · root session on `feat/wire-flag-load-config` (landed `HEAD:main`).** Wired `FeatureFlags.load_config()` at boot — card `60917072` (user ruling: wire, don't retire). `config/feature_flags.json` was dead: declared intent but nothing hydrated it, so the registry kept code defaults and `is_enabled('hf_finetune')` read DISABLED. `lifespan()` (`apps/api/server/main.py`) now calls a guarded `load_config()` at the top, BEFORE `StartupOrchestrator.run()` (orchestration phases + provider setup read flags early). Scope minimal + inert: flips exactly one flag (`hf_finetune` disabled→enabled; other 23 config flags already match defaults) and no non-test code calls `is_enabled('hf_finetune')` — it just makes the flag truthful. New test `test_real_config_enables_hf_finetune` (75/75 green) pins the real config declares enabled + `load_config` applies it; ledger dedupes so no restart spam. (PR #252 — the skip-gate identity fix + lint-flake card — MERGED to main `57cbd69c` same day; coverage-source regression from test-tree consolidation carded `20261031_080004`, still reddening main's `test-core-py`.)
 - **2026-10-29 · root session on `feat/version-tracking` (PR opened; 3
   commits, base `origin/main 18f848301`).** Version tracking so feature/UI

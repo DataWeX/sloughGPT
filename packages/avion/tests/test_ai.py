@@ -48,12 +48,17 @@ class TestModels:
         tree = {
             "role": "root",
             "children": [
-                {"role": "button", "bbox": {"x": 3, "y": 4}},
+                {"role": "button", "name": "Add note", "pos": "3,4,91x39"},
             ],
         }
         a = run(m.predict_action("t", "", accessibility_tree=tree))
         assert a.action_type == ActionType.MOUSE_CLICK
         assert (a.params["x"], a.params["y"]) == (3, 4)
+
+    def test_rule_based_ignores_a_control_without_a_box(self):
+        tree = {"role": "button", "name": "Add note"}
+        a = run(RuleBasedModel().predict_action("t", "", accessibility_tree=tree))
+        assert a.action_type == ActionType.SCREENSHOT
 
     def test_rule_based_no_tree_screenshots(self):
         a = run(RuleBasedModel().predict_action("t", ""))
@@ -387,3 +392,82 @@ class TestVerifier:
         assert result.success is False
         assert result.stop_reason == "unverified"
         assert "Unverified" in result.trajectory.steps[0].observation
+
+
+class BlindBackend(AgentBackend):
+    """A desktop-shaped backend: it sees a tree, and runs no JS.
+
+    evaluate() raising AttributeError is exactly how DesktopBackend behaved
+    before it had a get_url of its own, so the agent's except-path is what is
+    under test here, not a mock invented for it.
+    """
+
+    async def evaluate(self, expression):
+        raise AttributeError("'DesktopBackend' object has no attribute 'evaluate'")
+
+    async def get_url(self):
+        return ""
+
+    async def get_accessibility_tree(self):
+        return {
+            "role": "window",
+            "name": "Notes",
+            "children": [
+                {"role": "textbox", "name": "Note", "pos": "10,10,200x28"},
+                {"role": "button", "name": "Add note", "pos": "220,10,88x28"},
+                {"role": "text", "text": "1 saved"},
+            ],
+        }
+
+
+class TestDesktopGoalVerification:
+    """The observation gap, closed: a run with no JS can still verify a goal."""
+
+    def _agent(self, actions):
+        import tempfile
+
+        cfg = AgentConfig(
+            max_steps=10,
+            action_delay_ms=0,
+            screenshot_on_each_step=False,
+            output_dir=tempfile.mkdtemp(prefix="arken-traj-"),
+        )
+        agent = Agent(model=EchoModel(actions), config=cfg)
+        run(agent.start(backend=BlindBackend()))
+        return agent
+
+    def test_text_present_verifies_from_the_tree(self):
+        agent = self._agent([Action(ActionType.DONE)])
+        result = run(
+            agent.run(
+                "add a note",
+                context={"goal": [{"kind": "text_present", "value": "1 saved"}]},
+            )
+        )
+        run(agent.stop())
+        assert result.stop_reason == "done"
+
+    def test_absent_text_still_reads_unverified(self):
+        # The fallback widens what can be verified; it does not widen what
+        # passes. A needle that is not on screen must not be a success.
+        agent = self._agent([Action(ActionType.DONE)])
+        result = run(
+            agent.run(
+                "add a note",
+                context={"goal": [{"kind": "text_present", "value": "2 saved"}]},
+            )
+        )
+        run(agent.stop())
+        assert result.stop_reason == "unverified"
+
+    def test_url_contains_fails_loudly_without_a_url(self):
+        agent = self._agent([Action(ActionType.DONE)])
+        result = run(
+            agent.run(
+                "add a note",
+                context={"goal": [{"kind": "url_contains", "value": "/notes"}]},
+            )
+        )
+        run(agent.stop())
+        assert result.stop_reason == "unverified"
+        assert "lacks" in result.trajectory.steps[-1].observation
