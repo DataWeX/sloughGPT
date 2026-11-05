@@ -530,6 +530,35 @@ describe('MessageBubble', () => {
       expect(article.className).not.toMatch(/rounded-br-md/)
       expect(container.textContent).toContain('question')
     })
+
+    it('does not right-align the frame and the action toolbar as one horizontal pair', () => {
+      render(
+        <MessageBubble
+          content="question"
+          role="user"
+          timestamp={new Date()}
+          showTimestamp
+          onEdit={vi.fn()}
+        />,
+      )
+      const wrapper = screen.getByTestId('message-actions').parentElement as HTMLElement
+      // Root cause of the "user bubble floats mid-row" bug: a shared
+      // `flex justify-end` wrapper right-aligns [frame][opacity-0 toolbar] as a
+      // PAIR, so the bubble stops short of the right edge. MessageFrame already
+      // self-aligns (MessageFrame.tsx `isUser && 'justify-end'`), so the wrapper
+      // must not add `justify-end` — that is what pins the pair.
+      expect(wrapper.className).not.toMatch(/(^|\s)justify-end(\s|$)/)
+    })
+
+    it('keeps the user frame right-aligned by its own chrome, not the wrapper', () => {
+      const { container } = render(
+        <MessageBubble content="question" role="user" timestamp={new Date()} showTimestamp />,
+      )
+      const frame = container.querySelector('[data-message-frame="user"]') as HTMLElement
+      // Deleting the wrapper's justify-end must not lose right alignment:
+      // MessageFrame owns it, and the bubble stays flush right.
+      expect(frame.className).toMatch(/(^|\s)justify-end(\s|$)/)
+    })
   })
 
   describe('message folding', () => {
