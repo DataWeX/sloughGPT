@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "3b5e798167ecbecba5614cdb595dd1905ae2d2e0",
+    "recorded_commit": "706e267eaae6131906fefbf62b050280d37fb29e",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -159,7 +159,7 @@
       ],
       "note": "user data organization feature (cli-heavy)",
       "debt": null,
-      "tree_hash": "da316943523431a567d12a734fa7db4ed00a1c4b"
+      "tree_hash": "b857d3fd615a77ae9b2eddd5529055e9c56b8e75"
     },
     "companion": {
       "class": "feature",
@@ -233,7 +233,7 @@
       ],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "b6635b8cb8817655595267e5b2ef80af975022a5"
+      "tree_hash": "987dbef372bfe5d17c2ab87d0ec71e9309adf3a6"
     },
     "generation": {
       "class": "core-capability",
@@ -276,7 +276,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "6d6a0389f25c3c80fbf38c3de65bbf03dbeb8d9e"
+      "tree_hash": "63ee46fbe3349ca39e3902dffeb5a657dbde3ed8"
     },
     "knowledge": {
       "class": "core-capability",
@@ -389,7 +389,7 @@
       ],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
-      "tree_hash": "4722f63340d7ec9cd7da881555f76f2d8c628699"
+      "tree_hash": "026d0819be56f2e393c08e89d53a9458acfd218e"
     },
     "ops": {
       "class": "core-capability",
@@ -491,7 +491,7 @@
       ],
       "note": "performance kernels (AVX2/numba) for inference+training",
       "debt": null,
-      "tree_hash": "0f8854eb97eca2f5d1c4a270a298bf05c8dd267d"
+      "tree_hash": "d402ef2c9616f782af9f2d53f1faa8e0293756c4"
     },
     "soul": {
       "class": "feature",
