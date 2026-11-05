@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "2f57c7277f6a70fd480dd649ff870248d399d2fe",
+    "recorded_commit": "b8eef876e830c63bfcd6311f4d239f83f4f15c8b",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -276,7 +276,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "5375f4dec9c6a3be0b49f9479dbc37f8530e91d4"
+      "tree_hash": "3383b75a95ad6cfe6776d7615807c0f96d89c11c"
     },
     "knowledge": {
       "class": "core-capability",
