@@ -1,8 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import Link from '@/vite/next-compat/link'
-import { usePathname } from '@/vite/next-compat/navigation'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { cn } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
 import { routeMatchesPath } from '@/lib/route-match'
