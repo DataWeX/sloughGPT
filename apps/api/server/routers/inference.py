@@ -2152,6 +2152,7 @@ class InferenceRouter:
         model = _chat_state.model_type or req.model
 
         collected: list[str] = []
+        generation_t0 = time.monotonic()
         try:
             async for token in provider.chat_stream(
                 messages,
@@ -2172,6 +2173,7 @@ class InferenceRouter:
             raise
 
         text = "".join(collected)
+        generation_elapsed_ms = round((time.monotonic() - generation_t0) * 1000, 1)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
         try:
             tokens = _count_tokens(text, _chat_state)
@@ -2264,6 +2266,12 @@ class InferenceRouter:
             model=model,
             usage={"completion_tokens": tokens, "total_tokens": tokens},
             elapsed_ms=elapsed,
+            generation_elapsed_ms=generation_elapsed_ms,
+            tokens_per_sec=(
+                round(tokens / (generation_elapsed_ms / 1000), 1)
+                if tokens > 0 and generation_elapsed_ms > 0
+                else None
+            ),
             finish_reason="stop",
             tokens=collected,
             consciousness=(
