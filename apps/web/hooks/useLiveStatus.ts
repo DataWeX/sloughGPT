@@ -66,6 +66,8 @@ export interface LiveHealthSnapshot {
   request_count: number
   error_count: number
   tokens_per_sec: number
+  latest_tokens_per_sec: number
+  latest_inference_latency_ms: number | null
   avg_latency_ms: number
   p95_latency_ms: number
   requests_per_minute: number
@@ -166,6 +168,9 @@ export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
     request_count: Number(d.request_count) || 0,
     error_count: Number(d.error_count) || 0,
     tokens_per_sec: Number(d.tokens_per_sec) || 0,
+    latest_tokens_per_sec: Number(d.latest_tokens_per_sec ?? d.tokens_per_sec) || 0,
+    latest_inference_latency_ms:
+      typeof d.latest_inference_latency_ms === 'number' ? d.latest_inference_latency_ms : null,
     avg_latency_ms: Number(d.avg_latency_ms) || 0,
     p95_latency_ms: Number(d.p95_latency_ms) || 0,
     requests_per_minute: Number(d.requests_per_minute) || 0,
@@ -402,6 +407,9 @@ export function initLiveStatus(): () => void {
       request_count: Number(d.request_count) || 0,
       error_count: Number(d.error_count) || 0,
       tokens_per_sec: Number(d.tokens_per_sec) || 0,
+      latest_tokens_per_sec: Number(d.latest_tokens_per_sec ?? d.tokens_per_sec) || 0,
+      latest_inference_latency_ms:
+        typeof d.latest_inference_latency_ms === 'number' ? d.latest_inference_latency_ms : null,
       avg_latency_ms: Number(d.avg_latency_ms) || 0,
       p95_latency_ms: Number(d.p95_latency_ms) || 0,
       requests_per_minute: Number(d.requests_per_minute) || 0,
