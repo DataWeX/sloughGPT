@@ -25,6 +25,10 @@ jobs:
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,6 +48,10 @@ jobs:
   frontend-lib-tests:
     name: Frontend unit tests
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,6 +69,10 @@ jobs:
   frontend-build:
     name: Vite build
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,6 +88,10 @@ jobs:
   frontend-e2e:
     name: E2E tests
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 45
     # No frontend-build dependency: the 21 specs target the Vite dev server
     # (cypress.config.ts defaults baseUrl to 5173).
     env:
@@ -105,6 +121,10 @@ jobs:
   python-checks:
     name: Python
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 20
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
@@ -137,6 +157,10 @@ jobs:
   feature-tags:
     name: Feature Tags
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -153,6 +177,10 @@ jobs:
   board-integrity:
     name: Board integrity
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

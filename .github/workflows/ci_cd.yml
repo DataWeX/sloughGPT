@@ -28,6 +28,10 @@ jobs:
   # ─── Lint (Python) ──────────────────────────────────────────────
   lint:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -63,6 +67,10 @@ jobs:
   # ─── Core Python tests (packages/core-py) ───────────────────────
   test-core-py:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -108,6 +116,10 @@ jobs:
   # ─── Server API tests ───────────────────────────────────────────
   test-server:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -147,6 +159,10 @@ jobs:
   contract-gate:
     name: Contract gate
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -177,6 +193,10 @@ jobs:
   # ─── Root-level Python tests (tests/) ───────────────────────────
   test-root:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -226,6 +246,10 @@ jobs:
   # ─── Frontend: strui (typecheck + test) ─────────────────────────
   test-strui:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -283,6 +307,10 @@ jobs:
   # ─── Python SDK tests ──────────────────────────────────────────
   test-sdk-py:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -299,6 +327,10 @@ jobs:
   # ─── TypeScript SDK (lint + typecheck + build + test) ──────────
   test-sdk-ts:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -315,6 +347,10 @@ jobs:
   # ─── Docker build + push ────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 45
     needs: [lint, test-core-py, test-server, test-strui, test-web, test-sdk-py, test-sdk-ts, test-root]
     if: github.event_name != 'pull_request'
     permissions:
@@ -370,6 +406,10 @@ jobs:
   # ─── Deploy to K8s (release only) ──────────────────────────────
   deploy:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 45
     needs: [build]
     if: github.event_name == 'release'
     environment:
@@ -393,6 +433,10 @@ jobs:
   # ─── Benchmark (main only) ─────────────────────────────────────
   benchmark:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 30
     needs: [test-core-py]
     if: github.ref == 'refs/heads/main'
     steps:
