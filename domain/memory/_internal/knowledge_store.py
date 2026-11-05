@@ -28,6 +28,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle, spawn_loop
+
 logger = logging.getLogger("slo.learner.knowledge")
 
 
@@ -1426,7 +1428,7 @@ class KnowledgeIngestor:
         self._feeds: list[FeedSubscription] = self._load_feeds()
         self._lock = threading.RLock()
         self._running = False
-        self._feed_thread: threading.Thread | None = None
+        self._feed_thread: ThreadHandle | None = None
         self._stop_event = threading.Event()
 
     # ---- feeds -------------------------------------------------------------
@@ -1658,8 +1660,9 @@ class KnowledgeIngestor:
             return
         self._stop_event.clear()
         self._running = True
-        self._feed_thread = threading.Thread(target=self._poll_loop, args=(interval,), daemon=True)
-        self._feed_thread.start()
+        self._feed_thread = spawn_loop(
+            self._poll_loop, interval, name="feed-poll", stop=self._stop_event
+        )
         logger.info(
             "Background feed polling started (interval=%ss)", interval, extra={"tag": "INF"}
         )

@@ -474,9 +474,14 @@ def test_shutdown_joins_live_thread(state_paths, monkeypatch):
 
 
 def _make_no_thread_learner(monkeypatch, state_paths):
-    import threading
+    from unittest.mock import MagicMock
 
-    monkeypatch.setattr(threading.Thread, "start", lambda self: None)
+    import domain.learner._internal.continual as cont_mod
+
+    # spawn_loop seam: a dead handle stands in, so no background loop runs.
+    handle = MagicMock()
+    handle.is_alive.return_value = False
+    monkeypatch.setattr(cont_mod, "spawn_loop", lambda *a, **k: handle)
     return ContinualLearner(n_embed=32, n_layer=1, n_head=1, lr=1e-4)
 
 

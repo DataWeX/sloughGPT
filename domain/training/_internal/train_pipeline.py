@@ -45,6 +45,7 @@ try:
     from domain.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
+from domain.infrastructure._internal.pugqeep.singleton import spawn_loop
 from domain.shared._internal.feature_flags import is_enabled
 from domain.slolib._internal.gpu import dispatch_stats, known_backends, removed_backend_reason
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
@@ -2839,9 +2840,8 @@ class SloughGPTTrainer:
             except Exception as exc:
                 logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
 
-        thread = threading.Thread(target=_work, name="pugqeep-compress", daemon=True)
+        thread = spawn_loop(_work, name="pugqeep-compress")
         self._compress_thread = thread
-        thread.start()
 
     def wait_for_compression(self, timeout: float | None = None) -> bool:
         """Block until background checkpoint compression finishes.
