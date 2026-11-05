@@ -69,12 +69,23 @@ review flag.
      (buffer only drains inside the update, so a drop re-triggers);
      join-all collectors/validators → `ParallelExecutor.map`
      (compute-batch: drain result outranks the pass's FAF/engine
-     default under the call-site rule). **Remaining**: loop-with-
-     handle sites (workflow scheduler/training, auto-trainer, feed
-     poll, scheduler jobs, compress thread, soul warm, pretrain) —
-     need a Thread-shaped handle (`is_alive`/`join`/`daemon`) over
-     engine processes, plus loop-tree capacity so forever-loops can't
-     crowd short work off the default tree's 4 pool workers; the
+     default under the call-site rule). **Loop batch done
+     (2026-11-05)** — `spawn_loop(fn, stop=Event|callable)` +
+     `ThreadHandle` (`is_alive`/`join`/`daemon`/`name`) in
+     `pugqeep/singleton.py`, on a dedicated `loops` tree
+     (max_stems=32, pool_workers=16) so a forever-loop can't crowd
+     short work off the default tree's 4 pool workers; 8 sites
+     migrated (workflow scheduler/training, auto-trainer, feed
+     poll, scheduler jobs, compress, soul warm, pretrain,
+     continual — the last via a `stop=` callable since it polls a
+     bool, not an Event). Exit ordering is load-bearing: the
+     singleton shutdown registers via `threading._register_atexit`,
+     not plain `atexit` — `concurrent.futures._python_exit` joins
+     pool workers inside `threading._shutdown` *before* plain
+     atexit runs, so a plain atexit cancel deadlocks interpreter
+     exit on a blocked forever-loop (gate:
+     `tests/core-py/test_pugqeep_spawn_loop.py`, incl. a
+     subprocess interpreter-exit test). The
      stack-dump dumper is ruled grandfathered (global handle +
      join-on-cancel + `.name` test assertion).
    - **Grandfathered (~75 sites)**: the execution infra itself (pugqeep,
