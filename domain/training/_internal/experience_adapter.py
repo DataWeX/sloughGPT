@@ -23,19 +23,34 @@ from .training_handler import BatchSampler
 logger = logging.getLogger("slo.training.experience")
 
 
+def _registry_dataset_path(dataset_id: str) -> Path | None:
+    """Resolve a dataset id through the artifact registry.
+
+    One resolution covers every registry scan root (just-cache,
+    datasets/, data/, data/datasets/) instead of per-loader path guesses.
+    """
+    try:
+        from domain.infrastructure._internal.artifact_registry import resolve
+
+        hit = resolve("dataset", dataset_id)
+        return Path(hit) if hit else None
+    except Exception as exc:
+        logger.debug("Registry resolve failed for %s: %s", dataset_id, exc)
+        return None
+
+
 def _load_chat_corpus(path: Path | None = None) -> list[dict[str, str]]:
     """Load chat pairs from the experience corpus."""
     candidates = []
     if path is not None:
         candidates.append(Path(path))
-    # default locations (project-local + user cache)
-    candidates.extend(
-        [
-            Path("datasets/api_conversations/corpus.jsonl"),
-            Path("data/api_conversations/corpus.jsonl"),
-            Path.home() / ".cache" / "sloughgpt" / "experience" / "corpus.jsonl",
-        ]
-    )
+    # Registry first: its scan roots already cover datasets/, data/ and
+    # just-cache, so the old hardcoded repo-relative guesses are retired.
+    registry_hit = _registry_dataset_path("api_conversations")
+    if registry_hit is not None:
+        candidates.append(registry_hit)
+    # The user-cache corpus sits outside the registry scan roots — legacy fallback.
+    candidates.append(Path.home() / ".cache" / "sloughgpt" / "experience" / "corpus.jsonl")
     for p in candidates:
         if p.exists():
             out = []
@@ -65,6 +80,12 @@ def _load_feedback_pairs(path: Path | None = None) -> list[dict[str, str]]:
     candidates = []
     if path is not None:
         candidates.append(Path(path))
+    # Registry first for directory corpora (covers just-cache too); the two
+    # named files below are schema-specific (feedback record shape), which
+    # the registry's corpus picker does not guarantee.
+    registry_hit = _registry_dataset_path("feedback")
+    if registry_hit is not None:
+        candidates.append(registry_hit)
     candidates.extend(
         [
             Path("datasets/feedback/corrections.jsonl"),

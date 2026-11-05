@@ -861,6 +861,72 @@ def read_provenance(artifact_path: str | Path) -> ProvenanceRecord | None:
     return ProvenanceRecord.from_dict(data)
 
 
+# Export/training metadata fields that name a parent artifact, and the kind
+# each maps to. Checked flat AND under the caller's ``"metadata"`` sub-dict —
+# ``slonet.export_to_sou`` nests caller metadata there when it merges.
+_PROVENANCE_PARENT_FIELDS = (
+    ("training_dataset", "dataset"),
+    ("base_model", "model"),
+    ("parent_model", "model"),
+    ("teacher_model", "model"),
+)
+
+
+def parents_from_metadata(metadata: Any) -> list[str]:
+    """Derive lineage parent artifact_ids from export/training metadata.
+
+    Total over junk: non-dict input, missing keys, blank or non-string
+    values each simply contribute no parent.
+    """
+    if not isinstance(metadata, dict):
+        return []
+    layers = [metadata]
+    nested = metadata.get("metadata")
+    if isinstance(nested, dict):
+        layers.append(nested)
+    parents: list[str] = []
+    for layer in layers:
+        for key, kind in _PROVENANCE_PARENT_FIELDS:
+            value = layer.get(key)
+            if isinstance(value, str) and value.strip():
+                artifact_id = f"{kind}:{value.strip()}"
+                if artifact_id not in parents:
+                    parents.append(artifact_id)
+    return parents
+
+
+def stamp_export(
+    path: str | Path,
+    kind: str,
+    metadata: Any = None,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> ProvenanceRecord | None:
+    """Best-effort provenance stamp for a freshly written artifact.
+
+    The single write-path hook for exports: derives ``parents`` from
+    training metadata (which dataset/model produced this file) and writes
+    the ``.prov.json`` sidecar, so :func:`lineage` can walk the result.
+    Never raises — provenance must never break an export — and returns
+    ``None`` when the artifact file does not exist. Last writer wins, so a
+    checkpoint saver may re-stamp a file an export already stamped.
+    """
+    try:
+        fp = Path(path)
+        if not fp.is_file():
+            return None
+        return write_provenance(
+            fp,
+            kind,
+            fp.name,
+            parents=parents_from_metadata(metadata),
+            extra=extra,
+        )
+    except Exception as exc:  # noqa: BLE001 — provenance must never break a save
+        logger.debug("Export provenance stamp skipped (%s): %s", path, exc)
+        return None
+
+
 def lineage(
     kind: str,
     artifact_id: str,

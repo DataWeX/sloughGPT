@@ -345,3 +345,32 @@ class TestNpzCheckpointSaver:
         assert "lora_A" in data
         assert "lora_B" in data
         assert "embed" not in data
+
+
+class TestSoulCheckpointRotation:
+    def test_rotate_removes_sidecars_with_stale_checkpoint(self, tmp_path):
+        """A rotated-away checkpoint takes its ghost sidecars with it.
+
+        .meta.json was already orphaned by rotation before this landed
+        (the ghost-sidecar defect class documented in slo_format); the new
+        .prov.json provenance stamp must not join them.
+        """
+        import os
+
+        from domain.training._internal.training_handler import SoulCheckpointSaver
+
+        saver = SoulCheckpointSaver(str(tmp_path), max_keep=2)
+        for i, name in enumerate(("old", "mid", "new")):
+            for suffix in ("", ".meta.json", ".prov.json"):
+                (tmp_path / f"{name}.soul{suffix}").write_text("x", encoding="utf-8")
+            os.utime(tmp_path / f"{name}.soul", (1000 + i, 1000 + i))
+
+        saver._rotate()
+
+        assert not (tmp_path / "old.soul").exists()
+        assert not (tmp_path / "old.soul.meta.json").exists()
+        assert not (tmp_path / "old.soul.prov.json").exists()
+        # Survivors keep their sidecars.
+        assert (tmp_path / "new.soul").exists()
+        assert (tmp_path / "new.soul.meta.json").exists()
+        assert (tmp_path / "new.soul.prov.json").exists()
