@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "6841bed7630081951f2b682c48bee62c96168344",
+    "recorded_commit": "3b5e798167ecbecba5614cdb595dd1905ae2d2e0",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -276,7 +276,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "8b97b14281d4f392e98b139868f28b521240df55"
+      "tree_hash": "6d6a0389f25c3c80fbf38c3de65bbf03dbeb8d9e"
     },
     "knowledge": {
       "class": "core-capability",
@@ -546,7 +546,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "b2da6afbb6036a7ad1befa548aa71192ba4fdd47"
+      "tree_hash": "38fe4d57faf00345dabc86be544c8e27d2c96320"
     },
     "voice": {
       "class": "core-capability",
