@@ -60,7 +60,23 @@ review flag.
      initial + restart launch sites via `spawn_command`).
    - **3B — thread/FAF kind (~25 sites)**: short-lived in-process work →
      FAF pool or engine thread mode (`main.py` rag-init, preloader,
-     feedback loops, collectors, warmups, probes).
+     feedback loops, collectors, warmups, probes). **One-shot batch
+     done (2026-11-05)** — must-run one-shots → `engine.spawn` (never
+     drops: each has a one-shot/status flag a dropped FAF submit would
+     strand — rag-init, feedback-workflow startup, preloader,
+     slonet warmup, accel probe, context auto-ingest, multimodal
+     autosave); drop-tolerant online-train update → FAF pool
+     (buffer only drains inside the update, so a drop re-triggers);
+     join-all collectors/validators → `ParallelExecutor.map`
+     (compute-batch: drain result outranks the pass's FAF/engine
+     default under the call-site rule). **Remaining**: loop-with-
+     handle sites (workflow scheduler/training, auto-trainer, feed
+     poll, scheduler jobs, compress thread, soul warm, pretrain) —
+     need a Thread-shaped handle (`is_alive`/`join`/`daemon`) over
+     engine processes, plus loop-tree capacity so forever-loops can't
+     crowd short work off the default tree's 4 pool workers; the
+     stack-dump dumper is ruled grandfathered (global handle +
+     join-on-cancel + `.name` test assertion).
    - **Grandfathered (~75 sites)**: the execution infra itself (pugqeep,
      FAF, process_guard, watchdog, server accept/pump loops), tests,
      scripts/benchmarks, one-shot blocking `subprocess.run` (build,
