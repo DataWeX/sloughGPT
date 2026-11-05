@@ -267,7 +267,7 @@ describe('StatusBar', () => {
       soul: 'friendly',
     })
     render(<StatusBar />)
-    const tps = await screen.findAllByText('15 tok/s')
+    const tps = await screen.findAllByText('15.0 tok/s')
     expect(tps.length).toBeGreaterThanOrEqual(1)
   })
 
