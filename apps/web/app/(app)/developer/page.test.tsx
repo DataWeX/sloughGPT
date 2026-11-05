@@ -46,6 +46,10 @@ vi.mock('@/components/models/ModelCatalogCard', () => ({
   default: () => <div data-testid="model-catalog-card" />,
 }))
 
+vi.mock('@/components/models/ModelLineageCard', () => ({
+  default: () => <div data-testid="model-lineage-card" />,
+}))
+
 vi.mock('@/components/models/QuantizationCard', () => ({
   default: () => <div data-testid="quantization-card" />,
 }))

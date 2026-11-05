@@ -58,4 +58,23 @@ describe('registryController', () => {
     await registryController.stats()
     expect(apiGet).toHaveBeenCalledWith('/registry/stats')
   })
+
+  it('artifacts unwraps data.artifacts with lineage query', async () => {
+    const record = {
+      artifact_id: 'model:baby.soul', kind: 'model', id: 'baby.soul',
+      name: 'baby.soul', path: '/x/baby.soul', size_bytes: 10,
+      parents: ['dataset:ds1'],
+    }
+    apiGet.mockResolvedValue({ artifacts: [record] })
+    const result = await registryController.artifacts()
+    expect(result).toEqual([record])
+    expect(apiGet).toHaveBeenCalledWith('/registry/artifacts?lineage=true')
+  })
+
+  it('artifacts returns [] on empty or missing payload', async () => {
+    apiGet.mockResolvedValue({})
+    expect(await registryController.artifacts()).toEqual([])
+    apiGet.mockResolvedValue(null)
+    expect(await registryController.artifacts()).toEqual([])
+  })
 })

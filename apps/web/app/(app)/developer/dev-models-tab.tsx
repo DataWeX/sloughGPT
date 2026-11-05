@@ -2,6 +2,7 @@
 
 /** Models tab — catalog, quantization, downloads and engine status. */
 import ModelCatalogCard from '@/components/models/ModelCatalogCard'
+import ModelLineageCard from '@/components/models/ModelLineageCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
 import DownloadsCard from '@/components/models/DownloadsCard'
 import EngineStatusCard from '@/components/models/EngineStatusCard'
@@ -29,6 +30,7 @@ export function ModelsTab() {
         activeRuntimeId={activeRuntimeId}
         onModelLoaded={handleModelLoaded}
       />
+      <ModelLineageCard />
       <QuantizationCard isOnline={isOnline} />
       <DownloadsCard />
       <EngineStatusCard />

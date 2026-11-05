@@ -93,6 +93,69 @@ class TestListArtifacts:
             assert reg.list_artifacts("nope") == []
 
 
+class TestListArtifactsProvenance:
+    """with_provenance=True attaches lineage parents; default stays lean."""
+
+    def test_default_has_no_parents_key(self, tmp_path):
+        roots = _roots(tmp_path)
+        (roots["adapter"][0] / "plain.npz").write_bytes(b"\x00")
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("adapter")
+        assert "parents" not in a  # resolve()/verify() callers pay no sidecar reads
+
+    def test_sidecar_parents_attached(self, tmp_path):
+        roots = _roots(tmp_path)
+        child = roots["adapter"][0] / "child.npz"
+        child.write_bytes(b"\x00")
+        reg.write_provenance(child, "adapter", "child.npz", parents=["dataset:ds1"])
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("adapter", with_provenance=True)
+        assert a["parents"] == ["dataset:ds1"]
+
+    def test_meta_fallback_parents_without_sidecar(self, tmp_path):
+        roots = _roots(tmp_path)
+        soul = roots["model"][0] / "baby.soul"
+        soul.write_bytes(b"\x00" * 8)
+        soul.with_suffix(".soul.meta.json").write_text(
+            '{"training_dataset": "tinyshakespeare", "base_model": "sloughgpt"}'
+        )
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("model", with_provenance=True)
+        assert a["parents"] == ["dataset:tinyshakespeare", "model:sloughgpt"]
+
+    def test_sidecar_and_meta_union_deduped(self, tmp_path):
+        roots = _roots(tmp_path)
+        soul = roots["model"][0] / "baby.soul"
+        soul.write_bytes(b"\x00" * 8)
+        soul.with_suffix(".soul.meta.json").write_text(
+            '{"training_dataset": "ds1", "base_model": "sloughgpt"}'
+        )
+        reg.write_provenance(soul, "model", "baby.soul", parents=["dataset:ds1"])
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("model", with_provenance=True)
+        # sidecar first, meta extras appended, ds1 not duplicated
+        assert a["parents"] == ["dataset:ds1", "model:sloughgpt"]
+
+    def test_corrupt_sidecar_still_returns_meta_parents(self, tmp_path):
+        roots = _roots(tmp_path)
+        soul = roots["model"][0] / "bad.soul"
+        soul.write_bytes(b"\x00" * 8)
+        soul.with_suffix(".soul.meta.json").write_text(
+            '{"training_dataset": "ds2"}'
+        )
+        reg.provenance_path(soul).write_text("{broken")
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("model", with_provenance=True)
+        assert a["parents"] == ["dataset:ds2"]
+
+    def test_no_provenance_anywhere_is_empty_list(self, tmp_path):
+        roots = _roots(tmp_path)
+        (roots["model"][0] / "plain.soul").write_bytes(b"\x00" * 8)
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("model", with_provenance=True)
+        assert a["parents"] == []
+
+
 class TestResolve:
     def test_resolve_dataset(self, tmp_path):
         ds = tmp_path / "data" / "myds"

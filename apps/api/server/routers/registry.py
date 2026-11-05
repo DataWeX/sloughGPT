@@ -91,6 +91,10 @@ class RegistryRouter:
         self,
         kind: str | None = Query(None, description="Filter by kind"),
         q: str | None = Query(None, description="Substring search on id/name"),
+        lineage: bool = Query(
+            False,
+            description="Attach lineage parents per artifact (sidecar + metadata union)",
+        ),
     ) -> dict:
         """List artifacts across all kinds (Stage 1: read-only index)."""
         import asyncio as _aio
@@ -104,7 +108,7 @@ class RegistryRouter:
                 status_code=400,
             )
         _t0 = _time.monotonic()
-        artifacts = await _aio.to_thread(_ar.list_artifacts, kind, q)
+        artifacts = await _aio.to_thread(_ar.list_artifacts, kind, q, with_provenance=lineage)
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         safe_audit_log(
             "registry.artifacts",
