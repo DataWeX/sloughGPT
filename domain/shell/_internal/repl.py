@@ -33,6 +33,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
@@ -41,6 +43,28 @@ from .state import ShellState
 
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("slo.shell.repl")
+
+
+class _BgJob:
+    """Background-job handle over an engine process (routing kind: process).
+
+    Keeps the ``threading.Thread`` surface (``is_alive``/``join``) that
+    ``_cmd_bg``/``_cmd_fg``/``_cmd_wait`` consume, so job bookkeeping is
+    unchanged while the work itself runs on the shared pugqeep engine
+    instead of a raw thread at the call site.
+    """
+
+    __slots__ = ("_engine", "_proc")
+
+    def __init__(self, engine: Any, proc: Any) -> None:
+        self._engine = engine
+        self._proc = proc
+
+    def is_alive(self) -> bool:
+        return not self._proc.is_done
+
+    def join(self, timeout: float | None = None) -> None:
+        self._engine.wait_for(self._proc.id, timeout=timeout)
 
 
 # ── Optional cmds extension — dynamic load ─────────────────────────────────
@@ -327,7 +351,9 @@ class ShellREPL(LinuxCommandsMixin):
             except (OSError, ValueError):
                 use_tui = False
         self._use_tui = use_tui
-        self._bg_threads: dict[int, threading.Thread] = {}
+        # _BgJob handles (engine-supervised); tests may inject any
+        # Thread-shaped object with is_alive()/join().
+        self._bg_threads: dict[int, Any] = {}
         self._next_bg_id = 1
         self._piped_input: str = ""
         self._aborted = False
@@ -1579,9 +1605,9 @@ class ShellREPL(LinuxCommandsMixin):
             except Exception as e:
                 self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
-        t.start()
-        self._bg_threads[bg_id] = t
+        engine = get_engine()
+        proc = engine.spawn(_run, name=f"shell-bg-{bg_id}")
+        self._bg_threads[bg_id] = _BgJob(engine, proc)
         self._print(f"  [bg-{bg_id}] {raw}")
 
     def _execute_background_tuples(self, commands: list) -> None:
@@ -1595,9 +1621,9 @@ class ShellREPL(LinuxCommandsMixin):
             except Exception as e:
                 self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
-        t.start()
-        self._bg_threads[bg_id] = t
+        engine = get_engine()
+        proc = engine.spawn(_run, name=f"shell-bg-{bg_id}")
+        self._bg_threads[bg_id] = _BgJob(engine, proc)
         cmds_str = " | ".join(c[0] for c in commands)
         self._print(f"  [bg-{bg_id}] {cmds_str}")
 

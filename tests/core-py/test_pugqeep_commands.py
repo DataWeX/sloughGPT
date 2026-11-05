@@ -7,6 +7,8 @@ dispatch latency, no pool worker), live streams, raw-Popen lifecycle
 metrics, ``timeout``) independent of the caller polling.
 """
 
+import os
+import subprocess
 import sys
 
 import pytest
@@ -115,3 +117,28 @@ def test_singleton_engine_supervises_commands():
     assert proc.wait(timeout=10) == 0
     assert proc in eng.list_processes()
     # Teardown: conftest's stop_all_pugqeep() stops the shared engine.
+
+
+def test_start_new_session_isolates_process_group(engine):
+    """start_new_session gives the child its own group — the killpg-safe shape.
+
+    Services (init/api-server) signal their process group in stop();
+    without setsid that group would be the caller's own.
+    """
+    isolated = engine.spawn_command(
+        [PY, "-c", "import time; time.sleep(30)"],
+        stdout=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    inherited = engine.spawn_command(
+        [PY, "-c", "import time; time.sleep(30)"],
+        stdout=subprocess.DEVNULL,
+    )
+    try:
+        assert os.getpgid(isolated.pid) == isolated.pid  # own session/group
+        assert os.getpgid(inherited.pid) == os.getpgid(0)  # default: our group
+    finally:
+        isolated.terminate()
+        inherited.terminate()
+        isolated.wait(timeout=10)
+        inherited.wait(timeout=10)

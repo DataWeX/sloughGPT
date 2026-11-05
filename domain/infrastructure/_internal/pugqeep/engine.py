@@ -1875,6 +1875,7 @@ class Engine:
         stdout: Any = subprocess.PIPE,
         stderr: Any = subprocess.STDOUT,
         text: bool = True,
+        start_new_session: bool = False,
         timeout: float | None = None,
     ) -> CommandProcess:
         """Start an external command under engine supervision (eager).
@@ -1891,6 +1892,9 @@ class Engine:
 
         ``stdout``/``stderr`` are passed straight to ``subprocess.Popen``
         (defaults: merged stdout→PIPE, the supervised-server shape).
+        ``start_new_session`` gives the child its own session/group
+        (POSIX ``setsid``) — the killpg-safe shape for services whose
+        ``stop()`` signals the whole process group.
         """
         if isinstance(argv, (str, bytes)):
             raise TypeError("spawn_command takes an argv list, not a string")
@@ -1906,7 +1910,13 @@ class Engine:
         # Popen first: a missing executable must raise to the caller
         # (raw-Popen behaviour) without leaving a registered dead entry.
         proc._popen = subprocess.Popen(
-            argv, cwd=cwd, env=env, stdout=stdout, stderr=stderr, text=text
+            argv,
+            cwd=cwd,
+            env=env,
+            stdout=stdout,
+            stderr=stderr,
+            text=text,
+            start_new_session=start_new_session,
         )
         proc._pid = proc._popen.pid
         if timeout is not None:

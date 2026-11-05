@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
 from domain.shared import find_repo_root, find_server_python
 
 logger = logging.getLogger("slo.shell.runtime")
@@ -82,7 +83,8 @@ def _probe_api(api_url: str, timeout: float = 2.0) -> dict:
         }
 
 
-_shared_proc: subprocess.Popen | None = None
+# Engine-supervised CommandProcess (duck-typed Popen surface) or None.
+_shared_proc: Any = None
 _shared_lock = threading.Lock()
 _shared_started_at: float = 0.0
 
@@ -191,13 +193,17 @@ class APIServerProcess:
         )
 
         try:
-            proc = subprocess.Popen(
+            # Process kind: engine-supervised command (routing table in
+            # docs/plans/2026-09-20-execution-consolidation.md). Own session
+            # so stop()'s killpg reaches only this server's group.
+            proc = get_engine().spawn_command(
                 cmd,
+                name="api-server",
                 cwd=str(repo_root),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
-                preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+                start_new_session=hasattr(os, "setsid"),
             )
         except Exception as e:
             return {"ok": False, "error": f"Failed to launch: {e}"}

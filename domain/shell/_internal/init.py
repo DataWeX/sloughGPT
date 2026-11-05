@@ -23,6 +23,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
 logger = logging.getLogger("slo.shell.init")
 
 
@@ -86,7 +88,8 @@ class ServiceInstance:
     pid: int = 0
     started_at: float = 0.0
     respawn_count: int = 0
-    process: subprocess.Popen | None = None
+    # Engine-supervised CommandProcess (duck-typed Popen surface) or None.
+    process: Any = None
     log: list[str] = field(default_factory=list)
 
     @property
@@ -133,16 +136,22 @@ class ServiceManager:
             return False
 
         try:
-            proc = subprocess.Popen(
+            # Process kind: engine-supervised command (routing table in
+            # docs/plans/2026-09-20-execution-consolidation.md). The child
+            # leads its own session — stop()'s killpg must reach only the
+            # service's group, never ours (start_new_session == the old
+            # preexec_fn=os.setsid).
+            proc = get_engine().spawn_command(
                 shlex.split(self.defn.command),
+                name=f"service-{self.defn.name}",
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+                start_new_session=hasattr(os, "setsid"),
             )
             with self._lock:
                 self.instance.process = proc
-                self.instance.pid = proc.pid
+                self.instance.pid = proc.pid or 0
                 self.instance.state = "running"
 
             self._log(f"started (pid={proc.pid})")
