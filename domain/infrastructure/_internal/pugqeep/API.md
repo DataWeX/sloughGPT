@@ -139,7 +139,9 @@ Start engine dispatch loop in a background thread (non-blocking).
 Wait for all pending and running processes to complete.
 
 #### `get_completed() → list[Process]`
-Return all completed processes since last call.
+Return all completed processes since last call. A drain never re-fires
+engine-level `on_complete` callbacks or metrics — each process is reported
+exactly once regardless of draining.
 
 #### `route(process_name, tree_name)`
 Route processes by name to a specific tree.
@@ -590,7 +592,9 @@ registry.storage.register(MyStorage())
 ## Config Dataclasses
 
 ### `EngineConfig`
-Full engine configuration. Contains `SubprocessConfig`, `RestartPolicy`, `MonitorConfig`.
+Full engine configuration. Contains `SubprocessConfig`, `RestartPolicy`, `MonitorConfig`,
+and `retention_limit` (done processes kept in the registry before the oldest are evicted;
+live procs and pending-dependency anchors are never evicted).
 
 ### `SubprocessConfig`
 Subprocess isolation settings: memory limits, CPU affinity, cwd, env, capture output.
@@ -636,7 +640,9 @@ Thread-safe metrics tracker: spawned, completed, failed, cancelled, latency, thr
 LRU + TTL cache for deduplicating identical function calls.
 
 ### `ProcessMonitor`
-Background thread for stall detection and restart callbacks.
+Background thread for stall detection and restart callbacks. Untracks done
+processes each poll — COMPLETED/CANCELLED immediately, FAILED once the restart
+budget is spent (or no policy) — so the monitor never grows with completed work.
 
 ### Export quick-reference (undocumented names, 2026-10-11 audit)
 

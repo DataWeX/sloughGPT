@@ -44,7 +44,7 @@ from pickle import PicklingError
 from typing import Any
 
 from ..cancel_manager import OpType, get_cancel_manager
-from .config import RestartPolicy
+from .config import DEFAULT_RETENTION_LIMIT, RestartPolicy
 
 logger = logging.getLogger("slo.pugqeep.engine")
 
@@ -133,6 +133,9 @@ class Process:
     _stream_results: list[Any] = field(default_factory=list, repr=False)
     _progress: float = field(default=0.0, repr=False)
     _progress_message: str = field(default="", repr=False)
+    # Reported to engine-level on_complete/metrics exactly once — survives
+    # get_completed() draining _completed so a drain cannot re-fire them.
+    _reported: bool = field(default=False, repr=False)
     _on_complete: list[Callable] = field(default_factory=list, repr=False)
     _on_fail: list[Callable] = field(default_factory=list, repr=False)
     _on_cancel: list[Callable] = field(default_factory=list, repr=False)
@@ -446,11 +449,16 @@ class GuardTree(Tree):
 
     def _execute(self, proc: Process, stem: Stem) -> Any:
         sub = self._subprocesses.get(proc.id)
-        if sub is not None:
+        if sub is None:
+            return super()._execute(proc, stem)
+        try:
             sub.start()
             sub.monitor()
             return proc.result
-        return super()._execute(proc, stem)
+        finally:
+            # The wrapper is finished once monitor() returns (or start()
+            # raised): pop it so the registry holds live subprocesses only.
+            self._subprocesses.pop(proc.id, None)
 
     @property
     def subprocess_count(self) -> int:
@@ -1246,6 +1254,20 @@ class ProcessMonitor:
                                             "Non-critical pugqeep restart callback error",
                                             exc_info=True,
                                         )
+                    # Done procs are dropped from monitoring: COMPLETED and
+                    # CANCELLED immediately, FAILED once the restart budget
+                    # is spent (or with no policy) — otherwise the monitor
+                    # grows with every spawn for the life of the process.
+                    if proc.is_done:
+                        pol = proc._restart_policy or self.restart_policy
+                        keep_for_restart = (
+                            proc.status == ProcessStatus.FAILED
+                            and pol is not None
+                            and pol.max_restarts > 0
+                            and proc._restart_count < pol.max_restarts
+                        )
+                        if not keep_for_restart:
+                            self._processes.pop(proc.id, None)
 
     def stats(self) -> dict:
         with self._lock:
@@ -1388,6 +1410,9 @@ class Engine:
             self.name = name
             self.max_trees = max_trees
             self._config = None
+        self._retention_limit = (
+            config.retention_limit if config is not None else DEFAULT_RETENTION_LIMIT
+        )
         self._trees: dict[str, Tree] = {}
         self._processes: dict[str, Process] = {}
         self._pending: list[Process] = []
@@ -1462,6 +1487,7 @@ class Engine:
             hit, cached = self._cache.get(fn, args, kwargs)
             if hit:
                 proc.complete(cached)
+                proc._reported = True
                 self._processes[proc.id] = proc
                 self._completed.append(proc)
                 self._metrics.record_complete(proc)
@@ -1632,7 +1658,8 @@ class Engine:
             for proc in list(self._processes.values()):
                 if isinstance(proc, CommandProcess):
                     proc._reap()
-                if proc.is_done and proc not in self._completed:
+                if proc.is_done and not proc._reported:
+                    proc._reported = True
                     self._completed.append(proc)
                     if proc.status == ProcessStatus.COMPLETED:
                         self._metrics.record_complete(proc)
@@ -1643,6 +1670,8 @@ class Engine:
                             cb(proc)
                         except Exception as e:
                             logger.error("Engine[%s]: on_complete callback error: %s", self.name, e)
+
+            self._evict_completed()
 
             if on_progress is not None:
                 try:
@@ -2173,6 +2202,34 @@ class Engine:
                 os.kill(os.getpid(), signum)
             # prev is None: handlers not installed or already restored — a
             # stale direct call; stopping the engine is all we can honestly do.
+
+    def _evict_completed(self) -> None:
+        """Bound the registry: evict the oldest done processes beyond ``retention_limit``.
+
+        Live (pending/running) processes are never evicted, and a done process
+        still referenced by a pending dependent's ``depends_on`` is an anchor —
+        evicting it would strand the dependent forever (``_deps_met`` needs the
+        dep present + COMPLETED). ``_completed`` is bounded by the same limit
+        so an engine whose results are never drained cannot grow it either.
+
+        A dependent spawned *after* its dep was evicted holds exactly like the
+        pre-existing unknown-dep case (``_deps_met`` → False): the anchor covers
+        dependents already pending, and production spawns no dependency chains
+        today (``depends_on=[]`` everywhere).
+        """
+        cap = max(0, self._retention_limit)
+        done_ids = [pid for pid, p in self._processes.items() if p.is_done]
+        excess = len(done_ids) - cap
+        if excess > 0:
+            anchored: set[str] = set()
+            for p in self._pending:
+                anchored.update(p.depends_on)
+            evictable = [pid for pid in done_ids if pid not in anchored]
+            for pid in evictable[:excess]:
+                self._processes.pop(pid, None)
+                self._dependents.pop(pid, None)
+        if len(self._completed) > cap:
+            del self._completed[: len(self._completed) - cap]
 
     def _deps_met(self, proc: Process) -> bool:
         if not proc.depends_on:

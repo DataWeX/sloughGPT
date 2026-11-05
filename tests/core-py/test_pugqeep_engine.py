@@ -672,6 +672,43 @@ class TestProcessMonitor:
         mon = ProcessMonitor()
         mon.untrack("nope")
 
+    def test_loop_untracks_completed(self):
+        mon = ProcessMonitor(poll_interval=0.01)
+        p = Process(fn=_noop)
+        p.running()
+        p.complete()
+        mon.track(p)
+        mon.start()
+        time.sleep(0.05)
+        mon.stop()
+        assert mon.active_count == 0
+
+    def test_loop_keeps_failed_while_restarts_remain(self):
+        policy = RestartPolicy(max_restarts=1000)
+        mon = ProcessMonitor(restart_policy=policy, poll_interval=0.01)
+        p = Process(fn=_noop)
+        p.running()
+        p.fail("err")
+        mon.track(p)
+        mon.start()
+        time.sleep(0.05)
+        mon.stop()
+        # restart budget not yet exhausted: the failure stays visible
+        assert mon.active_count == 1
+        assert mon.stats()["failed"] == 1
+
+    def test_loop_untracks_failed_after_restarts_exhausted(self):
+        mon = ProcessMonitor(restart_policy=RestartPolicy(max_restarts=1), poll_interval=0.01)
+        p = Process(fn=_noop)
+        p.running()
+        p.fail("err")
+        mon.track(p)
+        mon.start()
+        time.sleep(0.1)
+        mon.stop()
+        # the single restart was consumed on the first tick: forgotten after
+        assert mon.active_count == 0
+
     def test_on_stall_callback(self):
         mon = ProcessMonitor(stall_timeout=0.01)
         stalled = []
@@ -1227,6 +1264,21 @@ class TestEngineRun:
         assert completed[0].id == p.id
         engine.stop()
 
+    def test_get_completed_drain_does_not_refire(self):
+        engine = Engine("test")
+        engine.tree("t")
+        engine.route("work", "t")
+        fired = []
+        engine.on_complete(lambda p: fired.append(p.id))
+        p = engine.spawn(_sleep_and_return, 0.01, "x", name="work")
+        engine.run_background(poll_interval=0.01)
+        engine.wait(timeout=5)
+        assert len(engine.get_completed()) == 1
+        time.sleep(0.1)  # several scan ticks with an empty _completed buffer
+        engine.stop()
+        assert fired.count(p.id) == 1
+        assert engine.metrics.snapshot()["completed"] == 1
+
     def test_wait_for(self):
         engine = Engine("test")
         engine.tree("t")
@@ -1534,6 +1586,52 @@ class TestEngineSaveState:
             assert "metrics" in state
         finally:
             os.unlink(path)
+        engine.stop()
+
+
+# ══════════════════════════════════════════════════════════════════
+# Engine: bounded retention (registry must not grow without bound)
+# ══════════════════════════════════════════════════════════════════
+
+
+class TestEngineRetention:
+    def test_done_processes_evicted_beyond_retention_limit(self):
+        cfg = EngineConfig(name="test", retention_limit=2)
+        engine = Engine(config=cfg)
+        engine.tree("t")
+        engine.route("work", "t")
+        procs = [engine.spawn(_sleep_and_return, 0.01, i, name="work") for i in range(6)]
+        release = threading.Event()
+        live = engine.spawn(release.wait, 5.0, name="work")
+        engine.run_background(poll_interval=0.01)
+        deadline = time.time() + 10
+        while not all(p.is_done for p in procs) and time.time() < deadline:
+            time.sleep(0.02)
+        assert all(p.is_done for p in procs)
+        time.sleep(0.05)  # let eviction ticks run
+        done_left = [p for p in engine.list_processes() if p.is_done]
+        assert len(done_left) <= 2
+        # the newest results survive; the live proc is never evicted
+        remaining_ids = {p.id for p in engine.list_processes()}
+        assert procs[-1].id in remaining_ids
+        assert engine.get_process(live.id) is live
+        release.set()
+        engine.stop()
+
+    def test_retention_spares_pending_dependency_anchor(self):
+        cfg = EngineConfig(name="test", retention_limit=0)
+        engine = Engine(config=cfg)
+        dep = engine.spawn(_noop, name="a")
+        child = engine.spawn(_noop, name="b", depends_on=[dep.id])
+        dep.complete()  # done; child still pending (no dispatch ran)
+        engine._evict_completed()
+        # anchored by the pending child's depends_on: evicting would strand it
+        assert engine.get_process(dep.id) is dep
+        assert engine.get_process(child.id) is child
+        # once the dependent leaves _pending the anchor no longer applies
+        engine._pending = [p for p in engine._pending if p.id != child.id]
+        engine._evict_completed()
+        assert engine.get_process(dep.id) is None
         engine.stop()
 
 

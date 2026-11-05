@@ -334,6 +334,16 @@ class TestGuardTree:
         assert proc.result == 42
         tree.shutdown()
 
+    def test_subprocess_registry_cleared_after_run(self):
+        config = SubprocessConfig(enabled=True, start_method="fork")
+        tree = GuardTree("test", config=config, max_stems=4, pool_workers=2)
+        proc = Process(fn=_noop, name="work")
+        stem = tree.branch([proc])
+        tree.wait_stem(stem, timeout=10)
+        assert proc.status == ProcessStatus.COMPLETED
+        assert tree.subprocess_count == 0
+        tree.shutdown()
+
     def test_health(self):
         config = SubprocessConfig(enabled=False)
         tree = GuardTree("test", config=config)
