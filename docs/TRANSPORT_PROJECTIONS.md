@@ -129,6 +129,35 @@ module today — `routers/contracts.py`, the pilot. Known
 declared-but-hand-registered offender: `routers/llm_v1.py` (3 `ToolSpec`s,
 3 `add_api_route` sites).
 
+**Ruling (2026-11-05, card `20261104_151035`): llm_v1 stays grandfathered —
+the projection cannot express its wire yet.** A straight migration was
+attempted and is blocked by four mismatches, each pinned by
+`apps/api/server/tests/test_llm_v1_router.py`:
+
+1. **Envelope.** `_build_endpoint` wraps every result in `success_response()`
+   (`{status, data}`); `test_nonstream_is_raw_wire_shape_no_envelope` asserts
+   the raw OpenAI shape (no `status`/`data`). `/v1` is an external
+   OpenAI-compatible wire — the envelope would break every OpenAI client.
+2. **SSE.** `chat_completions` returns `StreamingResponse` when
+   `stream=True`; the projection's dict wrap would kill the stream.
+3. **Handler shape.** Handlers take one pydantic model (`req: ChatBody`); the
+   projection calls `handler(**flat_payload)`. `_check_handler_accepts`
+   would refuse at boot ("the contract is the call signature").
+4. **Descriptor incompleteness.** `ChatBody` carries 12 fields with `ge/le`
+   constraints (`top_p`, `top_k`, `stream_options`, …); the ToolSpec declares
+   6 and `ToolParam` has no constraint vocabulary — descriptor-derived
+   validation would silently drop fields a test pins at the provider
+   (`top_p=0.85`).
+
+**What unlocks the migration** (one projection capability, then the
+migration lands on top): a raw-wire facet on the descriptor/projection —
+`envelope: bool = True` (default keeps the pilot byte-identical), Response
+passthrough for SSE, and body-model-from-handler-signature so `ChatBody`
+stays the validator. Until then: the 3 llm_v1 sites are frozen by the
+ratchet like the rest of the 697, and any new `/v1` route must follow
+llm_v1's hand-built pattern **or** the raw-wire facet must be built first —
+never a third way.
+
 **The ratchet:** any new `@router.get` / `add_api_route` site — in a new
 file or a grandfathered one — fails `check_contract.py --static`. Migration
 is the only way down, and each shrink lands as a reviewed baseline edit
