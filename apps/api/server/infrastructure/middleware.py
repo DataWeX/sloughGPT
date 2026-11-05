@@ -445,28 +445,51 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
         return response
 
 
-class MetricsMiddleware(BaseHTTPMiddleware):
-    """Records every request to the Prometheus MetricsCollector."""
+class MetricsMiddleware:
+    """Record completed requests, including the full body of streamed responses."""
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         from domain.infrastructure.metrics import get_metrics_collector
 
         collector = get_metrics_collector()
-        collector.set_active_requests(collector.get_active_requests() + 1)
+        collector.adjust_active_requests(1)
         start = time.monotonic()
+        method = scope.get("method", "GET")
+        path = scope.get("path", "")
         status_code = 500
-        try:
-            response = await call_next(request)
-            status_code = response.status_code
-            return response
-        finally:
-            elapsed = time.monotonic() - start
-            collector.set_active_requests(max(0, collector.get_active_requests() - 1))
-            path = request.url.path
-            collector.record_request(path, status_code, elapsed)
+        recorded = False
 
+        def record_completion() -> None:
+            nonlocal recorded
+            if recorded:
+                return
+            recorded = True
+            elapsed = time.monotonic() - start
+            collector.adjust_active_requests(-1)
+            collector.record_request(path, status_code, elapsed)
+            from domain.infrastructure.server_state import get_server_state
+
+            get_server_state().record_request_latency(path, method, status_code, elapsed * 1000)
+
+        async def send_with_metrics(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+            if message["type"] == "http.response.body" and not message.get("more_body", False):
+                record_completion()
+
+        try:
+            await self.app(scope, receive, send_with_metrics)
+        finally:
+            record_completion()
 
 class SerializationGuardMiddleware(BaseHTTPMiddleware):
     """Catches response serialization/validation errors and returns structured JSON.
