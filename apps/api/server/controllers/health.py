@@ -542,6 +542,11 @@ class HealthController:
         # reported itself running. It now comes from the same function
         # /health/detailed uses, so the two views cannot drift apart.
         health_score = _get_basic_health_score()
+        from domain.infrastructure.server_state import get_server_state
+
+        server_state = get_server_state()
+        latest_request = server_state.get_latest_inference_request()
+        latest_generation = server_state.get_latest_inference_metrics()
         result: dict[str, Any] = {
             "status": _derive_verdict(lifecycle, health_score),
             "health_score": health_score,
@@ -552,6 +557,12 @@ class HealthController:
             "device": _get_model_device(),
             "is_inferencing": inference_stats.get("is_inferencing", False),
             "inference_count": inference_stats.get("inference_count", 0),
+            "latest_inference_latency_ms": (
+                latest_request["elapsed_ms"] if latest_request else None
+            ),
+            "tokens_per_sec": (
+                latest_generation["tokens_per_sec"] if latest_generation else 0.0
+            ),
             "lifecycle": lifecycle,
         }
 
@@ -666,6 +677,8 @@ class HealthController:
             inference_count = ss.inference_count
             total_tokens = ss.total_tokens
             tokens_per_sec = ss.get_tokens_per_second()
+            latest_request = ss.get_latest_inference_request()
+            latest_generation = ss.get_latest_inference_metrics()
             avg_tokens_per_req = ss.get_avg_tokens_per_request()
             health_score = ss.get_health_score(cpu_percent=cpu, memory_percent=mem.percent)
             model_metrics = ss.get_model_metrics()
@@ -688,6 +701,8 @@ class HealthController:
             inference_count = 0
             total_tokens = 0
             tokens_per_sec = 0.0
+            latest_request = None
+            latest_generation = None
             avg_tokens_per_req = 0.0
             health_score = {"score": 0, "status": "unknown"}
             model_metrics = []
@@ -736,6 +751,12 @@ class HealthController:
             "inference_count": inference_count,
             "total_tokens": total_tokens,
             "tokens_per_sec": tokens_per_sec,
+            "latest_tokens_per_sec": (
+                latest_generation["tokens_per_sec"] if latest_generation else 0.0
+            ),
+            "latest_inference_latency_ms": (
+                latest_request["elapsed_ms"] if latest_request else None
+            ),
             "avg_tokens_per_request": avg_tokens_per_req,
             "health_score": health_score,
             "model_metrics": model_metrics,
