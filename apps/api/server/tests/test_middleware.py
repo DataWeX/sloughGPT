@@ -9,6 +9,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from starlette.responses import StreamingResponse
 from infrastructure.exception_handlers import register_app_error_handler
 from infrastructure.middleware import register_all_middleware
 
@@ -40,6 +41,17 @@ def _make_app(timeout: float = 5.0) -> FastAPI:
 
         await asyncio.sleep(2.0)
         return {"ok": 1}
+
+    @app.post("/chat")
+    async def streamed_chat():
+        import asyncio
+
+        async def body():
+            yield b"first"
+            await asyncio.sleep(0.04)
+            yield b"last"
+
+        return StreamingResponse(body(), media_type="text/event-stream")
 
     return app
 
@@ -235,6 +247,32 @@ class TestColdStartPrefixSuppression:
 
 
 class TestMetrics:
+    def test_streaming_inference_latency_includes_final_body(self):
+        from infrastructure.middleware import MetricsMiddleware
+        from domain.infrastructure.server_state import get_server_state
+
+        app = FastAPI()
+        app.add_middleware(MetricsMiddleware)
+
+        @app.post("/chat")
+        async def streamed_chat():
+            import asyncio
+
+            async def body():
+                yield b"first"
+                await asyncio.sleep(0.04)
+                yield b"last"
+
+            return StreamingResponse(body(), media_type="text/event-stream")
+
+        response = TestClient(app).post("/chat")
+        assert response.text == "firstlast"
+        latest = get_server_state().get_latest_inference_request()
+        assert latest is not None
+        assert latest["path"] == "/chat"
+        assert latest["status"] == 200
+        assert latest["elapsed_ms"] >= 35
+
     def test_request_recorded(self):
         from domain.infrastructure.metrics import get_metrics_collector
 
