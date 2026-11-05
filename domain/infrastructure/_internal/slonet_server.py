@@ -137,7 +137,11 @@ class SloNetServer:
             self._model_lock = threading.Lock()  # serializes model.generate* calls
 
         if enable_warmup:
-            threading.Thread(target=self._run_warmup, daemon=True).start()
+            # Process kind (routing table in docs/plans/2026-09-20-execution-
+            # consolidation.md): named engine spawn, never dropped.
+            from .pugqeep.singleton import get_engine
+
+            get_engine().spawn(self._run_warmup, name="slonet-warmup")
 
     # ------------------------------------------------------------------
     # Model pool management

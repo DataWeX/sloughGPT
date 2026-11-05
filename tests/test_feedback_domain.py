@@ -747,13 +747,13 @@ class TestOnlineLoRAUpdater:
         updater.add_feedback("hello", "hi there", "thumbs_up")
         assert len(updater._feedback_buffer) == 1
 
-    @patch("threading.Thread.start")
-    def test_add_feedback_triggers_update_at_threshold(self, mock_start):
+    @patch("domain.infrastructure._internal.fire_and_forget.get_pool")
+    def test_add_feedback_triggers_update_at_threshold(self, mock_pool):
         updater = OnlineLoRAUpdater(update_interval=2)
         updater.add_feedback("a", "b", "thumbs_up")
-        assert mock_start.call_count == 0
+        assert mock_pool.return_value.submit.call_count == 0
         updater.add_feedback("c", "d", "thumbs_down")
-        assert mock_start.call_count == 1
+        assert mock_pool.return_value.submit.call_count == 1
 
     def test_compute_gradients_all_positive(self):
         updater = OnlineLoRAUpdater(learning_rate=0.01, engine=_StubEngine())

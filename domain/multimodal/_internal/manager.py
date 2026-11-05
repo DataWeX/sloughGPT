@@ -575,8 +575,6 @@ class MultimodalManager:
 
             # Async auto-save every 5 images (non-blocking)
             if self._learning_count % 5 == 0:
-                import threading
-
                 def _async_save():
                     try:
                         engine.save(
@@ -588,7 +586,12 @@ class MultimodalManager:
                     except Exception as save_err:
                         logger.warning("Auto-save failed: %s", save_err, extra={"tag": "MODEL"})
 
-                threading.Thread(target=_async_save, daemon=True).start()
+                # Process kind (routing table in docs/plans/2026-09-20-
+                # execution-consolidation.md): dropping an autosave would
+                # silently lose learned weights — the engine never drops.
+                from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+                get_engine().spawn(_async_save, name="mm-autosave")
 
             confidence = min(float(np.mean(np.abs(embed.data))) * 2.0, 1.0)
 

@@ -172,7 +172,13 @@ def _ensure_probe() -> None:
             return
         _PROBE_STARTED = True
         gen = _PROBE_GEN
-        threading.Thread(target=_run_probe, args=(gen,), name="accel-probe", daemon=True).start()
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): _PROBE_STARTED is already set, so a dropped
+        # fire-and-forget submit would leave detection dead for this epoch —
+        # the engine never drops.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        get_engine().spawn(_run_probe, gen, name="accel-probe")
 
 
 def _run_probe(gen: int) -> None:

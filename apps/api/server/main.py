@@ -153,9 +153,9 @@ async def lifespan(app_inst: FastAPI):
             logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
 
         # Auto-ingest repo docs into production RAG (if empty)
-        # Moved to background thread: importing rag_service chains through
+        # Moved off the critical path: importing rag_service chains through
         # rag.py → HybridRetriever and blocks the lifespan.
-        import threading
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
 
         def _rag_init_and_ingest():
             try:
@@ -172,7 +172,10 @@ async def lifespan(app_inst: FastAPI):
             except Exception as e:
                 logger.debug("RAG init skipped: %s", e)
 
-        threading.Thread(target=_rag_init_and_ingest, daemon=True, name="rag-init").start()
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): engine spawn is never dropped, unlike a bounded
+        # FAF submit — RAG init must run.
+        get_engine().spawn(_rag_init_and_ingest, name="rag-init")
 
         # Warm the soul index off the critical path. SloManager no longer scans
         # in __init__ (a trained .soul embeds ~41 MB of Adam optimizer state as
@@ -186,11 +189,9 @@ async def lifespan(app_inst: FastAPI):
 
         # Start background daemons (moved from pre-uvicorn to post-startup).
         # The feedback workflow parses/aggregates adapters before returning
-        # (observed ~9 s of the 40 s cold start), so it runs on a daemon thread
-        # like rag-init above — background work must not gate readiness.
-        threading.Thread(
-            target=_start_feedback_workflow, daemon=True, name="feedback-workflow"
-        ).start()
+        # (observed ~9 s of the 40 s cold start), so it runs on the shared
+        # engine like rag-init above — background work must not gate readiness.
+        get_engine().spawn(_start_feedback_workflow, name="feedback-workflow")
         _start_health_monitor()
         _start_watchdog()
 
