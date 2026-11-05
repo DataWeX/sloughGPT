@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Phase 3: rewrite client next/* imports (and vi.mock sites) onto local shims.
-// In scope: next/link, next/navigation, next/dynamic, next/web-vitals
-// Out of scope: next/server, next/font, next-auth, next/image, next (types)
+// Keep framework-native imports. Vite aliases next/* to local shims, while
+// Next must use its own router context and runtime implementations.
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, extname } from 'node:path'
@@ -20,14 +19,14 @@ const SKIP_DIRS = new Set([
   'public',
 ])
 
-/** specifier → shim module path (alias-relative via @/) */
-const SPECIFIER_MAP = {
-  'next/link': '@/vite/next-compat/link',
-  'next/navigation': '@/vite/next-compat/navigation',
-  'next/dynamic': '@/vite/next-compat/dynamic',
-  'next/web-vitals': '@/vite/next-compat/web-vitals',
-  'next/server': '@/vite/next-compat/server',
-  'next-auth/react': '@/vite/next-compat/next-auth',
+/** shim module path → framework-native specifier */
+const SHIM_MAP = {
+  '@/vite/next-compat/link': 'next/link',
+  '@/vite/next-compat/navigation': 'next/navigation',
+  '@/vite/next-compat/dynamic': 'next/dynamic',
+  '@/vite/next-compat/web-vitals': 'next/web-vitals',
+  '@/vite/next-compat/server': 'next/server',
+  '@/vite/next-compat/next-auth': 'next-auth/react',
 }
 
 const EXTS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx'])
@@ -54,7 +53,7 @@ function transform(src) {
   let out = src
   let changed = false
 
-  for (const [spec, target] of Object.entries(SPECIFIER_MAP)) {
+  for (const [spec, target] of Object.entries(SHIM_MAP)) {
     // import ... from 'spec' | from "spec"
     const importRe = new RegExp(
       `(from\\s*)(['"])${escapeRe(spec)}\\2`,
@@ -116,7 +115,9 @@ function main() {
     const { out, changed } = transform(src)
     if (!changed) continue
     touched++
-    const n = (src.match(/next\/(link|navigation|dynamic|web-vitals)/g) || []).length
+    const n = (
+      src.match(/@\/vite\/next-compat\/(link|navigation|dynamic|web-vitals|server|next-auth)/g) || []
+    ).length
     rewritten += n
     if (!dry) writeFileSync(file, out, 'utf-8')
     console.log(`${dry ? 'would rewrite' : 'rewrote'}: ${file.slice(webRoot.length + 1)} (${n})`)
