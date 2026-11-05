@@ -46,6 +46,15 @@ review flag.
    through it (benchmarked: 1.4ms dispatch, 5 peak threads vs 141).
 2. Document the routing table; add a lint hint against raw
    `threading.Thread(target=` in `apps/` + `domain/` (allowlist file).
+   **Done (2026-11-05)** — `scripts/check_raw_threads.py` +
+   `scripts/raw_threads_allowlist.json` (54 sites across 46
+   `path::qualname` entries with declared counts; a new site, a shrunk
+   site, a schema-less entry, or a stale entry all fail; AST-based, so
+   docstring mentions and `from threading import Thread` aliases are
+   handled). Gate: `tests/core-py/test_raw_thread_gate.py`; hint:
+   pre-commit `check-raw-threads`. Allowlist entries carry `kind` —
+   `followup` marks stage-3/4 candidates the audit parked (grep
+   `"kind": "followup"` for the backlog; 7 sites today).
 3. Migrate raw-thread sites one by one, in two passes (audit2026-11-04, ~130 production call sites):
    - **3A — process kind (~30 sites)**: long-lived supervised work →
      `engine.spawn()` / `run_subprocess()` / `spawn_command()`. Priority
