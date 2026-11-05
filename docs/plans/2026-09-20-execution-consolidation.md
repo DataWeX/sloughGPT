@@ -51,10 +51,13 @@ review flag.
      `engine.spawn()` / `run_subprocess()` / `spawn_command()`. Priority
      order: `dev.py` server supervision (**done for `cmd_dev`** api+web —
      `spawn_command`; `_cmd_api_only`/`_cmd_api_and_*` migrate when next
-     touched) → shell command execution (`routers/shell.py`,
-     `shell/repl.py` background jobs, `shell/runtime.py`, `init.py`) →
-     `startup.py` engine-child (**done** — initial + restart launch sites
-     via `spawn_command`).
+     touched) → shell command execution (**done** — `shell/repl.py`
+     background jobs via `engine.spawn` + `_BgJob` handle,
+     `shell/runtime.py` + `shell/_internal/init.py` via
+     `spawn_command(start_new_session=)`; `routers/shell.py:158` ruled
+     not-an-isolation-case: drives the in-process REPL singleton,
+     thread-mode by necessity) → `startup.py` engine-child (**done** —
+     initial + restart launch sites via `spawn_command`).
    - **3B — thread/FAF kind (~25 sites)**: short-lived in-process work →
      FAF pool or engine thread mode (`main.py` rag-init, preloader,
      feedback loops, collectors, warmups, probes).
