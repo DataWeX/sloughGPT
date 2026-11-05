@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "a3b33af5838757ec15d94e23902d1a84d56d9595",
+    "recorded_commit": "d4cfd7b6d9e1bdc82db921371a57a42509f12427",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -169,7 +169,7 @@
       "consumers": ["tests/", "apps/api/", "scripts/", "domain/training/", "domain/core/"],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "715d1c513d7c1ab104dfaa30ea3c2f8c1aca51e6"
+      "tree_hash": "8b97b14281d4f392e98b139868f28b521240df55"
     },
     "knowledge": {
       "class": "core-capability",
@@ -285,7 +285,7 @@
       "consumers": ["tests/", "apps/cli/", "apps/api/", "scripts/"],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "4cd5f46520b756b165970cc925c9ad0f5fc0100a"
+      "tree_hash": "4d16614ac25b23638384ff5be5668bc010534266"
     },
     "slolib": {
       "class": "core-capability",
