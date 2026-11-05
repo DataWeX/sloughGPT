@@ -181,8 +181,13 @@ export const MessageBubble = memo(function MessageBubble({
         onKeyDown={handleKeyDown}
         className={cn('group transition-all duration-300 ease-out')}
       >
-        {/* Content — the frame carries the chrome; actions sit outside it */}
-        <div className={cn('min-w-0', role === 'user' && !isEditing && 'flex justify-end')}>
+        {/* Content — the frame carries the chrome; actions sit outside it.
+            This wrapper must stay a plain block: MessageFrame already owns
+            `justify-end` for user turns, and adding it here right-aligned
+            [frame][hover toolbar] as a PAIR — the toolbar is opacity-0 but still
+            occupies ~200px, so the bubble stopped short of the right edge and
+            read as floating mid-row. */}
+        <div className="min-w-0">
           <MessageContent
             content={content}
             role={role}
@@ -218,15 +223,20 @@ export const MessageBubble = memo(function MessageBubble({
           )}
 
           {role === 'user' && hasContent && !isEditing && (
-            <MessageActions
-              content={content}
-              messageId={id}
-              role={role}
-              onCopy={onCopy}
-              onEdit={handleEditStart}
-              onSuggestionClick={onSuggestionClick}
-              onDelete={onDelete}
-            />
+            /* Column + items-end: MessageActions is a fragment (toolbar, then
+               reactions), so it must stack vertically while its buttons sit
+               flush with the right-aligned bubble above. */
+            <div className="flex flex-col items-end">
+              <MessageActions
+                content={content}
+                messageId={id}
+                role={role}
+                onCopy={onCopy}
+                onEdit={handleEditStart}
+                onSuggestionClick={onSuggestionClick}
+                onDelete={onDelete}
+              />
+            </div>
           )}
         </div>
       </div>
