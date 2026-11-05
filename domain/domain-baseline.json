@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "4f51278a408a0babf2a6eb07fc05e9ef5de4c2ec",
+    "recorded_commit": "4b9d7c8278659e886f741a4a61125b1208e34365",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
