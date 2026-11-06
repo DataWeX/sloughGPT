@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from apps.api.server.tests.test_support import get_test_client
 
@@ -330,6 +330,69 @@ class TestGenerateRequiresModel:
         resp = client.post("/inference/generate/stream", json={"prompt": "hello"})
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
+
+
+class TestGenerateSharedEngine:
+    def test_interpretive_generate_delegates_after_context_and_parameter_processing(self):
+        from routers import inference as inference_router
+
+        class Coalescer:
+            def hash(self, *args):
+                return "test-generation"
+
+            async def start(self, _key):
+                return None
+
+            async def complete(self, _key, _result):
+                return None
+
+            async def complete_error(self, _key, _error):
+                return None
+
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value="A generated answer.")
+        server_state = MagicMock()
+        coalescer = Coalescer()
+
+        def preserve_explicit_parameters(**kwargs):
+            return {
+                key: kwargs[key]
+                for key in ("temperature", "top_p", "top_k", "repetition_penalty")
+            }
+
+        with (
+            patch.object(inference_router, "_get_model_status", return_value={"ready": True}),
+            patch.object(inference_router, "_check_memory_pressure", return_value=None),
+            patch.object(inference_router, "get_provider", return_value=provider),
+            patch.object(
+                inference_router, "_apply_meta_weights", side_effect=preserve_explicit_parameters
+            ),
+            patch.object(inference_router, "get_coalescer", return_value=coalescer),
+            patch.object(inference_router, "get_server_state", return_value=server_state),
+            patch.object(inference_router, "capture"),
+        ):
+            response = client.post(
+                "/inference/generate",
+                json={
+                    "prompt": "Explain this",
+                    "max_new_tokens": 12,
+                    "temperature": 0.2,
+                    "top_p": 0.9,
+                    "top_k": 5,
+                    "repetition_penalty": 1.0,
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["text"] == "A generated answer."
+        provider.chat.assert_awaited_once_with(
+            [{"role": "user", "content": "Explain this"}],
+            max_tokens=12,
+            temperature=0.2,
+            top_p=0.9,
+            top_k=5,
+            repetition_penalty=1.0,
+        )
 
 
 class TestChatRequiresModel:

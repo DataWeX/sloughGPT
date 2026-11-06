@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -108,19 +109,38 @@ class TestInferEmbed:
 
 class TestInferGenerate:
     def test_generate_endpoint_exists(self):
-        """Verify the generate endpoint is registered and accepts POST."""
+        """The granular endpoint delegates its explicit sampling controls."""
         _app, router = _build_app()
-        # Just verify the endpoint exists and accepts the request format
-        # The actual generation depends on model state which is complex to mock
         provider = _mock_provider()
-        mock_model = MagicMock()
+        provider.chat = AsyncMock(return_value="Hello, world!")
+        server_state = MagicMock(tokenizer=None)
         with (
-            patch.object(router, "_get_model", return_value=mock_model),
+            patch.object(
+                router, "_get_model", return_value=SimpleNamespace(model_id="test-model")
+            ),
+            patch("routers.inference._get_model_status", return_value={"ready": True}),
             patch("domain.models.get_provider", return_value=provider),
+            patch("domain.infrastructure.server_state.get_server_state", return_value=server_state),
         ):
             resp = TestClient(_app).post(
                 "/infer",
-                json={"prompt": "Hello", "max_new_tokens": 10},
+                json={
+                    "prompt": "Hello",
+                    "max_new_tokens": 10,
+                    "temperature": 0.2,
+                    "top_p": 0.9,
+                    "top_k": 5,
+                    "repetition_penalty": 1.0,
+                },
             )
-        # Endpoint exists and processes the request (may fail on model internals)
-        assert resp.status_code in (200, 400, 500, 503)
+        assert resp.status_code == 200
+        assert resp.json()["text"] == "Hello, world!"
+        assert resp.json()["tokens_generated"] == 2
+        provider.chat.assert_awaited_once_with(
+            [{"role": "user", "content": "Hello"}],
+            max_tokens=10,
+            temperature=0.2,
+            top_p=0.9,
+            top_k=5,
+            repetition_penalty=1.0,
+        )
