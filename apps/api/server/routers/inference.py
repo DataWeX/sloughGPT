@@ -785,6 +785,8 @@ def _run_post_gen_tasks(
     bg_tasks: Any,
     bg_tasks_discard: Any,
     corr_id: str,
+    inference_tokens: int | None = None,
+    inference_elapsed_ms: float | None = None,
 ) -> dict[str, Any]:
     """Launch fire-and-forget background tasks after chat generation completes.
 
@@ -867,8 +869,8 @@ def _run_post_gen_tasks(
     # Inference metrics
     try:
         get_server_state().record_inference(
-            tokens=tokens,
-            elapsed_ms=duration_ms,
+            tokens=inference_tokens if inference_tokens is not None else tokens,
+            elapsed_ms=inference_elapsed_ms if inference_elapsed_ms is not None else duration_ms,
             model=_pgs_state.model_type or req.model,
         )
     except Exception as e:
@@ -2152,6 +2154,7 @@ class InferenceRouter:
         model = _chat_state.model_type or req.model
 
         collected: list[str] = []
+        generation_t0 = time.monotonic()
         try:
             async for token in provider.chat_stream(
                 messages,
@@ -2172,6 +2175,7 @@ class InferenceRouter:
             raise
 
         text = "".join(collected)
+        generation_elapsed_ms = round((time.monotonic() - generation_t0) * 1000, 1)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
         try:
             tokens = _count_tokens(text, _chat_state)
@@ -2198,6 +2202,8 @@ class InferenceRouter:
                 self._BG_TASKS,
                 self._bg_tasks_lock_discard,
                 corr_id="stream",
+                inference_tokens=tokens,
+                inference_elapsed_ms=generation_elapsed_ms,
             )
         except Exception as e:
             logger.warning("Post-gen tasks failed: %s", e)
@@ -2264,6 +2270,12 @@ class InferenceRouter:
             model=model,
             usage={"completion_tokens": tokens, "total_tokens": tokens},
             elapsed_ms=elapsed,
+            generation_elapsed_ms=generation_elapsed_ms,
+            tokens_per_sec=(
+                round(tokens / (generation_elapsed_ms / 1000), 1)
+                if tokens > 0 and generation_elapsed_ms > 0
+                else None
+            ),
             finish_reason="stop",
             tokens=collected,
             consciousness=(

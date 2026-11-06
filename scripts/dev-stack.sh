@@ -132,7 +132,7 @@ start_api() {
 # ── Start Web ──────────────────────────────────────────────────
 start_web() {
   log_api "Starting web (port $WEB_PORT)..."
-  (cd "$ROOT/apps/web" && exec npm run dev 2>&1) &
+  (cd "$ROOT/apps/web" && exec npm run dev -- --host 0.0.0.0 --port "$WEB_PORT" 2>&1) &
   WEB_PID=$!
   # Give the Vite dev server a moment to bind
   sleep 3
