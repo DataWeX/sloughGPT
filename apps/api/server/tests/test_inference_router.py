@@ -2,7 +2,8 @@
 
 import json
 import uuid
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from apps.api.server.tests.test_support import get_test_client
 
@@ -323,13 +324,23 @@ class TestContextEndpoints:
 
 class TestGenerateRequiresModel:
     def test_generate_returns_503_without_model(self):
-        resp = client.post("/inference/generate", json={"prompt": "hello"})
+        resp = client.post("/infer", json={"prompt": "hello"})
         assert resp.status_code == 503
 
+    def test_old_generation_path_is_removed(self):
+        resp = client.post("/inference/generate", json={"prompt": "hello"})
+        assert resp.status_code == 404
+
     def test_generate_stream_returns_error_without_model(self):
-        resp = client.post("/inference/generate/stream", json={"prompt": "hello"})
+        resp = client.post("/infer/stream", json={"prompt": "hello"})
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
+
+    def test_old_generation_stream_path_is_removed(self):
+        resp = client.post("/inference/generate/stream", json={"prompt": "hello"})
+        assert resp.status_code == 404
+
+
 
 
 class TestChatRequiresModel:
@@ -364,7 +375,7 @@ class TestVoiceEndpoints:
 
 class TestSchemaValidation:
     def test_generate_missing_prompt(self):
-        resp = client.post("/inference/generate", json={})
+        resp = client.post("/infer", json={})
         assert resp.status_code == 422
 
     def test_chat_missing_messages(self):
@@ -387,7 +398,7 @@ class TestSchemaValidation:
         assert "No model loaded" in resp.text or "No user message" in resp.text
 
     def test_generate_temperature_out_of_range(self):
-        resp = client.post("/inference/generate", json={"prompt": "hi", "temperature": 5.0})
+        resp = client.post("/infer", json={"prompt": "hi", "temperature": 5.0})
         assert resp.status_code == 422
 
 

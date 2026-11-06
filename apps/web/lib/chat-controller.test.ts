@@ -129,14 +129,12 @@ describe('chatController.send', () => {
     expect(result.done).toBe(true)
   })
 
-  it('falls back to /inference/generate on chat failure', async () => {
+  it('does not fall back to a separate inference endpoint when chat fails', async () => {
     apiClient.apiGet.mockResolvedValue({ model_loaded: true, model_type: 'gpt2' })
-    apiClient.apiPost
-      .mockRejectedValueOnce(new Error('chat failed'))
-      .mockResolvedValueOnce({ text: 'fallback response' })
-    const result = await chatController.send('hello')
-    expect(result.message).toBe('fallback response')
-    expect(result.done).toBe(true)
+    apiClient.apiPost.mockRejectedValueOnce(new Error('chat failed'))
+    await expect(chatController.send('hello')).rejects.toThrow('chat failed')
+    expect(apiClient.apiPost).toHaveBeenCalledTimes(1)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/chat', expect.any(Object))
   })
 
   it('uses default options when none provided', async () => {

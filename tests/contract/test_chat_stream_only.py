@@ -28,7 +28,7 @@ Layers, and the specific reintroduction each catches:
 5. **No ``response_model`` on the chat router** — a folded body in OpenAPI
    re-advertises the non-streaming contract even while the handler streams.
 
-Deliberately out of scope (each is a different rule): ``/inference/generate``'s
+Deliberately out of scope (each is a different rule): ``/infer``'s
 non-streaming variant is grandfathered by the Endpoint Rule (no retroactive
 purge); ``companion`` owns a *separate* ``POST /chat`` under its own prefix
 with its own ``ChatResponse``; the port's ``fold()`` is the edge fold the
