@@ -46,13 +46,13 @@ export interface MessageBubbleProps {
   hasThread?: boolean
   onThread?: (messageId: string) => void
   /** Per-turn stream metrics for the frame footer (tok/s, token count, latency). */
-  metrics?: { tokens?: number; elapsedMs?: number }
+  metrics?: { tokens?: number; elapsedMs?: number; tokensPerSecond?: number }
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
-function formatMetrics(m?: { tokens?: number; elapsedMs?: number }): string | null {
+function formatMetrics(m?: { tokens?: number; elapsedMs?: number; tokensPerSecond?: number }): string | null {
   if (!m || m.tokens == null || m.elapsedMs == null || m.elapsedMs <= 0) return null
-  const tps = m.tokens / (m.elapsedMs / 1000)
+  const tps = m.tokensPerSecond ?? m.tokens / (m.elapsedMs / 1000)
   const secs = (m.elapsedMs / 1000).toFixed(1)
   return `${tps.toFixed(1)} tok/s · ${m.tokens} tok · ${secs}s`
 }

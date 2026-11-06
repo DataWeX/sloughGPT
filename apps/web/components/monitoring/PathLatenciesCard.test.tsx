@@ -29,7 +29,7 @@ const base = {
   training_pool: null,
   model_metrics: [],
   path_latencies: [
-    { path: '/inference/generate', avg_ms: 320.5, count: 18, p95_ms: 610.2 },
+    { path: '/infer/generate', avg_ms: 320.5, count: 18, p95_ms: 610.2 },
     { path: '/chat/stream', avg_ms: 150.0, count: 7, p95_ms: 210.4 },
   ],
 } as any
@@ -49,7 +49,7 @@ describe('PathLatenciesCard', () => {
 
   it('renders endpoint paths with avg and p95', () => {
     render(<PathLatenciesCard liveHealth={base} />)
-    expect(screen.getByText('/inference/generate')).toBeDefined()
+    expect(screen.getByText('/infer/generate')).toBeDefined()
     expect(screen.getByText('avg 320.5ms')).toBeDefined()
     expect(screen.getByText('p95 610.2ms')).toBeDefined()
   })
@@ -62,7 +62,7 @@ describe('PathLatenciesCard', () => {
 
   it('renders multiple endpoints', () => {
     render(<PathLatenciesCard liveHealth={base} />)
-    expect(screen.getByText('/inference/generate')).toBeDefined()
+    expect(screen.getByText('/infer/generate')).toBeDefined()
     expect(screen.getByText('/chat/stream')).toBeDefined()
   })
 

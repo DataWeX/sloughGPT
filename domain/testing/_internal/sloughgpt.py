@@ -91,7 +91,7 @@ SLOUGHPGPT_PAGES = {
     "consciousness/api-explorer": ("/consciousness/api-explorer", ["api", "explorer"]),
     "consciousness/personality": ("/consciousness/personality", ["personality"]),
     # Inference
-    "infer": ("/infer", ["infer", "predict"]),
+    "infer": ("/infer/generate", ["infer", "predict"]),
     "evaluate": ("/evaluate", ["evaluate", "eval"]),
     "benchmark": ("/benchmark", ["benchmark", "eval"]),
     "explain": ("/explain", ["explain"]),
