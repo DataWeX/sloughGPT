@@ -214,6 +214,8 @@ class ChatRouter:
                                 "model": item.model,
                                 "finish_reason": item.finish_reason,
                                 "elapsed_ms": item.elapsed_ms,
+                                "generation_elapsed_ms": getattr(item, "generation_elapsed_ms", None),
+                                "tokens_per_sec": getattr(item, "tokens_per_sec", None),
                             },
                         )
                 _elapsed_ms = round((time.time() - _start) * 1000)

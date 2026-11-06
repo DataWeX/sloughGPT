@@ -57,7 +57,7 @@ export const chatController = {
         done: true,
       }
     } catch (err) {
-      _log.warning('chat endpoint failed, falling back to /inference/generate', {
+      _log.warning('chat endpoint failed, falling back to /infer/generate', {
         error: err instanceof Error ? err.message : String(err),
       })
       try {
@@ -68,7 +68,7 @@ export const chatController = {
       } catch {
         /* best-effort */
       }
-      const fallback = await apiPost<{ text?: string }>('/inference/generate', {
+      const fallback = await apiPost<{ text?: string }>('/infer/generate', {
         prompt: `User: ${message}\nAssistant:`,
         max_new_tokens: options?.max_tokens ?? 100,
         temperature: options?.temperature ?? 0.8,
