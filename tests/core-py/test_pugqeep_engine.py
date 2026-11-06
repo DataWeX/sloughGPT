@@ -1794,3 +1794,96 @@ class TestProcessTimeout:
         assert p.status == ProcessStatus.COMPLETED
         assert p.result == "ok"
         tree.shutdown()
+
+
+# ── Concurrency ───────────────────────────────────────────────────
+
+
+class TestEngineConcurrency:
+    """Engine._processes is mutated by spawn() from arbitrary threads while
+    the run loop and every query method iterate it.
+
+    Iteration must snapshot (list(self._processes.values())): a bare .values()
+    over a dict being resized raises RuntimeError: dictionary changed size
+    during iteration. In CI this killed the run loop at the all-done check
+    (engine.py run -> all(p.is_done for p in self._processes.values())), so
+    spawned processes were never dispatched again and any ThreadHandle join
+    stranded until its timeout (test_learner_continual shutdown flake)."""
+
+    def test_query_methods_survive_concurrent_spawns(self):
+        engine = Engine("race-reads")
+        n_procs = 60_000
+        spawner_done = threading.Event()
+        errors: list[BaseException] = []
+
+        def hammer():
+            try:
+                for i in range(n_procs):
+                    engine.spawn(_noop, name=f"w{i}")
+            except BaseException as e:  # spawn itself must not fail either
+                errors.append(e)
+            finally:
+                spawner_done.set()
+
+        def reader():
+            # health() also exercises ProcessMonitor.stats() via
+            # monitor.track() being called from the spawning thread.
+            reads = (
+                engine.health,
+                engine.dependency_graph,
+                engine.orphan_processes,
+                engine.critical_path,
+                lambda: engine.cancel_tree("__absent__"),
+            )
+            while not spawner_done.is_set():
+                for read in reads:
+                    try:
+                        read()
+                    except RuntimeError as e:
+                        errors.append(e)
+
+        hammer_t = threading.Thread(target=hammer, name="race-hammer")
+        reader_t = threading.Thread(target=reader, name="race-reader")
+        reader_t.start()
+        hammer_t.start()
+        hammer_t.join(timeout=120)
+        spawner_done.set()
+        reader_t.join(timeout=60)
+
+        assert not hammer_t.is_alive(), "spawner did not finish"
+        assert not reader_t.is_alive(), "reader did not finish"
+        assert errors == [], f"{len(errors)} concurrent reads raised; first: {errors[0]!r}"
+
+    def test_run_loop_survives_concurrent_spawns(self):
+        engine = Engine("race-run")
+        engine.tree("t")
+        engine.route("w", "t")
+        stop = threading.Event()
+        errors: list[BaseException] = []
+
+        def hammer():
+            i = 0
+            while not stop.is_set():
+                try:
+                    engine.spawn(_noop, name=f"w{i}")
+                    i += 1
+                except BaseException as e:
+                    errors.append(e)
+
+        thread = engine.run_background(poll_interval=0.001)
+        hammer_t = threading.Thread(target=hammer, name="race-run-hammer")
+        hammer_t.start()
+        time.sleep(3.0)
+        alive_during = thread.is_alive()
+
+        stop.set()
+        hammer_t.join(timeout=60)
+        engine.stop()
+        thread.join(timeout=5)
+
+        assert not hammer_t.is_alive()
+        assert errors == []
+        assert alive_during, (
+            "engine run loop died under concurrent spawn — bare "
+            "_processes iteration raced a dict resize (CI flake root cause)"
+        )

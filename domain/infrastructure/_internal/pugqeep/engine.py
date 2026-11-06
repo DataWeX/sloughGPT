@@ -1682,12 +1682,12 @@ class Engine:
                             "completed": len(self._completed),
                             "running": sum(
                                 1
-                                for p in self._processes.values()
+                                for p in list(self._processes.values())
                                 if p.status == ProcessStatus.RUNNING
                             ),
                             "failed": sum(
                                 1
-                                for p in self._processes.values()
+                                for p in list(self._processes.values())
                                 if p.status == ProcessStatus.FAILED
                             ),
                         }
@@ -1695,7 +1695,7 @@ class Engine:
                 except Exception as e:
                     logger.error("Engine[%s]: on_progress callback error: %s", self.name, e)
 
-            if not self._pending and all(p.is_done for p in self._processes.values()):
+            if not self._pending and all(p.is_done for p in list(self._processes.values())):
                 self._all_done_event.set()
 
             time.sleep(poll_interval)
@@ -1721,13 +1721,13 @@ class Engine:
         return thread
 
     def wait(self, timeout: float | None = None) -> None:
-        if not self._pending and all(p.is_done for p in self._processes.values()):
+        if not self._pending and all(p.is_done for p in list(self._processes.values())):
             return
         self._all_done_event.wait(timeout=timeout)
 
     def wait_all(self, timeout: float | None = None) -> list[Process]:
         self.wait(timeout=timeout)
-        return [p for p in self._processes.values() if p.is_done]
+        return [p for p in list(self._processes.values()) if p.is_done]
 
     def get_completed(self) -> list[Process]:
         done = list(self._completed)
@@ -1737,7 +1737,7 @@ class Engine:
     def stop(self) -> None:
         self._running = False
         self.stop_workers()
-        for proc in self._processes.values():
+        for proc in list(self._processes.values()):
             if not proc.is_done:
                 proc.cancel()
                 self._metrics.record_cancel()
@@ -1825,7 +1825,7 @@ class Engine:
 
     def cancel_tree(self, tree_name: str) -> int:
         count = 0
-        for proc in self._processes.values():
+        for proc in list(self._processes.values()):
             if proc._tree_name == tree_name and not proc.is_done:
                 proc.cancel()
                 self._metrics.record_cancel()
@@ -1991,7 +1991,7 @@ class Engine:
             "pending": len(self._pending),
             "completed": len(self._completed),
             "status_counts": {
-                s.value: sum(1 for p in self._processes.values() if p.status == s)
+                s.value: sum(1 for p in list(self._processes.values()) if p.status == s)
                 for s in ProcessStatus
             },
             "monitor": self._monitor.stats() if self._monitor else None,
@@ -2037,7 +2037,7 @@ class Engine:
 
     def summary(self) -> str:
         counts = {}
-        for p in self._processes.values():
+        for p in list(self._processes.values()):
             counts[p.status.value] = counts.get(p.status.value, 0) + 1
         parts = [f"{k}={v}" for k, v in sorted(counts.items())]
         return f"Engine '{self.name}': processes={len(self._processes)} ({', '.join(parts) if parts else 'none'})"
@@ -2070,7 +2070,7 @@ class Engine:
     def dependency_graph(self) -> dict:
         nodes = []
         edges = []
-        for proc in self._processes.values():
+        for proc in list(self._processes.values()):
             nodes.append(proc.id)
             for dep_id in proc.depends_on:
                 edges.append({"from": dep_id, "to": proc.id})
@@ -2081,7 +2081,7 @@ class Engine:
             return []
         # Build adjacency and find longest path via DFS
         dep_of: dict[str, list[str]] = {}
-        for proc in self._processes.values():
+        for proc in list(self._processes.values()):
             for dep_id in proc.depends_on:
                 dep_of.setdefault(dep_id, []).append(proc.id)
 
@@ -2107,7 +2107,7 @@ class Engine:
         all_children = set()
         for children in dep_of.values():
             all_children.update(children)
-        roots = [p.id for p in self._processes.values() if p.id not in all_children]
+        roots = [p.id for p in list(self._processes.values()) if p.id not in all_children]
         if not roots:
             roots = list(self._processes.keys())
 
@@ -2119,7 +2119,7 @@ class Engine:
         return best_path
 
     def orphan_processes(self) -> list[Process]:
-        return [p for p in self._processes.values() if p.depends_on and not self._deps_met(p)]
+        return [p for p in list(self._processes.values()) if p.depends_on and not self._deps_met(p)]
 
     def spawn_batch(self, items: list) -> list[Process]:
         procs = []
@@ -2136,7 +2136,7 @@ class Engine:
 
         state = {
             "name": self.name,
-            "processes": {pid: p.to_dict() for pid, p in self._processes.items()},
+            "processes": {pid: p.to_dict() for pid, p in list(self._processes.items())},
             "metrics": self._metrics.snapshot(),
         }
         with open(path, "w") as f:
@@ -2218,7 +2218,7 @@ class Engine:
         today (``depends_on=[]`` everywhere).
         """
         cap = max(0, self._retention_limit)
-        done_ids = [pid for pid, p in self._processes.items() if p.is_done]
+        done_ids = [pid for pid, p in list(self._processes.items()) if p.is_done]
         excess = len(done_ids) - cap
         if excess > 0:
             anchored: set[str] = set()
