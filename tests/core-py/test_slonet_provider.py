@@ -633,6 +633,19 @@ class TestGenerate:
         result = p.generate("hi", max_new_tokens=3)
         assert isinstance(result, str)
 
+    def test_chat_decodes_only_generated_tokens(self):
+        p = _make_provider()
+        generated_ids = np.array([[17, 18]], dtype=np.int64)
+
+        def generate_with_prompt_prefix(input_ids, **_kwargs):
+            return np.concatenate((input_ids, generated_ids), axis=1)
+
+        p._model.generate_numpy = generate_with_prompt_prefix
+
+        result = p._generate_sync([{"role": "user", "content": "hello"}], max_tokens=2)
+
+        assert result == p._tokenizer.decode(generated_ids[0].tolist())
+
     def test_generate_with_stop_no_stop(self):
         p = _make_provider()
         result = p.generate_with_stop("hello", max_tokens=5)
