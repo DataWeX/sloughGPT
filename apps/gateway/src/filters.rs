@@ -133,7 +133,7 @@ mod tests {
         for ok in [
             "/chat",
             "/chat/voice",
-            "/inference/generate",
+            "/infer",
             "/models",
             "/session/list",
             "/openapi.json",
