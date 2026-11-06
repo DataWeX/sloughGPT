@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.infer import router
+from apps.api.server.routers.inference import router as inference_router
 
 
 @pytest.fixture
@@ -17,6 +18,7 @@ def app():
     _app = FastAPI()
     register_all_handlers(_app)
     _app.include_router(router)
+    _app.include_router(inference_router)
     return _app
 
 
@@ -27,7 +29,7 @@ def client(app):
 
 class TestInfer:
     @patch("state.model")
-    @patch("domain.models.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generates_text(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "Hello world"
@@ -43,62 +45,64 @@ class TestInfer:
         assert resp.status_code == 503
 
     @patch("state.model")
-    @patch("domain.models.get_provider", return_value=None)
+    @patch("apps.api.server.routers.inference.get_provider", return_value=None)
     def test_returns_503_when_no_provider(self, mock_prov, mock_model, client):
         resp = client.post("/infer", json={"prompt": "Hi"})
         assert resp.status_code == 503
 
     @patch("state.model")
-    @patch("domain.models.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_passes_temperature(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "ok"
         mock_get_prov.return_value = provider
         mock_model.model_id = "m"
-        client.post("/infer", json={"prompt": "Hi", "temperature": 0.1})
+        client.post("/infer", json={"prompt": "temperature test", "temperature": 0.1})
         _, kwargs = provider.chat.call_args
         assert kwargs.get("temperature") == 0.1
 
     @patch("state.model")
-    @patch("domain.models.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_passes_top_p(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "ok"
         mock_get_prov.return_value = provider
         mock_model.model_id = "m"
-        client.post("/infer", json={"prompt": "Hi", "top_p": 0.5})
+        client.post("/infer", json={"prompt": "top-p test", "top_p": 0.5})
         _, kwargs = provider.chat.call_args
         assert kwargs.get("top_p") == 0.5
 
     @patch("state.model")
-    @patch("domain.models.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_passes_max_new_tokens(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "ok"
         mock_get_prov.return_value = provider
         mock_model.model_id = "m"
-        client.post("/infer", json={"prompt": "Hi", "max_new_tokens": 100})
+        client.post("/infer", json={"prompt": "max-token test", "max_new_tokens": 100})
         _, kwargs = provider.chat.call_args
         assert kwargs.get("max_tokens") == 100
 
     @patch("state.model")
-    @patch("domain.models.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_provider_exception_returns_500(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.side_effect = RuntimeError("OOM")
         mock_get_prov.return_value = provider
         mock_model.model_id = "m"
-        resp = client.post("/infer", json={"prompt": "Hi"})
+        resp = client.post(
+            "/infer", json={"prompt": "trigger unique provider failure"}
+        )
         assert resp.status_code == 500
 
     @patch("state.model")
-    @patch("domain.models.get_provider")
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_response_has_model_field(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "test"
         mock_get_prov.return_value = provider
         mock_model.model_id = "gpt2"
-        resp = client.post("/infer", json={"prompt": "Hi"})
+        resp = client.post("/infer", json={"prompt": "response model field test"})
         assert "model" in resp.json()
 
     def test_missing_prompt_rejected(self, client):

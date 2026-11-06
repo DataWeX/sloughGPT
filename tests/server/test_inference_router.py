@@ -72,7 +72,7 @@ def no_model_state():
 
 
 class TestGenerate:
-    """POST /inference/generate"""
+    """POST /infer"""
 
     @patch.dict(
         "sys.modules",
@@ -85,7 +85,7 @@ class TestGenerate:
         mock_get_provider.return_value = mock_prov
         MOCK_STATE.provider = mock_prov
 
-        resp = client.post("/inference/generate", json={"prompt": "Hi", "max_new_tokens": 16})
+        resp = client.post("/infer", json={"prompt": "Hi", "max_new_tokens": 16})
         assert resp.status_code == 200
         body = resp.json()
         assert body["text"] == "Hello world"
@@ -103,35 +103,35 @@ class TestGenerate:
         mock_get_provider.return_value = mock_prov
         MOCK_STATE.provider = mock_prov
 
-        resp = client.post("/inference/generate", json={"prompt": "Hi"})
+        resp = client.post("/infer", json={"prompt": "Hi"})
         assert resp.status_code == 500
 
     def test_generate_no_model(self, client, no_model_state):
-        resp = client.post("/inference/generate", json={"prompt": "Hi"})
+        resp = client.post("/infer", json={"prompt": "Hi"})
         assert resp.status_code == 503
 
     def test_generate_missing_prompt_422(self, client):
-        resp = client.post("/inference/generate", json={"max_new_tokens": 16})
+        resp = client.post("/infer", json={"max_new_tokens": 16})
         assert resp.status_code == 422
 
     def test_generate_max_new_tokens_zero_422(self, client):
-        resp = client.post("/inference/generate", json={"prompt": "Hi", "max_new_tokens": 0})
+        resp = client.post("/infer", json={"prompt": "Hi", "max_new_tokens": 0})
         assert resp.status_code == 422
 
     def test_generate_temperature_too_high_422(self, client):
-        resp = client.post("/inference/generate", json={"prompt": "Hi", "temperature": 2.5})
+        resp = client.post("/infer", json={"prompt": "Hi", "temperature": 2.5})
         assert resp.status_code == 422
 
     def test_generate_temperature_negative_422(self, client):
-        resp = client.post("/inference/generate", json={"prompt": "Hi", "temperature": -1})
+        resp = client.post("/infer", json={"prompt": "Hi", "temperature": -1})
         assert resp.status_code == 422
 
     def test_generate_top_k_too_large_422(self, client):
-        resp = client.post("/inference/generate", json={"prompt": "Hi", "top_k": 9999})
+        resp = client.post("/infer", json={"prompt": "Hi", "top_k": 9999})
         assert resp.status_code == 422
 
     def test_generate_wrong_method_405(self, client):
-        assert client.get("/inference/generate").status_code == 405
+        assert client.get("/infer").status_code == 405
 
     @patch.dict(
         "sys.modules",
@@ -144,7 +144,7 @@ class TestGenerate:
         mock_get_provider.return_value = mock_prov
 
         resp = client.post(
-            "/inference/generate",
+            "/infer",
             json={
                 "prompt": "Test",
                 "max_new_tokens": 50,
@@ -157,7 +157,7 @@ class TestGenerate:
 
 
 class TestGenerateStream:
-    """POST /inference/generate/stream"""
+    """POST /infer/stream"""
 
     @patch.dict(
         "sys.modules",
@@ -175,7 +175,7 @@ class TestGenerateStream:
         mock_get_provider.return_value = mock_prov
 
         resp = client.post(
-            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 16}
+            "/infer/stream", json={"prompt": "Hi", "max_new_tokens": 16}
         )
         assert resp.status_code == 200
         text = resp.text
@@ -183,7 +183,7 @@ class TestGenerateStream:
         assert "world" in text
 
     def test_generate_stream_no_model(self, client, no_model_state):
-        resp = client.post("/inference/generate/stream", json={"prompt": "Hi"})
+        resp = client.post("/infer/stream", json={"prompt": "Hi"})
         assert resp.status_code == 200
         assert "error" in resp.text
 
@@ -193,7 +193,7 @@ class TestGenerateStream:
     )
     @patch("apps.api.server.routers.inference.get_provider", return_value=None)
     def test_generate_stream_no_provider(self, mock_get_provider, client):
-        resp = client.post("/inference/generate/stream", json={"prompt": "Hi"})
+        resp = client.post("/infer/stream", json={"prompt": "Hi"})
         assert resp.status_code == 200
         assert "No provider available" in resp.text
 
@@ -807,7 +807,7 @@ class TestCachedReplayChunking:
         mock_get_coalescer.return_value = fake
 
         resp = client.post(
-            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 16}
+            "/infer/stream", json={"prompt": "Hi", "max_new_tokens": 16}
         )
         assert resp.status_code == 200
         tokens = []

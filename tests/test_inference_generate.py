@@ -1,5 +1,5 @@
 """
-Tests for /inference/generate and /inference/generate/stream endpoints.
+Tests for /infer and /infer/stream endpoints.
 """
 
 import json
@@ -78,12 +78,12 @@ def _clear_meta_weight_cache():
 
 
 class TestGenerateEndpoint:
-    """Tests for POST /inference/generate."""
+    """Tests for POST /infer."""
 
     def test_generate_returns_text(self, client, mock_provider):
         """Should return generated text with model info."""
         response = client.post(
-            "/inference/generate",
+            "/infer",
             # Explicit rather than relying on GenerateRequest.model's default,
             # which has already been changed once under this test (gpt2 →
             # qwen2.5-0.5b-instruct); actual_model honours state.model_type
@@ -104,7 +104,7 @@ class TestGenerateEndpoint:
         patch: passing these through untouched is the production contract.
         """
         client.post(
-            "/inference/generate",
+            "/infer",
             json={
                 "prompt": "Hi",
                 "max_new_tokens": 50,
@@ -137,7 +137,7 @@ class TestGenerateEndpoint:
             manager.return_value.get_adjustment.return_value = MetaWeights(temperature=0.77)
             manager.return_value.neutral_weights = MetaWeights()
             client.post(
-                "/inference/generate",
+                "/infer",
                 json={"prompt": "Nudge me", "max_new_tokens": 5},
             )
         kwargs = mock_provider.chat.call_args[1]
@@ -167,7 +167,7 @@ class TestGenerateEndpoint:
             manager.return_value.get_adjustment.return_value = MetaWeights(temperature=1.05)
             manager.return_value.neutral_weights = MetaWeights()
             client.post(
-                "/inference/generate",
+                "/infer",
                 json={"prompt": "Telemetry", "max_new_tokens": 5},
             )
         # the provider saw the nudged value...
@@ -183,7 +183,7 @@ class TestGenerateEndpoint:
             patch("state.model", MagicMock()),
             patch("apps.api.server.routers.inference.get_provider", return_value=None),
         ):
-            response = client.post("/inference/generate", json={"prompt": "Hello"})
+            response = client.post("/infer", json={"prompt": "Hello"})
         assert response.status_code == 503
 
     def test_generate_reports_actual_loaded_model(self, client, mock_provider):
@@ -193,7 +193,7 @@ class TestGenerateEndpoint:
         _st.model_type = "Qwen/Qwen2.5-0.5B-Instruct"
         try:
             response = client.post(
-                "/inference/generate", json={"prompt": "Hello", "max_new_tokens": 10}
+                "/infer", json={"prompt": "Hello", "max_new_tokens": 10}
             )
         finally:
             _st.model_type = None
@@ -203,12 +203,12 @@ class TestGenerateEndpoint:
 
 
 class TestGenerateStreamEndpoint:
-    """Tests for POST /inference/generate/stream."""
+    """Tests for POST /infer/stream."""
 
     def test_generate_stream_returns_sse(self, client, mock_provider):
         """Should return SSE tokens from provider."""
         response = client.post(
-            "/inference/generate/stream", json={"prompt": "Hello", "max_new_tokens": 10}
+            "/infer/stream", json={"prompt": "Hello", "max_new_tokens": 10}
         )
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/event-stream")
@@ -229,7 +229,7 @@ class TestGenerateStreamEndpoint:
     def test_generate_stream_tokens_ordered(self, client, mock_provider):
         """Should yield tokens in correct order (may be batched)."""
         response = client.post(
-            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 5}
+            "/infer/stream", json={"prompt": "Hi", "max_new_tokens": 5}
         )
         tokens = []
         for line in response.text.split("\n"):
@@ -243,7 +243,7 @@ class TestGenerateStreamEndpoint:
     def test_generate_stream_complete_meta(self, client, mock_provider):
         """Should include token count and elapsed time in final event."""
         response = client.post(
-            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 10}
+            "/infer/stream", json={"prompt": "Hi", "max_new_tokens": 10}
         )
         for line in response.text.split("\n"):
             if line.startswith("data: "):

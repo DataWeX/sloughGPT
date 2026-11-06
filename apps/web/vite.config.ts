@@ -44,6 +44,30 @@ export default defineConfig({
     alias: [
       { find: /^@\//, replacement: path.resolve(__dirname) + '/' },
       {
+        find: /^next\/link$/,
+        replacement: path.resolve(__dirname, 'vite/next-compat/link.tsx'),
+      },
+      {
+        find: /^next\/navigation$/,
+        replacement: path.resolve(__dirname, 'vite/next-compat/navigation.ts'),
+      },
+      {
+        find: /^next\/dynamic$/,
+        replacement: path.resolve(__dirname, 'vite/next-compat/dynamic.tsx'),
+      },
+      {
+        find: /^next\/web-vitals$/,
+        replacement: path.resolve(__dirname, 'vite/next-compat/web-vitals.ts'),
+      },
+      {
+        find: /^next\/server$/,
+        replacement: path.resolve(__dirname, 'vite/next-compat/server.ts'),
+      },
+      {
+        find: /^next-auth\/react$/,
+        replacement: path.resolve(__dirname, 'vite/next-compat/next-auth.tsx'),
+      },
+      {
         find: /^@sloughgpt\/strui$/,
         replacement: path.resolve(__dirname, '../../packages/strui/src'),
       },
