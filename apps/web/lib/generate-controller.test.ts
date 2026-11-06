@@ -39,10 +39,10 @@ describe('generateController.generate', () => {
     await expect(generateController.generate({ prompt: 'x' })).rejects.toThrow('503')
   })
 
-  it('sends prompt to /inference/generate', async () => {
+  it('sends prompt to /infer/generate', async () => {
     apiClient.apiPost.mockResolvedValue({ text: 'ok', model: 'test', tokens_generated: 1 })
     await generateController.generate({ prompt: 'test prompt' })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/inference/generate', { prompt: 'test prompt' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/infer/generate', { prompt: 'test prompt' })
   })
 
   it('returns empty text without throwing', async () => {
@@ -54,6 +54,6 @@ describe('generateController.generate', () => {
   it('forwards optional parameters', async () => {
     apiClient.apiPost.mockResolvedValue({ text: 'ok', model: 'm', tokens_generated: 1 })
     await generateController.generate({ prompt: 'hi', max_new_tokens: 50, temperature: 0.5 })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/inference/generate', { prompt: 'hi', max_new_tokens: 50, temperature: 0.5 })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/infer/generate', { prompt: 'hi', max_new_tokens: 50, temperature: 0.5 })
   })
 })
