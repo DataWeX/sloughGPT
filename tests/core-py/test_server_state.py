@@ -159,6 +159,20 @@ class TestRequestRecording:
         assert history[0]["path"] == "/api/chat"
         assert history[0]["elapsed_ms"] == 45.3
 
+    def test_latest_inference_request_ignores_health_polls(self):
+        s = ServerState()
+        s.record_request_latency("/chat", "POST", 200, 845.2)
+        s.record_request_latency("/health", "GET", 200, 3.1)
+        latest = s.get_latest_inference_request()
+        assert latest is not None
+        assert latest["path"] == "/chat"
+        assert latest["elapsed_ms"] == 845.2
+
+    def test_latest_inference_request_is_empty_without_inference(self):
+        s = ServerState()
+        s.record_request_latency("/health", "GET", 200, 3.1)
+        assert s.get_latest_inference_request() is None
+
     def test_get_request_history_limit(self):
         s = ServerState()
         for i in range(10):
@@ -268,6 +282,16 @@ class TestPathLatency:
 
 
 class TestInferenceMetrics:
+    def test_latest_generation_metrics_use_generation_duration(self):
+        s = ServerState()
+        s.record_inference(tokens=30, elapsed_ms=1500, model="native")
+        metrics = s.get_latest_inference_metrics()
+        assert metrics is not None
+        assert metrics["tokens"] == 30
+        assert metrics["elapsed_ms"] == 1500
+        assert metrics["tokens_per_sec"] == 20.0
+        assert metrics["model"] == "native"
+
     def test_record_inference(self):
         s = ServerState()
         s.record_inference(tokens=50, elapsed_ms=100.0, model="gpt2")
