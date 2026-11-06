@@ -123,9 +123,9 @@ class TestGenerationEndpoints:
     """Integration tests for text generation endpoints."""
 
     def test_generate_endpoint(self):
-        """Test basic text generation via /inference/generate."""
+        """Test basic text generation via /infer/generate."""
         payload = {"prompt": "Hello, how are you?", **_QUICK_GEN}
-        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
+        response = requests.post(f"{BASE_URL}/infer/generate", json=payload, timeout=TIMEOUT)
         assert response.status_code == 200
         data = response.json()
         assert "text" in data
@@ -138,13 +138,13 @@ class TestGenerationEndpoints:
             "temperature": 0.7,
             "top_p": 0.9,
         }
-        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
+        response = requests.post(f"{BASE_URL}/infer/generate", json=payload, timeout=TIMEOUT)
         assert response.status_code == 200
 
     def test_generate_empty_prompt(self):
         """Test that empty prompt is rejected gracefully (not a 500)."""
         payload = {"prompt": ""}
-        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
+        response = requests.post(f"{BASE_URL}/infer/generate", json=payload, timeout=TIMEOUT)
         # Contract since request validation landed: an empty prompt is a
         # 422 with the structured E_VAL_REQUEST envelope — graceful means
         # a typed validation error, not a silent 200 and not a 500.
@@ -156,7 +156,7 @@ class TestGenerationEndpoints:
         """Test streaming generation endpoint."""
         payload = {"prompt": "Count to 3:", **_QUICK_GEN}
         response = requests.post(
-            f"{BASE_URL}/inference/generate/stream", json=payload, stream=True, timeout=TIMEOUT
+            f"{BASE_URL}/infer/generate/stream", json=payload, stream=True, timeout=TIMEOUT
         )
         assert response.status_code == 200
         assert response.headers.get("content-type", "").startswith("text/event-stream")
@@ -286,7 +286,7 @@ class TestErrorHandling:
     def test_invalid_json(self):
         """Test handling of invalid JSON."""
         response = requests.post(
-            f"{BASE_URL}/inference/generate",
+            f"{BASE_URL}/infer/generate",
             data="not valid json",
             headers={"Content-Type": "application/json"},
             timeout=TIMEOUT,
@@ -296,13 +296,13 @@ class TestErrorHandling:
     def test_missing_required_field(self):
         """Test handling of missing required fields."""
         payload = {"max_new_tokens": 100}
-        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
+        response = requests.post(f"{BASE_URL}/infer/generate", json=payload, timeout=TIMEOUT)
         assert response.status_code == 422
 
     def test_invalid_field_type(self):
         """Test handling of invalid field types."""
         payload = {"prompt": 12345}
-        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
+        response = requests.post(f"{BASE_URL}/infer/generate", json=payload, timeout=TIMEOUT)
         assert response.status_code == 422
 
     def test_404_not_found(self):
@@ -324,8 +324,8 @@ class TestCache:
     def test_identical_requests(self):
         """Test that identical requests work consistently."""
         payload = {"prompt": "Cache test", **_QUICK_GEN}
-        response1 = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
-        response2 = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
+        response1 = requests.post(f"{BASE_URL}/infer/generate", json=payload, timeout=TIMEOUT)
+        response2 = requests.post(f"{BASE_URL}/infer/generate", json=payload, timeout=TIMEOUT)
         assert response1.status_code == 200
         assert response2.status_code == 200
 
