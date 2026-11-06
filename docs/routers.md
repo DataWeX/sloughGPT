@@ -36,6 +36,8 @@ Registered pre-lifespan in `main.py`.
 
 ## System Router (`/system`)
 
+> Also serves the `/errors` and `/session` surfaces since card `20261101_154058` — `errors.py` and `session.py` were merged into this module as an aggregate router facade (paths and wire shapes unchanged).
+
 | Method | Path                               | Description                                                     |
 | ------ | ---------------------------------- | --------------------------------------------------------------- |
 | `GET`  | `/system/metrics`                  | Real-time CPU, memory, disk, GPU usage.                         |
@@ -151,6 +153,8 @@ Separate inference endpoint backed by the direct model server.
 | `GET`  | `/auth/whoami` | Get current user info. |
 
 ## Session Router (`/session`)
+
+> Served by `routers/system.py` since card `20261101_154058` — `session.py` was merged into the system facade (paths and wire shapes unchanged).
 
 | Method | Path                               | Description                  |
 | ------ | ---------------------------------- | ---------------------------- |
@@ -527,6 +531,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST`   | `/docstore/{collection}/bulk`     | Bulk upsert documents.          |
 
 ## Errors Router (`/errors`)
+
+> Served by `routers/system.py` since card `20261101_154058` — `errors.py` was merged into the system facade (paths and wire shapes unchanged).
 
 | Method   | Path                  | Description             |
 | -------- | --------------------- | ----------------------- |
