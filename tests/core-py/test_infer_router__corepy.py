@@ -91,10 +91,14 @@ def app():
     """Create FastAPI app with the infer router."""
     from fastapi import FastAPI
 
+    from apps.api.server.infrastructure.exception_handlers import register_app_error_handler
     from apps.api.server.routers.infer import router
+    from apps.api.server.routers.inference import router as inference_router
 
     app = FastAPI()
+    register_app_error_handler(app)
     app.include_router(router)
+    app.include_router(inference_router)
     return app
 
 
@@ -113,6 +117,19 @@ def _patch_state(model=None, phase="ready"):
     return [
         patch.object(infer_mod.InferRouter, "_get_model", return_value=model),
         patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=model),
+        patch(
+            "routers.inference._get_model_status",
+            return_value=(
+                {"ready": True}
+                if model is not None
+                else {
+                    "ready": False,
+                    "reason": "No model loaded",
+                    "code": "E_NO_MODEL",
+                    "status": 503,
+                }
+            ),
+        ),
     ]
 
 
@@ -252,11 +269,8 @@ class TestInferEmbed:
 class TestInferGenerate:
     def test_generate_no_model_returns_503(self, client):
         """Generate returns 503 when model not ready."""
-        import apps.api.server.routers.infer as infer_mod
-
         patches = [
-            patch.object(infer_mod.InferRouter, "_get_model", return_value=None),
-            patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=None),
+            patch("apps.api.server.routers.inference._get_model_status", return_value={"ready": False, "reason": "No model loaded", "code": "E_NO_MODEL", "status": 503}),
         ]
         for p in patches:
             p.start()
@@ -269,16 +283,14 @@ class TestInferGenerate:
 
     def test_generate_with_provider(self, client):
         """Generate returns text when provider is available."""
-        fake = FakeModel()
         mock_provider = AsyncMock()
         mock_provider.chat = AsyncMock(return_value="Hello world!")
 
-        import apps.api.server.routers.infer as infer_mod
-
         patches = [
-            patch.object(infer_mod.InferRouter, "_get_model", return_value=fake),
-            patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=fake),
-            patch("domain.models._internal.provider.get_provider", return_value=mock_provider),
+            patch("apps.api.server.routers.inference._get_model_status", return_value={"ready": True}),
+            patch("apps.api.server.routers.inference.get_provider", return_value=mock_provider),
+            patch("apps.api.server.routers.inference._check_memory_pressure", return_value=None),
+            patch("apps.api.server.routers.inference.capture"),
         ]
         for p in patches:
             p.start()
