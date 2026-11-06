@@ -15,10 +15,10 @@ describe('inferController', () => {
     vi.clearAllMocks()
   })
 
-  it('generate calls POST /infer with correct params', async () => {
+  it('generate calls POST /infer/generate with correct params', async () => {
     mockApiPost.mockResolvedValue({ text: 'Hello', model: 'gpt2', tokens_generated: 1, elapsed_ms: 10 })
     const result = await inferController.generate({ prompt: 'Hi', max_new_tokens: 10, temperature: 0.7 })
-    expect(mockApiPost).toHaveBeenCalledWith('/infer', { prompt: 'Hi', max_new_tokens: 10, temperature: 0.7 })
+    expect(mockApiPost).toHaveBeenCalledWith('/infer/generate', { prompt: 'Hi', max_new_tokens: 10, temperature: 0.7 })
     expect(result).toEqual({ text: 'Hello', model: 'gpt2', tokens_generated: 1, elapsed_ms: 10 })
   })
 
