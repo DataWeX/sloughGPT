@@ -154,6 +154,9 @@ class HealthRouter:
                 "model_type": getattr(server_state, "model_type", None),
                 "lifecycle": {"phase": STARTUP_PHASE.get("phase", "initializing")},
                 "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
+                "latest_inference_latency_ms": None,
+                "latest_tokens_per_sec": 0.0,
+                "tokens_per_sec": 0.0,
             }
         return success_response(data=data)
 
@@ -737,6 +740,8 @@ class HealthRouter:
                 "inference_count": detailed.get("inference_count", 0),
                 "total_tokens": detailed.get("total_tokens", 0),
                 "tokens_per_sec": detailed.get("tokens_per_sec", 0),
+                "latest_tokens_per_sec": detailed.get("latest_tokens_per_sec", 0),
+                "latest_inference_latency_ms": detailed.get("latest_inference_latency_ms"),
                 "avg_tokens_per_request": detailed.get("avg_tokens_per_request", 0),
                 "avg_latency_ms": detailed.get("avg_latency_ms", 0),
                 "requests_per_minute": detailed.get("requests_per_minute", 0),
@@ -817,6 +822,8 @@ class HealthRouter:
                 "request_count": detailed.get("request_count", 0),
                 "error_count": detailed.get("error_count", 0),
                 "tokens_per_sec": detailed.get("tokens_per_sec", 0),
+                "latest_tokens_per_sec": detailed.get("latest_tokens_per_sec", 0),
+                "latest_inference_latency_ms": detailed.get("latest_inference_latency_ms"),
                 "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
                 "memory_percent": detailed.get("system", {}).get("memory_percent"),
             }
@@ -837,6 +844,8 @@ class HealthRouter:
                 "request_count": 0,
                 "error_count": 0,
                 "tokens_per_sec": 0,
+                "latest_tokens_per_sec": 0,
+                "latest_inference_latency_ms": None,
                 "cpu_percent": None,
                 "memory_percent": None,
             }
@@ -875,6 +884,8 @@ class HealthRouter:
                 "request_count": detailed.get("request_count", 0),
                 "error_count": detailed.get("error_count", 0),
                 "tokens_per_sec": detailed.get("tokens_per_sec", 0),
+                "latest_tokens_per_sec": detailed.get("latest_tokens_per_sec", 0),
+                "latest_inference_latency_ms": detailed.get("latest_inference_latency_ms"),
                 "avg_latency_ms": detailed.get("avg_latency_ms", 0),
                 "requests_per_minute": detailed.get("requests_per_minute", 0),
                 "total_tokens": detailed.get("total_tokens", 0),

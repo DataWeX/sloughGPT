@@ -57,27 +57,10 @@ export const chatController = {
         done: true,
       }
     } catch (err) {
-      _log.warning('chat endpoint failed, falling back to /inference/generate', {
+      _log.warning('chat endpoint failed', {
         error: err instanceof Error ? err.message : String(err),
       })
-      try {
-        const { useToastStore } = await import('./toast-store')
-        useToastStore
-          .getState()
-          .addToast('Using basic mode — conversation context unavailable', 'info')
-      } catch {
-        /* best-effort */
-      }
-      const fallback = await apiPost<{ text?: string }>('/inference/generate', {
-        prompt: `User: ${message}\nAssistant:`,
-        max_new_tokens: options?.max_tokens ?? 100,
-        temperature: options?.temperature ?? 0.8,
-      })
-      return {
-        message: fallback.text || '',
-        session_id: options?.session_id || 'default',
-        done: true,
-      }
+      throw err
     }
   },
 
