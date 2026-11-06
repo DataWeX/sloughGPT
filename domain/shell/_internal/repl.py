@@ -2431,8 +2431,6 @@ Examples:
                 self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
         try:
-            import threading
-
             from apps.cli.src.utils.progress import ProgressBar
             from domain.infrastructure._internal.conversion_tracker import get_tracker
 
@@ -2442,12 +2440,14 @@ Examples:
             def _load():
                 result_holder[0] = self.cmds.load_model(model_name)
 
-            t = threading.Thread(target=_load, daemon=True)
-            t.start()
+            # Stage 3B: engine process, not a raw thread — is_done/join keep
+            # the progress-poll contract the bar consumes.
+            engine = get_engine()
+            proc = engine.spawn(_load, name="repl-load")
 
             bar = ProgressBar(total=100, desc=f"Loading {model_name}", width=30, show_eta=True)
 
-            while t.is_alive():
+            while not proc.is_done:
                 status = tracker.get(model_name)
                 if status:
                     pct = int(status["progress"] * 100)
@@ -2466,7 +2466,7 @@ Examples:
 
                 time.sleep(0.15)
 
-            t.join()
+            engine.wait_for(proc.id)
             bar.finish()
             _print_result(result_holder[0])
 

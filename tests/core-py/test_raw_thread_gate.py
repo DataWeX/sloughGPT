@@ -233,6 +233,6 @@ class TestRealTree:
             "migrate per docs/plans/2026-09-20-execution-consolidation.md or "
             "edit scripts/raw_threads_allowlist.json with a reason"
         )
-        assert report["site_count"] >= 50, (
+        assert report["site_count"] >= 45, (
             f"expected the grandfathered backlog to still exist, got {report['site_count']}"
         )

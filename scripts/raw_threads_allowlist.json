@@ -7,7 +7,7 @@
       "deferred": "charter ruling: migrate when the site is next touched",
       "followup": "stage-3/4 migration candidate the audit parked — greppable backlog"
     },
-    "site_count": 54
+    "site_count": 48
   },
   "entries": {
     "apps/api/server/infrastructure/inference_pool.py::InferencePool.run_generator": {
@@ -23,11 +23,6 @@
     "apps/api/server/infrastructure/startup.py::_start_inference_engine": {
       "reason": "engine-stderr capture pump bound to the engine child handle",
       "kind": "grandfathered",
-      "count": 1
-    },
-    "apps/api/server/infrastructure/startup.py::_start_parent_preload": {
-      "reason": "FOLLOWUP: delayed must-run one-shot (Timer -> Thread, delay avoids GIL starvation at uvicorn bind); migrate to engine.spawn once delay semantics exist",
-      "kind": "followup",
       "count": 1
     },
     "apps/api/server/main.py::_install_stack_dump_timer": {
@@ -60,11 +55,6 @@
       "kind": "deferred",
       "count": 4
     },
-    "apps/cli/src/core/tui.py::DevDashboard.serve": {
-      "reason": "FOLLOWUP: one-shot server restart from a keypress — short-lived in-process work, 3B shape, missed by both batches",
-      "kind": "followup",
-      "count": 1
-    },
     "apps/cli/src/utils/helpers.py::ensure_server": {
       "reason": "child stderr pump bound to the spawned server handle",
       "kind": "grandfathered",
@@ -83,11 +73,6 @@
     "domain/infrastructure/_internal/fire_and_forget.py::FireAndForgetPool.__init__": {
       "reason": "FAF pool worker — execution infra itself (charter grandfather)",
       "kind": "grandfathered",
-      "count": 1
-    },
-    "domain/infrastructure/_internal/idle_manager.py::IdleManager._ensure_running": {
-      "reason": "FOLLOWUP: long-lived idle-check loop — spawn_loop shape from the 3B loop batch, not in the batch's 8 sites",
-      "kind": "followup",
       "count": 1
     },
     "domain/infrastructure/_internal/idle_manager.py::IdleManager.touch_async": {
@@ -120,11 +105,6 @@
       "kind": "grandfathered",
       "count": 1
     },
-    "domain/infrastructure/_internal/model_server.py::ModelServer.__init__": {
-      "reason": "FOLLOWUP: must-run warmup one-shot — 3B one-shot shape (slonet _run_warmup migrated, this did not)",
-      "kind": "followup",
-      "count": 1
-    },
     "domain/infrastructure/_internal/model_server.py::ModelServer._wrap_generator_as_streamer": {
       "reason": "generator-to-queue pump bound to the live generator",
       "kind": "grandfathered",
@@ -133,11 +113,6 @@
     "domain/infrastructure/_internal/model_server.py::ModelServer.generate_stream": {
       "reason": "asyncio-loop bridge pump bound to the live stream",
       "kind": "grandfathered",
-      "count": 1
-    },
-    "domain/infrastructure/_internal/model_server.py::ModelServer.swap_model": {
-      "reason": "FOLLOWUP: re-warmup one-shot after model swap — same shape as __init__ warmup",
-      "kind": "followup",
       "count": 1
     },
     "domain/infrastructure/_internal/model_worker.py::_hf_worker_main._stream": {
@@ -218,11 +193,6 @@
     "domain/shell/_internal/kernel.py::Kernel.tick": {
       "reason": "shell kernel's own per-process runner (proc._thread owned by the proc) — subsystem execution infra",
       "kind": "grandfathered",
-      "count": 1
-    },
-    "domain/shell/_internal/repl.py::ShellREPL._cmd_load": {
-      "reason": "FOLLOWUP: one-shot model load joined via is_alive progress poll — spawn handle shape, missed by the 3B one-shot batch",
-      "kind": "followup",
       "count": 1
     },
     "domain/shell/_internal/runtime.py::APIServerProcess.start": {

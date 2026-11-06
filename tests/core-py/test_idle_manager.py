@@ -140,6 +140,28 @@ class TestIdleManager:
         im = IdleManager()
         im.shutdown()
 
+    def test_loop_owned_by_engine(self):
+        """Stage 3B: the check loop is an engine process, not a raw thread.
+
+        The ThreadHandle keeps the surface ``shutdown()`` consumes
+        (``is_alive``/``join(timeout)``/``name``) while the loop becomes a
+        registry-visible engine process on the ``loops`` tree; ``stop=``
+        releases it on engine stop/interpreter exit (daemon-equivalent).
+        """
+        from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle
+
+        im = IdleManager()
+        im.register("model1")
+        try:
+            assert isinstance(im._thread, ThreadHandle), (
+                f"expected engine-owned ThreadHandle, got {type(im._thread)}"
+            )
+            assert im._thread.name == "idle-manager"
+            assert im._thread.is_alive()
+        finally:
+            im.shutdown()
+        assert not im._thread.is_alive()
+
     def test_reset(self):
         im = IdleManager()
         im.register("m1")
