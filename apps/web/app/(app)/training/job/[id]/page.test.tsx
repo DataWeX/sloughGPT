@@ -131,7 +131,7 @@ vi.mock('@/vite/next-compat/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/training/job/job-1',
 }))
-vi.mock('@/vite/next-compat/navigation', () => ({
+vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'job-1' }),
   useRouter: () => stableRouter,
   useSearchParams: () => new URLSearchParams(),
@@ -154,12 +154,7 @@ vi.mock('@/lib/download-utils', () => ({
   downloadBlob: mockDownloadBlob,
   downloadJson: mockDownloadJson,
 }))
-vi.mock('@/vite/next-compat/dynamic', () => ({
-  default: () => () => <div data-testid="loss-chart" />,
-}))
-vi.mock('@/vite/next-compat/dynamic', () => ({
-  default: () => () => <div data-testid="loss-chart" />,
-}))
+vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="loss-chart" /> }))
 import Page from './page'
 
 const COMPLETED_JOB: any = {
