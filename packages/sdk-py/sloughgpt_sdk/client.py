@@ -214,7 +214,7 @@ class SloughGPTClient:
             **kwargs,
         )
         start_time = time.time()
-        response = self._request("POST", "/inference/generate", json=request.to_dict())
+        response = self._request("POST", "/infer", json=request.to_dict())
         elapsed_ms = (time.time() - start_time) * 1000
         result = GenerationResult.from_response(response.json(), prompt)
         if result.inference_time_ms is None:
@@ -234,7 +234,7 @@ class SloughGPTClient:
             prompt=prompt, max_new_tokens=max_new_tokens, temperature=temperature, **kwargs
         )
         response = self._request(
-            "POST", "/inference/generate/stream", json=request.to_dict(), stream=True
+            "POST", "/infer/stream", json=request.to_dict(), stream=True
         )
         for line in response.iter_lines(decode_unicode=True):
             if line.startswith("data:"):
@@ -1387,7 +1387,7 @@ class AsyncSloughGPTClient:
         from .models import GenerateRequest
 
         request = GenerateRequest(prompt=prompt, **kwargs)
-        data = await self._request("POST", "/inference/generate", json=request.to_dict())
+        data = await self._request("POST", "/infer", json=request.to_dict())
         return GenerationResult.from_response(data, prompt)
 
     async def chat(self, messages: list[ChatMessage], **kwargs) -> ChatResult:

@@ -42,7 +42,7 @@ def app():
     async def chat_post():
         return {"ok": True}
 
-    @_app.post("/inference/generate")
+    @_app.post("/infer")
     async def generate():
         return {"ok": True}
 
@@ -98,7 +98,7 @@ class TestReadinessGateOPTIONS:
         assert resp.status_code != 503
 
     def test_options_inference_generate_passes_when_model_not_ready(self, client, model_not_ready):
-        resp = client.options("/inference/generate")
+        resp = client.options("/infer")
         assert resp.status_code != 503
 
     def test_post_chat_blocked_when_model_not_ready(self, client, model_not_ready):
