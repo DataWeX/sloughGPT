@@ -129,7 +129,7 @@ describe('chatController.send', () => {
     expect(result.done).toBe(true)
   })
 
-  it('falls back to /inference/generate on chat failure', async () => {
+  it('falls back to /infer/generate on chat failure', async () => {
     apiClient.apiGet.mockResolvedValue({ model_loaded: true, model_type: 'gpt2' })
     apiClient.apiPost
       .mockRejectedValueOnce(new Error('chat failed'))
