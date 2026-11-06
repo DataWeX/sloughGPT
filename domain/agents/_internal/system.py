@@ -71,7 +71,7 @@ def _default_inference_fn(prompt: str, max_tokens: int = 200) -> dict[str, Any]:
         import requests
 
         r = requests.post(
-            f"{_API_BASE}/inference/generate",
+            f"{_API_BASE}/infer/generate",
             json={
                 "prompt": prompt,
                 "max_new_tokens": max_tokens,

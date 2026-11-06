@@ -261,7 +261,7 @@ class TestInferGenerate:
         for p in patches:
             p.start()
         try:
-            resp = client.post("/infer", json={"prompt": "hello"})
+            resp = client.post("/infer/generate", json={"prompt": "hello"})
             assert resp.status_code == 503
         finally:
             for p in patches:
@@ -283,7 +283,7 @@ class TestInferGenerate:
         for p in patches:
             p.start()
         try:
-            resp = client.post("/infer", json={"prompt": "hello"})
+            resp = client.post("/infer/generate", json={"prompt": "hello"})
             assert resp.status_code == 200
             data = resp.json()
             assert data["text"] == "Hello world!"
@@ -299,12 +299,12 @@ class TestInferGenerate:
 class TestInferSchemas:
     def test_generate_rejects_empty_prompt(self, client):
         """Generate rejects request with no prompt."""
-        resp = client.post("/infer", json={})
+        resp = client.post("/infer/generate", json={})
         assert resp.status_code == 422
 
     def test_generate_rejects_large_max_tokens(self, client):
         """Generate rejects max_new_tokens > 2048."""
-        resp = client.post("/infer", json={"prompt": "hi", "max_new_tokens": 9999})
+        resp = client.post("/infer/generate", json={"prompt": "hi", "max_new_tokens": 9999})
         assert resp.status_code == 422
 
     def test_embed_rejects_empty_text(self, client):

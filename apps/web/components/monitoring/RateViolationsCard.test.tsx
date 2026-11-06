@@ -30,7 +30,7 @@ const base = {
   model_metrics: [],
   model_events: [],
   rate_violations: [
-    { path: '/inference/generate', count: 32, limit: 10, ts: 1723000000 },
+    { path: '/infer/generate', count: 32, limit: 10, ts: 1723000000 },
     { path: '/chat/stream', count: 11, limit: 5, ts: 1722999900 },
   ],
   path_latencies: [],
