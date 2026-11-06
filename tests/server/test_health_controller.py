@@ -59,6 +59,8 @@ class TestHealthController:
     def test_basic_health_has_status(self, ctrl):
         result = ctrl.get_basic_health()
         assert "status" in result
+        assert "latest_inference_latency_ms" in result
+        assert "latest_tokens_per_sec" in result
 
     def test_health_has_timestamp(self, ctrl):
         result = ctrl.get_basic_health()
