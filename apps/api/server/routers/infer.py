@@ -2,8 +2,8 @@
 Unified Inference Router — /infer prefix
 
 Single language-agnostic entrypoint for all inference operations:
-  POST /infer          — generate text
-  POST /infer/stream   — streaming generation (SSE)
+  POST /infer/generate — generate text
+  POST /infer/generate/stream — streaming generation (SSE)
   POST /infer/embed    — text embedding
   POST /infer/tokenize — tokenization
   POST /infer/detokenize — detokenization
@@ -21,6 +21,7 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.inference_generation import generate_text
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log
 
@@ -129,9 +130,17 @@ class InferRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route("", self.infer, methods=["POST"], response_model=InferResponse)
         self.router.add_api_route(
-            "/stream", self.infer_stream, methods=["POST"], response_model=None
+            "/generate", self.generate, methods=["POST"], response_model=InferResponse
+        )
+        self.router.add_api_route(
+            "/generate/stream", self.generate_stream, methods=["POST"], response_model=None
+        )
+        self.router.add_api_route(
+            "", self.generate, methods=["POST"], response_model=InferResponse, deprecated=True
+        )
+        self.router.add_api_route(
+            "/stream", self.generate_stream, methods=["POST"], response_model=None, deprecated=True
         )
         self.router.add_api_route(
             "/embed", self.infer_embed, methods=["POST"], response_model=EmbedResponse
@@ -150,6 +159,39 @@ class InferRouter:
         )
         self.router.add_api_route(
             "/info", self.infer_info, methods=["GET"], response_model=InferInfoResponse
+        )
+
+    @endpoint("infer.generate")
+    async def generate(
+        self, req: InferRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> InferResponse:
+        """Generate through the shared, context-aware inference handler."""
+        from routers.inference import GenerateRequest, _instance
+
+        request_data = req.model_dump(exclude_none=True)
+        request_data.setdefault("model", "qwen2.5-0.5b-instruct")
+        result = await _instance.generate(GenerateRequest(**request_data), auth_user=auth_user)
+        return InferResponse(
+            text=result.text,
+            model=result.model,
+            tokens_generated=result.tokens_generated,
+            elapsed_ms=result.elapsed_ms,
+        )
+
+    @endpoint("infer.generate_stream")
+    async def generate_stream(
+        self,
+        req: InferRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> StreamingResponse:
+        """Stream generation through the shared, context-aware handler."""
+        from routers.inference import GenerateRequest, _instance
+
+        request_data = req.model_dump(exclude_none=True)
+        request_data.setdefault("model", "qwen2.5-0.5b-instruct")
+        return await _instance.generate_stream(
+            GenerateRequest(**request_data), request=request, auth_user=auth_user
         )
 
     # --- Helpers ---
@@ -239,22 +281,27 @@ class InferRouter:
                 "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
             )
         provider_messages = [{"role": "user", "content": prompt_text}]
-        start = datetime.datetime.now()
         try:
-            result = await provider.chat(
+            from domain.infrastructure.server_state import get_server_state
+
+            server_state = get_server_state()
+            generation = await generate_text(
+                provider,
                 provider_messages,
                 max_tokens=req.max_new_tokens,
-                temperature=req.temperature,
-                top_p=req.top_p,
-                top_k=req.top_k,
-                repetition_penalty=req.repetition_penalty,
+                generation_params={
+                    "temperature": req.temperature,
+                    "top_p": req.top_p,
+                    "top_k": req.top_k,
+                    "repetition_penalty": req.repetition_penalty,
+                },
+                tokenizer=getattr(server_state, "tokenizer", None),
             )
-            elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-            tokens = len(result.split())
+            result = generation.text
+            elapsed_ms = generation.elapsed_ms
+            tokens = generation.tokens_generated
             try:
-                from domain.infrastructure.server_state import get_server_state
-
-                get_server_state().record_inference(
+                server_state.record_inference(
                     tokens=tokens, elapsed_ms=elapsed_ms, model=req.model
                 )
             except Exception as e:
