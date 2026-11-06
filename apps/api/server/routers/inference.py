@@ -26,6 +26,11 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
+from infrastructure.inference_generation import (
+    count_generated_tokens,
+    generate_text,
+    stream_text,
+)
 from infrastructure.sse_fallback import sse_error, sse_event, sse_token
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
@@ -451,6 +456,7 @@ class GenerateResponse(BaseModel):
     text: str
     model: str
     tokens_generated: int = 0
+    elapsed_ms: float = 0
 
 
 # ── Pure module-level helpers (no instance state) ──
@@ -466,13 +472,8 @@ def _count_tokens(text: str, server_state) -> int:
     Returns:
         token count (via tokenizer.encode when available, else len(text.split()))
     """
-    try:
-        tokenizer = getattr(server_state, "tokenizer", None)
-        if tokenizer is not None and hasattr(tokenizer, "encode"):
-            return len(tokenizer.encode(text))
-    except Exception as e:
-        logger.debug("tokenizer encode fallback failed: %s", e)
-    return len(text.split())
+    tokenizer = getattr(server_state, "tokenizer", None)
+    return count_generated_tokens(text, tokenizer)
 
 
 def _extract_user_message(messages: list[Message]) -> str | None:
@@ -785,6 +786,8 @@ def _run_post_gen_tasks(
     bg_tasks: Any,
     bg_tasks_discard: Any,
     corr_id: str,
+    inference_tokens: int | None = None,
+    inference_elapsed_ms: float | None = None,
 ) -> dict[str, Any]:
     """Launch fire-and-forget background tasks after chat generation completes.
 
@@ -867,8 +870,8 @@ def _run_post_gen_tasks(
     # Inference metrics
     try:
         get_server_state().record_inference(
-            tokens=tokens,
-            elapsed_ms=duration_ms,
+            tokens=inference_tokens if inference_tokens is not None else tokens,
+            elapsed_ms=inference_elapsed_ms if inference_elapsed_ms is not None else duration_ms,
             model=_pgs_state.model_type or req.model,
         )
     except Exception as e:
@@ -1207,6 +1210,9 @@ class InferenceRouter:
 
         import state as _gen_state
 
+        request_started = time.monotonic()
+
+
         ms = _get_model_status()
         if not ms["ready"]:
             raise_error(
@@ -1246,7 +1252,6 @@ class InferenceRouter:
             pass
 
         try:
-            _t0 = time.monotonic()
             gen_params = _apply_meta_weights(
                 temperature=req.temperature,
                 top_p=req.top_p,
@@ -1270,30 +1275,38 @@ class InferenceRouter:
                 result = existing.result
                 tokens = _count_tokens(result, _gen_state)
                 actual_model = _gen_state.model_type or req.model
-                return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
+                return GenerateResponse(
+                    text=result,
+                    model=actual_model,
+                    tokens_generated=tokens,
+                    elapsed_ms=round((time.monotonic() - request_started) * 1000, 1),
+                )
 
-            result = await provider.chat(
+            generation = await generate_text(
+                provider,
                 provider_messages,
                 max_tokens=req.max_new_tokens,
-                **gen_params,
+                generation_params=gen_params,
+                tokenizer=getattr(_gen_state, "tokenizer", None),
             )
+            result = generation.text
             logger.debug(
                 "generate handler",
                 extra={
                     "tag": "INFO",
                     "context": {
                         "provider": getattr(provider, "_text_name", type(provider).__name__),
-                        "elapsed_ms": round((time.monotonic() - _t0) * 1000, 1),
+                        "elapsed_ms": round(generation.elapsed_ms, 1),
                         "result": str(result)[:80],
                     },
                 },
             )
-            tokens = _count_tokens(result, _gen_state)
+            tokens = generation.tokens_generated
             actual_model = _gen_state.model_type or req.model
             try:
                 get_server_state().record_inference(
                     tokens=tokens,
-                    elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
+                    elapsed_ms=round(generation.elapsed_ms, 1),
                     model=actual_model,
                 )
             except Exception as e:
@@ -1304,13 +1317,18 @@ class InferenceRouter:
                     result,
                     model=actual_model,
                     tokens_generated=tokens,
-                    elapsed_ms=(time.monotonic() - _t0) * 1000,
+                    elapsed_ms=generation.elapsed_ms,
                     temperature=gen_params["temperature"],
                 )
             except Exception as e:
                 logger.warning("Failed to capture conversation: %s", e)
             await _coalescer.complete(_coalesce_key, result)
-            return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
+            return GenerateResponse(
+                text=result,
+                model=actual_model,
+                tokens_generated=tokens,
+                elapsed_ms=round((time.monotonic() - request_started) * 1000, 1),
+            )
         except Exception as e:
             try:
                 await _coalescer.complete_error(_coalesce_key, e)
@@ -1445,11 +1463,12 @@ class InferenceRouter:
                 return
 
             try:
-                async for token in provider.chat_stream(
+                async for token in stream_text(
+                    provider,
                     provider_messages,
                     max_tokens=req.max_new_tokens,
+                    generation_params=gen_params,
                     cancel_event=cancel_event,
-                    **gen_params,
                 ):
                     if cancel_event.is_set() or await request.is_disconnected():
                         cancel_event.set()
@@ -1733,10 +1752,11 @@ class InferenceRouter:
 
             collected: list[str] = []
             try:
-                async for token in provider.chat_stream(
+                async for token in stream_text(
+                    provider,
                     provider_messages,
                     max_tokens=max_tokens,
-                    **gen_params,
+                    generation_params=gen_params,
                 ):
                     if token:
                         collected.append(token)
@@ -2152,17 +2172,15 @@ class InferenceRouter:
         model = _chat_state.model_type or req.model
 
         collected: list[str] = []
+        generation_t0 = time.monotonic()
         try:
-            async for token in provider.chat_stream(
+            async for token in stream_text(
+                provider,
                 messages,
                 max_tokens=req.max_tokens,
-                # The turn's stop flag: minted by whoever owns the registry
-                # (chat's manager) and delivered with the request. The provider
-                # polls is_set() each token, so a cancel fired mid-stream stops
-                # generation here. None only when the caller has no registry.
+                generation_params=gen_params,
                 cancel_event=req.cancel_event,
                 session_id=session_id,
-                **gen_params,
             ):
                 if token:
                     collected.append(token)
@@ -2172,6 +2190,7 @@ class InferenceRouter:
             raise
 
         text = "".join(collected)
+        generation_elapsed_ms = round((time.monotonic() - generation_t0) * 1000, 1)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
         try:
             tokens = _count_tokens(text, _chat_state)
@@ -2198,6 +2217,8 @@ class InferenceRouter:
                 self._BG_TASKS,
                 self._bg_tasks_lock_discard,
                 corr_id="stream",
+                inference_tokens=tokens,
+                inference_elapsed_ms=generation_elapsed_ms,
             )
         except Exception as e:
             logger.warning("Post-gen tasks failed: %s", e)
@@ -2264,6 +2285,12 @@ class InferenceRouter:
             model=model,
             usage={"completion_tokens": tokens, "total_tokens": tokens},
             elapsed_ms=elapsed,
+            generation_elapsed_ms=generation_elapsed_ms,
+            tokens_per_sec=(
+                round(tokens / (generation_elapsed_ms / 1000), 1)
+                if tokens > 0 and generation_elapsed_ms > 0
+                else None
+            ),
             finish_reason="stop",
             tokens=collected,
             consciousness=(
@@ -2881,10 +2908,6 @@ class InferenceRouter:
 
     def _register_routes(self):
         r = self.router
-        r.add_api_route(
-            "/inference/generate", self.generate, methods=["POST"], response_model=GenerateResponse
-        )
-        r.add_api_route("/inference/generate/stream", self.generate_stream, methods=["POST"])
         r.add_api_route("/info", self.get_info, methods=["GET"])
         r.add_api_route("/info/soul", self.get_info_soul, methods=["GET"])
         r.add_api_route("/", self.root, methods=["GET"])
