@@ -1544,7 +1544,7 @@ class SloNetChatProvider:
             eos_token=self._tokenizer.eos_token_id,
             extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
         )
-        return self._tokenizer.decode(result[0].tolist())
+        return self._tokenizer.decode(result[0, len(tokens) :].tolist())
 
     async def chat(
         self,
