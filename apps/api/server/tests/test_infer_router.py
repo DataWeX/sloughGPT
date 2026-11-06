@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -14,11 +14,13 @@ _AUTH_USER = {"sub": "user1", "tenant_id": "t1"}
 
 def _build_app(auth_user_dict=_AUTH_USER):
     from routers.infer import InferRouter
+    from routers.inference import router as inference_router
 
     router_obj = InferRouter()
     _app = FastAPI()
     register_app_error_handler(_app)
     _app.include_router(router_obj.router)
+    _app.include_router(inference_router)
     _app.dependency_overrides[require_auth_if_enabled] = lambda: auth_user_dict
     return _app, router_obj
 
@@ -107,20 +109,53 @@ class TestInferEmbed:
 
 
 class TestInferGenerate:
-    def test_generate_endpoint_exists(self):
-        """Verify the generate endpoint is registered and accepts POST."""
+    def test_infer_uses_shared_text_generation_logic(self):
         _app, router = _build_app()
-        # Just verify the endpoint exists and accepts the request format
-        # The actual generation depends on model state which is complex to mock
-        provider = _mock_provider()
-        mock_model = MagicMock()
-        with (
-            patch.object(router, "_get_model", return_value=mock_model),
-            patch("domain.models.get_provider", return_value=provider),
-        ):
-            resp = TestClient(_app).post(
-                "/infer",
-                json={"prompt": "Hello", "max_new_tokens": 10},
+        from infrastructure.inference_generation import GenerationResult
+
+        provider = MagicMock()
+        generate = AsyncMock(
+            return_value=GenerationResult(
+                text="Hello, world!", tokens_generated=2, elapsed_ms=8.5
             )
-        # Endpoint exists and processes the request (may fail on model internals)
-        assert resp.status_code in (200, 400, 500, 503)
+        )
+        server_state = MagicMock()
+        server_state.model_type.get.return_value = "test-model"
+        server_state.tokenizer.get.return_value = None
+        payload = {
+            "prompt": "Hello",
+            "max_new_tokens": 10,
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "top_k": 5,
+            "repetition_penalty": 1.0,
+        }
+        with (
+            patch("routers.inference._get_model_status", return_value={"ready": True}),
+            patch("routers.inference._check_memory_pressure", return_value=None),
+            patch("routers.inference.get_provider", return_value=provider),
+            patch("domain.infrastructure.server_state.get_server_state", return_value=server_state),
+            patch("state.model_type", "test-model"),
+            patch("routers.inference.generate_text", new=generate),
+        ):
+            response = TestClient(_app).post("/infer", json=payload)
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "text": "Hello, world!",
+            "model": "test-model",
+            "tokens_generated": 2,
+            "elapsed_ms": 8.5,
+        }
+        generate.assert_awaited_once_with(
+            provider,
+            [{"role": "user", "content": "Hello"}],
+            max_tokens=10,
+            generation_params={
+                "temperature": 0.2,
+                "top_p": 0.9,
+                "top_k": 5,
+                "repetition_penalty": 1.0,
+            },
+            tokenizer=None,
+        )

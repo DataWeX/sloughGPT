@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState, useCallback } from 'react'
-import { useRouter } from '@/vite/next-compat/navigation'
+import { useRouter } from 'next/navigation'
 import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'

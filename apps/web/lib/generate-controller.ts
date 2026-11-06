@@ -27,7 +27,7 @@ export interface GenerateResponse {
 
 export const generateController = {
   async generate(req: GenerateRequest): Promise<GenerateResponse> {
-    const result = await apiPost<GenerateResponse & { error?: string }>('/inference/generate', req)
+    const result = await apiPost<GenerateResponse & { error?: string }>('/infer', req)
     if (result.error) throw new Error(result.error)
     return result as GenerateResponse
   },
@@ -40,7 +40,7 @@ export const generateController = {
   ): Promise<void> {
     let errored = false
     try {
-      for await (const event of streamSSE('/inference/generate/stream', { body: req })) {
+      for await (const event of streamSSE('/infer/stream', { body: req })) {
         if (event.status === 'error') {
           errored = true
           onError?.(event.message || 'Generation error')
