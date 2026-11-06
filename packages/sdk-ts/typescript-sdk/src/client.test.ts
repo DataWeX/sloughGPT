@@ -76,7 +76,7 @@ describe('SloughGPTClient', () => {
   });
 
   describe('generate()', () => {
-    it('correctly uses POST /inference/generate', async () => {
+    it('correctly uses POST /infer/generate', async () => {
       const mockResult = { text: 'Hello world', model: 'gpt2', inference_time_ms: 150 };
       mockFetch.mockResolvedValue(createMockResponse(mockResult));
 
@@ -85,7 +85,7 @@ describe('SloughGPTClient', () => {
 
       expect(result).toEqual(mockResult);
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8000/inference/generate',
+        'http://localhost:8000/infer/generate',
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
@@ -1874,7 +1874,7 @@ describe('SloughGPTClient', () => {
   });
 
   describe('Generation', () => {
-    it('generate calls POST /inference/generate', async () => {
+    it('generate calls POST /infer/generate', async () => {
       const mockData = { text: 'Hello world', model: 'gpt2', inference_time_ms: 50 };
       mockFetch.mockResolvedValue(createMockResponse(mockData));
 
