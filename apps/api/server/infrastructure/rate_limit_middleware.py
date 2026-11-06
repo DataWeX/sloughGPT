@@ -21,8 +21,8 @@ from domain.infrastructure.rate_limiter import (
 _ROUTE_LIMITS: dict[str, tuple[int, int]] = {
     "/chat": (10, 60),  # POST /chat — the generation entry point (and its only state)
     "/chat/voice": (5, 60),
-    "/inference/generate/stream": (10, 60),
-    "/inference/generate": (20, 60),
+    "/infer/stream": (10, 60),
+    "/infer": (20, 60),
     "/inference/embed": (30, 60),
     "/models/load": (2, 120),
     "/models/unload": (2, 120),
