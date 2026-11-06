@@ -13,7 +13,6 @@ Single language-agnostic entrypoint for all inference operations:
 Thin adapter: delegates to provider/domain logic, no business logic here.
 """
 
-import datetime
 import logging
 import time as _time
 from collections.abc import AsyncGenerator, AsyncIterator
@@ -21,6 +20,7 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.inference_generation import generate_text
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log
 
@@ -239,22 +239,27 @@ class InferRouter:
                 "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
             )
         provider_messages = [{"role": "user", "content": prompt_text}]
-        start = datetime.datetime.now()
         try:
-            result = await provider.chat(
+            from domain.infrastructure.server_state import get_server_state
+
+            server_state = get_server_state()
+            generation = await generate_text(
+                provider,
                 provider_messages,
                 max_tokens=req.max_new_tokens,
-                temperature=req.temperature,
-                top_p=req.top_p,
-                top_k=req.top_k,
-                repetition_penalty=req.repetition_penalty,
+                generation_params={
+                    "temperature": req.temperature,
+                    "top_p": req.top_p,
+                    "top_k": req.top_k,
+                    "repetition_penalty": req.repetition_penalty,
+                },
+                tokenizer=getattr(server_state, "tokenizer", None),
             )
-            elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-            tokens = len(result.split())
+            result = generation.text
+            elapsed_ms = generation.elapsed_ms
+            tokens = generation.tokens_generated
             try:
-                from domain.infrastructure.server_state import get_server_state
-
-                get_server_state().record_inference(
+                server_state.record_inference(
                     tokens=tokens, elapsed_ms=elapsed_ms, model=req.model
                 )
             except Exception as e:
