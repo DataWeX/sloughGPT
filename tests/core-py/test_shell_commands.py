@@ -433,7 +433,7 @@ class TestShellCommands:
         out = ShellCommands.generate("hi", 50)
         assert out == {"text": "hi"}
         path, data = calls["post"][0]
-        assert path == "/inference/generate"
+        assert path == "/infer"
         assert data["prompt"] == "hi"
         assert data["max_new_tokens"] == 50
 
