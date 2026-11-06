@@ -2,8 +2,8 @@
 Unified Inference Router — /infer prefix
 
 Single language-agnostic entrypoint for all inference operations:
-  POST /infer          — generate text
-  POST /infer/stream   — streaming generation (SSE)
+  POST /infer           — plain-text generation
+  POST /infer/stream    — streamed plain-text generation
   POST /infer/embed    — text embedding
   POST /infer/tokenize — tokenization
   POST /infer/detokenize — detokenization
@@ -13,14 +13,19 @@ Single language-agnostic entrypoint for all inference operations:
 Thin adapter: delegates to provider/domain logic, no business logic here.
 """
 
-import datetime
 import logging
 import time as _time
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.inference_generation import (
+    count_generated_tokens,
+    generate_text,
+    stream_text,
+)
+from infrastructure.sse_fallback import sse_complete, sse_error, sse_token
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log
 
@@ -129,10 +134,6 @@ class InferRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route("", self.infer, methods=["POST"], response_model=InferResponse)
-        self.router.add_api_route(
-            "/stream", self.infer_stream, methods=["POST"], response_model=None
-        )
         self.router.add_api_route(
             "/embed", self.infer_embed, methods=["POST"], response_model=EmbedResponse
         )
@@ -151,6 +152,125 @@ class InferRouter:
         self.router.add_api_route(
             "/info", self.infer_info, methods=["GET"], response_model=InferInfoResponse
         )
+
+    async def infer(
+        self, req: InferRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> InferResponse:
+        """Generate plain text without chat-specific orchestration."""
+        from domain.infrastructure.server_state import get_server_state
+        from domain.models import get_provider
+        from routers.inference import _check_memory_pressure, _get_model_status
+
+        status = _get_model_status()
+        if not status["ready"]:
+            raise_error(status["reason"], status["code"], status_code=status["status"])
+        memory_error = _check_memory_pressure()
+        if memory_error:
+            raise_error(memory_error, "E_MEMORY_PRESSURE", status_code=503)
+
+        provider = get_provider("default")
+        if provider is None:
+            raise_error("No provider available — load a model first", "E_INFRA_REGISTRY", status_code=503)
+
+        prompt = req.prompt
+        if req.response_format == "json":
+            prompt += "\n\nRespond ONLY with valid JSON. No markdown, no explanation, no code fences."
+
+        state = get_server_state()
+        model_id = req.model or state.model_type.get() or "unknown"
+        try:
+            result = await generate_text(
+                provider,
+                [{"role": "user", "content": prompt}],
+                max_tokens=req.max_new_tokens,
+                generation_params={
+                    "temperature": req.temperature,
+                    "top_p": req.top_p,
+                    "top_k": req.top_k,
+                    "repetition_penalty": req.repetition_penalty,
+                },
+                tokenizer=state.tokenizer.get(),
+            )
+            state.record_inference(
+                tokens=result.tokens_generated,
+                elapsed_ms=result.elapsed_ms,
+                model=model_id,
+            )
+            return InferResponse(
+                text=result.text,
+                model=model_id,
+                tokens_generated=result.tokens_generated,
+                elapsed_ms=round(result.elapsed_ms, 1),
+            )
+        except AppError as exc:
+            classify_and_raise(exc, source="infer.generate")
+        except Exception as exc:
+            classify_and_raise(exc, source="infer.generate")
+
+    async def infer_stream(
+        self,
+        req: InferRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> StreamingResponse:
+        """Stream plain text from the shared provider generation core."""
+        from domain.infrastructure.server_state import get_server_state
+        from domain.models import get_provider
+        from routers.inference import _check_memory_pressure, _get_model_status
+
+        status = _get_model_status()
+        if not status["ready"]:
+            async def not_ready() -> AsyncIterator[str]:
+                yield sse_error("infer", "IDLE", status["reason"], code=status["code"], http_status=status["status"])
+            return StreamingResponse(not_ready(), media_type="text/event-stream")
+
+        memory_error = _check_memory_pressure()
+        if memory_error:
+            async def memory_blocked() -> AsyncIterator[str]:
+                yield sse_error("infer", "IDLE", memory_error, code="E_MEMORY_PRESSURE", http_status=503)
+            return StreamingResponse(memory_blocked(), media_type="text/event-stream")
+
+        provider = get_provider("default")
+        if provider is None:
+            async def provider_missing() -> AsyncIterator[str]:
+                yield sse_error(
+                    "infer", "IDLE", "No provider available — load a model first",
+                    code="E_INFRA_REGISTRY", http_status=503,
+                )
+            return StreamingResponse(provider_missing(), media_type="text/event-stream")
+
+        prompt = req.prompt
+        if req.response_format == "json":
+            prompt += "\n\nRespond ONLY with valid JSON. No markdown, no explanation, no code fences."
+        state = get_server_state()
+
+        async def response_stream() -> AsyncIterator[str]:
+            started = _time.monotonic()
+            collected: list[str] = []
+            try:
+                async for token in stream_text(
+                    provider,
+                    [{"role": "user", "content": prompt}],
+                    max_tokens=req.max_new_tokens,
+                    generation_params={
+                        "temperature": req.temperature,
+                        "top_p": req.top_p,
+                        "top_k": req.top_k,
+                        "repetition_penalty": req.repetition_penalty,
+                    },
+                ):
+                    if await request.is_disconnected():
+                        return
+                    collected.append(token)
+                    yield sse_token("infer", token)
+                elapsed_ms = (_time.monotonic() - started) * 1000
+                count = count_generated_tokens("".join(collected), state.tokenizer.get())
+                state.record_inference(tokens=count, elapsed_ms=elapsed_ms, model=req.model or "")
+                yield sse_complete("infer", data={"tokens_generated": count}, meta={"elapsed_ms": round(elapsed_ms, 1)})
+            except Exception as exc:
+                yield sse_error("infer", "ERROR", str(exc), code="E_INFERENCE", http_status=500)
+
+        return StreamingResponse(response_stream(), media_type="text/event-stream")
 
     # --- Helpers ---
 
@@ -174,272 +294,8 @@ class InferRouter:
             return model
         return None
 
-    def _sse_event(self, stream, phase, status, data=None, meta=None, message=""):
-        """SSE event helper."""
-        import json
-
-        return (
-            "data: "
-            + json.dumps(
-                {
-                    "stream": stream,
-                    "phase": phase,
-                    "status": status,
-                    "data": data or {},
-                    "meta": meta or {},
-                    "message": message,
-                }
-            )
-            + "\n\n"
-        )
 
     # --- Endpoints ---
-
-    @endpoint("infer.infer")
-    async def infer(
-        self, req: InferRequest, auth_user: dict = Depends(require_auth_if_enabled)
-    ) -> InferResponse:
-        """Generate text from a prompt.
-
-        Single non-streaming generation endpoint. Delegates to the active provider.
-        """
-        # Block inference under memory pressure
-        try:
-            from domain.infrastructure.memory_pressure import (
-                PressureLevel,
-                get_memory_pressure_monitor,
-            )
-
-            if get_memory_pressure_monitor().check() == PressureLevel.EMERGENCY:
-                raise_error(
-                    "System memory too low for inference — try again later",
-                    "E_MEMORY_PRESSURE",
-                    status_code=503,
-                )
-        except ImportError as exc:
-            logger.debug("Memory pressure guard unavailable: %s", exc)
-
-        from domain.models import get_provider
-        from routers.inference import _get_model_status
-
-        ms = _get_model_status()
-        if not ms["ready"]:
-            raise_error(ms["reason"], ms["code"], status_code=ms["status"])
-
-        provider = get_provider("default")
-        if provider is None:
-            raise_error(
-                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=503
-            )
-
-        prompt_text = req.prompt
-        if req.response_format == "json":
-            prompt_text = (
-                f"{req.prompt}\n\n"
-                "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
-            )
-        provider_messages = [{"role": "user", "content": prompt_text}]
-        start = datetime.datetime.now()
-        try:
-            result = await provider.chat(
-                provider_messages,
-                max_tokens=req.max_new_tokens,
-                temperature=req.temperature,
-                top_p=req.top_p,
-                top_k=req.top_k,
-                repetition_penalty=req.repetition_penalty,
-            )
-            elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-            tokens = len(result.split())
-            try:
-                from domain.infrastructure.server_state import get_server_state
-
-                get_server_state().record_inference(
-                    tokens=tokens, elapsed_ms=elapsed_ms, model=req.model
-                )
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
-            model = self._get_model()
-            model_name = req.model or (
-                getattr(model, "model_id", None) or type(model).__name__ if model else "unknown"
-            )
-            safe_audit_log(
-                "infer.generate",
-                resource=model_name,
-                detail=f"elapsed={elapsed_ms:.0f}ms tokens={tokens}",
-            )
-            return InferResponse(
-                text=result,
-                model=model_name,
-                tokens_generated=tokens,
-                elapsed_ms=round(elapsed_ms, 1),
-            )
-        except AppError as e:
-            classify_and_raise(e, source="infer.infer")
-        except Exception as e:
-            logger.warning("Inference failed: %s", e)
-            classify_and_raise(e, source="infer")
-
-    @endpoint("infer.infer_stream")
-    async def infer_stream(
-        self,
-        req: InferRequest,
-        request: Request,
-        auth_user: dict = Depends(require_auth_if_enabled),
-    ) -> AsyncGenerator[str, None]:
-        """Stream generated tokens as SSE.
-
-        Yields standard envelope: {stream, phase, status, data: {token}, meta}.
-        """
-        # Block streaming inference under memory pressure
-        try:
-            from domain.infrastructure.memory_pressure import (
-                PressureLevel,
-                get_memory_pressure_monitor,
-            )
-
-            if get_memory_pressure_monitor().check() == PressureLevel.EMERGENCY:
-
-                async def error_stream() -> AsyncIterator[str]:
-                    """error_stream."""
-                    yield self._sse_error(
-                        "infer",
-                        "IDLE",
-                        "System memory too low for inference — try again later",
-                        code="E_MEMORY_PRESSURE",
-                        http_status=503,
-                    )
-
-                return StreamingResponse(error_stream(), media_type="text/event-stream")
-        except ImportError as exc:
-            logger.debug("Memory pressure guard unavailable: %s", exc)
-
-        try:
-            from routers.inference import _get_model_status
-
-            ms = _get_model_status()
-            if not ms["ready"]:
-
-                async def error_stream() -> AsyncIterator[str]:
-                    """error_stream."""
-                    yield self._sse_error(
-                        "infer",
-                        "IDLE",
-                        ms["reason"],
-                        code=ms["code"],
-                        http_status=ms["status"],
-                    )
-
-                return StreamingResponse(error_stream(), media_type="text/event-stream")
-
-            async def generate() -> AsyncIterator[str]:
-                """generate."""
-                from domain.models import get_provider
-
-                provider = get_provider("default")
-                if provider is None:
-                    yield self._sse_error(
-                        "infer",
-                        "IDLE",
-                        "No provider available — load a model first",
-                        code="E_INFRA_REGISTRY",
-                        http_status=503,
-                    )
-                    return
-
-                prompt_text = req.prompt
-                if req.response_format == "json":
-                    prompt_text = (
-                        f"{req.prompt}\n\n"
-                        "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
-                    )
-                provider_messages = [{"role": "user", "content": prompt_text}]
-                start = datetime.datetime.now()
-                token_count = 0
-                _token_gen_start = _time.time()
-                _max_token_wait_s = getattr(cfg, "generate_timeout", 60)
-                _heartbeat_interval_s = 10.0
-                _last_heartbeat = _time.time()
-                try:
-                    async for token in provider.chat_stream(
-                        provider_messages,
-                        max_tokens=req.max_new_tokens,
-                        temperature=req.temperature,
-                        top_p=req.top_p,
-                        top_k=req.top_k,
-                        repetition_penalty=req.repetition_penalty,
-                    ):
-                        if await request.is_disconnected():
-                            return
-                        if token:
-                            _token_gen_start = _time.time()
-                            token_count += 1
-                            yield self._sse_token("infer", token)
-                        else:
-                            now = _time.time()
-                            if now - _last_heartbeat >= _heartbeat_interval_s:
-                                yield ": heartbeat\n\n"
-                                _last_heartbeat = now
-                        elapsed_since_token = _time.time() - _token_gen_start
-                        if elapsed_since_token > _max_token_wait_s:
-                            logger.warning(
-                                "Infer stream stalled for %.1fs (limit=%.1fs)",
-                                elapsed_since_token,
-                                _max_token_wait_s,
-                                extra={"tag": "INF"},
-                            )
-                            yield self._sse_error(
-                                "infer",
-                                "TIMEOUT",
-                                f"Generation stalled for {elapsed_since_token:.0f}s",
-                                code="MODEL_TIMEOUT",
-                                http_status=504,
-                            )
-                            return
-                except Exception as e:
-                    from domain.infrastructure import (
-                        classify_exception,
-                        emit_error_event,
-                    )
-
-                    err = classify_exception(e)
-                    emit_error_event(err, source="infer_stream")
-                    yield self._sse_error("infer", err.code, err.user_message)
-                    return
-                elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-                try:
-                    from domain.infrastructure.server_state import get_server_state
-
-                    get_server_state().record_inference(
-                        tokens=token_count, elapsed_ms=elapsed_ms, model=req.model
-                    )
-                except Exception as e:
-                    logger.warning("Failed to record inference metrics: %s", e)
-                safe_audit_log(
-                    "infer.stream",
-                    resource=req.model or "default",
-                    detail=f"elapsed={elapsed_ms:.0f}ms tokens={token_count}",
-                )
-                import json
-
-                yield (
-                    "data: "
-                    + json.dumps(
-                        {
-                            "stream": "infer",
-                            "phase": "STREAMING",
-                            "status": "complete",
-                            "data": {},
-                            "meta": {"tokens": token_count, "elapsed_ms": round(elapsed_ms, 1)},
-                        }
-                    )
-                    + "\n\n"
-                )
-
-            return StreamingResponse(generate(), media_type="text/event-stream")
-
-        except Exception as e:
-            classify_and_raise(e, source="infer.infer_stream")
 
     @endpoint("infer.infer_embed")
     async def infer_embed(
@@ -643,36 +499,8 @@ class InferRouter:
 
         # --- SSE helpers (local, avoid import issues) ---
 
-    def _sse_token(
-        self,
-        stream: str,
-        token: str,
-        done: bool = False,
-        meta: dict = None,
-        elapsed_ms: float = None,
-    ) -> str:
-        phase = "STREAMING"
-        status = "complete" if done else "working"
-        m = dict(meta) if meta else {}
-        if done and elapsed_ms is not None:
-            m["elapsed_ms"] = round(elapsed_ms, 1)
-        return self._sse_event(stream, phase, status, {"token": token}, m, "")
-
-    def _sse_error(
-        self,
-        stream: str,
-        phase: str,
-        error: str,
-        meta: dict = None,
-        code: str = None,
-        http_status: int = None,
-    ) -> str:
-        data = {"error": error}
-        if code is not None:
-            data["code"] = code
-        if http_status is not None:
-            data["http_status"] = http_status
-        return self._sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
 
 
-router = InferRouter().router
+
+_infer_router = InferRouter()
+router = _infer_router.router
