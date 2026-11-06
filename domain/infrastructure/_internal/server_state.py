@@ -128,6 +128,7 @@ class ServerState:
 
         # Sliding window for recent tokens/s (last 30 inferences)
         self._recent_inferences: deque[dict] = deque(maxlen=30)
+        self._latest_inference_metrics: dict | None = None
 
         # Per-model inference tracking: {model: {tokens, time_ms, count}}
         self._model_metrics: dict[str, dict] = {}
@@ -188,6 +189,25 @@ class ServerState:
         """Return the most recent requests (newest first)."""
         with self._lock:
             return list(reversed(list(self._request_history)[-limit:]))
+
+    def get_latest_inference_request(self) -> dict | None:
+        """Return the latest completed request to an inference endpoint."""
+        inference_paths = {
+            "/chat",
+            "/infer",
+            "/infer/stream",
+            "/infer/embed",
+            "/infer/generate",
+            "/infer/generate/stream",
+            "/v1/chat/completions",
+        }
+        with self._lock:
+            for request in reversed(self._request_history):
+                path = request["path"]
+                is_regenerate = path.startswith("/chat/") and path.endswith("/regenerate")
+                if request["method"] == "POST" and (path in inference_paths or is_regenerate):
+                    return dict(request)
+        return None
 
     def get_avg_latency(self, window: int = 20) -> float:
         """Average latency of the last N requests in ms."""
@@ -283,6 +303,14 @@ class ServerState:
                     "ts": time.time(),
                 }
             )
+            if tokens > 0 and elapsed_ms > 0:
+                self._latest_inference_metrics = {
+                    "tokens": tokens,
+                    "elapsed_ms": round(elapsed_ms, 1),
+                    "tokens_per_sec": round(tokens / (elapsed_ms / 1000), 1),
+                    "model": model,
+                    "timestamp": time.time(),
+                }
             if model:
                 if model not in self._model_metrics:
                     self._model_metrics[model] = {"tokens": 0, "time_ms": 0.0, "count": 0}
@@ -308,6 +336,11 @@ class ServerState:
             if total_ms <= 0:
                 return 0.0
             return round(total_tokens / (total_ms / 1000), 1)
+
+    def get_latest_inference_metrics(self) -> dict | None:
+        """Return metrics for the latest generation that produced tokens."""
+        with self._lock:
+            return dict(self._latest_inference_metrics) if self._latest_inference_metrics else None
 
     def get_avg_tokens_per_request(self) -> float:
         """Average tokens generated per inference request (last N)."""

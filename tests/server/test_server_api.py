@@ -62,7 +62,7 @@ class TestInferenceEndpoints:
             patch("apps.api.server.routers.inference.get_provider", return_value=None),
             patch("apps.api.server.state.model", "gpt2", create=True),
         ):
-            response = client.post("/inference/generate", json={"prompt": "Hi"})
+            response = client.post("/infer/generate", json={"prompt": "Hi"})
             assert response.status_code == 503
 
 
@@ -106,12 +106,12 @@ class TestUnknownRoute:
 class TestInvalidRequests:
     def test_generate_missing_payload_422(self):
         with patch("state.model", object()):
-            response = client.post("/inference/generate", json={})
+            response = client.post("/infer/generate", json={})
             assert response.status_code == 422
 
     def test_generate_no_prompt_422(self):
         with patch("state.model", object()):
-            response = client.post("/inference/generate")
+            response = client.post("/infer/generate")
             assert response.status_code == 422
 
 
