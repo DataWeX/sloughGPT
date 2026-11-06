@@ -157,6 +157,8 @@ export interface DetailedHealth {
   error_count: number
   avg_latency_ms: number
   p95_latency_ms: number
+  latest_inference_latency_ms?: number | null
+  latest_tokens_per_sec?: number
   requests_per_minute: number
   path_latencies: Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
   recent_errors: Array<{
