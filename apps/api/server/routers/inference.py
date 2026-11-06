@@ -26,6 +26,11 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.chat_response_cache import chunk_replay as _chunk_replay
+from infrastructure.inference_generation import (
+    count_generated_tokens,
+    generate_text,
+    stream_text,
+)
 from infrastructure.sse_fallback import sse_error, sse_event, sse_token
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
@@ -451,6 +456,7 @@ class GenerateResponse(BaseModel):
     text: str
     model: str
     tokens_generated: int = 0
+    elapsed_ms: float = 0
 
 
 # ── Pure module-level helpers (no instance state) ──
@@ -466,13 +472,8 @@ def _count_tokens(text: str, server_state) -> int:
     Returns:
         token count (via tokenizer.encode when available, else len(text.split()))
     """
-    try:
-        tokenizer = getattr(server_state, "tokenizer", None)
-        if tokenizer is not None and hasattr(tokenizer, "encode"):
-            return len(tokenizer.encode(text))
-    except Exception as e:
-        logger.debug("tokenizer encode fallback failed: %s", e)
-    return len(text.split())
+    tokenizer = getattr(server_state, "tokenizer", None)
+    return count_generated_tokens(text, tokenizer)
 
 
 def _extract_user_message(messages: list[Message]) -> str | None:
@@ -785,6 +786,8 @@ def _run_post_gen_tasks(
     bg_tasks: Any,
     bg_tasks_discard: Any,
     corr_id: str,
+    inference_tokens: int | None = None,
+    inference_elapsed_ms: float | None = None,
 ) -> dict[str, Any]:
     """Launch fire-and-forget background tasks after chat generation completes.
 
@@ -867,8 +870,8 @@ def _run_post_gen_tasks(
     # Inference metrics
     try:
         get_server_state().record_inference(
-            tokens=tokens,
-            elapsed_ms=duration_ms,
+            tokens=inference_tokens if inference_tokens is not None else tokens,
+            elapsed_ms=inference_elapsed_ms if inference_elapsed_ms is not None else duration_ms,
             model=_pgs_state.model_type or req.model,
         )
     except Exception as e:
@@ -1203,121 +1206,47 @@ class InferenceRouter:
     async def generate(
         self, req: GenerateRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> GenerateResponse:
-        """generate."""
-
-        import state as _gen_state
-
-        ms = _get_model_status()
-        if not ms["ready"]:
-            raise_error(
-                ms["reason"],
-                ms["code"],
-                status_code=ms["status"],
-            )
-
-        mem_err = _check_memory_pressure()
-        if mem_err:
-            raise_error(mem_err, "E_MEMORY_PRESSURE", status_code=503)
-
+        """Fast non-streaming text inference; chat context stays in the chat path."""
+        status = _get_model_status()
+        if not status["ready"]:
+            raise_error(status["reason"], status["code"], status_code=status["status"])
+        memory_error = _check_memory_pressure()
+        if memory_error:
+            raise_error(memory_error, "E_MEMORY_PRESSURE", status_code=503)
         provider = get_provider("default")
         if provider is None:
-            raise_error(
-                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=503
-            )
+            raise_error("No provider available — load a model first", "E_INFRA_REGISTRY", status_code=503)
 
-        prompt_text = req.prompt
+        prompt = req.prompt
         if req.response_format == "json":
-            prompt_text = (
-                f"{req.prompt}\n\n"
-                "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
-            )
-        provider_messages = [{"role": "user", "content": prompt_text}]
+            prompt += "\n\nRespond ONLY with valid JSON. No markdown, no explanation, no code fences."
+        import state as server_state
 
-        # Cognitive reasoning context injection from SloEngine
+        model = server_state.model_type or req.model
         try:
-            import state as _gen_state2
-
-            soul_engine = _gen_state2.soul_engine
-            if soul_engine and soul_engine._soul:
-                reasoning_text = soul_engine._build_reasoning_chain_text(req.prompt)
-                if reasoning_text.strip():
-                    provider_messages.insert(0, {"role": "system", "content": reasoning_text})
-        except Exception:
-            pass
-
-        try:
-            _t0 = time.monotonic()
-            gen_params = _apply_meta_weights(
-                temperature=req.temperature,
-                top_p=req.top_p,
-                top_k=req.top_k,
-                repetition_penalty=req.repetition_penalty,
-                user_message=req.prompt,
-                explicit=req.model_fields_set,
-            )
-
-            import state as _gen_state
-
-            _coalescer = get_coalescer()
-            _coalesce_key = _coalescer.hash(
-                provider_messages, gen_params, req.max_new_tokens, _gen_state.model_type
-            )
-            existing = await _coalescer.start(_coalesce_key)
-            if existing is not None:
-                await existing.event.wait()
-                if existing.error is not None:
-                    raise existing.error
-                result = existing.result
-                tokens = _count_tokens(result, _gen_state)
-                actual_model = _gen_state.model_type or req.model
-                return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
-
-            result = await provider.chat(
-                provider_messages,
+            result = await generate_text(
+                provider,
+                [{"role": "user", "content": prompt}],
                 max_tokens=req.max_new_tokens,
-                **gen_params,
-            )
-            logger.debug(
-                "generate handler",
-                extra={
-                    "tag": "INFO",
-                    "context": {
-                        "provider": getattr(provider, "_text_name", type(provider).__name__),
-                        "elapsed_ms": round((time.monotonic() - _t0) * 1000, 1),
-                        "result": str(result)[:80],
-                    },
+                generation_params={
+                    "temperature": req.temperature,
+                    "top_p": req.top_p,
+                    "top_k": req.top_k,
+                    "repetition_penalty": req.repetition_penalty,
                 },
+                tokenizer=server_state.tokenizer,
             )
-            tokens = _count_tokens(result, _gen_state)
-            actual_model = _gen_state.model_type or req.model
-            try:
-                get_server_state().record_inference(
-                    tokens=tokens,
-                    elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
-                    model=actual_model,
-                )
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
-            try:
-                capture(
-                    req.prompt,
-                    result,
-                    model=actual_model,
-                    tokens_generated=tokens,
-                    elapsed_ms=(time.monotonic() - _t0) * 1000,
-                    temperature=gen_params["temperature"],
-                )
-            except Exception as e:
-                logger.warning("Failed to capture conversation: %s", e)
-            await _coalescer.complete(_coalesce_key, result)
-            return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
-        except Exception as e:
-            try:
-                await _coalescer.complete_error(_coalesce_key, e)
-            except Exception as coalescer_err:
-                logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
-            logger.warning("Generate failed: %s", e, extra={"tag": "INF"})
-            classify_and_raise(e, source="generate")
+            get_server_state().record_inference(
+                tokens=result.tokens_generated, elapsed_ms=result.elapsed_ms, model=model
+            )
+            return GenerateResponse(
+                text=result.text,
+                model=model,
+                tokens_generated=result.tokens_generated,
+                elapsed_ms=round(result.elapsed_ms, 1),
+            )
+        except Exception as exc:
+            classify_and_raise(exc, source="infer.generate")
 
     async def generate_stream(
         self,
@@ -1325,246 +1254,56 @@ class InferenceRouter:
         request: Request,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> StreamingResponse:
-        """generate_stream."""
-        import state as _stream_state
+        """Fast streaming text inference through the same provider core as chat."""
+        status = _get_model_status()
+        if not status["ready"]:
+            async def not_ready() -> AsyncIterator[str]:
+                yield sse_error("infer", "IDLE", status["reason"], code=status["code"], http_status=status["status"])
+            return StreamingResponse(not_ready(), media_type="text/event-stream")
+        memory_error = _check_memory_pressure()
+        if memory_error:
+            async def memory_blocked() -> AsyncIterator[str]:
+                yield sse_error("infer", "IDLE", memory_error, code="E_MEMORY_PRESSURE", http_status=503)
+            return StreamingResponse(memory_blocked(), media_type="text/event-stream")
+        provider = get_provider("default")
+        if provider is None:
+            async def provider_missing() -> AsyncIterator[str]:
+                yield sse_error("infer", "IDLE", "No provider available — load a model first", code="E_INFRA_REGISTRY", http_status=503)
+            return StreamingResponse(provider_missing(), media_type="text/event-stream")
 
-        ms = _get_model_status()
-        if not ms["ready"]:
+        prompt = req.prompt
+        if req.response_format == "json":
+            prompt += "\n\nRespond ONLY with valid JSON. No markdown, no explanation, no code fences."
+        import state as server_state
+        model = server_state.model_type or req.model
 
-            async def error_stream() -> AsyncIterator[str]:
-                """error_stream."""
-                yield sse_error(
-                    "generate",
-                    "IDLE",
-                    ms["reason"],
-                    code=ms["code"],
-                    http_status=ms["status"],
-                )
-
-            return StreamingResponse(error_stream(), media_type="text/event-stream")
-
-        mem_err = _check_memory_pressure()
-        if mem_err:
-
-            async def oom_stream() -> AsyncIterator[str]:
-                yield sse_error(
-                    "generate", "IDLE", mem_err, code="E_MEMORY_PRESSURE", http_status=503
-                )
-
-            return StreamingResponse(oom_stream(), media_type="text/event-stream")
-
-        async def generate() -> AsyncIterator[str]:
-            """generate."""
-            _gen_corr_id = f"gen-{int(time.time() * 1000) % 100000}"
-
-            provider = get_provider("default")
-            if provider is None:
-                yield sse_error(
-                    "generate",
-                    "IDLE",
-                    "No provider available — load a model first",
-                    code="E_INFRA_REGISTRY",
-                    http_status=503,
-                )
-                return
-
-            cancel_event = threading.Event()
-            _mgr = get_cancel_manager()
-            _op_id = _mgr.register(
-                OpType.INFERENCE,
-                f"generate:{req.prompt[:40]}",
-                cancel_fn=lambda: cancel_event.set(),
-            )
-            _mgr.start(_op_id)
-
-            prompt_text = req.prompt
-            if req.response_format == "json":
-                prompt_text = (
-                    f"{req.prompt}\n\n"
-                    "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
-                )
-            provider_messages = [{"role": "user", "content": prompt_text}]
-
-            # Cognitive reasoning context injection from SloEngine
+        async def response_stream() -> AsyncIterator[str]:
+            started = time.monotonic()
+            chunks: list[str] = []
             try:
-                soul_engine = _stream_state.soul_engine
-                if soul_engine and soul_engine._soul:
-                    reasoning_text = soul_engine._build_reasoning_chain_text(req.prompt)
-                    if reasoning_text.strip():
-                        provider_messages.insert(0, {"role": "system", "content": reasoning_text})
-            except Exception:
-                pass
-
-            start = datetime.datetime.now()
-            token_count = 0
-            collected = []
-            _token_gen_start = time.time()
-            _max_token_wait_s = cfg.generate_timeout
-            _heartbeat_interval_s = 10.0
-            _last_heartbeat = time.time()
-            _batch: list[str] = []
-            _batch_start = time.time()
-            _BATCH_MAX = 5
-            _BATCH_INTERVAL_S = 0.005
-            _token_count = 0
-            gen_params = _apply_meta_weights(
-                temperature=req.temperature,
-                top_p=req.top_p,
-                top_k=req.top_k,
-                repetition_penalty=req.repetition_penalty,
-                user_message=req.prompt,
-                explicit=req.model_fields_set,
-            )
-
-            _coalescer = get_coalescer()
-            _coalesce_key = _coalescer.hash(
-                provider_messages, gen_params, req.max_new_tokens, _stream_state.model_type
-            )
-            existing = await _coalescer.start(_coalesce_key)
-            if existing is not None:
-                await existing.event.wait()
-                if existing.error is not None:
-                    yield sse_error(
-                        "generate",
-                        "ERROR",
-                        str(existing.error),
-                        code="E_INFRA_GENERATION",
-                        http_status=500,
-                    )
-                    return
-                cached = existing.result or ""
-                for chunk in _chunk_replay(cached):
-                    yield sse_token("generate", chunk)
-                _mgr.finish(_op_id)
-                yield sse_token(
-                    "generate",
-                    "",
-                    done=True,
-                    meta={"tokens": len(cached.split()), "cached": True},
-                )
-                return
-
-            try:
-                async for token in provider.chat_stream(
-                    provider_messages,
+                async for token in stream_text(
+                    provider,
+                    [{"role": "user", "content": prompt}],
                     max_tokens=req.max_new_tokens,
-                    cancel_event=cancel_event,
-                    **gen_params,
+                    generation_params={
+                        "temperature": req.temperature,
+                        "top_p": req.top_p,
+                        "top_k": req.top_k,
+                        "repetition_penalty": req.repetition_penalty,
+                    },
                 ):
-                    if cancel_event.is_set() or await request.is_disconnected():
-                        cancel_event.set()
-                        logger.info(
-                            "Client disconnected from generate stream", extra={"tag": "INF"}
-                        )
-                        _mgr.finish(_op_id)
+                    if await request.is_disconnected():
                         return
-                    if token:
-                        if _token_count == 0:
-                            _first_token_ms = (time.time() - _token_gen_start) * 1000
-                            logger.info(
-                                "GEN_FIRST_TOKEN corr=%s after=%.1fms",
-                                _gen_corr_id,
-                                _first_token_ms,
-                                extra={
-                                    "tag": "INF",
-                                    "context": {
-                                        "corr": _gen_corr_id,
-                                        "elapsed_ms": round(_first_token_ms, 1),
-                                    },
-                                },
-                            )
-                        _token_gen_start = time.time()
-                        token_count += 1
-                        _token_count += 1
-                        collected.append(token)
-                        _batch.append(token)
-                        if (
-                            _token_count == 1
-                            or len(_batch) >= _BATCH_MAX
-                            or (time.time() - _batch_start) >= _BATCH_INTERVAL_S
-                        ):
-                            yield sse_token("generate", "".join(_batch))
-                            _batch = []
-                            _batch_start = time.time()
-                    else:
-                        now = time.time()
-                        if now - _last_heartbeat >= _heartbeat_interval_s:
-                            yield ": heartbeat\n\n"
-                            _last_heartbeat = now
-                    elapsed_since_token = time.time() - _token_gen_start
-                    if elapsed_since_token > _max_token_wait_s:
-                        logger.warning(
-                            "Generate stream stalled for %.1fs (limit=%.1fs) corr=%s",
-                            elapsed_since_token,
-                            _max_token_wait_s,
-                            _gen_corr_id,
-                            extra={
-                                "tag": "INF",
-                                "context": {
-                                    "corr": _gen_corr_id,
-                                    "elapsed_s": round(elapsed_since_token, 1),
-                                    "limit_s": _max_token_wait_s,
-                                },
-                            },
-                        )
-                        cancel_event.set()
-                        _mgr.finish(_op_id, "timeout")
-                        yield sse_error(
-                            "generate",
-                            "TIMEOUT",
-                            f"Generation stalled for {elapsed_since_token:.0f}s",
-                            code="MODEL_TIMEOUT",
-                            http_status=504,
-                        )
-                        return
-                if _batch:
-                    yield sse_token("generate", "".join(_batch))
-                    _batch = []
-            except Exception as e:
-                try:
-                    await _coalescer.complete_error(_coalesce_key, e)
-                except Exception as coalescer_err:
-                    logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
-                _mgr.finish(_op_id, str(e))
-                logger.warning("Generate stream failed: %s", e, extra={"tag": "INF"})
-                err_code = (
-                    "E_MEMORY_PRESSURE"
-                    if isinstance(e, RuntimeError) and "memory" in str(e).lower()
-                    else "E_INFRA_GENERATION"
-                )
-                http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
-                yield sse_error("generate", "ERROR", str(e), code=err_code, http_status=http_status)
-            elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
-            try:
-                get_server_state().record_inference(
-                    tokens=token_count,
-                    elapsed_ms=elapsed,
-                    model=_stream_state.model_type or req.model,
-                )
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
-            try:
-                capture(
-                    req.prompt,
-                    "".join(collected),
-                    model=_stream_state.model_type or req.model,
-                    tokens_generated=token_count,
-                    elapsed_ms=elapsed,
-                    temperature=gen_params["temperature"],
-                )
-            except Exception as e:
-                logger.warning("Failed to capture conversation: %s", e)
-            full_response = "".join(collected)
-            await _coalescer.complete(_coalesce_key, full_response)
-            _mgr.finish(_op_id)
-            yield sse_token(
-                "generate",
-                "",
-                done=True,
-                meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)},
-            )
+                    chunks.append(token)
+                    yield sse_token("infer", token)
+                elapsed_ms = (time.monotonic() - started) * 1000
+                tokens = count_generated_tokens("".join(chunks), server_state.tokenizer)
+                get_server_state().record_inference(tokens=tokens, elapsed_ms=elapsed_ms, model=model)
+                yield sse_complete("infer", data={"tokens_generated": tokens}, meta={"elapsed_ms": round(elapsed_ms, 1)})
+            except Exception as exc:
+                yield sse_error("infer", "ERROR", str(exc), code="E_INFERENCE", http_status=500)
 
-        return StreamingResponse(generate(), media_type="text/event-stream")
+        return StreamingResponse(response_stream(), media_type="text/event-stream")
 
     async def ws_generate(self, websocket: WebSocket) -> None:
         """WebSocket endpoint for real-time token streaming.
@@ -1733,10 +1472,11 @@ class InferenceRouter:
 
             collected: list[str] = []
             try:
-                async for token in provider.chat_stream(
+                async for token in stream_text(
+                    provider,
                     provider_messages,
                     max_tokens=max_tokens,
-                    **gen_params,
+                    generation_params=gen_params,
                 ):
                     if token:
                         collected.append(token)
@@ -2152,17 +1892,15 @@ class InferenceRouter:
         model = _chat_state.model_type or req.model
 
         collected: list[str] = []
+        generation_t0 = time.monotonic()
         try:
-            async for token in provider.chat_stream(
+            async for token in stream_text(
+                provider,
                 messages,
                 max_tokens=req.max_tokens,
-                # The turn's stop flag: minted by whoever owns the registry
-                # (chat's manager) and delivered with the request. The provider
-                # polls is_set() each token, so a cancel fired mid-stream stops
-                # generation here. None only when the caller has no registry.
+                generation_params=gen_params,
                 cancel_event=req.cancel_event,
                 session_id=session_id,
-                **gen_params,
             ):
                 if token:
                     collected.append(token)
@@ -2172,6 +1910,7 @@ class InferenceRouter:
             raise
 
         text = "".join(collected)
+        generation_elapsed_ms = round((time.monotonic() - generation_t0) * 1000, 1)
         elapsed = round((time.monotonic() - _chat_t0) * 1000, 1)
         try:
             tokens = _count_tokens(text, _chat_state)
@@ -2198,6 +1937,8 @@ class InferenceRouter:
                 self._BG_TASKS,
                 self._bg_tasks_lock_discard,
                 corr_id="stream",
+                inference_tokens=tokens,
+                inference_elapsed_ms=generation_elapsed_ms,
             )
         except Exception as e:
             logger.warning("Post-gen tasks failed: %s", e)
@@ -2264,6 +2005,12 @@ class InferenceRouter:
             model=model,
             usage={"completion_tokens": tokens, "total_tokens": tokens},
             elapsed_ms=elapsed,
+            generation_elapsed_ms=generation_elapsed_ms,
+            tokens_per_sec=(
+                round(tokens / (generation_elapsed_ms / 1000), 1)
+                if tokens > 0 and generation_elapsed_ms > 0
+                else None
+            ),
             finish_reason="stop",
             tokens=collected,
             consciousness=(
@@ -2881,10 +2628,8 @@ class InferenceRouter:
 
     def _register_routes(self):
         r = self.router
-        r.add_api_route(
-            "/inference/generate", self.generate, methods=["POST"], response_model=GenerateResponse
-        )
-        r.add_api_route("/inference/generate/stream", self.generate_stream, methods=["POST"])
+        r.add_api_route("/infer", self.generate, methods=["POST"], response_model=GenerateResponse)
+        r.add_api_route("/infer/stream", self.generate_stream, methods=["POST"])
         r.add_api_route("/info", self.get_info, methods=["GET"])
         r.add_api_route("/info/soul", self.get_info_soul, methods=["GET"])
         r.add_api_route("/", self.root, methods=["GET"])
