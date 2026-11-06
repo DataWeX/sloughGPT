@@ -267,8 +267,33 @@ describe('StatusBar', () => {
       soul: 'friendly',
     })
     render(<StatusBar />)
-    const tps = await screen.findAllByText('15 tok/s')
+    const tps = await screen.findAllByText('15.0 tok/s')
     expect(tps.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows latest end-to-end latency and generation rate together', () => {
+    mockHealthState.mockReturnValue({
+      model_loaded: true,
+      model_type: 'native',
+      inference_count: 4,
+      health_score: 85,
+      health_status: 'healthy',
+      health_summary: 'Healthy',
+      tokens_per_sec: 23.4,
+      latest_tokens_per_sec: 23.4,
+      latest_inference_latency_ms: 842.1,
+      is_inferencing: false,
+      cpu_percent: 10,
+      memory_percent: 20,
+      uptime_seconds: 100,
+      request_count: 4,
+      error_count: 0,
+      soul: null,
+    })
+
+    render(<StatusBar />)
+
+    expect(screen.getByText('842 ms · 23.4 tok/s')).toBeTruthy()
   })
 
   it('renders inference count when no tps', async () => {
