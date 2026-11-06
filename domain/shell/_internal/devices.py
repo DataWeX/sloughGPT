@@ -142,7 +142,7 @@ class LLMDevice(AIDevice):
             from .config import get_api_base
 
             r = requests.post(
-                f"{get_api_base()}/inference/generate",
+                f"{get_api_base()}/infer/generate",
                 json={"prompt": prompt, "max_new_tokens": 128},
                 timeout=30,
             )

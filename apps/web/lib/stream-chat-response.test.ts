@@ -135,6 +135,19 @@ describe('streamChatResponse', () => {
     expect(order).toEqual(['meta', 'complete'])
   })
 
+  it('prefers server generation throughput metadata when available', async () => {
+    const onMeta = vi.fn()
+    mockSSE([
+      'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"meta":{"usage_tokens":{"completion_tokens":12},"generation_elapsed_ms":600,"tokens_per_sec":20},"message":""}',
+    ])
+    await streamChatResponse({ ...mockParams, onMeta })
+    expect(onMeta).toHaveBeenCalledWith({
+      tokens: 12,
+      elapsedMs: 600,
+      tokensPerSecond: 20,
+    })
+  })
+
   it('does not call onMeta when it is not provided', async () => {
     mockSSE([
       'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}',

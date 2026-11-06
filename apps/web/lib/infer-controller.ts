@@ -60,7 +60,7 @@ export interface InferInfo {
 
 export const inferController = {
   async generate(req: InferRequest): Promise<InferResponse> {
-    return apiPost<InferResponse>('/infer', req)
+    return apiPost<InferResponse>('/infer/generate', req)
   },
 
   async health(): Promise<InferHealth> {
