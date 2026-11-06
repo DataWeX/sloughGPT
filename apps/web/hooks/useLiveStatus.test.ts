@@ -139,7 +139,7 @@ describe('mapDetailedToSnapshot', () => {
       error_count: 2,
       avg_latency_ms: 80,
       requests_per_minute: 4.5,
-      path_latencies: [{ path: '/inference/generate', avg_ms: 80, count: 5, p95_ms: 120 }],
+      path_latencies: [{ path: '/infer/generate', avg_ms: 80, count: 5, p95_ms: 120 }],
       recent_errors: [
         { path: '/chat', method: 'POST', status: 500, message: 'boom', error_type: 'Err', ts: 100 },
       ],
