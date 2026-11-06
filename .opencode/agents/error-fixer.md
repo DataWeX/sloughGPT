@@ -81,7 +81,7 @@ apps/web/               # Vite + React frontend
 apps/web/app/(app)/     # Authenticated pages
 apps/web/components/    # UI components
 apps/web/lib/           # Utilities, controllers, stores
-packages/core-py/       # Python core logic
+domain/             # Python core logic
 packages/strui/         # Component library
 ```
 

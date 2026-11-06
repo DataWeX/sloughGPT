@@ -130,5 +130,5 @@ Add to `TrainingLoop`:
 ### Verification
 
 1. `python -c "from domain.cognition._internal.consciousness.training import ConsciousnessTrainer, TrainingConfig; print('OK')"`
-2. `pytest packages/core-py/tests/test_train_pipeline.py packages/core-py/tests/test_slonet_chat_trainer.py`
+2. `pytest tests/core-py/test_train_pipeline.py tests/core-py/test_slonet_chat_trainer.py`
 3. Start server, verify `/consciousness/status` returns 200

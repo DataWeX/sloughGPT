@@ -690,7 +690,7 @@ It is:
 Headless observation via the world driver:
 
 ```bash
-PYTHONPATH=packages/core-py python3 -m domain.shell._internal.world_driver \
+PYTHONPATH=. python3 -m domain.shell._internal.world_driver \
     --grid 64,32,64 --seed 42 --babies 4 --ticks 100 --every 10
 ```
 

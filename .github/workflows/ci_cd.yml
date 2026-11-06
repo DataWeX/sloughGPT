@@ -52,11 +52,11 @@ jobs:
       - name: Ruff lint
         run: |
           ruff --version
-          ruff check packages/core-py/ apps/api/server/ --exclude '__pycache__'
+          ruff check domain/ apps/api/server/ --exclude '__pycache__'
       - name: Ruff format check
-        run: ruff format --check packages/core-py/ apps/api/server/ --exclude '__pycache__'
+        run: ruff format --check apps/api/server/ --exclude '__pycache__'
       - name: Mypy type check
-        run: mypy packages/core-py/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
+        run: mypy domain/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
       # Build-context rot: a COPY source that is missing, or excluded by
       # .dockerignore, kills `docker build` — caught here on every commit,
       # because moving a directory breaks a Dockerfile without editing it
@@ -64,7 +64,7 @@ jobs:
       - name: Dockerfile build-context check
         run: python scripts/check_dockerfile_contexts.py
 
-  # ─── Core Python tests (packages/core-py) ───────────────────────
+  # ─── Core Python tests (tests/core-py) ───────────────────────
   test-core-py:
     runs-on: ubuntu-latest
     # A hung step fails the job instead of holding the
@@ -95,7 +95,7 @@ jobs:
           # Job ID kept — it is the required check name. The old --cov=.
           # (run from inside packages/core-py) measured the package tree, which
           # then CONTAINED the test_*_coverage.py driver modules (→ a bogus 97%
-          # that counted test files). After the move packages/core-py is nearly
+          # that counted test files). After the move that tree was nearly
           # empty, so --cov=packages/core-py collected 0 lines → fail-under=50
           # always reddened (card 20261031_080004). Coverage now points at the
           # domain library the tests actually import, so the 50% floor measures
@@ -146,7 +146,7 @@ jobs:
           # apps/api/server FIRST so `tests` resolves to the server test
           # package -- repo-root tests/ shadows it otherwise (the standing
           # test_support collection errors). Root + shared packages follow.
-          PYTHONPATH: ${{ github.workspace }}/apps/api/server:${{ github.workspace }}:${{ github.workspace }}/packages/core-py:${{ github.workspace }}/packages/downcraft
+          PYTHONPATH: ${{ github.workspace }}/apps/api/server:${{ github.workspace }}:${{ github.workspace }}/packages/downcraft
         # --cov=src pointed at a directory that does not exist; the server
         # code lives in these packages.
         run: python -m pytest tests/ --cov=infrastructure --cov=routers --cov=controllers --cov-report=term-missing --cov-fail-under=30 -q --tb=short
@@ -187,7 +187,7 @@ jobs:
 
       - name: Projection matches the served route table (runtime)
         env:
-          PYTHONPATH: .:apps/api/server:packages/core-py:packages/downcraft
+          PYTHONPATH: .:apps/api/server:packages/downcraft
         run: python scripts/check_contract.py --runtime
 
   # ─── Root-level Python tests (tests/) ───────────────────────────

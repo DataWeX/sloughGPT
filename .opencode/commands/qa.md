@@ -21,7 +21,7 @@ Verify no regressions after code changes.
 /qa                          # Full verification
 /qa python                   # Python only
 /qa web                      # Frontend only
-/qa packages/core-py         # Specific path
+/qa domain                   # Specific path
 ```
 
 ## What It Does

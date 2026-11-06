@@ -52,7 +52,6 @@ from domain.shared import find_repo_root  # noqa: E402  (resolvable now)
 
 _REPO_ROOT = find_repo_root(_HERE)
 _SERVER_ROOT = _HERE.parent
-_CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
 _CHARGECTL_ROOT = _REPO_ROOT / "packages" / "chargectl" / "src"
 
@@ -60,7 +59,7 @@ _HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
 _HF_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("HF_HOME", str(_HF_CACHE))
 
-for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _REPO_ROOT):
+for _p in (_SERVER_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _REPO_ROOT):
     _s = str(_p)
     if _s not in sys.path:
         sys.path.insert(0, _s)

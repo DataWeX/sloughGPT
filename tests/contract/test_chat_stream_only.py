@@ -105,7 +105,6 @@ def _registered_routes() -> list[dict]:
         for p in (
             ROOT,
             ROOT / "apps" / "api" / "server",
-            ROOT / "packages" / "core-py",
             ROOT / "packages" / "sdk-py",
             ROOT / "packages" / "downcraft",
             ROOT / "apps" / "cli" / "src",

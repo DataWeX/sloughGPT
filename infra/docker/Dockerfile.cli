@@ -22,12 +22,11 @@ RUN pip install --no-cache-dir -r /tmp/requirements-api.txt \
 
 COPY apps/cli /app/apps/cli
 COPY apps/api/server /app/apps/api/server
-COPY packages/core-py /app/packages/core-py
 COPY packages/sdk-py /app/packages/sdk-py
 COPY pyproject.toml README.md LICENSE /app/
 
 RUN mkdir -p /app/data /app/models /app/datasets
 
-ENV PYTHONPATH="/app:/app/packages/core-py:/app/apps/api/server"
+ENV PYTHONPATH="/app:/app/apps/api/server"
 
 CMD ["python", "/app/apps/cli/cli.py"]

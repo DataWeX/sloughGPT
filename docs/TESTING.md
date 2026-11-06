@@ -141,13 +141,11 @@ describe('MyComponent', () => {
 ### Running Tests
 
 ```bash
-cd packages/core-py
-
 # Run all tests (parallel)
 python -m pytest -n auto -x -q
 
 # Run specific test file
-python -m pytest tests/test_training_infrastructure.py
+python -m pytest tests/core-py/test_training_infrastructure.py
 
 # Run with coverage
 python -m pytest --cov=domain tests/

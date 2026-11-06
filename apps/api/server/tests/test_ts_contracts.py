@@ -50,7 +50,6 @@ _PYTHONPATH = [
     ROOT,
     ROOT / "packages" / "mogdb" / "src",
     ROOT / "packages" / "downcraft",
-    ROOT / "packages" / "core-py",
     ROOT / "apps" / "api" / "server",
 ]
 

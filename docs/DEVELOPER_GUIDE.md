@@ -248,7 +248,7 @@ python3 -m pytest tests/ -q
 # Run a subset
 python3 -m pytest tests/test_api.py -v
 
-# Run with coverage (domains live under packages/core-py)
+# Run with coverage (domain/ lives at the repo root)
 python3 -m pytest tests/ --cov=domain --cov-report=html
 
 # Run integration-focused tests

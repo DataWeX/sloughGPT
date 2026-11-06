@@ -11,7 +11,6 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 # Add project sub-packages at high priority (position 0).
 # _REPO_ROOT itself goes at the end to avoid shadowing sub-package modules.
 for _p in (
-    _REPO_ROOT / "packages" / "core-py",
     _REPO_ROOT / "packages" / "sdk-py",
     _REPO_ROOT / "apps" / "api" / "server",
     _REPO_ROOT / "apps" / "cli" / "src",

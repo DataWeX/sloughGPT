@@ -7,7 +7,6 @@ repo_root = os.path.abspath(os.path.join(__file__, ".."))
 # append: an env-installed copy of a repo package (e.g. conda's `downcraft`)
 # must never shadow the source tree we are actually testing.
 for _p in (
-    "packages/core-py",
     "apps/api/server",
     "packages/downcraft",
     # Sibling planner packages (src layout) — app_planner's GUI transition

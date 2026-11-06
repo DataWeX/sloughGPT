@@ -7,7 +7,7 @@ RBAC role; training syscalls are gated behind the `ADMIN` role.
 ## Architecture
 
 ```
-apps/web (VM Console)           apps/api /vm/run              packages/core-py X86VirtualSystem
+apps/web (VM Console)           apps/api /vm/run              domain/shell X86VirtualSystem
 ┌────────────────────────┐      ┌─────────────────┐           ┌───────────────────────────────┐
 │ source textarea        │─────>│ routers/vm.py   │──────────>│ X86Assembler / X86CPU         │
 │ role selector          │      │ VMRunRequest    │           │ X86SyscallHandler (INT 0x80)  │

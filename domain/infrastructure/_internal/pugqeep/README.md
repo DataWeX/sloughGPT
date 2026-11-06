@@ -162,5 +162,5 @@ Only `numpy` + Python stdlib. No PyTorch, no sentence-transformers, no Pinecone.
 ## Tests
 
 ```bash
-PYTHONPATH=packages/core-py python3 -m pytest packages/core-py/tests/test_pugqeep.py -v
+PYTHONPATH=. python3 -m pytest tests/core-py/test_pugqeep.py -v
 ```

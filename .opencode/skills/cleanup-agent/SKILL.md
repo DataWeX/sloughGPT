@@ -44,7 +44,7 @@ Ratcheted: `tests/test_code_hygiene.py::test_no_fstring_logger_calls` (zero as o
 
 ### 2. Missing `from __future__ import annotations`
 ```bash
-grep -rL 'from __future__ import annotations' --include='*.py' --exclude-dir=__pycache__ domain packages/core-py
+grep -rL 'from __future__ import annotations' --include='*.py' --exclude-dir=__pycache__ domain
 ```
 STATUS (2026-10-04): open scope decision on card `0d4ad67b` — 860 of 1665 files missing; no explicit mandate exists (PYTHON_FIRST.md only exemplifies it), ruff cannot enforce it. NOT ratcheted; do not mass-edit without the user's scope pick.
 
@@ -75,7 +75,7 @@ Ratcheted; kanban cards are the todo system, markers rot in the tree. Zero as of
 
 ### 6. Unused imports
 ```bash
-ruff check --select F401 domain packages/core-py
+ruff check --select F401 domain
 ```
 Zero as of 2026-10-04 (ruff 0.16.8). The old `rg '^import '` line never measured anything — it just listed imports.
 

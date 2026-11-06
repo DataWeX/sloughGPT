@@ -337,12 +337,12 @@ it('renders after load', async () => {
 ### Run
 
 ```bash
-cd packages/core-py && .venv/bin/python -m pytest tests/test_<module>.py -x -v
+.venv/bin/python -m pytest tests/core-py/test_<module>.py -x -v
 ```
 
 ### File Location
 
-`packages/core-py/tests/test_<module>.py`
+`tests/core-py/test_<module>.py`
 
 ### Pattern
 
@@ -399,7 +399,7 @@ class TestMyModule:
 ### Run
 
 ```bash
-cd packages/core-py && .venv/bin/python -m pytest tests/test_user_journeys.py -x -v
+.venv/bin/python -m pytest tests/core-py/test_user_journeys.py -x -v
 ```
 
 **Requires:** API on `:8000`, web on `:5173`.
@@ -457,8 +457,7 @@ class TestToolsFlows:
 
 ```bash
 # Python
-cd packages/core-py
-.venv/bin/python -m pytest tests/test_<module>*.py \
+.venv/bin/python -m pytest tests/core-py/test_<module>*.py \
   --cov=domain/<area>/<module> \
   --cov-report=term-missing -q
 

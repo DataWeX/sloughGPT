@@ -60,7 +60,7 @@ layer (token-prefix reuse within a session) and is untouched by this design.
 `scripts/benchmark_response_cache.py` — microbenchmark, no model required:
 
 ```
-PYTHONNOUSERSITE=1 PYTHONPATH="$PWD:$PWD/packages/core-py" \
+PYTHONNOUSERSITE=1 PYTHONPATH="$PWD" \
   python scripts/benchmark_response_cache.py
 ```
 

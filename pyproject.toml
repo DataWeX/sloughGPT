@@ -142,7 +142,6 @@ known-third-party = ["datasets"]
 "**/tests/*.py" = ["F811", "B017"]
 "tests/fixtures/__init__.py" = ["F403", "F405"]
 "domain/cognitive/_internal/metacognition/__init__.py" = ["F403", "F405"]
-"packages/core-py/scripts/*.py" = ["B018"]
 "scripts/examples/*.py" = ["F821"]
 
 [tool.mypy]
@@ -158,7 +157,7 @@ python_functions = ["test_*"]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["packages/core-py", "domain"]
+source = ["domain"]
 omit = ["*/tests/*", "*/test_*"]
 
 [tool.coverage.report]

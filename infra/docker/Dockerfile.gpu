@@ -38,12 +38,10 @@ RUN pip install --upgrade pip && \
     pip install --no-cache-dir scipy psutil
 
 COPY apps/api/server /build/apps/api/server
-COPY packages/core-py /build/packages/core-py
 COPY packages/sdk-py/sloughgpt_sdk /build/packages/sdk-py/sloughgpt_sdk
 COPY pyproject.toml README.md LICENSE /build/
 
 RUN pip install --no-cache-dir -e /build \
-    && pip install --no-cache-dir -e /build/packages/core-py \
     && pip install --no-cache-dir -e /build/packages/sdk-py/sloughgpt_sdk
 
 # ─── Runtime stage (no build tools, no CUDA dev libs) ───────────
@@ -70,7 +68,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy app code
 COPY apps/api/server /app/apps/api/server
-COPY packages/core-py /app/packages/core-py
 COPY packages/sdk-py/sloughgpt_sdk /app/packages/sdk-py/sloughgpt_sdk
 COPY pyproject.toml README.md LICENSE /app/
 

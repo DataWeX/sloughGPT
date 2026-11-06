@@ -16,9 +16,8 @@ if _venv_py.exists() and sys.executable != str(_venv_py):
     os.execv(str(_venv_py), [str(_venv_py)] + sys.argv)
 
 # ── Path setup ──────────────────────────────────────────────────────────
-_CORE_PY = _REPO / "packages" / "core-py"
 _CLI_SRC = _REPO / "apps" / "cli" / "src"
-for _p in [_CLI_SRC, _CORE_PY]:
+for _p in [_CLI_SRC]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
