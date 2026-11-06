@@ -30,7 +30,7 @@ const base = {
   model_metrics: [],
   path_latencies: [],
   recent_errors: [
-    { path: '/inference/generate', method: 'POST', status: 500, message: 'generation timed out', error_type: 'TimeoutError', ts: 1723000000 },
+    { path: '/infer/generate', method: 'POST', status: 500, message: 'generation timed out', error_type: 'TimeoutError', ts: 1723000000 },
     { path: '/chat', method: 'POST', status: 422, message: 'bad payload', error_type: 'ValidationError', ts: 1722999900 },
   ],
 } as any
