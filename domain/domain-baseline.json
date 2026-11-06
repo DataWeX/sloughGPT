@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "4b9d7c8278659e886f741a4a61125b1208e34365",
+    "recorded_commit": "f7fa2f6f056ed2956a999dfcc69925ef4d1af540",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -276,7 +276,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "b7ea96cb29855bd551768d5bca8e1477cdbe3a12"
+      "tree_hash": "dd6515d9c9308e4f020b0e13fba5632bd1b52fba"
     },
     "knowledge": {
       "class": "core-capability",
@@ -474,7 +474,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "4d16614ac25b23638384ff5be5668bc010534266"
+      "tree_hash": "edc0f925daedfdf9a7655997fde64ecc9c53efd6"
     },
     "slolib": {
       "class": "core-capability",
