@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -14,11 +15,13 @@ _AUTH_USER = {"sub": "user1", "tenant_id": "t1"}
 
 def _build_app(auth_user_dict=_AUTH_USER):
     from routers.infer import InferRouter
+    from routers.inference import router as inference_router
 
     router_obj = InferRouter()
     _app = FastAPI()
     register_app_error_handler(_app)
     _app.include_router(router_obj.router)
+    _app.include_router(inference_router)
     _app.dependency_overrides[require_auth_if_enabled] = lambda: auth_user_dict
     return _app, router_obj
 
@@ -107,20 +110,33 @@ class TestInferEmbed:
 
 
 class TestInferGenerate:
-    def test_generate_endpoint_exists(self):
-        """Verify the generate endpoint is registered and accepts POST."""
+    def test_canonical_generate_endpoint_delegates_to_shared_handler(self):
         _app, router = _build_app()
-        # Just verify the endpoint exists and accepts the request format
-        # The actual generation depends on model state which is complex to mock
-        provider = _mock_provider()
-        mock_model = MagicMock()
-        with (
-            patch.object(router, "_get_model", return_value=mock_model),
-            patch("domain.models.get_provider", return_value=provider),
-        ):
-            resp = TestClient(_app).post(
-                "/infer",
-                json={"prompt": "Hello", "max_new_tokens": 10},
+        from routers.inference import _instance
+
+        generate = AsyncMock(
+            return_value=SimpleNamespace(
+                text="Hello, world!", model="test-model", tokens_generated=2, elapsed_ms=8.5
             )
-        # Endpoint exists and processes the request (may fail on model internals)
-        assert resp.status_code in (200, 400, 500, 503)
+        )
+        payload = {
+            "prompt": "Hello",
+            "max_new_tokens": 10,
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "top_k": 5,
+            "repetition_penalty": 1.0,
+        }
+        with patch.object(_instance, "generate", new=generate):
+            canonical = TestClient(_app).post("/infer", json=payload)
+
+        assert canonical.status_code == 200
+        assert canonical.json()["elapsed_ms"] == 8.5
+        generate.assert_awaited_once()
+        request = generate.await_args.args[0]
+        assert request.prompt == "Hello"
+        assert request.max_new_tokens == 10
+        assert request.temperature == 0.2
+        assert request.top_p == 0.9
+        assert request.top_k == 5
+        assert request.repetition_penalty == 1.0
