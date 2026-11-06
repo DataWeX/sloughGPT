@@ -54,7 +54,8 @@ review flag.
    handled). Gate: `tests/core-py/test_raw_thread_gate.py`; hint:
    pre-commit `check-raw-threads`. Allowlist entries carry `kind` —
    `followup` marks stage-3/4 candidates the audit parked (grep
-   `"kind": "followup"` for the backlog; 7 sites today).
+   `"kind": "followup"` for the backlog; 1 site today — the
+   knowledge-store sync bridge, owned by stage 4).
 3. Migrate raw-thread sites one by one, in two passes (audit2026-11-04, ~130 production call sites):
    - **3A — process kind (~30 sites)**: long-lived supervised work →
      `engine.spawn()` / `run_subprocess()` / `spawn_command()`. Priority
@@ -96,7 +97,17 @@ review flag.
      `tests/core-py/test_pugqeep_spawn_loop.py`, incl. a
      subprocess interpreter-exit test). The
      stack-dump dumper is ruled grandfathered (global handle +
-     join-on-cancel + `.name` test assertion).
+     join-on-cancel + `.name` test assertion). **Followup batch done
+     (2026-11-06)** — 6 of the 7 allowlist `kind: followup` sites
+     migrated: idle-manager check loop → `spawn_loop(stop=)` (loop now
+     honors the stop event, which the engine's cancel sets — the
+     daemon-equivalent release), model-server warmups ×2 →
+     `engine.spawn`, REPL progress-load → spawn + `is_done`/`wait_for`
+     (the bar's contract), TUI restart → spawn, parent-preload inner
+     thread → spawn (the `threading.Timer` stays as the delay
+     scheduler — timers are not gated Thread sites). Allowlist shrank
+     54 → 48; the gate's declared counts forced every removal to be
+     explicit.
    - **Grandfathered (~75 sites)**: the execution infra itself (pugqeep,
      FAF, process_guard, watchdog, server accept/pump loops), tests,
      scripts/benchmarks, one-shot blocking `subprocess.run` (build,
