@@ -5,6 +5,12 @@
     "types": ["@webgpu/types"],
     "paths": {
       "@/*": ["./*"],
+      "next/link": ["./vite/next-compat/link.tsx"],
+      "next/navigation": ["./vite/next-compat/navigation.ts"],
+      "next/dynamic": ["./vite/next-compat/dynamic.tsx"],
+      "next/web-vitals": ["./vite/next-compat/web-vitals.ts"],
+      "next/server": ["./vite/next-compat/server.ts"],
+      "next-auth/react": ["./vite/next-compat/next-auth.tsx"],
       "@sloughgpt/strui": ["../../packages/strui/src"],
       "@sloughgpt/strui/*": ["../../packages/strui/src/*"]
     }
