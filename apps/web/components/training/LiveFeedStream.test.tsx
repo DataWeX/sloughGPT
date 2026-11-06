@@ -175,6 +175,50 @@ describe('LiveFeedStream', () => {
     expect(screen.getByText('1 job running')).toBeInTheDocument()
   })
 
+  it('links each active job chip to its live in-place view', () => {
+    // Journey: see a running job in the feed → click → watch it in place.
+    render(<LiveFeedStream />)
+    openStream()
+    emit(
+      snapshot({
+        jobs: {
+          active: [
+            { id: 'j1', name: 'Live job', status: 'running', dataset: 'feed:feedback', progress: 40 },
+          ],
+          count: 1,
+        },
+        changed: true,
+      }),
+    )
+    expect(
+      screen.getByRole('link', { name: 'Open live view for Live job' }),
+    ).toHaveAttribute('href', '/training/job/j1')
+  })
+
+  it('does not link phantom pending-* jobs (no backend record to open)', () => {
+    render(<LiveFeedStream />)
+    openStream()
+    emit(
+      snapshot({
+        jobs: {
+          active: [
+            {
+              id: 'pending-123',
+              name: 'Optimistic job',
+              status: 'running',
+              dataset: 'feed:feedback',
+              progress: 0,
+            },
+          ],
+          count: 1,
+        },
+        changed: true,
+      }),
+    )
+    expect(screen.queryByRole('link', { name: /Open live view/ })).toBeNull()
+    expect(screen.getByText('Optimistic job')).toBeInTheDocument()
+  })
+
   it('ignores envelopes from other streams', () => {
     render(<LiveFeedStream />)
     act(() => {
