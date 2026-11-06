@@ -91,10 +91,14 @@ def app():
     """Create FastAPI app with the infer router."""
     from fastapi import FastAPI
 
+    from apps.api.server.infrastructure.exception_handlers import register_app_error_handler
     from apps.api.server.routers.infer import router
+    from apps.api.server.routers.inference import router as inference_router
 
     app = FastAPI()
+    register_app_error_handler(app)
     app.include_router(router)
+    app.include_router(inference_router)
     return app
 
 
@@ -252,16 +256,13 @@ class TestInferEmbed:
 class TestInferGenerate:
     def test_generate_no_model_returns_503(self, client):
         """Generate returns 503 when model not ready."""
-        import apps.api.server.routers.infer as infer_mod
-
         patches = [
-            patch.object(infer_mod.InferRouter, "_get_model", return_value=None),
-            patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=None),
+            patch("apps.api.server.routers.inference._get_model_status", return_value={"ready": False, "reason": "No model loaded", "code": "E_NO_MODEL", "status": 503}),
         ]
         for p in patches:
             p.start()
         try:
-            resp = client.post("/infer", json={"prompt": "hello"})
+            resp = client.post("/infer/generate", json={"prompt": "hello"})
             assert resp.status_code == 503
         finally:
             for p in patches:
@@ -269,21 +270,19 @@ class TestInferGenerate:
 
     def test_generate_with_provider(self, client):
         """Generate returns text when provider is available."""
-        fake = FakeModel()
         mock_provider = AsyncMock()
         mock_provider.chat = AsyncMock(return_value="Hello world!")
 
-        import apps.api.server.routers.infer as infer_mod
-
         patches = [
-            patch.object(infer_mod.InferRouter, "_get_model", return_value=fake),
-            patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=fake),
-            patch("domain.models._internal.provider.get_provider", return_value=mock_provider),
+            patch("apps.api.server.routers.inference._get_model_status", return_value={"ready": True}),
+            patch("apps.api.server.routers.inference.get_provider", return_value=mock_provider),
+            patch("apps.api.server.routers.inference._check_memory_pressure", return_value=None),
+            patch("apps.api.server.routers.inference.capture"),
         ]
         for p in patches:
             p.start()
         try:
-            resp = client.post("/infer", json={"prompt": "hello"})
+            resp = client.post("/infer/generate", json={"prompt": "hello"})
             assert resp.status_code == 200
             data = resp.json()
             assert data["text"] == "Hello world!"
@@ -299,12 +298,12 @@ class TestInferGenerate:
 class TestInferSchemas:
     def test_generate_rejects_empty_prompt(self, client):
         """Generate rejects request with no prompt."""
-        resp = client.post("/infer", json={})
+        resp = client.post("/infer/generate", json={})
         assert resp.status_code == 422
 
     def test_generate_rejects_large_max_tokens(self, client):
         """Generate rejects max_new_tokens > 2048."""
-        resp = client.post("/infer", json={"prompt": "hi", "max_new_tokens": 9999})
+        resp = client.post("/infer/generate", json={"prompt": "hi", "max_new_tokens": 9999})
         assert resp.status_code == 422
 
     def test_embed_rejects_empty_text(self, client):

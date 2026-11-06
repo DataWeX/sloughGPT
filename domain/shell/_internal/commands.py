@@ -422,7 +422,7 @@ class ShellCommands:
     def generate(prompt: str, max_tokens: int = 100) -> dict[str, Any]:
         """Generate text via the inference endpoint."""
         return _api_post(
-            "/inference/generate",
+            "/infer/generate",
             {
                 "prompt": prompt,
                 "max_new_tokens": max_tokens,

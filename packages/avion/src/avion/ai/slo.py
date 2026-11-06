@@ -346,7 +346,7 @@ class SloModel:
 
     @classmethod
     def from_http(
-        cls, base_url: str, endpoint: str = "/infer", timeout: float = 120.0, **kwargs
+        cls, base_url: str, endpoint: str = "/infer/generate", timeout: float = 120.0, **kwargs
     ) -> SloModel:
         """Drive the model through a running API server (no browser needed)."""
         from avion.backends.api import ApiBackend

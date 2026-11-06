@@ -288,7 +288,7 @@ export class SloughGPTClient {
 
   async generate(request: GenerateRequest): Promise<GenerationResult> {
     this.log('info', `Generating: "${request.prompt.slice(0, 50)}..."`);
-    return this.request<GenerationResult>('POST', '/inference/generate', {
+    return this.request<GenerationResult>('POST', '/infer/generate', {
       prompt: request.prompt,
       max_new_tokens: request.max_new_tokens || 100,
       temperature: request.temperature || 0.8,
@@ -302,7 +302,7 @@ export class SloughGPTClient {
   async *generateStream(
     request: GenerateRequest
   ): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/inference/generate/stream`;
+    const url = `${this.baseUrl}/infer/stream`;
     this.log('info', `Streaming: "${request.prompt.slice(0, 50)}..."`);
 
     const response = await fetch(url, {
