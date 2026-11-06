@@ -55,7 +55,7 @@ FEATURE_VERSIONS = {
     "security": {"backend": "/security", "api": "1.0.0"},
     "vm": {"backend": "/vm", "api": "1.0.0"},
     "shell": {"backend": "/shell", "api": "1.0.0"},
-    "infer": {"backend": "/infer", "api": "1.0.0"},
+    "infer": {"backend": "/infer/generate", "api": "1.0.0"},
     "tokenizer": {"backend": "/tokenizer", "api": "1.0.0"},
     "benchmark": {"backend": "/benchmark", "api": "1.0.0"},
 }
