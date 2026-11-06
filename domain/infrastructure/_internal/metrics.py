@@ -78,6 +78,10 @@ class MetricsCollector:
         with self._lock:
             self._active_requests = count
 
+    def adjust_active_requests(self, delta: int) -> None:
+        with self._lock:
+            self._active_requests = max(0, self._active_requests + delta)
+
     def get_active_requests(self) -> int:
         """Return the current in-flight request count (thread-safe)."""
         with self._lock:
