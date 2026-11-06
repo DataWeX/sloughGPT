@@ -440,12 +440,12 @@ class TestNewSDKEndpoints(unittest.TestCase):
 
     def test_generate_uses_inference_path(self):
         self._client().generate("hello")
-        self._assert_called("POST", "/inference/generate")
+        self._assert_called("POST", "/infer/generate")
 
     def test_generate_stream_uses_inference_path(self):
         self.mock_response.iter_lines.return_value = []
         list(self._client().generate_stream("hello"))
-        self._assert_called("POST", "/inference/generate/stream")
+        self._assert_called("POST", "/infer/generate/stream")
 
     # === Training Control ===
 

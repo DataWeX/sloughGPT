@@ -166,7 +166,7 @@ class TestChatStreaming:
 class TestGenerate:
     def test_generate_returns_text(self, client, model_loaded):
         resp = client.post(
-            "/inference/generate",
+            "/infer/generate",
             json={
                 "prompt": "Hello",
                 "max_new_tokens": 20,
@@ -179,7 +179,7 @@ class TestGenerate:
 
     def test_generate_returns_model_and_tokens(self, client, model_loaded):
         resp = client.post(
-            "/inference/generate",
+            "/infer/generate",
             json={
                 "prompt": "Hello world",
                 "max_new_tokens": 20,
@@ -194,7 +194,7 @@ class TestGenerate:
     def test_generate_increases_inference_count(self, client, model_loaded):
         before = client.get("/health").json().get("inference_count", 0)
         client.post(
-            "/inference/generate",
+            "/infer/generate",
             json={
                 "prompt": "Test",
                 "max_new_tokens": 10,
@@ -212,7 +212,7 @@ class TestGenerate:
 class TestGenerateStream:
     def test_generate_stream_returns_sse(self, client, model_loaded):
         resp = client.post(
-            "/inference/generate/stream",
+            "/infer/generate/stream",
             json={
                 "prompt": "Hi",
                 "max_new_tokens": 20,
@@ -225,7 +225,7 @@ class TestGenerateStream:
 
     def test_generate_stream_has_tokens_and_complete(self, client, model_loaded):
         resp = client.post(
-            "/inference/generate/stream",
+            "/infer/generate/stream",
             json={
                 "prompt": "Hello",
                 "max_new_tokens": 20,
@@ -241,7 +241,7 @@ class TestGenerateStream:
 
     def test_generate_stream_meta_has_elapsed(self, client, model_loaded):
         resp = client.post(
-            "/inference/generate/stream",
+            "/infer/generate/stream",
             json={
                 "prompt": "Hi",
                 "max_new_tokens": 15,
