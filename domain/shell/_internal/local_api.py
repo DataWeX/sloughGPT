@@ -493,7 +493,7 @@ def _post_models_dequantize(params, query, data):
 # ── Inference ────────────────────────────────────────────────────────
 
 
-@_route("POST", "/inference/generate")
+@_route("POST", "/infer/generate")
 def _post_inference_generate(params, query, data):
     provider = _current_provider()
     if provider is None or not hasattr(provider, "generate"):
