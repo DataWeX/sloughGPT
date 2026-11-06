@@ -32,6 +32,8 @@ class TestHealthRouter:
         assert "timestamp" in data
         assert "model_loaded" in data
         assert "inference_count" in data
+        assert "latest_inference_latency_ms" in data
+        assert "latest_tokens_per_sec" in data
 
     def test_liveness(self):
         """GET /health/live returns status: alive."""
