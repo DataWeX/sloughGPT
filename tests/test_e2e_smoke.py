@@ -162,7 +162,7 @@ class TestChatGenerate:
         if not model_loaded:
             pytest.skip("No model loaded")
         resp = client.post(
-            "/inference/generate",
+            "/infer/generate",
             json={
                 "prompt": "Hello",
                 "max_new_tokens": 20,
@@ -176,7 +176,7 @@ class TestChatGenerate:
         if not model_loaded:
             pytest.skip("No model loaded")
         resp = client.post(
-            "/inference/generate/stream",
+            "/infer/generate/stream",
             json={
                 "prompt": "Hi",
                 "max_new_tokens": 20,
