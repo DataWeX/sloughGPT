@@ -83,6 +83,9 @@ class ServerConfig:
         "/session/",
         "/generate/stream",
         "/models/load",
+        "/infer/generate/stream",
+        "/inference/generate/stream",
+        "/infer/generate",
         "/inference/generate",
         "/chat",
     )
