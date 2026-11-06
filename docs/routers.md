@@ -631,6 +631,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## Images Router (`/images`)
 
+> Served by `routers/files.py` since card `20261101_154058` — `images.py` was merged into the `/files` facade (paths and wire shapes unchanged).
+
 | Method | Path              | Description            |
 | ------ | ----------------- | ---------------------- |
 | `GET`  | `/images/gallery` | List generated images. |

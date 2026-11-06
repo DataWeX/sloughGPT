@@ -21,7 +21,6 @@ ROUTER_MODULES: list[str] = [
     "experiments",
     "feedback",
     "files",
-    "images",
     "infer",
     "inference",
     "kb",
