@@ -793,7 +793,7 @@ class _FakeHttp:
     def post(self, url, json=None, timeout=None, stream=False, **kwargs):
         import requests as _requests
 
-        if "/inference/generate" in url:
+        if "/infer" in url:
             return _FakeHttpResponse(self._repl.os._api.generate())
         raise _requests.ConnectionError("mocked offline API")
 
