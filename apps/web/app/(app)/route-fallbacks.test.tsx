@@ -25,7 +25,11 @@ describe('route error boundaries', () => {
     // lower bound here; the it.each below verifies every boundary renders.
     // 2026-10-24: floor 50 -> 26 — the 36 shadowed pages (and their
     // error/loading companions) were deleted, page.tsx 109 -> 73.
-    expect(errors.length).toBeGreaterThanOrEqual(26)
+    // 2026-11-07: floor 26 -> 25 — d0a57fba5 composed /model/[id] into
+    // /models (route map card 3/7) and deleted its error/loading/page
+    // trio; page-baseline.json was updated in the same commit, this
+    // companion floor was missed.
+    expect(errors.length).toBeGreaterThanOrEqual(25)
   })
 
   it.each(errors)('renders %s and retries', (key) => {
@@ -46,7 +50,8 @@ describe('route loading skeletons', () => {
     // See note above — update if routes change.
     // 2026-10-24: floor 48 -> 24 — same page-prune as the error boundary
     // (two kept routes carry an error.tsx but no loading.tsx).
-    expect(loadings.length).toBeGreaterThanOrEqual(24)
+    // 2026-11-07: floor 24 -> 23 — same /model/[id] deletion as above.
+    expect(loadings.length).toBeGreaterThanOrEqual(23)
   })
 
   it.each(loadings)('renders %s with a skeleton', (key) => {
