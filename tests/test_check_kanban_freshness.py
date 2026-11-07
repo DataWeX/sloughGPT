@@ -9,6 +9,7 @@ goes stale silently. Same load pattern as test_board_chain_gate.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -89,3 +90,82 @@ def test_default_target_is_repo_manifest():
     """No-arg default must be the repo-side manifest, cwd-independent."""
     assert gate.DEFAULT_MANIFEST == REPO_ROOT / ".kanban" / "manifest.json"
     assert gate.DEFAULT_MAX_AGE_MINUTES == 120
+
+
+class TestReadsOriginMain:
+    """The default verdict is about main, not the checked-out tree.
+
+    The producer pushes to main only, so a feature branch's copy of
+    .kanban/manifest.json is stale by design — reading it reddened every
+    branch CI run with "kanban-sync.timer looks dead" for a healthy timer.
+    """
+
+    @staticmethod
+    def _payload(exported_at: datetime) -> str:
+        return json.dumps(
+            {
+                "exported_at": exported_at.isoformat(timespec="seconds"),
+                "note_count": 2,
+                "card_count": 5,
+            }
+        )
+
+    def _fake_git(self, monkeypatch, results):
+        """Install a git stub; `results` is a list applied per call in order.
+
+        Each entry is (returncode, stdout, stderr); the last entry repeats for
+        any further call.
+        """
+        calls: list[list[str]] = []
+
+        def run_git(args, cwd=None):
+            calls.append(list(args))
+            rc, out, err = results[min(len(calls) - 1, len(results) - 1)]
+            return subprocess.CompletedProcess(["git", *args], rc, out, err)
+
+        monkeypatch.setattr(gate, "run_git", run_git)
+        return calls
+
+    def test_default_reads_the_ref_not_the_worktree(self, monkeypatch, capsys):
+        calls = self._fake_git(monkeypatch, [(0, self._payload(datetime.now(UTC)), "")])
+        assert gate.main([]) == 0
+        assert calls[0] == ["show", f"{gate.DEFAULT_REF}:{gate.MANIFEST_IN_TREE}"]
+        out = capsys.readouterr().out
+        assert "ok:" in out and "origin/main:.kanban/manifest.json" in out
+
+    def test_stale_on_main_fails_however_fresh_the_branch_copy_is(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        old = datetime.now(UTC) - timedelta(minutes=300)
+        self._fake_git(monkeypatch, [(0, self._payload(old), "")])
+        # An explicit fresh file must NOT be consulted on the default path.
+        fresh = _manifest(tmp_path, datetime.now(UTC))
+        assert gate.main(["--manifest", str(fresh)]) == 0
+        assert gate.main([]) == 1
+        assert "FAIL" in capsys.readouterr().out
+
+    def test_unreadable_ref_fails_open_loudly(self, monkeypatch, capsys):
+        """No origin, no ref: 'cannot verify' is not 'the producer is dead'."""
+        calls = self._fake_git(
+            monkeypatch,
+            [
+                (1, "", "fatal: ambiguous argument"),
+                (1, "", "fatal: could not read"),
+            ],
+        )
+        assert gate.main([]) == 0
+        out = capsys.readouterr().out
+        assert out.startswith("WARN:") and "cannot verify" in out
+        assert calls[0][0] == "show" and calls[1][:3] == ["fetch", "--no-tags", "origin"]
+
+    def test_missing_ref_is_fetched_once_then_read(self, monkeypatch, capsys):
+        calls = self._fake_git(
+            monkeypatch,
+            [
+                (1, "", "fatal: unknown revision"),
+                (0, self._payload(datetime.now(UTC)), ""),
+            ],
+        )
+        assert gate.main([]) == 0
+        assert calls[0][0] == "show" and calls[1][0] == "fetch" and calls[2][0] == "show"
+        assert "ok:" in capsys.readouterr().out

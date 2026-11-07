@@ -29,9 +29,9 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "packages/app-planner/src"))
+sys.path.insert(0, str(REPO / "packages/grib/src"))
 
-from app_planner.store import PlannerStore  # noqa: E402
+from grib.store import PlannerStore  # noqa: E402
 
 
 def _add_burst(payload: tuple[str, str, int, int]) -> int:

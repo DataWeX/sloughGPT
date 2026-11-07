@@ -9,9 +9,9 @@ repo_root = os.path.abspath(os.path.join(__file__, ".."))
 for _p in (
     "apps/api/server",
     "packages/downcraft",
-    # Sibling planner packages (src layout) — app_planner's GUI transition
+    # Sibling planner packages (src layout) — grib's GUI transition
     # handler imports planner.engine, and both suites run under testpaths.
-    "packages/app-planner/src",
+    "packages/grib/src",
     "packages/planner/src",
 ):
     _full = os.path.join(repo_root, _p)

@@ -191,7 +191,7 @@ jobs:
         # PR, not just the ones that touch it — merge 5e5c8ce36 shipped
         # 975 duplicate rows with no gate watching the real file
         # (card 20261029). Stdlib-only; the script self-locates
-        # packages/app-planner/src for the chain verifier.
+        # packages/grib/src for the chain verifier.
         run: python3 scripts/check_board_chain.py
       - name: Kanban export freshness (sync producer alarm)
         # The canonical store lives outside CI; kanban-sync.timer mirrors it

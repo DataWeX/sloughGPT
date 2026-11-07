@@ -205,4 +205,4 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 test-planner:
-	PYTHONPATH=packages/app-planner/src:packages/mogdb/src $(PY) -m pytest packages/app-planner/tests/ -x -q $(ARGS)
+	PYTHONPATH=packages/grib/src:packages/mogdb/src $(PY) -m pytest packages/grib/tests/ -x -q $(ARGS)
