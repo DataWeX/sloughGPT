@@ -31,8 +31,11 @@ const APP_ROOT = join(WEB_ROOT, 'app')
  * 2026-10-24: 109 -> 73 — the 36 `knownShadowed` pages (a live `page.tsx`
  * AND a redirect source, so unreachable) were deleted with their colocated
  * tests and error/loading companions; `knownShadowed` is now empty.
+ * 2026-11-06: 72 -> 71 — `/model/[id]` was composed into `/models` as a
+ * ?id=-driven detail fold (route-map card 20261101_154054); the old path's
+ * in-app link sources now point at `/models?id=<model>`.
  */
-const GRANDFATHERED_CEILING = 72
+const GRANDFATHERED_CEILING = 71
 
 interface PageBaseline {
   grandfathered: string[]

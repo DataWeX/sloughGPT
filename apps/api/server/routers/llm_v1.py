@@ -8,10 +8,10 @@ native infrastructure rather than a compatibility layer.
 One generation core; ``/v1`` is a projection of it (Endpoint & Transport Rule):
 
     chat        -> domain.models.get_provider("default").chat / .chat_stream
-                   (the same seam routers/infer.py projects — no second
+                   (the same seam routers/models.py projects — no second
                    generate implementation)
-    info        -> routers.infer.InferRouter.infer_info()
-    embeddings  -> routers.infer.InferRouter.infer_embed()
+    info        -> routers.models.InferRouter.infer_info()
+    embeddings  -> routers.models.InferRouter.infer_embed()
 
 Responses are the raw wire shape (``choices``/``data`` at the top level —
 that IS the contract; the project envelope belongs to our internal routes).
@@ -106,7 +106,7 @@ class EmbedBody(BaseModel):
     input: str | list[str]
 
 
-# ── Shared guards (parity with routers/infer.py) ────────────────────────────
+# ── Shared guards (parity with routers/models.py) ────────────────────────────
 
 
 def _require_engine() -> None:
@@ -421,7 +421,7 @@ async def list_models(auth_user: dict = Depends(require_auth_if_enabled)) -> dic
     if not _model_ready():
         return {"object": "list", "data": []}
 
-    from routers.infer import InferRouter
+    from routers.models import InferRouter
 
     try:
         info = await InferRouter().infer_info()
@@ -439,7 +439,7 @@ async def create_embeddings(
 ) -> dict[str, Any]:
     """POST /v1/embeddings — batch through InferRouter.infer_embed."""
     _require_engine()
-    from routers.infer import EmbedRequest, InferRouter
+    from routers.models import EmbedRequest, InferRouter
 
     items = [req.input] if isinstance(req.input, str) else list(req.input)
     if not items:

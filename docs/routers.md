@@ -78,6 +78,8 @@ Registered pre-lifespan in `main.py`.
 
 ## Infer Router (`/infer`)
 
+> Served by `routers/models.py` since card `20261101_154054` — `infer.py` was merged into the `/models` facade (paths and wire shapes unchanged).
+
 Separate inference endpoint backed by the direct model server.
 
 | Method | Path                | Description                  |
@@ -91,6 +93,8 @@ Separate inference endpoint backed by the direct model server.
 | `GET`  | `/infer/info`       | Loaded model information.    |
 
 ## Models Router (`/models`)
+
+> Also serves the `/infer` and `/registry` surfaces since card `20261101_154054` — `infer.py` and `registry.py` were merged into this module as an aggregate router facade (paths and wire shapes unchanged).
 
 | Method | Path                           | Description                       |
 | ------ | ------------------------------ | --------------------------------- |
@@ -593,6 +597,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST` | `/lora-eval/aggregate` | Aggregate evaluation results. |
 
 ## Registry Router (`/registry`)
+
+> Served by `routers/models.py` since card `20261101_154054` — `registry.py` was merged into the `/models` facade (paths and wire shapes unchanged).
 
 | Method | Path                   | Description                |
 | ------ | ---------------------- | -------------------------- |

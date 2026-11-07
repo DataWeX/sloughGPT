@@ -17,7 +17,6 @@ import { revalidateAll } from '@/lib/cache'
 import { ShellTab } from './dev-shell-tab'
 import { FilesTab } from './dev-files-tab'
 import { VoiceTab } from './dev-voice-tab'
-import { ModelsTab } from './dev-models-tab'
 import { ApiTab } from './dev-api-tab'
 import { QuickActionsTab } from './dev-quick-actions-tab'
 import { StartupTab } from './dev-startup-tab'
@@ -62,7 +61,6 @@ export default function DeveloperPage() {
           <TabsTrigger value="shell">Terminal</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="voice">Voice</TabsTrigger>
-          <TabsTrigger value="models">Models</TabsTrigger>
           <TabsTrigger value="api">API</TabsTrigger>
           <TabsTrigger value="quick">Quick Actions</TabsTrigger>
           <TabsTrigger value="startup">Startup</TabsTrigger>
@@ -76,9 +74,6 @@ export default function DeveloperPage() {
         </TabsContent>
         <TabsContent value="voice">
           <VoiceTab />
-        </TabsContent>
-        <TabsContent value="models">
-          <ModelsTab />
         </TabsContent>
         <TabsContent value="api">
           <ApiTab />

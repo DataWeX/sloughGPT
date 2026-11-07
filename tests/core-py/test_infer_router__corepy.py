@@ -91,7 +91,7 @@ def app():
     """Create FastAPI app with the infer router."""
     from fastapi import FastAPI
 
-    from apps.api.server.routers.infer import router
+    from apps.api.server.routers.models import router
 
     app = FastAPI()
     app.include_router(router)
@@ -108,7 +108,7 @@ def client(app):
 
 def _patch_state(model=None, phase="ready"):
     """Return list of context managers that mock the router's model accessors."""
-    import apps.api.server.routers.infer as infer_mod
+    import apps.api.server.routers.models as infer_mod
 
     return [
         patch.object(infer_mod.InferRouter, "_get_model", return_value=model),
@@ -252,7 +252,7 @@ class TestInferEmbed:
 class TestInferGenerate:
     def test_generate_no_model_returns_503(self, client):
         """Generate returns 503 when model not ready."""
-        import apps.api.server.routers.infer as infer_mod
+        import apps.api.server.routers.models as infer_mod
 
         patches = [
             patch.object(infer_mod.InferRouter, "_get_model", return_value=None),
@@ -273,7 +273,7 @@ class TestInferGenerate:
         mock_provider = AsyncMock()
         mock_provider.chat = AsyncMock(return_value="Hello world!")
 
-        import apps.api.server.routers.infer as infer_mod
+        import apps.api.server.routers.models as infer_mod
 
         patches = [
             patch.object(infer_mod.InferRouter, "_get_model", return_value=fake),

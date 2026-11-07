@@ -84,6 +84,7 @@
     "/training",
     "/training/runs",
     "/datasets",
+    "/models",
     "/knowledge",
     "/personality",
     "/agents",

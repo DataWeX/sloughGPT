@@ -179,9 +179,10 @@ export default memo(function ModelCatalogCard({
                         isLoaded ? 'border-primary/40 bg-primary/5' : 'border-border/60',
                         isLoading && 'border-primary/30 bg-primary/[0.08]',
                       )}
-                      onClick={() => router.push(`/model/${encodeURIComponent(model.id)}`)}
+                      onClick={() => router.push(`/models?id=${encodeURIComponent(model.id)}`)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') router.push(`/model/${encodeURIComponent(model.id)}`)
+                        if (e.key === 'Enter')
+                          router.push(`/models?id=${encodeURIComponent(model.id)}`)
                       }}
                       tabIndex={0}
                       role="button"

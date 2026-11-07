@@ -74,6 +74,12 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         description: 'Manage datasets',
       },
       {
+        path: '/models',
+        labelKey: 'nav.models',
+        icon: 'grid',
+        description: 'Browse & switch models',
+      },
+      {
         path: '/knowledge',
         labelKey: 'nav.knowledge',
         shortcut: '8',
@@ -219,6 +225,7 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/auto-train': IconSparkle,
   '/self-train': IconBrain,
   '/datasets': IconChart,
+  '/models': IconGrid,
   '/knowledge': IconBookmark,
   '/personality': IconBrain,
   '/agents': IconAgents,

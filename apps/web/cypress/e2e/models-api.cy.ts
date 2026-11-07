@@ -40,24 +40,21 @@ describe('Models catalog', () => {
   })
 
   it('displays model list from API', () => {
-    cy.visit('/developer')
-    cy.contains('Models').click()
+    cy.visit('/models')
     cy.wait('@modelsHf')
     cy.contains('GPT-2').scrollIntoView().should('be.visible')
     cy.contains('GPT-2 Medium').scrollIntoView().should('be.visible')
   })
 
   it('shows loaded model indicator', () => {
-    cy.visit('/developer')
-    cy.contains('Models').click()
+    cy.visit('/models')
     cy.wait('@modelsHf')
     cy.contains('GPT-2').scrollIntoView().should('be.visible')
     cy.contains('Loaded').scrollIntoView().should('be.visible')
   })
 
   it('shows model sizes', () => {
-    cy.visit('/developer')
-    cy.contains('Models').click()
+    cy.visit('/models')
     cy.wait('@modelsHf')
     cy.contains('GPT-2 Medium').scrollIntoView().should('be.visible')
     cy.contains('0.5 GB').should('be.visible')

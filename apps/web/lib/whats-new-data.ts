@@ -131,7 +131,7 @@ export const whatsNewItems: WhatsNewItem[] = [
       'Comprehensive per-model view with live uptime, inference count, benchmark metrics, vocabulary size, context length, and load/unload controls.',
     icon: '🔍',
     date: '2026-05-27',
-    href: '/model/gpt2',
+    href: '/models?id=gpt2',
     tags: ['Page', 'Models'],
   },
   {
