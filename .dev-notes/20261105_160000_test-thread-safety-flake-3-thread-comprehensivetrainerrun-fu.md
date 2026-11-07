@@ -15,3 +15,56 @@ CI evidence (PR #267 rerun, run 42036453877 job 127309721013): tests/core-py/tes
 ## Work log
 
 (claimed by foreman session 2026-11-07, dispatched to Gen)
+
+## Work log (foreman session, 2026-11-07 — Gen hit free-usage limit, absorbed brief)
+
+### Step 1: assertion now surfaces the error (done)
+`assert all(r.success for r in results)` replaced with a message that prints
+`r.error` + every phase's `(phase, success, error)` for failed results.
+
+### Diagnosis: root cause PROVEN — unguarded `f.stat()` in `_enforce_disk_limit`
+`domain/training/_internal/train_pipeline.py` line 2566:
+
+```python
+try:
+    files = sorted(checkpoint_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime)
+except OSError:
+    return
+total_bytes = sum(f.stat().st_size for f in files)   # ← OUTSIDE the try
+```
+
+All 3 threads run `ComprehensiveTrainer.run_full_cycle` with the shared
+hard-coded checkpoint dir `models/comprehensive`. Each thread's final
+`save_checkpoint(is_final=True)` calls `_enforce_disk_limit` (glob+stat pass)
+while another thread's `_prune_stale_checkpoints(keep_final=True)` unlinks
+everything but the newest file. A file unlinked between glob and the sum →
+`FileNotFoundError` escapes `save_checkpoint` → `train()` → caught by
+`_run_phase` → `PhaseResult(success=False, error=...)` →
+`run_full_cycle` returns `success=False` with **no thread exception** —
+exactly the CI signature (run 42036453877: len(errors)==0, len(results)==3,
+one success=False, failure after preprocessing, stdout shows only normal
+phase logs).
+
+`_prune_stale_checkpoints` correctly guards every stat/unlink with
+try/except OSError; `_enforce_disk_limit` guards the glob but not the sum,
+and not the while-loop `oldest.stat()` (both are the same hole).
+
+### Evidence captured
+- `race_enforce.py` (unit-level, real methods, 3 threads × 300 rounds,
+  40 seeded files) → **FileNotFoundError escaped twice immediately**:
+  `No such file or directory: 'models/comprehensive/seed_37.soul'`.
+- `stress_flake.py` (6 concurrent full cycles × 8 rounds, 48 runs) →
+  0 failures but showed the same contention class: 5× soft
+  "Checkpoint not found" warnings from a concurrent prune.
+- Port-don't-rebuild: `git log --all -S "_enforce_disk_limit"` → no fix on
+  any branch.
+- End-to-end repro of the test itself is probabilistic (window ≈ µs; 15/15
+  green even with a 61-file seeded dir) — consistent with a rare CI flake.
+
+### Plan (approved direction: fix contention, never weaken assertions)
+1. Guard the sum + while-loop stat in `_enforce_disk_limit` (skip on
+   OSError — disk-limit enforcement is best-effort; a vanished file means
+   another saver is already pruning).
+2. Domain touched → `scripts/domain_baseline_rehash.py` + rehash commit.
+3. Gates: race_enforce.py → 0 escapes; target test ×20; full file green;
+   ruff check + format.
