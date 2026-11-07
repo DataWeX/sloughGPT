@@ -68,3 +68,16 @@ and not the while-loop `oldest.stat()` (both are the same hole).
 2. Domain touched → `scripts/domain_baseline_rehash.py` + rehash commit.
 3. Gates: race_enforce.py → 0 escapes; target test ×20; full file green;
    ruff check + format.
+
+## Benchmark (SOP step 11, 2026-11-07)
+`scripts/benchmark_slonet_training.py --only gate` on the PR head (e0a83bd0a):
+**GATE PASS** — 55.4K params, 37.4s, 3.21 steps/s, loss 2.9247 → 0.0007 (<10% goal),
+PPL 1.0, 25.8 MB, rng-fingerprint 0032a7465041. vs quiet-pixel's recorded 3.46 s/s
+= within shared-machine noise; the fix guards stat() calls in checkpoint pruning
+and never enters the training loop. No regression.
+
+## PR
+- #297 fix/test-thread-safety-flake — rebased ×2 (baseline conflicts each time main
+  rehashed; procedure: checkout --ours + hand-apply training hash + recorded_commit).
+  First CI on 52b90d07f: test-core-py PASSED, sole reds = route-fallbacks floor
+  (fixed on main by #298). Head now e0a83bd0a, CI running.
