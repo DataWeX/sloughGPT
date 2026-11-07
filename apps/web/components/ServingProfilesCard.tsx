@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import {
   Badge,
@@ -17,7 +18,6 @@ import {
   type ServingProfile,
   type ProfileApplyResult,
 } from '@/lib/profiles-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 
@@ -38,7 +38,7 @@ const TIER_COLORS: Record<string, string> = {
 }
 
 export function ServingProfilesCard() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const [profiles, setProfiles] = useState<ServingProfile[]>([])
   const [activeId, setActiveId] = useState<string>('balanced')
   const [loading, setLoading] = useState(true)
@@ -62,7 +62,9 @@ export function ServingProfilesCard() {
     }
   }, [])
 
-  useEffect(() => { fetchProfiles() }, [fetchProfiles])
+  useEffect(() => {
+    fetchProfiles()
+  }, [fetchProfiles])
 
   const handleApply = async (id: string) => {
     setApplying(id)
@@ -72,7 +74,10 @@ export function ServingProfilesCard() {
       setActiveId(id)
       addToast(`Applied "${result.profile.name}" profile`, 'success')
       if (result.requires_restart.length > 0) {
-        addToast(`${result.requires_restart.length} settings require restart to take effect`, 'info')
+        addToast(
+          `${result.requires_restart.length} settings require restart to take effect`,
+          'info',
+        )
       }
     } catch (e: unknown) {
       addToast(extractErrorMessage(e, 'Could not apply profile'), 'error')
@@ -87,7 +92,9 @@ export function ServingProfilesCard() {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-xs">Serving Profile</CardTitle>
-            <CardDescription className="text-[10px] text-muted-foreground/60">Predefined hardware-optimized configurations</CardDescription>
+            <CardDescription className="text-[10px] text-muted-foreground/60">
+              Predefined hardware-optimized configurations
+            </CardDescription>
           </div>
           <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchProfiles}>
             Refresh
@@ -97,7 +104,7 @@ export function ServingProfilesCard() {
       <CardContent>
         {loading ? (
           <div className="space-y-2">
-            {[1, 2, 3].map(i => (
+            {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
@@ -105,7 +112,7 @@ export function ServingProfilesCard() {
           <p className="text-[10px] text-muted-foreground/60">No profiles available</p>
         ) : (
           <div className="space-y-1.5">
-            {profiles.map(p => {
+            {profiles.map((p) => {
               const isActive = p.id === activeId
               const isApplying = applying === p.id
               return (
@@ -117,12 +124,17 @@ export function ServingProfilesCard() {
                       : 'border-border/40 hover:border-border'
                   }`}
                 >
-                  <div className={`h-2 w-2 rounded-full shrink-0 ${TIER_COLORS[p.tier] ?? 'bg-muted-foreground/30'}`} />
+                  <div
+                    className={`h-2 w-2 rounded-full shrink-0 ${TIER_COLORS[p.tier] ?? 'bg-muted-foreground/30'}`}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] font-medium truncate">{p.name}</span>
                       {isActive && (
-                        <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 text-primary border-primary/40">
+                        <Badge
+                          variant="outline"
+                          className="text-[8px] px-1 py-0 h-3.5 text-primary border-primary/40"
+                        >
                           Active
                         </Badge>
                       )}
@@ -160,20 +172,27 @@ export function ServingProfilesCard() {
             <div className="text-[9px] text-muted-foreground/60 space-y-px">
               <p>Applied live: {Object.keys(applyResult.live_settings).join(', ') || 'none'}</p>
               {applyResult.requires_restart.length > 0 && (
-                <p className="text-warning">Requires restart: {applyResult.requires_restart.join(', ')}</p>
+                <p className="text-warning">
+                  Requires restart: {applyResult.requires_restart.join(', ')}
+                </p>
               )}
             </div>
           </div>
         )}
       </CardContent>
       <CardFooter className="justify-end py-2">
-        <Badge variant="outline" className="text-[8px] font-mono px-1 py-0 h-3.5 text-muted-foreground/60 border-border/40">
+        <Badge
+          variant="outline"
+          className="text-[8px] font-mono px-1 py-0 h-3.5 text-muted-foreground/60 border-border/40"
+        >
           {profiles.length} profiles
         </Badge>
       </CardFooter>
       <ConfirmDialog
         open={confirmTarget !== null}
-        onOpenChange={(open) => { if (!open) setConfirmTarget(null) }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmTarget(null)
+        }}
         title={`Apply "${confirmTarget?.name ?? ''}" profile?`}
         description="This will change serving configuration. Some settings require a restart to take effect."
         confirmLabel="Apply"

@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Card,
@@ -16,7 +17,6 @@ import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry, type FileDetail } from '@/lib/files-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { ImagesPanel } from '@/components/images/ImagesPanel'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function FilesPage() {
@@ -32,7 +32,7 @@ export default function FilesPage() {
   const [previewFile, setPreviewFile] = useState<FileDetail | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const fetchFiles = useCallback(async () => {
     try {

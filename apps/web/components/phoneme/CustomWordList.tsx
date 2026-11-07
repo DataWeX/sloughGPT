@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge, Input } from '@sloughgpt/strui'
 import { IconTrash } from '@sloughgpt/strui'
@@ -8,7 +9,6 @@ import {
   PHONEME_LANGUAGES,
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 
 const STORAGE_KEY = 'sloughgpt-phoneme-custom-words'
@@ -43,7 +43,7 @@ export default function CustomWordList() {
   const [words, setWords] = useState<CustomWord[]>([])
   const [newWord, setNewWord] = useState('')
   const [language, setLanguage] = useState<PhonemeLanguage>('en')
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   useEffect(() => {
     setWords(loadCustomWords())

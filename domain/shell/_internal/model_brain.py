@@ -292,9 +292,7 @@ class SloNetBrain:
         if self.optimizer == "adam":
             return SloAdam(lr=float(lr))
         if self.optimizer != "sgd":
-            raise ValueError(
-                f"unknown brain optimizer {self.optimizer!r} (known: sgd, adam)"
-            )
+            raise ValueError(f"unknown brain optimizer {self.optimizer!r} (known: sgd, adam)")
         return SloSGD(lr=float(lr))
 
     # ── inference ─────────────────────────────────────────────────────────
@@ -612,7 +610,11 @@ def _make_model(input_dim: int, output_dim: int, hidden_units: int = 0, **_: Any
 
 
 def _make_slonet(input_dim: int, output_dim: int, hidden_units: int = 0, **kw: Any) -> SloNetBrain:
-    keep = {k: kw[k] for k in ("n_embed", "n_layer", "decide_every", "learn_every", "optimizer") if k in kw}
+    keep = {
+        k: kw[k]
+        for k in ("n_embed", "n_layer", "decide_every", "learn_every", "optimizer")
+        if k in kw
+    }
     return SloNetBrain(input_dim, output_dim, hidden_units=int(hidden_units), **keep)
 
 

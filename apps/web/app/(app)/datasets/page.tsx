@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
@@ -20,7 +21,6 @@ import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { DatasetListSkeleton } from '@/components/ui/PageSkeletons'
 import { IconRefresh, IconPlus, IconTrash, IconDownload, IconPlay } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import {
   datasetController,
   type Dataset,
@@ -35,7 +35,7 @@ import { isTrainingCorpus } from '@/lib/dataset-controller'
 
 export default function DatasetsPage() {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { data: allDatasets = [], isLoading: loading, refetch: refetchDatasets } = useDatasetList()
   const deleteDataset = useDeleteDataset()
   const [search, setSearch] = useState('')

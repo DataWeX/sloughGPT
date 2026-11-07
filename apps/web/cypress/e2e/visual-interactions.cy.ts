@@ -61,7 +61,7 @@ describe('Visual interactions — Chat page', () => {
 describe('Visual interactions — Models catalog', () => {
   beforeEach(() => {
     cy.mockAll()
-    cy.visit('/developer')
+    cy.visit('/models')
   })
 
   it('captures models grid', () => {

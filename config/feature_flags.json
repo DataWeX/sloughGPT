@@ -23,5 +23,7 @@
   "llm_nlp": "experimental",
   "feature_flags": "enabled",
   "slonet_provider_tests": "enabled",
+  "slonet_provider_wave_i": "enabled",
+  "slonet_wave_f": "enabled",
   "step_trace": "enabled"
 }

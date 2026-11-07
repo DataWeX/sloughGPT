@@ -23,6 +23,7 @@ from schemas.common import (
     success_response,
 )
 
+from domain.infrastructure.engine_seam import run_on_engine
 from domain.multimodal import get_multimodal_manager
 
 logger = logging.getLogger("slo.routers.multimodal")
@@ -279,7 +280,7 @@ class MultimodalRouter:
         from PIL import Image
 
         img = Image.open(io.BytesIO(contents)).convert("RGB")
-        caption = await asyncio.to_thread(mgr.caption_image, img, ground_truth=label)
+        caption = await run_on_engine(mgr.caption_image, img, ground_truth=label)
         safe_audit_log(
             "multimodal.train",
             resource="image",
@@ -379,7 +380,6 @@ class MultimodalRouter:
         import time as _time
 
         _batch_t0 = _time.monotonic()
-        loop = asyncio.get_event_loop()
         for src in image_sources:
             with self._bg_lock:
                 if not self._background_job["running"]:
@@ -394,10 +394,10 @@ class MultimodalRouter:
 
                     img = Image.open(io.BytesIO(contents)).convert("RGB")
                     name = src[1].filename or "upload"
-                    caption = await loop.run_in_executor(None, mgr.caption_image, img)
+                    caption = await run_on_engine(mgr.caption_image, img)
                 else:
                     name = src.split("/")[-1]
-                    caption = await loop.run_in_executor(None, mgr.train_on_path, src)
+                    caption = await run_on_engine(mgr.train_on_path, src)
                 with self._bg_lock:
                     self._background_job["current_image"] = name
                     self._background_job["current_caption"] = caption.text
@@ -595,7 +595,7 @@ class MultimodalRouter:
         from PIL import Image
 
         img = Image.open(io.BytesIO(contents)).convert("RGB")
-        cap = await asyncio.to_thread(mgr.caption_image, img)
+        cap = await run_on_engine(mgr.caption_image, img)
         learning = getattr(mgr, "_learning_count", 0)
         engine = getattr(mgr, "_multimodal_engine", None)
         buf = getattr(mgr, "_replay_buffer", None)
@@ -662,7 +662,7 @@ class MultimodalRouter:
         from PIL import Image
 
         img = Image.open(io.BytesIO(contents)).convert("RGB")
-        answer = await asyncio.to_thread(mgr.ask_question, img, question)
+        answer = await run_on_engine(mgr.ask_question, img, question)
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         return success_response(
             data={

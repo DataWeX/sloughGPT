@@ -19,10 +19,22 @@ vi.mock('@/lib/files-controller', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
-    selector({ addToast: vi.fn() }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+      selector({ addToast: vi.fn() }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 // The Create Images journey was absorbed from the retired /images route
 // (card 7839a7c6) — /files is now its host page, so the page must render it.

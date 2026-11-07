@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconBolt } from '@sloughgpt/strui'
@@ -11,7 +12,6 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 type Difficulty = 'easy' | 'medium' | 'hard'
@@ -47,7 +47,7 @@ export default function QuizCard() {
   const quizBestStreak = usePhonemeStore((s) => s.quizBestStreak)
   const incrementQuizScore = usePhonemeStore((s) => s.incrementQuizScore)
   const resetQuiz = usePhonemeStore((s) => s.resetQuiz)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const startQuiz = useCallback(async () => {
     const filtered = WOTD_WORDS.filter((w) => w.lang === language && w.difficulty === difficulty)

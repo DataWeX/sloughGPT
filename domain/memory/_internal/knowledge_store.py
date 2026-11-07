@@ -30,6 +30,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import ThreadHandle, spawn_loop
+
 logger = logging.getLogger("slo.learner.knowledge")
 
 
@@ -608,11 +610,11 @@ class KnowledgeMemory:
         When called from inside a running event loop, running the coroutine on
         that same loop and blocking with ``fut.result()`` deadlocks — the loop
         thread waits on a task only it can schedule. Instead, execute the
-        coroutine on a dedicated new event loop in a helper thread so the
-        caller never blocks the loop that owns ``coro``'s dependencies.
+        coroutine on a dedicated new event loop in a helper *engine process*
+        (stage 4) so the caller never blocks the loop that owns ``coro``'s
+        dependencies; ``wait_for`` keeps the old ``thread.join()`` contract.
         """
         import asyncio
-        import threading
 
         try:
             asyncio.get_running_loop()
@@ -635,9 +637,15 @@ class KnowledgeMemory:
             finally:
                 inner.close()
 
-        thread = threading.Thread(target=_runner, daemon=True)
-        thread.start()
-        thread.join()
+        # The raw helper thread becomes a registry-visible engine process
+        # (stage-4 boundary: Engine is the one execution layer) — same
+        # blocking contract, daemon-equivalent exit via the engine's
+        # shutdown hook.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        engine = get_engine()
+        proc = engine.spawn(_runner, name="knowledge-store-bridge")
+        engine.wait_for(proc.id)
         if "error" in box:
             raise box["error"]
         return box.get("result")
@@ -1615,7 +1623,7 @@ class KnowledgeIngestor:
         self._feeds: list[FeedSubscription] = self._load_feeds()
         self._lock = threading.RLock()
         self._running = False
-        self._feed_thread: threading.Thread | None = None
+        self._feed_thread: ThreadHandle | None = None
         self._stop_event = threading.Event()
 
     # ---- feeds -------------------------------------------------------------
@@ -1847,8 +1855,9 @@ class KnowledgeIngestor:
             return
         self._stop_event.clear()
         self._running = True
-        self._feed_thread = threading.Thread(target=self._poll_loop, args=(interval,), daemon=True)
-        self._feed_thread.start()
+        self._feed_thread = spawn_loop(
+            self._poll_loop, interval, name="feed-poll", stop=self._stop_event
+        )
         logger.info(
             "Background feed polling started (interval=%ss)", interval, extra={"tag": "INF"}
         )

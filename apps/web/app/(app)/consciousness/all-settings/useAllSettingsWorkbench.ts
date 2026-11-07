@@ -7,9 +7,9 @@
  * prefs/personality persistence, the level/seed/clear/reset mutations and
  * the settings export/import. The tabs own render.
  */
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -29,7 +29,7 @@ import {
 } from './all-settings-prefs'
 
 export function useAllSettingsWorkbench() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [config, setConfig] = useState<ConfigStatus | null>(null)
   const [status, setStatus] = useState<FullStatus | null>(null)

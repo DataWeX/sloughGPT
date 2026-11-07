@@ -59,7 +59,7 @@ class TestDeploymentEnvironment:
 class TestDeploymentStatus:
     def test_values(self):
         assert DeploymentStatus.PENDING.value == "pending"
-        assert DeploymentStatus.IN_PROGRESS.value == "in_progress"
+        assert DeploymentStatus.LIVE.value == "live"
         assert DeploymentStatus.COMPLETED.value == "completed"
         assert DeploymentStatus.FAILED.value == "failed"
         assert DeploymentStatus.ROLLED_BACK.value == "rolled_back"
@@ -69,11 +69,11 @@ class TestDeploymentStatus:
 
     def test_member_names(self):
         names = {s.name for s in DeploymentStatus}
-        assert names == {"PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "ROLLED_BACK"}
+        assert names == {"PENDING", "LIVE", "COMPLETED", "FAILED", "ROLLED_BACK"}
 
     def test_from_value(self):
         assert DeploymentStatus("pending") == DeploymentStatus.PENDING
-        assert DeploymentStatus("in_progress") == DeploymentStatus.IN_PROGRESS
+        assert DeploymentStatus("live") == DeploymentStatus.LIVE
         assert DeploymentStatus("completed") == DeploymentStatus.COMPLETED
 
     def test_invalid_value_raises(self):
@@ -102,7 +102,7 @@ class TestDeploymentStatus:
     def test_status_ordering(self):
         statuses = [
             DeploymentStatus.PENDING,
-            DeploymentStatus.IN_PROGRESS,
+            DeploymentStatus.LIVE,
             DeploymentStatus.COMPLETED,
         ]
         assert len(statuses) == 3
@@ -197,7 +197,7 @@ class TestDeployment:
         d = Deployment(
             deployment_id="dep-7",
             environment=DeploymentEnvironment.STAGING,
-            status=DeploymentStatus.IN_PROGRESS,
+            status=DeploymentStatus.LIVE,
             config={},
             created_at=1000.0,
             started_at=1001.0,

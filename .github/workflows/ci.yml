@@ -25,6 +25,10 @@ jobs:
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,6 +48,10 @@ jobs:
   frontend-lib-tests:
     name: Frontend unit tests
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,6 +69,10 @@ jobs:
   frontend-build:
     name: Vite build
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,6 +88,10 @@ jobs:
   frontend-e2e:
     name: E2E tests
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 45
     # No frontend-build dependency: the 21 specs target the Vite dev server
     # (cypress.config.ts defaults baseUrl to 5173).
     env:
@@ -105,6 +121,10 @@ jobs:
   python-checks:
     name: Python
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 20
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
@@ -137,6 +157,10 @@ jobs:
   feature-tags:
     name: Feature Tags
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -146,13 +170,17 @@ jobs:
           python-version: "3.11"
       - name: Check feature tags
         run: |
-          # domain/ lives at the repo root (packages/core-py has no domain/);
+          # domain/ lives at the repo root;
           # the script imports domain.shared._internal.feature_flags.
-          PYTHONPATH=.:packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions
+          PYTHONPATH=. python3 scripts/check_feature_tags.py --validate --check-deletions
 
   board-integrity:
     name: Board integrity
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -163,7 +191,7 @@ jobs:
         # PR, not just the ones that touch it — merge 5e5c8ce36 shipped
         # 975 duplicate rows with no gate watching the real file
         # (card 20261029). Stdlib-only; the script self-locates
-        # packages/app-planner/src for the chain verifier.
+        # packages/grib/src for the chain verifier.
         run: python3 scripts/check_board_chain.py
       - name: Kanban export freshness (sync producer alarm)
         # The canonical store lives outside CI; kanban-sync.timer mirrors it

@@ -1,15 +1,15 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 
 export default function ProgressExport() {
-  const history = usePhonemeStore(s => s.history)
-  const addToHistory = usePhonemeStore(s => s.addToHistory)
-  const addToast = useToastStore(s => s.addToast)
+  const history = usePhonemeStore((s) => s.history)
+  const addToHistory = usePhonemeStore((s) => s.addToHistory)
+  const addToast = notify.toast
 
   const exportData = useCallback(() => {
     const data = {
@@ -37,14 +37,23 @@ export default function ProgressExport() {
 
       try {
         const text = await file.text()
-        const data: { history: Array<{ target: string; spoken: string; language: string; targetPhonemes: string[]; spokenPhonemes: string[]; score: number }> } = JSON.parse(text)
+        const data: {
+          history: Array<{
+            target: string
+            spoken: string
+            language: string
+            targetPhonemes: string[]
+            spokenPhonemes: string[]
+            score: number
+          }>
+        } = JSON.parse(text)
 
         if (!data.history || !Array.isArray(data.history)) {
           addToast('Invalid file format', 'error')
           return
         }
 
-        const existingWords = new Set(history.map(h => `${h.target}-${h.language}-${h.spoken}`))
+        const existingWords = new Set(history.map((h) => `${h.target}-${h.language}-${h.spoken}`))
 
         let imported = 0
         for (const entry of data.history) {
@@ -62,7 +71,10 @@ export default function ProgressExport() {
           }
         }
 
-        addToast(`Imported ${imported} new entries (${data.history.length - imported} duplicates skipped)`, 'success')
+        addToast(
+          `Imported ${imported} new entries (${data.history.length - imported} duplicates skipped)`,
+          'success',
+        )
       } catch {
         addToast('Failed to parse file', 'error')
       }

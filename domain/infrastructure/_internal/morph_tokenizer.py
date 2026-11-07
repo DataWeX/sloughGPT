@@ -539,10 +539,7 @@ class MorphTokenizer:
             raw_merges = tok_data["model"]["merges"]
         except (KeyError, TypeError):
             raw_merges = []
-        merges = [
-            tuple(m.split(" ", 1)) if isinstance(m, str) else tuple(m)
-            for m in raw_merges
-        ]
+        merges = [tuple(m.split(" ", 1)) if isinstance(m, str) else tuple(m) for m in raw_merges]
         merges = [m for m in merges if len(m) == 2]
 
         # Detect byte-level BPE (GPT-2, Qwen2, etc)

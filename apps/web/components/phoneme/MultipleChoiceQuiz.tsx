@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconBolt } from '@sloughgpt/strui'
@@ -10,7 +11,6 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 type QuizType = 'phoneme-to-word' | 'word-to-phoneme' | 'ipa-to-phoneme'
@@ -93,7 +93,7 @@ export default function MultipleChoiceQuiz() {
   const [total, setTotal] = useState(0)
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const startNewQuestion = useCallback(() => {

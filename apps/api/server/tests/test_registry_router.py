@@ -105,3 +105,39 @@ class TestRegistryStats:
             data = _data(resp)
             assert "models_loaded" in data
             assert data["healthy"] is True
+
+
+class TestRegistryArtifactsLineage:
+    """GET /registry/artifacts?lineage=true projects provenance parents."""
+
+    def _patch_list(self, **expected):
+        return patch(
+            "domain.infrastructure.artifact_registry.list_artifacts",
+            side_effect=lambda kind=None, q=None, **kw: (
+                [{"id": "a", "name": "a", "parents": ["dataset:ds1"]}]
+                if kw.get("with_provenance")
+                else [{"id": "a", "name": "a"}]
+            ),
+        )
+
+    def test_lineage_param_off_by_default(self):
+        with self._patch_list() as mock_list:
+            client = get_test_client()
+            resp = client.get("/registry/artifacts")
+            assert resp.status_code == 200
+            mock_list.assert_called_once_with(None, None, with_provenance=False)
+            [artifact] = _data(resp)["artifacts"]
+            assert "parents" not in artifact
+
+    def test_lineage_true_attaches_parents(self):
+        with self._patch_list():
+            client = get_test_client()
+            resp = client.get("/registry/artifacts", params={"lineage": "true"})
+            assert resp.status_code == 200
+            [artifact] = _data(resp)["artifacts"]
+            assert artifact["parents"] == ["dataset:ds1"]
+
+    def test_unknown_kind_still_400(self):
+        client = get_test_client()
+        resp = client.get("/registry/artifacts", params={"kind": "nope"})
+        assert resp.status_code == 400

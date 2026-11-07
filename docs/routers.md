@@ -36,6 +36,8 @@ Registered pre-lifespan in `main.py`.
 
 ## System Router (`/system`)
 
+> Also serves the `/errors` and `/session` surfaces since card `20261101_154058` — `errors.py` and `session.py` were merged into this module as an aggregate router facade (paths and wire shapes unchanged).
+
 | Method | Path                               | Description                                                     |
 | ------ | ---------------------------------- | --------------------------------------------------------------- |
 | `GET`  | `/system/metrics`                  | Real-time CPU, memory, disk, GPU usage.                         |
@@ -76,6 +78,8 @@ Registered pre-lifespan in `main.py`.
 
 ## Infer Router (`/infer`)
 
+> Served by `routers/models.py` since card `20261101_154054` — `infer.py` was merged into the `/models` facade (paths and wire shapes unchanged).
+
 Separate inference endpoint backed by the direct model server.
 
 | Method | Path                | Description                  |
@@ -89,6 +93,8 @@ Separate inference endpoint backed by the direct model server.
 | `GET`  | `/infer/info`       | Loaded model information.    |
 
 ## Models Router (`/models`)
+
+> Also serves the `/infer` and `/registry` surfaces since card `20261101_154054` — `infer.py` and `registry.py` were merged into this module as an aggregate router facade (paths and wire shapes unchanged).
 
 | Method | Path                           | Description                       |
 | ------ | ------------------------------ | --------------------------------- |
@@ -151,6 +157,8 @@ Separate inference endpoint backed by the direct model server.
 | `GET`  | `/auth/whoami` | Get current user info. |
 
 ## Session Router (`/session`)
+
+> Served by `routers/system.py` since card `20261101_154058` — `session.py` was merged into the system facade (paths and wire shapes unchanged).
 
 | Method | Path                               | Description                  |
 | ------ | ---------------------------------- | ---------------------------- |
@@ -528,6 +536,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## Errors Router (`/errors`)
 
+> Served by `routers/system.py` since card `20261101_154058` — `errors.py` was merged into the system facade (paths and wire shapes unchanged).
+
 | Method   | Path                  | Description             |
 | -------- | --------------------- | ----------------------- |
 | `POST`   | `/errors/log`         | Log an error.           |
@@ -588,6 +598,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## Registry Router (`/registry`)
 
+> Served by `routers/models.py` since card `20261101_154054` — `registry.py` was merged into the `/models` facade (paths and wire shapes unchanged).
+
 | Method | Path                   | Description                |
 | ------ | ---------------------- | -------------------------- |
 | `GET`  | `/registry`            | List registered models.    |
@@ -630,6 +642,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST` | `/shell/exec/stream` | Execute with SSE streaming. |
 
 ## Images Router (`/images`)
+
+> Served by `routers/files.py` since card `20261101_154058` — `images.py` was merged into the `/files` facade (paths and wire shapes unchanged).
 
 | Method | Path              | Description            |
 | ------ | ----------------- | ---------------------- |

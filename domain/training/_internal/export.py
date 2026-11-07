@@ -580,6 +580,9 @@ def export_to_gguf(
         quantization,
         extra={"tag": "TRAIN"},
     )
+    from domain.infrastructure._internal.artifact_registry import stamp_export
+
+    stamp_export(result, "model", None)
     return result
 
 
@@ -615,6 +618,9 @@ def export_to_gguf_fp16(
         output_path,
         extra={"tag": "TRAIN"},
     )
+    from domain.infrastructure._internal.artifact_registry import stamp_export
+
+    stamp_export(result, "model", None)
     return result
 
 
@@ -648,6 +654,9 @@ def export_to_gguf_q4_k_m(
         output_path,
         extra={"tag": "TRAIN"},
     )
+    from domain.infrastructure._internal.artifact_registry import stamp_export
+
+    stamp_export(result, "model", None)
     return result
 
 
@@ -686,6 +695,9 @@ def export_to_sou(
         output_path,
         extra={"tag": "TRAIN"},
     )
+    from domain.infrastructure._internal.artifact_registry import stamp_export
+
+    stamp_export(output_path, "model", None)
     return output_path
 
 
@@ -722,6 +734,14 @@ def export_model(config: ExportConfig, model: Any, tokenizer: Any) -> list:
     if fmt == "gguf_fp16" or fmt == "all":
         path = export_to_gguf_fp16(model, output_path, tokenizer=tokenizer)
         results.append(path)
+
+    # Re-stamp every produced file with the config's tagging metadata
+    # (training_dataset, base_model, ...) — last writer wins over the bare
+    # format-export stamps above, so lineage() sees the training parents.
+    from domain.infrastructure._internal.artifact_registry import stamp_export
+
+    for path in results:
+        stamp_export(path, "model", config.metadata, extra={"format": fmt})
 
     return results
 

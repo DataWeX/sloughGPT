@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { authFetch } from '@/lib/http-client'
@@ -16,7 +17,6 @@ import {
   Skeleton,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { IconCode, IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
@@ -97,7 +97,7 @@ function formatJson(data: unknown): string {
 }
 
 export default function ConsciousnessDebugPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
 
   const [autoRefresh, setAutoRefresh] = useState(false)

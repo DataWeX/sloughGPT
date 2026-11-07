@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import {
   cn,
@@ -21,7 +22,6 @@ import {
   type CompareResult,
   type SavedTree,
 } from '@/lib/token-tree-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 interface TokenTreeCompareCardProps {
   refreshKey?: number
@@ -61,7 +61,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
   const [comparing, setComparing] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [result, setResult] = useState<CompareResult | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const load = useCallback(async () => {
     try {

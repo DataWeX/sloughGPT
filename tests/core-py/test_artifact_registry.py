@@ -93,6 +93,67 @@ class TestListArtifacts:
             assert reg.list_artifacts("nope") == []
 
 
+class TestListArtifactsProvenance:
+    """with_provenance=True attaches lineage parents; default stays lean."""
+
+    def test_default_has_no_parents_key(self, tmp_path):
+        roots = _roots(tmp_path)
+        (roots["adapter"][0] / "plain.npz").write_bytes(b"\x00")
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("adapter")
+        assert "parents" not in a  # resolve()/verify() callers pay no sidecar reads
+
+    def test_sidecar_parents_attached(self, tmp_path):
+        roots = _roots(tmp_path)
+        child = roots["adapter"][0] / "child.npz"
+        child.write_bytes(b"\x00")
+        reg.write_provenance(child, "adapter", "child.npz", parents=["dataset:ds1"])
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("adapter", with_provenance=True)
+        assert a["parents"] == ["dataset:ds1"]
+
+    def test_meta_fallback_parents_without_sidecar(self, tmp_path):
+        roots = _roots(tmp_path)
+        soul = roots["model"][0] / "baby.soul"
+        soul.write_bytes(b"\x00" * 8)
+        soul.with_suffix(".soul.meta.json").write_text(
+            '{"training_dataset": "tinyshakespeare", "base_model": "sloughgpt"}'
+        )
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("model", with_provenance=True)
+        assert a["parents"] == ["dataset:tinyshakespeare", "model:sloughgpt"]
+
+    def test_sidecar_and_meta_union_deduped(self, tmp_path):
+        roots = _roots(tmp_path)
+        soul = roots["model"][0] / "baby.soul"
+        soul.write_bytes(b"\x00" * 8)
+        soul.with_suffix(".soul.meta.json").write_text(
+            '{"training_dataset": "ds1", "base_model": "sloughgpt"}'
+        )
+        reg.write_provenance(soul, "model", "baby.soul", parents=["dataset:ds1"])
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("model", with_provenance=True)
+        # sidecar first, meta extras appended, ds1 not duplicated
+        assert a["parents"] == ["dataset:ds1", "model:sloughgpt"]
+
+    def test_corrupt_sidecar_still_returns_meta_parents(self, tmp_path):
+        roots = _roots(tmp_path)
+        soul = roots["model"][0] / "bad.soul"
+        soul.write_bytes(b"\x00" * 8)
+        soul.with_suffix(".soul.meta.json").write_text('{"training_dataset": "ds2"}')
+        reg.provenance_path(soul).write_text("{broken")
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("model", with_provenance=True)
+        assert a["parents"] == ["dataset:ds2"]
+
+    def test_no_provenance_anywhere_is_empty_list(self, tmp_path):
+        roots = _roots(tmp_path)
+        (roots["model"][0] / "plain.soul").write_bytes(b"\x00" * 8)
+        with _scan(tmp_path):
+            [a] = reg.list_artifacts("model", with_provenance=True)
+        assert a["parents"] == []
+
+
 class TestResolve:
     def test_resolve_dataset(self, tmp_path):
         ds = tmp_path / "data" / "myds"
@@ -319,3 +380,57 @@ class TestLineage:
             result = reg.lineage("adapter", "child.npz", path=child, root_dir=store)
         assert result["roots"] == ["adapter:parent.npz"]
         assert "adapter:parent.npz" in result["nodes"]
+
+
+class TestStampExport:
+    def test_parents_from_metadata_flat(self):
+        md = {"training_dataset": "ultrachat_200k", "base_model": "gpt2-tiny"}
+        assert reg.parents_from_metadata(md) == [
+            "dataset:ultrachat_200k",
+            "model:gpt2-tiny",
+        ]
+
+    def test_parents_from_metadata_reads_nested_caller_metadata(self):
+        # slonet.export_to_sou nests caller metadata under the "metadata" key.
+        md = {"soul_name": "bob", "metadata": {"training_dataset": "tinyshakespeare"}}
+        assert reg.parents_from_metadata(md) == ["dataset:tinyshakespeare"]
+
+    def test_parents_from_metadata_is_total_over_junk(self):
+        assert reg.parents_from_metadata(None) == []
+        assert reg.parents_from_metadata({}) == []
+        assert reg.parents_from_metadata("junk") == []
+        assert reg.parents_from_metadata({"training_dataset": "   "}) == []
+        assert reg.parents_from_metadata({"training_dataset": 42}) == []
+
+    def test_parents_from_metadata_dedupes_across_layers(self):
+        md = {"training_dataset": "ds", "metadata": {"training_dataset": "ds"}}
+        assert reg.parents_from_metadata(md) == ["dataset:ds"]
+
+    def test_stamp_export_writes_sidecar(self, tmp_path):
+        baby = tmp_path / "baby.soul"
+        baby.write_bytes(b"SOUL")
+        record = reg.stamp_export(baby, "model", {"training_dataset": "ds"})
+        assert record is not None
+        assert record.parents == ["dataset:ds"]
+        read = reg.read_provenance(baby)
+        assert read is not None
+        assert read.kind == "model"
+        assert read.parents == ["dataset:ds"]
+
+    def test_stamp_export_missing_file_is_none(self, tmp_path):
+        assert reg.stamp_export(tmp_path / "nope.soul", "model", {}) is None
+
+    def test_stamp_export_junk_metadata_still_stamps(self, tmp_path):
+        baby = tmp_path / "baby.soul"
+        baby.write_bytes(b"SOUL")
+        record = reg.stamp_export(baby, "model", "not-a-dict")
+        assert record is not None
+        assert record.parents == []
+
+    def test_export_stamp_links_model_to_dataset_root(self, tmp_path):
+        baby = tmp_path / "stamp-ds-xyz.soul"
+        baby.write_bytes(b"SOUL")
+        reg.stamp_export(baby, "model", {"training_dataset": "stamp-ds-xyz"})
+        result = reg.lineage("model", baby.name, path=baby)
+        assert "dataset:stamp-ds-xyz" in result["roots"]
+        assert result["nodes"]["dataset:stamp-ds-xyz"]["parents"] == []

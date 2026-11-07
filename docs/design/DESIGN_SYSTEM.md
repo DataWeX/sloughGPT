@@ -34,59 +34,59 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 
 ### Light Mode
 
-| Token | RGB | Usage |
-|-------|-----|-------|
-| `--background` | `248 246 252` | Page background (warm cream with violet tint) |
-| `--foreground` | `25 22 36` | Primary text |
-| `--card` | `255 255 255` | Card/panel backgrounds |
-| `--card-foreground` | `25 22 36` | Text on cards |
-| `--primary` | `124 82 196` | Buttons, links, active states |
-| `--primary-foreground` | `250 248 255` | Text on primary |
-| `--secondary` | `237 232 248` | Secondary backgrounds |
-| `--secondary-foreground` | `42 37 55` | Text on secondary |
-| `--muted` | `244 242 248` | Subtle backgrounds |
-| `--muted-foreground` | `130 122 150` | Captions, secondary text |
-| `--accent` | `236 145 95` | Highlights, warnings, accents |
-| `--accent-foreground` | `250 248 255` | Text on accent |
-| `--border` | `228 224 242` | Borders, dividers |
-| `--input` | `228 224 242` | Input borders |
-| `--ring` | `124 82 196` | Focus rings |
-| `--success` | `52 176 125` | Success states |
-| `--warning` | `236 168 60` | Warning states |
-| `--destructive` | `220 80 90` | Errors, destructive actions |
+| Token                    | RGB           | Usage                                         |
+| ------------------------ | ------------- | --------------------------------------------- |
+| `--background`           | `248 246 252` | Page background (warm cream with violet tint) |
+| `--foreground`           | `25 22 36`    | Primary text                                  |
+| `--card`                 | `255 255 255` | Card/panel backgrounds                        |
+| `--card-foreground`      | `25 22 36`    | Text on cards                                 |
+| `--primary`              | `124 82 196`  | Buttons, links, active states                 |
+| `--primary-foreground`   | `250 248 255` | Text on primary                               |
+| `--secondary`            | `237 232 248` | Secondary backgrounds                         |
+| `--secondary-foreground` | `42 37 55`    | Text on secondary                             |
+| `--muted`                | `244 242 248` | Subtle backgrounds                            |
+| `--muted-foreground`     | `130 122 150` | Captions, secondary text                      |
+| `--accent`               | `236 145 95`  | Highlights, warnings, accents                 |
+| `--accent-foreground`    | `250 248 255` | Text on accent                                |
+| `--border`               | `228 224 242` | Borders, dividers                             |
+| `--input`                | `228 224 242` | Input borders                                 |
+| `--ring`                 | `124 82 196`  | Focus rings                                   |
+| `--success`              | `52 176 125`  | Success states                                |
+| `--warning`              | `236 168 60`  | Warning states                                |
+| `--destructive`          | `220 80 90`   | Errors, destructive actions                   |
 
 ### Dark Mode
 
-| Token | RGB | Usage |
-|-------|-----|-------|
-| `--background` | `17 15 24` | Page background (deep charcoal-violet) |
-| `--foreground` | `238 234 248` | Primary text |
-| `--card` | `28 25 38` | Card/panel backgrounds |
-| `--card-foreground` | `238 234 248` | Text on cards |
-| `--primary` | `192 170 244` | Buttons, links, active states |
-| `--primary-foreground` | `25 22 36` | Text on primary |
-| `--secondary` | `50 44 68` | Secondary backgrounds |
-| `--secondary-foreground` | `238 234 248` | Text on secondary |
-| `--muted` | `38 34 52` | Subtle backgrounds |
-| `--muted-foreground` | `150 140 172` | Captions, secondary text |
-| `--accent` | `240 176 130` | Highlights, warnings, accents |
-| `--accent-foreground` | `25 22 36` | Text on accent |
-| `--border` | `52 46 72` | Borders, dividers |
-| `--input` | `52 46 72` | Input borders |
-| `--ring` | `192 170 244` | Focus rings |
-| `--success` | `72 192 140` | Success states |
-| `--warning` | `240 192 80` | Warning states |
-| `--destructive` | `235 100 110` | Errors, destructive actions |
+| Token                    | RGB           | Usage                                  |
+| ------------------------ | ------------- | -------------------------------------- |
+| `--background`           | `17 15 24`    | Page background (deep charcoal-violet) |
+| `--foreground`           | `238 234 248` | Primary text                           |
+| `--card`                 | `28 25 38`    | Card/panel backgrounds                 |
+| `--card-foreground`      | `238 234 248` | Text on cards                          |
+| `--primary`              | `192 170 244` | Buttons, links, active states          |
+| `--primary-foreground`   | `25 22 36`    | Text on primary                        |
+| `--secondary`            | `50 44 68`    | Secondary backgrounds                  |
+| `--secondary-foreground` | `238 234 248` | Text on secondary                      |
+| `--muted`                | `38 34 52`    | Subtle backgrounds                     |
+| `--muted-foreground`     | `150 140 172` | Captions, secondary text               |
+| `--accent`               | `240 176 130` | Highlights, warnings, accents          |
+| `--accent-foreground`    | `25 22 36`    | Text on accent                         |
+| `--border`               | `52 46 72`    | Borders, dividers                      |
+| `--input`                | `52 46 72`    | Input borders                          |
+| `--ring`                 | `192 170 244` | Focus rings                            |
+| `--success`              | `72 192 140`  | Success states                         |
+| `--warning`              | `240 192 80`  | Warning states                         |
+| `--destructive`          | `235 100 110` | Errors, destructive actions            |
 
 ### Chart Colors
 
-| Token | Light | Dark |
-|-------|-------|------|
+| Token       | Light        | Dark          |
+| ----------- | ------------ | ------------- |
 | `--chart-1` | `124 82 196` | `192 170 244` |
-| `--chart-2` | `52 176 125` | `72 192 140` |
+| `--chart-2` | `52 176 125` | `72 192 140`  |
 | `--chart-3` | `236 145 95` | `240 176 130` |
 | `--chart-4` | `90 150 220` | `100 165 240` |
-| `--chart-5` | `220 80 90` | `235 100 110` |
+| `--chart-5` | `220 80 90`  | `235 100 110` |
 
 **Chart rule:** every chart series, legend swatch, progress bar, and per-item accent references a chart or semantic token — `stroke="var(--chart-1)"`, `backgroundColor: 'var(--chart-N)'`, `bg-success`/`bg-warning`/`bg-destructive`. Color constants at the top of a component (`const COLORS = { a: '#6366f1' }`) are forbidden; define them as `{ a: 'var(--chart-1)' }` so they follow theme and palette like everything else.
 
@@ -94,15 +94,15 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 
 Each accent theme is a full aura — not just a primary color swap. Themes override `--primary`, `--ring`, `--secondary`, `--secondary-foreground`, `--muted`, `--border`, and `--input` to shift the entire UI atmosphere.
 
-| Theme | Aura | Primary | Mood |
-|-------|------|---------|------|
-| `theme-blue` | Periwinkle | `90 130 220` | Calm ocean, trustworthy |
-| `theme-purple` | Lilac | `155 108 214` | Ethereal lilac, mystical |
-| `theme-pink` | Rose | `218 130 170` | Soft rose, delicate |
-| `theme-red` | Coral | `230 120 130` | Warm coral, energetic |
-| `theme-orange` | Peach | `236 155 90` | Peachy bread crust, warm bakery |
-| `theme-green` | Mint | `72 178 130` | Fresh mint, natural |
-| `theme-teal` | Dew | `72 166 200` | Cool dew, refreshing |
+| Theme          | Aura       | Primary       | Mood                            |
+| -------------- | ---------- | ------------- | ------------------------------- |
+| `theme-blue`   | Periwinkle | `90 130 220`  | Calm ocean, trustworthy         |
+| `theme-purple` | Lilac      | `155 108 214` | Ethereal lilac, mystical        |
+| `theme-pink`   | Rose       | `218 130 170` | Soft rose, delicate             |
+| `theme-red`    | Coral      | `230 120 130` | Warm coral, energetic           |
+| `theme-orange` | Peach      | `236 155 90`  | Peachy bread crust, warm bakery |
+| `theme-green`  | Mint       | `72 178 130`  | Fresh mint, natural             |
+| `theme-teal`   | Dew        | `72 166 200`  | Cool dew, refreshing            |
 
 Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool tints to match the aura. Dark mode variants deepen these shifts.
 
@@ -112,11 +112,11 @@ Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool t
 
 Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** (code). No third family is loaded in the app.
 
-| Role | Font | CSS variable | Fallback |
-|------|------|--------------|----------|
-| Body / headings (`font-sans`) | Outfit — `public/fonts/outfit-latin.woff2` | `--font-rubik` — **legacy name; the family is Outfit** | system-ui, sans-serif |
-| Numeric (`font-numeric`, `tabular-nums`) | Outfit — same face as body; there is no separate numeral font | `--font-rubik` | system-ui, sans-serif |
-| Code (`font-mono`) | JetBrains Mono — `public/fonts/jetbrains-latin.woff2` | `--font-jetbrains-mono` | ui-monospace, monospace |
+| Role                                     | Font                                                          | CSS variable                                           | Fallback                |
+| ---------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------ | ----------------------- |
+| Body / headings (`font-sans`)            | Outfit — `public/fonts/outfit-latin.woff2`                    | `--font-rubik` — **legacy name; the family is Outfit** | system-ui, sans-serif   |
+| Numeric (`font-numeric`, `tabular-nums`) | Outfit — same face as body; there is no separate numeral font | `--font-rubik`                                         | system-ui, sans-serif   |
+| Code (`font-mono`)                       | JetBrains Mono — `public/fonts/jetbrains-latin.woff2`         | `--font-jetbrains-mono`                                | ui-monospace, monospace |
 
 - Outfit is loaded with `next/font/local` in `apps/web/app/layout.tsx`; JetBrains Mono also has a raw `@font-face` in `globals.css`.
 - **`--font-rubik` is a rename TODO, not a font.** The variable resolves to Outfit. Do not rename it in passing — consumers are `layout.tsx`, `globals.css`, `tailwind.config.js`, `magazine/page.tsx`, and `vite/index-metadata.test.ts`. Until the rename lands, read it as "the body font".
@@ -126,14 +126,14 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 
 ### Type Scale
 
-| Role | Class | Weight | Usage |
-|------|-------|--------|-------|
-| Page title | `text-2xl md:text-3xl font-semibold` | 600 | Only in `AppRouteHeaderLead` |
-| Section title | `text-base font-medium` | 500 | Card headers |
-| Body | `text-sm` | 400 | Primary content |
-| Caption | `text-xs text-muted-foreground` | 400 | Timestamps, secondary info |
-| Label | `text-xs font-medium uppercase tracking-wider` | 500 | Form labels |
-| Badge | `text-[10px] font-medium` | 500 | Status badges, tags |
+| Role          | Class                                          | Weight | Usage                        |
+| ------------- | ---------------------------------------------- | ------ | ---------------------------- |
+| Page title    | `text-2xl md:text-3xl font-semibold`           | 600    | Only in `AppRouteHeaderLead` |
+| Section title | `text-base font-medium`                        | 500    | Card headers                 |
+| Body          | `text-sm`                                      | 400    | Primary content              |
+| Caption       | `text-xs text-muted-foreground`                | 400    | Timestamps, secondary info   |
+| Label         | `text-xs font-medium uppercase tracking-wider` | 500    | Form labels                  |
+| Badge         | `text-[10px] font-medium`                      | 500    | Status badges, tags          |
 
 ### Rules
 
@@ -147,23 +147,23 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 
 ### Page Layout
 
-| Token | Class | Value |
-|-------|-------|-------|
-| Page wrapper | `sl-page` | `p-4 sm:p-6 md:p-8` |
-| Max content width | `max-w-4xl` | 896px |
-| Between sections | `space-y-4` | 16px |
-| Between cards | `space-y-4` | 16px |
+| Token             | Class       | Value               |
+| ----------------- | ----------- | ------------------- |
+| Page wrapper      | `sl-page`   | `p-4 sm:p-6 md:p-8` |
+| Max content width | `max-w-4xl` | 896px               |
+| Between sections  | `space-y-4` | 16px                |
+| Between cards     | `space-y-4` | 16px                |
 
 ### Component Spacing
 
-| Context | Class |
-|---------|-------|
-| Card padding | `p-4` or `p-6` |
-| Card header/content gap | `space-y-2` |
-| Button gap | `gap-2` |
-| Form field gap | `space-y-2` |
-| Inline group | `flex items-center gap-2` |
-| Grid gap | `gap-4` |
+| Context                 | Class                     |
+| ----------------------- | ------------------------- |
+| Card padding            | `p-4` or `p-6`            |
+| Card header/content gap | `space-y-2`               |
+| Button gap              | `gap-2`                   |
+| Form field gap          | `space-y-2`               |
+| Inline group            | `flex items-center gap-2` |
+| Grid gap                | `gap-4`                   |
 
 ### Rules
 
@@ -173,22 +173,22 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 
 ## Border Radius
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--radius` | `6px` | Default for all components |
-| `rounded-sm` | `2px` | Subtle rounding |
-| `rounded-lg` | `10px` | Modals, large panels |
-| `rounded-xl` | `14px` | Feature cards |
-| `rounded-2xl` | `16px` | Chat composer card, floating input surfaces |
+| Token          | Value    | Usage                                                   |
+| -------------- | -------- | ------------------------------------------------------- |
+| `--radius`     | `6px`    | Default for all components                              |
+| `rounded-sm`   | `2px`    | Subtle rounding                                         |
+| `rounded-lg`   | `10px`   | Modals, large panels                                    |
+| `rounded-xl`   | `14px`   | Feature cards                                           |
+| `rounded-2xl`  | `16px`   | Chat composer card, floating input surfaces             |
 | `rounded-full` | `9999px` | Send/mic buttons, avatars, status dots — never on cards |
 
 ## Shadows
 
-| Token | Usage |
-|-------|-------|
+| Token       | Usage                            |
+| ----------- | -------------------------------- |
 | `shadow-sm` | Subtle elevation (cards at rest) |
-| `shadow-md` | Hover states, dropdowns |
-| `shadow-lg` | Modals, popovers |
+| `shadow-md` | Hover states, dropdowns          |
+| `shadow-lg` | Modals, popovers                 |
 | `shadow-xl` | Command palette, floating panels |
 
 ## Component Patterns
@@ -198,7 +198,7 @@ Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** 
 ```tsx
 import { Card, CardHeader, CardTitle, CardContent } from '@anthropic/strui/card'
 
-<Card>
+;<Card>
   <CardHeader>
     <CardTitle className="text-base">Section Title</CardTitle>
   </CardHeader>
@@ -232,7 +232,7 @@ import { Button } from '@anthropic/strui/button'
 import { Input } from '@anthropic/strui/input'
 import { Label } from '@anthropic/strui/label'
 
-<div className="space-y-2">
+;<div className="space-y-2">
   <Label htmlFor="name">Name</Label>
   <Input id="name" placeholder="Enter name" />
 </div>
@@ -253,55 +253,73 @@ import { Badge } from '@anthropic/strui/badge'
 sloughGPT's visual signature is **one strong layout primitive, repeated**:
 the annotated log entry. Every list of things a user reads turn-by-turn —
 chat transcripts, the kanban board, later anything else — composes through
-the same three-zone anatomy, so the silhouette (gutter + flowing text +
-metadata margin) is recognizably sloughGPT even shrunk to black and white.
+the same anatomy, so the silhouette is recognizably sloughGPT even shrunk to
+black and white.
+
+**Chat was re-ruled Direction B (user ruling 2026-11-03, "visual consistency
+please")**: transcripts render through a shared `MessageFrame` — one shape
+(`rounded-2xl`, never pills) and one radius for both roles; only alignment
+and tint differ, and the metadata is a footer **inside** the frame. The old
+three-zone chat anatomy (turn-number gutter + prose + detached right margin)
+is retired. Board entries keep the gutter + margin anatomy below — the ruling
+changed the chat projection, not the primitive.
 
 ```
-┌ gutter ┐ content (document-like)              ┐ margin (mono metadata) ┐
-│  07    │ The words are the interface.         │ role · model · 2.1 t/s │
-│        │ Assistant prose has NO bubble chrome.│ ● live · 148 tok       │
+chat (MessageFrame):
+┌── user: right-aligned, bg-primary/10 border-primary/20, rounded-2xl ──┐
+│ words + footer (role · model · 2.1 t/s · 148 tok · timestamp)        │
+└──────────────────────────────────────────────────────────────────────┘
+
+board (gutter + content + margin):
+┌ gutter ┐ content (ledger line)             ┐ margin (mono metadata) ┐
+│ a3f9   │ The words are the interface.      │ priority · Maya · Fri  │
 ```
 
-- **Gutter** (`font-mono text-[10px] text-muted-foreground/50`): stable
-  position marker — turn number in chat, hash/id prefix on board entries.
-- **Content**: assistant turns are flowing prose with no card or bubble;
-  user turns are the only contained element (right-aligned tinted card in
-  chat). Board entries sit in their column like ledger lines, not floating
-  rounded cards.
-- **Margin** (`font-mono text-[10px] text-muted-foreground/60`): metadata as
-  first-class typography beside the content it describes (Tufte sidenote
-  model) — per-turn tok/s, token count, latency, model; card priority,
-  assignee, due date. Live/in-flight state is a `StatusDot tone="primary"
-  pulse`; WIP overflow is `StatusDot tone="destructive" pulse`.
+- **MessageFrame** (`features/chat/components/messages/MessageFrame.tsx`):
+  the one surface every chat message renders through. User =
+  right-aligned `bg-primary/10 border-primary/20`; assistant = left-aligned
+  `bg-card border-border`; both `rounded-2xl`. Renderers **compose** it and
+  never re-decide chrome. No message index/turn numbers — the sub-decision
+  removed the gutter numbering entirely.
+- **Gutter** (`font-mono text-[10px] text-muted-foreground/50`, board):
+  stable position marker — hash/id prefix on board entries.
+- **Content**: board entries sit in their column like ledger lines, not
+  floating rounded cards.
+- **Margin** (`font-mono text-[10px] text-muted-foreground/60`, board):
+  metadata as first-class typography beside the content it describes (Tufte
+  sidenote model) — card priority, assignee, due date. Live/in-flight state
+  is a `StatusDot tone="primary" pulse`; WIP overflow is
+  `StatusDot tone="destructive" pulse`. In chat the same metadata lives in
+  the frame footer (`data-message-frame-footer`).
 
-Reference implementations: `features/chat/components/messages/MessageBubble.tsx`
-(chat turn), `components/planner/CardItem.tsx` + `Tray.tsx` (board entry +
-column). Per-turn chat metrics arrive via `streamChatResponse`'s `onMeta`
+Reference implementations: `features/chat/components/messages/MessageFrame.tsx`
+(composed by `MessageBubble.tsx`, `MessageContent.tsx`, `MessageRenderer.tsx`),
+`components/planner/CardItem.tsx` + `Tray.tsx` (board entry + column).
+Per-turn chat metrics arrive via `streamChatResponse`'s `onMeta`
 (`{tokens, elapsedMs}`) and live on `ChatMessage.metrics`.
 
 Rules for new surfaces adopting the primitive:
 
-1. Three zones, always — never re-introduce a bubble/bubble pair.
-2. Metadata goes in the margin, never as badges stacked under the content.
-3. One margin annotation per fact; no icon+label pairs (icon-only with
+1. Chat messages compose `MessageFrame` — never hand-roll message chrome,
+   never re-introduce a bubble/bubble pair, never `rounded-full` pills.
+2. Chat metadata goes in the frame footer, inside the surface — never as a
+   detached margin, never as badges stacked under the content.
+3. Board surfaces keep three zones (gutter + content + margin); one margin
+   annotation per fact; no icon+label pairs (icon-only with
    `aria-label`/`title` is fine).
-4. Gutter is `aria-hidden`; the margin carries the accessible text.
+4. Board gutter is `aria-hidden`; the margin carries the accessible text.
 
 ### Page Template
 
 ```tsx
 <div className="sl-page mx-auto max-w-4xl">
-  <AppRouteHeader
-    left={<AppRouteHeaderLead title="Page Title" subtitle="Description" />}
-  />
+  <AppRouteHeader left={<AppRouteHeaderLead title="Page Title" subtitle="Description" />} />
   <div className="space-y-4">
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Section</CardTitle>
       </CardHeader>
-      <CardContent>
-        {/* Content */}
-      </CardContent>
+      <CardContent>{/* Content */}</CardContent>
     </Card>
   </div>
 </div>
@@ -319,25 +337,25 @@ Codified from the archived references `docs/design/references/chat-composer-refe
 └────────────────────────────────────────┘
 ```
 
-| Part | Rule |
-|------|------|
-| Shell | One card: `rounded-2xl border border-border/50 bg-card px-4 py-3 shadow-sm`. On focus: `focus-within:border-primary/40 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/10`. Reference impl: `features/chat/components/input/ChatInputRow.tsx`. |
-| Row 1 — field | Multiline message input in Body type, placeholder `text-muted-foreground`. Grows to a max height, scrolls internally. |
-| Row 2 — controls | A separate row **below** the field — controls never sit inline beside the first line of typed text. |
-| `+` affordance | Bottom-**left**: `h-9 w-9` ghost icon button (`hover:bg-muted`), `aria-label` naming the action. |
-| Model picker | Bottom-**right**, immediately left of send: text button in Label/Caption type, `text-muted-foreground` → foreground on hover, chevron, shows the active model. |
-| Send button | Bottom-**right**: circular `h-9 w-9 rounded-full bg-primary`, `aria-label="Send message"`. Streaming → Stop in the same circle (`bg-destructive`). Empty → mic/neutral state. Fixed footprint in every state — no layout shift. |
-| Gutter | Stays inside the page gutter (`px-4 sm:px-6`) and the `max-w-4xl` thread column; the thread gets bottom padding ≥ composer height + safe-area so the last message is never covered. |
-| Hint strip (optional) | Below row 2, Badge type (`text-[10px] text-muted-foreground/40`), `aria-hidden` — kbd hints, token count. |
+| Part                  | Rule                                                                                                                                                                                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shell                 | One card: `rounded-2xl border border-border/50 bg-card px-4 py-3 shadow-sm`. On focus: `focus-within:border-primary/40 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/10`. Reference impl: `features/chat/components/input/ChatInputRow.tsx`. |
+| Row 1 — field         | Multiline message input in Body type, placeholder `text-muted-foreground`. Grows to a max height, scrolls internally.                                                                                                                                               |
+| Row 2 — controls      | A separate row **below** the field — controls never sit inline beside the first line of typed text.                                                                                                                                                                 |
+| `+` affordance        | Bottom-**left**: `h-9 w-9` ghost icon button (`hover:bg-muted`), `aria-label` naming the action.                                                                                                                                                                    |
+| Model picker          | Bottom-**right**, immediately left of send: text button in Label/Caption type, `text-muted-foreground` → foreground on hover, chevron, shows the active model.                                                                                                      |
+| Send button           | Bottom-**right**: circular `h-9 w-9 rounded-full bg-primary`, `aria-label="Send message"`. Streaming → Stop in the same circle (`bg-destructive`). Empty → mic/neutral state. Fixed footprint in every state — no layout shift.                                     |
+| Gutter                | Stays inside the page gutter (`px-4 sm:px-6`) and the `max-w-4xl` thread column; the thread gets bottom padding ≥ composer height + safe-area so the last message is never covered.                                                                                 |
+| Hint strip (optional) | Below row 2, Badge type (`text-[10px] text-muted-foreground/40`), `aria-hidden` — kbd hints, token count.                                                                                                                                                           |
 
 **Message-list type roles**
 
-| Element | Role |
-|---------|------|
-| Message text | Body (`text-sm`; RN 15/22) |
-| Timestamps, model/meta lines, queued count | Caption (`text-xs text-muted-foreground`; RN 12/16) |
-| Role labels, mode chips | Label (`text-xs font-medium uppercase tracking-wider`) |
-| Status badges, match counters | Badge (`text-[10px]`) |
+| Element                                    | Role                                                   |
+| ------------------------------------------ | ------------------------------------------------------ |
+| Message text                               | Body (`text-sm`; RN 15/22)                             |
+| Timestamps, model/meta lines, queued count | Caption (`text-xs text-muted-foreground`; RN 12/16)    |
+| Role labels, mode chips                    | Label (`text-xs font-medium uppercase tracking-wider`) |
+| Status badges, match counters              | Badge (`text-[10px]`)                                  |
 
 **Empty / error / offline rows**
 
@@ -354,20 +372,20 @@ Existing implementations: web `apps/web/features/chat/components/input/` (`ChatI
 
 Every clickable element must have a hover state:
 
-| Element | Hover Class |
-|---------|-------------|
-| Button | `hover:bg-primary/90` |
+| Element          | Hover Class                               |
+| ---------------- | ----------------------------------------- |
+| Button           | `hover:bg-primary/90`                     |
 | Card (clickable) | `hover:border-primary/50 hover:shadow-md` |
-| Link | `hover:text-primary/80` |
-| List item | `hover:bg-muted` |
-| Icon button | `hover:bg-muted hover:text-foreground` |
+| Link             | `hover:text-primary/80`                   |
+| List item        | `hover:bg-muted`                          |
+| Icon button      | `hover:bg-muted hover:text-foreground`    |
 
 ### Focus
 
 All interactive elements must have visible focus:
 
 ```tsx
-className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+className = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
 ```
 
 ### Disabled
@@ -375,7 +393,7 @@ className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offse
 Disabled elements use reduced opacity:
 
 ```tsx
-className="opacity-40 pointer-events-none"
+className = 'opacity-40 pointer-events-none'
 ```
 
 ## Animation
@@ -391,11 +409,11 @@ className="opacity-40 pointer-events-none"
 
 ### Font Mapping
 
-| Role | Mobile | Where |
-|------|--------|-------|
-| Body / headings | Outfit | `apps/mobile/tamagui.config.ts` → `fonts.body`, `fonts.heading` |
-| Code | JetBrains Mono (`JetBrainsMono-Regular`) | `fonts.mono` |
-| Weights | 400 / 500 / 600 / 700 | weight maps in `tamagui.config.ts` |
+| Role            | Mobile                                   | Where                                                           |
+| --------------- | ---------------------------------------- | --------------------------------------------------------------- |
+| Body / headings | Outfit                                   | `apps/mobile/tamagui.config.ts` → `fonts.body`, `fonts.heading` |
+| Code            | JetBrains Mono (`JetBrainsMono-Regular`) | `fonts.mono`                                                    |
+| Weights         | 400 / 500 / 600 / 700                    | weight maps in `tamagui.config.ts`                              |
 
 Same two families as web, no others. No platform-switched font, no newly bundled family.
 
@@ -403,14 +421,14 @@ Same two families as web, no others. No platform-switched font, no newly bundled
 
 Web class → RN `fontSize` / `lineHeight` (px):
 
-| Role | Web class | RN fontSize / lineHeight | Weight |
-|------|-----------|--------------------------|--------|
-| Page title | `text-2xl md:text-3xl` | 24 / 30 | 600 |
-| Section title | `text-base` | 16 / 22 | 500 |
-| Body | `text-sm` | 15 / 22 | 400 |
-| Caption | `text-xs` | 12 / 16 | 400 |
-| Label | `text-xs font-medium uppercase tracking-wider` | 12 / 16, uppercase, tracking ≥ 0.5 | 500 |
-| Badge | `text-[10px] font-medium` | 11 / 15 | 500 |
+| Role          | Web class                                      | RN fontSize / lineHeight           | Weight |
+| ------------- | ---------------------------------------------- | ---------------------------------- | ------ |
+| Page title    | `text-2xl md:text-3xl`                         | 24 / 30                            | 600    |
+| Section title | `text-base`                                    | 16 / 22                            | 500    |
+| Body          | `text-sm`                                      | 15 / 22                            | 400    |
+| Caption       | `text-xs`                                      | 12 / 16                            | 400    |
+| Label         | `text-xs font-medium uppercase tracking-wider` | 12 / 16, uppercase, tracking ≥ 0.5 | 500    |
+| Badge         | `text-[10px] font-medium`                      | 11 / 15                            | 500    |
 
 - Body is 15/22 on mobile (1px over web `text-sm`, reading distance) — what `MessageBubble` and `ChatInput` already ship.
 - The five chat files carry **ten distinct `fontSize` literals (9–24) for six roles**. Each maps to a row above: 9–10 → Badge, 11 → Caption/Badge, 12–13 → Caption, 14–15 → Body, 16 → Section title, 18/20 → icon glyphs only (never body text), 24 → Page title.
@@ -419,26 +437,26 @@ Web class → RN `fontSize` / `lineHeight` (px):
 
 All spacing is a multiple of 4 (px): **4 · 8 · 12 · 16 · 20 · 24 · 32** — 48 only for full-bleed empty states. `2` is the one half-step, for hairline gaps and dots.
 
-| Context | Value |
-|---------|-------|
-| Icon-to-label micro gap | 4 |
-| Inline gap, tight stack | 8 |
-| Card / composer internal padding | 12–16 |
-| Screen gutter, between sections | 16 |
+| Context                           | Value |
+| --------------------------------- | ----- |
+| Icon-to-label micro gap           | 4     |
+| Inline gap, tight stack           | 8     |
+| Card / composer internal padding  | 12–16 |
+| Screen gutter, between sections   | 16    |
 | Sheet padding, empty-state gutter | 20–32 |
 
 `MessageBubble`'s local `S = {xs: 4, sm: 8, md: 12, lg: 16, xl: 20}` is already this grid; the shared scale adds 24 and 32. Off-grid literals (`paddingVertical: 7`, `paddingHorizontal: 14`, `marginHorizontal: 6`) are drift.
 
 ### Radius
 
-| Token | Value | Web class | Use |
-|-------|-------|-----------|-----|
-| `xs` | 2 | `rounded-sm` | Hairlines, subtle rounding |
-| `sm` | 6 | `rounded` (`--radius`) | Inputs, chips |
-| `md` | 10 | `rounded-lg` | Buttons, list tiles, icon buttons |
-| `lg` | 14 | `rounded-xl` | Cards, sheets |
-| `xl` | 16 | `rounded-2xl` | Chat composer, floating panels |
-| `full` | 9999 | `rounded-full` | Send/mic buttons, avatars, dots — never cards |
+| Token  | Value | Web class              | Use                                           |
+| ------ | ----- | ---------------------- | --------------------------------------------- |
+| `xs`   | 2     | `rounded-sm`           | Hairlines, subtle rounding                    |
+| `sm`   | 6     | `rounded` (`--radius`) | Inputs, chips                                 |
+| `md`   | 10    | `rounded-lg`           | Buttons, list tiles, icon buttons             |
+| `lg`   | 14    | `rounded-xl`           | Cards, sheets                                 |
+| `xl`   | 16    | `rounded-2xl`          | Chat composer, floating panels                |
+| `full` | 9999  | `rounded-full`         | Send/mic buttons, avatars, dots — never cards |
 
 `MessageBubble`'s local `R = {sm: 6, md: 10, lg: 16, xl: 20, full: 9999}` predates this table: 6/10 land on `sm`/`md`, 16 maps to `xl`, 20 is off-scale. The five chat files use **sixteen distinct radius literals (2–28 plus 999/9999)** — all of them collapse into this table.
 
@@ -455,16 +473,17 @@ All spacing is a multiple of 4 (px): **4 · 8 · 12 · 16 · 20 · 24 · 32** �
 
 ```tsx
 // scales.ts — MessageBubble.tsx's local constants, promoted to one shared module
-export const S = {xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32} as const // 4pt grid
-export const R = {xs: 2, sm: 6, md: 10, lg: 14, xl: 16, full: 9999} as const // radius
+export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as const // 4pt grid
+export const R = { xs: 2, sm: 6, md: 10, lg: 14, xl: 16, full: 9999 } as const // radius
 
-export const T = { // type styles
-  page: {fontSize: 24, lineHeight: 30, fontWeight: '600'},
-  section: {fontSize: 16, lineHeight: 22, fontWeight: '500'},
-  body: {fontSize: 15, lineHeight: 22},
-  caption: {fontSize: 12, lineHeight: 16},
-  label: {fontSize: 12, lineHeight: 16, letterSpacing: 0.6},
-  badge: {fontSize: 11, lineHeight: 15, fontWeight: '500'},
+export const T = {
+  // type styles
+  page: { fontSize: 24, lineHeight: 30, fontWeight: '600' },
+  section: { fontSize: 16, lineHeight: 22, fontWeight: '500' },
+  body: { fontSize: 15, lineHeight: 22 },
+  caption: { fontSize: 12, lineHeight: 16 },
+  label: { fontSize: 12, lineHeight: 16, letterSpacing: 0.6 },
+  badge: { fontSize: 11, lineHeight: 15, fontWeight: '500' },
 } as const
 ```
 
@@ -474,31 +493,31 @@ export const T = { // type styles
 
 ## Forbidden Patterns
 
-| Never | Use Instead |
-|-------|-------------|
-| `#hex` colors | `rgb(var(--token))` or Tailwind classes |
-| `text-gray-500` | `text-muted-foreground` |
-| `bg-white` | `bg-card` |
-| `border-gray-200` | `border-border` |
-| `text-lg` in body | `text-sm` or `text-base` |
-| `px-8 py-6` on page | `sl-page` class |
-| Inline `style={{}}` | Tailwind classes |
-| `console.log` in production | Remove before commit |
-| Custom color variables | Use existing tokens |
-| New font families | Use Outfit or JetBrains Mono |
-| `rounded-full` on cards | Use `rounded` or `rounded-lg` |
-| Animations without motion check | Add `motion-reduce:` variants |
-| Stock Tailwind palette (`text-green-500`, `bg-red-400`, `border-blue-500`, `text-indigo-600`) | Semantic tokens (`text-success`, `bg-destructive`, `border-border`, `text-primary`) |
-| Hex in chart series / progress bars (`#6366f1`, `#22c55e`) | `var(--chart-N)` / `bg-success` / `bg-warning` / `bg-destructive` |
-| Loud AI-default hero gradients (vivid purple→indigo at full opacity) | Token-tinted ambient washes only (below) |
-| "Actions" card in the page body | `PageContainer headerRight` |
-| Five identical stat cards (`Card` + `text-2xl`) | `KpiGrid` + `StatCard` |
-| Stat numbers at `text-2xl` in body | `StatCard` value (owns its own scale) |
-| Live/status conveyed as raw text + `bg-green-400` dot | `StatusDot` (`tone="success" pulse`) |
-| Secondary controls stacked as cards | `FoldSection` (collapsible) |
-| A row/stack of more than two flat cards with no hierarchy | `SectionHeader`, `KpiGrid`, or rethink the layout |
-| Chat composer controls inline beside the text field | Two-row composer (**Chat Composer / Chat Screen**) |
-| Raw spacing/radius/fontSize literals in RN components (`paddingVertical: 7`, `borderRadius: 9`, `fontSize: 13`) | Scales from `src/theme/scales.ts` (**Mobile (React Native / Tamagui)** section) |
+| Never                                                                                                           | Use Instead                                                                         |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `#hex` colors                                                                                                   | `rgb(var(--token))` or Tailwind classes                                             |
+| `text-gray-500`                                                                                                 | `text-muted-foreground`                                                             |
+| `bg-white`                                                                                                      | `bg-card`                                                                           |
+| `border-gray-200`                                                                                               | `border-border`                                                                     |
+| `text-lg` in body                                                                                               | `text-sm` or `text-base`                                                            |
+| `px-8 py-6` on page                                                                                             | `sl-page` class                                                                     |
+| Inline `style={{}}`                                                                                             | Tailwind classes                                                                    |
+| `console.log` in production                                                                                     | Remove before commit                                                                |
+| Custom color variables                                                                                          | Use existing tokens                                                                 |
+| New font families                                                                                               | Use Outfit or JetBrains Mono                                                        |
+| `rounded-full` on cards                                                                                         | Use `rounded` or `rounded-lg`                                                       |
+| Animations without motion check                                                                                 | Add `motion-reduce:` variants                                                       |
+| Stock Tailwind palette (`text-green-500`, `bg-red-400`, `border-blue-500`, `text-indigo-600`)                   | Semantic tokens (`text-success`, `bg-destructive`, `border-border`, `text-primary`) |
+| Hex in chart series / progress bars (`#6366f1`, `#22c55e`)                                                      | `var(--chart-N)` / `bg-success` / `bg-warning` / `bg-destructive`                   |
+| Loud AI-default hero gradients (vivid purple→indigo at full opacity)                                            | Token-tinted ambient washes only (below)                                            |
+| "Actions" card in the page body                                                                                 | `PageContainer headerRight`                                                         |
+| Five identical stat cards (`Card` + `text-2xl`)                                                                 | `KpiGrid` + `StatCard`                                                              |
+| Stat numbers at `text-2xl` in body                                                                              | `StatCard` value (owns its own scale)                                               |
+| Live/status conveyed as raw text + `bg-green-400` dot                                                           | `StatusDot` (`tone="success" pulse`)                                                |
+| Secondary controls stacked as cards                                                                             | `FoldSection` (collapsible)                                                         |
+| A row/stack of more than two flat cards with no hierarchy                                                       | `SectionHeader`, `KpiGrid`, or rethink the layout                                   |
+| Chat composer controls inline beside the text field                                                             | Two-row composer (**Chat Composer / Chat Screen**)                                  |
+| Raw spacing/radius/fontSize literals in RN components (`paddingVertical: 7`, `borderRadius: 9`, `fontSize: 13`) | Scales from `src/theme/scales.ts` (**Mobile (React Native / Tamagui)** section)     |
 
 ## AI Agent Rules
 
@@ -547,8 +566,11 @@ grep -rn '#[0-9a-fA-F]\{3,8\}' apps/web/ --include='*.tsx' | grep -v '.test.\|st
 # Hex chart/list constants at top of a component (forbidden)
 grep -rn "': '#" apps/web/components apps/web/app --include='*.tsx' | grep -v '.test.'
 
-# Chat transcript must stay bubble-free (the log-entry primitive)
+# Chat transcript must stay bubble-free (MessageFrame — Direction B ruling)
 grep -rnE 'rounded-(br|bl)-md|chat-bubble' apps/web/features/chat/components/messages/ --include='*.tsx' | grep -v '.test.'   # must be zero
+
+# Chat messages must render through the shared MessageFrame (no hand-rolled chrome)
+grep -rLn 'MessageFrame' apps/web/features/chat/components/messages/MessageBubble.tsx apps/web/features/chat/components/messages/MessageContent.tsx apps/web/features/chat/components/MessageRenderer.tsx   # must print nothing
 
 # Planner must not pin hues (non-negotiable #1)
 grep -rn 'hsl(' apps/web/components/planner --include='*.tsx' | grep -v '.test.'   # must be zero

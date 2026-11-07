@@ -19,10 +19,22 @@ vi.mock('@/lib/auth', () => ({
   },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
-    selector({ addToast: vi.fn() }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+      selector({ addToast: vi.fn() }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/components/icons/NavIcons', () => ({
   IconPlus: (props: Record<string, unknown>) => <svg data-testid="icon-plus" {...props} />,
@@ -36,9 +48,37 @@ describe('ApiKeysPage', () => {
   const mockKeys = {
     data: {
       keys: [
-        { id: 'k1', name: 'Production Key', key_hash: 'sk-abc...xyz', scopes: ['*'], created_at: 1700000000, revoked: false, workspace_id: 'ws-1', user_id: 'u1' },
-        { id: 'k2', name: 'Dev Key', key_hash: 'sk-def...uvw', scopes: ['chat:send'], created_at: 1700100000, expires_at: 1700200000, revoked: false, workspace_id: 'ws-1', user_id: 'u1' },
-        { id: 'k3', name: 'Old Key', key_hash: 'sk-old...key', scopes: ['*'], created_at: 1699900000, revoked: true, workspace_id: 'ws-1', user_id: 'u1' },
+        {
+          id: 'k1',
+          name: 'Production Key',
+          key_hash: 'sk-abc...xyz',
+          scopes: ['*'],
+          created_at: 1700000000,
+          revoked: false,
+          workspace_id: 'ws-1',
+          user_id: 'u1',
+        },
+        {
+          id: 'k2',
+          name: 'Dev Key',
+          key_hash: 'sk-def...uvw',
+          scopes: ['chat:send'],
+          created_at: 1700100000,
+          expires_at: 1700200000,
+          revoked: false,
+          workspace_id: 'ws-1',
+          user_id: 'u1',
+        },
+        {
+          id: 'k3',
+          name: 'Old Key',
+          key_hash: 'sk-old...key',
+          scopes: ['*'],
+          created_at: 1699900000,
+          revoked: true,
+          workspace_id: 'ws-1',
+          user_id: 'u1',
+        },
       ],
       count: 3,
     },

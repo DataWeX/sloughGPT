@@ -1,11 +1,16 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge, Input } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, toIPA, type PhonemeLanguage } from '@/lib/phoneme-controller'
-import { useToastStore } from '@/lib/toast-store'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  toIPA,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 interface RhymeResult {
@@ -16,7 +21,7 @@ interface RhymeResult {
 }
 
 const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
-  'at': [
+  at: [
     { word: 'cat', phonemes: ['K', 'AE', 'T'] },
     { word: 'hat', phonemes: ['HH', 'AE', 'T'] },
     { word: 'bat', phonemes: ['B', 'AE', 'T'] },
@@ -28,7 +33,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'that', phonemes: ['DH', 'AE', 'T'] },
     { word: 'plat', phonemes: ['P', 'L', 'AE', 'T'] },
   ],
-  'et': [
+  et: [
     { word: 'bet', phonemes: ['B', 'EH', 'T'] },
     { word: 'get', phonemes: ['G', 'EH', 'T'] },
     { word: 'jet', phonemes: ['JH', 'EH', 'T'] },
@@ -40,7 +45,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'wet', phonemes: ['W', 'EH', 'T'] },
     { word: 'yet', phonemes: ['Y', 'EH', 'T'] },
   ],
-  'it': [
+  it: [
     { word: 'bit', phonemes: ['B', 'IH', 'T'] },
     { word: 'fit', phonemes: ['F', 'IH', 'T'] },
     { word: 'hit', phonemes: ['HH', 'IH', 'T'] },
@@ -52,7 +57,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'wit', phonemes: ['W', 'IH', 'T'] },
     { word: 'split', phonemes: ['S', 'P', 'L', 'IH', 'T'] },
   ],
-  'ot': [
+  ot: [
     { word: 'bot', phonemes: ['B', 'AO', 'T'] },
     { word: 'cot', phonemes: ['K', 'AO', 'T'] },
     { word: 'dot', phonemes: ['D', 'AO', 'T'] },
@@ -64,7 +69,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'pot', phonemes: ['P', 'AO', 'T'] },
     { word: 'shot', phonemes: ['SH', 'AO', 'T'] },
   ],
-  'ut': [
+  ut: [
     { word: 'but', phonemes: ['B', 'AH', 'T'] },
     { word: 'cut', phonemes: ['K', 'AH', 'T'] },
     { word: 'gut', phonemes: ['G', 'AH', 'T'] },
@@ -75,7 +80,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'shut', phonemes: ['SH', 'AH', 'T'] },
     { word: 'strut', phonemes: ['S', 'T', 'R', 'AH', 'T'] },
   ],
-  'ake': [
+  ake: [
     { word: 'bake', phonemes: ['B', 'EY', 'K'] },
     { word: 'cake', phonemes: ['K', 'EY', 'K'] },
     { word: 'fake', phonemes: ['F', 'EY', 'K'] },
@@ -87,7 +92,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'wake', phonemes: ['W', 'EY', 'K'] },
     { word: 'snake', phonemes: ['S', 'N', 'EY', 'K'] },
   ],
-  'ight': [
+  ight: [
     { word: 'bite', phonemes: ['B', 'AY', 'T'] },
     { word: 'kite', phonemes: ['K', 'AY', 'T'] },
     { word: 'light', phonemes: ['L', 'AY', 'T'] },
@@ -99,7 +104,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'white', phonemes: ['W', 'AY', 'T'] },
     { word: 'flight', phonemes: ['F', 'L', 'AY', 'T'] },
   ],
-  'eel': [
+  eel: [
     { word: 'feel', phonemes: ['F', 'IY', 'L'] },
     { word: 'heal', phonemes: ['HH', 'IY', 'L'] },
     { word: 'keel', phonemes: ['K', 'IY', 'L'] },
@@ -111,7 +116,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'wheel', phonemes: ['W', 'IY', 'L'] },
     { word: 'zeal', phonemes: ['Z', 'IY', 'L'] },
   ],
-  'an': [
+  an: [
     { word: 'ban', phonemes: ['B', 'AE', 'N'] },
     { word: 'can', phonemes: ['K', 'AE', 'N'] },
     { word: 'fan', phonemes: ['F', 'AE', 'N'] },
@@ -123,7 +128,7 @@ const RHYME_DATABASE: Record<string, { word: string; phonemes: string[] }[]> = {
     { word: 'plan', phonemes: ['P', 'L', 'AE', 'N'] },
     { word: 'scan', phonemes: ['S', 'K', 'AE', 'N'] },
   ],
-  'ore': [
+  ore: [
     { word: 'core', phonemes: ['K', 'AO', 'R'] },
     { word: 'door', phonemes: ['D', 'AO', 'R'] },
     { word: 'floor', phonemes: ['F', 'L', 'AO', 'R'] },
@@ -178,7 +183,7 @@ export default function RhymeFinder() {
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<RhymeResult[]>([])
   const [inputPhonemes, setInputPhonemes] = useState<string[]>([])
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   const handleSearch = useCallback(async () => {
     if (!word.trim()) return
@@ -203,27 +208,27 @@ export default function RhymeFinder() {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Rhyme Finder</span>
-          {results.length > 0 && (
-            <Badge variant="outline">{results.length} rhymes</Badge>
-          )}
+          {results.length > 0 && <Badge variant="outline">{results.length} rhymes</Badge>}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <Input
             value={word}
-            onChange={e => setWord(e.target.value)}
+            onChange={(e) => setWord(e.target.value)}
             placeholder="Enter a word to find rhymes..."
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             className="flex-1"
           />
-          <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
+          <Select value={language} onValueChange={(v) => setLanguage(v as PhonemeLanguage)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PHONEME_LANGUAGES.map(l => (
-                <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              {PHONEME_LANGUAGES.map((l) => (
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -240,7 +245,9 @@ export default function RhymeFinder() {
             <p className="text-sm text-muted-foreground mb-1">Phonemes for &quot;{word}&quot;:</p>
             <div className="flex flex-wrap gap-1">
               {inputPhonemes.map((p, i) => (
-                <Badge key={i} variant="outline">{p}</Badge>
+                <Badge key={i} variant="outline">
+                  {p}
+                </Badge>
               ))}
             </div>
           </div>
@@ -251,14 +258,13 @@ export default function RhymeFinder() {
             <p className="text-sm font-medium text-muted-foreground">Rhyming words:</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {results.map((result, i) => (
-                <div
-                  key={i}
-                  className="p-2 rounded-lg bg-muted/30 text-center"
-                >
+                <div key={i} className="p-2 rounded-lg bg-muted/30 text-center">
                   <p className="font-medium">{result.word}</p>
                   <div className="flex flex-wrap gap-1 justify-center mt-1">
                     {result.phonemes.map((p, j) => (
-                      <Badge key={j} variant="outline" className="text-xs">{p}</Badge>
+                      <Badge key={j} variant="outline" className="text-xs">
+                        {p}
+                      </Badge>
                     ))}
                   </div>
                   <Badge

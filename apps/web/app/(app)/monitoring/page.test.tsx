@@ -5,6 +5,7 @@ import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
+import { sessionController } from '@/lib/session-controller'
 
 const { mockDetailedHealth, mockUseLiveStatus } = vi.hoisted(() => ({
   mockDetailedHealth: {
@@ -171,6 +172,14 @@ vi.mock('@/lib/training-controller', () => ({
     getRecoveryStats: vi.fn().mockResolvedValue(null),
     getAutoTrainStatus: vi.fn().mockResolvedValue(null),
     getStatus: vi.fn().mockResolvedValue(null),
+  },
+}))
+
+vi.mock('@/lib/session-controller', () => ({
+  sessionController: {
+    getInspector: vi.fn(),
+    fetchMessages: vi.fn(),
+    regenerate: vi.fn(),
   },
 }))
 
@@ -660,6 +669,128 @@ describe('MonitoringPage — fetchAll failure handling', () => {
     await waitFor(() => {
       expect(screen.getByTestId('status-card')).toBeTruthy()
       expect(screen.getAllByText(/error/i).length).toBeGreaterThanOrEqual(1)
+    })
+  })
+})
+
+describe('MonitoringPage — session inspector compose (card 20261101_154058)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUseLiveStatus.connectionStatus = 'disconnected'
+    mockUseLiveStatus.health = null
+    // Earlier describes leave fetch mocks rejected — restore the happy path so
+    // `loaded` flips and the compose gate renders.
+    const sc = vi.mocked(systemController)
+    sc.getDetailedHealth.mockResolvedValue(mockDetailedHealth as never)
+    sc.getMetrics.mockResolvedValue({
+      cpu_percent: 45,
+      memory_percent: 62,
+      memory_used_gb: 8,
+      memory_total_gb: 16,
+    } as never)
+    sc.getInfo.mockResolvedValue({
+      platform: 'linux',
+      platform_release: '5.15',
+      platform_version: '#1 SMP',
+      architecture: 'x86_64',
+      processor: 'Intel',
+      cpu_count: 8,
+    } as never)
+    sc.getDisk.mockResolvedValue({
+      total_gb: 500,
+      used_gb: 275,
+      free_gb: 225,
+      percent: 55,
+    } as never)
+    sc.getExecutorStatus.mockResolvedValue({
+      initialized: true,
+      active_jobs: 0,
+      max_workers: 2,
+      total_tracked: 0,
+      jobs: [],
+    } as never)
+    sc.getProcessGuardStatus.mockResolvedValue(null as never)
+    sc.getInferencePoolStatus.mockResolvedValue(null as never)
+    vi.mocked(sessionController.getInspector).mockResolvedValue({
+      session: {
+        id: 'ctx_abc',
+        message_count: 2,
+        messages: [
+          { role: 'user', content: 'hello there' },
+          { role: 'assistant', content: 'hi back' },
+        ],
+      },
+      knowledge: { total_facts: 7, topics: ['ops'] },
+      traits: {},
+      modes: { personality: 'calm' },
+      feedback: { total: 3, thumbs_up: 2, thumbs_down: 1 },
+      workspace: {
+        working_memory: [],
+        semantic_keys: [],
+        episodic_count: 0,
+        sensory_buffer_size: 0,
+        system_prompt: '',
+      },
+      elapsed_ms: 12,
+    } as never)
+    vi.mocked(sessionController.fetchMessages).mockResolvedValue([
+      { role: 'user', content: 'hello there' },
+      { role: 'assistant', content: 'hi back' },
+    ] as never)
+  })
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('shows the load-session input without fetching on mount', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Enter session ID...')).toBeTruthy()
+    })
+    expect(sessionController.getInspector).not.toHaveBeenCalled()
+    expect(sessionController.fetchMessages).not.toHaveBeenCalled()
+  })
+
+  it('inspect loads inspector stats and messages', async () => {
+    render(<MonitoringPage />)
+    const input = await screen.findByPlaceholderText('Enter session ID...')
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'ctx_abc' } })
+    })
+    const inspectBtn = screen.getByRole('button', { name: /inspect/i })
+    await act(async () => {
+      fireEvent.click(inspectBtn)
+    })
+    await waitFor(() => {
+      expect(sessionController.getInspector).toHaveBeenCalledWith('ctx_abc')
+      expect(sessionController.fetchMessages).toHaveBeenCalledWith('ctx_abc')
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Knowledge Facts')).toBeTruthy()
+      expect(screen.getByText('7')).toBeTruthy()
+      expect(screen.getByText('hello there')).toBeTruthy()
+      expect(screen.getByText('hi back')).toBeTruthy()
+    })
+  })
+
+  it('inspect failure surfaces an error and shows no stats', async () => {
+    const { extractErrorMessage } = await import('@/lib/error-utils')
+    vi.mocked(extractErrorMessage).mockReturnValue('no such session')
+    vi.mocked(sessionController.getInspector).mockRejectedValue(new Error('no such session'))
+    render(<MonitoringPage />)
+    const input = await screen.findByPlaceholderText('Enter session ID...')
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'ctx_missing' } })
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /inspect/i }))
+    })
+    await waitFor(() => {
+      expect(sessionController.getInspector).toHaveBeenCalledWith('ctx_missing')
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('Knowledge Facts')).toBeNull()
+      expect(screen.getByText(/no such session/i)).toBeTruthy()
     })
   })
 })

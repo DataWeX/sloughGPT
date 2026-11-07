@@ -1,11 +1,11 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useRef } from 'react'
 import { Card, CardContent, Button } from '@sloughgpt/strui'
 import { chatController } from '@/lib/chat-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 interface QuickActionsProps {
   loading: boolean
@@ -28,7 +28,7 @@ export function QuickActions({
   knowledgeCount,
   setKnowledgeCount,
 }: QuickActionsProps) {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [streaming, setStreaming] = useState(false)
   const streamingRef = useRef(false)
 

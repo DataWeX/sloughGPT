@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.session import SessionRouter  # noqa: E402
+from routers.system import SessionRouter  # noqa: E402
 
 
 def _app(sr: SessionRouter) -> FastAPI:

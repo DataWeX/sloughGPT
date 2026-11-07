@@ -4,9 +4,9 @@
 // page-decomposition refactor: all state, fetching, live-event folding, and
 // action handlers live here — the page and its components stay presentational.
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
 import {
@@ -21,7 +21,7 @@ import {
 } from './dashboard-data'
 
 export function useConsciousnessDashboard() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
   const [loading, setLoading] = useState(true)
   const [episodes, setEpisodes] = useState<Episode[]>([])

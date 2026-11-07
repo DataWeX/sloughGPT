@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
 from apps.api.server.routers.inference import _instance as _inference_router
-from apps.api.server.routers.session import router as session_router
+from apps.api.server.routers.system import router as session_router
 
 MESSAGES_WITH_IDS = [
     {"id": "s1:0:u", "role": "user", "content": "question zero"},

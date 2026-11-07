@@ -33,6 +33,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
@@ -41,6 +43,28 @@ from .state import ShellState
 
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("slo.shell.repl")
+
+
+class _BgJob:
+    """Background-job handle over an engine process (routing kind: process).
+
+    Keeps the ``threading.Thread`` surface (``is_alive``/``join``) that
+    ``_cmd_bg``/``_cmd_fg``/``_cmd_wait`` consume, so job bookkeeping is
+    unchanged while the work itself runs on the shared pugqeep engine
+    instead of a raw thread at the call site.
+    """
+
+    __slots__ = ("_engine", "_proc")
+
+    def __init__(self, engine: Any, proc: Any) -> None:
+        self._engine = engine
+        self._proc = proc
+
+    def is_alive(self) -> bool:
+        return not self._proc.is_done
+
+    def join(self, timeout: float | None = None) -> None:
+        self._engine.wait_for(self._proc.id, timeout=timeout)
 
 
 # ── Optional cmds extension — dynamic load ─────────────────────────────────
@@ -335,7 +359,9 @@ class ShellREPL(LinuxCommandsMixin):
             except (OSError, ValueError):
                 use_tui = False
         self._use_tui = use_tui
-        self._bg_threads: dict[int, threading.Thread] = {}
+        # _BgJob handles (engine-supervised); tests may inject any
+        # Thread-shaped object with is_alive()/join().
+        self._bg_threads: dict[int, Any] = {}
         self._next_bg_id = 1
         self._piped_input: str = ""
         self._aborted = False
@@ -1587,9 +1613,9 @@ class ShellREPL(LinuxCommandsMixin):
             except Exception as e:
                 self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
-        t.start()
-        self._bg_threads[bg_id] = t
+        engine = get_engine()
+        proc = engine.spawn(_run, name=f"shell-bg-{bg_id}")
+        self._bg_threads[bg_id] = _BgJob(engine, proc)
         self._print(f"  [bg-{bg_id}] {raw}")
 
     def _execute_background_tuples(self, commands: list) -> None:
@@ -1603,9 +1629,9 @@ class ShellREPL(LinuxCommandsMixin):
             except Exception as e:
                 self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
-        t.start()
-        self._bg_threads[bg_id] = t
+        engine = get_engine()
+        proc = engine.spawn(_run, name=f"shell-bg-{bg_id}")
+        self._bg_threads[bg_id] = _BgJob(engine, proc)
         cmds_str = " | ".join(c[0] for c in commands)
         self._print(f"  [bg-{bg_id}] {cmds_str}")
 
@@ -2413,8 +2439,6 @@ Examples:
                 self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
         try:
-            import threading
-
             from apps.cli.src.utils.progress import ProgressBar
             from domain.infrastructure._internal.conversion_tracker import get_tracker
 
@@ -2424,12 +2448,14 @@ Examples:
             def _load():
                 result_holder[0] = self.cmds.load_model(model_name)
 
-            t = threading.Thread(target=_load, daemon=True)
-            t.start()
+            # Stage 3B: engine process, not a raw thread — is_done/join keep
+            # the progress-poll contract the bar consumes.
+            engine = get_engine()
+            proc = engine.spawn(_load, name="repl-load")
 
             bar = ProgressBar(total=100, desc=f"Loading {model_name}", width=30, show_eta=True)
 
-            while t.is_alive():
+            while not proc.is_done:
                 status = tracker.get(model_name)
                 if status:
                     pct = int(status["progress"] * 100)
@@ -2448,7 +2474,7 @@ Examples:
 
                 time.sleep(0.15)
 
-            t.join()
+            engine.wait_for(proc.id)
             bar.finish()
             _print_result(result_holder[0])
 
@@ -4692,7 +4718,9 @@ nl: db 10
                 self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
                 self._print(f"    {'count':15s} Count 0 to 9")
                 self._print(f"    {'counter':15s} Count 0 to 4")
-                self._print(f"    {'life':15s} Conway's Game of Life (60x20, validated lives prompt)")
+                self._print(
+                    f"    {'life':15s} Conway's Game of Life (60x20, validated lives prompt)"
+                )
                 self._last_exit_code = 0
                 return
             else:

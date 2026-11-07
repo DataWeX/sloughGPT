@@ -1,4 +1,4 @@
-"""Tests for the registry API router (routers/registry.py).
+"""Tests for the registry API router (routers/models.py).
 
 Covers: list_models, get_model (found/not-found), get_best_model, get_registry_stats.
 """
@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.registry import RegistryRouter  # noqa: E402
+from routers.models import RegistryRouter  # noqa: E402
 
 
 def _mock_registry(**overrides) -> MagicMock:
@@ -45,7 +45,7 @@ def _app(rr: RegistryRouter) -> FastAPI:
 
 
 class TestListModels:
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_list_models(self, mock_get):
         mock_get.return_value = _mock_registry()
         rr = RegistryRouter()
@@ -56,7 +56,7 @@ class TestListModels:
         assert data["count"] == 2
         assert len(data["models"]) == 2
 
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_list_models_empty(self, mock_get):
         reg = _mock_registry()
         reg.list_models.return_value = []
@@ -72,7 +72,7 @@ class TestListModels:
         assert resp.status_code == 200
         assert resp.json()["data"]["count"] == 0
 
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_list_models_has_model_ids(self, mock_get):
         mock_get.return_value = _mock_registry()
         rr = RegistryRouter()
@@ -85,7 +85,7 @@ class TestListModels:
 
 
 class TestGetModel:
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_model_found(self, mock_get):
         mock_get.return_value = _mock_registry()
         rr = RegistryRouter()
@@ -94,7 +94,7 @@ class TestGetModel:
         assert resp.status_code == 200
         assert resp.json()["data"]["model_id"] == "gpt2"
 
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_model_not_found(self, mock_get):
         mock_get.return_value = _mock_registry()
         rr = RegistryRouter()
@@ -102,7 +102,7 @@ class TestGetModel:
         resp = client.get("/registry/models/nonexistent")
         assert resp.status_code == 404
 
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_model_has_status(self, mock_get):
         mock_get.return_value = _mock_registry()
         rr = RegistryRouter()
@@ -112,7 +112,7 @@ class TestGetModel:
 
 
 class TestBestAndStats:
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_best_model(self, mock_get):
         mock_get.return_value = _mock_registry()
         rr = RegistryRouter()
@@ -121,7 +121,7 @@ class TestBestAndStats:
         assert resp.status_code == 200
         assert "total_models" in resp.json()["data"]
 
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_stats(self, mock_get):
         mock_get.return_value = _mock_registry()
         rr = RegistryRouter()
@@ -132,7 +132,7 @@ class TestBestAndStats:
         assert data["total_models"] == 2
         assert data["loaded_models"] == 1
 
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_stats_zero_models(self, mock_get):
         mock_get.return_value = _mock_registry(total_models=0, loaded_models=0, failed_models=0)
         rr = RegistryRouter()
@@ -142,7 +142,7 @@ class TestBestAndStats:
         assert data["total_models"] == 0
         assert data["loaded_models"] == 0
 
-    @patch("routers.registry.RegistryRouter._get_registry")
+    @patch("routers.models.RegistryRouter._get_registry")
     def test_best_includes_health(self, mock_get):
         mock_get.return_value = _mock_registry()
         rr = RegistryRouter()

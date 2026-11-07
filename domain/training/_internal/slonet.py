@@ -5200,6 +5200,12 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
         json.dumps(_sanitize(metadata), indent=2),
     )
 
+    # Provenance sidecar — records which dataset/model produced this file so
+    # lineage() can walk it. Best-effort: a stamp failure never breaks a save.
+    from domain.infrastructure._internal.artifact_registry import stamp_export
+
+    stamp_export(path, "model", metadata)
+
     return path
 
 

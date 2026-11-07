@@ -10,10 +10,22 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 
 const addToast = vi.fn()
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: typeof addToast }) => unknown) =>
-    selector({ addToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (selector: (s: { addToast: typeof addToast }) => unknown) =>
+      selector({ addToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 const liveState = {
   isLive: false,

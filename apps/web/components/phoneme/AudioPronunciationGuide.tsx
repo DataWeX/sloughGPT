@@ -1,22 +1,29 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconSpeaker } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
-import { useToastStore } from '@/lib/toast-store'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 
 interface AudioPronunciationGuideProps {
   word?: string
   lang?: PhonemeLanguage
 }
 
-export default function AudioPronunciationGuide({ word = 'hello', lang = 'en' }: AudioPronunciationGuideProps) {
+export default function AudioPronunciationGuide({
+  word = 'hello',
+  lang = 'en',
+}: AudioPronunciationGuideProps) {
   const [loading, setLoading] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   const handleGenerate = useCallback(async () => {
     if (!word.trim()) return
@@ -64,7 +71,9 @@ export default function AudioPronunciationGuide({ word = 'hello', lang = 'en' }:
         <CardTitle className="flex items-center justify-between">
           <span>Audio Pronunciation</span>
           {audioUrl && (
-            <Badge variant="default" className="bg-success">Ready</Badge>
+            <Badge variant="default" className="bg-success">
+              Ready
+            </Badge>
           )}
         </CardTitle>
       </CardHeader>
@@ -72,7 +81,7 @@ export default function AudioPronunciationGuide({ word = 'hello', lang = 'en' }:
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">Word:</span>
           <span className="font-medium">{word}</span>
-          <Badge variant="outline">{PHONEME_LANGUAGES.find(l => l.value === lang)?.label}</Badge>
+          <Badge variant="outline">{PHONEME_LANGUAGES.find((l) => l.value === lang)?.label}</Badge>
         </div>
 
         <div className="flex gap-3">

@@ -3,7 +3,7 @@
 #                  + board chain guard (card 20261029).
 #
 # GUARD 1 — format parity. CI (.github/workflows/ci_cd.yml) runs:
-#     ruff format --check packages/core-py/ apps/api/server/   (ruff==0.16.8)
+#     ruff format --check apps/api/server/   (ruff==0.16.8)
 # Parallel lanes kept landing Python that violated that check, re-red-ing
 # main's lint gate until whichever lane merged next absorbed a format-only
 # fix. This hook runs the SAME verdict locally at push time.
@@ -51,7 +51,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   if git diff --name-only "$base" "$local_sha" -- \
-       'packages/core-py/**/*.py' 'apps/api/server/**/*.py' 2>/dev/null | grep -q .; then
+       'apps/api/server/**/*.py' 2>/dev/null | grep -q .; then
     changed_py=1
   fi
 
@@ -74,7 +74,7 @@ if [ "$changed_py" -eq 0 ]; then
 fi
 
 if ! out=$("$py" -m ruff format --check \
-        packages/core-py/ apps/api/server/ --exclude '__pycache__' 2>&1); then
+        apps/api/server/ --exclude '__pycache__' 2>&1); then
   echo "pre-push: BLOCKED — Python outside the CI format pin (ruff 0.16.8):" >&2
   echo "$out" | grep -v "^$" | head -20 >&2
   echo >&2

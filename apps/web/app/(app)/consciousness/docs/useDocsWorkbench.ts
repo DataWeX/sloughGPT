@@ -7,15 +7,15 @@
  * and the request runner (authFetch, timing, JSON formatting, scroll-into-
  * view). The sidebar and endpoint list own render.
  */
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef } from 'react'
-import { useToastStore } from '@/lib/toast-store'
 import { authFetch } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import type { Endpoint, Category } from './docs-endpoints'
 
 export function useDocsWorkbench() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [activeCategory, setActiveCategory] = useState<Category>('core')
   const [responses, setResponses] = useState<

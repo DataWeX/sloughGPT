@@ -41,7 +41,6 @@
     "app/(app)/knowledge/[id]/page.tsx",
     "app/(app)/knowledge/page.tsx",
     "app/(app)/magazine/page.tsx",
-    "app/(app)/model/[id]/page.tsx",
     "app/(app)/models/page.tsx",
     "app/(app)/monitoring/page.tsx",
     "app/(app)/multimodal/page.tsx",

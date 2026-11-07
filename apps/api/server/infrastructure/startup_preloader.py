@@ -137,15 +137,13 @@ def _run_preload(modules: list[str], delay: float) -> None:
 def preload_common_modules(
     modules: list[str] | None = None,
     delay: float = 0.0,
-    daemon: bool = True,
 ) -> None:
-    """Start preloading common modules in a background thread.
+    """Start preloading common modules in the background (engine-supervised).
 
     Args:
         modules: List of module names to preload. Defaults to DEFAULT_PRELOAD_MODULES.
         delay: Seconds to wait before starting preload. Useful for avoiding
                contention with critical startup paths.
-        daemon: Whether the preload thread should be a daemon thread.
     """
     global _status
 
@@ -160,13 +158,12 @@ def preload_common_modules(
         )
 
     target_modules = modules or DEFAULT_PRELOAD_MODULES
-    thread = threading.Thread(
-        target=_run_preload,
-        args=(target_modules, delay),
-        daemon=daemon,
-        name="startup-preloader",
-    )
-    thread.start()
+    # Process kind (docs/plans/2026-09-20-execution-consolidation.md):
+    # engine spawn is never dropped, unlike a bounded FAF submit — a dropped
+    # preload would leave _status.running=True forever.
+    from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+    get_engine().spawn(_run_preload, target_modules, delay, name="startup-preloader")
     logger.info("Started preloading %d modules (delay=%.1fs)", len(target_modules), delay)
 
 

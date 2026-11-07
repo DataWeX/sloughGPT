@@ -1,6 +1,6 @@
 ---
 id: 20261104_090736_npu-unify-one-device-two-seams
-status: in_progress
+status: done
 board: 20261104_090736_npu-unify-one-device-two-seams
 title: "Unify the two NPUDevice classes into one device on both seams + fix boot shadowing, CLI crash, .npy arg swap; validate with real Qwen inference through the VM device path"
 tags: [shell, npu, devices, vm, refactor, bugs]

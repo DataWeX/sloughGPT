@@ -1,5 +1,7 @@
 """Meaningful tests for ModelHealthMonitor — get_trend, detect_drift, get_stats, history persistence."""
 
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -137,3 +139,64 @@ class TestModelHealthMonitor:
         snap = HealthSnapshot(timestamp=1.0, perplexity=10.0, loss=2.3, num_sentences=15)
         assert snap.perplexity == 10.0
         assert snap.num_sentences == 15
+
+
+class TestStartAutoMonitoringProcess:
+    """process-kind migration: the monitor loop runs as a pugqeep Process.
+
+    See docs/plans/2026-09-20-execution-consolidation.md (stage 3A).
+    """
+
+    def test_returns_process_on_shared_engine(self, tmp_path, monkeypatch):
+        from domain.infrastructure._internal.pugqeep.engine import Process, ProcessStatus
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        monitor = ModelHealthMonitor(db_path=str(tmp_path / "health.json"))
+        monkeypatch.setattr(monitor, "run_benchmark", lambda: None)
+        proc = monitor.start_auto_monitoring(interval_seconds=3600)
+        try:
+            assert isinstance(proc, Process)
+            assert proc.name == "health-monitor"
+            assert proc in get_engine().list_processes()
+            deadline = time.time() + 5.0
+            while proc.status != ProcessStatus.RUNNING and time.time() < deadline:
+                time.sleep(0.01)
+            assert proc.status == ProcessStatus.RUNNING
+        finally:
+            proc.cancel()
+
+    def test_cancel_releases_loop(self, tmp_path, monkeypatch):
+        monitor = ModelHealthMonitor(db_path=str(tmp_path / "health.json"))
+        monkeypatch.setattr(monitor, "run_benchmark", lambda: None)
+        proc = monitor.start_auto_monitoring(interval_seconds=3600)
+        exited = threading.Event()
+        # Wait until a worker actually holds the loop: a proc cancelled
+        # before dispatch is never executed (terminal state is honored),
+        # so on_complete only exists for the release path this test pins.
+        from domain.infrastructure._internal.pugqeep.engine import ProcessStatus
+
+        deadline = time.time() + 5.0
+        while proc.status != ProcessStatus.RUNNING and time.time() < deadline:
+            time.sleep(0.01)
+        assert proc.status == ProcessStatus.RUNNING
+        # Tree._execute fires on_complete when the loop fn returns — i.e.
+        # the cancel hook released the worker holding the forever-loop.
+        proc.on_complete(lambda _p: exited.set())
+        proc.cancel()
+        assert exited.wait(5.0), "monitor loop did not exit after cancel"
+
+    def test_get_engine_is_singleton_with_default_tree(self):
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        e1 = get_engine()
+        assert get_engine() is e1
+        assert "default" in e1.list_trees()
+
+    def test_get_engine_recreates_stopped_engine(self):
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        e1 = get_engine()
+        e1.stop()
+        e2 = get_engine()
+        assert e2 is not e1
+        assert e2._running

@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.session import router
+from apps.api.server.routers.system import router
 
 
 def _make_app():

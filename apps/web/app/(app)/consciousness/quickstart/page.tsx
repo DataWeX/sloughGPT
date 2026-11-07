@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
@@ -13,7 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 
@@ -71,7 +71,7 @@ const LINKS = [
 
 export default function ConsciousnessQuickstartPage() {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [progress, setProgress] = useState<Progress>(DEFAULT_PROGRESS)
   const [enabling, setEnabling] = useState(false)

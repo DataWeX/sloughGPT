@@ -1,10 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { Button } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
-import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
 import { useBootstrap } from '@/contexts/BootstrapContext'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -12,7 +12,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 export function ConsciousnessQuickActions() {
   const router = useRouter()
   const { t } = useLocale()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [result, setResult] = useState<{ action: string; data: any } | null>(null)

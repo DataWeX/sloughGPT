@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useRef, memo } from 'react'
 import {
   Dialog,
@@ -10,7 +11,6 @@ import {
   DialogOverlay,
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 
 interface NoteDialogProps {
   open: boolean
@@ -29,7 +29,7 @@ export const NoteDialog = memo(function NoteDialog({
 }: NoteDialogProps) {
   const [draft, setDraft] = useState(note)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   useEffect(() => {
     setDraft(note)

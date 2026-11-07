@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useMemo, useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@sloughgpt/strui'
 import {
@@ -9,7 +10,6 @@ import {
 } from '@/lib/phoneme-controller'
 import { toIPA } from '@/lib/phoneme-controller'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 interface ComparisonResult {
@@ -30,7 +30,7 @@ export default function PronunciationComparison() {
   const [word2, setWord2] = useState('')
   const [result, setResult] = useState<ComparisonResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const compare = async () => {
     if (!word1.trim() || !word2.trim()) return

@@ -12,9 +12,9 @@
  * Extracted from app/(app)/consciousness/dashboard/page.tsx (874 lines) to keep
  * that page a composition root.
  */
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
 
@@ -51,7 +51,7 @@ export interface EvalReport {
 }
 
 export function useConsciousnessDashboard() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
 
   const [loading, setLoading] = useState(true)

@@ -37,8 +37,8 @@ from .codecs import BlockQ4Codec, BlockQ8Codec, CodecRegistry, PointCodec, codec
 from .compressor import PointCompressor
 from .config import CompressorConfig, LibraryConfig, PointConfig, QueueConfig, TreeConfig
 from .dedup import PointDeduplicator, PointLibrarySync
-from .engine import Engine as Engine
 from .engine import (
+    CommandProcess,
     EngineMetrics,
     GuardTree,
     ProcessGroup,
@@ -46,6 +46,7 @@ from .engine import (
     ResultCache,
     SubprocessProcess,
 )
+from .engine import Engine as Engine
 from .engine import Process as Process
 from .facade import PGQ
 from .generic import (
@@ -145,6 +146,7 @@ __all__ = [
     "Engine",
     "ProcessGroup",
     "SubprocessProcess",
+    "CommandProcess",
     "ProcessMonitor",
     "GuardTree",
     "EngineMetrics",

@@ -46,7 +46,11 @@ class CyclesDevice(Device):
     """VM device that wraps the Cycles path tracer."""
 
     def __init__(
-        self, width: int = 160, height: int = 120, samples: int = 16, arena: TensorArena | None = None
+        self,
+        width: int = 160,
+        height: int = 120,
+        samples: int = 16,
+        arena: TensorArena | None = None,
     ):
         self._scene = Scene()
         self._width = width
@@ -57,23 +61,26 @@ class CyclesDevice(Device):
         self._last_state: dict[str, np.ndarray] | None = None
         self._arena: TensorArena = arena if arena is not None else TensorArena()
 
-        self._ops = OpTable("CyclesDevice", {
-            "render": self._render,
-            "encode_png": self._encode_png,
-            "free_slot": self._free_slot,
-            "state_tensors": self._state_tensors,
-            "add_sphere": self._add_sphere,
-            "add_cube": self._add_cube,
-            "add_plane": self._add_plane,
-            "add_light": self._add_light,
-            "set_camera": self._set_camera,
-            "set_material": self._set_material,
-            "set_background": self._set_background,
-            "info": self.info,
-            "clear": self._clear,
-            "set_samples": self._set_samples,
-            "set_resolution": self._set_resolution,
-        })
+        self._ops = OpTable(
+            "CyclesDevice",
+            {
+                "render": self._render,
+                "encode_png": self._encode_png,
+                "free_slot": self._free_slot,
+                "state_tensors": self._state_tensors,
+                "add_sphere": self._add_sphere,
+                "add_cube": self._add_cube,
+                "add_plane": self._add_plane,
+                "add_light": self._add_light,
+                "set_camera": self._set_camera,
+                "set_material": self._set_material,
+                "set_background": self._set_background,
+                "info": self.info,
+                "clear": self._clear,
+                "set_samples": self._set_samples,
+                "set_resolution": self._set_resolution,
+            },
+        )
 
     @property
     def arena(self) -> TensorArena:

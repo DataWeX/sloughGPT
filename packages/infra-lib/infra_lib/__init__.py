@@ -4,7 +4,6 @@ Infrastructure modules extracted from sloughGPT for reuse.
 
 Modules:
     cancel_manager — Track and cancel long-running operations
-    task_queue     — Async priority queue with pause/resume/cancel/dependencies
     server_state   — Thread-safe atomic state with listener notifications
 
 Note (card 44229b2a): ``task_queue`` is now a delegating shim over the
@@ -22,14 +21,6 @@ from .cancel_manager import (
     reset_cancel_manager,
 )
 from .server_state import AtomicRef, ServerState, get_server_state
-from .task_queue import (
-    InProcessTaskQueue,
-    Priority,
-    Task,
-    TaskQueue,
-    TaskStatus,
-    WorkerPool,
-)
 
 __all__ = [
     # cancel_manager
@@ -39,13 +30,6 @@ __all__ = [
     "Operation",
     "get_cancel_manager",
     "reset_cancel_manager",
-    # task_queue
-    "InProcessTaskQueue",
-    "Priority",
-    "Task",
-    "TaskQueue",
-    "TaskStatus",
-    "WorkerPool",
     # server_state
     "AtomicRef",
     "ServerState",

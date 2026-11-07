@@ -305,7 +305,6 @@ Be concise, accurate, and helpful."""
     def _auto_ingest(self) -> None:
         """Trigger repo auto-ingestion if vector store is empty."""
         import os
-        import threading
 
         provider = os.environ.get("MAN_VECTOR_STORE", "chromadb")
 
@@ -326,7 +325,13 @@ Be concise, accurate, and helpful."""
                     },
                 )
 
-        threading.Thread(target=_do, daemon=True).start()
+        # Process kind (routing table in docs/plans/2026-09-20-execution-
+        # consolidation.md): the one-shot trigger flag above means a dropped
+        # fire-and-forget submit would skip ingestion for the process
+        # lifetime — the engine never drops.
+        from .pugqeep.singleton import get_engine
+
+        get_engine().spawn(_do, name="context-auto-ingest")
 
     async def get_rag_context(self, query: str) -> str:
         """Get RAG context from vector store (legacy string projection)."""

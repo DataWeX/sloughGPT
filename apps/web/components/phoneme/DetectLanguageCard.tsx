@@ -1,16 +1,25 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge, Skeleton } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Input,
+  Button,
+  Badge,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES } from '@/lib/phoneme-controller'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 const SAMPLE_WORDS: Record<string, string[]> = {
   en: ['hello', 'world', 'please', 'thank you', 'good morning'],
   de: ['hallo', 'welt', 'bitte', 'danke', 'guten tag'],
-  fr: ['bonjour', 'monde', 'merci', 's\'il vous plait', 'bonsoir'],
+  fr: ['bonjour', 'monde', 'merci', "s'il vous plait", 'bonsoir'],
   es: ['hola', 'mundo', 'por favor', 'gracias', 'buenos dias'],
   it: ['ciao', 'mondo', 'per favore', 'grazie', 'buongiorno'],
   pt: ['ola', 'mundo', 'por favor', 'obrigado', 'bom dia'],
@@ -19,12 +28,19 @@ const SAMPLE_WORDS: Record<string, string[]> = {
 export default function DetectLanguageCard() {
   const [text, setText] = useState('hello world')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<{ text: string; language: string; supported_languages: string[] } | null>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const [result, setResult] = useState<{
+    text: string
+    language: string
+    supported_languages: string[]
+  } | null>(null)
+  const addToast = notify.toast
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const doDetect = useCallback(async (t: string) => {
-    if (!t.trim()) { setResult(null); return }
+    if (!t.trim()) {
+      setResult(null)
+      return
+    }
     setLoading(true)
     try {
       const res = await phonemeController.detectLanguage(t)
@@ -39,7 +55,9 @@ export default function DetectLanguageCard() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => doDetect(text), 400)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
   }, [text, doDetect])
 
   const handleDetect = useCallback(() => {
@@ -57,7 +75,7 @@ export default function DetectLanguageCard() {
     setText(word)
   }, [])
 
-  const langLabel = (code: string) => PHONEME_LANGUAGES.find(l => l.value === code)?.label ?? code
+  const langLabel = (code: string) => PHONEME_LANGUAGES.find((l) => l.value === code)?.label ?? code
 
   return (
     <Card>
@@ -68,9 +86,9 @@ export default function DetectLanguageCard() {
         <div className="flex flex-col sm:flex-row gap-3">
           <Input
             value={text}
-            onChange={e => setText(e.target.value)}
+            onChange={(e) => setText(e.target.value)}
             placeholder="Enter text to detect language..."
-            onKeyDown={e => e.key === 'Enter' && handleDetect()}
+            onKeyDown={(e) => e.key === 'Enter' && handleDetect()}
             className="flex-1"
           />
           <Button onClick={handleDetect} disabled={loading || !text.trim()}>
@@ -101,15 +119,19 @@ export default function DetectLanguageCard() {
           <div className="p-4 rounded-lg bg-muted/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-muted-foreground">Detected:</span>
-              <Badge variant="default" className="text-base">{langLabel(result.language)}</Badge>
+              <Badge variant="default" className="text-base">
+                {langLabel(result.language)}
+              </Badge>
               <span className="text-sm text-muted-foreground">({result.language})</span>
             </div>
 
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">Supported Languages:</p>
               <div className="flex flex-wrap gap-1">
-                {result.supported_languages.map(lang => (
-                  <Badge key={lang} variant="outline">{langLabel(lang)}</Badge>
+                {result.supported_languages.map((lang) => (
+                  <Badge key={lang} variant="outline">
+                    {langLabel(lang)}
+                  </Badge>
                 ))}
               </div>
             </div>
@@ -120,17 +142,19 @@ export default function DetectLanguageCard() {
           <p className="text-sm font-medium text-muted-foreground mb-2">Try a sample:</p>
           <div className="flex flex-wrap gap-2">
             {Object.entries(SAMPLE_WORDS).flatMap(([lang, words]) =>
-              words.slice(0, 2).map(word => (
+              words.slice(0, 2).map((word) => (
                 <Button
                   key={`${lang}-${word}`}
                   variant="secondary"
                   size="sm"
                   onClick={() => handleSample(lang, word)}
                 >
-                  <Badge variant="outline" className="mr-1">{lang.toUpperCase()}</Badge>
+                  <Badge variant="outline" className="mr-1">
+                    {lang.toUpperCase()}
+                  </Badge>
                   {word}
                 </Button>
-              ))
+              )),
             )}
           </div>
         </div>

@@ -633,13 +633,16 @@ class TestCmdDevWebPort:
             json.dumps({"scripts": {"dev": dev_script}}), encoding="utf-8"
         )
 
-        popen_calls = []
+        spawn_calls = []
 
-        def fake_popen(cmd, **kwargs):
-            popen_calls.append((list(cmd), kwargs))
+        def fake_spawn(argv, **kwargs):
+            spawn_calls.append((list(argv), kwargs))
             proc = MagicMock()
             proc.poll.return_value = None
             return proc
+
+        fake_engine = MagicMock()
+        fake_engine.spawn_command.side_effect = fake_spawn
 
         class FakeDashboard:
             def __init__(self, *a, **k):
@@ -649,7 +652,7 @@ class TestCmdDevWebPort:
                 return None
 
         with (
-            patch("commands.dev.subprocess.Popen", side_effect=fake_popen),
+            patch("commands.dev.get_engine", return_value=fake_engine),
             patch("commands.dev._repo_root", return_value=tmp_path),
             patch("commands.dev._read_stream"),
             patch("commands.dev._preflight_model_check"),
@@ -672,8 +675,8 @@ class TestCmdDevWebPort:
 
             mod.cmd_dev(args)
 
-        web_calls = [c for c in popen_calls if c[0] and c[0][0] in ("npm", "npx")]
-        assert web_calls, f"web subprocess never spawned: {popen_calls}"
+        web_calls = [c for c in spawn_calls if c[0] and c[0][0] in ("npm", "npx")]
+        assert web_calls, f"web subprocess never spawned: {spawn_calls}"
         cmd, kwargs = web_calls[0]
         assert cmd[-len(expected_tail) :] == expected_tail
         assert kwargs["env"]["PORT"] == "3999"
@@ -1034,9 +1037,15 @@ class TestApiOnlySignalHandling:
             nxt = part.find("\ndef ")
             body = part[: nxt if nxt != -1 else len(part)]
             reg = body.find("signal.signal(signal.SIGINT")
-            spawn = body.find("subprocess.Popen")
+            # Spawn seam: raw Popen, or engine.spawn_command after the
+            # process-kind migration — whichever site appears first is the
+            # first child spawn for this variant.
+            sites = [
+                i for i in (body.find("subprocess.Popen"), body.find("spawn_command")) if i != -1
+            ]
+            spawn = min(sites) if sites else -1
             assert reg != -1, f"{fn}: no SIGINT registration found"
-            assert spawn != -1, f"{fn}: no subprocess.Popen found"
+            assert spawn != -1, f"{fn}: no spawn site (Popen/spawn_command) found"
             assert reg < spawn, (
                 f"{fn}: SIGINT registered after spawn — an interrupt in the gap "
                 "orphan-leaks the children"

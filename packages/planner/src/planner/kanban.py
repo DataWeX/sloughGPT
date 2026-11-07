@@ -132,7 +132,7 @@ class Board:
     columns: list[ColumnDef] = field(
         default_factory=lambda: [
             ColumnDef(name="todo", wip_limit=0, order=0),
-            ColumnDef(name="in_progress", wip_limit=0, order=1),
+            ColumnDef(name="live", wip_limit=0, order=1),
             ColumnDef(name="review", wip_limit=0, order=2),
             ColumnDef(name="done", wip_limit=0, order=3),
         ]
@@ -163,7 +163,7 @@ class Board:
         else:
             columns = [
                 ColumnDef(name="todo", order=0),
-                ColumnDef(name="in_progress", order=1),
+                ColumnDef(name="live", order=1),
                 ColumnDef(name="review", order=2),
                 ColumnDef(name="done", order=3),
             ]

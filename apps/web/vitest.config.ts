@@ -34,7 +34,9 @@ const NODE_EXCLUDE = [
   'lib/protocol/useEndpoint.test.tsx',
 ]
 
-const JSDOM_EXCLUDE = ['app/(app)/model/[id]/ModelDetailPage.test.tsx']
+// No jsdom-project exclusions: the last entry (`model/[id]/ModelDetailPage.test.tsx`)
+// left with the /model/[id] route it tested (route-map card 20261101_154054).
+const JSDOM_EXCLUDE: string[] = []
 
 export default defineConfig({
   esbuild: {

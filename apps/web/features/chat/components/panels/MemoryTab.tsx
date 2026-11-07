@@ -1,12 +1,12 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import Link from '@/vite/next-compat/link'
 import { cn, Switch, Button, Spinner } from '@sloughgpt/strui'
 import { IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
 import { formatRelativeTime } from '@/lib/format-bytes'
-import { useToastStore } from '@/lib/toast-store'
 import { useChatMemory } from './useChatMemory'
 import { useMemoryData } from '@/hooks/useMemoryData'
 import { MemoryAddForm } from './MemoryAddForm'
@@ -15,7 +15,7 @@ import { MemoryEditForm } from './MemoryEditForm'
 const MAX_VISIBLE = 8
 
 export const MemoryTab = memo(function MemoryTab() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const {
     stats,
     items,

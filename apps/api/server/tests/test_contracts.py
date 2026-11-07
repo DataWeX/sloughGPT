@@ -522,3 +522,93 @@ def test_pilot_prefix_filter():
     resp = TestClient(app).get("/contracts", params={"prefix": "/nothing-matches"})
     assert resp.status_code == 200
     assert resp.json()["data"]["contracts"] == []
+
+
+# ── declaration-style ratchet: hand-built routes are frozen, not free ──
+#
+# The endpoint rule (AGENTS.md) says routes are projections of a descriptor.
+# The grandfathered backlog is declared once in handbuilt-routes-baseline.json;
+# this gate keeps the count from ever growing again. See
+# docs/TRANSPORT_PROJECTIONS.md.
+
+
+def _write_py(root: Path, rel: str, src: str) -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(src, encoding="utf-8")
+
+
+def test_scanner_counts_handbuilt_but_not_projected_declarations():
+    """Decorators and add_api_route are hand-built; create_router is the seam."""
+    src = """\
+from infrastructure.contract import create_router
+
+router = APIRouter()
+
+@router.get("/x")
+async def x(): ...
+
+def mount():
+    r.add_api_route("/y", handler, methods=["POST"])
+    create_router(spec, route, handler)
+    app.include_router(other)
+"""
+    labels = sorted(label for _, label in check_contract.find_handbuilt_declarations(src))
+    assert labels == sorted(["@router.get", "r.add_api_route"])
+
+
+def test_scan_scope_excludes_tests_and_projection_internals(tmp_path: Path):
+    """Test fixtures and create_router's own add_api_route are not the surface."""
+    handbuilt = '@router.get("/x")\nasync def x(): ...\n'
+    _write_py(tmp_path, "routers/a.py", handbuilt)
+    _write_py(tmp_path, "tests/test_a.py", handbuilt)
+    _write_py(tmp_path, "infrastructure/contract.py", 'r.add_api_route("/y", h)\n')
+    _write_py(tmp_path, "infrastructure/other.py", handbuilt)
+    _write_py(tmp_path, "routers/_generated.py", handbuilt)
+    sites = check_contract.scan_handbuilt(tmp_path)
+    assert set(sites) == {"routers/a.py", "infrastructure/other.py"}
+
+
+def test_new_handbuilt_route_beyond_baseline_is_a_violation():
+    sites = {"routers/new.py": [(3, "@router.get")]}
+    violations = check_contract.check_declaration_style(sites, {})
+    assert len(violations) == 1
+    assert "routers/new.py" in violations[0]
+    assert "create_router" in violations[0]  # tells the author the way out
+
+
+def test_grandfathered_counts_pass_quietly():
+    sites = {"routers/old.py": [(1, "@r.get"), (2, "@r.post")]}
+    assert check_contract.check_declaration_style(sites, {"routers/old.py": 2}) == []
+
+
+def test_one_extra_route_in_a_grandfathered_file_still_fails():
+    """The ratchet bites where the backlog lives — counts may never grow."""
+    sites = {"routers/old.py": [(1, "@r.get"), (2, "@r.post"), (9, "@r.delete")]}
+    violations = check_contract.check_declaration_style(sites, {"routers/old.py": 2})
+    assert len(violations) == 1
+    assert "routers/old.py" in violations[0]
+
+
+def test_shrunk_file_fails_until_the_baseline_entry_shrinks_with_it():
+    """A migration must show up as a reviewed baseline edit, not silently."""
+    sites = {"routers/old.py": [(1, "@r.get")]}
+    violations = check_contract.check_declaration_style(sites, {"routers/old.py": 3})
+    assert len(violations) == 1
+    assert "shrink" in violations[0]
+
+
+def test_leftover_baseline_entry_after_migration_fails():
+    violations = check_contract.check_declaration_style({}, {"routers/gone.py": 5})
+    assert len(violations) == 1
+    assert "routers/gone.py" in violations[0]
+    assert "remove" in violations[0]
+
+
+def test_committed_declaration_baseline_matches_the_tree():
+    """Integration: the real tree at rest must equal the committed baseline."""
+    sites = check_contract.scan_handbuilt(check_contract.SERVER_DIR)
+    stored = json.loads(
+        (check_contract.SERVER_DIR / "handbuilt-routes-baseline.json").read_text(encoding="utf-8")
+    )
+    assert check_contract.check_declaration_style(sites, stored["files"]) == []

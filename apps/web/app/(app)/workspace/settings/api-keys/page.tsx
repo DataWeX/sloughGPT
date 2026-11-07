@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
@@ -27,7 +28,6 @@ import {
 } from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconRefresh } from '@/components/icons/NavIcons'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface ApiKey {
@@ -51,7 +51,7 @@ interface CreateKeyResponse {
 }
 
 export default function ApiKeysPage() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)
@@ -119,8 +119,8 @@ export default function ApiKeysPage() {
     }
   }
 
-  const activeKeys = keys.filter(k => !k.revoked)
-  const revokedKeys = keys.filter(k => k.revoked)
+  const activeKeys = keys.filter((k) => !k.revoked)
+  const revokedKeys = keys.filter((k) => k.revoked)
 
   const copyKey = (key: string) => {
     navigator.clipboard.writeText(key)
@@ -144,20 +144,21 @@ export default function ApiKeysPage() {
       subtitle="Manage API keys for programmatic access"
       toolbar={<WorkspaceSectionTabs tabs={settingsTabs} ariaLabel="Workspace settings" />}
     >
-
       {newKey && (
         <Card className="mb-6 border-success/50 bg-success/5">
           <CardHeader>
             <CardTitle className="text-success">New API Key</CardTitle>
-            <CardDescription>
-              Copy this key now. It won&apos;t be shown again.
-            </CardDescription>
+            <CardDescription>Copy this key now. It won&apos;t be shown again.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
               <code className="flex-1 p-2 bg-muted rounded text-sm break-all">{newKey}</code>
-              <Button size="sm" onClick={() => copyKey(newKey)}>Copy</Button>
-              <Button size="sm" variant="ghost" onClick={() => setNewKey(null)}>Dismiss</Button>
+              <Button size="sm" onClick={() => copyKey(newKey)}>
+                Copy
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setNewKey(null)}>
+                Dismiss
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -179,10 +180,10 @@ export default function ApiKeysPage() {
           <div className="flex gap-2">
             <Input
               value={newName}
-              onChange={e => setNewName(e.target.value)}
+              onChange={(e) => setNewName(e.target.value)}
               placeholder="Key name"
               maxLength={100}
-              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             />
             <Button onClick={handleCreate} disabled={!newName.trim() || creating}>
               <IconPlus className="mr-2 h-4 w-4" />
@@ -202,8 +203,11 @@ export default function ApiKeysPage() {
             <p className="text-muted-foreground text-sm">No active API keys.</p>
           ) : (
             <div className="space-y-3">
-              {activeKeys.map(key => (
-                <div key={key.id} className="flex items-center justify-between p-3 border rounded-lg">
+              {activeKeys.map((key) => (
+                <div
+                  key={key.id}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">{key.name}</div>
                     <div className="text-xs text-muted-foreground">
@@ -216,9 +220,7 @@ export default function ApiKeysPage() {
                         </span>
                       )}
                       {key.scopes.length > 0 && key.scopes[0] !== '*' && (
-                        <span className="ml-1">
-                          · scopes: {key.scopes.join(', ')}
-                        </span>
+                        <span className="ml-1">· scopes: {key.scopes.join(', ')}</span>
                       )}
                     </div>
                   </div>
@@ -271,8 +273,11 @@ export default function ApiKeysPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {revokedKeys.map(key => (
-                <div key={key.id} className="flex items-center justify-between p-3 border rounded-lg opacity-60">
+              {revokedKeys.map((key) => (
+                <div
+                  key={key.id}
+                  className="flex items-center justify-between p-3 border rounded-lg opacity-60"
+                >
                   <div>
                     <span className="font-medium">{key.name}</span>
                     <span className="ml-2 text-xs text-muted-foreground">

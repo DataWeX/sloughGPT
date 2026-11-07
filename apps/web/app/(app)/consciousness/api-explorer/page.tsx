@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
@@ -13,7 +14,6 @@ import {
   CardTitle,
   Input,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { IconCode, IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
@@ -246,7 +246,7 @@ function generateId() {
 }
 
 export default function ConsciousnessApiExplorerPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
 
   const [selectedIdx, setSelectedIdx] = useState(0)

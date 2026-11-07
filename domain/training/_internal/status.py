@@ -42,11 +42,18 @@ class TrainingStage(Enum):
 class CompletionStatus(Enum):
     """Training completion status."""
 
-    IN_PROGRESS = "in_progress"
+    LIVE = "live"
     COMPLETED = "completed"
     FAILED = "failed"
     INTERRUPTED = "interrupted"
     NOT_STARTED = "not_started"
+
+
+# Read-compat for artifacts written before the in_progress -> live rename:
+# save_report pins enum values to disk, so old reports carry "in_progress",
+# which matches no member anymore. load_report maps the legacy value instead
+# of leaving a raw str (which would blow up later on ``.value``).
+_LEGACY_STATUS_VALUES = {"in_progress": "live"}
 
 
 @dataclass
@@ -112,7 +119,7 @@ class TrainingCompletionReport:
         return (
             self.completion_status
             in [
-                CompletionStatus.IN_PROGRESS,
+                CompletionStatus.LIVE,
                 CompletionStatus.INTERRUPTED,
             ]
             and self.checkpoint_path is not None
@@ -122,7 +129,7 @@ class TrainingCompletionReport:
         """Get human-readable progress summary."""
         if self.completion_status == CompletionStatus.COMPLETED:
             return f"Training complete! Final loss: {self.final_loss:.4f}"
-        elif self.completion_status == CompletionStatus.IN_PROGRESS:
+        elif self.completion_status == CompletionStatus.LIVE:
             return f"Training in progress: {self.completion_percentage:.1f}%"
         elif self.completion_status == CompletionStatus.INTERRUPTED:
             return f"Training interrupted at {self.completion_percentage:.1f}%. Can resume."
@@ -154,7 +161,7 @@ class TrainingStatusTracker:
         precision: str = "bf16",
     ):
         """Initialize training status."""
-        self.report.completion_status = CompletionStatus.IN_PROGRESS
+        self.report.completion_status = CompletionStatus.LIVE
         self.report.dataset = dataset
         self.report.batch_size = batch_size
         self.report.learning_rate = learning_rate
@@ -188,7 +195,7 @@ class TrainingStatusTracker:
         stage_status = stage_name_map.get(stage)
         if stage_status:
             stage_status.started_at = utc_now_iso()
-            stage_status.status = CompletionStatus.IN_PROGRESS
+            stage_status.status = CompletionStatus.LIVE
 
     def update_stage(
         self,
@@ -331,6 +338,7 @@ class TrainingStatusTracker:
             if isinstance(obj, list):
                 return [_coerce(v) for v in obj]
             if isinstance(obj, str):
+                obj = _LEGACY_STATUS_VALUES.get(obj, obj)
                 for enum_cls in (CompletionStatus, TrainingStage):
                     for member in enum_cls:
                         if member.value == obj:

@@ -11,9 +11,9 @@
  * them (format module / items list): both are pure and neither touches
  * state.
  */
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
-import { useToastStore } from '@/lib/toast-store'
 import {
   knowledgeController,
   type KnowledgeItem,
@@ -37,7 +37,7 @@ import { SEARCH_DEBOUNCE_MS } from './knowledge-format'
 
 export function useKnowledgeWorkbench() {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [items, setItems] = useState<KnowledgeItem[]>([])
   const [stats, setStats] = useState<KnowledgeStats | null>(null)
   const [topics, setTopics] = useState<TopicCount[]>([])

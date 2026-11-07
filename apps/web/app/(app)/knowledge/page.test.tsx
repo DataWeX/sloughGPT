@@ -3,14 +3,33 @@ import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-libra
 import React from 'react'
 
 const {
-  mockList, mockStats, mockTopics, mockSearch, mockAdd, mockDelete, mockUpdate,
-  mockBatchDelete, mockGetAdapterStatus, mockTrainAdapter, mockAddToast,
-  mockGetRAGStats, mockListRAGDocuments,
+  mockList,
+  mockStats,
+  mockTopics,
+  mockSearch,
+  mockAdd,
+  mockDelete,
+  mockUpdate,
+  mockBatchDelete,
+  mockGetAdapterStatus,
+  mockTrainAdapter,
+  mockAddToast,
+  mockGetRAGStats,
+  mockListRAGDocuments,
 } = vi.hoisted(() => ({
-  mockList: vi.fn(), mockStats: vi.fn(), mockTopics: vi.fn(), mockSearch: vi.fn(),
-  mockAdd: vi.fn(), mockDelete: vi.fn(), mockUpdate: vi.fn(), mockBatchDelete: vi.fn(),
-  mockGetAdapterStatus: vi.fn(), mockTrainAdapter: vi.fn(), mockAddToast: vi.fn(),
-  mockGetRAGStats: vi.fn(), mockListRAGDocuments: vi.fn(),
+  mockList: vi.fn(),
+  mockStats: vi.fn(),
+  mockTopics: vi.fn(),
+  mockSearch: vi.fn(),
+  mockAdd: vi.fn(),
+  mockDelete: vi.fn(),
+  mockUpdate: vi.fn(),
+  mockBatchDelete: vi.fn(),
+  mockGetAdapterStatus: vi.fn(),
+  mockTrainAdapter: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockGetRAGStats: vi.fn(),
+  mockListRAGDocuments: vi.fn(),
 }))
 
 vi.mock('@/lib/knowledge-controller', () => ({
@@ -47,9 +66,21 @@ vi.mock('@/vite/next-compat/navigation', () => ({
   usePathname: () => '/knowledge',
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 vi.mock('@/lib/download-utils', () => ({ downloadJson: vi.fn() }))
 vi.mock('@/lib/format-bytes', () => ({
@@ -729,7 +760,12 @@ describe('KnowledgePage — batch operations flow', () => {
 })
 
 describe('KnowledgePage — RAG sources panel paging', () => {
-  const doc = (source: string) => ({ metadata: { source }, chunk_size: 512, num_chunks: 1, added_at: 1 })
+  const doc = (source: string) => ({
+    metadata: { source },
+    chunk_size: 512,
+    num_chunks: 1,
+    added_at: 1,
+  })
   const ragStats = { total_documents: 5, total_chunks: 5, index_size: 10 }
 
   it('shows first page with count, appends on Load more, hides button when complete', async () => {
@@ -737,25 +773,39 @@ describe('KnowledgePage — RAG sources panel paging', () => {
     mockListRAGDocuments
       .mockResolvedValueOnce({
         documents: [doc('src-a'), doc('src-b')],
-        stats: ragStats, ready: true, total: 5, limit: 200, offset: 0,
+        stats: ragStats,
+        ready: true,
+        total: 5,
+        limit: 200,
+        offset: 0,
       })
       .mockResolvedValueOnce({
         documents: [doc('src-c'), doc('src-d'), doc('src-e')],
-        stats: ragStats, ready: true, total: 5, limit: 200, offset: 2,
+        stats: ragStats,
+        ready: true,
+        total: 5,
+        limit: 200,
+        offset: 2,
       })
 
     render(<KnowledgePage />)
     const sourcesBtn = await screen.findByRole('button', { name: 'Sources' })
     fireEvent.click(sourcesBtn)
 
-    await waitFor(() => { expect(screen.getByText('Showing 2 of 5')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Showing 2 of 5')).toBeTruthy()
+    })
     expect(screen.getByText('src-a')).toBeTruthy()
     expect(screen.queryByText('src-c')).toBeNull()
 
     const loadMore = screen.getByRole('button', { name: 'Load more' })
-    await act(async () => { fireEvent.click(loadMore) })
+    await act(async () => {
+      fireEvent.click(loadMore)
+    })
 
-    await waitFor(() => { expect(screen.getByText('Showing 5 of 5')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Showing 5 of 5')).toBeTruthy()
+    })
     expect(screen.getByText('src-c')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
   })

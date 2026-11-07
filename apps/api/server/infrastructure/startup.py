@@ -1512,6 +1512,8 @@ def _start_parent_preload(model_type: str, delay_s: float | None = None):
     """
     _delay = _PARENT_PRELOAD_DELAY_S if delay_s is None else delay_s
     global _parent_preload_timer
+    from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
     _shutting_down.clear()  # a fresh boot is not shutting down
     logger.info(
         "Parent preload: scheduling in %.0fs (avoid GIL starvation of uvicorn bind)",
@@ -1520,12 +1522,15 @@ def _start_parent_preload(model_type: str, delay_s: float | None = None):
     )
     timer = threading.Timer(
         _delay,
-        lambda: threading.Thread(
-            target=_preload_parent_weights,
-            args=(model_type,),
-            daemon=True,
+        # Stage 3B: the Timer stays as the delay scheduler (daemon, not a
+        # gated Thread site); the preload work itself becomes an engine
+        # process — spawn is never dropped, so the must-run preload can't
+        # silently vanish.
+        lambda: get_engine().spawn(
+            _preload_parent_weights,
+            model_type,
             name=f"parent-preload-{model_type.split('/')[-1]}",
-        ).start(),
+        ),
     )
     timer.daemon = True
     _parent_preload_timer = timer
@@ -2210,11 +2215,21 @@ def _start_inference_engine(cfg) -> Any | None:
     engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
     try:
-        proc = subprocess.Popen(
+        # Process kind: the engine child is an engine-supervised command —
+        # live status via engine.list_processes(), and Engine.stop()/atexit
+        # reaps it if shutdown never runs (docs/plans/
+        # 2026-09-20-execution-consolidation.md, routing kind "process").
+        # text=False keeps byte-mode stderr: the capture thread below
+        # decodes bytes, exactly as with the raw Popen this replaces.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        proc = get_engine().spawn_command(
             engine_cmd,
+            name="inference-engine",
+            cwd=os.getcwd(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            cwd=os.getcwd(),
+            text=False,
         )
         import collections
 
@@ -2356,11 +2371,15 @@ def _make_engine_restart_fn(cfg):
         engine_cmd.extend(["--quant-clip", str(cfg.quant_clip)])
 
         try:
-            proc = subprocess.Popen(
+            from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+            proc = get_engine().spawn_command(
                 engine_cmd,
+                name="inference-engine",
+                cwd=os.getcwd(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                cwd=os.getcwd(),
+                text=False,
             )
             import state as server_state
 

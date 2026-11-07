@@ -23,7 +23,7 @@ class TestEnums:
         assert TrainingStage.COMPLETE.value == "complete"
 
     def test_completion_status_values(self):
-        assert CompletionStatus.IN_PROGRESS.value == "in_progress"
+        assert CompletionStatus.LIVE.value == "live"
         assert CompletionStatus.COMPLETED.value == "completed"
         assert CompletionStatus.FAILED.value == "failed"
 
@@ -67,7 +67,7 @@ class TestTrainingCompletionReport:
         r = TrainingCompletionReport(
             model_name="test",
             created_at="2024",
-            completion_status=CompletionStatus.IN_PROGRESS,
+            completion_status=CompletionStatus.LIVE,
             checkpoint_path="/path/ckpt",
         )
         assert r.can_resume() is True
@@ -76,7 +76,7 @@ class TestTrainingCompletionReport:
         r = TrainingCompletionReport(
             model_name="test",
             created_at="2024",
-            completion_status=CompletionStatus.IN_PROGRESS,
+            completion_status=CompletionStatus.LIVE,
         )
         assert r.can_resume() is False
 
@@ -102,7 +102,7 @@ class TestTrainingCompletionReport:
         r = TrainingCompletionReport(
             model_name="test",
             created_at="2024",
-            completion_status=CompletionStatus.IN_PROGRESS,
+            completion_status=CompletionStatus.LIVE,
             completion_percentage=50.0,
         )
         assert "50.0%" in r.get_progress_summary()
@@ -136,7 +136,7 @@ class TestTrainingStatusTracker:
             federated_rounds=3,
             rlhf_epochs=2,
         )
-        assert tracker.report.completion_status == CompletionStatus.IN_PROGRESS
+        assert tracker.report.completion_status == CompletionStatus.LIVE
         assert tracker.report.dataset == "test.jsonl"
         assert tracker.report.batch_size == 8
         assert tracker.report.pretraining is not None
@@ -155,7 +155,7 @@ class TestTrainingStatusTracker:
         tracker.start_training(pretrain_epochs=5)
         tracker.start_stage(TrainingStage.PRETRAINING)
         assert tracker.report.pretraining.started_at is not None
-        assert tracker.report.pretraining.status == CompletionStatus.IN_PROGRESS
+        assert tracker.report.pretraining.status == CompletionStatus.LIVE
 
     def test_update_stage(self):
         tracker = TrainingStatusTracker()
@@ -222,7 +222,31 @@ class TestTrainingStatusTracker:
         loaded = TrainingStatusTracker.load_report(path)
         assert loaded.report.model_name == "save_test"
         assert loaded.report.dataset == "test.jsonl"
-        assert loaded.report.completion_status == CompletionStatus.IN_PROGRESS
+        assert loaded.report.completion_status == CompletionStatus.LIVE
+
+    def test_load_report_legacy_in_progress_alias(self, tmp_path):
+        """Artifacts written before the in_progress -> live rename must still load.
+
+        save_report pins enum values to disk; old reports on disk contain
+        "in_progress", which no longer matches any member — load_report must
+        coerce the legacy value to LIVE instead of leaving a raw str (which
+        would blow up later on ``.value``).
+        """
+        tracker = TrainingStatusTracker("legacy")
+        tracker.start_training(dataset="old.jsonl", pretrain_epochs=2)
+        tracker.start_stage(TrainingStage.PRETRAINING)
+        path = str(tmp_path / "legacy.json")
+        tracker.save_report(path)
+
+        # Simulate a pre-rename artifact: rewrite the saved values back.
+        with open(path) as f:
+            raw = f.read()
+        with open(path, "w") as f:
+            f.write(raw.replace('"live"', '"in_progress"'))
+
+        loaded = TrainingStatusTracker.load_report(path)
+        assert loaded.report.completion_status == CompletionStatus.LIVE
+        assert loaded.report.pretraining.status == CompletionStatus.LIVE
 
     def test_get_report(self):
         tracker = TrainingStatusTracker()

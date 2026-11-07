@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconTrash, IconDownload, IconUpload } from '@sloughgpt/strui'
@@ -7,7 +8,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Progress } from '@sloughgpt/strui'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
 import { usePhonemeStore, type HistoryEntry } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import { PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import {
   AreaChart,
@@ -285,7 +285,7 @@ export default function HistoryCard() {
   const clearHistory = usePhonemeStore((s) => s.clearHistory)
   const exportHistory = usePhonemeStore((s) => s.exportHistory)
   const importHistory = usePhonemeStore((s) => s.importHistory)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const fileRef = useRef<HTMLInputElement>(null)
 
   const filteredHistory = useMemo(() => {

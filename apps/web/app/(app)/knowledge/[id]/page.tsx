@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } from '@sloughgpt/strui'
@@ -8,7 +9,6 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
 import { knowledgeController, type KnowledgeItem } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { formatDate } from '@/lib/conversations-utils'
 import {
   ArrowLeft,
@@ -37,7 +37,7 @@ export default function KnowledgeDetailPage() {
   const params = useParams()
   const router = useRouter()
   const itemId = params.id as string
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const [item, setItem] = useState<KnowledgeItem | null>(null)
   const [loading, setLoading] = useState(true)

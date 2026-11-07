@@ -1,10 +1,25 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Input, Button, Chip, Skeleton } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Input,
+  Button,
+  Chip,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { IconSearch } from '@sloughgpt/strui'
-import { tokenTreeController, type TokenTreeStats, type SimilarResult, type Neighbor, type LineageResult } from '@/lib/token-tree-controller'
-import { useToastStore } from '@/lib/toast-store'
+import {
+  tokenTreeController,
+  type TokenTreeStats,
+  type SimilarResult,
+  type Neighbor,
+  type LineageResult,
+} from '@/lib/token-tree-controller'
 
 const displayToken = (token: string) => token.replace('</w>', '').trim()
 
@@ -16,12 +31,21 @@ export function TokenTreeQueryCard() {
   const [expanded, setExpanded] = useState<Neighbor | null>(null)
   const [lineage, setLineage] = useState<LineageResult | null>(null)
   const [loadingLineage, setLoadingLineage] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   useEffect(() => {
     let active = true
-    tokenTreeController.getStats().then(s => { if (active) setStats(s) }).catch(() => { if (active) setStats(null) })
-    return () => { active = false }
+    tokenTreeController
+      .getStats()
+      .then((s) => {
+        if (active) setStats(s)
+      })
+      .catch(() => {
+        if (active) setStats(null)
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   const handleSearch = async () => {
@@ -82,8 +106,8 @@ export function TokenTreeQueryCard() {
         <div className="flex items-center gap-2">
           <Input
             value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => {
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
               if (e.key === 'Enter') handleSearch()
             }}
             placeholder="Query a token, e.g. quick"
@@ -91,7 +115,9 @@ export function TokenTreeQueryCard() {
             aria-label="Token to query"
           />
           <Button size="sm" onClick={handleSearch} disabled={searching || !query.trim()}>
-            {searching ? 'Searching...' : (
+            {searching ? (
+              'Searching...'
+            ) : (
               <>
                 <IconSearch className="h-4 w-4 mr-1" />
                 Find neighbors
@@ -104,13 +130,15 @@ export function TokenTreeQueryCard() {
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground">
               Nearest neighbors of{' '}
-              <span className="font-mono text-primary">{'"' + displayToken(result.query) + '"'}</span>
+              <span className="font-mono text-primary">
+                {'"' + displayToken(result.query) + '"'}
+              </span>
             </div>
             {result.neighbors.length === 0 ? (
               <div className="text-sm text-muted-foreground">No neighbors found.</div>
             ) : (
               <div className="space-y-1">
-                {result.neighbors.map(n => (
+                {result.neighbors.map((n) => (
                   <button
                     key={n.id}
                     type="button"
@@ -125,13 +153,18 @@ export function TokenTreeQueryCard() {
                         style={{ width: `${Math.round(n.score * 100)}%` }}
                       />
                     </span>
-                    <span className="text-xs text-muted-foreground w-10 text-right">{n.score.toFixed(3)}</span>
+                    <span className="text-xs text-muted-foreground w-10 text-right">
+                      {n.score.toFixed(3)}
+                    </span>
                   </button>
                 ))}
                 {expanded && (
                   <div className="rounded-md bg-muted/50 px-3 py-2">
                     <div className="text-xs text-muted-foreground mb-1">
-                      Merge lineage of <span className="font-mono text-primary">{'"' + displayToken(expanded.token) + '"'}</span>
+                      Merge lineage of{' '}
+                      <span className="font-mono text-primary">
+                        {'"' + displayToken(expanded.token) + '"'}
+                      </span>
                     </div>
                     {loadingLineage ? (
                       <Skeleton className="h-12 w-full rounded" />
@@ -157,8 +190,8 @@ export function TokenTreeQueryCard() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Embeddings are learned from token co-occurrence and stored as compressed cluster points — the same
-          pugqeep substrate used to generate model weights.
+          Embeddings are learned from token co-occurrence and stored as compressed cluster points —
+          the same pugqeep substrate used to generate model weights.
         </p>
       </CardContent>
     </Card>

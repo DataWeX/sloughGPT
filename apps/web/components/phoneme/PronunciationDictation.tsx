@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -9,7 +10,6 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
@@ -43,7 +43,7 @@ export default function PronunciationDictation() {
   const [score, setScore] = useState(0)
   const [total, setTotal] = useState(0)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const pickNewWord = useCallback(() => {
     const words = WORDS[language]

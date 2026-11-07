@@ -1,4 +1,5 @@
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 vi.mock('./ImageUpload', () => ({
@@ -27,6 +28,12 @@ vi.mock('./ChatInputRow', () => ({
       <span>disabled: {String(props.disabled)}</span>
       <span>loading: {String(props.loading)}</span>
       <span>hasContent: {String(props.hasContent)}</span>
+      <button
+        data-testid="voice-fire"
+        onClick={() => props.onTranscript?.((globalThis as any).__voiceText ?? 'spoken')}
+      >
+        voice
+      </button>
     </div>
   ),
 }))
@@ -116,5 +123,30 @@ describe('ChatInput', () => {
     const { container } = render(<ChatInput {...base} value="hello" />)
     const row = container.querySelector('[data-testid="chat-input-row"]')
     expect(row?.textContent).toContain('hello')
+  })
+
+  it('appends each final voice transcript exactly once (append semantic)', () => {
+    // The seam contract with VoiceInput: VoiceInput emits each FINAL utterance
+    // once, and this handler appends it. Spoken text must land once — never be
+    // re-appended, never drop text the user already typed.
+    const w = globalThis as any
+    function Harness() {
+      const [value, setValue] = useState('')
+      return <ChatInput {...base} value={value} onChange={setValue} />
+    }
+    render(<Harness />)
+    const row = () => screen.getByTestId('chat-input-row').textContent ?? ''
+
+    w.__voiceText = 'spoken one'
+    fireEvent.click(screen.getByTestId('voice-fire'))
+    expect(row()).toContain('value: spoken one')
+
+    w.__voiceText = 'spoken two'
+    fireEvent.click(screen.getByTestId('voice-fire'))
+    expect(row()).toContain('value: spoken one spoken two')
+    // Exactly once each — no doubling of the first utterance.
+    expect(row()).not.toContain('spoken one spoken one')
+    expect(row()).not.toContain('spoken two spoken two')
+    delete w.__voiceText
   })
 })

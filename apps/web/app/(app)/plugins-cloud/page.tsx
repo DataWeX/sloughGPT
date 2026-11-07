@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import {
@@ -15,7 +16,6 @@ import {
   Badge,
   Skeleton,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
 import { addGlobalError } from '@/lib/error-store'
 import { MolePluginPanel } from '@/components/mole/MolePluginPanel'
@@ -44,7 +44,7 @@ export default function PluginsCloudPage() {
   const [submitting, setSubmitting] = useState(false)
   const [provider, setProvider] = useState('local')
   const [datasetId, setDatasetId] = useState('')
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const loadData = useCallback(async () => {
     setLoading(true)

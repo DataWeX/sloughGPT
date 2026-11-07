@@ -428,8 +428,19 @@ _ITERATORS = {
 }
 
 
-def list_artifacts(kind: str | None = None, query: str | None = None) -> list[dict[str, Any]]:
-    """List artifacts, optionally filtered by kind and substring query."""
+def list_artifacts(
+    kind: str | None = None,
+    query: str | None = None,
+    *,
+    with_provenance: bool = False,
+) -> list[dict[str, Any]]:
+    """List artifacts, optionally filtered by kind and substring query.
+
+    ``with_provenance=True`` attaches a ``parents`` list per artifact — the
+    union of its ``.prov.json`` sidecar parents (sidecar first) and parents
+    derived from soul/export metadata, deduped. Default ``False`` keeps the
+    hot path (``resolve``, ``verify``) free of per-artifact sidecar reads.
+    """
     kinds = (kind,) if kind else ARTIFACT_KINDS[:-1]  # exclude generic "file"
     out: list[dict[str, Any]] = []
     for k in kinds:
@@ -438,12 +449,34 @@ def list_artifacts(kind: str | None = None, query: str | None = None) -> list[di
             continue
         try:
             out.extend(iterator())
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — one bad kind must not hide the rest
             logger.debug("Artifact scan failed for kind %s: %s", k, exc)
+    if with_provenance:
+        for artifact in out:
+            artifact["parents"] = _parents_for(artifact)
     if query:
         q = query.lower()
         out = [a for a in out if q in a["id"].lower() or q in a["name"].lower()]
     return out
+
+
+def _parents_for(artifact: dict[str, Any]) -> list[str]:
+    """Parents of one artifact record: sidecar union metadata, deduped.
+
+    Total over junk: unreadable sidecars and non-dict metas each contribute
+    nothing, and a record with neither resolves to an empty list (a root).
+    """
+    parents: list[str] = []
+    try:
+        record = read_provenance(artifact.get("path", ""))
+    except Exception:  # noqa: BLE001 — provenance must never break a listing
+        record = None
+    if record is not None:
+        parents.extend(record.parents)
+    for parent in parents_from_metadata(artifact.get("meta")):
+        if parent not in parents:
+            parents.append(parent)
+    return parents
 
 
 def resolve(kind: str, artifact_id: str) -> str | None:
@@ -859,6 +892,72 @@ def read_provenance(artifact_path: str | Path) -> ProvenanceRecord | None:
     if not isinstance(data, dict):
         return None
     return ProvenanceRecord.from_dict(data)
+
+
+# Export/training metadata fields that name a parent artifact, and the kind
+# each maps to. Checked flat AND under the caller's ``"metadata"`` sub-dict —
+# ``slonet.export_to_sou`` nests caller metadata there when it merges.
+_PROVENANCE_PARENT_FIELDS = (
+    ("training_dataset", "dataset"),
+    ("base_model", "model"),
+    ("parent_model", "model"),
+    ("teacher_model", "model"),
+)
+
+
+def parents_from_metadata(metadata: Any) -> list[str]:
+    """Derive lineage parent artifact_ids from export/training metadata.
+
+    Total over junk: non-dict input, missing keys, blank or non-string
+    values each simply contribute no parent.
+    """
+    if not isinstance(metadata, dict):
+        return []
+    layers = [metadata]
+    nested = metadata.get("metadata")
+    if isinstance(nested, dict):
+        layers.append(nested)
+    parents: list[str] = []
+    for layer in layers:
+        for key, kind in _PROVENANCE_PARENT_FIELDS:
+            value = layer.get(key)
+            if isinstance(value, str) and value.strip():
+                artifact_id = f"{kind}:{value.strip()}"
+                if artifact_id not in parents:
+                    parents.append(artifact_id)
+    return parents
+
+
+def stamp_export(
+    path: str | Path,
+    kind: str,
+    metadata: Any = None,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> ProvenanceRecord | None:
+    """Best-effort provenance stamp for a freshly written artifact.
+
+    The single write-path hook for exports: derives ``parents`` from
+    training metadata (which dataset/model produced this file) and writes
+    the ``.prov.json`` sidecar, so :func:`lineage` can walk the result.
+    Never raises — provenance must never break an export — and returns
+    ``None`` when the artifact file does not exist. Last writer wins, so a
+    checkpoint saver may re-stamp a file an export already stamped.
+    """
+    try:
+        fp = Path(path)
+        if not fp.is_file():
+            return None
+        return write_provenance(
+            fp,
+            kind,
+            fp.name,
+            parents=parents_from_metadata(metadata),
+            extra=extra,
+        )
+    except Exception as exc:  # noqa: BLE001 — provenance must never break a save
+        logger.debug("Export provenance stamp skipped (%s): %s", path, exc)
+        return None
 
 
 def lineage(

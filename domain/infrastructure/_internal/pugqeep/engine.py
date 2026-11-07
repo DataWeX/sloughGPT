@@ -24,10 +24,13 @@ Usage:
     engine.dispatch()  # one-shot dispatch
     engine.run(poll_interval=0.5)  # continuous loop
 """
+
 from __future__ import annotations
 
 import logging
 import multiprocessing
+import os
+import subprocess
 import threading
 import time
 import uuid
@@ -41,7 +44,7 @@ from pickle import PicklingError
 from typing import Any
 
 from ..cancel_manager import OpType, get_cancel_manager
-from .config import RestartPolicy
+from .config import DEFAULT_RETENTION_LIMIT, RestartPolicy
 
 logger = logging.getLogger("slo.pugqeep.engine")
 
@@ -60,6 +63,9 @@ _MSG_READY = "__READY__"
 _MSG_HEARTBEAT = "__HEARTBEAT__"
 _MSG_ERROR = "__ERROR__"
 _MSG_RESULT = "__RESULT__"
+
+# External-command supervision (spawn_command): SIGTERM -> SIGKILL grace.
+_CMD_KILL_GRACE = 2.0
 
 
 class ProcessStatus(Enum):
@@ -127,6 +133,9 @@ class Process:
     _stream_results: list[Any] = field(default_factory=list, repr=False)
     _progress: float = field(default=0.0, repr=False)
     _progress_message: str = field(default="", repr=False)
+    # Reported to engine-level on_complete/metrics exactly once — survives
+    # get_completed() draining _completed so a drain cannot re-fire them.
+    _reported: bool = field(default=False, repr=False)
     _on_complete: list[Callable] = field(default_factory=list, repr=False)
     _on_fail: list[Callable] = field(default_factory=list, repr=False)
     _on_cancel: list[Callable] = field(default_factory=list, repr=False)
@@ -338,7 +347,12 @@ class Tree:
         self.status = TreeStatus.BRANCHING
 
         for proc in processes:
-            proc.ready()
+            # ready() must not clobber a terminal state: a proc cancelled
+            # while queued (cancel_process / stop / timeout) stays
+            # CANCELLED. It is still submitted so _execute runs the stem
+            # bookkeeping in its finally.
+            if not proc.is_done:
+                proc.ready()
             future = self._pool.submit(self._execute, proc, stem)
             proc._future = future
 
@@ -348,8 +362,14 @@ class Tree:
         return stem
 
     def _execute(self, proc: Process, stem: Stem) -> Any:
-        proc.running()
         try:
+            if proc.is_done:
+                # Cancelled between spawn and execution: honor the terminal
+                # state — never run the fn, never overwrite CANCELLED with
+                # running(). The finally below still does stem bookkeeping,
+                # so a stem of cancelled procs still completes.
+                return proc.result
+            proc.running()
             if proc.timeout is not None and proc.timeout > 0:
                 result_container: list[Any] = []
                 error_container: list[Exception | None] = [None]
@@ -440,11 +460,16 @@ class GuardTree(Tree):
 
     def _execute(self, proc: Process, stem: Stem) -> Any:
         sub = self._subprocesses.get(proc.id)
-        if sub is not None:
+        if sub is None:
+            return super()._execute(proc, stem)
+        try:
             sub.start()
             sub.monitor()
             return proc.result
-        return super()._execute(proc, stem)
+        finally:
+            # The wrapper is finished once monitor() returns (or start()
+            # raised): pop it so the registry holds live subprocesses only.
+            self._subprocesses.pop(proc.id, None)
 
     @property
     def subprocess_count(self) -> int:
@@ -882,6 +907,183 @@ class SubprocessProcess:
         return self._stderr
 
 
+def _command_target() -> None:
+    """Placeholder ``fn`` for external commands.
+
+    The work runs in the child OS process, not as a callable — ``fn``
+    exists only because ``Process`` is fn-shaped; invoking it is a bug.
+    """
+    raise RuntimeError("external commands run in their own process")
+
+
+@dataclass
+class CommandProcess(Process):
+    """An external OS command supervised by the Engine — the process kind.
+
+    ``spawn(subprocess=True)`` runs a *Python fn* in a fresh interpreter
+    and hands its output back post-hoc; a supervised server (``uvicorn``,
+    ``npm run dev``) needs the opposite contract: the command itself is
+    the unit of work, its output must be readable *while it runs*, and
+    the caller drives it through ``poll()``/``terminate()`` exactly as
+    with a raw ``subprocess.Popen``.
+
+    Contract:
+      - **Eager start**: the child spawns inside ``Engine.spawn_command``
+        — never queued for dispatch, so no run-loop poll latency and no
+        pool worker is held for the child's lifetime.
+      - **The caller owns the live streams** (an I/O pump thread reading
+        ``stdout``/``stderr``), same as raw Popen — a PIPE nobody drains
+        blocks the child.
+      - **The engine's run loop reaps** (``_reap``): status transitions,
+        completion metrics, and ``timeout`` enforcement never depend on
+        the caller polling. ``poll()``/``wait()`` finalize too — both
+        paths idempotent under ``_finalize_lock`` (first caller wins).
+      - **``cancel()``** (``Engine.stop()``, atexit) terminates the child
+        with a bounded SIGTERM→SIGKILL so no orphan outlives the engine.
+    """
+
+    argv: list[str] = field(default_factory=list)
+    _popen: Any = field(default=None, repr=False)
+    _deadline: float | None = field(default=None, repr=False)
+    _timed_out: bool = field(default=False, repr=False)
+    # Any, not threading.RLock: RLock is a factory function at runtime and
+    # does not annotate cleanly as a type.
+    _finalize_lock: Any = field(default_factory=threading.RLock, repr=False)
+
+    # ── Popen surface (duck-typed superset of the raw handle) ──
+
+    @property
+    def pid(self) -> int | None:
+        return self._popen.pid if self._popen is not None else None
+
+    @property
+    def returncode(self) -> int | None:
+        return self._popen.returncode if self._popen is not None else None
+
+    @property
+    def stdout(self) -> Any:
+        return self._popen.stdout if self._popen is not None else None
+
+    @property
+    def stderr(self) -> Any:
+        return self._popen.stderr if self._popen is not None else None
+
+    @property
+    def is_alive(self) -> bool:
+        return self._popen is not None and self._popen.poll() is None
+
+    def poll(self) -> int | None:
+        """Reap once: return the exit code, finalizing status if exited."""
+        if self._popen is None:
+            return self.returncode
+        rc: int | None = self._popen.poll()
+        if rc is not None:
+            self._finalize(rc)
+        return rc
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self._popen is None:
+            raise ProcessLookupError("command was never started")
+        rc: int = self._popen.wait(timeout=timeout)
+        self._finalize(rc)
+        return rc
+
+    def terminate(self) -> None:
+        """SIGTERM the child (raw, like ``Popen.terminate``).
+
+        Status follows via the next reap — this is the signal, not the
+        lifecycle transition.
+        """
+        if self.is_alive:
+            try:
+                self._popen.terminate()
+            except OSError:
+                pass
+
+    def kill(self) -> None:
+        if self.is_alive:
+            try:
+                self._popen.kill()
+            except OSError:
+                pass
+
+    # ── Engine supervision ──
+
+    def _reap(self) -> None:
+        """Poll the child once and enforce ``timeout``. Idempotent, non-blocking.
+
+        Called every run-loop tick so supervision does not depend on the
+        caller polling; ``poll()``/``wait()`` call it too. The timeout
+        path is signal-only (SIGTERM, then SIGKILL a grace period later)
+        so the dispatch loop never blocks on a hung child.
+        """
+        if self._popen is None or self.is_done:
+            return
+        rc = self._popen.poll()
+        if rc is not None:
+            self._finalize(rc)
+            return
+        if self._deadline is not None:
+            now = time.monotonic()
+            if now > self._deadline:
+                if not self._timed_out:
+                    self._timed_out = True
+                    logger.warning(
+                        "Command '%s' exceeded timeout %.1fs — SIGTERM",
+                        self.name,
+                        self.timeout or 0.0,
+                    )
+                    self.terminate()
+                elif now > self._deadline + _CMD_KILL_GRACE:
+                    self.kill()
+
+    def _finalize(self, rc: int) -> None:
+        """First caller wins: exit code -> status + callbacks (idempotent)."""
+        with self._finalize_lock:
+            if self.is_done:
+                return
+            if self._timed_out:
+                self.fail(f"command timed out after {self.timeout}s")
+            elif rc == 0:
+                self.complete(rc)
+            else:
+                self.fail(f"command exited with code {rc}")
+
+    def cancel(self) -> None:
+        """Terminate the child (bounded SIGTERM→SIGKILL), then cancel.
+
+        ``Engine.stop()``/atexit take this path — no orphan may outlive
+        the engine. If the child already exited, the reap finalizes it
+        and the cancel is a no-op: its real exit status wins.
+        """
+        with self._finalize_lock:
+            self._reap()
+            if self.is_done:
+                return
+            self._terminate_child()
+            super().cancel()
+
+    def _terminate_child(self, grace: float = _CMD_KILL_GRACE) -> None:
+        if self._popen is None:
+            return
+        try:
+            if self._popen.poll() is None:
+                self._popen.terminate()
+                try:
+                    self._popen.wait(timeout=grace)
+                except subprocess.TimeoutExpired:
+                    self._popen.kill()
+                    self._popen.wait(timeout=1.0)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["argv"] = list(self.argv)
+        d["returncode"] = self.returncode
+        return d
+
+
 class ProcessGroup:
     """Batch operations on a set of processes."""
 
@@ -1063,6 +1265,20 @@ class ProcessMonitor:
                                             "Non-critical pugqeep restart callback error",
                                             exc_info=True,
                                         )
+                    # Done procs are dropped from monitoring: COMPLETED and
+                    # CANCELLED immediately, FAILED once the restart budget
+                    # is spent (or with no policy) — otherwise the monitor
+                    # grows with every spawn for the life of the process.
+                    if proc.is_done:
+                        pol = proc._restart_policy or self.restart_policy
+                        keep_for_restart = (
+                            proc.status == ProcessStatus.FAILED
+                            and pol is not None
+                            and pol.max_restarts > 0
+                            and proc._restart_count < pol.max_restarts
+                        )
+                        if not keep_for_restart:
+                            self._processes.pop(proc.id, None)
 
     def stats(self) -> dict:
         with self._lock:
@@ -1194,7 +1410,9 @@ class Engine:
     of parallel tasks. Points carry function-calling capacity.
     """
 
-    def __init__(self, name: str = "main", max_trees: int = 16, config=None):
+    def __init__(
+        self, name: str = "main", max_trees: int = 16, config=None, install_signals: bool = False
+    ):
         if config is not None:
             self.name = config.name
             self.max_trees = config.max_trees
@@ -1203,6 +1421,9 @@ class Engine:
             self.name = name
             self.max_trees = max_trees
             self._config = None
+        self._retention_limit = (
+            config.retention_limit if config is not None else DEFAULT_RETENTION_LIMIT
+        )
         self._trees: dict[str, Tree] = {}
         self._processes: dict[str, Process] = {}
         self._pending: list[Process] = []
@@ -1231,7 +1452,13 @@ class Engine:
             )
             self._monitor.start()
 
-        self.install_signal_handlers()
+        # A library must not own process-wide signals from a constructor —
+        # hosts (uvicorn's capture_signals, an IPython kernel, a runner's
+        # supervisor) install theirs first, and an unchained replacement is
+        # what made the API ignore SIGTERM (card 20261104_070434).
+        # Standalone runners opt in explicitly via install_signal_handlers().
+        if install_signals:
+            self.install_signal_handlers()
         _engines.add(self)
 
     @property
@@ -1271,14 +1498,18 @@ class Engine:
             hit, cached = self._cache.get(fn, args, kwargs)
             if hit:
                 proc.complete(cached)
+                proc._reported = True
                 self._processes[proc.id] = proc
                 self._completed.append(proc)
                 self._metrics.record_complete(proc)
                 return proc
 
-        self._processes[proc.id] = proc
-        self._pending.append(proc)
-        self._all_done_event.clear()
+        # Commit under the same lock dispatch() filters with: an unlocked
+        # append racing dispatch()'s read-modify-write is what loses procs.
+        with self._lock:
+            self._processes[proc.id] = proc
+            self._pending.append(proc)
+            self._all_done_event.clear()
         self._metrics.record_spawn()
 
         if register_cancel:
@@ -1361,12 +1592,12 @@ class Engine:
             return 0
 
         dispatchable: list[Process] = []
-        held: list[Process] = []
         for proc in self._pending:
+            # Unmet deps simply stay out of `dispatchable`, so the commit
+            # below leaves them pending exactly as before.
             if proc.depends_on and not self._deps_met(proc):
-                held.append(proc)
-            else:
-                dispatchable.append(proc)
+                continue
+            dispatchable.append(proc)
 
         if not dispatchable:
             return 0
@@ -1419,7 +1650,16 @@ class Engine:
                     for p in batch:
                         p.fail(str(e))
 
-        self._pending = held
+        # Drop exactly the procs we consumed — by identity, from the list as
+        # it stands *now*, under the lock spawn() appends with. Rebinding to
+        # `held` here was the bug: a spawn() landing after our snapshot but
+        # before this line was discarded outright, leaving the proc registered
+        # in _processes yet never branched (CREATED forever), which
+        # ThreadHandle.is_alive() (= not is_done) then reported as alive.
+        with self._lock:
+            consumed = {id(p) for p in dispatchable}
+            self._pending = [p for p in self._pending if id(p) not in consumed]
+
         self._metrics.record_dispatch(dispatched)
         return dispatched
 
@@ -1439,7 +1679,10 @@ class Engine:
                 active = sum(t.active_stems for t in self._trees.values())
 
             for proc in list(self._processes.values()):
-                if proc.is_done and proc not in self._completed:
+                if isinstance(proc, CommandProcess):
+                    proc._reap()
+                if proc.is_done and not proc._reported:
+                    proc._reported = True
                     self._completed.append(proc)
                     if proc.status == ProcessStatus.COMPLETED:
                         self._metrics.record_complete(proc)
@@ -1451,6 +1694,8 @@ class Engine:
                         except Exception as e:
                             logger.error("Engine[%s]: on_complete callback error: %s", self.name, e)
 
+            self._evict_completed()
+
             if on_progress is not None:
                 try:
                     on_progress(
@@ -1460,12 +1705,12 @@ class Engine:
                             "completed": len(self._completed),
                             "running": sum(
                                 1
-                                for p in self._processes.values()
+                                for p in list(self._processes.values())
                                 if p.status == ProcessStatus.RUNNING
                             ),
                             "failed": sum(
                                 1
-                                for p in self._processes.values()
+                                for p in list(self._processes.values())
                                 if p.status == ProcessStatus.FAILED
                             ),
                         }
@@ -1473,7 +1718,7 @@ class Engine:
                 except Exception as e:
                     logger.error("Engine[%s]: on_progress callback error: %s", self.name, e)
 
-            if not self._pending and all(p.is_done for p in self._processes.values()):
+            if not self._pending and all(p.is_done for p in list(self._processes.values())):
                 self._all_done_event.set()
 
             time.sleep(poll_interval)
@@ -1499,13 +1744,13 @@ class Engine:
         return thread
 
     def wait(self, timeout: float | None = None) -> None:
-        if not self._pending and all(p.is_done for p in self._processes.values()):
+        if not self._pending and all(p.is_done for p in list(self._processes.values())):
             return
         self._all_done_event.wait(timeout=timeout)
 
     def wait_all(self, timeout: float | None = None) -> list[Process]:
         self.wait(timeout=timeout)
-        return [p for p in self._processes.values() if p.is_done]
+        return [p for p in list(self._processes.values()) if p.is_done]
 
     def get_completed(self) -> list[Process]:
         done = list(self._completed)
@@ -1515,7 +1760,7 @@ class Engine:
     def stop(self) -> None:
         self._running = False
         self.stop_workers()
-        for proc in self._processes.values():
+        for proc in list(self._processes.values()):
             if not proc.is_done:
                 proc.cancel()
                 self._metrics.record_cancel()
@@ -1603,7 +1848,7 @@ class Engine:
 
     def cancel_tree(self, tree_name: str) -> int:
         count = 0
-        for proc in self._processes.values():
+        for proc in list(self._processes.values()):
             if proc._tree_name == tree_name and not proc.is_done:
                 proc.cancel()
                 self._metrics.record_cancel()
@@ -1681,6 +1926,75 @@ class Engine:
 
         return proc
 
+    def spawn_command(
+        self,
+        argv: list[str],
+        *,
+        name: str = "",
+        cwd: str | None = None,
+        env: dict | None = None,
+        stdout: Any = subprocess.PIPE,
+        stderr: Any = subprocess.STDOUT,
+        text: bool = True,
+        start_new_session: bool = False,
+        timeout: float | None = None,
+    ) -> CommandProcess:
+        """Start an external command under engine supervision (eager).
+
+        The external-command flavor of the ``process`` routing kind
+        (routing table: ``docs/plans/2026-09-20-execution-consolidation.md``).
+        Unlike ``spawn(subprocess=True)`` — a Python fn whose output
+        arrives post-hoc — the child starts *here* (no dispatch latency,
+        no pool worker held), streams live through ``proc.stdout`` /
+        ``proc.stderr``, and is driven with raw-Popen semantics
+        (``poll`` / ``returncode`` / ``terminate``) while the run loop
+        reaps it into the process registry (status, metrics,
+        ``list_processes``, ``timeout``).
+
+        ``stdout``/``stderr`` are passed straight to ``subprocess.Popen``
+        (defaults: merged stdout→PIPE, the supervised-server shape).
+        ``start_new_session`` gives the child its own session/group
+        (POSIX ``setsid``) — the killpg-safe shape for services whose
+        ``stop()`` signals the whole process group.
+        """
+        if isinstance(argv, (str, bytes)):
+            raise TypeError("spawn_command takes an argv list, not a string")
+        if not argv:
+            raise ValueError("spawn_command requires a non-empty argv")
+
+        proc = CommandProcess(
+            fn=_command_target,
+            argv=[str(a) for a in argv],
+            name=name or str(argv[0]),
+            timeout=timeout,
+        )
+        # Popen first: a missing executable must raise to the caller
+        # (raw-Popen behaviour) without leaving a registered dead entry.
+        proc._popen = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=env,
+            stdout=stdout,
+            stderr=stderr,
+            text=text,
+            start_new_session=start_new_session,
+        )
+        proc._pid = proc._popen.pid
+        if timeout is not None:
+            proc._deadline = time.monotonic() + timeout
+        proc.running()
+
+        self._processes[proc.id] = proc
+        self._metrics.record_spawn()
+        logger.debug(
+            "Engine[%s]: spawned command %s (%s) -> pid %s",
+            self.name,
+            proc.id,
+            proc.name,
+            proc._pid,
+        )
+        return proc
+
     def group(self, name: str) -> ProcessGroup:
         return ProcessGroup(name, engine=self)
 
@@ -1700,7 +2014,7 @@ class Engine:
             "pending": len(self._pending),
             "completed": len(self._completed),
             "status_counts": {
-                s.value: sum(1 for p in self._processes.values() if p.status == s)
+                s.value: sum(1 for p in list(self._processes.values()) if p.status == s)
                 for s in ProcessStatus
             },
             "monitor": self._monitor.stats() if self._monitor else None,
@@ -1746,7 +2060,7 @@ class Engine:
 
     def summary(self) -> str:
         counts = {}
-        for p in self._processes.values():
+        for p in list(self._processes.values()):
             counts[p.status.value] = counts.get(p.status.value, 0) + 1
         parts = [f"{k}={v}" for k, v in sorted(counts.items())]
         return f"Engine '{self.name}': processes={len(self._processes)} ({', '.join(parts) if parts else 'none'})"
@@ -1779,7 +2093,7 @@ class Engine:
     def dependency_graph(self) -> dict:
         nodes = []
         edges = []
-        for proc in self._processes.values():
+        for proc in list(self._processes.values()):
             nodes.append(proc.id)
             for dep_id in proc.depends_on:
                 edges.append({"from": dep_id, "to": proc.id})
@@ -1790,7 +2104,7 @@ class Engine:
             return []
         # Build adjacency and find longest path via DFS
         dep_of: dict[str, list[str]] = {}
-        for proc in self._processes.values():
+        for proc in list(self._processes.values()):
             for dep_id in proc.depends_on:
                 dep_of.setdefault(dep_id, []).append(proc.id)
 
@@ -1816,7 +2130,7 @@ class Engine:
         all_children = set()
         for children in dep_of.values():
             all_children.update(children)
-        roots = [p.id for p in self._processes.values() if p.id not in all_children]
+        roots = [p.id for p in list(self._processes.values()) if p.id not in all_children]
         if not roots:
             roots = list(self._processes.keys())
 
@@ -1828,7 +2142,7 @@ class Engine:
         return best_path
 
     def orphan_processes(self) -> list[Process]:
-        return [p for p in self._processes.values() if p.depends_on and not self._deps_met(p)]
+        return [p for p in list(self._processes.values()) if p.depends_on and not self._deps_met(p)]
 
     def spawn_batch(self, items: list) -> list[Process]:
         procs = []
@@ -1845,14 +2159,29 @@ class Engine:
 
         state = {
             "name": self.name,
-            "processes": {pid: p.to_dict() for pid, p in self._processes.items()},
+            "processes": {pid: p.to_dict() for pid, p in list(self._processes.items())},
             "metrics": self._metrics.snapshot(),
         }
         with open(path, "w") as f:
             json.dump(state, f, indent=2, default=str)
 
     def install_signal_handlers(self) -> None:
+        """Claim SIGTERM/SIGINT for this engine (explicit, owner-driven).
+
+        Never called from the constructor: installing is the *host runner's*
+        decision. Idempotent — re-installing would save our own handler as
+        "previous" and make _handle_signal chain into itself.
+        """
         import signal
+
+        if self._signal_handlers_installed:
+            return
+
+        # signal.signal() only works on the main thread — engines created
+        # lazily from worker threads (e.g. get_engine()) must not crash.
+        if threading.current_thread() is not threading.main_thread():
+            logger.debug("Engine[%s]: non-main thread; skipping signal handlers", self.name)
+            return
 
         self._old_signal_handlers = {
             signal.SIGTERM: signal.getsignal(signal.SIGTERM),
@@ -1871,8 +2200,59 @@ class Engine:
         self._signal_handlers_installed = False
 
     def _handle_signal(self, signum, frame) -> None:
+        """Stop the engine, then hand the signal back to whoever owned it.
+
+        The handler must not be a dead end: a host installed before us
+        (uvicorn's capture_signals -> handle_exit, a runner's supervisor) is
+        chained so its graceful shutdown still runs. With no host handler
+        (SIG_DFL) the default disposition is restored and the signal re-raised,
+        so a process running only this engine behaves as if we never
+        installed. SIG_IGN stays ignored.
+        """
         self._running = False
-        self.stop()
+        try:
+            self.stop()
+        finally:
+            import signal
+
+            prev = self._old_signal_handlers.get(signum)
+            if callable(prev):
+                prev(signum, frame)
+            elif prev is signal.SIG_IGN:
+                pass  # the signal was ignored before us — keep ignoring it
+            elif prev is signal.SIG_DFL:
+                signal.signal(signum, signal.SIG_DFL)
+                os.kill(os.getpid(), signum)
+            # prev is None: handlers not installed or already restored — a
+            # stale direct call; stopping the engine is all we can honestly do.
+
+    def _evict_completed(self) -> None:
+        """Bound the registry: evict the oldest done processes beyond ``retention_limit``.
+
+        Live (pending/running) processes are never evicted, and a done process
+        still referenced by a pending dependent's ``depends_on`` is an anchor —
+        evicting it would strand the dependent forever (``_deps_met`` needs the
+        dep present + COMPLETED). ``_completed`` is bounded by the same limit
+        so an engine whose results are never drained cannot grow it either.
+
+        A dependent spawned *after* its dep was evicted holds exactly like the
+        pre-existing unknown-dep case (``_deps_met`` → False): the anchor covers
+        dependents already pending, and production spawns no dependency chains
+        today (``depends_on=[]`` everywhere).
+        """
+        cap = max(0, self._retention_limit)
+        done_ids = [pid for pid, p in list(self._processes.items()) if p.is_done]
+        excess = len(done_ids) - cap
+        if excess > 0:
+            anchored: set[str] = set()
+            for p in self._pending:
+                anchored.update(p.depends_on)
+            evictable = [pid for pid in done_ids if pid not in anchored]
+            for pid in evictable[:excess]:
+                self._processes.pop(pid, None)
+                self._dependents.pop(pid, None)
+        if len(self._completed) > cap:
+            del self._completed[: len(self._completed) - cap]
 
     def _deps_met(self, proc: Process) -> bool:
         if not proc.depends_on:

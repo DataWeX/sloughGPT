@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import {
   AlertDialog,
@@ -31,7 +32,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { todayDateString } from '@/lib/format-bytes'
 import { downloadJson } from '@/lib/download-utils'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
@@ -48,7 +48,7 @@ import { ArchiveDialog } from './ArchiveDialog'
  * and a confirmed clear-all. Wired to `memoryController` (`/memory/*`).
  */
 export const MemoryCard = memo(function MemoryCard() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const {
     stats,
     items,

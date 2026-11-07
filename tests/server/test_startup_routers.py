@@ -30,8 +30,7 @@ from fastapi import APIRouter, FastAPI
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVER_DIR = REPO_ROOT / "apps/api/server"
-CORE_DIR = REPO_ROOT / "packages/core-py"
-for _p in (SERVER_DIR, CORE_DIR):
+for _p in (SERVER_DIR,):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

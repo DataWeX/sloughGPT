@@ -23,6 +23,7 @@ Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import math
 import os
@@ -44,6 +45,7 @@ try:
     from domain.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
+from domain.infrastructure._internal.pugqeep.singleton import spawn_loop
 from domain.shared._internal.feature_flags import is_enabled
 from domain.slolib._internal.gpu import dispatch_stats, known_backends, removed_backend_reason
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
@@ -306,7 +308,32 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
                     f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
                 )
         with open(path, encoding="utf-8") as f:
-            text = f.read()
+            if path.suffix == ".jsonl":
+                # Canonical text corpora (e.g. tinyshakespeare's 32,777
+                # cached records) carry the corpus in each record's `text`
+                # field — extract it, never the JSON syntax around it.
+                # Only `text` is extracted: other record shapes (pair
+                # datasets like user/assistant …) keep their pre-existing
+                # raw-read behaviour. Malformed lines and records without
+                # `text` are skipped; join with newlines. When no record
+                # has a text field, fall back to the raw read.
+                raw = f.read()
+                texts = []
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict):
+                        t = rec.get("text")
+                        if isinstance(t, str) and t:
+                            texts.append(t)
+                text = "\n".join(texts) if texts else raw
+            else:
+                text = f.read()
 
     if tokenizer is not None:
         data = np.asarray(tokenizer.encode(text), dtype=np.int64)
@@ -2529,6 +2556,11 @@ class SloughGPTTrainer:
         """Delete oldest checkpoints if total disk usage exceeds MAX_CHECKPOINT_DISK_MB."""
         from .state import MAX_CHECKPOINT_DISK_MB
 
+        # Every stat pass tolerates a vanished file: concurrent savers share
+        # this directory, and _prune_stale_checkpoints unlinks stale .soul
+        # files between our glob and our stat (FileNotFoundError escaped here
+        # and failed test_thread_safety — card 20261105_160000). A file that
+        # disappeared mid-scan is already accounted for by whoever removed it.
         try:
             files = sorted(
                 checkpoint_dir.glob("*.soul"),
@@ -2536,11 +2568,17 @@ class SloughGPTTrainer:
             )
         except OSError:
             return
-        total_bytes = sum(f.stat().st_size for f in files)
+        try:
+            total_bytes = sum(f.stat().st_size for f in files)
+        except OSError:
+            return
         limit_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
         while total_bytes > limit_bytes and len(files) > 1:
             oldest = files.pop(0)
-            total_bytes -= oldest.stat().st_size
+            try:
+                total_bytes -= oldest.stat().st_size
+            except OSError:
+                continue
             try:
                 oldest.unlink()
                 logger.info(
@@ -2813,9 +2851,8 @@ class SloughGPTTrainer:
             except Exception as exc:
                 logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
 
-        thread = threading.Thread(target=_work, name="pugqeep-compress", daemon=True)
+        thread = spawn_loop(_work, name="pugqeep-compress")
         self._compress_thread = thread
-        thread.start()
 
     def wait_for_compression(self, timeout: float | None = None) -> bool:
         """Block until background checkpoint compression finishes.

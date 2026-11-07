@@ -18,7 +18,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCAN_DIRS = ("domain", "apps", "packages/core-py", "scripts")
+SCAN_DIRS = ("domain", "apps", "scripts")
 SKIP_PARTS = {"__pycache__", ".venv", "venv", "node_modules", ".wt-merge"}
 
 

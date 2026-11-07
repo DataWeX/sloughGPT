@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from domain.infrastructure._internal.pugqeep.singleton import get_engine
 from domain.shared import find_repo_root, find_server_python
 
 logger = logging.getLogger("slo.shell.runtime")
@@ -82,7 +83,8 @@ def _probe_api(api_url: str, timeout: float = 2.0) -> dict:
         }
 
 
-_shared_proc: subprocess.Popen | None = None
+# Engine-supervised CommandProcess (duck-typed Popen surface) or None.
+_shared_proc: Any = None
 _shared_lock = threading.Lock()
 _shared_started_at: float = 0.0
 
@@ -191,13 +193,17 @@ class APIServerProcess:
         )
 
         try:
-            proc = subprocess.Popen(
+            # Process kind: engine-supervised command (routing table in
+            # docs/plans/2026-09-20-execution-consolidation.md). Own session
+            # so stop()'s killpg reaches only this server's group.
+            proc = get_engine().spawn_command(
                 cmd,
+                name="api-server",
                 cwd=str(repo_root),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
-                preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+                start_new_session=hasattr(os, "setsid"),
             )
         except Exception as e:
             return {"ok": False, "error": f"Failed to launch: {e}"}
@@ -357,15 +363,23 @@ class DaitRuntime:
         self._vfs.set_devices(self._devices)
 
         self._device_system = get_device_system()
+        # The NPU is registered exactly once, behind its VM face: the same
+        # instance create_default_devices() put in _devices["npu"] is what
+        # NPUVMDevice wraps (card 20261104_090736). Previously a second,
+        # distinct NPUDevice was registered here and silently overwrote the
+        # shell one, leaving two model registries under one device name —
+        # a model loaded from /dev/npu was invisible to DEV_CALL and vice
+        # versa. One device, one registry, both seams.
+        from .vm_devices import NPUVMDevice
+
+        shared_npu = self._devices.get("npu")
         for name in self._devices.names:
+            if name == "npu":
+                continue  # registered below behind its VM face
             dev = self._devices.get(name)
             self._device_system.register(name, dev, registered_by="shell")
 
-        from .kernel_npu import NPUDevice
-        from .vm_devices import NPUVMDevice
-
-        npu_device = NPUDevice(name="npu")
-        self._device_system.register("npu", NPUVMDevice(npu_device), registered_by="kernel")
+        self._device_system.register("npu", NPUVMDevice(shared_npu), registered_by="kernel")
 
         boot_log = self._init.boot(target_runlevel=3, shell_run=shell_run)
         self._boot_complete = True

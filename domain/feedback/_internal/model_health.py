@@ -19,7 +19,10 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from domain.infrastructure._internal.pugqeep.engine import Process
 
 logger = logging.getLogger("slo.model_health")
 
@@ -261,27 +264,35 @@ class ModelHealthMonitor:
             ),
         }
 
-    def start_auto_monitoring(self, interval_seconds: int = 300) -> threading.Thread:
-        """Start a background thread that periodically benchmarks the model.
+    def start_auto_monitoring(self, interval_seconds: int = 300) -> Process:
+        """Start background monitoring as a pugqeep Process (shared engine).
+
+        Replaces the raw ``threading.Thread`` per the ``process`` kind in
+        ``docs/plans/2026-09-20-execution-consolidation.md``. The loop is
+        cancellable: ``proc.cancel()`` (or shared-engine stop) releases it.
 
         Args:
             interval_seconds: Seconds between benchmarks (default: 5 min)
 
         Returns:
-            The background thread (daemon).
+            The spawned :class:`Process` (name ``health-monitor``).
         """
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        stop = threading.Event()
 
         def _loop():
-            while True:
+            while not stop.is_set():
                 self.run_benchmark()
                 drift = self.detect_drift()
                 if drift.get("drifted"):
                     logger.warning(drift["message"], extra={"tag": "INFRA"})
-                time.sleep(interval_seconds)
+                stop.wait(interval_seconds)
 
-        thread = threading.Thread(target=_loop, daemon=True, name="health-monitor")
-        thread.start()
-        return thread
+        engine = get_engine()
+        proc = engine.spawn(_loop, name="health-monitor")
+        proc.on_cancel(lambda _p: stop.set())
+        return proc
 
     def get_stats(self) -> dict[str, Any]:
         """Get full health statistics including trend and drift."""

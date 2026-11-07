@@ -28,6 +28,10 @@ jobs:
   # ─── Lint (Python) ──────────────────────────────────────────────
   lint:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,11 +52,14 @@ jobs:
       - name: Ruff lint
         run: |
           ruff --version
-          ruff check packages/core-py/ apps/api/server/ --exclude '__pycache__'
+          ruff check domain/ apps/api/server/ --exclude '__pycache__'
+      # domain/ + cli.py joined the format gate with card 20261106_071811
+      # (their 23 drifted files are formatted in the same commit); the check
+      # line already covered domain/, only the format verdict lagged.
       - name: Ruff format check
-        run: ruff format --check packages/core-py/ apps/api/server/ --exclude '__pycache__'
+        run: ruff format --check domain/ cli.py apps/api/server/ --exclude '__pycache__'
       - name: Mypy type check
-        run: mypy packages/core-py/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
+        run: mypy domain/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
       # Build-context rot: a COPY source that is missing, or excluded by
       # .dockerignore, kills `docker build` — caught here on every commit,
       # because moving a directory breaks a Dockerfile without editing it
@@ -60,9 +67,13 @@ jobs:
       - name: Dockerfile build-context check
         run: python scripts/check_dockerfile_contexts.py
 
-  # ─── Core Python tests (packages/core-py) ───────────────────────
+  # ─── Core Python tests (tests/core-py) ───────────────────────
   test-core-py:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -87,7 +98,7 @@ jobs:
           # Job ID kept — it is the required check name. The old --cov=.
           # (run from inside packages/core-py) measured the package tree, which
           # then CONTAINED the test_*_coverage.py driver modules (→ a bogus 97%
-          # that counted test files). After the move packages/core-py is nearly
+          # that counted test files). After the move that tree was nearly
           # empty, so --cov=packages/core-py collected 0 lines → fail-under=50
           # always reddened (card 20261031_080004). Coverage now points at the
           # domain library the tests actually import, so the 50% floor measures
@@ -108,6 +119,10 @@ jobs:
   # ─── Server API tests ───────────────────────────────────────────
   test-server:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -134,7 +149,7 @@ jobs:
           # apps/api/server FIRST so `tests` resolves to the server test
           # package -- repo-root tests/ shadows it otherwise (the standing
           # test_support collection errors). Root + shared packages follow.
-          PYTHONPATH: ${{ github.workspace }}/apps/api/server:${{ github.workspace }}:${{ github.workspace }}/packages/core-py:${{ github.workspace }}/packages/downcraft
+          PYTHONPATH: ${{ github.workspace }}/apps/api/server:${{ github.workspace }}:${{ github.workspace }}/packages/downcraft
         # --cov=src pointed at a directory that does not exist; the server
         # code lives in these packages.
         run: python -m pytest tests/ --cov=infrastructure --cov=routers --cov=controllers --cov-report=term-missing --cov-fail-under=30 -q --tb=short
@@ -147,6 +162,10 @@ jobs:
   contract-gate:
     name: Contract gate
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -171,12 +190,16 @@ jobs:
 
       - name: Projection matches the served route table (runtime)
         env:
-          PYTHONPATH: .:apps/api/server:packages/core-py:packages/downcraft
+          PYTHONPATH: .:apps/api/server:packages/downcraft
         run: python scripts/check_contract.py --runtime
 
   # ─── Root-level Python tests (tests/) ───────────────────────────
   test-root:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -213,12 +236,12 @@ jobs:
             --ignore=tests/test_training_monitor.py \
             -q --tb=short
 
-      # planner + app-planner suites (added 2026-10-28 with the canonical-state
+      # planner + grib suites (added 2026-10-28 with the canonical-state
       # PR): these never ran in CI before — root conftest puts both src dirs on
       # the path, so a bare import works here without an editable install.
       - name: Run planner suites
         run: |
-          python -m pytest packages/app-planner/tests packages/planner/tests \
+          python -m pytest packages/grib/tests packages/planner/tests \
             --override-ini="addopts=" \
             --import-mode=importlib \
             -q --tb=short
@@ -226,6 +249,10 @@ jobs:
   # ─── Frontend: strui (typecheck + test) ─────────────────────────
   test-strui:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -283,6 +310,10 @@ jobs:
   # ─── Python SDK tests ──────────────────────────────────────────
   test-sdk-py:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -299,6 +330,10 @@ jobs:
   # ─── TypeScript SDK (lint + typecheck + build + test) ──────────
   test-sdk-ts:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -315,6 +350,10 @@ jobs:
   # ─── Docker build + push ────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 45
     needs: [lint, test-core-py, test-server, test-strui, test-web, test-sdk-py, test-sdk-ts, test-root]
     if: github.event_name != 'pull_request'
     permissions:
@@ -370,6 +409,10 @@ jobs:
   # ─── Deploy to K8s (release only) ──────────────────────────────
   deploy:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 45
     needs: [build]
     if: github.event_name == 'release'
     environment:
@@ -393,6 +436,10 @@ jobs:
   # ─── Benchmark (main only) ─────────────────────────────────────
   benchmark:
     runs-on: ubuntu-latest
+    # A hung step fails the job instead of holding the
+    # concurrency group for GitHub's 6-hour default
+    # (card 20261102_025758 — test-root hung 6 h on main).
+    timeout-minutes: 30
     needs: [test-core-py]
     if: github.ref == 'refs/heads/main'
     steps:

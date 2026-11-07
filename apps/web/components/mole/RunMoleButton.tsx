@@ -1,9 +1,9 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState } from 'react'
 import { Button, cn } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
-import { useToastStore } from '@/lib/toast-store'
 import type { MoleReport } from './types'
 
 interface RunMoleButtonProps {
@@ -19,7 +19,7 @@ interface RunMoleButtonProps {
 export function RunMoleButton({ onCompleted, className }: RunMoleButtonProps) {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const run = async () => {
     if (running) return
@@ -52,11 +52,7 @@ export function RunMoleButton({ onCompleted, className }: RunMoleButtonProps) {
         Run check
       </Button>
       {error ? (
-        <span
-          role="alert"
-          data-testid="run-mole-error"
-          className="text-xs text-destructive"
-        >
+        <span role="alert" data-testid="run-mole-error" className="text-xs text-destructive">
           {error}
         </span>
       ) : null}
