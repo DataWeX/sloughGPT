@@ -347,7 +347,12 @@ class Tree:
         self.status = TreeStatus.BRANCHING
 
         for proc in processes:
-            proc.ready()
+            # ready() must not clobber a terminal state: a proc cancelled
+            # while queued (cancel_process / stop / timeout) stays
+            # CANCELLED. It is still submitted so _execute runs the stem
+            # bookkeeping in its finally.
+            if not proc.is_done:
+                proc.ready()
             future = self._pool.submit(self._execute, proc, stem)
             proc._future = future
 
@@ -357,8 +362,14 @@ class Tree:
         return stem
 
     def _execute(self, proc: Process, stem: Stem) -> Any:
-        proc.running()
         try:
+            if proc.is_done:
+                # Cancelled between spawn and execution: honor the terminal
+                # state — never run the fn, never overwrite CANCELLED with
+                # running(). The finally below still does stem bookkeeping,
+                # so a stem of cancelled procs still completes.
+                return proc.result
+            proc.running()
             if proc.timeout is not None and proc.timeout > 0:
                 result_container: list[Any] = []
                 error_container: list[Exception | None] = [None]

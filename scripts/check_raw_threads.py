@@ -3,10 +3,14 @@
 
 Scans ``apps/`` + ``domain/`` production files for raw ``threading.Thread``
 call sites (any import spelling: ``threading.Thread(``, ``_threading.Thread(``,
-``from threading import Thread``) and checks them against the allowlist
-(``scripts/raw_threads_allowlist.json``). A site outside the allowlist, a
-declared ``count`` that drifted, a schema-less entry, or a stale entry all
-fail the check — the grandfathered set moves only by explicit edit.
+``from threading import Thread``) and for async escapes out of the event
+loop — ``asyncio.to_thread(...)`` (any import spelling) and
+``loop.run_in_executor(...)`` (stage 4: the seam replaces long-running
+escapes with ``run_on_engine``, micro-I/O stays) — and checks them against
+the allowlist (``scripts/raw_threads_allowlist.json``). A site outside the
+allowlist, a declared ``count`` that drifted, a schema-less entry, or a
+stale entry all fail the check — the grandfathered set moves only by
+explicit edit.
 
 The same scan backs ``tests/core-py/test_raw_thread_gate.py`` (CI gate);
 run this script directly for the developer-facing hint:
@@ -48,12 +52,46 @@ def _thread_bindings(tree: ast.AST) -> tuple[set[str], set[str]]:
     return modules, classes
 
 
+def _async_bindings(tree: ast.AST) -> tuple[set[str], set[str]]:
+    """Names bound to the asyncio module / ``to_thread``, anywhere in the file."""
+    modules: set[str] = set()
+    funcs: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "asyncio":
+                    modules.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module == "asyncio":
+            for alias in node.names:
+                if alias.name == "to_thread":
+                    funcs.add(alias.asname or alias.name)
+    return modules, funcs
+
+
 def _is_thread_call(node: ast.Call, modules: set[str], classes: set[str]) -> bool:
     fn = node.func
     if isinstance(fn, ast.Attribute) and fn.attr == "Thread":
         return isinstance(fn.value, ast.Name) and fn.value.id in modules
     if isinstance(fn, ast.Name):
         return fn.id in classes
+    return False
+
+
+def _is_async_escape_call(node: ast.Call, modules: set[str], funcs: set[str]) -> bool:
+    """``asyncio.to_thread(...)`` (any import spelling) or ``.run_in_executor(...)``.
+
+    ``run_in_executor`` is matched on the attribute name alone: the method
+    belongs to asyncio's event loop / executor surface only, so any call
+    shape (``loop.run_in_executor``, ``get_running_loop().run_in_executor``)
+    is the escape class this gate ratchets.
+    """
+    fn = node.func
+    if isinstance(fn, ast.Attribute) and fn.attr == "run_in_executor":
+        return True
+    if isinstance(fn, ast.Attribute) and fn.attr == "to_thread":
+        return isinstance(fn.value, ast.Name) and fn.value.id in modules
+    if isinstance(fn, ast.Name):
+        return fn.id in funcs
     return False
 
 
@@ -64,14 +102,16 @@ def _collect_sites(path: Path, root: Path) -> list[dict]:
     except (SyntaxError, UnicodeDecodeError) as exc:  # pragma: no cover - corrupt file
         raise SystemExit(f"cannot parse {rel}: {exc}") from exc
     modules, classes = _thread_bindings(tree)
-    if not modules and not classes:
-        return []
+    async_modules, async_funcs = _async_bindings(tree)
 
     sites: list[dict] = []
     stack: list[str] = []
 
     def visit(node: ast.AST) -> None:
-        if isinstance(node, ast.Call) and _is_thread_call(node, modules, classes):
+        if isinstance(node, ast.Call) and (
+            _is_thread_call(node, modules, classes)
+            or _is_async_escape_call(node, async_modules, async_funcs)
+        ):
             sites.append(
                 {
                     "path": rel.as_posix(),
@@ -200,8 +240,9 @@ def _format(violation: dict) -> str:
     how = violation.get("how", "?")
     if how == "unlisted":
         return (
-            f"{loc} (line {violation['lines'][0]}) — raw thread not in allowlist; "
-            "migrate per docs/plans/2026-09-20-execution-consolidation.md or "
+            f"{loc} (line {violation['lines'][0]}) — raw thread / async-escape "
+            "site not in allowlist; migrate per "
+            "docs/plans/2026-09-20-execution-consolidation.md or "
             "add an entry to scripts/raw_threads_allowlist.json"
         )
     if how == "schema":
@@ -228,7 +269,7 @@ def main(argv: list[str]) -> int:
             f"{report['site_count']} grandfathered site(s) scanned"
         )
         return 1
-    print(f"ok — {report['site_count']} allowlisted raw-thread site(s)")
+    print(f"ok — {report['site_count']} allowlisted raw-thread/async-escape site(s)")
     return 0
 
 

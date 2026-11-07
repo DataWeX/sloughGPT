@@ -1,13 +1,13 @@
 {
   "metadata": {
     "spec": "docs/plans/2026-09-20-execution-consolidation.md",
-    "stage": "2 (lint hint) — allowlist built from the 2026-11-04 audit inventory, classified 2026-11-05",
+    "stage": "2 (lint hint) — allowlist built from the 2026-11-04 audit inventory, classified 2026-11-05; stage-4 async escapes (to_thread/run_in_executor) added 2026-11-06",
     "kinds": {
       "grandfathered": "charter grandfather: execution infra, server accept/pump loops, I/O pumps bound to a live handle",
       "deferred": "charter ruling: migrate when the site is next touched",
       "followup": "stage-3/4 migration candidate the audit parked — greppable backlog"
     },
-    "site_count": 48
+    "site_count": 252
   },
   "entries": {
     "apps/api/server/infrastructure/inference_pool.py::InferencePool.run_generator": {
@@ -66,9 +66,9 @@
       "count": 1
     },
     "domain/inference/_internal/slonet_provider.py::SloNetChatProvider.chat_stream": {
-      "reason": "producer pump feeding the chat-stream result queue",
+      "reason": "producer pump feeding the chat-stream result queue; +1 async-escape site(s) (stage 4)",
       "kind": "grandfathered",
-      "count": 1
+      "count": 2
     },
     "domain/infrastructure/_internal/fire_and_forget.py::FireAndForgetPool.__init__": {
       "reason": "FAF pool worker — execution infra itself (charter grandfather)",
@@ -111,9 +111,9 @@
       "count": 1
     },
     "domain/infrastructure/_internal/model_server.py::ModelServer.generate_stream": {
-      "reason": "asyncio-loop bridge pump bound to the live stream",
+      "reason": "asyncio-loop bridge pump bound to the live stream; +1 async-escape site(s) (stage 4)",
       "kind": "grandfathered",
-      "count": 1
+      "count": 2
     },
     "domain/infrastructure/_internal/model_worker.py::_hf_worker_main._stream": {
       "reason": "model.generate thread bound to the live streamer — pump",
@@ -161,18 +161,13 @@
       "count": 1
     },
     "domain/infrastructure/_internal/slonet_server.py::SloNetServer.generate_stream": {
-      "reason": "stream pump bound to the live stream handle",
+      "reason": "stream pump bound to the live stream handle; +1 async-escape site(s) (stage 4)",
       "kind": "grandfathered",
-      "count": 1
+      "count": 2
     },
     "domain/infrastructure/_internal/watchdog.py::HealthWatchdog.start": {
       "reason": "health watchdog — execution infra itself (charter grandfather)",
       "kind": "grandfathered",
-      "count": 1
-    },
-    "domain/memory/_internal/knowledge_store.py::KnowledgeMemory._run_async": {
-      "reason": "FOLLOWUP: sync-over-async bridge (fresh event loop, join immediately) — feeds the stage-4 TaskQueue sync-bridge open question",
-      "kind": "followup",
       "count": 1
     },
     "domain/shell/_internal/console.py::_Spinner.__enter__": {
@@ -209,6 +204,746 @@
       "reason": "VM execution loop — the subsystem's own loop (charter grandfather)",
       "kind": "grandfathered",
       "count": 1
+    },
+    "apps/api/server/host_metrics.py::sample_host_metrics_async": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/compression.py::SelectiveGZipMiddleware.dispatch": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/inference_pool.py::InferencePool.run": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::StartupOrchestrator._shutdown_training_runtime": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::StartupOrchestrator.run._init_autotrainer": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::StartupOrchestrator.run._init_metrics": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::StartupOrchestrator.run._init_rag": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::_auto_resume_training": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/infrastructure/startup.py::_restore_training_runtime": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/agents.py::AgentsRouter.create_agent": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/agents.py::AgentsRouter.delete_agent": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/agents.py::AgentsRouter.get_run": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/agents.py::AgentsRouter.list_agents": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/agents.py::AgentsRouter.list_runs": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/agents.py::AgentsRouter.update_agent": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/bootstrap.py::BootstrapRouter.bootstrap.call": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/consciousness.py::ConsciousnessRouter.stream_status.generate": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/consciousness.py::ConsciousnessRouter.train_start": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/dashboard.py::DashboardRouter.dashboard_stream.generate": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.convert_to_messages": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 4
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.create_dataset_from_chat": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.export_dataset": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.import_from_csv": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 3
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.import_from_github": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.import_from_huggingface": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.import_from_isbn": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.import_from_kaggle": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.import_from_local": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.import_from_url": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.list_datasets": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.preview_dataset": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/datasets.py::DatasetsRouter.quality_dataset": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/errors.py::ErrorsRouter.clear_errors": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/errors.py::ErrorsRouter.get_opencode_log": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/errors.py::ErrorsRouter.log_errors": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/files.py::FilesRouter._async_load_metadata": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/files.py::FilesRouter._async_save_metadata": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/files.py::FilesRouter.delete_file": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/files.py::FilesRouter.ingest_file": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/files.py::FilesRouter.upload_file": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/health.py::HealthRouter.debug_info": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/health.py::HealthRouter.detailed_health": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/health.py::HealthRouter.health": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/health.py::HealthRouter.health_stream.generate": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/health.py::HealthRouter.health_summary": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/health.py::HealthRouter.liveness": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/health.py::HealthRouter.readiness": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/images.py::ImagesRouter.list_gallery": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/inference.py::InferenceRouter._flush_session_to_disk": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/inference.py::InferenceRouter.get_current_session": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/inference.py::InferenceRouter.get_voice_audio": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/inference.py::InferenceRouter.list_sessions": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/inference.py::InferenceRouter.search_sessions": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/inference.py::InferenceRouter.send_voice_message": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/inference.py::InferenceRouter.stream_turn": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 3
+    },
+    "apps/api/server/routers/inference.py::_run_post_gen_tasks": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 4
+    },
+    "apps/api/server/routers/kb.py::KBRouter.bulk_ingest": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/kb.py::KBRouter.categorize_knowledge": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/kb.py::KBRouter.check_duplicate": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/kb.py::KBRouter.embedder_status": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/kb.py::KBRouter.ingest_file": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "apps/api/server/routers/kb.py::KBRouter.knowledge_gaps": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/kb.py::KBRouter.search_files": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/kb.py::KBRouter.train_embedder_endpoint": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/lora_eval.py::LoraEvalRouter.run_eval": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/meta_weights.py::MetaWeightsRouter.get_meta_weight_stats": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/meta_weights.py::MetaWeightsRouter.get_meta_weights": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/mobile.py::MobileRouter.mobile_train": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 5
+    },
+    "apps/api/server/routers/mobile.py::MobileRouter.train_from_sessions": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 5
+    },
+    "apps/api/server/routers/models.py::ModelsRouter.cache_usage": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/models.py::ModelsRouter.download_qwen_gguf": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 3
+    },
+    "apps/api/server/routers/models.py::ModelsRouter.get_engine_status": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/models.py::ModelsRouter.list_hf_models": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/models.py::ModelsRouter.reload_engine": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/models.py::ModelsRouter.verify_download": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/mole.py::MoleRouter.get_report": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/mole.py::MoleRouter.run_mole": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.analyze_pdf": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 3
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.create_visual_dataset": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 2
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.delete_checkpoint": {
+      "reason": "stage-4 grandfathered async escape: checkpoint find+delete is micro-I/O, stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.generate_image": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 3
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.list_checkpoints": {
+      "reason": "stage-4 grandfathered async escape: checkpoint dir listing is micro-I/O, stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.load_checkpoint": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 2
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.process_video": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 4
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.synthesize_speech": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 1
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.train_batch": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 1
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.transcribe_audio": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 1
+    },
+    "apps/api/server/routers/multimodal.py::MultimodalRouter.video_infer": {
+      "reason": "stage-4 migration candidate: long compute on asyncio.to_thread -> run_on_engine (charter stage 4)",
+      "kind": "followup",
+      "count": 2
+    },
+    "apps/api/server/routers/registry.py::RegistryRouter.list_artifacts": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/registry.py::RegistryRouter.verify_artifacts": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/security.py::SecurityRouter.get_audit_logs": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/self_train.py::SelfTrainRouter.get_self_train_status": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/self_train.py::SelfTrainRouter.start_self_train": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/self_train.py::SelfTrainRouter.stop_self_train": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/session.py::SessionRouter.get_session_inspector": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 5
+    },
+    "apps/api/server/routers/shell.py::exec_command": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/souls.py::SoulsRouter.get_soul": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/souls.py::SoulsRouter.list_souls": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/souls.py::SoulsRouter.switch_soul": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/system.py::SystemRouter.get_battery": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/system.py::SystemRouter.get_disk": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/system.py::SystemRouter.get_info": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/system.py::SystemRouter.get_metrics": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/system.py::SystemRouter.set_battery_limit": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/system.py::SystemRouter.set_battery_policy": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter._ensure_trained": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter.analyze_corpus": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter.decompose_token": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter.detokenize_ids": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter.get_tokenization_sample": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter.get_tokenizer_stats": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter.pretokenize_text": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter.tokenize_text": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/tokenizer.py::TokenizerRouter.train_tokenizer": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 3
+    },
+    "apps/api/server/routers/voice.py::VoiceRouter.text_to_speech": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/training/execution.py::start_training": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 4
+    },
+    "apps/api/server/training/helpers.py::notify_push._push": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/training/live_stream.py::training_live_stream.generate": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/agents/_internal/agents.py::Agent._plan_with_llm": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/agents/_internal/agents.py::Agent._synthesize": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "domain/core/_internal/soul.py::SloEngine.generate_async": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/inference/_internal/native/engine.py::NativeTransformerProvider.chat": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/inference/_internal/native/engine.py::NativeTransformerProvider.chat_stream": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/inference/_internal/slonet_provider.py::SloNetChatProvider.chat": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/context_core.py::ContextCore._get_rag_context_parts": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/context_core.py::ContextCore.get_auto_memory_context": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/download_manager.py::DownloadManager._download_worker": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/inference_client.py::InferenceClient.chat": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_server.py::ModelServer.generate._run": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/model_server.py::ModelServer.tokenize": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/numpy_engine.py::NumpyEngine.generate_stream": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/producer_consumer.py::ProducerConsumerQueue.async_get": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/producer_consumer.py::ProducerConsumerQueue.async_put": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/pugqeep/async_engine.py::AsyncEngine._run_sync_process": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
+    },
+    "domain/infrastructure/_internal/pugqeep/async_engine.py::AsyncEngine._run_threaded_process": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/infrastructure/_internal/slonet_server.py::SloNetServer.generate": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/memory/_internal/service.py::MemoryService.remember_async": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/memory/_internal/service.py::MemoryService.remember_facts_async": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/models/_internal/provider/slo_transformer.py::SloTransformerProvider.chat_stream": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/ops/_internal/wandb_server.py::start_wandb_server_background._loop": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 4
+    },
+    "domain/training/_internal/checkpoints.py::checkpoint_info": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/training/_internal/checkpoints.py::delete_checkpoint": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/training/_internal/checkpoints.py::download_checkpoint_path": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/training/_internal/checkpoints.py::export_all_metrics": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/training/_internal/checkpoints.py::export_checkpoint_mobile": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/training/_internal/checkpoints.py::get_all_checkpoint_data": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/training/_internal/checkpoints.py::list_checkpoints": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "domain/training/_internal/checkpoints.py::load_checkpoint": {
+      "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 2
     }
   }
 }

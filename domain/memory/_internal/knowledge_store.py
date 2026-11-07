@@ -558,11 +558,11 @@ class KnowledgeMemory:
         When called from inside a running event loop, running the coroutine on
         that same loop and blocking with ``fut.result()`` deadlocks — the loop
         thread waits on a task only it can schedule. Instead, execute the
-        coroutine on a dedicated new event loop in a helper thread so the
-        caller never blocks the loop that owns ``coro``'s dependencies.
+        coroutine on a dedicated new event loop in a helper *engine process*
+        (stage 4) so the caller never blocks the loop that owns ``coro``'s
+        dependencies; ``wait_for`` keeps the old ``thread.join()`` contract.
         """
         import asyncio
-        import threading
 
         try:
             asyncio.get_running_loop()
@@ -585,9 +585,15 @@ class KnowledgeMemory:
             finally:
                 inner.close()
 
-        thread = threading.Thread(target=_runner, daemon=True)
-        thread.start()
-        thread.join()
+        # The raw helper thread becomes a registry-visible engine process
+        # (stage-4 boundary: Engine is the one execution layer) — same
+        # blocking contract, daemon-equivalent exit via the engine's
+        # shutdown hook.
+        from domain.infrastructure._internal.pugqeep.singleton import get_engine
+
+        engine = get_engine()
+        proc = engine.spawn(_runner, name="knowledge-store-bridge")
+        engine.wait_for(proc.id)
         if "error" in box:
             raise box["error"]
         return box.get("result")

@@ -3,21 +3,28 @@
 `docs/plans/2026-09-20-execution-consolidation.md` (stage 2) prescribes a
 lint hint against raw ``threading.Thread(target=`` in ``apps/`` + ``domain/``
 with an allowlist file; stage 3 then migrated the candidates and ruled the
-rest grandfathered. This gate makes the rule mechanical so the migration
-ratchets instead of regressing (page-baseline / command-parity precedent:
+rest grandfathered. Stage 4 extended the same gate to async escapes out of
+the event loop — ``asyncio.to_thread(...)`` and ``loop.run_in_executor(...)``
+— so the duration rule (long compute → ``run_on_engine``, micro-I/O stays)
+ratchets with the identical mechanism. This gate makes the rule mechanical
+so the migration ratchets instead of regressing (page-baseline /
+command-parity precedent):
 
 - detection is AST-based: docstrings *mentioning* ``threading.Thread(...)``
   are not call sites, and ``from threading import Thread`` / ``_threading``
   aliases are as much a raw site as ``threading.Thread(``;
+- async escapes match on ``asyncio.to_thread`` (any import spelling) and
+  on the ``run_in_executor`` attribute name (asyncio's surface only);
 - allowlist entries are ``path::qualname`` with a declared ``count`` —
   a new site in an allowlisted function changes the count (red), and a
   migrated site lowers it (red until the entry is shrunk), so the
   grandfathered set can only move by explicit, reviewed edit;
 - entries carry ``reason`` + ``kind`` (``grandfathered`` / ``deferred`` /
-  ``followup``) — kind ``followup`` marks stage-3 migration candidates the
+  ``followup``) — kind ``followup`` marks stage-3/4 migration candidates the
   audit deliberately parked (greppable backlog).
 
-Baseline: audit 2026-11-04 + 2026-11-05 allowlist pass (54 sites).
+Baseline: audit 2026-11-04 + 2026-11-05 allowlist pass (54 sites);
+stage-4 async-escape pass 2026-11-06 (261 sites / 195 entries).
 """
 
 from __future__ import annotations
@@ -83,14 +90,10 @@ class TestDetection:
             tmp_path,
             {
                 "apps/x/a.py": (
-                    "from threading import Thread\n"
-                    "def go():\n"
-                    "    Thread(target=f).start()\n"
+                    "from threading import Thread\ndef go():\n    Thread(target=f).start()\n"
                 ),
                 "domain/y/b.py": (
-                    "import threading as th\n"
-                    "def go():\n"
-                    "    th.Thread(target=f).start()\n"
+                    "import threading as th\ndef go():\n    th.Thread(target=f).start()\n"
                 ),
             },
         )
@@ -117,13 +120,57 @@ class TestDetection:
             tmp_path,
             {
                 "apps/x/tests/test_thing.py": (
-                    "import threading\n"
-                    "def test_x():\n"
-                    "    threading.Thread(target=f).start()\n"
+                    "import threading\ndef test_x():\n    threading.Thread(target=f).start()\n"
                 ),
-                "apps/x/conftest.py": (
-                    "import threading\n"
-                    "threading.Thread(target=f).start()\n"
+                "apps/x/conftest.py": ("import threading\nthreading.Thread(target=f).start()\n"),
+            },
+        )
+        report = checker.scan(tree, allowlist={})
+        assert report["violations"] == []
+
+    def test_flags_asyncio_to_thread(self, checker, tmp_path):
+        tree = _write_tree(
+            tmp_path,
+            {
+                "apps/x/svc.py": (
+                    "import asyncio\nasync def go():\n    await asyncio.to_thread(fn)\n"
+                ),
+                "domain/y/b.py": (
+                    "from asyncio import to_thread\nasync def go():\n    await to_thread(fn)\n"
+                ),
+            },
+        )
+        report = checker.scan(tree, allowlist={})
+        assert len(report["violations"]) == 2
+        quals = {v["qualname"] for v in report["violations"]}
+        assert quals == {"go"}
+
+    def test_flags_run_in_executor_any_receiver(self, checker, tmp_path):
+        tree = _write_tree(
+            tmp_path,
+            {
+                "apps/x/svc.py": (
+                    "import asyncio\n"
+                    "async def go():\n"
+                    "    loop = asyncio.get_running_loop()\n"
+                    "    await loop.run_in_executor(None, fn)\n"
+                ),
+                "domain/y/b.py": (
+                    "async def go():\n    await get_loop().run_in_executor(None, fn)\n"
+                ),
+            },
+        )
+        report = checker.scan(tree, allowlist={})
+        assert len(report["violations"]) == 2
+
+    def test_ignores_docstring_mention_of_to_thread(self, checker, tmp_path):
+        tree = _write_tree(
+            tmp_path,
+            {
+                "domain/y/doc.py": (
+                    '"""Notes about ``asyncio.to_thread(...)`` escapes."""\n'
+                    "def ok():\n"
+                    "    return 1\n"
                 ),
             },
         )
@@ -137,9 +184,7 @@ class TestAllowlistRatchet:
             tmp_path,
             {
                 "apps/x/svc.py": (
-                    "import threading\n"
-                    "def boot():\n"
-                    "    threading.Thread(target=run).start()\n"
+                    "import threading\ndef boot():\n    threading.Thread(target=run).start()\n"
                 ),
             },
         )
@@ -181,11 +226,7 @@ class TestAllowlistRatchet:
         tree = _write_tree(
             tmp_path,
             {
-                "apps/x/svc.py": (
-                    "import threading\n"
-                    "def boot():\n"
-                    "    pass\n"
-                ),
+                "apps/x/svc.py": ("import threading\ndef boot():\n    pass\n"),
             },
         )
         allowlist = {
@@ -201,9 +242,7 @@ class TestAllowlistRatchet:
 
     def test_stale_entry_is_reported(self, checker, tmp_path):
         tree = _write_tree(tmp_path, {"apps/x/svc.py": "def ok():\n    return 1\n"})
-        allowlist = {
-            "apps/x/gone.py::boot": {"reason": "old", "kind": "grandfathered", "count": 1}
-        }
+        allowlist = {"apps/x/gone.py::boot": {"reason": "old", "kind": "grandfathered", "count": 1}}
         report = checker.scan(tree, allowlist=allowlist)
         assert any(v["stale"] for v in report["violations"])
 
@@ -212,9 +251,7 @@ class TestAllowlistRatchet:
             tmp_path,
             {
                 "apps/x/svc.py": (
-                    "import threading\n"
-                    "def boot():\n"
-                    "    threading.Thread(target=run).start()\n"
+                    "import threading\ndef boot():\n    threading.Thread(target=run).start()\n"
                 ),
             },
         )

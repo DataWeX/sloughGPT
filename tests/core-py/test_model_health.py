@@ -170,6 +170,15 @@ class TestStartAutoMonitoringProcess:
         monkeypatch.setattr(monitor, "run_benchmark", lambda: None)
         proc = monitor.start_auto_monitoring(interval_seconds=3600)
         exited = threading.Event()
+        # Wait until a worker actually holds the loop: a proc cancelled
+        # before dispatch is never executed (terminal state is honored),
+        # so on_complete only exists for the release path this test pins.
+        from domain.infrastructure._internal.pugqeep.engine import ProcessStatus
+
+        deadline = time.time() + 5.0
+        while proc.status != ProcessStatus.RUNNING and time.time() < deadline:
+            time.sleep(0.01)
+        assert proc.status == ProcessStatus.RUNNING
         # Tree._execute fires on_complete when the loop fn returns — i.e.
         # the cancel hook released the worker holding the forever-loop.
         proc.on_complete(lambda _p: exited.set())

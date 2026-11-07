@@ -5,12 +5,13 @@ Delegates to domain.training._internal.service for state and logic.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 
 from fastapi import APIRouter
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+
+from domain.infrastructure.engine_seam import run_on_engine
 
 from .schemas import FromSessionsRequest, TurboStartRequest
 
@@ -133,7 +134,9 @@ async def start_turbo_training_unified(req: TurboStartRequest):
                     )
 
         config = req.model_dump()
-        job_info = await asyncio.to_thread(start_turbo_training, config)
+        # Quick setup (job dirs + registration) — long enough to leave the
+        # loop, short enough for the default tree (stage-4 seam).
+        job_info = await run_on_engine(start_turbo_training, config)
 
         # Register with CancelManager for cancellation support
         cancel_event = threading.Event()

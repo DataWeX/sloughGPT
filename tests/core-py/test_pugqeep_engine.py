@@ -1396,6 +1396,21 @@ class TestEngineCancellation:
         engine.stop()
         assert p.is_cancelled
 
+    def test_cancelled_before_dispatch_never_runs(self):
+        """Terminal state is honored at dispatch: a proc cancelled while
+        queued must not execute when the dispatcher later picks it up,
+        and ready()/running() must not clobber CANCELLED."""
+        engine = Engine("test")
+        engine.tree("t")
+        ran = threading.Event()
+        p = engine.spawn(ran.set, tree="t")
+        assert engine.cancel_process(p.id) == 1  # before any dispatch
+        engine.dispatch()
+        p._future.result(timeout=5)  # _execute ran (and skipped the fn)
+        assert not ran.is_set()
+        assert p.is_cancelled
+        engine.stop()
+
 
 # ══════════════════════════════════════════════════════════════════
 # Engine: dependency graph
