@@ -2556,6 +2556,11 @@ class SloughGPTTrainer:
         """Delete oldest checkpoints if total disk usage exceeds MAX_CHECKPOINT_DISK_MB."""
         from .state import MAX_CHECKPOINT_DISK_MB
 
+        # Every stat pass tolerates a vanished file: concurrent savers share
+        # this directory, and _prune_stale_checkpoints unlinks stale .soul
+        # files between our glob and our stat (FileNotFoundError escaped here
+        # and failed test_thread_safety — card 20261105_160000). A file that
+        # disappeared mid-scan is already accounted for by whoever removed it.
         try:
             files = sorted(
                 checkpoint_dir.glob("*.soul"),
@@ -2563,11 +2568,17 @@ class SloughGPTTrainer:
             )
         except OSError:
             return
-        total_bytes = sum(f.stat().st_size for f in files)
+        try:
+            total_bytes = sum(f.stat().st_size for f in files)
+        except OSError:
+            return
         limit_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
         while total_bytes > limit_bytes and len(files) > 1:
             oldest = files.pop(0)
-            total_bytes -= oldest.stat().st_size
+            try:
+                total_bytes -= oldest.stat().st_size
+            except OSError:
+                continue
             try:
                 oldest.unlink()
                 logger.info(
