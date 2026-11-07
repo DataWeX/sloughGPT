@@ -50,6 +50,17 @@ def state_paths(tmp_path, monkeypatch):
 def learner(state_paths, tmp_path, monkeypatch):
     inst = ContinualLearner(n_embed=32, n_layer=1, n_head=1, lr=1e-4)
     yield inst
+    # Wake the poll loop before flipping its flag: _poll_loop parks in
+    # _stop_event.wait(interval=600), so setting _running = False alone never
+    # reaches it and the 0.2s join below expires having joined nothing — each
+    # learner here would otherwise hold a live `feed-poll` stem against the
+    # loops tree's max_stems=32 for ten minutes. stop_background_polling()
+    # sets _stop_event, which is the wake-up.
+    #
+    # Deliberately NOT inst.shutdown(): its join(timeout=5) waits out the
+    # trainer's time.sleep(5) and triples this file's runtime for no gain —
+    # the trainer's stem clears on its own within one sleep.
+    inst.ingestor.stop_background_polling()
     inst._running = False
     inst.ingestor._running = False
     if inst.ingestor._feed_thread and inst.ingestor._feed_thread.is_alive():
@@ -465,9 +476,13 @@ def test_shutdown_joins_live_thread(state_paths, monkeypatch):
     try:
         assert inst._thread.is_alive()
         inst.shutdown()
+        assert not inst._thread.is_alive()
     finally:
-        inst.shutdown()
-    assert not inst._thread.is_alive()
+        # Re-run only when the first shutdown left it alive. The old
+        # unconditional finally joined twice on every *passing* run, doubling
+        # the join budget the assertion above is racing against.
+        if inst._thread.is_alive():
+            inst.shutdown()
 
 
 # ---- background loop ----------------------------------------------------------

@@ -1114,6 +1114,47 @@ class TestEngineDispatch:
         assert child in engine._pending
         engine.stop()
 
+    def test_dispatch_preserves_proc_spawned_during_dispatch(self):
+        """A proc appended between dispatch()'s read and its commit must survive.
+
+        dispatch() used to rebind ``_pending = held`` only after
+        ``tree.branch()`` had returned, so a spawn() landing in that window was
+        discarded: the proc stayed registered in ``_processes`` but was never
+        branched, sat at CREATED forever, and ``ThreadHandle.is_alive()``
+        (= ``not is_done``) then reported a doomed proc as alive — which is
+        what made ``test_shutdown_joins_live_thread`` flake.
+        """
+        engine = Engine("test")
+        engine.tree("t")
+        engine.spawn(_noop, name="work", tree="t")
+
+        tree = engine._trees["t"]
+        orig_branch = tree.branch
+
+        def branch_then_spawn(procs):
+            stem = orig_branch(procs)
+            # A concurrent spawn_loop() landing between dispatch()'s snapshot
+            # of _pending and its commit — the exact window the rebind lost.
+            engine.spawn(_noop, name="late", tree="t")
+            return stem
+
+        tree.branch = branch_then_spawn
+        try:
+            engine.dispatch()
+        finally:
+            tree.branch = orig_branch
+
+        pending_names = [p.name for p in engine._pending]
+        assert "late" in pending_names, (
+            f"proc spawned during dispatch was silently dropped from _pending "
+            f"(pending={pending_names}) — it can never reach a terminal state"
+        )
+
+        # ...and it must still be dispatchable on the next pass, not stranded.
+        engine.dispatch()
+        assert engine._pending == []
+        engine.stop()
+
     def test_dispatch_when_deps_met(self):
         engine = Engine("test")
         engine.tree("t")
