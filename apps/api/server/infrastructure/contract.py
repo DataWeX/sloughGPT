@@ -22,6 +22,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import re
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -85,6 +86,17 @@ class RouteSpec:
     method: str | None = None
     summary: str = ""
     tags: tuple[str, ...] = ()
+    #: Raw-wire facet (ruling 2026-11-05, card ``20261104_151035``): ``True``
+    #: wraps the handler result in the standard ``{status, data}`` envelope;
+    #: ``False`` returns it untouched — for wires that must stay byte-identical
+    #: (SSE ``StreamingResponse`` passthrough, endpoints whose callers parse a
+    #: bare payload). The default keeps the pilot projection unchanged.
+    envelope: bool = True
+    #: Input carrier override: ``"query"`` validates the declared parameters as
+    #: query strings (even on a write verb — ``POST .../purge?status=...``),
+    #: ``"body"`` as a JSON body. ``None`` derives it from the method, which is
+    #: what FastAPI itself does for hand-built routes.
+    input: str | None = None
 
 
 @dataclass(frozen=True)
@@ -209,13 +221,14 @@ def _coerce(json_type: str, value: str) -> Any:
     return value
 
 
-def _query_dependency(spec: ToolSpec):
+def _query_dependency(spec: ToolSpec, path_params: frozenset[str] = frozenset()):
     """Build the read-side dependency: validate query params against the contract.
 
     The descriptor's ``parameters`` *are* the query schema — strings arrive as
     strings, numbers/booleans/objects are coerced to their declared types, and
     a missing required or unparseable value is a 422, not a downstream
     ``ValueError``. Keys outside the contract are ignored (cache-busters etc.).
+    ``path_params`` are bound by the URL template instead, never by the query.
     """
 
     async def dependency(request: Request) -> dict[str, Any]:
@@ -223,6 +236,8 @@ def _query_dependency(spec: ToolSpec):
         out: dict[str, Any] = {}
         errors: list[dict[str, Any]] = []
         for p in spec.parameters:
+            if p.name in path_params:
+                continue
             if p.name not in raw:
                 if p.required:
                     errors.append(
@@ -246,10 +261,16 @@ def _query_dependency(spec: ToolSpec):
     return dependency
 
 
-def _request_model(spec: ToolSpec) -> type[BaseModel]:
-    """Generate the write-side body model from the descriptor's parameters."""
+def _request_model(spec: ToolSpec, path_params: frozenset[str] = frozenset()) -> type[BaseModel]:
+    """Generate the write-side body model from the descriptor's parameters.
+
+    Path params belong to the URL template, not the body — they are excluded
+    here and bound from ``request.path_params`` at dispatch time.
+    """
     fields: dict[str, tuple[Any, Any]] = {}
     for p in spec.parameters:
+        if p.name in path_params:
+            continue
         ann = _JSON_TO_PY.get(p.type, Any)
         default: Any = ... if p.required else None
         fields[p.name] = (ann, default)
@@ -257,20 +278,136 @@ def _request_model(spec: ToolSpec) -> type[BaseModel]:
     return create_model(schema_name, **fields)  # type: ignore[call-overload]
 
 
-def _check_handler_accepts(spec: ToolSpec, handler: CapabilityHandler) -> None:
+_ANN_TO_JSON = {str: "string", int: "integer", float: "number", bool: "boolean"}
+
+
+def _resolve_ann(param: inspect.Parameter, handler: CapabilityHandler) -> Any:
+    """The parameter's annotation as a live object.
+
+    ``from __future__ import annotations`` turns every annotation into a
+    string; model-style detection, raw-Request recognition and path coercion
+    all need the real class. Evaluated in the handler's own module namespace
+    (where the name was written), falling back to the raw text when it does
+    not resolve.
+    """
+    ann = param.annotation
+    if not isinstance(ann, str):
+        return ann
+    globs = getattr(handler, "__globals__", None)
+    if not globs:
+        return ann
+    try:
+        return eval(ann, globs)  # noqa: S307 — annotation text from our own source
+    except Exception:  # noqa: BLE001 — an unresolvable name degrades to the raw text
+        return ann
+
+
+def _is_raw_request(param: inspect.Parameter, handler: CapabilityHandler) -> bool:
+    """``request`` as the raw FastAPI Request (not a pydantic body model)."""
+    ann = _resolve_ann(param, handler)
+    if isinstance(ann, type) and issubclass(ann, BaseModel):
+        return False
+    if isinstance(ann, type):
+        return issubclass(ann, Request)
+    return param.name == "request"  # unannotated — the name is the convention
+
+
+def _flat_params(
+    sig: inspect.Signature, path_params: frozenset[str], handler: CapabilityHandler
+) -> dict[str, inspect.Parameter]:
+    """Handler params the *contract* must supply — excludes transport injections."""
+    return {
+        name: p
+        for name, p in sig.parameters.items()
+        if name not in path_params and name != "auth_user" and not _is_raw_request(p, handler)
+    }
+
+
+def _model_param(
+    handler: CapabilityHandler, path_params: frozenset[str] = frozenset()
+) -> tuple[str, type[BaseModel]] | None:
+    """The handler's single pydantic body parameter, if it takes exactly one.
+
+    Model-style body: the annotation *is* the validator — constraints
+    (``ge/le/pattern``) stay enforced by the same class the hand-built route
+    used, and the projection passes the validated instance straight through.
+    """
+    try:
+        sig = inspect.signature(handler)
+        flats = _flat_params(sig, path_params, handler)
+    except (TypeError, ValueError):
+        return None
+    models = [
+        (name, ann)
+        for name, p in flats.items()
+        if isinstance(ann := _resolve_ann(p, handler), type) and issubclass(ann, BaseModel)
+    ]
+    if len(models) == 1 and len(flats) == 1:
+        return models[0]
+    return None
+
+
+def _wants_auth_user(handler: CapabilityHandler) -> bool:
+    """Whether the handler reads the decoded token payload (``auth_user``)."""
+    try:
+        return "auth_user" in inspect.signature(handler).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def _path_types(handler: CapabilityHandler, path_params: frozenset[str]) -> dict[str, str]:
+    """JSON Schema type per path placeholder, from the handler's annotation."""
+    if not path_params:
+        return {}
+    try:
+        params = inspect.signature(handler).parameters
+    except (TypeError, ValueError):
+        return dict.fromkeys(path_params, "string")
+    out: dict[str, str] = {}
+    for name in path_params:
+        ann = _resolve_ann(params[name], handler) if name in params else None
+        out[name] = _ANN_TO_JSON.get(ann, "string")
+    return out
+
+
+def _check_handler_accepts(
+    spec: ToolSpec, handler: CapabilityHandler, path_params: frozenset[str] = frozenset()
+) -> None:
     """Boot-time invariant: the handler can receive every declared parameter."""
     try:
         sig = inspect.signature(handler)
     except (TypeError, ValueError):  # builtins / C callables — nothing to check
         return
     params = sig.parameters
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return  # **kwargs absorbs anything the contract sends
+    flats = _flat_params(sig, path_params, handler)
+    has_model = any(
+        isinstance(ann := _resolve_ann(p, handler), type) and issubclass(ann, BaseModel)
+        for p in flats.values()
+    )
+    if has_model and _model_param(handler, path_params) is None:
+        raise ValueError(
+            f"handler for '{spec.name}' mixes a pydantic body parameter with flat "
+            f"parameters; the projection takes one body style per route — split "
+            f"the handler or declare the fields flat"
+        )
+    missing_path = sorted(name for name in path_params if name not in params)
+    if missing_path:
+        raise ValueError(
+            f"handler for '{spec.name}' does not accept path parameter(s) "
+            f"{missing_path} declared in the route template; the path is the "
+            f"call signature — adapt the handler, not the RouteSpec"
+        )
+    if _model_param(handler, path_params) is not None:
+        # Model-style: spec.parameters document the model's fields for the
+        # registry/TS projection; the model itself validates them at runtime.
+        return
     if any(p.name == "request" for p in spec.parameters):
         raise ValueError(
             f"'request' is reserved by the projection (injected raw Request) — "
             f"rename the '{spec.name}' parameter"
         )
-    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
-        return
     missing = [p.name for p in spec.parameters if p.name not in params]
     if missing:
         raise ValueError(
@@ -279,12 +416,19 @@ def _check_handler_accepts(spec: ToolSpec, handler: CapabilityHandler) -> None:
         )
 
 
-def _openapi_extra(spec: ToolSpec, method: str) -> dict[str, Any]:
+def _openapi_extra(
+    spec: ToolSpec,
+    path_params: frozenset[str] = frozenset(),
+    path_types: dict[str, str] | None = None,
+    input_style: str = "query",
+) -> dict[str, Any]:
     """Operation-level contract metadata: ``x-contract`` + projected parameters.
 
-    Read-side parameters are validated by our own dependency (FastAPI never
-    sees them as function parameters), so they are published here — otherwise
-    the OpenAPI view of the contract would silently omit what it enforces.
+    Read-side (and ``input="query"``) parameters are validated by our own
+    dependency — FastAPI never sees them as function parameters — so they are
+    published here; otherwise the OpenAPI view of the contract would silently
+    omit what it enforces. Path placeholders are published as ``in: path`` for
+    the same reason: the endpoint signature does not carry them.
     """
     extra: dict[str, Any] = {
         "x-contract": {
@@ -294,8 +438,17 @@ def _openapi_extra(spec: ToolSpec, method: str) -> dict[str, Any]:
             "idempotent": spec.idempotent,
         }
     }
-    if method in _READ_METHODS and spec.parameters:
-        extra["parameters"] = [
+    parameters: list[dict[str, Any]] = [
+        {
+            "name": name,
+            "in": "path",
+            "required": True,
+            "schema": {"type": (path_types or {}).get(name, "string")},
+        }
+        for name in sorted(path_params)
+    ]
+    if input_style == "query" and spec.parameters:
+        parameters.extend(
             {
                 "name": p.name,
                 "in": "query",
@@ -304,90 +457,155 @@ def _openapi_extra(spec: ToolSpec, method: str) -> dict[str, Any]:
                 "schema": {"type": p.type},
             }
             for p in spec.parameters
-        ]
+            if p.name not in path_params
+        )
+    if parameters:
+        extra["parameters"] = parameters
     return extra
 
 
 def _build_endpoint(
     spec: ToolSpec,
     handler: CapabilityHandler,
-    method: str,
     source: str,
+    *,
+    path_params: frozenset[str] = frozenset(),
+    path_types: dict[str, str] | None = None,
+    envelope: bool = True,
+    input_style: str = "query",
 ) -> CapabilityHandler:
     """Return the FastAPI endpoint function for one projected route.
 
-    Shape: validate (contract-derived) → call → envelope (``success_response``)
-    → classify (``classify_and_raise``). The try/except is async by design: the
-    awaited handler raises *inside* it, so classification always fires.
+    Shape: validate (contract-derived) → call → envelope → classify
+    (``classify_and_raise``). The try/except is async by design: the awaited
+    handler raises *inside* it, so classification always fires.
+
+    Binding order: payload (body model or query dict) → path placeholders →
+    raw ``Request`` → ``auth_user`` — exactly what the hand-built signature
+    declared, now derived from the descriptor and the handler's annotations.
+    ``envelope=False`` returns the handler result untouched (raw-wire facets
+    keep ``StreamingResponse`` passthrough and bare payload shapes working).
     """
     wants_request = _wants_request(handler)
+    wants_auth_user = _wants_auth_user(handler)
     authed = (spec.auth_scope or "public") != "public"
+    model_style = _model_param(handler, path_params)
+    types = path_types or {}
 
-    async def _dispatch(payload: Any, request: Request) -> dict[str, Any]:
+    def _bind(payload: Any, request: Request, auth_user: dict | None) -> dict[str, Any]:
+        if model_style is not None:
+            data: dict[str, Any] = {model_style[0]: payload} if payload is not None else {}
+        elif isinstance(payload, BaseModel):
+            data = payload.model_dump()
+        else:
+            data = dict(payload or {})
+        for name in path_params:
+            raw = request.path_params.get(name, "")
+            try:
+                data[name] = _coerce(types.get(name, "string"), raw)
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise RequestValidationError(
+                    [
+                        {
+                            "loc": ("path", name),
+                            "msg": f"Invalid value for {types.get(name, 'string')}: {exc}",
+                            "type": "value_error",
+                        }
+                    ]
+                ) from exc
+        if wants_request:
+            data["request"] = request
+        if wants_auth_user:
+            data["auth_user"] = auth_user
+        return data
+
+    async def _dispatch(payload: Any, request: Request, auth_user: dict | None) -> Any:
         try:
-            data: dict[str, Any] = (
-                payload.model_dump() if isinstance(payload, BaseModel) else dict(payload or {})
-            )
-            if wants_request:
-                data["request"] = request
+            data = _bind(payload, request, auth_user)
             result = handler(**data)
             if inspect.isawaitable(result):
                 result = await result
-            return success_response(data=result)
+            return success_response(data=result) if envelope else result
         except Exception as exc:
             classify_and_raise(exc, source=source)
 
-    if method in _READ_METHODS:
-        dep = _query_dependency(spec)
+    if input_style == "query":
+        dep = _query_dependency(spec, path_params)
         if authed:
 
-            async def read_endpoint(
+            async def query_endpoint(
                 request: Request,
                 payload: dict[str, Any] = Depends(dep),
                 auth_user: dict | None = Depends(require_auth_if_enabled),
             ) -> dict[str, Any]:
-                return await _dispatch(payload, request)
+                return await _dispatch(payload, request, auth_user)
 
         else:
 
-            async def read_endpoint(  # noqa: F811 — scoped twin, public variant
+            async def query_endpoint(  # noqa: F811 — scoped twin, public variant
                 request: Request,
                 payload: dict[str, Any] = Depends(dep),
             ) -> dict[str, Any]:
-                return await _dispatch(payload, request)
+                return await _dispatch(payload, request, None)
 
-        return read_endpoint
-
-    model = _request_model(spec)
-    if authed:
-
-        async def write_endpoint(
-            request: Request,
-            payload: Any = Body(...),
-            auth_user: dict | None = Depends(require_auth_if_enabled),
-        ) -> dict[str, Any]:
-            return await _dispatch(payload, request)
-
+        endpoint = query_endpoint
     else:
+        body_model = (
+            model_style[1] if model_style is not None else _request_model(spec, path_params)
+        )
+        # A route with nothing to validate accepts an absent body — hand-built
+        # no-arg POSTs never required one, and Body(...) would 422 on them.
+        has_body = model_style is not None or any(
+            p.name not in path_params for p in spec.parameters
+        )
+        body_default: Any = Body(...) if has_body else Body(None)
+        if authed:
 
-        async def write_endpoint(  # noqa: F811 — scoped twin, public variant
-            request: Request,
-            payload: Any = Body(...),
-        ) -> dict[str, Any]:
-            return await _dispatch(payload, request)
+            async def write_endpoint(
+                request: Request,
+                payload: Any = body_default,
+                auth_user: dict | None = Depends(require_auth_if_enabled),
+            ) -> dict[str, Any]:
+                return await _dispatch(payload, request, auth_user)
 
-    # Contract-derived body schema: FastAPI validates against it *and* publishes
-    # it in the OpenAPI request body (same declaration the model sees).
-    write_endpoint.__annotations__["payload"] = model
-    return write_endpoint
+        else:
+
+            async def write_endpoint(  # noqa: F811 — scoped twin, public variant
+                request: Request,
+                payload: Any = body_default,
+            ) -> dict[str, Any]:
+                return await _dispatch(payload, request, None)
+
+        # Contract-derived body schema: FastAPI validates against it *and*
+        # publishes it in the OpenAPI request body (same declaration the
+        # model sees — constraints included, model-style).
+        write_endpoint.__annotations__["payload"] = body_model
+        endpoint = write_endpoint
+
+    if not envelope:
+        # Raw wire: no response_model — the payload shape is whatever the
+        # handler returned, exactly as the hand-built route served it.
+        endpoint.__annotations__.pop("return", None)
+    return endpoint
 
 
 def _wants_request(handler: CapabilityHandler) -> bool:
-    """Whether the handler takes the raw ``Request`` (auth, client ip, streaming)."""
+    """Whether the handler takes the raw ``Request`` (auth, client ip, streaming).
+
+    Annotation-aware: ``request`` annotated with a pydantic model is a *body*
+    parameter (model-style), not the raw Request — ``load_adapter(request:
+    LoadAdapterRequest)`` must receive its validated model, not Starlette's.
+    """
     try:
-        return "request" in inspect.signature(handler).parameters
+        param = inspect.signature(handler).parameters.get("request")
     except (TypeError, ValueError):
         return False
+    if param is None:
+        return False
+    ann = _resolve_ann(param, handler)
+    if isinstance(ann, type) and issubclass(ann, BaseModel):
+        return False
+    return True
 
 
 def create_router(
@@ -412,8 +630,13 @@ def create_router(
         route: A single ``RouteSpec``, or ``[(RouteSpec, handler), ...]`` for a
             capability crossing more than once.
         handler: The capability callable (required for a single ``RouteSpec``).
-            Must accept every declared parameter; ``request`` is injected when
-            declared.
+            Must accept every declared parameter; the raw ``Request`` and the
+            decoded ``auth_user`` are injected when declared, and every
+            ``{placeholder}`` in the path must be an accepted parameter.
+
+    Route-level facets: ``RouteSpec.envelope=False`` serves the handler result
+    unwrapped (raw wire / SSE passthrough); ``RouteSpec.input="query"``
+    validates declared parameters as query strings even on a write verb.
 
     Returns:
         An ``APIRouter`` for the module to expose as ``router``.
@@ -456,7 +679,26 @@ def create_router(
                 derived,
             )
 
-        _check_handler_accepts(spec, route_handler)
+        path_params = frozenset(re.findall(r"\{([A-Za-z_][A-Za-z0-9_]*)\}", route_spec.path))
+        authed = (spec.auth_scope or "public") != "public"
+        _check_handler_accepts(spec, route_handler, path_params)
+        if _wants_auth_user(route_handler) and not authed:
+            raise ValueError(
+                f"handler for '{spec.name}' reads auth_user but the descriptor "
+                f"auth_scope is public — declare the scope so the projection "
+                f"can enforce and forward the token"
+            )
+        input_style = route_spec.input or ("query" if method in _READ_METHODS else "body")
+        if input_style not in {"query", "body"}:
+            raise ValueError(
+                f"{spec.name}: unknown input style {input_style!r} (expected query|body)"
+            )
+        if input_style == "query" and _model_param(route_handler, path_params):
+            raise ValueError(
+                f"{spec.name}: a pydantic body parameter cannot ride a "
+                f"query-input route — the model is the body validator"
+            )
+        path_types = _path_types(route_handler, path_params)
         path = _join(prefix, route_spec.path)
         operation_id = reg.claim_operation_id(f"{spec.name}.{method.lower()}", method, path)
         reg.register(
@@ -475,7 +717,15 @@ def create_router(
             )
         )
 
-        endpoint = _build_endpoint(spec, route_handler, method, source)
+        endpoint = _build_endpoint(
+            spec,
+            route_handler,
+            source,
+            path_params=path_params,
+            path_types=path_types,
+            envelope=route_spec.envelope,
+            input_style=input_style,
+        )
         router.add_api_route(
             route_spec.path,
             endpoint,
@@ -487,7 +737,7 @@ def create_router(
             responses={
                 422: {"description": "Contract violation (missing or mistyped parameter)"},
             },
-            openapi_extra=_openapi_extra(spec, method),
+            openapi_extra=_openapi_extra(spec, path_params, path_types, input_style),
         )
         logger.debug("projected %s %s -> %s", method, path, spec.name)
 
