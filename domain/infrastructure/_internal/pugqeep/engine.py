@@ -1504,9 +1504,12 @@ class Engine:
                 self._metrics.record_complete(proc)
                 return proc
 
-        self._processes[proc.id] = proc
-        self._pending.append(proc)
-        self._all_done_event.clear()
+        # Commit under the same lock dispatch() filters with: an unlocked
+        # append racing dispatch()'s read-modify-write is what loses procs.
+        with self._lock:
+            self._processes[proc.id] = proc
+            self._pending.append(proc)
+            self._all_done_event.clear()
         self._metrics.record_spawn()
 
         if register_cancel:
@@ -1589,12 +1592,12 @@ class Engine:
             return 0
 
         dispatchable: list[Process] = []
-        held: list[Process] = []
         for proc in self._pending:
+            # Unmet deps simply stay out of `dispatchable`, so the commit
+            # below leaves them pending exactly as before.
             if proc.depends_on and not self._deps_met(proc):
-                held.append(proc)
-            else:
-                dispatchable.append(proc)
+                continue
+            dispatchable.append(proc)
 
         if not dispatchable:
             return 0
@@ -1647,7 +1650,16 @@ class Engine:
                     for p in batch:
                         p.fail(str(e))
 
-        self._pending = held
+        # Drop exactly the procs we consumed — by identity, from the list as
+        # it stands *now*, under the lock spawn() appends with. Rebinding to
+        # `held` here was the bug: a spawn() landing after our snapshot but
+        # before this line was discarded outright, leaving the proc registered
+        # in _processes yet never branched (CREATED forever), which
+        # ThreadHandle.is_alive() (= not is_done) then reported as alive.
+        with self._lock:
+            consumed = {id(p) for p in dispatchable}
+            self._pending = [p for p in self._pending if id(p) not in consumed]
+
         self._metrics.record_dispatch(dispatched)
         return dispatched
 
