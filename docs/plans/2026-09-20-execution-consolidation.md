@@ -197,8 +197,18 @@ kind-routing design and quantified stage 3's scope.
 
 ## Open questions
 
-- Shared pool size / overflow policy (drop? grow? block with timeout?).
+All three closed as of stage 4 (2026-11-07):
+
+- Shared pool size / overflow policy — **answered (stage 1)**: drop +
+  count + log, pool 4 / queue cap 256 (see Stage 1 above; growing would
+  unbounded the pool, blocking would re-introduce the worker stall).
 - Should `TaskQueue` gain a sync bridge so non-async callers stop
-  hand-rolling threads?
-- Who owns lifecycle (shutdown/flush) of the shared pool — `lifespan`,
-  `startup.py`, or process guard?
+  hand-rolling threads — **answered (stage 4): no**. The boundary ruling
+  gives each layer one job: async callers cross via the `run_on_engine`
+  seam (`domain/infrastructure/_internal/engine_seam.py`), sync callers
+  (scripts/CLI/tests) use the sync core directly — `Engine`/`Pool` are
+  synchronous by design and need no bridge. Queues gain none.
+- Who owns lifecycle (shutdown/flush) of the shared pool — **answered**:
+  `startup.py` — `StartupOrchestrator._shutdown_pool` registered as
+  `ShutdownHook("pool_shutdown", ...)` (not `lifespan`, not process
+  guard).
