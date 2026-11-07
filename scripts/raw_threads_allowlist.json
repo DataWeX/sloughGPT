@@ -365,17 +365,17 @@
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/errors.py::ErrorsRouter.clear_errors": {
+    "apps/api/server/routers/system.py::ErrorsRouter.clear_errors": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/errors.py::ErrorsRouter.get_opencode_log": {
+    "apps/api/server/routers/system.py::ErrorsRouter.get_opencode_log": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 2
     },
-    "apps/api/server/routers/errors.py::ErrorsRouter.log_errors": {
+    "apps/api/server/routers/system.py::ErrorsRouter.log_errors": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
@@ -440,7 +440,7 @@
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/images.py::ImagesRouter.list_gallery": {
+    "apps/api/server/routers/files.py::ImagesRouter.list_gallery": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
@@ -645,12 +645,12 @@
       "kind": "followup",
       "count": 2
     },
-    "apps/api/server/routers/registry.py::RegistryRouter.list_artifacts": {
+    "apps/api/server/routers/models.py::RegistryRouter.list_artifacts": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/registry.py::RegistryRouter.verify_artifacts": {
+    "apps/api/server/routers/models.py::RegistryRouter.verify_artifacts": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
@@ -675,7 +675,7 @@
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/session.py::SessionRouter.get_session_inspector": {
+    "apps/api/server/routers/system.py::SessionRouter.get_session_inspector": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 5
