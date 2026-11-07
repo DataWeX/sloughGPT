@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { notify } from '@/lib/notify'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from '@/vite/next-compat/navigation'
+import Link from '@/vite/next-compat/link'
 import { PageContainer } from '@/components/PageContainer'
 import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
 import { datasetController } from '@/lib/controllers'
@@ -202,20 +203,39 @@ export default function TrainingPage() {
         </div>
       }
     >
-      {/* Hero: live training status */}
+      {/* Hero: live training status — click through to the job's live view */}
       <div
         role="status"
         aria-live="polite"
         className="flex items-center gap-2 rounded-lg border border-border/40 bg-card/50 px-3 py-2"
       >
         <StatusDot tone={heroTone} pulse={liveTraining} />
-        <p className="text-sm text-muted-foreground">{heroText}</p>
+        {runningJob && !runningJob.id.startsWith('pending-') ? (
+          <Link
+            href={`/training/job/${runningJob.id}`}
+            className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
+          >
+            {heroText}
+          </Link>
+        ) : (
+          <p className="text-sm text-muted-foreground">{heroText}</p>
+        )}
       </div>
 
-      {/* At-a-glance counts */}
+      {/* At-a-glance counts — Active jobs links into the running job's live view */}
       <KpiGrid columns={4}>
         <StatCard label="Datasets" value={datasets.datasets.length} numeric />
-        <StatCard label="Active jobs" value={runningCount} numeric />
+        {runningJob && !runningJob.id.startsWith('pending-') ? (
+          <Link
+            href={`/training/job/${runningJob.id}`}
+            aria-label={`Open live view for ${runningJob.name || runningJob.id}`}
+            className="rounded-lg transition-shadow hover:shadow-sm focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <StatCard label="Active jobs" value={runningCount} numeric />
+          </Link>
+        ) : (
+          <StatCard label="Active jobs" value={runningCount} numeric />
+        )}
         <StatCard label="Finished jobs" value={completedCount} numeric />
         <StatCard label="Saved checkpoints" value={checkpoints.checkpoints.length} numeric />
       </KpiGrid>
