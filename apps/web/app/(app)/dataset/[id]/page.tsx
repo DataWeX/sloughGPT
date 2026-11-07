@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import dynamicNext from '@/vite/next-compat/dynamic'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from '@/vite/next-compat/navigation'
@@ -41,7 +42,6 @@ import { DatasetQualityCard } from '@/components/dataset/DatasetQualityCard'
 import { DatasetInsightsCard } from '@/components/dataset/DatasetInsightsCard'
 import { formatBytes } from '@/lib/format-bytes'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
-import { useToastStore } from '@/lib/toast-store'
 
 const DatasetImportDialog = dynamicNext(
   () => import('@/components/DatasetImportDialog').then((m) => m.DatasetImportDialog),
@@ -51,7 +51,7 @@ const DatasetImportDialog = dynamicNext(
 export default function DatasetDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const datasetId = decodeURIComponent((params.id as string) || '')
 
   const [dataset, setDataset] = useState<Dataset | null>(null)

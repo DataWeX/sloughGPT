@@ -8,9 +8,9 @@
  * clear and full settings reset. Appearance, locale and palette route
  * through the shared settings/theme/locale stores. The panels own render.
  */
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { useSettings, useUpdateSettings, DEFAULT_SETTINGS } from '@/lib/store'
-import { useToastStore } from '@/lib/toast-store'
 import { systemController } from '@/lib/system-controller'
 import { modelController } from '@/lib/model-controller'
 import { chatDB } from '@/lib/db'
@@ -30,7 +30,7 @@ import {
 export function useSettingsWorkbench() {
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { healthLegacy: apiHealth } = useLiveStatus()
   const { locale, setLocale } = useLocale()
   const { palette, setPalette } = useTheme()

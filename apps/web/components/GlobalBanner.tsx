@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { memo } from 'react'
 
 import { Button, StatusDot, IconX } from '@sloughgpt/strui'
@@ -16,7 +17,7 @@ export const GlobalBanner = memo(function GlobalBanner() {
   // Single-slot store: `banners[0]` IS the banner. Rendering it explicitly
   // (instead of mapping) keeps the view aligned with the one-banner invariant.
   const banner = useBannerStore((s) => s.banners[0])
-  const dismissBanner = useBannerStore((s) => s.dismissBanner)
+  const dismissBanner = notify.dismissBanner
   if (!banner) return null
   return (
     <div aria-live="assertive">

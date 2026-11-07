@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import Link from '@/vite/next-compat/link'
 import { usePathname } from '@/vite/next-compat/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -61,8 +62,8 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
   const toasts = useToastStore((s) => s.toasts)
-  const dismissToast = useToastStore((s) => s.dismissToast)
-  const clearToasts = useToastStore((s) => s.clearToasts)
+  const dismissToast = notify.dismissToast
+  const clearToasts = notify.clearToasts
   const apiStatus = useApiMonitor((s) => s.status)
   const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed, toggleConv } = useConvSidebar()
   useGlobalShortcuts()
@@ -116,7 +117,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
       if (detail?.message) {
-        useToastStore.getState().addToast(detail.message, detail.type || 'info')
+        notify.toast(detail.message, detail.type || 'info')
       }
     }
     window.addEventListener('show-toast', handler)
@@ -163,7 +164,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       const { bannerGraceMs } = useAppStore.getState().settings
       let id: string | null = null
       const raise = () => {
-        id = useBannerStore.getState().showBanner({
+        id = notify.banner({
           key: 'backend-connection',
           tone: 'destructive',
           title: 'Backend unreachable',
@@ -195,7 +196,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         // A superseded id is a no-op (single-slot store) — another producer's
         // banner is left alone. `id` tracks the latest raise, so a re-raised
         // banner is retired here too when the status moves on.
-        if (id) useBannerStore.getState().dismissBanner(id)
+        if (id) notify.dismissBanner(id)
       }
     }
 
@@ -215,7 +216,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       connectionDropRef.current = false
       return
     }
-    const greenId = useBannerStore.getState().showBanner({
+    const greenId = notify.banner({
       key: 'backend-connection',
       tone: 'success',
       title: 'Backend reconnected',
@@ -225,14 +226,14 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     // StrictMode remount (cleanup clears the timer, ref still set) re-raises
     // the banner and re-arms the hold instead of leaving it stuck on screen.
     const timer = setTimeout(() => {
-      useBannerStore.getState().dismissBanner(greenId)
+      notify.dismissBanner(greenId)
       connectionDropRef.current = false
     }, bannerHoldMs ?? RECOVERY_BANNER_HOLD_MS)
     return () => {
       clearTimeout(timer)
       // Retire the green banner on re-run/unmount; the drop ref stays set so a
       // StrictMode second pass re-shows it (single slot replaces, never stacks).
-      useBannerStore.getState().dismissBanner(greenId)
+      notify.dismissBanner(greenId)
     }
   }, [apiStatus])
 

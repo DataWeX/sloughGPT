@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -15,7 +16,6 @@ import {
   StatusDot,
   Switch,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -169,7 +169,7 @@ function sendNotification(title: string, body: string) {
 }
 
 export default function ConsciousnessAlertsPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [health, setHealth] = useState<HealthData | null>(null)

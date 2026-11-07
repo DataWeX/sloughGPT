@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
@@ -27,7 +28,6 @@ import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from '@/vite/next-compat/dynamic'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { downloadJson } from '@/lib/download-utils'
-import { useToastStore } from '@/lib/toast-store'
 import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
 import { SystemStatusCard } from '@/components/monitoring/SystemStatusCard'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
@@ -218,7 +218,7 @@ export default function SystemHealthPage() {
     )
   }, [cpuThreshold, memThreshold])
 
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const handleBatteryLimit = useCallback(
     async (percent: number) => {
@@ -607,9 +607,7 @@ export default function SystemHealthPage() {
               onInspect={() => void handleSessionInspect()}
               onRegenerate={() => void handleSessionRegenerate()}
             />
-            {sessionError && (
-              <span className="block text-xs text-destructive">{sessionError}</span>
-            )}
+            {sessionError && <span className="block text-xs text-destructive">{sessionError}</span>}
             {sessionInspector && (
               <SessionInspectorGrid
                 stats={{

@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
 import { Skeleton } from '@sloughgpt/strui'
@@ -11,7 +12,6 @@ import { SearchResultsCard } from '@/components/workspace-search/SearchResultsCa
 import { SearchEmptyState } from '@/components/workspace-search/SearchEmptyState'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { SEARCH_STORES } from '@/lib/search-stores'
 
 interface SearchHit {
@@ -35,7 +35,7 @@ export default function WorkspaceSearchPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   // Deep link: /workspace/data/search?q=... seeds the query (palette jumps).
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [hits, setHits] = useState<SearchHit[] | null>(null)

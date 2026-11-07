@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconCheck, IconX, IconBolt } from '@sloughgpt/strui'
@@ -10,7 +11,6 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 
 interface ChallengeWord {
   word: string
@@ -271,7 +271,7 @@ export default function ChallengeCard() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ score: number; phonemes: string[] } | null>(null)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const currentWord = challenge.words[currentWordIndex]
 

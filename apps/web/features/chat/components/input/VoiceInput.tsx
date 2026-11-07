@@ -1,9 +1,9 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { multimodalController } from '@/lib/controllers'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { VoiceWaveform } from './VoiceWaveform'
 
@@ -74,7 +74,7 @@ export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: 
   const [isListening, setIsListening] = useState(false)
   const [isBrowserSupported, setIsBrowserSupported] = useState(false)
   const [isServerSupported, setIsServerSupported] = useState(false)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 

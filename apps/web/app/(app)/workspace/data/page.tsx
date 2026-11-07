@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -7,7 +8,6 @@ import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTab
 import { dataTabs } from '@/components/workspace/workspace-tabs'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/dataset-controller'
 import { Database, Key, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react'
 
@@ -36,7 +36,7 @@ const RESOURCE_COLORS: Record<string, string> = {
 
 export default function SharedDataPage() {
   const { currentWorkspace } = useAuthStore()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [shares, setShares] = useState<Share[]>([])
   const [loading, setLoading] = useState(true)
   const [showShareDialog, setShowShareDialog] = useState(false)

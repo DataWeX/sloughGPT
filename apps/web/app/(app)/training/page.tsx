@@ -1,11 +1,11 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { trainingJobsController } from '@/lib/training-controller'
 import { useTrainingForm } from '@/hooks/useTrainingForm'
@@ -23,7 +23,7 @@ import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const initialLoadDone = useRef(false)
   const session = useTrainingSession()
   const datasets = useTrainingDatasets(addToast)

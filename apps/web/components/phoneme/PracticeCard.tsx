@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconMic, IconMicFilled, IconStop } from '@sloughgpt/strui'
@@ -13,7 +14,6 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeSkeleton from './PhonemeSkeleton'
 import { IconBolt } from '@sloughgpt/strui'
 
@@ -83,7 +83,7 @@ export default function PracticeCard() {
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
   const randomWordTrigger = usePhonemeStore((s) => s.randomWordTrigger)
   const pronunciationStreak = usePhonemeStore((s) => s.pronunciationStreak)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   useEffect(() => {
     return () => {

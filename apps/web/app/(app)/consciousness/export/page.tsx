@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -14,7 +15,6 @@ import {
   Input,
   Skeleton,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 
@@ -31,12 +31,18 @@ const EXPORT_OPTIONS = [
 
 const fetchExportData = async (key: string): Promise<unknown> => {
   switch (key) {
-    case 'episodes': return consciousnessController.getEpisodeHistory(1000)
-    case 'qualia': return consciousnessController.getQualiaHistory(1000)
-    case 'beliefs': return consciousnessController.getBeliefsHistory()
-    case 'personality': return consciousnessController.getPersonality()
-    case 'configuration': return consciousnessController.getStatus()
-    default: return null
+    case 'episodes':
+      return consciousnessController.getEpisodeHistory(1000)
+    case 'qualia':
+      return consciousnessController.getQualiaHistory(1000)
+    case 'beliefs':
+      return consciousnessController.getBeliefsHistory()
+    case 'personality':
+      return consciousnessController.getPersonality()
+    case 'configuration':
+      return consciousnessController.getStatus()
+    default:
+      return null
   }
 }
 
@@ -61,7 +67,9 @@ function loadBackups(): BackupEntry[] {
 function saveBackups(backups: BackupEntry[]) {
   try {
     localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(backups))
-  } catch { /* ignored */ }
+  } catch {
+    /* ignored */
+  }
 }
 
 function formatBytes(bytes: number): string {
@@ -81,7 +89,7 @@ function formatDate(iso: string): string {
 }
 
 export default function ConsciousnessExportPage() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [selected, setSelected] = useState<Record<string, boolean>>({
     episodes: true,
@@ -102,11 +110,11 @@ export default function ConsciousnessExportPage() {
   }, [])
 
   const toggleOption = (key: string) => {
-    setSelected(prev => ({ ...prev, [key]: !prev[key] }))
+    setSelected((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
   const handleExport = async () => {
-    const keys = Object.keys(selected).filter(k => selected[k])
+    const keys = Object.keys(selected).filter((k) => selected[k])
     if (keys.length === 0) {
       addToast(t('consciousness_export.toast_no_selection'), 'error')
       return
@@ -133,7 +141,7 @@ export default function ConsciousnessExportPage() {
         extension = 'json'
       } else if (format === 'jsonl') {
         const lines = Object.entries(exportData).map(([key, value]) =>
-          JSON.stringify({ key, data: value })
+          JSON.stringify({ key, data: value }),
         )
         content = lines.join('\n')
         mimeType = 'application/jsonl'
@@ -151,15 +159,20 @@ export default function ConsciousnessExportPage() {
           }
         }
         if (allRows.length > 0) {
-          const headers = [...new Set(allRows.flatMap(r => Object.keys(r)))]
+          const headers = [...new Set(allRows.flatMap((r) => Object.keys(r)))]
           const csvRows = [headers.join(',')]
           for (const row of allRows) {
-            csvRows.push(headers.map(h => {
-              const val = row[h]
-              const str = val === undefined || val === null ? '' : String(val)
-              return str.includes(',') || str.includes('"') || str.includes('\n')
-                ? `"${str.replace(/"/g, '""')}"` : str
-            }).join(','))
+            csvRows.push(
+              headers
+                .map((h) => {
+                  const val = row[h]
+                  const str = val === undefined || val === null ? '' : String(val)
+                  return str.includes(',') || str.includes('"') || str.includes('\n')
+                    ? `"${str.replace(/"/g, '""')}"`
+                    : str
+                })
+                .join(','),
+            )
           }
           content = csvRows.join('\n')
         } else {
@@ -207,14 +220,20 @@ export default function ConsciousnessExportPage() {
         const text = ev.target?.result as string
         let parsed: unknown
         if (file.name.endsWith('.jsonl')) {
-          parsed = text.split('\n').filter(Boolean).map(line => JSON.parse(line))
+          parsed = text
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line))
         } else {
           parsed = JSON.parse(text)
         }
         const records = Array.isArray(parsed)
           ? parsed
           : typeof parsed === 'object' && parsed !== null
-            ? Object.entries(parsed as Record<string, unknown>).map(([k, v]) => ({ key: k, data: v }))
+            ? Object.entries(parsed as Record<string, unknown>).map(([k, v]) => ({
+                key: k,
+                data: v,
+              }))
             : [parsed]
         setImportPreview(records.slice(0, 5))
       } catch {
@@ -231,7 +250,10 @@ export default function ConsciousnessExportPage() {
       const text = await importFile.text()
       let parsed: unknown
       if (importFile.name.endsWith('.jsonl')) {
-        parsed = text.split('\n').filter(Boolean).map(line => JSON.parse(line))
+        parsed = text
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
       } else {
         parsed = JSON.parse(text)
       }
@@ -246,7 +268,7 @@ export default function ConsciousnessExportPage() {
   }
 
   const handleDeleteBackup = (id: string) => {
-    const updated = backups.filter(b => b.id !== id)
+    const updated = backups.filter((b) => b.id !== id)
     setBackups(updated)
     saveBackups(updated)
   }
@@ -265,19 +287,24 @@ export default function ConsciousnessExportPage() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{t('consciousness_export.export_options_title')}</CardTitle>
+            <CardTitle className="text-base">
+              {t('consciousness_export.export_options_title')}
+            </CardTitle>
             <CardDescription>{t('consciousness_export.export_options_desc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              {EXPORT_OPTIONS.map(opt => (
+              {EXPORT_OPTIONS.map((opt) => (
                 <div key={opt.key} className="flex items-center gap-2">
                   <Checkbox
                     id={`export-${opt.key}`}
                     checked={!!selected[opt.key]}
                     onCheckedChange={() => toggleOption(opt.key)}
                   />
-                  <label htmlFor={`export-${opt.key}`} className="text-sm font-medium cursor-pointer">
+                  <label
+                    htmlFor={`export-${opt.key}`}
+                    className="text-sm font-medium cursor-pointer"
+                  >
                     {t(`consciousness_export.option_${opt.key}`)}
                   </label>
                 </div>
@@ -285,9 +312,11 @@ export default function ConsciousnessExportPage() {
             </div>
             <div className="border-t border-border/30" />
             <div className="flex items-center gap-4">
-              <label className="text-sm font-medium">{t('consciousness_export.format_label')}</label>
+              <label className="text-sm font-medium">
+                {t('consciousness_export.format_label')}
+              </label>
               <div className="flex gap-2">
-                {(['json', 'jsonl', 'csv'] as const).map(f => (
+                {(['json', 'jsonl', 'csv'] as const).map((f) => (
                   <Button
                     key={f}
                     variant={format === f ? 'default' : 'outline'}
@@ -300,7 +329,9 @@ export default function ConsciousnessExportPage() {
               </div>
             </div>
             <Button onClick={handleExport} disabled={exporting} className="w-full">
-              {exporting ? t('consciousness_export.exporting') : t('consciousness_export.export_button')}
+              {exporting
+                ? t('consciousness_export.exporting')
+                : t('consciousness_export.export_button')}
             </Button>
           </CardContent>
         </Card>
@@ -335,7 +366,9 @@ export default function ConsciousnessExportPage() {
               variant="secondary"
               className="w-full"
             >
-              {importing ? t('consciousness_export.importing') : t('consciousness_export.import_button')}
+              {importing
+                ? t('consciousness_export.importing')
+                : t('consciousness_export.import_button')}
             </Button>
           </CardContent>
         </Card>
@@ -347,10 +380,12 @@ export default function ConsciousnessExportPage() {
           </CardHeader>
           <CardContent>
             {backups.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('consciousness_export.no_backups')}</p>
+              <p className="text-sm text-muted-foreground">
+                {t('consciousness_export.no_backups')}
+              </p>
             ) : (
               <div className="space-y-2">
-                {backups.map(backup => (
+                {backups.map((backup) => (
                   <div
                     key={backup.id}
                     className="flex items-center justify-between rounded-md border border-border/30 p-3"

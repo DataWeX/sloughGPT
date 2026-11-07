@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -29,7 +30,6 @@ import { TokenTreeMergesCard } from '@/components/tokenizer/TokenTreeMergesCard'
 import { TokenTreeVocabCard } from '@/components/tokenizer/TokenTreeVocabCard'
 import { TokenTreeTrainCard } from '@/components/tokenizer/TokenTreeTrainCard'
 import { TokenTreePersistenceCard } from '@/components/tokenizer/TokenTreePersistenceCard'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'play' | 'vocab' | 'train'
@@ -53,7 +53,7 @@ export default function TokenizerPage() {
   const [training, setTraining] = useState(false)
   const [trainResult, setTrainResult] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const loadStats = useCallback(() => {
     setLoading(true)
     setLoadError(null)

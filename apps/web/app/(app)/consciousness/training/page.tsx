@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -14,7 +15,6 @@ import {
   Skeleton,
   Input,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { useLiveTraining } from '@/hooks/useLiveTraining'
@@ -59,7 +59,7 @@ interface EvalReport {
 }
 
 export default function ConsciousnessTrainingPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const { isTraining: liveTraining, connected: trainingConnected } = useLiveTraining()
   const [loading, setLoading] = useState(true)

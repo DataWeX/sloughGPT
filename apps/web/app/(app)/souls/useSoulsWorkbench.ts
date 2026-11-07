@@ -8,9 +8,9 @@
  * weight-snapshot lifecycle, plus the search filters. The tab panels and
  * dialogs own render.
  */
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { type Tab, type ModeInfo } from './souls-format'
 
@@ -48,7 +48,7 @@ export function useSoulsWorkbench() {
   const [compareSoul, setCompareSoul] = useState<Soul | null>(null)
   const [checkpointDetail, setCheckpointDetail] = useState<Checkpoint | null>(null)
 
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   // ── Data Loading ──
   const loadData = useCallback(async () => {

@@ -1,10 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { formatToastError } from '@/lib/error-utils'
 
@@ -45,7 +45,7 @@ export interface UseTrainingJobReturn {
 export function useTrainingJob(): UseTrainingJobReturn {
   const params = useParams()
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const jobId = (params.id as string) || ''
 
   const [job, setJob] = useState<TrainingJob | null>(null)

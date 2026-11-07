@@ -36,10 +36,22 @@ vi.mock('@/lib/model-controller', () => ({
 }))
 
 const mockAddToast = vi.fn()
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: typeof mockAddToast }) => unknown) =>
-    selector({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (selector: (s: { addToast: typeof mockAddToast }) => unknown) =>
+      selector({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 const mockDownloadJson = vi.fn()
 const mockDownloadBlob = vi.fn()

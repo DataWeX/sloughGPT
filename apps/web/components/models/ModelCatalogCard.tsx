@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, memo } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle, Progress, Spinner } from '@sloughgpt/strui'
@@ -9,7 +10,6 @@ import { catalogIdMatchesRuntime } from '@/lib/inference-display'
 import { generateController } from '@/lib/generate-controller'
 import { getJsonItem, setJsonItem } from '@/lib/format-bytes'
 import { useLoadModel } from '@/lib/cache/api-hooks'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useConversionStatus, formatStage } from '@/hooks/useConversionStatus'
 import { logger } from '@/lib/dev-log'
@@ -44,7 +44,7 @@ export default memo(function ModelCatalogCard({
   onModelLoaded,
 }: ModelCatalogCardProps) {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { mutateAsync: loadModel } = useLoadModel()
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [warmingModel, setWarmingModel] = useState<string | null>(null)

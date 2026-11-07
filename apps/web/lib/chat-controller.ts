@@ -61,10 +61,8 @@ export const chatController = {
         error: err instanceof Error ? err.message : String(err),
       })
       try {
-        const { useToastStore } = await import('./toast-store')
-        useToastStore
-          .getState()
-          .addToast('Using basic mode — conversation context unavailable', 'info')
+        const { notify } = await import('./notify')
+        notify.toast('Using basic mode — conversation context unavailable', 'info')
       } catch {
         /* best-effort */
       }

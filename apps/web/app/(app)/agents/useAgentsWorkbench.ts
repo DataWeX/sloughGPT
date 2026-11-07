@@ -12,6 +12,7 @@
  * it depends on the page-local constants/format siblings and has no
  * `useAgents*` family up in `hooks/` to join.
  */
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import {
@@ -21,7 +22,6 @@ import {
   type AgentRun,
 } from '@/lib/agents-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
-import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString } from '@/lib/format-bytes'
 import { agentSchema, agentExecuteSchema, orchestrateSchema } from '@/lib/validation-schemas'
@@ -29,7 +29,7 @@ import { logger } from '@/lib/dev-log'
 
 export function useAgentsWorkbench() {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
 

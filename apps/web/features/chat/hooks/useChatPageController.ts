@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
 
@@ -25,7 +26,6 @@ import { computeSearchMatches } from '@/lib/chat-utils'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { chatController } from '@/lib/chat-controller'
 import { useFeedbackStore } from '@/lib/feedback-store'
-import { useToastStore } from '@/lib/toast-store'
 import { useSettings } from '@/lib/store'
 import { imagesController } from '@/lib/images-controller'
 import type { ImageStyle } from '@/lib/images-controller'
@@ -545,7 +545,7 @@ export function useChatPageController(
           },
         ])
       } catch (err: unknown) {
-        useToastStore.getState().addToast(formatToastError(err, "Couldn't read file"), 'error')
+        notify.toast(formatToastError(err, "Couldn't read file"), 'error')
       } finally {
         setReadLoading(false)
       }

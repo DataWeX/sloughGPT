@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
@@ -21,7 +22,6 @@ import {
   IconCheckCircle,
 } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
@@ -141,7 +141,7 @@ export const MessageActions = memo(function MessageActions({
       cancelled = true
     }
   }, [messageId])
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 

@@ -8,11 +8,11 @@
  * save, preset application, CSV-ish comma-list inputs and the import
  * comparison. The sections own render.
  */
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import { apiPatch } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { useToastStore } from '@/lib/toast-store'
 import { useLocale } from '@/hooks/useLocale'
 import {
   type SavedPersona,
@@ -22,7 +22,7 @@ import {
 } from './personality-model'
 
 export function usePersonalityWorkbench() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

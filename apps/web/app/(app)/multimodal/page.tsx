@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Button } from '@sloughgpt/strui'
@@ -12,7 +13,6 @@ import type {
   TrainingStatus,
 } from '@/lib/multimodal-controller'
 import type { DetectedObject } from '@/components/multimodal/ObjectDetectionSection'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { apiPost } from '@/lib/http-client'
 import { logger } from '@/lib/dev-log'
@@ -35,7 +35,7 @@ const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingC
 })
 
 export default function MultimodalPage() {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const [caps, setCaps] = useState<MultimodalCapabilities | null>(null)
   const [report, setReport] = useState<TrainingReport | null>(null)
   const [trainStatus, setTrainStatus] = useState<TrainingStatus | null>(null)

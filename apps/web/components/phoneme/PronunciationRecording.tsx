@@ -1,10 +1,10 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 
 type RecordState = 'idle' | 'recording' | 'stopped'
 
@@ -26,7 +26,7 @@ export default function PronunciationRecording() {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animFrameRef = useRef<number | null>(null)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const cleanup = useCallback(() => {
     if (timerRef.current) {

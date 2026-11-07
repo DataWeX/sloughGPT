@@ -1,11 +1,11 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { toIPA } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import PhonemeReference from './PhonemeReference'
 
 const PHONEMES = [
@@ -64,7 +64,7 @@ export default function PhonemeTypingMode() {
   const [total, setTotal] = useState(0)
   const [showRef, setShowRef] = useState(false)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const generateChallenge = useCallback(() => {
     const count = 3 + Math.floor(Math.random() * 3)

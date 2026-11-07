@@ -1,12 +1,18 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, type PhonemeEncodeResult, type PhonemeScoreResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
-import { useToastStore } from '@/lib/toast-store'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  type PhonemeEncodeResult,
+  type PhonemeScoreResult,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 export default function BatchCard() {
@@ -17,10 +23,13 @@ export default function BatchCard() {
   const [loading, setLoading] = useState(false)
   const [encodeResults, setEncodeResults] = useState<PhonemeEncodeResult[]>([])
   const [scoreResults, setScoreResults] = useState<PhonemeScoreResult[]>([])
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   const handleBatchEncode = useCallback(async () => {
-    const texts = inputText.split('\n').map(s => s.trim()).filter(Boolean)
+    const texts = inputText
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
     if (texts.length === 0) return
     setLoading(true)
     try {
@@ -34,11 +43,12 @@ export default function BatchCard() {
   }, [inputText, language, addToast])
 
   const handleBatchScore = useCallback(async () => {
-    const pairs = scoreInput.split('\n')
-      .map(s => s.trim())
+    const pairs = scoreInput
+      .split('\n')
+      .map((s) => s.trim())
       .filter(Boolean)
-      .map(s => {
-        const [target, spoken] = s.split('→').map(x => x?.trim())
+      .map((s) => {
+        const [target, spoken] = s.split('→').map((x) => x?.trim())
         return target && spoken ? { target, spoken } : null
       })
       .filter(Boolean) as { target: string; spoken: string }[]
@@ -71,7 +81,7 @@ export default function BatchCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
-          <Select value={mode} onValueChange={v => setMode(v as 'encode' | 'score')}>
+          <Select value={mode} onValueChange={(v) => setMode(v as 'encode' | 'score')}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
@@ -80,13 +90,15 @@ export default function BatchCard() {
               <SelectItem value="score">Batch Score</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
+          <Select value={language} onValueChange={(v) => setLanguage(v as PhonemeLanguage)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PHONEME_LANGUAGES.map(l => (
-                <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              {PHONEME_LANGUAGES.map((l) => (
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -96,7 +108,7 @@ export default function BatchCard() {
           <>
             <Textarea
               value={inputText}
-              onChange={e => setInputText(e.target.value)}
+              onChange={(e) => setInputText(e.target.value)}
               placeholder="Enter one word per line..."
               rows={5}
             />
@@ -110,11 +122,16 @@ export default function BatchCard() {
             {encodeResults.length > 0 && (
               <div className="space-y-2 max-h-[300px] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                 {encodeResults.map((r, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 text-sm">
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 text-sm"
+                  >
                     <span className="font-medium min-w-[80px]">{r.text}</span>
                     <div className="flex flex-wrap gap-1">
                       {r.phonemes.map((p, j) => (
-                        <Badge key={j} variant="outline" className="text-xs">{p}</Badge>
+                        <Badge key={j} variant="outline" className="text-xs">
+                          {p}
+                        </Badge>
                       ))}
                     </div>
                   </div>
@@ -126,7 +143,7 @@ export default function BatchCard() {
           <>
             <Textarea
               value={scoreInput}
-              onChange={e => setScoreInput(e.target.value)}
+              onChange={(e) => setScoreInput(e.target.value)}
               placeholder="Enter target→spoken per line (e.g. hello→helo)"
               rows={5}
             />
@@ -140,12 +157,17 @@ export default function BatchCard() {
             {scoreResults.length > 0 && (
               <div className="space-y-2 max-h-[300px] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                 {scoreResults.map((r, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 text-sm">
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 text-sm"
+                  >
                     <span className="font-medium min-w-[80px]">{r.target}</span>
                     <span className="text-muted-foreground">→</span>
                     <span>{r.spoken}</span>
                     <Badge
-                      variant={r.score >= 0.8 ? 'default' : r.score >= 0.5 ? 'secondary' : 'destructive'}
+                      variant={
+                        r.score >= 0.8 ? 'default' : r.score >= 0.5 ? 'secondary' : 'destructive'
+                      }
                       className="ml-auto"
                     >
                       {(r.score * 100).toFixed(0)}%

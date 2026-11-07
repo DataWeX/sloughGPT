@@ -6,10 +6,22 @@ vi.mock('@/lib/http-client', () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
 }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (m: string, t?: string) => void }) => unknown) =>
-    selector({ addToast: vi.fn() }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (selector: (s: { addToast: (m: string, t?: string) => void }) => unknown) =>
+      selector({ addToast: vi.fn() }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 
 import { apiPost } from '@/lib/http-client'
 import { RunMoleButton } from './RunMoleButton'
@@ -53,7 +65,10 @@ describe('RunMoleButton', () => {
   it('is disabled and busy while the run is in flight', async () => {
     let resolve: (v: unknown) => void = () => {}
     post.mockImplementation(
-      () => new Promise((r) => { resolve = r as (v: unknown) => void }) as never,
+      () =>
+        new Promise((r) => {
+          resolve = r as (v: unknown) => void
+        }) as never,
     )
     render(<RunMoleButton />)
     const button = screen.getByTestId('run-mole-button')

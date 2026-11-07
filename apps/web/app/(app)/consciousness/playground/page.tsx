@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -13,7 +14,6 @@ import {
   CardTitle,
   Skeleton,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 import { addGlobalError } from '@/lib/error-store'
@@ -97,7 +97,7 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function ConsciousnessPlaygroundPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
   const [input, setInput] = useState('')
   const [reflecting, setReflecting] = useState(false)

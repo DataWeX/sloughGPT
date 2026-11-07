@@ -1,32 +1,55 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useEffect, useRef } from 'react'
-import { ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
+import {
+  ActionCard,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Textarea,
+  StatCard,
+  KpiGrid,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { SectionLabel } from '@/components/composed/SectionLabel'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { VoicePresetCard } from '@/components/voice/VoicePresetCard'
-import { useToastStore } from '@/lib/toast-store'
 
 export function VoiceSection() {
   const [status, setStatus] = useState<VoiceStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [ttsText, setTtsText] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string; sample_rate: number } | null>(null)
+  const [lastResult, setLastResult] = useState<{
+    duration_ms: number
+    backend: string
+    sample_rate: number
+  } | null>(null)
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [ttsCount, setTtsCount] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   useEffect(() => {
     let active = true
-    voiceController.getStatus()
-      .then(d => { if (active) setStatus(d) })
-      .catch(() => { if (active) addToast('Could not load voice status', 'error') })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+    voiceController
+      .getStatus()
+      .then((d) => {
+        if (active) setStatus(d)
+      })
+      .catch(() => {
+        if (active) addToast('Could not load voice status', 'error')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   const handleRefreshStatus = async () => {
@@ -48,8 +71,12 @@ export function VoiceSection() {
         setTtsError(data.detail)
         return
       }
-      setLastResult({ duration_ms: data.duration_ms, backend: data.backend, sample_rate: data.sample_rate })
-      setTtsCount(c => c + 1)
+      setLastResult({
+        duration_ms: data.duration_ms,
+        backend: data.backend,
+        sample_rate: data.sample_rate,
+      })
+      setTtsCount((c) => c + 1)
       if (data.audio && data.backend !== 'browser-fallback') {
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
         audioRef.current = audio
@@ -81,7 +108,10 @@ export function VoiceSection() {
         </KpiGrid>
       ) : (
         <KpiGrid>
-          <StatCard label="Text-to-Speech" value={status?.server_tts ? 'Available' : 'Unavailable'} />
+          <StatCard
+            label="Text-to-Speech"
+            value={status?.server_tts ? 'Available' : 'Unavailable'}
+          />
           <StatCard label="Model" value={status?.model ?? 'None'} />
           <StatCard label="TTS Calls" value={ttsCount} />
         </KpiGrid>
@@ -90,26 +120,45 @@ export function VoiceSection() {
       <ActionCard
         title="TTS Backend"
         actions={
-          <Button size="sm" variant="ghost" onClick={handleRefreshStatus} aria-label="Refresh TTS status">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleRefreshStatus}
+            aria-label="Refresh TTS status"
+          >
             <IconRefresh className="h-4 w-4" />
           </Button>
         }
       >
-          {status ? (
-            <div className="space-y-3">
-              <KpiGrid columns={4}>
-                <StatCard label="Service" value={<span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>{status.server_tts ? 'Online' : 'Offline'}</span>} />
-                <StatCard label="Model" value={status.model ?? '—'} />
-                <StatCard label="Fallback" value="Browser" />
-                <StatCard label="Status" value={<span className={status.error ? 'text-destructive' : 'text-success'}>{status.error ? 'Error' : 'Ready'}</span>} />
-              </KpiGrid>
-              {status.error && (
-                <StatusBanner variant="error" message={status.error} dismissible={false} />
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Could not load TTS status.</p>
-          )}
+        {status ? (
+          <div className="space-y-3">
+            <KpiGrid columns={4}>
+              <StatCard
+                label="Service"
+                value={
+                  <span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>
+                    {status.server_tts ? 'Online' : 'Offline'}
+                  </span>
+                }
+              />
+              <StatCard label="Model" value={status.model ?? '—'} />
+              <StatCard label="Fallback" value="Browser" />
+              <StatCard
+                label="Status"
+                value={
+                  <span className={status.error ? 'text-destructive' : 'text-success'}>
+                    {status.error ? 'Error' : 'Ready'}
+                  </span>
+                }
+              />
+            </KpiGrid>
+            {status.error && (
+              <StatusBanner variant="error" message={status.error} dismissible={false} />
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Could not load TTS status.</p>
+        )}
       </ActionCard>
 
       <VoicePresetCard />
@@ -121,7 +170,7 @@ export function VoiceSection() {
         <CardContent className="space-y-3">
           <Textarea
             value={ttsText}
-            onChange={e => setTtsText(e.target.value)}
+            onChange={(e) => setTtsText(e.target.value)}
             placeholder="Enter text to speak..."
             rows={3}
           />
@@ -135,9 +184,7 @@ export function VoiceSection() {
               </span>
             )}
           </div>
-          {ttsError && (
-            <StatusBanner variant="error" message={ttsError} dismissible={false} />
-          )}
+          {ttsError && <StatusBanner variant="error" message={ttsError} dismissible={false} />}
         </CardContent>
       </Card>
 

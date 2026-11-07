@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import {
   Card,
   CardContent,
@@ -10,7 +11,6 @@ import {
   Button,
 } from '@sloughgpt/strui'
 import { downloadJson, importFile } from '@/lib/download-utils'
-import { useToastStore } from '@/lib/toast-store'
 
 interface SettingsBackupRestoreCardProps {
   settings: Record<string, unknown>
@@ -23,7 +23,7 @@ export function SettingsBackupRestoreCard({
   onImport,
   version,
 }: SettingsBackupRestoreCardProps) {
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const handleExport = () => {
     downloadJson(settings, 'sloughgpt-settings.json')

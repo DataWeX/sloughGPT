@@ -8,15 +8,15 @@
  * a parent-chip -> child row. Roots without stamps are counted, never
  * listed — a family tree only shows links that exist.
  */
+import { notify } from '@/lib/notify'
 import { useState, useEffect } from 'react'
 import { Badge, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@sloughgpt/strui'
 import { registryController, type ArtifactRecord } from '@/lib/registry-controller'
-import { useToastStore } from '@/lib/toast-store'
 
 export default function ModelLineageCard() {
   const [artifacts, setArtifacts] = useState<ArtifactRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
 
   useEffect(() => {
     let active = true
@@ -34,10 +34,12 @@ export default function ModelLineageCard() {
       }
     }
     void run()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [addToast])
 
-  const stamped = artifacts.filter(a => (a.parents?.length ?? 0) > 0)
+  const stamped = artifacts.filter((a) => (a.parents?.length ?? 0) > 0)
 
   return (
     <Card>
@@ -57,15 +59,15 @@ export default function ModelLineageCard() {
           </div>
         ) : stamped.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No lineage stamped yet. New training exports and checkpoints record
-            their parent datasets automatically ({'<file>.prov.json'} sidecars);
-            pre-existing artifacts are roots until re-exported.
+            No lineage stamped yet. New training exports and checkpoints record their parent
+            datasets automatically ({'<file>.prov.json'} sidecars); pre-existing artifacts are roots
+            until re-exported.
           </p>
         ) : (
           <ul className="space-y-2">
-            {stamped.map(a => (
+            {stamped.map((a) => (
               <li key={a.artifact_id} className="flex flex-wrap items-center gap-1.5 text-sm">
-                {a.parents!.map(p => (
+                {a.parents!.map((p) => (
                   <Badge
                     key={p}
                     variant="secondary"

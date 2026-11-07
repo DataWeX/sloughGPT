@@ -1,12 +1,17 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { Progress } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, type PhonemeEncodeResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
-import { useToastStore } from '@/lib/toast-store'
+import {
+  phonemeController,
+  PHONEME_LANGUAGES,
+  type PhonemeEncodeResult,
+  type PhonemeLanguage,
+} from '@/lib/phoneme-controller'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 export default function ComparisonCard() {
@@ -16,11 +21,15 @@ export default function ComparisonCard() {
   const [loading, setLoading] = useState(false)
   const [result1, setResult1] = useState<PhonemeEncodeResult | null>(null)
   const [result2, setResult2] = useState<PhonemeEncodeResult | null>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = notify.toast
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const doCompare = useCallback(async (w1: string, w2: string, l: PhonemeLanguage) => {
-    if (!w1.trim() || !w2.trim()) { setResult1(null); setResult2(null); return }
+    if (!w1.trim() || !w2.trim()) {
+      setResult1(null)
+      setResult2(null)
+      return
+    }
     setLoading(true)
     try {
       const [r1, r2] = await Promise.all([
@@ -39,7 +48,9 @@ export default function ComparisonCard() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => doCompare(word1, word2, language), 400)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
   }, [word1, word2, language, doCompare])
 
   const handleCompare = useCallback(() => {
@@ -53,12 +64,10 @@ export default function ComparisonCard() {
     return () => window.removeEventListener('phoneme-submit', handleSubmit)
   }, [handleCompare])
 
-  const common = result1 && result2
-    ? result1.phonemes.filter(p => result2.phonemes.includes(p))
-    : []
-  const allPhonemes = result1 && result2
-    ? [...new Set([...result1.phonemes, ...result2.phonemes])]
-    : []
+  const common =
+    result1 && result2 ? result1.phonemes.filter((p) => result2.phonemes.includes(p)) : []
+  const allPhonemes =
+    result1 && result2 ? [...new Set([...result1.phonemes, ...result2.phonemes])] : []
   const similarity = allPhonemes.length > 0 ? (common.length / allPhonemes.length) * 100 : 0
 
   return (
@@ -70,24 +79,26 @@ export default function ComparisonCard() {
         <div className="flex flex-col sm:flex-row gap-3">
           <Input
             value={word1}
-            onChange={e => setWord1(e.target.value)}
+            onChange={(e) => setWord1(e.target.value)}
             placeholder="Word 1..."
             className="flex-1"
           />
           <Input
             value={word2}
-            onChange={e => setWord2(e.target.value)}
+            onChange={(e) => setWord2(e.target.value)}
             placeholder="Word 2..."
             className="flex-1"
-            onKeyDown={e => e.key === 'Enter' && handleCompare()}
+            onKeyDown={(e) => e.key === 'Enter' && handleCompare()}
           />
-          <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
+          <Select value={language} onValueChange={(v) => setLanguage(v as PhonemeLanguage)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PHONEME_LANGUAGES.map(l => (
-                <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              {PHONEME_LANGUAGES.map((l) => (
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -106,7 +117,9 @@ export default function ComparisonCard() {
                 <p className="text-sm font-medium">{word1}</p>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {result1.phonemes.map((p, i) => (
-                    <Badge key={i} variant="outline">{p}</Badge>
+                    <Badge key={i} variant="outline">
+                      {p}
+                    </Badge>
                   ))}
                 </div>
               </div>
@@ -114,7 +127,9 @@ export default function ComparisonCard() {
                 <p className="text-sm font-medium">{word2}</p>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {result2.phonemes.map((p, i) => (
-                    <Badge key={i} variant="outline">{p}</Badge>
+                    <Badge key={i} variant="outline">
+                      {p}
+                    </Badge>
                   ))}
                 </div>
               </div>
@@ -133,7 +148,9 @@ export default function ComparisonCard() {
                 <p className="text-sm font-medium text-muted-foreground">Common Phonemes:</p>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {common.map((p, i) => (
-                    <Badge key={i} variant="default">{p}</Badge>
+                    <Badge key={i} variant="default">
+                      {p}
+                    </Badge>
                   ))}
                 </div>
               </div>

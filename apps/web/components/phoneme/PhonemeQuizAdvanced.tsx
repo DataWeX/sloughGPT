@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@sloughgpt/strui'
 import {
@@ -9,7 +10,6 @@ import {
   type PhonemeLanguage,
 } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
-import { useToastStore } from '@/lib/toast-store'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 
 const WORDS: Record<PhonemeLanguage, string[]> = {
@@ -173,7 +173,7 @@ export default function PhonemeQuizAdvanced() {
   const [total, setTotal] = useState(0)
   const [streak, setStreak] = useState(0)
   const addToHistory = usePhonemeStore((s) => s.addToHistory)
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   const generateQuestion = useCallback(async () => {
     const words = WORDS[language]

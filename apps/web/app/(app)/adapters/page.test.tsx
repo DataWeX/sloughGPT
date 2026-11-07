@@ -133,9 +133,21 @@ vi.mock('@/lib/lora-eval-controller', () => ({
   loraEvalController: { runEval: mockRunEval, getHistory: mockGetHistory },
 }))
 
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const mod = {
+    useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => {
+      const st = sink((x) => x)
+      return typeof st === 'object' && st !== null ? st : mod
+    }
+  }
+  return mod
+})
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://test-api' }))
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ title, children, loading, error, onRetry, headerRight }: any) => (

@@ -61,9 +61,19 @@ vi.mock('@sloughgpt/strui', async () => {
 vi.mock('@/lib/cache/api-hooks', () => ({
   useLoadModel: () => ({ mutateAsync: vi.fn().mockResolvedValue({ model_id: 'test-model' }) }),
 }))
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: () => vi.fn(),
-}))
+vi.mock('@/lib/toast-store', () => {
+  const state = { addToast: vi.fn(), dismissToast: vi.fn(), clearToasts: vi.fn(), toasts: [] }
+  const mod = {
+    useToastStore: () => state.addToast,
+  }
+  const sink = mod.useToastStore as unknown as ((f: (x: unknown) => unknown) => unknown) & {
+    getState?: () => unknown
+  }
+  if (typeof sink.getState !== 'function') {
+    sink.getState = () => state
+  }
+  return mod
+})
 vi.mock('@/lib/generate-controller', () => ({
   generateController: { generate: vi.fn().mockResolvedValue({}) },
 }))

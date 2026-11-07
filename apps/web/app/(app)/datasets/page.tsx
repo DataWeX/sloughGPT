@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
+import { notify } from '@/lib/notify'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
@@ -20,7 +21,6 @@ import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { DatasetListSkeleton } from '@/components/ui/PageSkeletons'
 import { IconRefresh, IconPlus, IconTrash, IconDownload, IconPlay } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import {
   datasetController,
   type Dataset,
@@ -35,7 +35,7 @@ import { isTrainingCorpus } from '@/lib/dataset-controller'
 
 export default function DatasetsPage() {
   const router = useRouter()
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
   const { data: allDatasets = [], isLoading: loading, refetch: refetchDatasets } = useDatasetList()
   const deleteDataset = useDeleteDataset()
   const [search, setSearch] = useState('')
@@ -165,7 +165,9 @@ export default function DatasetsPage() {
       ) : filtered.length === 0 ? (
         <EmptyCard
           message={
-            allDatasets.filter(isTrainingCorpus).length === 0 ? 'No files yet' : 'No files match your search'
+            allDatasets.filter(isTrainingCorpus).length === 0
+              ? 'No files yet'
+              : 'No files match your search'
           }
           description={
             allDatasets.filter(isTrainingCorpus).length === 0
@@ -323,7 +325,9 @@ export default function DatasetsPage() {
                 <Card key={ds.id} className="bg-muted/20 border-border/40">
                   <CardContent className="flex items-center justify-between py-2 px-3">
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate text-muted-foreground">{ds.name}</p>
+                      <p className="text-xs font-medium truncate text-muted-foreground">
+                        {ds.name}
+                      </p>
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
                         <span>{ds.kind}</span>
                         {ds.has_corpus === false ? (

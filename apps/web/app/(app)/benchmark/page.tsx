@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useRouter } from '@/vite/next-compat/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -28,7 +29,6 @@ import { BenchmarkChartCard } from '@/components/benchmark/BenchmarkChartCard'
 import { BenchmarkCompareCard } from '@/components/benchmark/BenchmarkCompareCard'
 import { BenchmarkHistoryCard } from '@/components/benchmark/BenchmarkHistoryCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
-import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity' | 'compare'
@@ -62,7 +62,7 @@ export default function BenchmarkPage() {
   const [compareResults, setCompareResults] = useState<[string, BenchmarkResult][]>([])
   const [compareLoading, setCompareLoading] = useState(false)
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([])
-  const addToast = useToastStore((s) => s.addToast)
+  const addToast = notify.toast
 
   // Shared by the initial mount, the 'r' refresh shortcut and PageContainer's
   // retry — all three re-run this page's own loader instead of reloading the

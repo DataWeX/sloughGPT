@@ -1,5 +1,6 @@
 'use client'
 
+import { notify } from '@/lib/notify'
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { authFetch } from '@/lib/http-client'
@@ -12,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@sloughgpt/strui'
-import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
 
@@ -130,7 +130,7 @@ function buildTests(): Omit<TestCase, 'status' | 'duration'>[] {
 }
 
 export default function ConsciousnessTestRunnerPage() {
-  const addToast = useToastStore((state) => state.addToast)
+  const addToast = notify.toast
   const { t } = useLocale()
 
   const [suites, setSuites] = useState<TestSuite[]>(() => SUITES.map((s) => ({ ...s })))
