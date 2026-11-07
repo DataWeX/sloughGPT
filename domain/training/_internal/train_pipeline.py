@@ -667,11 +667,17 @@ def _build_training_state_metadata(
     return state
 
 
-def _parse_training_state_metadata(metadata: dict) -> dict:
+def _parse_training_state_metadata(metadata: dict, base_dir=None) -> dict:
     """Extract training state from .soul metadata (inverse of _build_...).
 
     Converts nested lists back to numpy arrays where appropriate so that
     optimizer.load_state_dict() can consume them.
+
+    ``base_dir`` (str | Path) is the directory holding the meta's gzip sibling:
+    when ``optimizer.state`` was externalized as a ``state_ref`` (slim sidecar),
+    it is resolved hash-pinned from there. Without ``base_dir`` a ref degrades
+    to an empty ``state`` — the same fresh-momentum resume semantics as
+    ``include_optimizer_state=False`` — never an error.
 
     Returns:
         Dict with keys: step, epoch, completed_epochs (optional),
@@ -695,12 +701,26 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
     if isinstance(opt_raw, dict):
         opt = dict(opt_raw)
         opt.get("hyperparameters", {})
-        state = opt.get("state", {})
+        state = opt.get("state")
+        ref = opt.get("state_ref")
+        if (
+            (not isinstance(state, dict) or not state)
+            and isinstance(ref, dict)
+            and base_dir is not None
+        ):
+            from domain.inference._internal.soul_meta_slim import load_state_file
+
+            loaded = load_state_file(ref, base_dir)
+            if loaded is not None:
+                state = loaded
+        if not isinstance(state, dict):
+            state = {}
         # Convert nested lists in state back to numpy arrays
         converted_state = {}
         for name, buffers in state.items():
             converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
         opt["state"] = converted_state
+        opt.pop("state_ref", None)
         result["optimizer"] = opt
     sched_raw = raw.get("scheduler")
     if isinstance(sched_raw, dict):
