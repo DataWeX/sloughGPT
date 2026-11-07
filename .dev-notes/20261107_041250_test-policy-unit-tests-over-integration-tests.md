@@ -1,6 +1,6 @@
 ---
 id: 20261107_041250_test-policy-unit-tests-over-integration-tests
-status: todo
+status: done
 board: 20261107_041250_test-policy-unit-tests-over-integration-tests
 title: "Test policy: unit tests over integration tests"
 tags: [testing, policy]
