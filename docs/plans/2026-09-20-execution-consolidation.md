@@ -91,7 +91,7 @@ review flag.
      bool, not an Event). Exit ordering is load-bearing: the
      singleton shutdown registers via `threading._register_atexit`,
      not plain `atexit` — `concurrent.futures._python_exit` joins
-     pool workers inside `threading._shutdown` *before* plain
+     pool workers inside `threading._shutdown` _before_ plain
      atexit runs, so a plain atexit cancel deadlocks interpreter
      exit on a blocked forever-loop (gate:
      `tests/core-py/test_pugqeep_spawn_loop.py`, incl. a
@@ -113,8 +113,42 @@ review flag.
      scripts/benchmarks, one-shot blocking `subprocess.run` (build,
      system, lscpu/git/gguf/shader one-shots), and I/O pumps bound to a
      live handle. No migration; the lint allowlist covers them.
-4. Reconcile the two task queues (infra vs pugqeep) — converge or draw an
-   explicit compute-vs-orchestration boundary. Explicitly NOT in stages 1–3.
+4. Reconcile the two task queues (infra vs pugqeep) — **boundary, not
+   convergence** (design approved 2026-11-06). Explicitly NOT in stages 1–3.
+   - **The boundary**: infra `TaskQueue` stays the _async orchestration_
+     layer (SSE fan-out, pause/resume/cancel — it never executes
+     compute); pugqeep `TaskQueue` stays the _durable pull-store_
+     (kg-pipeline); the **Engine is the one execution layer**. No queue
+     convergence — the three solve different problems (in-flight
+     orchestration vs durable claims vs execution).
+   - **The seam**: `run_on_engine(fn, ...)` in
+     `domain/infrastructure/_internal/engine_seam.py` — spawns on the
+     shared engine and awaits loop-safely via `call_soon_threadsafe`
+     (never blocks the loop); re-raises the _original_ exception (the
+     engine stores only `str(e)`, so the callable's exception is captured
+     and re-raised — `except InterruptedError` call sites keep working);
+     CANCELLED resolves as `EngineCancelled`; `timeout=` cancels the
+     process so compute never outlives the wait. Lives **outside**
+     `pugqeep/` — PGQ stays event-loop-free; the seam is the async host
+     of a sync core (`tests/core-py/test_engine_seam.py`).
+   - **Duration rule** (what migrates): long/indeterminate compute —
+     training, inference, captioning, model loads, shell — → engine
+     (`run_on_engine` or spawn per kind); micro-I/O (`os.unlink`, config
+     reads) stays on `asyncio.to_thread`. Gate: the stage-2 scanner
+     extended to `asyncio.to_thread`/`run_in_executor` AST nodes, same
+     allowlist schema + ratchet (grandfathered sites counted both ways).
+   - **Engine fix landed with the seam**: terminal state is honored at
+     dispatch — a proc cancelled while queued never runs its fn, and
+     `branch()`/`_execute()` no longer clobber CANCELLED with
+     READY/RUNNING (the subprocess path already had this guard;
+     `test_cancelled_before_dispatch_never_runs` pins it).
+   - **Migrations**: training handlers (`training_queue.py` ×2),
+     `turbo_endpoints.py` (`start_turbo_training`), multimodal
+     caption/ask `run_in_executor` sites, and the knowledge-store
+     `_run_async` sync bridge (the last `kind:followup` allowlist entry).
+   - **Deletions**: `packages/infra-lib/infra_lib/task_queue.py` (zero
+     consumers outside its own tests) — its own commit, after the seam
+     lands.
 
 ## Audit 2026-11-04 (call-site inventory)
 
