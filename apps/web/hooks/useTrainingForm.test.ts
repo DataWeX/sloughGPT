@@ -233,6 +233,25 @@ describe('useTrainingForm', () => {
       })
       expect(session.startVisualTraining).toHaveBeenCalled()
     })
+
+    it('labels native training slonet-native regardless of selected model', async () => {
+      // job_cbc6162a: `model: selectedModel || 'slonet-native'` let a selected
+      // Qwen model ride along on method=native, so the job record claimed
+      // Qwen/Qwen2.5-0.5B-Instruct while a native slonet transformer trained.
+      const session = makeSession()
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), session, makeCheckpoints(), addToast),
+      )
+      act(() => result.current.setMethod('native'))
+      act(() => result.current.setSelectedModel('Qwen/Qwen2.5-0.5B-Instruct'))
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalled()
+      const body = (mockTrainingJobsController.startAutoTrain as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as Record<string, unknown>
+      expect(body.model).toBe('slonet-native')
+    })
   })
 
   describe('defaults', () => {

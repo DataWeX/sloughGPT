@@ -2687,7 +2687,9 @@ class SloughGPTTrainer:
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
         Args:
-            path: Output path without the extension; ``.soul`` is appended.
+            path: Output path, with or without the ``.soul`` extension —
+                the extension is appended exactly once (callers pass both
+                bare stems and full ``..._trained.soul`` paths).
             format: DEPRECATED and ignored. Retained for backward compatibility;
                 ``SloughGPTTrainer.save()`` always writes ``.soul`` regardless of
                 this value. Passing a non-None value emits a
@@ -2822,7 +2824,12 @@ class SloughGPTTrainer:
             initial_lr=self.config.learning_rate,
         )
 
-        output_path = path + ".soul"
+        # Callers hand over both bare stems ("auto", "<ds>_<ts>") and full
+        # paths already carrying the extension ("<stem>_trained.soul" from
+        # local_api/legacy/execution/from_feedback). save() owns the
+        # extension, so append exactly once — a blind append produced
+        # ``qt_trained.soul.soul`` (+ .soul.soul.meta.json), job_cbc6162a.
+        output_path = path if path.endswith(".soul") else path + ".soul"
         save_soul(self.model, output_path, soul_profile=soul)
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})

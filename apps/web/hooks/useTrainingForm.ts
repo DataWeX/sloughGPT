@@ -348,7 +348,10 @@ export function useTrainingForm(
 
       const body: Record<string, unknown> = {
         name: `${method}-training-${Date.now()}`,
-        model: selectedModel || 'slonet-native',
+        // method=native always trains a native slonet transformer — a
+        // selected HF model must not ride along and mislabel the job
+        // (job_cbc6162a recorded Qwen/Qwen2.5-0.5B-Instruct on a slonet run).
+        model: method === 'native' ? 'slonet-native' : selectedModel || 'slonet-native',
         algo,
         epochs: trainingEpochs,
         learning_rate: trainingLR,
