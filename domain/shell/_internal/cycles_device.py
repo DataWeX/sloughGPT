@@ -45,21 +45,24 @@ class CyclesDevice(Device):
         self._last_image: np.ndarray | None = None
         self._last_state: dict[str, np.ndarray] | None = None
 
-        self._ops = OpTable("CyclesDevice", {
-            "render": self._render,
-            "state_tensors": self._state_tensors,
-            "add_sphere": self._add_sphere,
-            "add_cube": self._add_cube,
-            "add_plane": self._add_plane,
-            "add_light": self._add_light,
-            "set_camera": self._set_camera,
-            "set_material": self._set_material,
-            "set_background": self._set_background,
-            "info": self.info,
-            "clear": self._clear,
-            "set_samples": self._set_samples,
-            "set_resolution": self._set_resolution,
-        })
+        self._ops = OpTable(
+            "CyclesDevice",
+            {
+                "render": self._render,
+                "state_tensors": self._state_tensors,
+                "add_sphere": self._add_sphere,
+                "add_cube": self._add_cube,
+                "add_plane": self._add_plane,
+                "add_light": self._add_light,
+                "set_camera": self._set_camera,
+                "set_material": self._set_material,
+                "set_background": self._set_background,
+                "info": self.info,
+                "clear": self._clear,
+                "set_samples": self._set_samples,
+                "set_resolution": self._set_resolution,
+            },
+        )
 
     def info(self):
         return {

@@ -11,7 +11,9 @@ class StyleProcessor:
         self._directness = directness
         self._verbosity = verbosity
 
-    def set_style(self, formality: float = 0.5, directness: float = 0.5, verbosity: float = 0.5) -> None:
+    def set_style(
+        self, formality: float = 0.5, directness: float = 0.5, verbosity: float = 0.5
+    ) -> None:
         self._formality = formality
         self._directness = directness
         self._verbosity = verbosity

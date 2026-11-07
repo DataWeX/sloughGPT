@@ -574,6 +574,7 @@ class MultimodalManager:
 
             # Async auto-save every 5 images (non-blocking)
             if self._learning_count % 5 == 0:
+
                 def _async_save():
                     try:
                         engine.save(

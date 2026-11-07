@@ -213,9 +213,7 @@ class IdleManager:
         # (the daemon-equivalent guarantee). The loop must honor the event
         # itself: the engine cancels the process, it cannot interrupt a
         # blocking wait.
-        self._thread = spawn_loop(
-            self._check_loop, name="idle-manager", stop=self._stop_event
-        )
+        self._thread = spawn_loop(self._check_loop, name="idle-manager", stop=self._stop_event)
 
     def _check_loop(self) -> None:
         """Background loop: check for idle models and unload them."""

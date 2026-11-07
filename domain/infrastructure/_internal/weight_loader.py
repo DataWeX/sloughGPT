@@ -129,10 +129,7 @@ class ShapeMismatchError(ValueError):
         self.issues = issues
         lines = [f"shape mismatch loading {len(issues)} tensor(s):"]
         for param_name, canonical, have, want in issues:
-            lines.append(
-                f"  {param_name} (canonical={canonical}): "
-                f"file {have} vs model {want}"
-            )
+            lines.append(f"  {param_name} (canonical={canonical}): file {have} vs model {want}")
         lines.append(
             "FFN dims may pad to the next 64-multiple (align_dim_ff); "
             "everything else must match exactly"
@@ -140,7 +137,9 @@ class ShapeMismatchError(ValueError):
         super().__init__("\n".join(lines))
 
     @classmethod
-    def single(cls, param_name: str, canonical: str, have: tuple, want: tuple) -> ShapeMismatchError:
+    def single(
+        cls, param_name: str, canonical: str, have: tuple, want: tuple
+    ) -> ShapeMismatchError:
         return cls([(param_name, canonical, have, want)])
 
 
@@ -223,9 +222,7 @@ def _assign_checked(param, arr: np.ndarray, param_name: str, canonical: str, pol
     if canonical in policy.ffn_pad_canonicals and _is_align_pad(have, want):
         dst[...] = 0
         dst[tuple(slice(0, s) for s in have)] = arr
-        logger.debug(
-            "FFN alignment pad: %s %s -> %s (zero-filled)", param_name, have, want
-        )
+        logger.debug("FFN alignment pad: %s %s -> %s (zero-filled)", param_name, have, want)
         return True
     raise ShapeMismatchError.single(param_name, canonical, have, want)
 
@@ -291,7 +288,9 @@ def build_load_plan(
                     synthesized.append((f"blocks.{i}.ff.w3.bias", "1", w1_key))
 
         n_embed_arr = state_dict.get("tok_emb.weight")
-        n_embed = int(n_embed_arr.shape[1]) if n_embed_arr is not None and n_embed_arr.ndim == 2 else 0
+        n_embed = (
+            int(n_embed_arr.shape[1]) if n_embed_arr is not None and n_embed_arr.ndim == 2 else 0
+        )
 
         plan = LoadPlan(
             tensor_map=tensor_map,
@@ -484,10 +483,7 @@ def infer_arch_from_state_dict(
     if tok_emb is not None and tok_emb.ndim == 2:
         if config is None or config.get("vocab_size") is None:
             result["vocab_size"] = int(tok_emb.shape[0])
-        if (
-            config is None
-            or (config.get("n_embd") is None and config.get("hidden_size") is None)
-        ):
+        if config is None or (config.get("n_embd") is None and config.get("hidden_size") is None):
             result["n_embed"] = int(tok_emb.shape[1])
 
     # n_layer from max block index
@@ -509,9 +505,13 @@ def infer_arch_from_state_dict(
     q_w = state_dict.get("blocks.0.attn.q_proj.weight")
     if q_w is None:
         q_w = state_dict.get("blocks.0.q_proj.weight")
-    if q_w is not None and q_w.ndim == 2 and (
-        config is None
-        or (config.get("n_head") is None and config.get("num_attention_heads") is None)
+    if (
+        q_w is not None
+        and q_w.ndim == 2
+        and (
+            config is None
+            or (config.get("n_head") is None and config.get("num_attention_heads") is None)
+        )
     ):
         head_dim = n_embed // 8
         if head_dim > 0:
@@ -576,8 +576,7 @@ def dims_from_config(config: dict) -> dict:
         use_abs_pos = not bool(config["use_rope"])
     else:
         has_rope = (
-            config.get("rope_theta") is not None
-            or config.get("position_embedding_type") == "rope"
+            config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
         )
         use_abs_pos = not has_rope
 
@@ -727,9 +726,7 @@ def load_into_model(
     # Tied weights
     for dest, src in plan.tied_weights:
         if dest in param_map and src in param_map:
-            _assign_checked(
-                param_map[dest], param_map[src].data, dest, "lm_head.tie", policy
-            )
+            _assign_checked(param_map[dest], param_map[src].data, dest, "lm_head.tie", policy)
 
     # Synthesized params
     for param_name, fill_val, _shape_ref in plan.synthesized_params:
@@ -840,9 +837,7 @@ class DirectWeightLoader:
 
         for dest, src in plan.tied_weights:
             if dest in param_map and src in param_map:
-                _assign_checked(
-                    param_map[dest], param_map[src].data, dest, "lm_head.tie", policy
-                )
+                _assign_checked(param_map[dest], param_map[src].data, dest, "lm_head.tie", policy)
 
         for param_name, fill_val, _ in plan.synthesized_params:
             p = param_map.get(param_name)

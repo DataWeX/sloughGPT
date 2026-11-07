@@ -53,8 +53,11 @@ jobs:
         run: |
           ruff --version
           ruff check domain/ apps/api/server/ --exclude '__pycache__'
+      # domain/ + cli.py joined the format gate with card 20261106_071811
+      # (their 23 drifted files are formatted in the same commit); the check
+      # line already covered domain/, only the format verdict lagged.
       - name: Ruff format check
-        run: ruff format --check apps/api/server/ --exclude '__pycache__'
+        run: ruff format --check domain/ cli.py apps/api/server/ --exclude '__pycache__'
       - name: Mypy type check
         run: mypy domain/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
       # Build-context rot: a COPY source that is missing, or excluded by
