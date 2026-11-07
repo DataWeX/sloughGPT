@@ -226,7 +226,12 @@ class TestConcurrentSafety:
 
         assert len(errors) == 0, f"Thread errors: {errors}"
         assert len(results) == 3
-        assert all(r.success for r in results)
+        failed = [r for r in results if not r.success]
+        assert not failed, "Failed results: " + " | ".join(
+            f"success={r.success} error={r.error!r} phases="
+            + str([(p.phase.value, p.success, p.error) for p in (r.phases or [])])
+            for r in failed
+        )
 
     def test_multiple_trainers_same_data(self):
         from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
