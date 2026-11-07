@@ -65,6 +65,11 @@ _dait_instance = None
 
 _LAZY_IMPORTS = {
     "ShellREPL": ("._internal.repl", "ShellREPL"),
+    # The unified NPU driver: `from domain.shell import NPUDevice` was the
+    # documented import (cli.py used it) but was never exported, so the CLI's
+    # model path died on line 1 with an ImportError. Lazy, so importing it
+    # costs nothing until someone actually asks for it.
+    "NPUDevice": ("._internal.kernel_npu", "NPUDevice"),
     "InsFault": ("._internal.vm", "InsFault"),
     "MemFault": ("._internal.vm", "MemFault"),
     "Role": ("._internal.vm_permissions", "Role"),
@@ -123,4 +128,5 @@ __all__ = [
     "Simulation",
     "WorldParams",
     "X86VirtualSystem",
+    "NPUDevice",
 ]

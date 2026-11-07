@@ -363,15 +363,23 @@ class DaitRuntime:
         self._vfs.set_devices(self._devices)
 
         self._device_system = get_device_system()
+        # The NPU is registered exactly once, behind its VM face: the same
+        # instance create_default_devices() put in _devices["npu"] is what
+        # NPUVMDevice wraps (card 20261104_090736). Previously a second,
+        # distinct NPUDevice was registered here and silently overwrote the
+        # shell one, leaving two model registries under one device name —
+        # a model loaded from /dev/npu was invisible to DEV_CALL and vice
+        # versa. One device, one registry, both seams.
+        from .vm_devices import NPUVMDevice
+
+        shared_npu = self._devices.get("npu")
         for name in self._devices.names:
+            if name == "npu":
+                continue  # registered below behind its VM face
             dev = self._devices.get(name)
             self._device_system.register(name, dev, registered_by="shell")
 
-        from .kernel_npu import NPUDevice
-        from .vm_devices import NPUVMDevice
-
-        npu_device = NPUDevice(name="npu")
-        self._device_system.register("npu", NPUVMDevice(npu_device), registered_by="kernel")
+        self._device_system.register("npu", NPUVMDevice(shared_npu), registered_by="kernel")
 
         boot_log = self._init.boot(target_runlevel=3, shell_run=shell_run)
         self._boot_complete = True
