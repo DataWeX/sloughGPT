@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "129b94a19e59b4eb6c9d7b7761a5ae2e50bc8399",
+    "recorded_commit": "2f4a151d044cde62ae9d2055fbc48b08a57f8689",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -233,7 +233,7 @@
       ],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "311cf0d7affac210e8b4abc67f1ba8dc019de07f"
+      "tree_hash": "4850bf11cfef754e28ee5c5df437706f58c0f7ac"
     },
     "generation": {
       "class": "core-capability",

@@ -33,6 +33,24 @@ class MetaWeights:
     confidence_boost: float = 0.0  # increase for more confident responses
 
 
+# Tight operating window (lo, hi) each feedback-adjusted param may reach.
+# These sit well inside the param's hard range so accumulated history can
+# bias a value but never pin it to a hard-range corner. The repetition
+# floor is 1.0: below that the model is *rewarded* for repeating tokens,
+# which is how a saturated boost drove /chat into an infinite loop.
+_SAFE_BAND: dict[str, tuple[float, float]] = {
+    "temperature": (0.3, 1.1),
+    "repetition_penalty": (1.0, 1.25),
+    "top_p": (0.6, 1.0),
+    "top_k": (10.0, 120.0),
+}
+
+
+def _band(value: float, lo: float, hi: float) -> float:
+    """Clamp `value` into the tight [lo, hi] operating band."""
+    return max(lo, min(hi, value))
+
+
 class MetaWeightManager:
     """
     Manages meta-weights based on user feedback.
@@ -257,14 +275,30 @@ class MetaWeightManager:
             weights.style_bias += adjustments.get("style_bias", 0)
             weights.confidence_boost += adjustments.get("confidence_boost", 0)
 
-            # Clamp to safe ranges. `repetition_penalty` never goes below 1.0:
-            # a value < 1 REWARDS tokens the model already emitted, which is
-            # exactly how a completed answer turns into a verbatim replay loop
-            # that never emits its turn-end token (card 20261102_001621).
+            # Clamp to safe ranges. Two-stage: the SAFE_BAND is a *tight*
+            # operating window around the neutral default; the hard ranges
+            # below are only a backstop. Clamping straight to the hard range
+            # is what let a saturated history (hundreds of same-direction
+            # votes) pin every param to a corner — temperature 1.5, top_k 5,
+            # repetition_penalty 0.80 — which drives generation into a
+            # degenerate repetition loop. `repetition_penalty` never goes
+            # below 1.0: a value < 1 REWARDS tokens the model already
+            # emitted, which is exactly how a completed answer turns into a
+            # verbatim replay loop that never emits its turn-end token
+            # (card 20261102_001621). Feedback may bias a param within the
+            # band; it can never drive it to the corner of its range.
+            weights.temperature = _band(weights.temperature, *_SAFE_BAND["temperature"])
+            weights.repetition_penalty = _band(
+                weights.repetition_penalty, *_SAFE_BAND["repetition_penalty"]
+            )
+            weights.top_p = _band(weights.top_p, *_SAFE_BAND["top_p"])
+            weights.top_k = int(_band(weights.top_k, *_SAFE_BAND["top_k"]))
+
+            # Hard backstop (normally unreachable once the band is applied).
             weights.temperature = max(0.1, min(1.5, weights.temperature))
             weights.repetition_penalty = max(1.0, min(1.3, weights.repetition_penalty))
             weights.top_p = max(0.1, min(1.0, weights.top_p))
-            weights.top_k = max(5, min(200, weights.top_k))
+            weights.top_k = max(10, min(200, weights.top_k))
             weights.style_bias = max(-1.0, min(1.0, weights.style_bias))
             weights.confidence_boost = max(-1.0, min(1.0, weights.confidence_boost))
 
