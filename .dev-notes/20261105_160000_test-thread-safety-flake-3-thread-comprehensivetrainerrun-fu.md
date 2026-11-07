@@ -1,6 +1,6 @@
 ---
 id: 20261105_160000_test-thread-safety-flake-3-thread-comprehensivetrainerrun-fu
-status: wip
+status: done
 board: 20261105_160000_test-thread-safety-flake-3-thread-comprehensivetrainerrun-fu
 title: "test_thread_safety flake — 3-thread ComprehensiveTrainer.run_full_cycle returns non-success (test-core-py CI flake)"
 tags: [training, test-flake, ci-flake]
@@ -81,3 +81,9 @@ and never enters the training loop. No regression.
   rehashed; procedure: checkout --ours + hand-apply training hash + recorded_commit).
   First CI on 52b90d07f: test-core-py PASSED, sole reds = route-fallbacks floor
   (fixed on main by #298). Head now e0a83bd0a, CI running.
+
+## DONE — 2026-11-07
+PR #297 MERGED `98cba5c72` (full green on e0a83bd0a; benchmark gate PASS 3.21 s/s,
+loss 2.9247→0.0007, PPL 1.0, rng 0032a7465041 recorded above). Rebases ×3 across
+main's baseline-rehash churn (locked procedure: checkout --ours + hand-apply
+training tree_hash c4445ae2 + recorded_commit).

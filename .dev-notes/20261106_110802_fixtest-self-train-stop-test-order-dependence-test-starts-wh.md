@@ -1,6 +1,6 @@
 ---
 id: 20261106_110802_fixtest-self-train-stop-test-order-dependence-test-starts-wh
-status: wip
+status: done
 board: 20261106_110802_fixtest-self-train-stop-test-order-dependence-test-starts-wh
 title: "fix(test): self_train stop test order-dependence — test_starts_when_not_running leaks a live process"
 tags: [test-isolation, pre-existing]
@@ -15,3 +15,9 @@ tests/server/test_self_train_router.py::TestSelfTrainDeterministic::test_stop_no
 ## Work log
 
 (claimed by foreman session 2026-11-07, dispatched to Gen)
+
+## DONE — 2026-11-07
+PR #296 MERGED `8b3b3ca5c` (documented evidence: test-core-py passed full suite;
+sole reds = route-fallbacks floor, fixed on main by #298 after head push; diff =
+one Python test file). Module-level autouse `stop_self_train_process` fixture;
+gates: full file ×10 green + random-order green + 0 stray subprocesses, ruff clean.
