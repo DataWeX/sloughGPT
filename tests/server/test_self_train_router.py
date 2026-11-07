@@ -12,6 +12,32 @@ from infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.self_train import router
 
 
+@pytest.fixture(autouse=True)
+def stop_self_train_process():
+    """Stop any real self-train subprocess after every test in this file.
+
+    Several tests (``test_starts_when_not_running``, the temperature
+    boundary tests, ``test_start_when_proc_exited``) POST /self-train/start
+    without patching ``subprocess.Popen`` and therefore leave a live process
+    in ``server_state._self_train_proc``.  A later test then observes that
+    leaked state — e.g. ``test_stop_not_running`` gets ``stopped`` instead
+    of ``not_running`` — making the suite order-dependent.  Cleanup after
+    each test keeps every test's starting state identical.
+    """
+    import state as server_state
+
+    yield
+    proc = server_state._self_train_proc
+    if proc is not None:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+        server_state._self_train_proc = None
+
+
 @pytest.fixture
 def app():
     _app = FastAPI()
