@@ -246,9 +246,7 @@ describe('useProcessNotifications — zustand surface', () => {
 
   it('notifies subscribers on change', () => {
     const seen: number[] = []
-    const unsub = useProcessNotifications.subscribe((s) =>
-      seen.push(s.notifications.length),
-    )
+    const unsub = useProcessNotifications.subscribe((s) => seen.push(s.notifications.length))
     ingestProcessEvents([interruptedEvent()])
     unsub()
     expect(seen).toContain(1)

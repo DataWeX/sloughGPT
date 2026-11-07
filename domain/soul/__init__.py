@@ -3,7 +3,6 @@
 Public API:
     SentimentAnalyzer, HDMemoryStore, QuantumCognitiveEngine
 """
-
 from __future__ import annotations
 
 from domain.soul._internal.cognitive import SentimentAnalyzer

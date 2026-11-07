@@ -183,16 +183,23 @@ describe('LiveFeedStream', () => {
       snapshot({
         jobs: {
           active: [
-            { id: 'j1', name: 'Live job', status: 'running', dataset: 'feed:feedback', progress: 40 },
+            {
+              id: 'j1',
+              name: 'Live job',
+              status: 'running',
+              dataset: 'feed:feedback',
+              progress: 40,
+            },
           ],
           count: 1,
         },
         changed: true,
       }),
     )
-    expect(
-      screen.getByRole('link', { name: 'Open live view for Live job' }),
-    ).toHaveAttribute('href', '/training/job/j1')
+    expect(screen.getByRole('link', { name: 'Open live view for Live job' })).toHaveAttribute(
+      'href',
+      '/training/job/j1',
+    )
   })
 
   it('does not link phantom pending-* jobs (no backend record to open)', () => {

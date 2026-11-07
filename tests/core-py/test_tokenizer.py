@@ -689,3 +689,87 @@ class TestSloUnigramAllSegmentations:
         tok = SloUnigram()
         tok.train(["hello"], vocab_size=16)
         assert tok._all_segmentations("") == []
+
+
+# ── word-boundary round-trip on a byte-level vocabulary (card a4705a55) ──
+#
+# GPT-2/Qwen-class vocabs spell the inter-word space as the byte-level marker
+# "Ġ" (U+0120). They carry no literal " " token and no "</w>" word-end token,
+# so the two mechanisms SloBPE.decode historically used to find a word
+# boundary both miss, and the space silently disappears.
+
+
+def _byte_level_words() -> list[str]:
+    return [
+        "<PAD>",
+        "<UNK>",
+        "<BOS>",
+        "<EOS>",
+        "Ġ",
+        "h",
+        "e",
+        "l",
+        "o",
+        "w",
+        "r",
+        "d",
+    ]
+
+
+def _byte_level_bpe() -> SloBPE:
+    words = _byte_level_words()
+    stoi = {t: i for i, t in enumerate(words)}
+    itos = {i: t for t, i in stoi.items()}
+    return SloBPE.from_dict(
+        {
+            "vocab": [[t, i] for t, i in stoi.items()],
+            "merges": [],
+            "stoi": stoi,
+            "itos": {str(k): v for k, v in itos.items()},
+            "version": 2,
+            "pretokenizer": "gpt2",
+        }
+    )
+
+
+def _byte_level_unigram() -> SloUnigram:
+    words = _byte_level_words()
+    stoi = {t: i for i, t in enumerate(words)}
+    itos = {i: t for t, i in stoi.items()}
+    return SloUnigram.from_dict(
+        {
+            "vocab": list(words),
+            "scores": {str(i): 0.0 for i in range(len(words))},
+            "stoi": stoi,
+            "itos": {str(k): v for k, v in itos.items()},
+            "pretokenizer": "gpt2",
+        }
+    )
+
+
+class TestByteLevelWordBoundaries:
+    """encode(text) -> decode(ids) must give the text back, spaces and all."""
+
+    def test_slobpe_roundtrip_preserves_inter_word_spaces(self):
+        tok = _byte_level_bpe()
+        text = "hello world"
+        assert tok.decode(tok.encode(text)) == text
+
+    def test_slobpe_streaming_roundtrip_preserves_boundaries(self):
+        """Serving decodes one token at a time (model_worker.py:415)."""
+        tok = _byte_level_bpe()
+        text = "hello world"
+        ids = tok.encode(text)
+        streamed = "".join(tok.decode([i]) for i in ids)
+        assert streamed == text
+
+    def test_slo_unigram_roundtrip_preserves_inter_word_spaces(self):
+        tok = _byte_level_unigram()
+        text = "hello world"
+        assert tok.decode(tok.encode(text)) == text
+
+    def test_self_trained_tokenizer_still_roundtrips(self):
+        """Guard: a </w>-style vocabulary must keep behaving exactly as before."""
+        tok = SloBPE().train(["hello world"] * 5, vocab_size=128, verbose=False)
+        text = "hello world"
+        assert tok.decode(tok.encode(text)) == text

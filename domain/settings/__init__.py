@@ -4,7 +4,6 @@ Public API:
     GenerationSettings, TrainingSettings, AdaptiveSettings, VoiceSettings, UISettings
     AppSettings, PersistentSettings, get_settings
 """
-
 from __future__ import annotations
 
 from domain.settings._internal.persistent import (

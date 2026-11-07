@@ -373,7 +373,11 @@ def test_bind_server_steps_past_occupied_port(tmp_path):
     try:
         srv = _bind_server("127.0.0.1", taken, GuiHandler, note_store, kanban_store)
         try:
-            assert srv.server_address[1] == taken + 1
+            # Steps PAST the occupied port — not necessarily to taken+1: when
+            # taken+1 is itself occupied (busy CI runner), _bind_server keeps
+            # stepping, so pin the invariant (skipped the blocker), not the
+            # exact offset (flake: 47383 == 47381 + 1 failed on run 41779589696).
+            assert srv.server_address[1] > taken
         finally:
             srv.server_close()
     finally:

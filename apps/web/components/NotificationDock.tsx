@@ -42,11 +42,7 @@ function actionKindClass(intent: ProcessAction['intent']): string {
   return 'text-muted-foreground'
 }
 
-const DockEntry = memo(function DockEntry({
-  note,
-}: {
-  note: ProcessNotification
-}) {
+const DockEntry = memo(function DockEntry({ note }: { note: ProcessNotification }) {
   const tone = STATE_TONE[note.state]
   const eventId = note.event_id
   const failed = note.stale === true
@@ -80,12 +76,8 @@ const DockEntry = memo(function DockEntry({
         </Button>
       </div>
 
-      {note.name && (
-        <p className="truncate text-[11px] text-muted-foreground">{note.name}</p>
-      )}
-      {note.reason && (
-        <p className="text-[11px] text-muted-foreground">{note.reason}</p>
-      )}
+      {note.name && <p className="truncate text-[11px] text-muted-foreground">{note.name}</p>}
+      {note.reason && <p className="text-[11px] text-muted-foreground">{note.reason}</p>}
 
       {/* Lifecycle feedback — explicit, never inferred from content. */}
       {failed && (

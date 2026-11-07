@@ -1,5 +1,4 @@
 """Processors package."""
-
 from __future__ import annotations
 
 from .consciousness import ConsciousnessProcessor

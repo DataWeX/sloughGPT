@@ -204,7 +204,7 @@ export const MemoryTab = memo(function MemoryTab() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search memory..."
                 aria-label="Search memory"
-                className="w-full h-7 pl-7 pr-6 rounded border border-border/40 bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+                className="w-full h-7 pl-7 pr-6 rounded border border-border/40 bg-background text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus:border-primary/50"
               />
               {search && (
                 <button

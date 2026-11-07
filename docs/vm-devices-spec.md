@@ -27,12 +27,14 @@ class DeviceTable:
 ```
 
 **Operations:**
+
 - `register(device, type)` → add device to table
 - `open(name, mode)` → alloc fd, return int
 - `close(fd)` → free fd
 - `ioctl(fd, command, *args)` → route to device
 
 **Bit operations:**
+
 - `_alloc_fd()` → bit scan for free fd
 - `_free_fd(fd)` → bit clear
 - `_fd_is_open(fd)` → bit test
@@ -72,6 +74,7 @@ CUSTOM    = 0       # no type
 Standalone compute hardware — wraps numpy.
 
 **59 commands via ioctl:**
+
 - Linear algebra: MATMUL, DOT, INV, SVD, EIG
 - Activations: RELU, SIGMOID, TANH, SOFTMAX, GELU, SILU, ELU, SELU
 - Arithmetic: ADD, SUB, MUL, DIV, NEG, ABS, POW, SQRT, EXP, LOG
@@ -86,6 +89,7 @@ Standalone compute hardware — wraps numpy.
 - Utility: CLIP_GRAD_NORM, DROPOUT, EMBEDDING, LINEAR
 
 **Interface:**
+
 ```python
 tensor = TensorDevice()
 result = tensor.ioctl("MATMUL", a, b)  # → SyscallResult
@@ -100,6 +104,7 @@ import NPUDevice` resolves to the same class, so every seam (VM `DEV_CALL`,
 loaded from any seam is visible from every other.
 
 **18 commands via ioctl** (`PIPE` and `PIPELINE` are aliases of one operation):
+
 - INFO, LIST_COMMANDS
 - LOAD, UNLOAD, CALL
 - BATCH, PIPE, PIPELINE, PROFILE, QUANTIZE
@@ -108,12 +113,14 @@ loaded from any seam is visible from every other.
 - MEMORY, COMPUTE
 
 **Two faces of one contract:**
+
 - `call(method, *args)` — guest/VM face: lowercase, returns the value,
   raises `DeviceFault` on failure.
 - `ioctl(command, *args)` — kernel face: uppercase, returns `SyscallResult`,
   never raises.
 
 **Interface:**
+
 ```python
 from domain.shell import NPUDevice
 

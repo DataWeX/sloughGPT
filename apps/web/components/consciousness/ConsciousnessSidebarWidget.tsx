@@ -83,7 +83,7 @@ export function ConsciousnessSidebarWidget() {
             <MiniQualiaBar
               label={t('consciousness_sidebar.qualia_novelty')}
               value={novelty}
-              color="bg-violet-500"
+              color="bg-primary"
             />
           </div>
 

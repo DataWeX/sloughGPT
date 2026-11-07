@@ -35,6 +35,7 @@ Verify no regressions after code changes.
 ## Verification Commands
 
 ### Python
+
 ```bash
 python3 -m py_compile <file>
 python3 -m pytest tests/test_<module>.py -x -q
@@ -42,6 +43,7 @@ make test-py
 ```
 
 ### Frontend
+
 ```bash
 cd apps/web && npx tsc --noEmit
 npm run test:lib
@@ -51,6 +53,7 @@ npm run test:components
 ## Output
 
 The agent will report:
+
 1. Files checked
 2. Tests run and results
 3. Issues found (if any)

@@ -107,8 +107,23 @@ describe('DatasetsPage structured listing (card 20261104_060023)', () => {
 
   it('labels corpusless entries instead of showing a bare size', async () => {
     mockList.mockResolvedValue([
-      { id: 'hollow', name: 'Hollow', size: 0, created_at: '2025-01-01', kind: 'dataset', has_corpus: false },
-      { id: 'full', name: 'Full Set', size: 900, created_at: '2025-01-01', kind: 'dataset', has_corpus: true, samples: 12 },
+      {
+        id: 'hollow',
+        name: 'Hollow',
+        size: 0,
+        created_at: '2025-01-01',
+        kind: 'dataset',
+        has_corpus: false,
+      },
+      {
+        id: 'full',
+        name: 'Full Set',
+        size: 900,
+        created_at: '2025-01-01',
+        kind: 'dataset',
+        has_corpus: true,
+        samples: 12,
+      },
     ])
     render(<DatasetsPage />)
     await waitFor(() => {

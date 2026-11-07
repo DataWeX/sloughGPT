@@ -232,21 +232,24 @@ class TestExtractPairsFromSessions:
 
 class TestExtractPairsFromLogs:
     @pytest.fixture(autouse=True)
-    def _isolate_mogdb_path(self, monkeypatch):
-        """These tests own the JSONL fallback only — neutralize the MogDB-first read.
+    def _force_jsonl_fallback(self, monkeypatch):
+        """Pin these tests to the JSONL branch by disabling the MogDB read.
 
-        extract_pairs_from_logs() queries the response tracker's MogDB
-        collection FIRST and falls back to _RESPONSE_LOGS_DIR. The tracker is
-        a process-wide singleton over the repo-local data/response_mogdb
-        store, which accumulates fixture docs written by other suites — so
-        without this stub these tests silently depend on store contents
-        (polluted locally, empty in CI; card 26fc83c4). _coll=None forces the
-        JSONL fallback each test already redirects via monkeypatch.
+        extract_pairs_from_logs() tries MogDB FIRST (get_response_tracker()._coll)
+        and only falls back to the JSONL dir when that yields nothing, so patching
+        _RESPONSE_LOGS_DIR alone does not isolate the function under test: any row
+        other suite left in the shared responses collection wins and is returned
+        instead. That state lives on disk (data/response_mogdb), so the failure is
+        checkout-dependent rather than order-dependent — a populated checkout
+        (e.g. the long-lived sloughgpt-api-std tree) fails 8/8 here while a fresh
+        worktree passes, which is exactly what RUN7 recorded.
+
+        _coll = None reproduces the "MogDB unavailable" path the class's own
+        docstrings describe, so the JSONL assertions below see their own writes.
         """
-        stub = SimpleNamespace(_coll=None)
         monkeypatch.setattr(
             "domain.feedback._internal.response_tracker.get_response_tracker",
-            lambda: stub,
+            lambda: SimpleNamespace(_coll=None),
         )
 
     def test_basic_extraction(self, tmp_path, monkeypatch):

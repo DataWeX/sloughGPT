@@ -4,7 +4,6 @@ Byte-identical with the canonical implementation; re-exported from
 :mod:`domain.knowledge._internal.data_filter` to keep a single source of
 truth.
 """
-
 from __future__ import annotations
 
 from domain.knowledge._internal.data_filter import (

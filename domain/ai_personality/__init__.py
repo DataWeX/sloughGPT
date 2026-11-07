@@ -4,7 +4,6 @@ Public API:
     PersonalityType, Personality, PersonalityManager
     get_personality_manager, list_personalities, PERSONALITIES
 """
-
 from __future__ import annotations
 
 from domain.ai_personality._internal.personality import (

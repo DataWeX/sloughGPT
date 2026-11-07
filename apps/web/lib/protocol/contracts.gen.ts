@@ -29,6 +29,36 @@ export interface ContractDescriptor {
 }
 
 export const CONTRACTS = {
+  "consciousness.personality_history": {
+    "auth_scope": "authenticated",
+    "description": "Personality evolution history derived from episodes (voice and trait trends).",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.personality",
+    "name": "consciousness.personality_history",
+    "operation_id": "consciousness.personality_history.get",
+    "params": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "path": "/consciousness/personality/history",
+    "result": {
+      "properties": {
+        "history": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "labels": {
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
   "contracts.list": {
     "auth_scope": "authenticated",
     "description": "List capability contracts registered through the descriptor mechanism.",

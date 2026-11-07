@@ -91,14 +91,16 @@ export function OrchestrationPanel({
           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-[11px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
           placeholder="Additional context (optional)"
           value={context}
-          onChange={e => onContextChange(e.target.value)}
+          onChange={(e) => onContextChange(e.target.value)}
           aria-label="Orchestration context"
         />
         {agents.length > 0 && (
           <div>
-            <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Agents (optional — leave empty for all)</p>
+            <p className="text-[10px] font-medium text-muted-foreground mb-1.5">
+              Agents (optional — leave empty for all)
+            </p>
             <div className="flex flex-wrap gap-1.5" data-testid="orch-agent-list">
-              {agents.map(a => (
+              {agents.map((a) => (
                 <button
                   key={a.id}
                   type="button"
@@ -117,7 +119,11 @@ export function OrchestrationPanel({
           </div>
         )}
         <div className="flex gap-2">
-          <Button onClick={onOrchestrate} disabled={running || !goal.trim()} className="h-7 text-[11px]">
+          <Button
+            onClick={onOrchestrate}
+            disabled={running || !goal.trim()}
+            className="h-7 text-[11px]"
+          >
             {running ? 'Orchestrating...' : 'Orchestrate'}
           </Button>
           {(response || error) && (
@@ -128,11 +134,20 @@ export function OrchestrationPanel({
         </div>
 
         {phase && (
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground" data-testid="phase-indicator">
-            <span className={cn(
-              'inline-block h-2 w-2 rounded-full',
-              phase === 'COMPLETE' ? 'bg-success' : phase === 'ERROR' ? 'bg-destructive' : 'bg-warning animate-pulse',
-            )} />
+          <div
+            className="flex items-center gap-2 text-[10px] text-muted-foreground"
+            data-testid="phase-indicator"
+          >
+            <span
+              className={cn(
+                'inline-block h-2 w-2 rounded-full',
+                phase === 'COMPLETE'
+                  ? 'bg-success'
+                  : phase === 'ERROR'
+                    ? 'bg-destructive'
+                    : 'bg-warning animate-pulse',
+              )}
+            />
             {phase === 'PLAN' && 'Planning subtasks...'}
             {phase === 'EXECUTE' && `Executing level ${level}/${totalLevels}...`}
             {phase === 'COMPOSE' && 'Composing final response...'}
@@ -144,18 +159,33 @@ export function OrchestrationPanel({
         {tasks.length > 0 && (
           <div className="space-y-1.5" data-testid="orch-tasks">
             <p className="text-[10px] font-medium text-muted-foreground">Tasks ({tasks.length})</p>
-            {tasks.map(task => {
+            {tasks.map((task) => {
               const status = taskStatuses[task.id] || 'pending'
               return (
-                <div key={task.id} className="flex items-center gap-2 rounded-lg border border-border/40 px-2.5 py-2 text-[11px]">
-                  <span className={cn(
-                    'inline-block h-2 w-2 shrink-0 rounded-full',
-                    status === 'completed' ? 'bg-success' : status === 'live' ? 'bg-warning animate-pulse' : status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30',
-                  )} />
-                  <span className="font-medium text-[10px] min-w-[64px] text-muted-foreground">{task.agent}</span>
+                <div
+                  key={task.id}
+                  className="flex items-center gap-2 rounded-lg border border-border/40 px-2.5 py-2 text-[11px]"
+                >
+                  <span
+                    className={cn(
+                      'inline-block h-2 w-2 shrink-0 rounded-full',
+                      status === 'completed'
+                        ? 'bg-success'
+                        : status === 'live'
+                          ? 'bg-warning animate-pulse'
+                          : status === 'failed'
+                            ? 'bg-destructive'
+                            : 'bg-muted-foreground/30',
+                    )}
+                  />
+                  <span className="font-medium text-[10px] min-w-[64px] text-muted-foreground">
+                    {task.agent}
+                  </span>
                   <span className="flex-1 truncate">{task.description}</span>
                   {task.depends_on && task.depends_on.length > 0 && (
-                    <span className="text-[10px] text-muted-foreground/50">after: {task.depends_on.join(', ')}</span>
+                    <span className="text-[10px] text-muted-foreground/50">
+                      after: {task.depends_on.join(', ')}
+                    </span>
                   )}
                 </div>
               )
@@ -164,15 +194,16 @@ export function OrchestrationPanel({
         )}
 
         {response && (
-          <div className="rounded-lg border border-border/40 bg-muted/30 p-3" data-testid="orch-response">
+          <div
+            className="rounded-lg border border-border/40 bg-muted/30 p-3"
+            data-testid="orch-response"
+          >
             <p className="text-[10px] font-medium text-muted-foreground mb-1">Result</p>
             <p className="text-[11px] whitespace-pre-wrap">{response}</p>
           </div>
         )}
 
-        {error && (
-          <StatusBanner variant="error" message={error} dismissible={false} />
-        )}
+        {error && <StatusBanner variant="error" message={error} dismissible={false} />}
       </CardContent>
     </Card>
   )

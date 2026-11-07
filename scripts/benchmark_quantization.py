@@ -156,6 +156,34 @@ class TestResult:
     details: str = ""
 
 
+def _steady_spread(times: list[float]) -> float:
+    """Outlier-resistant spread of warm-state samples (median absolute deviation).
+
+    The warm steady-state gate must tolerate OS scheduler bursts: one
+    stalled sample among four inflates ``np.std`` past any fixed ratio
+    (CI flake 2026-11-02 — a single stall flipped ``cold_vs_warm`` FAIL,
+    dropped ``passed`` 7->6 and failed the zero-tolerance baseline compare).
+    MAD moves by at most one order statistic per stalled sample while
+    genuinely unsettled timing still yields a large value.
+    """
+    if len(times) < 2:
+        return 0.0
+    arr = np.asarray(times, dtype=float)
+    med = float(np.median(arr))
+    return float(np.median(np.abs(arr - med)))
+
+
+def _warm_steady_gate(warm_nq: float, warm_q: float, spread_nq: float, spread_q: float) -> bool:
+    """Warm steady state achievable: MAD spread < 25% of the warm median.
+
+    0.5x is rejected because MAD is centered at the median and is then
+    blind to bimodal stall patterns; 0.25x still fails sustained scatter
+    while the proven single-stall pattern passes with ~1.6x margin.
+    """
+    mean_warm = (warm_nq + warm_q) / 2
+    return (spread_nq + spread_q) / 2 < mean_warm * 0.25
+
+
 class QuantizationBenchmark:
     """Comprehensive benchmark suite for int4/int8 quantized generate_numpy."""
 
@@ -175,7 +203,11 @@ class QuantizationBenchmark:
         self.n_measured = 5 if quick else 7
         self.short_lengths = [10, 20, 50] if quick else [10, 20, 50, 100, 200]
         self.prompt_lengths = [10, 50, 100] if quick else [10, 50, 100, 200, 400]
-        self.n_cold_runs = 5 if quick else 20
+        # 9 (not 5): with only 4 warm samples a two-stall burst poisons the
+        # median itself and no spread estimator can recover (2026-11-02 CI
+        # flake class — MAD gate + enough samples to outvote a stall burst;
+        # 8 warm samples survive up to 3 stalled ones).
+        self.n_cold_runs = 9 if quick else 20
         self.test_prompts = [
             "The capital of France is",
             "def fibonacci(n):",
@@ -822,8 +854,8 @@ class QuantizationBenchmark:
         cold_nq, warm_nq = _cold_warm(times_nq)
         cold_q, warm_q = _cold_warm(times_q)
 
-        variance_nq = float(np.std(times_nq[1:])) if len(times_nq) > 1 else 0
-        variance_q = float(np.std(times_q[1:])) if len(times_q) > 1 else 0
+        spread_nq = _steady_spread(times_nq[1:])
+        spread_q = _steady_spread(times_q[1:])
 
         results = {
             "n_runs": self.n_cold_runs,
@@ -831,13 +863,13 @@ class QuantizationBenchmark:
                 "cold_s": round(cold_nq, 3),
                 "warm_median_s": round(warm_nq, 3),
                 "cold_warmup_ratio": round(cold_nq / max(warm_nq, 0.001), 2),
-                "variance_s": round(variance_nq, 3),
+                "spread_s": round(spread_nq, 3),
             },
             "quantized": {
                 "cold_s": round(cold_q, 3),
                 "warm_median_s": round(warm_q, 3),
                 "cold_warmup_ratio": round(cold_q / max(warm_q, 0.001), 2),
-                "variance_s": round(variance_q, 3),
+                "spread_s": round(spread_q, 3),
             },
         }
 
@@ -848,10 +880,11 @@ class QuantizationBenchmark:
             f"  Quantized:     cold={cold_q:.3f}s, warm={warm_q:.3f}s ({cold_q / warm_q:.1f}x startup overhead)"
         )
 
-        # Pass if warm steady state is achievable (variance < 50% of mean)
-        mean_warm = (warm_nq + warm_q) / 2
-        total_var = (variance_nq + variance_q) / 2
-        passed = total_var < mean_warm * 0.5
+        # Pass if warm steady state is achievable: robust spread (MAD)
+        # below 25% of the warm median — std flapped on a single scheduler
+        # stall (CI flake 2026-11-02); 0.5x MAD is blind to bimodal stalls,
+        # 0.25x keeps genuine sustained scatter failing.
+        passed = _warm_steady_gate(warm_nq, warm_q, spread_nq, spread_q)
         details = f"Startup overhead: NQ={cold_nq / warm_nq:.1f}x, Q={cold_q / warm_q:.1f}x"
 
         print(f"  Result: {'PASS' if passed else 'FAIL'} — {details}")
@@ -1122,12 +1155,12 @@ class QuantizationBenchmark:
                     )
             elif r.name == "cold_vs_warm":
                 m = r.metrics
-                lines.append("| Path | Cold (s) | Warm median (s) | Variance (s) |")
-                lines.append("|------|----------|-----------------|--------------|")
+                lines.append("| Path | Cold (s) | Warm median (s) | Warm spread (s, MAD) |")
+                lines.append("|------|----------|-----------------|---------------------|")
                 for path in ("non_quantized", "quantized"):
                     d = m[path]
                     lines.append(
-                        f"| {path} | {d['cold_s']} | {d['warm_median_s']} | {d['variance_s']} |"
+                        f"| {path} | {d['cold_s']} | {d['warm_median_s']} | {d['spread_s']} |"
                     )
             lines.append("")
         if self.tiny:

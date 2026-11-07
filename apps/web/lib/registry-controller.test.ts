@@ -8,7 +8,9 @@ vi.mock('./http-client', () => ({
 
 const apiGet = vi.mocked(http.apiGet)
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('registryController', () => {
   it('list unwraps nested data.models', async () => {
@@ -24,15 +26,38 @@ describe('registryController', () => {
   })
 
   it('stats maps backend fields to frontend shape', async () => {
-    apiGet.mockResolvedValue({ models_registered: 3, models_loaded: 1, healthy: true, degraded: false, has_errors: false, default_model: 'gpt2' })
+    apiGet.mockResolvedValue({
+      models_registered: 3,
+      models_loaded: 1,
+      healthy: true,
+      degraded: false,
+      has_errors: false,
+      default_model: 'gpt2',
+    })
     const result = await registryController.stats()
-    expect(result).toEqual({ total_models: 3, loaded_models: 1, failed_models: 0, circuit_breaker_open: false })
+    expect(result).toEqual({
+      total_models: 3,
+      loaded_models: 1,
+      failed_models: 0,
+      circuit_breaker_open: false,
+    })
   })
 
   it('stats maps errors and degraded', async () => {
-    apiGet.mockResolvedValue({ models_registered: 1, models_loaded: 0, healthy: false, degraded: true, has_errors: true })
+    apiGet.mockResolvedValue({
+      models_registered: 1,
+      models_loaded: 0,
+      healthy: false,
+      degraded: true,
+      has_errors: true,
+    })
     const result = await registryController.stats()
-    expect(result).toEqual({ total_models: 1, loaded_models: 0, failed_models: 1, circuit_breaker_open: true })
+    expect(result).toEqual({
+      total_models: 1,
+      loaded_models: 0,
+      failed_models: 1,
+      circuit_breaker_open: true,
+    })
   })
 
   it('best returns the data as-is', async () => {
@@ -54,15 +79,25 @@ describe('registryController', () => {
   })
 
   it('stats calls correct endpoint', async () => {
-    apiGet.mockResolvedValue({ models_registered: 0, models_loaded: 0, healthy: true, degraded: false, has_errors: false })
+    apiGet.mockResolvedValue({
+      models_registered: 0,
+      models_loaded: 0,
+      healthy: true,
+      degraded: false,
+      has_errors: false,
+    })
     await registryController.stats()
     expect(apiGet).toHaveBeenCalledWith('/registry/stats')
   })
 
   it('artifacts unwraps data.artifacts with lineage query', async () => {
     const record = {
-      artifact_id: 'model:baby.soul', kind: 'model', id: 'baby.soul',
-      name: 'baby.soul', path: '/x/baby.soul', size_bytes: 10,
+      artifact_id: 'model:baby.soul',
+      kind: 'model',
+      id: 'baby.soul',
+      name: 'baby.soul',
+      path: '/x/baby.soul',
+      size_bytes: 10,
       parents: ['dataset:ds1'],
     }
     apiGet.mockResolvedValue({ artifacts: [record] })

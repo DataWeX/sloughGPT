@@ -37,12 +37,14 @@ Out of scope unless asked: frontend, CLI UX, docs.
 ## Workflow
 
 ### 1. Triage
+
 - Run the smallest useful verification first:
   - `python3 -m py_compile <file>` for syntax
   - `python3 -m pytest tests/core-py/<file>.py -x -q` for tests
 - Read failing output. Identify the smallest reproducible case.
 
 ### 2. Investigate
+
 - Read the failing test and the source file it exercises.
 - Search for related call sites:
   - `grep -r "function_name" domain/`
@@ -50,12 +52,14 @@ Out of scope unless asked: frontend, CLI UX, docs.
 - Check `infrastructure/` for process/model guards that may change behavior.
 
 ### 3. Fix
+
 - Prefer fixing the root cause, not the symptom.
 - Keep changes minimal. Do not refactor unrelated code.
 - Preserve public APIs and existing test expectations unless they are
   themselves the bug.
 
 ### 4. Verify
+
 - Re-run the exact failing test.
 - Run a targeted regression check on nearby tests:
   - `python3 -m pytest tests/core-py/test_<area>*.py -q`
@@ -64,6 +68,7 @@ Out of scope unless asked: frontend, CLI UX, docs.
   foundational infrastructure.
 
 ### 5. Test Coverage
+
 - If the bug had no test, add one in the same directory.
 - Test the failure mode explicitly (error path, edge case, bad input).
 - Use existing test patterns in the file. Do not introduce new frameworks.

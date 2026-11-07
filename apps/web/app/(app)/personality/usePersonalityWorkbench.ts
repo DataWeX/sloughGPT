@@ -3,8 +3,8 @@
 /**
  * Stateful core of the Personality page.
  *
- * Owns IO and state only — profile/presets/history/conflicts fetches,
- * the saved-persona list with activate/delete, trait edits and their
+ * Owns IO and state only — profile/presets/conflicts fetches (history is a
+ * protocol read through lib/protocol), the saved-persona list with activate/delete, trait edits and their
  * save, preset application, CSV-ish comma-list inputs and the import
  * comparison. The sections own render.
  */
@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import { apiPatch } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { useEndpoint } from '@/lib/protocol/useEndpoint'
 import { useLocale } from '@/hooks/useLocale'
 import {
   type SavedPersona,
@@ -33,7 +34,6 @@ export function usePersonalityWorkbench() {
   const [avoidInput, setAvoidInput] = useState('')
   const [presetNames, setPresetNames] = useState<string[]>([])
   const [activePreset, setActivePreset] = useState<string | null>(null)
-  const [personalityHistory, setPersonalityHistory] = useState<PersonalityHistory[]>([])
   const [applyingPreset, setApplyingPreset] = useState<string | null>(null)
   const [conflicts, setConflicts] = useState<PersonalityConflict[]>([])
   const [showComparison, setShowComparison] = useState(false)
@@ -44,6 +44,13 @@ export function usePersonalityWorkbench() {
   const [activatingPersona, setActivatingPersona] = useState<string | null>(null)
   const [deletingPersona, setDeletingPersona] = useState<string | null>(null)
   const [showSavePersonaDialog, setShowSavePersonaDialog] = useState(false)
+
+  // History is a protocol read: the capability name resolves the path through
+  // the generated contract registry (lib/protocol), not a hand-written call.
+  const historyQuery = useEndpoint<{ history: PersonalityHistory[] }>(
+    'consciousness.personality_history',
+  )
+  const personalityHistory = historyQuery.data?.history ?? []
 
   const fetchPersonas = useCallback(async () => {
     try {
@@ -56,10 +63,9 @@ export function usePersonalityWorkbench() {
 
   const fetchProfile = useCallback(async () => {
     try {
-      const [profileResult, presetsResult, histResult, conflictsResult] = await Promise.allSettled([
+      const [profileResult, presetsResult, conflictsResult] = await Promise.allSettled([
         consciousnessController.getPersonality(),
         consciousnessController.getPersonalityPresets(),
-        consciousnessController.getPersonalityHistory(),
         consciousnessController.getPersonalityConflicts(),
       ])
       if (profileResult.status === 'fulfilled') {
@@ -72,9 +78,6 @@ export function usePersonalityWorkbench() {
       }
       if (presetsResult.status === 'fulfilled') {
         setPresetNames((presetsResult.value as any)?.names ?? [])
-      }
-      if (histResult.status === 'fulfilled') {
-        setPersonalityHistory((histResult.value as any)?.history ?? [])
       }
       if (conflictsResult.status === 'fulfilled') {
         setConflicts((conflictsResult.value as any)?.conflicts ?? [])
@@ -304,7 +307,6 @@ export function usePersonalityWorkbench() {
     setLoading,
     setOriginalProfile,
     setPersonaNameInput,
-    setPersonalityHistory,
     setPresetNames,
     setProfile,
     setSavedPersonas,

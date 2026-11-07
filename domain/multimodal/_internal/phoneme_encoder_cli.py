@@ -9,7 +9,6 @@ Usage:
     python -m domain.multimodal._internal.phoneme_encoder_cli --lang pt "ola mundo"
     python -m domain.multimodal._internal.phoneme_encoder_cli --detect "hello world"
 """
-
 from __future__ import annotations
 
 import os

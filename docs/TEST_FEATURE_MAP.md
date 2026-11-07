@@ -4,8 +4,8 @@
 `tests/` (AST + regex, no hand counts) plus the full `RUN_ALL` run's
 `-v` output, plus `config/feature_flags.json` and the `FEATURE:` tag scan.
 Purpose: input for the Test Rule clause 5 trim audit (card `299d8d38`'s
-follow-up) — *which features is the suite spending its time on, and what
-looks irrelevant?*
+follow-up) — _which features is the suite spending its time on, and what
+looks irrelevant?_
 
 Scope note: Python tests under `tests/` are analyzed in depth; web/Vitest
 suites are counted but not mapped here (separate follow-up).
@@ -17,13 +17,13 @@ suites are counted but not mapped here (separate follow-up).
    functions**; the top 5 files hold **6,880 (14.7%)** of 46,649. Any
    lever big enough to matter starts here (parametrized-REPL coverage).
 
-   | File | Tests |
-   |------|------|
-   | `tests/core-py/test_shell_repl_more.py` | 4,081 |
-   | `tests/core-py/test_vm_os_layer.py` | 1,200 |
-   | `tests/core-py/test_vm.py` | 657 |
-   | `tests/core-py/test_vm_coverage_gaps.py` | 474 |
-   | `tests/core-py/test_interactive.py` | 468 |
+   | File                                     | Tests |
+   | ---------------------------------------- | ----- |
+   | `tests/core-py/test_shell_repl_more.py`  | 4,081 |
+   | `tests/core-py/test_vm_os_layer.py`      | 1,200 |
+   | `tests/core-py/test_vm.py`               | 657   |
+   | `tests/core-py/test_vm_coverage_gaps.py` | 474   |
+   | `tests/core-py/test_interactive.py`      | 468   |
 
 2. **89 of 103 skips come from two shell files** — `test_shell_repl_more.py`
    (56) and `test_shell_tui_live.py` (33): TTY/live-terminal-dependent tests
@@ -45,7 +45,7 @@ suites are counted but not mapped here (separate follow-up).
 4. **Disabled flags carry no dead feature tests (good news).**
    `cloud_vector_store` and `native_c_inference` (both `disabled`) are
    mentioned only by `test_shared.py` and `test_feature_flags.py` — flag
-   *registry mechanics*, not feature coverage. There is no army of tests
+   _registry mechanics_, not feature coverage. There is no army of tests
    defending features you turned off.
 
 5. **`dpo` (`experimental`) is the largest experimental surface** — 38
@@ -68,35 +68,35 @@ suites are counted but not mapped here (separate follow-up).
 
 ## Scale and concentration
 
-| Area | Files | Test functions | Share |
-|------|------:|---------------:|------:|
-| `tests/core-py/` | 826 | 42,736 | 91.6% |
-| `tests/server/` | 68 | 2,163 | 4.6% |
-| `tests/` (root) | 115 | 1,707 | 3.7% |
-| `tests/contract/` | 6 | 43 | 0.1% |
-| **Python total** | **1,015** | **46,649** | |
-| Web/Vitest (`apps/web` + `packages/strui`) | 916 files | (counted only) | |
+| Area                                       |     Files | Test functions | Share |
+| ------------------------------------------ | --------: | -------------: | ----: |
+| `tests/core-py/`                           |       826 |         42,736 | 91.6% |
+| `tests/server/`                            |        68 |          2,163 |  4.6% |
+| `tests/` (root)                            |       115 |          1,707 |  3.7% |
+| `tests/contract/`                          |         6 |             43 |  0.1% |
+| **Python total**                           | **1,015** |     **46,649** |       |
+| Web/Vitest (`apps/web` + `packages/strui`) | 916 files | (counted only) |       |
 
 ## Feature-flag coverage
 
 Status from `config/feature_flags.json`; count = test files mentioning the
 flag string (mechanical substring match — includes registry tests).
 
-| Flag | Status | Test files | Note |
-|------|--------|----------:|------|
-| dpo | experimental | 84 | largest experimental surface (finding 5) |
-| multimodal | enabled | 52 | |
-| quantization | enabled | 37 | |
-| kv_cache | enabled | 34 | |
-| slonet_provider | enabled | 21 | |
-| model_server | enabled | 20 | |
-| slonet_kernels | experimental | 7 | |
-| semantic_cache | enabled | 6 | |
-| cross_attention | enabled | 8 | |
-| vlm | experimental | 4 | |
-| knowledge_memory / model_registry | enabled | 10 / 10 | |
-| llm_nlp / on_device_training / cloud_vector_store / native_c_inference / process_isolation / soul_manager / session_kv_cache | experimental or disabled | 2 each | registry-level mentions only for the disabled ones |
-| step_trace | enabled | 1 | thinnest enabled coverage |
+| Flag                                                                                                                         | Status                   | Test files | Note                                               |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ---------: | -------------------------------------------------- |
+| dpo                                                                                                                          | experimental             |         84 | largest experimental surface (finding 5)           |
+| multimodal                                                                                                                   | enabled                  |         52 |                                                    |
+| quantization                                                                                                                 | enabled                  |         37 |                                                    |
+| kv_cache                                                                                                                     | enabled                  |         34 |                                                    |
+| slonet_provider                                                                                                              | enabled                  |         21 |                                                    |
+| model_server                                                                                                                 | enabled                  |         20 |                                                    |
+| slonet_kernels                                                                                                               | experimental             |          7 |                                                    |
+| semantic_cache                                                                                                               | enabled                  |          6 |                                                    |
+| cross_attention                                                                                                              | enabled                  |          8 |                                                    |
+| vlm                                                                                                                          | experimental             |          4 |                                                    |
+| knowledge_memory / model_registry                                                                                            | enabled                  |    10 / 10 |                                                    |
+| llm_nlp / on_device_training / cloud_vector_store / native_c_inference / process_isolation / soul_manager / session_kv_cache | experimental or disabled |     2 each | registry-level mentions only for the disabled ones |
+| step_trace                                                                                                                   | enabled                  |          1 | thinnest enabled coverage                          |
 
 ## Test families by filename
 
@@ -119,7 +119,7 @@ candidate by name alone.
 - Counts: AST parse of every `tests/**/test_*.py` (`def test_*` at any
   indent, `parametrize` marks counted separately), 2026-11-05 tree.
 - Skips: grepped from the `-v` output of a full `RUN_ALL=1
-  scripts/run_affected.sh` run on `feat/artifact-provenance-exports`
+scripts/run_affected.sh` run on `feat/artifact-provenance-exports`
   (base `origin/main` @ `3685675b6`).
 - Flag mentions and `FEATURE:` tags: substring/regex scan of test and
   source trees, same date.

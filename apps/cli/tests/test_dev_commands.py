@@ -1041,9 +1041,7 @@ class TestApiOnlySignalHandling:
             # process-kind migration — whichever site appears first is the
             # first child spawn for this variant.
             sites = [
-                i
-                for i in (body.find("subprocess.Popen"), body.find("spawn_command"))
-                if i != -1
+                i for i in (body.find("subprocess.Popen"), body.find("spawn_command")) if i != -1
             ]
             spawn = min(sites) if sites else -1
             assert reg != -1, f"{fn}: no SIGINT registration found"

@@ -55,46 +55,46 @@ grib gui
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `new` | Create a note |
-| `list` | List notes |
-| `show <id>` | Show a note |
-| `edit <id>` | Edit a note |
-| `delete` / `rm` | Delete a note |
-| `search <query>` | Search notes |
-| `today` | Show today's notes |
-| `export` | Export all notes |
-| `tags` | List all tags |
-| `status` | Status summary |
-| `timeline` | Show notes grouped by day |
-| `sprint <name>` | Sprint operations |
-| `init` | Initialize a new board |
-| `add` | Add a card |
-| `cards` | List cards |
-| `card <id>` | Show card details |
-| `edit-card <id>` | Edit a card |
-| `move <id> <column>` | Move card to another column |
-| `block <card> <blocker>` | Block a card by another card |
-| `unblock <card> <blocker>` | Unblock a card |
-| `blocked` | List blocked cards |
-| `delete-card` / `rm-card` | Delete a card |
-| `board` | Show ASCII kanban board |
-| `note add <card> <text>` | Add note to a card |
-| `note list <card>` | List notes on a card |
-| `note delete <card> <id>` | Delete note from a card |
-| `columns` | List columns |
-| `column-add <name>` | Add a column |
-| `column-rename <old> <new>` | Rename a column |
-| `column-rm <name>` | Remove a column |
-| `archive` | Archive (delete) all done cards |
-| `search-cards <query>` | Search cards |
-| `stats` | Board statistics |
-| `verify <note>` | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift) |
-| `export-board` | Export board to JSON |
-| `import-board <file>` | Import board from JSON |
-| `sync` | Sync notes to board |
-| `gui` | Launch web GUI |
+| Command                     | Purpose                                                                           |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| `new`                       | Create a note                                                                     |
+| `list`                      | List notes                                                                        |
+| `show <id>`                 | Show a note                                                                       |
+| `edit <id>`                 | Edit a note                                                                       |
+| `delete` / `rm`             | Delete a note                                                                     |
+| `search <query>`            | Search notes                                                                      |
+| `today`                     | Show today's notes                                                                |
+| `export`                    | Export all notes                                                                  |
+| `tags`                      | List all tags                                                                     |
+| `status`                    | Status summary                                                                    |
+| `timeline`                  | Show notes grouped by day                                                         |
+| `sprint <name>`             | Sprint operations                                                                 |
+| `init`                      | Initialize a new board                                                            |
+| `add`                       | Add a card                                                                        |
+| `cards`                     | List cards                                                                        |
+| `card <id>`                 | Show card details                                                                 |
+| `edit-card <id>`            | Edit a card                                                                       |
+| `move <id> <column>`        | Move card to another column                                                       |
+| `block <card> <blocker>`    | Block a card by another card                                                      |
+| `unblock <card> <blocker>`  | Unblock a card                                                                    |
+| `blocked`                   | List blocked cards                                                                |
+| `delete-card` / `rm-card`   | Delete a card                                                                     |
+| `board`                     | Show ASCII kanban board                                                           |
+| `note add <card> <text>`    | Add note to a card                                                                |
+| `note list <card>`          | List notes on a card                                                              |
+| `note delete <card> <id>`   | Delete note from a card                                                           |
+| `columns`                   | List columns                                                                      |
+| `column-add <name>`         | Add a column                                                                      |
+| `column-rename <old> <new>` | Rename a column                                                                   |
+| `column-rm <name>`          | Remove a column                                                                   |
+| `archive`                   | Archive (delete) all done cards                                                   |
+| `search-cards <query>`      | Search cards                                                                      |
+| `stats`                     | Board statistics                                                                  |
+| `verify <note>`             | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift) |
+| `export-board`              | Export board to JSON                                                              |
+| `import-board <file>`       | Import board from JSON                                                            |
+| `sync`                      | Sync notes to board                                                               |
+| `gui`                       | Launch web GUI                                                                    |
 
 Global options: `--backend {file,mogdb}`, `--notes-dir`, `--board-dir`, `--no-sync`
 
@@ -104,17 +104,17 @@ Environment: `GRIB_NOTES_DIR`, `GRIB_BOARD_DIR`, `GRIB_BACKEND`, `GRIB_NO_SYNC` 
 
 Resolution order, first match wins:
 
-| Priority | Source |
-|----------|--------|
-| 1 | Explicit CLI flag (`--notes-dir`, `--board-dir`, `--backend`) |
-| 2 | Environment: `GRIB_NOTES_DIR`, `GRIB_BOARD_DIR`, `GRIB_BACKEND` |
-| 3 | Repo root: nearest ancestor containing `.kanban/board.json` -> `<root>/.dev-notes`, `<root>/.kanban` |
-| 4 | User config fallback: `~/.config/dev-notes`, `~/.config/kanban` |
+| Priority | Source                                                                                               |
+| -------- | ---------------------------------------------------------------------------------------------------- |
+| 1        | Explicit CLI flag (`--notes-dir`, `--board-dir`, `--backend`)                                        |
+| 2        | Environment: `GRIB_NOTES_DIR`, `GRIB_BOARD_DIR`, `GRIB_BACKEND`                                      |
+| 3        | Repo root: nearest ancestor containing `.kanban/board.json` -> `<root>/.dev-notes`, `<root>/.kanban` |
+| 4        | User config fallback: `~/.config/dev-notes`, `~/.config/kanban`                                      |
 
 ## Status <-> column mapping
 
 | Note status | Board column |
-|-------------|--------------|
+| ----------- | ------------ |
 | `open`      | `todo`       |
 | `wip`       | `wip`        |
 | `review`    | `review`     |

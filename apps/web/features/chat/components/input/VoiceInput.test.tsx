@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { VoiceInput } from './VoiceInput'
@@ -12,7 +11,9 @@ describe('VoiceInput', () => {
       SpeechRecognition: mockSpeechRecognition,
       webkitSpeechRecognition: mockSpeechRecognition,
     })
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ speech_to_text: true }) })
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve({ speech_to_text: true }) })
   })
 
   afterEach(() => {
@@ -57,8 +58,12 @@ describe('VoiceInput', () => {
       onstart: null,
       onend: null,
       onerror: null,
-      set onresult(fn) { onresult = fn },
-      get onresult() { return onresult },
+      set onresult(fn) {
+        onresult = fn
+      },
+      get onresult() {
+        return onresult
+      },
     }))
 
     render(<VoiceInput onTranscript={onTranscript} />)
@@ -184,7 +189,9 @@ describe('VoiceInput', () => {
     const w = window as unknown as Record<string, unknown>
     delete w.SpeechRecognition
     delete w.webkitSpeechRecognition
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ speech_to_text: false }) })
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve({ speech_to_text: false }) })
     render(<VoiceInput onTranscript={() => {}} />)
     await waitFor(() => {
       const btn = screen.getByLabelText(/voice input/i)
@@ -202,8 +209,12 @@ describe('VoiceInput', () => {
       start: vi.fn(),
       stop: vi.fn(),
       abort: vi.fn(),
-      set onstart(fn) { onstart = fn },
-      get onstart() { return onstart },
+      set onstart(fn) {
+        onstart = fn
+      },
+      get onstart() {
+        return onstart
+      },
       onend: null,
       onerror: null,
       onresult: null,
@@ -224,8 +235,12 @@ describe('VoiceInput', () => {
       abort: vi.fn(),
       onstart: null,
       onend: null,
-      set onerror(fn) { onerror = fn },
-      get onerror() { return onerror },
+      set onerror(fn) {
+        onerror = fn
+      },
+      get onerror() {
+        return onerror
+      },
       onresult: null,
     }))
     render(<VoiceInput onTranscript={() => {}} />)

@@ -4,7 +4,6 @@ Public API:
     Role, Permission, UserRole, User, Tenant, Workspace, WorkspaceMember
     RBAC, get_rbac
 """
-
 from __future__ import annotations
 
 from domain.auth._internal.models import (

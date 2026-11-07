@@ -14,7 +14,6 @@ Public API:
     get_consciousness, reset_consciousness
     record_experience — the single substrate-recording seam for non-chat runs
 """
-
 from __future__ import annotations
 
 

@@ -9,7 +9,6 @@ Public API:
     align_dim_ff, FF_ALIGN — feed-forward SIMD alignment contract (shared with loader)
     merge_dicts, clamp, validate_config, retry, Timer, Cache, RateLimiter
 """
-
 from __future__ import annotations
 
 from domain.shared._internal.concurrency import Cache, RateLimiter, Timer, retry
