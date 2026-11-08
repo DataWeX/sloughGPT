@@ -7,7 +7,7 @@
       "deferred": "charter ruling: migrate when the site is next touched",
       "followup": "stage-3/4 migration candidate the audit parked — greppable backlog"
     },
-    "site_count": 238
+    "site_count": 239
   },
   "entries": {
     "apps/api/server/infrastructure/inference_pool.py::InferencePool.run_generator": {
@@ -392,6 +392,11 @@
     },
     "apps/api/server/routers/files.py::FilesRouter.delete_file": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
+      "kind": "grandfathered",
+      "count": 1
+    },
+    "apps/api/server/routers/files.py::FilesRouter.download_url": {
+      "reason": "stage-4 async escape: import-from-URL fetch runs on the to_thread worker seam (async-host rule — AGENTS.md execution philosophy); site landed with d4c0ed398 (card 20261108_094501) without an entry, recorded here as a drive-by by the route-map /knowledge lane",
       "kind": "grandfathered",
       "count": 1
     },

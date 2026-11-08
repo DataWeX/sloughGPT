@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic'
  * `knowledge-*` siblings next to this file. Only the page shell belongs
  * here: header chrome, the KPI strip and section wiring.
  */
+import { useSearchParams } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { FoldSection } from '@sloughgpt/strui'
 import { MemoryCard } from '@/components/knowledge/MemoryCard'
@@ -20,6 +21,7 @@ import { KnowledgeHeaderActions, KnowledgeToolbar } from './knowledge-chrome'
 import { KnowledgeStatsStrip } from './knowledge-stats-strip'
 import { KnowledgeAdvancedSection } from './knowledge-advanced-section'
 import { KnowledgeItemsList } from './knowledge-items-list'
+import { KnowledgeDetailFold } from './knowledge-detail-fold'
 import { KnowledgeDeleteDialog } from './knowledge-delete-dialog'
 import { KnowledgeBatchDeleteDialog } from './knowledge-batch-delete-dialog'
 import { KnowledgeBulkTopicDialog } from './knowledge-bulk-topic-dialog'
@@ -28,6 +30,11 @@ import { KnowledgeAddDialog } from './knowledge-add-dialog'
 export default function KnowledgePage() {
   const wb = useKnowledgeWorkbench()
   const { addToast, fetchData } = wb
+  // ?id=-driven detail fold — the old /knowledge/[id] route composed in here
+  // (route-map card 7/7; card-3 /models pattern). List click sets ?id=,
+  // Back/Delete clear it by navigating to bare /knowledge.
+  const searchParams = useSearchParams()
+  const selectedId = searchParams.get('id')
 
   return (
     <PageContainer
@@ -41,6 +48,12 @@ export default function KnowledgePage() {
       <KnowledgeStatsStrip wb={wb} />
 
       <KnowledgeAdvancedSection wb={wb} />
+
+      {selectedId && (
+        <FoldSection heading="Item detail" open>
+          <KnowledgeDetailFold id={selectedId} />
+        </FoldSection>
+      )}
 
       <KnowledgeItemsList wb={wb} />
 

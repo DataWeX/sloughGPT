@@ -47,7 +47,6 @@ const {
 
 const stableRouter = { push: mockPush }
 vi.mock('@/vite/next-compat/navigation', () => ({
-  useParams: () => ({ id: 'kb-1' }),
   useRouter: () => stableRouter,
 }))
 vi.mock('@/lib/http-client', () => ({ apiGet: mockApiGet }))
@@ -74,20 +73,7 @@ vi.mock('@/lib/toast-store', () => {
   return mod
 })
 vi.mock('@/lib/conversations-utils', () => ({ formatDate: vi.fn(() => 'Jan 1, 2026') }))
-vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ children, title, loading, loadingCards, headerRight }: any) => (
-    <div data-testid="page-container" data-title={title} data-loading={loading}>
-      {headerRight && <div data-testid="header-right">{headerRight}</div>}
-      {loading ? <div data-testid="loading-state">loading...</div> : children}
-    </div>
-  ),
-}))
-vi.mock('@/components/AppRouteHeader', () => ({
-  AppRouteHeader: ({ children }: any) => <div>{children}</div>,
-  AppRouteHeaderLead: ({ children }: any) => <div>{children}</div>,
-}))
-
-import Page from './page'
+import { KnowledgeDetailFold } from './knowledge-detail-fold'
 
 const MOCK_ITEM: any = {
   id: 'kb-1',
@@ -108,16 +94,16 @@ beforeEach(() => {
   mockApiGet.mockResolvedValue(MOCK_ITEM)
 })
 
-describe('KnowledgeDetailPage', () => {
+describe('KnowledgeDetailFold', () => {
   it('shows loading state and fetches item on mount', () => {
     mockApiGet.mockReturnValue(new Promise(() => {}))
-    render(<Page />)
-    expect(screen.getByTestId('page-container')).toHaveAttribute('data-loading', 'true')
+    render(<KnowledgeDetailFold id="kb-1" />)
+    expect(screen.getByTestId('knowledge-detail-loading')).toBeTruthy()
     expect(mockApiGet).toHaveBeenCalledWith('/knowledge/kb-1')
   })
 
   it('displays knowledge item after loading', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('The user prefers dark mode and likes TypeScript.')).toBeTruthy()
     })
@@ -130,16 +116,16 @@ describe('KnowledgeDetailPage', () => {
   })
 
   it('renders page title after data loads', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
-      expect(screen.getByTestId('page-container')).toHaveAttribute('data-title', 'Knowledge Item')
+      expect(screen.getByText('Knowledge Item')).toBeTruthy()
     })
   })
 
   it('falls back to knowledgeController.list when apiGet fails', async () => {
     mockApiGet.mockRejectedValue(new Error('not found'))
     mockKnowledgeList.mockResolvedValue([MOCK_ITEM, { ...MOCK_ITEM, id: 'kb-other' }])
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('The user prefers dark mode and likes TypeScript.')).toBeTruthy()
     })
@@ -149,7 +135,7 @@ describe('KnowledgeDetailPage', () => {
   it('shows toast when item not found in list fallback', async () => {
     mockApiGet.mockRejectedValue(new Error('not found'))
     mockKnowledgeList.mockResolvedValue([])
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Knowledge item not found', 'error')
     })
@@ -158,14 +144,14 @@ describe('KnowledgeDetailPage', () => {
   it('shows error toast when fetch entirely fails', async () => {
     mockApiGet.mockRejectedValue(new Error('network'))
     mockKnowledgeList.mockRejectedValue(new Error('network'))
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge item', 'error')
     })
   })
 
   it('navigates back via Back button', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Back')).toBeTruthy()
     })
@@ -177,7 +163,7 @@ describe('KnowledgeDetailPage', () => {
 
   it('deletes item and navigates to knowledge list', async () => {
     mockKnowledgeDelete.mockResolvedValue({})
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Delete')).toBeTruthy()
     })
@@ -193,7 +179,7 @@ describe('KnowledgeDetailPage', () => {
 
   it('shows toast on delete failure', async () => {
     mockKnowledgeDelete.mockRejectedValue(new Error('fail'))
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Delete')).toBeTruthy()
     })
@@ -206,7 +192,7 @@ describe('KnowledgeDetailPage', () => {
   })
 
   it('shows url when item has url', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText(/example\.com/)).toBeTruthy()
     })
@@ -214,14 +200,14 @@ describe('KnowledgeDetailPage', () => {
 
   it('shows source as manual when no source', async () => {
     mockApiGet.mockResolvedValue({ ...MOCK_ITEM, source: '' })
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('manual')).toBeTruthy()
     })
   })
 
   it('navigates to chat with context on Use in Chat click', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Use in Chat')).toBeTruthy()
     })
@@ -232,7 +218,7 @@ describe('KnowledgeDetailPage', () => {
   })
 
   it('opens edit mode when Edit clicked', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Edit')).toBeTruthy()
     })
@@ -248,7 +234,7 @@ describe('KnowledgeDetailPage', () => {
 
   it('saves edits and exits edit mode', async () => {
     mockKnowledgeUpdate.mockResolvedValue({})
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Edit')).toBeTruthy()
     })
@@ -269,7 +255,7 @@ describe('KnowledgeDetailPage', () => {
   })
 
   it('cancels editing without saving', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Edit')).toBeTruthy()
     })
@@ -285,7 +271,7 @@ describe('KnowledgeDetailPage', () => {
 
   it('shows saving state during save', async () => {
     mockKnowledgeUpdate.mockReturnValue(new Promise(() => {}))
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Edit')).toBeTruthy()
     })
@@ -302,20 +288,20 @@ describe('KnowledgeDetailPage', () => {
   })
 
   it('renders back button in headerRight', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
-      expect(screen.getByTestId('header-right')).toBeTruthy()
+      expect(screen.getByTestId('fold-actions')).toBeTruthy()
     })
   })
 
   it('refetches on refresh button click', async () => {
-    render(<Page />)
+    render(<KnowledgeDetailFold id="kb-1" />)
     await waitFor(() => {
       expect(screen.getByText('Back')).toBeTruthy()
     })
     await act(async () => {
-      const headerRight = screen.getByTestId('header-right')
-      const refreshBtn = headerRight.querySelector('button:last-child') as HTMLElement
+      const foldActions = screen.getByTestId('fold-actions')
+      const refreshBtn = foldActions.querySelector('button:last-child') as HTMLElement
       refreshBtn.click()
     })
     await waitFor(() => {

@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
-from apps.api.server.routers.learner import router
+from apps.api.server.routers.kb import router  # learner merged into kb (route-map card 7/7)
 
 
 @pytest.fixture

@@ -21,7 +21,6 @@ ROUTER_MODULES: list[str] = [
     "files",
     "inference",
     "kb",
-    "learner",
     "llm_v1",
     "lora_eval",
     "memory",

@@ -106,7 +106,7 @@ export function KnowledgeItemsList({ wb }: { wb: KnowledgeWorkbench }) {
                       ? 'bg-primary/[0.04] border-primary/30'
                       : 'bg-card border-border/40 hover:bg-muted/30',
                 )}
-                onClick={() => router.push(`/knowledge/${item.id}`)}
+                onClick={() => router.push(`/knowledge?id=${encodeURIComponent(item.id)}`)}
               >
                 <div className="flex items-start gap-2">
                   <Checkbox

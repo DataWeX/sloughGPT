@@ -392,6 +392,8 @@ Routes are split across focused sub-modules:
 
 ## Learner Router (`/learn`)
 
+> Served by `routers/kb.py` since card `20261101_154056` — `learner.py` was merged into the `/knowledge` facade as its `/learn` sub-router (paths and wire shapes unchanged).
+
 | Method | Path                | Description              |
 | ------ | ------------------- | ------------------------ |
 | `POST` | `/learn/search`     | Search learning content. |

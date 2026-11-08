@@ -31,6 +31,8 @@ describe('route error boundaries', () => {
     // companion floor was missed.
     // 2026-11-08: floor 25 -> 24 — /vm folded into /developer as its VM tab
     // (route map card 6/7) and deleted its error/loading/page trio.
+    // (route map card 7/7 deleted knowledge/[id]/page.tsx WITHOUT moving
+    // this floor — that dir had no error.tsx companion to lose.)
     expect(errors.length).toBeGreaterThanOrEqual(24)
   })
 
@@ -54,6 +56,8 @@ describe('route loading skeletons', () => {
     // (two kept routes carry an error.tsx but no loading.tsx).
     // 2026-11-07: floor 24 -> 23 — same /model/[id] deletion as above.
     // 2026-11-08: floor 23 -> 22 — same /vm deletion as above (card 6/7).
+    // (card 7/7's knowledge/[id] deletion carried no loading.tsx — floor
+    // stays 22, see the errors floor comment above.)
     expect(loadings.length).toBeGreaterThanOrEqual(22)
   })
 
