@@ -467,9 +467,7 @@ router.include_router(
 router.include_router(
     create_router(
         SPEC_STOP,
-        RouteSpec(
-            path="/training/jobs/{job_id}/stop", envelope=False, summary="Stop Training Job"
-        ),
+        RouteSpec(path="/training/jobs/{job_id}/stop", envelope=False, summary="Stop Training Job"),
         stop_training_job,
     )
 )
@@ -509,18 +507,14 @@ router.include_router(
 router.include_router(
     create_router(
         SPEC_EXPORT,
-        RouteSpec(
-            path="/training/export/{job_id}", envelope=False, summary="Export Training Job"
-        ),
+        RouteSpec(path="/training/export/{job_id}", envelope=False, summary="Export Training Job"),
         export_training_job,
     )
 )
 router.include_router(
     create_router(
         SPEC_EXPORT_TEXT,
-        RouteSpec(
-            path="/training/export-text", envelope=False, summary="Export Feedback Pairs"
-        ),
+        RouteSpec(path="/training/export-text", envelope=False, summary="Export Feedback Pairs"),
         export_feedback_pairs,
     )
 )

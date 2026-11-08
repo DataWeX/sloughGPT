@@ -94,9 +94,7 @@ def _tokenizer_from_metadata(metadata: dict) -> object | None:
 
             return SloBPE.from_dict(tok_config)
         except Exception as e:
-            logger.warning(
-                "Failed to load BPE tokenizer from soul: %s", e, extra={"tag": "MODEL"}
-            )
+            logger.warning("Failed to load BPE tokenizer from soul: %s", e, extra={"tag": "MODEL"})
             return None
     return None
 
