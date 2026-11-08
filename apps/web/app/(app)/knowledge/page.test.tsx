@@ -791,3 +791,17 @@ describe('KnowledgePage — ?id= detail fold (route-map card 7/7, 20261101_15405
     expect(mockPush).toHaveBeenCalledWith('/knowledge?id=k1')
   })
 })
+
+describe('KnowledgePage — plain-language jargon ban (Build Order #5 guard, UX_FLOWS Feature 3)', () => {
+  it('renders none of the banned jargon terms on the default view', async () => {
+    const { container } = render(<KnowledgePage />)
+    await waitFor(() => expectEmptyStateVisible())
+    const text = container.textContent ?? ''
+    // UX_FLOWS Feature 3 "What they should NOT see": "Knowledge base",
+    // "vector store", "ingestion", "indexing", "RAG", "embeddings",
+    // "chunks" — Card 058 shipped the ban; this pins it against regrowth.
+    for (const pattern of ['\\bRAG\\b', 'vector store', 'chunks', 'ingestion', 'Indexing']) {
+      expect(text, `banned term matched: ${pattern}`).not.toMatch(new RegExp(pattern, 'i'))
+    }
+  })
+})
