@@ -106,6 +106,8 @@ class TokenTree:
         self._freqs: Counter = Counter()
         self._word_suffix: str = WORD_SUFFIX
         self._pretokenizer: str = pretokenizer
+        # Case policy learned by train(); defaults to legacy lowercase=True.
+        self._lowercase: bool = True
         self._library: PointLibrary = PointLibrary(name="token_tree")
         self._embed_dim: int = 0
         self._trained: bool = False
@@ -195,6 +197,7 @@ class TokenTree:
         self._freqs = Counter()
         self._library = PointLibrary(name="token_tree")
         self._embed_dim = embed_dim
+        self._lowercase = lowercase
         self._trained = False
         self._invalidate_caches()
 
@@ -341,11 +344,11 @@ class TokenTree:
         Returns:
             list of integer token ids.
         """
-        text = self._normalize(text, lowercase=True)
+        text = self._normalize(text, lowercase=self._lowercase)
         ids: list[int] = []
         if add_bos:
             ids.append(self.bos_id)
-        for word in self._pretokenize(text, lowercase=True):
+        for word in self._pretokenize(text, lowercase=self._lowercase):
             s = word + self._word_suffix
             i = 0
             while i < len(s):
@@ -373,9 +376,9 @@ class TokenTree:
             the consumed prefixes reproduces ``encode(text)``: the sequence of
             ``id`` values is exactly ``encode(text)``.
         """
-        normalized = self._normalize(text, lowercase=True)
+        normalized = self._normalize(text, lowercase=self._lowercase)
         steps: list[dict] = []
-        for word in self._pretokenize(normalized, lowercase=True):
+        for word in self._pretokenize(normalized, lowercase=self._lowercase):
             s = word + self._word_suffix
             i = 0
             while i < len(s):
@@ -746,6 +749,7 @@ class TokenTree:
         return {
             "version": 1,
             "pretokenizer": self._pretokenizer,
+            "lowercase": self._lowercase,
             "word_suffix": self._word_suffix,
             "embed_dim": self._embed_dim,
             "vocab": self.vocab,
@@ -770,6 +774,8 @@ class TokenTree:
         """
         tree = cls(pretokenizer=meta.get("pretokenizer", "gpt2"))
         tree._word_suffix = meta.get("word_suffix", WORD_SUFFIX)
+        # Legacy dicts predate the flag and were trained lowercase=True.
+        tree._lowercase = bool(meta.get("lowercase", True))
         tree._embed_dim = meta.get("embed_dim", 0)
         tree.vocab = list(meta.get("vocab", []))
         tree.stoi = {t: i for i, t in enumerate(tree.vocab)}

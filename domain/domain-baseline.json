@@ -205,7 +205,7 @@
       ],
       "note": "base types/exports every domain builds on",
       "debt": null,
-      "tree_hash": "397110d2fd500e94ae233f6241cc8e67c1a24b66"
+      "tree_hash": "ed7ba1156a685433e44ab3b027c2ebb4517563c3"
     },
     "errors": {
       "class": "core-capability",
@@ -546,7 +546,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "5d4090c8463076fb6162ce1dac91cf484d161b6a"
+      "tree_hash": "c221ac5ce13e9fe85891f1e54a42707e47333e8a"
     },
     "voice": {
       "class": "core-capability",

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTrainingForm } from './useTrainingForm'
 
@@ -278,6 +278,112 @@ describe('useTrainingForm', () => {
         await new Promise((r) => setTimeout(r, 10))
       })
       expect(result.current.availableModels).toEqual(['gpt2', 'qwen'])
+    })
+  })
+
+  describe('ETA pre-flight guard', () => {
+    let confirmSpy: MockInstance<typeof window.confirm>
+
+    function makeDatasetsWithSize(selectedDataset: string, size: number) {
+      return {
+        ...makeDatasets(selectedDataset),
+        datasets: [
+          {
+            id: selectedDataset,
+            name: selectedDataset,
+            source: 'test',
+            size,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ],
+      }
+    }
+
+    beforeEach(() => {
+      confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    })
+
+    it('confirms before starting an absurd-steps job', async () => {
+      const { result } = renderHook(() =>
+        useTrainingForm(
+          makeDatasetsWithSize('ds1', 5_000_000),
+          makeSession(),
+          makeCheckpoints(),
+          addToast,
+        ),
+      )
+      act(() => result.current.setMethod('native'))
+      act(() => result.current.setTrainingEpochs(500))
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(confirmSpy).toHaveBeenCalledTimes(1)
+      expect(String(confirmSpy.mock.calls[0][0])).toMatch(/steps/)
+      expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalled()
+    })
+
+    it('declining aborts before the optimistic row and the API call', async () => {
+      confirmSpy.mockReturnValue(false)
+      const { result } = renderHook(() =>
+        useTrainingForm(
+          makeDatasetsWithSize('ds1', 5_000_000),
+          makeSession(),
+          makeCheckpoints(),
+          addToast,
+        ),
+      )
+      act(() => result.current.setMethod('native'))
+      act(() => result.current.setTrainingEpochs(500))
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(confirmSpy).toHaveBeenCalledTimes(1)
+      expect(result.current.allJobs).toHaveLength(0)
+      expect(mockTrainingJobsController.startAutoTrain).not.toHaveBeenCalled()
+      expect(addToast).not.toHaveBeenCalledWith('Training started', 'info')
+    })
+
+    it('a small job starts without confirmation', async () => {
+      const { result } = renderHook(() =>
+        useTrainingForm(
+          makeDatasetsWithSize('ds1', 50_000),
+          makeSession(),
+          makeCheckpoints(),
+          addToast,
+        ),
+      )
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalled()
+    })
+
+    it('skips the guard when the dataset size is unknown', async () => {
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast),
+      )
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalled()
+    })
+
+    it('projects text-mode input as well', async () => {
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets(null), makeSession(), makeCheckpoints(), addToast),
+      )
+      act(() => result.current.setMethod('native'))
+      act(() => result.current.setInputMode('text'))
+      act(() => result.current.setTextInput('x'.repeat(1_000_000)))
+      act(() => result.current.setTrainingBatchSize(1))
+      act(() => result.current.setTrainingEpochs(500))
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(confirmSpy).toHaveBeenCalledTimes(1)
+      expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalled()
     })
   })
 })

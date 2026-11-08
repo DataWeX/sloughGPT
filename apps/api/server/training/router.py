@@ -364,7 +364,7 @@ def start_recovery(job_id: str) -> dict:
             # (LoRA, dropout, scheduler, device, ...) instead of a fixed subset.
             trainer_config = {
                 "data_path": recovery_job.get("data_path", ""),
-                **_sloughgpt_trainer_kwds(recovery_job),
+                **_sloughgpt_trainer_kwds(recovery_job, data_path=recovery_job.get("data_path")),
             }
 
             def on_progress(info: dict):

@@ -55,7 +55,7 @@ async def train(request):
             training_jobs[job_id]["status"] = "running"
             trainer = SloughGPTTrainer(
                 data_path=data_path_str,
-                **_sloughgpt_trainer_kwds(req_snapshot),
+                **_sloughgpt_trainer_kwds(req_snapshot, data_path=data_path_str),
             )
             if not cancel_event.is_set():
                 trainer.train(cancel_event=cancel_event)
