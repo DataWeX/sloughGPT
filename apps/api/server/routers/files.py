@@ -10,12 +10,18 @@ File metadata is stored in MogDB and synced to JSON for human readability.
 import asyncio
 import base64
 import io
+import ipaddress
 import json
 import logging
+import os
 import re
+import socket
+import threading
 import time
 from pathlib import Path
 from typing import Literal
+from urllib.parse import unquote, urlparse
+from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
 from infrastructure.auth import require_auth_if_enabled
@@ -25,6 +31,8 @@ from schemas.common import endpoint, raise_error, safe_audit_log, success_respon
 logger = logging.getLogger("slo.routers.files")
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+MAX_IMPORT_SIZE = 50 * 1024 * 1024  # 50 MB — same cap as uploads
+_IMPORT_JOB_KEEP = 20  # terminal jobs retained for status reads
 
 
 class FileMetadata(BaseModel):
@@ -79,10 +87,81 @@ class IngestResponse(BaseModel):
     facts_stored: int
 
 
+class ImportRequest(BaseModel):
+    url: str
+
+
+class ImportStartResponse(BaseModel):
+    job_id: str
+
+
+class ImportStatusResponse(BaseModel):
+    job_id: str
+    state: str  # running | done | error
+    filename: str
+    done: int  # decoded bytes on disk
+    total: int  # decoded total; 0 = unknown (client shows indeterminate)
+    pct: float
+    wire_bytes: int | None = None
+    saved_bytes: int | None = None
+    content_encoding: str = "identity"
+    error: str | None = None
+
+
 def _get_db():
     from infrastructure.db_pool import get_db
 
     return get_db("uploads_mogdb")
+
+
+# In-memory import-job registry: written by worker threads, read by status
+# handlers. Terminal jobs are kept (bounded by _IMPORT_JOB_KEEP) so the UI
+# can read the final wire/savings receipt after the poll ends.
+_IMPORT_JOBS: dict[str, dict] = {}
+_IMPORT_JOBS_LOCK = threading.Lock()
+_IMPORT_TASKS: set = set()  # hold asyncio task refs so GC cannot cancel them
+
+
+class _ImportSizeCap(Exception):
+    """Raised from on_chunk to abort an import over MAX_IMPORT_SIZE."""
+
+
+def _validate_import_url(url: str) -> str:
+    """SSRF guard for user-supplied import URLs; returns the URL's filename.
+
+    Blocks non-http(s) schemes and hosts resolving to non-global addresses
+    (loopback / private / link-local — including cloud metadata
+    169.254.169.254) unless ``SLO_FILES_ALLOW_PRIVATE=1`` (tests/dev).
+
+    The check runs once at request time; downcraft re-resolves on connect,
+    so a DNS-rebinding window remains — accepted for this local tool (this
+    blocks the direct-hit class, which is the one that matters here).
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise_error("Only http(s) URLs can be imported", "E_BAD_REQUEST", status_code=400)
+    host = parsed.hostname
+    if not host:
+        raise_error("URL has no host", "E_BAD_REQUEST", status_code=400)
+    if os.environ.get("SLO_FILES_ALLOW_PRIVATE") != "1":
+        try:
+            infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        except socket.gaierror:
+            raise_error(f"Could not resolve host {host}", "E_BAD_REQUEST", status_code=400)
+        for info in infos:
+            ip = ipaddress.ip_address(info[4][0])
+            if ip.version == 6 and ip.ipv4_mapped is not None:
+                ip = ip.ipv4_mapped
+            if not ip.is_global:
+                raise_error(
+                    "Import blocked: URL resolves to a private/internal address",
+                    "E_FORBIDDEN",
+                    status_code=403,
+                )
+    filename = unquote(Path(parsed.path).name).strip()
+    if "." not in filename:
+        raise_error("URL must point to a file with an extension", "E_BAD_REQUEST", status_code=400)
+    return filename
 
 
 class FilesRouter:
@@ -117,6 +196,15 @@ class FilesRouter:
         )
         self.router.add_api_route(
             "/upload", self.upload_file, methods=["POST"], response_model=UploadResponse
+        )
+        self.router.add_api_route(
+            "/import", self.download_url, methods=["POST"], response_model=ImportStartResponse
+        )
+        self.router.add_api_route(
+            "/import/{job_id}",
+            self.import_status,
+            methods=["GET"],
+            response_model=ImportStatusResponse,
         )
         self.router.add_api_route(
             "/search", self.search_files, methods=["GET"], response_model=FileListResponse
@@ -315,6 +403,172 @@ class FilesRouter:
             chars=0,
             pages=1,
             size_bytes=len(contents),
+        )
+
+    # ── Import from URL (one-request, compressed, honest progress) ─────────
+
+    @staticmethod
+    def _job_put(job_id: str, job: dict) -> None:
+        with _IMPORT_JOBS_LOCK:
+            _IMPORT_JOBS[job_id] = job
+            terminal = [k for k, v in _IMPORT_JOBS.items() if v["state"] != "running"]
+            overflow = len(_IMPORT_JOBS) - _IMPORT_JOB_KEEP
+            for k in sorted(terminal)[: max(0, overflow)]:
+                _IMPORT_JOBS.pop(k, None)
+
+    def _run_import(self, job_id: str, url: str, filename: str) -> None:
+        """Worker thread: downcraft fetch → uploads dir → metadata upsert.
+
+        Progress stays in disk byte-space: on_chunk reports decoded bytes on
+        disk vs the decoded total (0 → client shows indeterminate). Wire bytes
+        and savings come from WireStats and are reported only at the end —
+        never mixed into the bar.
+        """
+        from downcraft.download.http import WireStats, download_file
+
+        job = _IMPORT_JOBS.get(job_id)
+        if job is None:
+            return
+        job.update(state="running", filename=filename, done=0, total=0)
+        ext = filename[filename.rfind(".") :]
+        fid = self._file_id(filename)
+        dest = self.UPLOADS_DIR / f"{fid}{ext}"
+        stats = WireStats()
+
+        def on_chunk(done: int, total: int) -> None:
+            if done > MAX_IMPORT_SIZE:
+                raise _ImportSizeCap(f"import exceeds {MAX_IMPORT_SIZE} bytes")
+            j = _IMPORT_JOBS.get(job_id)
+            if j is not None:
+                j["done"], j["total"] = done, total
+
+        def _fetch() -> Path:
+            from downcraft.download.http import _part_path
+
+            try:
+                return download_file(
+                    url,
+                    dest,
+                    compressed=True,
+                    skip_if_exists=False,
+                    stats=stats,
+                    on_chunk=on_chunk,
+                )
+            except BaseException:
+                # Never leave a partial body or part file behind.
+                _part_path(dest).unlink(missing_ok=True)
+                dest.unlink(missing_ok=True)
+                raise
+
+        try:
+            # _run_import runs inside a worker thread (no running loop) — blocking call.
+            path = _fetch()
+            size = path.stat().st_size
+
+            def _upsert() -> None:
+                try:
+                    tag_list = json.loads(os.environ.get("SLO_IMPORT_TAGS", "[]"))
+                except (TypeError, ValueError):
+                    tag_list = []
+                self._upsert_file_metadata(
+                    fid,
+                    {
+                        "filename": path.name,
+                        "original_name": filename,
+                        "extension": ext.lstrip(".").lower(),
+                        "size_bytes": size,
+                        "chars": 0,
+                        "pages": 1,
+                        "uploaded_at": time.time(),
+                        "tags": tag_list,
+                    },
+                )
+
+            _upsert()
+            safe_audit_log(
+                "file.import",
+                resource=fid,
+                detail=(
+                    f"url={url}, size={size}, wire={stats.wire_bytes}, "
+                    f"saved={stats.saved_bytes}, enc={stats.content_encoding}"
+                ),
+            )
+            job.update(
+                state="done",
+                done=size,
+                total=size,
+                file_id=fid,
+                wire_bytes=stats.wire_bytes,
+                saved_bytes=stats.saved_bytes,
+                content_encoding=stats.content_encoding or "identity",
+                error=None,
+            )
+        except _ImportSizeCap as exc:
+            safe_audit_log("file.import_start", resource=job_id, detail=f"aborted: {exc}")
+            job.update(state="error", error=str(exc))
+        except Exception as exc:  # noqa: BLE001 — surfaced to the status reader
+            logger.warning("Import failed for %s: %s", url, exc, extra={"tag": "FILES"})
+            job.update(state="error", error=str(exc) or exc.__class__.__name__)
+
+    @endpoint("files.download_url")
+    async def download_url(
+        self,
+        req: ImportRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> ImportStartResponse:
+        """Start a background import of a remote URL into the file manager."""
+        url = req.url.strip()
+        if not url:
+            raise_error("No URL provided", "E_BAD_REQUEST", status_code=400)
+        filename = _validate_import_url(url)
+        job_id = uuid4().hex[:12]
+        job = {
+            "job_id": job_id,
+            "state": "running",
+            "filename": filename,
+            "done": 0,
+            "total": 0,
+            "file_id": None,
+            "wire_bytes": None,
+            "saved_bytes": None,
+            "content_encoding": "identity",
+            "error": None,
+        }
+        self._job_put(job_id, job)
+        safe_audit_log("file.import_start", resource=job_id, detail=f"url={url}")
+        task = asyncio.create_task(asyncio.to_thread(self._run_import, job_id, url, filename))
+        _IMPORT_TASKS.add(task)
+        task.add_done_callback(_IMPORT_TASKS.discard)
+        return ImportStartResponse(job_id=job_id)
+
+    @endpoint("files.import_status")
+    async def import_status(
+        self,
+        job_id: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> ImportStatusResponse:
+        """Read an import job's progress (decoded/decoded pct) and receipt."""
+        job = _IMPORT_JOBS.get(job_id)
+        if job is None:
+            raise_error("Import job not found", "E_NOT_FOUND", status_code=404)
+        done, total, state = job["done"], job["total"], job["state"]
+        if state == "done":
+            pct = 100.0
+        elif total > done >= 0 and total > 0:
+            pct = round(100.0 * done / total, 1)
+        else:
+            pct = 0.0
+        return ImportStatusResponse(
+            job_id=job_id,
+            state=state,
+            filename=job["filename"],
+            done=done,
+            total=total,
+            pct=pct,
+            wire_bytes=job["wire_bytes"],
+            saved_bytes=job["saved_bytes"],
+            content_encoding=job["content_encoding"],
+            error=job["error"],
         )
 
     @endpoint("files.search_files")

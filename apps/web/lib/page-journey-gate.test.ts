@@ -34,8 +34,13 @@ const APP_ROOT = join(WEB_ROOT, 'app')
  * 2026-11-06: 72 -> 71 — `/model/[id]` was composed into `/models` as a
  * ?id=-driven detail fold (route-map card 20261101_154054); the old path's
  * in-app link sources now point at `/models?id=<model>`.
+ * 2026-11-08: 70 -> 69 — `/vm` was folded into `/developer` as its VM tab
+ * (route-map card 6/7, 20261101_154057); `vm/page.tsx` deleted, `/vm` 307s.
+ * 2026-11-08: 69 -> 68 — `/knowledge/[id]` was composed into `/knowledge` as
+ * a ?id=-driven detail fold (route-map card 7/7, 20261101_154056); the old
+ * path's list click now pushes `/knowledge?id=<item>`.
  */
-const GRANDFATHERED_CEILING = 70
+const GRANDFATHERED_CEILING = 68
 
 interface PageBaseline {
   grandfathered: string[]

@@ -3,15 +3,7 @@
 // Training-job progress card (poll target for the run result's training_job_id).
 // Extracted from page.tsx by the page-decomposition refactor.
 
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Progress,
-} from '@sloughgpt/strui'
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import type { VMTrainingJob } from '@/lib/vm-controller'
 import { StatusRow } from './VmStatusRow'

@@ -7,6 +7,8 @@ const mockDelete = vi.fn()
 const mockDeleteBatch = vi.fn()
 const mockIngest = vi.fn()
 const mockSearch = vi.fn()
+const mockStartImport = vi.fn()
+const mockImportStatus = vi.fn()
 
 vi.mock('@/lib/files-controller', () => ({
   filesController: {
@@ -16,6 +18,8 @@ vi.mock('@/lib/files-controller', () => ({
     deleteBatch: (...args: unknown[]) => mockDeleteBatch(...args),
     ingest: (...args: unknown[]) => mockIngest(...args),
     search: (...args: unknown[]) => mockSearch(...args),
+    startImport: (...args: unknown[]) => mockStartImport(...args),
+    importStatus: (...args: unknown[]) => mockImportStatus(...args),
   },
 }))
 
@@ -584,5 +588,98 @@ describe('FilesPage — hosts the Create Images journey', () => {
     await waitFor(() => {
       expect(screen.getByTestId('images-panel')).toBeTruthy()
     })
+  })
+})
+
+describe('FilesPage — import from URL flow', () => {
+  const RUNNING = {
+    job_id: 'j1',
+    state: 'running' as const,
+    filename: 'a.txt',
+    done: 0,
+    total: 0,
+    pct: 0,
+    error: null,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue([])
+    mockSearch.mockResolvedValue([])
+    mockStartImport.mockResolvedValue({ job_id: 'j1' })
+  })
+  afterEach(() => {
+    cleanup()
+  })
+
+  async function startImportViaUi() {
+    render(<FilesPage />)
+    await waitFor(() => expect(screen.getByText('Import URL')).toBeTruthy())
+    fireEvent.click(screen.getByText('Import URL'))
+    const input = await screen.findByLabelText('Import URL')
+    fireEvent.change(input, { target: { value: 'https://example.com/a.txt' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Start import' }))
+    await waitFor(() => expect(mockStartImport).toHaveBeenCalledWith('https://example.com/a.txt'))
+  }
+
+  it('toggle reveals the import row and start posts the url', async () => {
+    await startImportViaUi()
+    await waitFor(() => expect(screen.getByTestId('import-job')).toBeTruthy())
+    expect(screen.getByText(/Importing a\.txt/)).toBeTruthy()
+  })
+
+  it('completes and shows the decoded percentage + wire savings receipt', async () => {
+    mockImportStatus.mockResolvedValueOnce(RUNNING).mockResolvedValueOnce({
+      job_id: 'j1',
+      state: 'done',
+      filename: 'a.txt',
+      done: 48000,
+      total: 48000,
+      pct: 100,
+      wire_bytes: 20000,
+      saved_bytes: 28000,
+      content_encoding: 'gzip',
+      error: null,
+    })
+    await startImportViaUi()
+
+    await waitFor(() => expect(screen.getByTestId('import-savings')).toBeTruthy(), {
+      timeout: 3000,
+    })
+    expect(screen.getByText('Imported a.txt')).toBeTruthy()
+    const savings = screen.getByTestId('import-savings').textContent ?? ''
+    expect(savings).toMatch(/Saved 27\.3 KB/)
+    expect(savings).toMatch(/58%/)
+    // the list refreshes so the new file shows up
+    await waitFor(() => expect(mockList.mock.calls.length).toBeGreaterThanOrEqual(2))
+  })
+
+  it('shows the error state when the import fails', async () => {
+    mockImportStatus.mockResolvedValueOnce(RUNNING).mockResolvedValueOnce({
+      job_id: 'j1',
+      state: 'error',
+      filename: 'a.txt',
+      done: 10,
+      total: 100,
+      pct: 10,
+      error: 'Import blocked: URL resolves to a private/internal address',
+    })
+    await startImportViaUi()
+
+    await waitFor(() => expect(screen.getByText(/Import failed:/)).toBeTruthy(), { timeout: 3000 })
+    expect(screen.queryByTestId('import-savings')).toBeNull()
+  })
+
+  it('shows an indeterminate bar while the total is unknown', async () => {
+    mockImportStatus.mockResolvedValue(RUNNING)
+    await startImportViaUi()
+
+    await waitFor(() => expect(screen.getByTestId('import-job')).toBeTruthy())
+    // total = 0 → value null → aria-busy bar with no fake aria-valuenow
+    await waitFor(() => {
+      const bar = screen.getByRole('progressbar', { busy: true })
+      expect(bar.getAttribute('aria-valuenow')).toBeNull()
+    })
+    expect(screen.queryByTestId('import-savings')).toBeNull()
   })
 })

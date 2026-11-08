@@ -72,6 +72,13 @@ describe('DeveloperPage', () => {
     expect(screen.getByRole('tab', { name: /api/i })).toBeTruthy()
   })
 
+  it('exposes the VM console tab — /vm folded in here (card 20261101_154057)', () => {
+    // Composition assertion: the VM journey itself is exercised end-to-end
+    // in developer/vm/vm-tab.test.tsx (68 tests against the same VmTab).
+    render(<DeveloperPage />)
+    expect(screen.getByRole('tab', { name: 'VM' })).toBeTruthy()
+  })
+
   it('defaults to shell tab', () => {
     render(<DeveloperPage />)
     expect(screen.getByTestId('terminal-panel')).toBeTruthy()

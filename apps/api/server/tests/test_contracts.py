@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -21,11 +22,14 @@ from infrastructure.auth import require_auth_if_enabled
 from infrastructure.contract import (
     REGISTRY,
     ContractRegistry,
+    RouteEntry,
     RouteSpec,
     create_router,
     derive_method,
+    params_from_model,
 )
 from infrastructure.exception_handlers import register_app_error_handler
+from pydantic import BaseModel, Field
 from routers.contracts import SPEC as CONTRACTS_SPEC
 
 from domain.agents import ToolParam, ToolSpec
@@ -137,6 +141,36 @@ def test_duplicate_method_path_is_rejected():
     create_router(spec, RouteSpec(path="/same"), _read_echo, prefix="/dup", registry=registry)
     with pytest.raises(ValueError, match="duplicate contract route GET /dup/same"):
         create_router(spec, RouteSpec(path="/same"), _read_echo, prefix="/dup", registry=registry)
+
+
+def test_registration_is_idempotent_across_import_identities():
+    """Dual-identity imports re-execute the module; that is not a collision.
+
+    ``training.control`` and ``apps.api.server.training.control`` are two
+    names for one file (tests import and ``@patch`` via both) — the same
+    capability re-claiming its own crossing from the second identity must be
+    absorbed, while a different capability on that crossing, and a same-
+    identity re-registration (a double projection), must still raise.
+    """
+    registry = ContractRegistry()
+    entry = RouteEntry(
+        name="t.ident",
+        version="1",
+        auth_scope="public",
+        idempotent=True,
+        description="",
+        method="GET",
+        path="/ident",
+        operation_id="t.ident.get",
+        module="training.control",
+    )
+    registry.register(entry)
+    registry.register(replace(entry, module="apps.api.server.training.control"))
+    assert [e["name"] for e in registry.routes()] == ["t.ident"]
+    with pytest.raises(ValueError, match="duplicate contract route"):
+        registry.register(replace(entry, name="t.other"))
+    with pytest.raises(ValueError, match="duplicate contract route"):
+        registry.register(entry)
 
 
 def test_operation_ids_stay_unique():
@@ -347,6 +381,58 @@ def test_openapi_request_body_comes_from_the_generated_model():
     props = schema["properties"]
     assert set(props) == {"text", "count"}
     assert props["text"]["type"] == "string"
+
+
+def test_params_from_model_derives_the_model_fields():
+    """Model-style routes document their model — one declaration, both views."""
+
+    class _Req(BaseModel):
+        name: str = Field(description="job name")
+        epochs: int = 3
+        device: str | None = None
+        tags: list[str] = Field(default_factory=list)
+
+    by_name = {p.name: p for p in params_from_model(_Req)}
+    assert set(by_name) == {"name", "epochs", "device", "tags"}
+    assert (by_name["name"].type, by_name["name"].required) == ("string", True)
+    assert by_name["name"].description == "job name"
+    assert (by_name["epochs"].type, by_name["epochs"].required) == ("integer", False)
+    assert by_name["device"].type == "string"  # ``str | None`` unwraps
+    assert by_name["tags"].type == "array"
+
+
+async def _idle():
+    return {"status": "idle"}
+
+
+async def _ping():
+    return {"ok": True}
+
+
+def test_route_with_nothing_to_validate_publishes_no_422():
+    """No params, no path placeholders, no body → 200 alone (control parity).
+
+    FastAPI auto-422s on *any* body field, even an optional empty one, so a
+    no-param write must not carry one — the hand-built twin published exactly
+    ``{"200"}`` and so must the projection.
+    """
+    app, _ = _serve(
+        _spec("t.idle", idempotent=False, execute=_idle),
+        RouteSpec(path="/idle", method="POST"),
+        _idle,
+    )
+    op = app.openapi()["paths"]["/t/idle"]["post"]
+    assert sorted(op["responses"]) == ["200"]
+    assert "requestBody" not in op
+    assert TestClient(app).post("/t/idle").status_code == 200
+
+
+def test_paramless_read_publishes_no_422():
+    """A GET with nothing to validate serves 200 alone (builds parity)."""
+    app, _ = _serve(_spec("t.ping", execute=_ping), RouteSpec(path="/ping"), _ping)
+    op = app.openapi()["paths"]["/t/ping"]["get"]
+    assert sorted(op["responses"]) == ["200"]
+    assert not op.get("parameters")
 
 
 # ── boot self-registration (the manifest replaced the hand-edited list) ─
@@ -612,3 +698,220 @@ def test_committed_declaration_baseline_matches_the_tree():
         (check_contract.SERVER_DIR / "handbuilt-routes-baseline.json").read_text(encoding="utf-8")
     )
     assert check_contract.check_declaration_style(sites, stored["files"]) == []
+
+
+# ── projection facets (path params, raw wire, auth_user, body styles) ──
+# What the training migration wave (card 20261104_151036) projects from:
+# every capability the hand-built routes express, without re-deciding it.
+
+
+async def _job_read(job_id: str, limit: int = 10):
+    return {"id": job_id, "limit": limit}
+
+
+def test_path_param_flows_to_the_handler():
+    app, _ = _serve(
+        _spec(
+            "t.path.read",
+            params=[ToolParam("job_id", "string", "id"), ToolParam("limit", "integer", "n")],
+            execute=_job_read,
+        ),
+        RouteSpec(path="/jobs/{job_id}"),
+        _job_read,
+    )
+    resp = TestClient(app).get("/t/jobs/abc?limit=5")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == {"id": "abc", "limit": 5}
+
+
+def test_path_param_is_not_required_from_the_query():
+    """The URL template binds it — a missing query twin must not 422."""
+    app, _ = _serve(
+        _spec("t.path.only", params=[ToolParam("job_id", "string", "id")], execute=_job_read),
+        RouteSpec(path="/jobs/{job_id}"),
+        _job_read,
+    )
+    resp = TestClient(app).get("/t/jobs/xyz")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["id"] == "xyz"
+
+
+def test_path_params_are_published_as_path_parameters():
+    app, _ = _serve(
+        _spec("t.path.openapi", params=[ToolParam("job_id", "string", "id")], execute=_job_read),
+        RouteSpec(path="/jobs/{job_id}"),
+        _job_read,
+    )
+    op = app.openapi()["paths"]["/t/jobs/{job_id}"]["get"]
+    assert any(p["in"] == "path" and p["name"] == "job_id" for p in op["parameters"])
+    assert op["x-contract"]["name"] == "t.path.openapi"
+
+
+def test_handler_must_accept_the_path_placeholder():
+    with pytest.raises(ValueError, match="path parameter"):
+        create_router(
+            _spec("t.path.bad"),
+            RouteSpec(path="/jobs/{job_id}"),
+            _read_echo,  # takes value/count/flag — no job_id
+            registry=ContractRegistry(),
+        )
+
+
+def test_envelope_facet_serves_the_raw_wire():
+    """envelope=False keeps callers that parse a bare payload byte-identical."""
+
+    async def _raw():
+        return {"builds": [1, 2]}
+
+    app, _ = _serve(
+        _spec("t.raw", execute=_raw),
+        RouteSpec(path="/raw", envelope=False),
+        _raw,
+    )
+    resp = TestClient(app).get("/t/raw")
+    assert resp.status_code == 200
+    assert resp.json() == {"builds": [1, 2]}  # no {status, data} wrapper
+
+
+def test_envelope_facet_passes_streaming_responses_through():
+    """SSE survives the projection only on the raw wire — the stream is the body."""
+    from starlette.responses import StreamingResponse
+
+    async def _stream():
+        async def _gen():
+            yield b"data: hi\n\n"
+
+        return StreamingResponse(_gen(), media_type="text/event-stream")
+
+    app, _ = _serve(
+        _spec("t.sse", execute=_stream),
+        RouteSpec(path="/stream", envelope=False),
+        _stream,
+    )
+    resp = TestClient(app).get("/t/stream")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/event-stream")
+    assert "data: hi" in resp.text
+
+
+async def _who(job_id: str, auth_user: dict | None = None):
+    return {"sub": (auth_user or {}).get("sub")}
+
+
+def test_auth_user_is_forwarded_to_handlers_that_declare_it():
+    app, _ = _serve(
+        _spec(
+            "t.who",
+            params=[ToolParam("job_id", "string", "id")],
+            auth_scope="authenticated",
+            execute=_who,
+        ),
+        RouteSpec(path="/jobs/{job_id}"),
+        _who,
+        auth_user={"sub": "u1"},
+    )
+    resp = TestClient(app).get("/t/jobs/x")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == {"sub": "u1"}
+
+
+def test_auth_user_handler_on_a_public_scope_fails_at_boot():
+    """No scope → no token enforcement → auth_user could never arrive."""
+    with pytest.raises(ValueError, match="auth_user"):
+        create_router(
+            _spec("t.who.public", params=[ToolParam("job_id", "string", "id")], execute=_who),
+            RouteSpec(path="/jobs/{job_id}"),
+            _who,
+            registry=ContractRegistry(),
+        )
+
+
+class _StartReq(BaseModel):
+    epochs: int = Field(default=3, ge=1, le=1000)
+    name: str = "model"
+
+
+async def _start(req: _StartReq, auth_user: dict | None = None):
+    return {"epochs": req.epochs, "is_model": isinstance(req, _StartReq)}
+
+
+def test_model_style_body_passes_the_validated_instance():
+    """The handler's pydantic annotation *is* the body validator (constraints on)."""
+    app, _ = _serve(
+        _spec(
+            "t.start",
+            params=[ToolParam("epochs", "integer", "e"), ToolParam("name", "string", "n")],
+            idempotent=False,
+            auth_scope="authenticated",
+            execute=_start,
+        ),
+        RouteSpec(path="/start", method="POST"),
+        _start,
+        auth_user={"sub": "u"},
+    )
+    client = TestClient(app)
+    ok = client.post("/t/start", json={"epochs": 5})
+    assert ok.status_code == 200
+    assert ok.json()["data"] == {"epochs": 5, "is_model": True}
+    assert client.post("/t/start", json={"epochs": 0}).status_code == 422  # ge=1 holds
+    assert client.post("/t/start", json={"epochs": 9999}).status_code == 422  # le=1000 holds
+    assert client.post("/t/start", json={}).json()["data"]["epochs"] == 3  # default
+
+
+def test_model_style_body_on_a_query_route_fails_at_boot():
+    with pytest.raises(ValueError, match="body validator"):
+        create_router(
+            _spec("t.start.bad", idempotent=False, auth_scope="authenticated", execute=_start),
+            RouteSpec(path="/start", method="POST", input="query"),
+            _start,
+            registry=ContractRegistry(),
+        )
+
+
+async def _pause():
+    return {"status": "paused"}
+
+
+def test_write_route_without_body_params_accepts_an_absent_body():
+    """Hand-built no-arg POSTs never required a body; Body(...) would 422 them."""
+    app, _ = _serve(
+        _spec("t.pause", idempotent=False, execute=_pause),
+        RouteSpec(path="/pause", method="POST"),
+        _pause,
+    )
+    resp = TestClient(app).post("/t/pause")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == {"status": "paused"}
+
+
+async def _purge(status: str | None = None):
+    return {"status": status or "all"}
+
+
+def test_query_input_write_reads_the_query_and_ignores_the_body():
+    """POST .../purge?status=... — today's working caller wire, preserved."""
+    app, _ = _serve(
+        _spec(
+            "t.purge", params=[ToolParam("status", "string", "s")], idempotent=False, execute=_purge
+        ),
+        RouteSpec(path="/purge", method="POST", input="query"),
+        _purge,
+    )
+    client = TestClient(app)
+    assert client.post("/t/purge?status=failed").json()["data"] == {"status": "failed"}
+    assert client.post("/t/purge", json={"status": "ignored"}).json()["data"] == {"status": "all"}
+
+
+def test_mixed_body_styles_fail_at_boot():
+    """One route, one body style — a model alongside flat params is refused."""
+
+    async def _mixed(req: _StartReq, extra: str = ""):
+        return {"extra": extra}
+
+    with pytest.raises(ValueError, match="one body style"):
+        create_router(
+            _spec("t.mixed", idempotent=False, execute=_mixed),
+            RouteSpec(path="/mixed", method="POST"),
+            _mixed,
+            registry=ContractRegistry(),
+        )

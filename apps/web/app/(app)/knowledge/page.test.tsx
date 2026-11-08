@@ -16,6 +16,8 @@ const {
   mockAddToast,
   mockGetRAGStats,
   mockListRAGDocuments,
+  searchParamsStore,
+  mockPush,
 } = vi.hoisted(() => ({
   mockList: vi.fn(),
   mockStats: vi.fn(),
@@ -30,6 +32,8 @@ const {
   mockAddToast: vi.fn(),
   mockGetRAGStats: vi.fn(),
   mockListRAGDocuments: vi.fn(),
+  searchParamsStore: { value: new URLSearchParams() },
+  mockPush: vi.fn(),
 }))
 
 vi.mock('@/lib/knowledge-controller', () => ({
@@ -56,13 +60,13 @@ vi.mock('@/lib/rag-controller', () => ({
 
 vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
     back: vi.fn(),
     forward: vi.fn(),
     refresh: vi.fn(),
     replace: vi.fn(),
   }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParamsStore.value,
   usePathname: () => '/knowledge',
 }))
 
@@ -808,5 +812,49 @@ describe('KnowledgePage — RAG sources panel paging', () => {
     })
     expect(screen.getByText('src-c')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull()
+  })
+})
+
+describe('KnowledgePage — ?id= detail fold (route-map card 7/7, 20261101_154056)', () => {
+  beforeEach(() => {
+    mockList.mockResolvedValue([
+      {
+        id: 'k1',
+        content: 'User likes Python',
+        topic: 'personal',
+        importance: 0.8,
+        created_at: '2026-08-01',
+      },
+    ])
+    searchParamsStore.value = new URLSearchParams('id=k1')
+    mockPush.mockClear()
+  })
+
+  afterEach(() => {
+    searchParamsStore.value = new URLSearchParams()
+    mockPush.mockClear()
+  })
+
+  it('renders the detail fold when ?id= is set (composed from /knowledge/[id])', async () => {
+    render(<KnowledgePage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('knowledge-detail-fold')).toBeTruthy()
+    })
+  })
+
+  it('renders no fold without ?id=', () => {
+    searchParamsStore.value = new URLSearchParams()
+    render(<KnowledgePage />)
+    expect(screen.queryByTestId('knowledge-detail-fold')).toBeNull()
+  })
+
+  it('list click pushes ?id= — the fold’s source link', async () => {
+    // List-only view (no ?id=): exactly one instance of the row text, so the
+    // click target is unambiguous.
+    searchParamsStore.value = new URLSearchParams()
+    render(<KnowledgePage />)
+    const rowText = await screen.findByText('User likes Python')
+    fireEvent.click(rowText)
+    expect(mockPush).toHaveBeenCalledWith('/knowledge?id=k1')
   })
 })

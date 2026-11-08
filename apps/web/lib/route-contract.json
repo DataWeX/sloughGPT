@@ -71,6 +71,7 @@
     "/tools": "/chat",
     "/translate": "/chat?mode=translate",
     "/usage": "/workspace/usage",
+    "/vm": "/developer",
     "/voice": "/chat?mode=talk",
     "/wellness": "/chat?mode=wellness",
     "/workflow": "/feedback",

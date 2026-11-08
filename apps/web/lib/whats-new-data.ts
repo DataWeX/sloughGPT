@@ -10,6 +10,53 @@ export interface WhatsNewItem {
 
 export const whatsNewItems: WhatsNewItem[] = [
   {
+    id: 'download-wire-savings',
+    title: 'Downloads show bandwidth savings',
+    description:
+      'Every download now reports what it cost on the wire versus what it wrote to disk — compressed transfers show bytes and percent saved, and resumed ranges stay in one byte-space so partials cannot corrupt.',
+    icon: '📉',
+    date: '2026-11-08',
+    tags: ['Downloads', 'Compression'],
+  },
+  {
+    id: 'training-job-links',
+    title: 'Jump to any training job',
+    description:
+      'Feed chips, the training hero, and the Active-jobs KPI now link straight to the job page — one click from any signal to the run behind it.',
+    icon: '🎯',
+    date: '2026-11-07',
+    href: '/training',
+    tags: ['Training', 'UX'],
+  },
+  {
+    id: 'voice-no-duplicates',
+    title: 'Voice input stops repeating',
+    description:
+      'Final transcription results are emitted exactly once — no more duplicated text piling up in the composer as recognition settles.',
+    icon: '🎤',
+    date: '2026-11-07',
+    tags: ['Voice', 'Fix'],
+  },
+  {
+    id: 'chat-bubble-polish',
+    title: 'Chat tidier by default',
+    description:
+      'Your messages sit flush right and date dividers label each calendar day, so long conversations are easier to scan.',
+    icon: '💬',
+    date: '2026-11-05',
+    href: '/chat',
+    tags: ['Chat', 'UX'],
+  },
+  {
+    id: 'feedback-no-replay-loops',
+    title: 'No more answer-replay loops',
+    description:
+      'Feedback now steers the prompt instead of the sampler — the old path could push the model into repeating itself until the token limit. Rated answers still steer what comes next.',
+    icon: '🛡️',
+    date: '2026-11-03',
+    tags: ['AI', 'Quality'],
+  },
+  {
     id: 'workspace-switcher',
     title: 'New workspace switcher',
     description:

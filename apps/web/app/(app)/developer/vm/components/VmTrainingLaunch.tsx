@@ -83,9 +83,7 @@ export function VmTrainingLaunch({
                 <option value="__custom__">Custom…</option>
                 {[
                   ...datasetNames,
-                  ...(datasetNames.includes(trainConfig.dataset)
-                    ? []
-                    : [trainConfig.dataset]),
+                  ...(datasetNames.includes(trainConfig.dataset) ? [] : [trainConfig.dataset]),
                 ].map((name) => (
                   <option key={name} value={name}>
                     {name}

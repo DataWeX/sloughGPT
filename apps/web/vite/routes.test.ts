@@ -5,7 +5,8 @@ describe('globToRoutePath', () => {
   it('maps App Router paths', () => {
     expect(globToRoutePath('../app/(app)/page.tsx')).toBe('/')
     expect(globToRoutePath('../app/(app)/settings/page.tsx')).toBe('/settings')
-    expect(globToRoutePath('../app/(app)/knowledge/[id]/page.tsx')).toBe('/knowledge/:id')
+    // /knowledge/[id] retired by route-map card 7/7 (folded into /knowledge?id=);
+    // training/job/[id] below still covers the dynamic [id] -> :id conversion.
     expect(globToRoutePath('../app/(app)/consciousness/settings/page.tsx')).toBe(
       '/consciousness/settings',
     )

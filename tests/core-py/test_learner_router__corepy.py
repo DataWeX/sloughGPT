@@ -28,7 +28,7 @@ sys.path.insert(0, _server_dir)
 # Import build_test_app from the core-py tests conftest directly
 import importlib.util as _iu
 
-from routers.learner import router  # noqa: E402
+from routers.kb import router  # noqa: E402 — learner merged into kb (route-map card 7/7)
 
 _core_conftest = Path(__file__).resolve().parent / "conftest.py"
 _spec = _iu.spec_from_file_location("_core_conftest", _core_conftest)

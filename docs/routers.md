@@ -392,6 +392,8 @@ Routes are split across focused sub-modules:
 
 ## Learner Router (`/learn`)
 
+> Served by `routers/kb.py` since card `20261101_154056` — `learner.py` was merged into the `/knowledge` facade as its `/learn` sub-router (paths and wire shapes unchanged).
+
 | Method | Path                | Description              |
 | ------ | ------------------- | ------------------------ |
 | `POST` | `/learn/search`     | Search learning content. |
@@ -622,6 +624,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## VM Router (`/vm`)
 
+> Served by `routers/shell.py` since card `20261101_154057` — `vm.py` was merged into the `/shell` facade as its `/vm` sub-router (paths and wire shapes unchanged).
+
 | Method | Path                              | Description                       |
 | ------ | --------------------------------- | --------------------------------- |
 | `POST` | `/vm/run`                         | Run x86 assembly in sandboxed VM. |
@@ -671,6 +675,13 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST` | `/files`           | Upload a file. |
 
 ## Security Router (`/security`)
+
+> **Provenance (route-map card 5/7):** the `SecurityRouter` class (and the
+> `ApiKeyManager`/`ApiKeysRouter` it shares with the old `api_keys.py`) now
+> live in `routers/settings.py` (merged verbatim, card `20261101_154056`);
+> the modules `routers/security.py` and `routers/api_keys.py` are gone.
+> Every `/security/*` path below is unchanged — the sub-router prefix bakes
+> at add-time, and `ApiKeysRouter` remains deliberately unmounted.
 
 | Method | Path                   | Description     |
 | ------ | ---------------------- | --------------- |

@@ -1,12 +1,28 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
+/**
+ * Knowledge detail fold — the old `/knowledge/[id]` reader, composed into the
+ * knowledge page as a `?id=`-driven fold (route-map card 7/7, 20261101_154056;
+ * card-3 `/models` FoldSection pattern).
+ *
+ * Extracted verbatim from `app/(app)/knowledge/[id]/page.tsx`: same fetch,
+ * list-fallback, edit, delete and chat-context behavior. Prop-driven (`id`),
+ * no PageContainer — the page owns the chrome. Back/Delete clear the query
+ * parameter by navigating to bare `/knowledge`.
+ */
 import { notify } from '@/lib/notify'
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from '@/vite/next-compat/navigation'
-import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
-import { PageContainer } from '@/components/PageContainer'
+import { useRouter } from '@/vite/next-compat/navigation'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Badge,
+  Button,
+  Skeleton,
+  IconRefresh,
+} from '@sloughgpt/strui'
 import { apiGet } from '@/lib/http-client'
 import { knowledgeController, type KnowledgeItem } from '@/lib/knowledge-controller'
 import { formatDate } from '@/lib/conversations-utils'
@@ -33,10 +49,9 @@ const TOPIC_COLORS: Record<string, string> = {
   general: 'bg-muted/50 text-muted-foreground dark:bg-muted/10 dark:text-muted-foreground',
 }
 
-export default function KnowledgeDetailPage() {
-  const params = useParams()
+export function KnowledgeDetailFold({ id }: { id: string }) {
   const router = useRouter()
-  const itemId = params.id as string
+  const itemId = id
   const addToast = notify.toast
 
   const [item, setItem] = useState<KnowledgeItem | null>(null)
@@ -105,12 +120,10 @@ export default function KnowledgeDetailPage() {
   const topicColor = item ? TOPIC_COLORS[item.topic] || TOPIC_COLORS.general : ''
 
   return (
-    <PageContainer
-      title={item ? 'Knowledge Item' : 'Loading...'}
-      loading={loading}
-      loadingCards={3}
-      headerRight={
-        <div className="flex items-center gap-2">
+    <div className="space-y-4" data-testid="knowledge-detail-fold">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">{item ? 'Knowledge Item' : 'Loading...'}</h2>
+        <div className="flex items-center gap-2" data-testid="fold-actions">
           <Button variant="outline" size="sm" onClick={() => router.push('/knowledge')}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
@@ -118,8 +131,16 @@ export default function KnowledgeDetailPage() {
             <IconRefresh className="h-4 w-4" />
           </Button>
         </div>
-      }
-    >
+      </div>
+
+      {loading && (
+        <div data-testid="knowledge-detail-loading" className="space-y-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      )}
+
       {!loading && item && (
         <div className="space-y-6">
           {/* Content Card */}
@@ -287,6 +308,6 @@ export default function KnowledgeDetailPage() {
           </Card>
         </div>
       )}
-    </PageContainer>
+    </div>
   )
 }

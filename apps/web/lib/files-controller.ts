@@ -32,6 +32,23 @@ export interface SearchResult {
   count?: number
 }
 
+export interface ImportJob {
+  job_id: string
+}
+
+export interface ImportStatus {
+  job_id: string
+  state: 'running' | 'done' | 'error'
+  filename: string
+  done: number // decoded bytes on disk
+  total: number // decoded total; 0 = unknown → indeterminate
+  pct: number
+  wire_bytes?: number | null
+  saved_bytes?: number | null
+  content_encoding?: string
+  error?: string | null
+}
+
 interface BackendFileItem {
   id: string
   filename: string
@@ -66,12 +83,21 @@ class FilesController {
     return apiPost('/files/upload', formData, { raw: true })
   }
 
+  /** Start a background import of a remote URL; poll `importStatus(job_id)`. */
+  async startImport(url: string): Promise<ImportJob> {
+    return apiPost('/files/import', { url })
+  }
+
+  async importStatus(jobId: string): Promise<ImportStatus> {
+    return apiGet(`/files/import/${jobId}`)
+  }
+
   async delete(id: string): Promise<void> {
     return apiDelete(`/files/${id}`)
   }
 
   async deleteBatch(ids: string[]): Promise<void> {
-    await Promise.all(ids.map(id => apiDelete(`/files/${id}`)))
+    await Promise.all(ids.map((id) => apiDelete(`/files/${id}`)))
   }
 
   async ingest(id: string): Promise<void> {

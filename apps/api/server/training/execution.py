@@ -1,7 +1,11 @@
 """Training execution routes — start, distill, lora, visual, from-feedback, builds.
 
 Each route group is extracted into its own module; this file includes them via
-``router.include_router()`` and defines the core ``start_training`` endpoint.
+``router.include_router()`` and defines the core ``start_training`` endpoint,
+which is descriptor-projected (card 20261104_151036): one ``ToolSpec`` + one
+``create_router`` call instead of a hand-laid decorator. Raw wire — the
+handler's ``{status, job_id, ...}`` is served unwrapped (``envelope=False``),
+byte-identical to the hand-built route.
 """
 
 from __future__ import annotations
@@ -13,8 +17,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
+from domain.agents import ToolSpec
 from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
@@ -99,7 +105,6 @@ from .builds import router as builds_router
 router.include_router(builds_router)
 
 
-@router.post("/training/start")
 async def start_training(
     request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)
 ):
@@ -503,6 +508,38 @@ async def start_training(
         "dataset": request.dataset,
         "epochs": request.epochs,
     }
+
+
+# ── Descriptor projection (card 20261104_151036) ───────────────────────
+
+SPEC_START = ToolSpec(
+    name="training.start",
+    description="Start a tracked training job (web UI).",
+    parameters=params_from_model(TrainingRequest),
+    execute=start_training,
+    auth_scope="authenticated",
+    idempotent=False,
+    result={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "job_id": {"type": "string"},
+            "name": {"type": "string"},
+            "model": {"type": "string"},
+            "dataset": {"type": "string"},
+            "epochs": {"type": "integer"},
+        },
+    },
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_START,
+        RouteSpec(path="/training/start", envelope=False),
+        start_training,
+    )
+)
 
 
 # ── Visual Training (delegated to visual.py) ────────────────────

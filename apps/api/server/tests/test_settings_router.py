@@ -354,3 +354,41 @@ class TestAdaptiveInsights:
         _app = _build_app()
         resp = TestClient(_app).get("/settings/adaptive/insights")
         assert resp.status_code == 200
+
+
+# ── Route-map card 5/7: security + api_keys merged into settings ────────────
+
+
+class TestSettingsFacadeAbsorbsSecurity:
+    """The settings router serves the merged /security routes (card 20261101_154056).
+
+    security.py and api_keys.py are folded into settings.py: one module-level
+    router exposes /settings/* and /security/* paths, ApiKeyManager lives on
+    routers.settings, and routers.security / routers.api_keys no longer exist.
+    """
+
+    def test_settings_router_serves_both_prefixes(self):
+        from fastapi import FastAPI
+        from routers.settings import router as settings_router
+
+        facade = FastAPI()
+        facade.include_router(settings_router)
+        paths = set(facade.openapi()["paths"])
+        # settings routes keep working
+        assert {"/settings", "/settings/generation", "/settings/reset"} <= paths
+        # merged security routes (audit + keys family, byte-identical paths)
+        assert {"/security/audit", "/security/keys", "/security/keys/validate"} <= paths
+        assert "/security/keys/{key_id}" in paths
+        assert "/security/keys/{key_id}/rotate" in paths
+
+    def test_api_key_manager_lives_on_settings_module(self):
+        from routers.settings import ApiKeyManager
+
+        assert hasattr(ApiKeyManager, "validate")
+        assert hasattr(ApiKeyManager, "rotate")
+
+    def test_security_and_api_keys_modules_are_gone(self):
+        import importlib.util
+
+        assert importlib.util.find_spec("routers.security") is None
+        assert importlib.util.find_spec("routers.api_keys") is None
