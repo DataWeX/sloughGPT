@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTrainingForm } from './useTrainingForm'
 
@@ -282,7 +282,7 @@ describe('useTrainingForm', () => {
   })
 
   describe('ETA pre-flight guard', () => {
-    let confirmSpy: ReturnType<typeof vi.spyOn>
+    let confirmSpy: MockInstance<typeof window.confirm>
 
     function makeDatasetsWithSize(selectedDataset: string, size: number) {
       return {
