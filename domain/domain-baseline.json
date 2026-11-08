@@ -474,7 +474,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "466e14cb4d839e98e391fc7104e58245a7a5ef21"
+      "tree_hash": "f7ae25e29da970aba5913fc99df1419e1b7821ed"
     },
     "slolib": {
       "class": "core-capability",
