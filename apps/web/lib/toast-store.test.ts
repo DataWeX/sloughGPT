@@ -48,7 +48,7 @@ describe('toast-store', () => {
   })
 
   it('auto-removes toast after 6 seconds', () => {
-    const id = useToastStore.getState().addToast('Hello')
+    useToastStore.getState().addToast('Hello')
     expect(useToastStore.getState().toasts.length).toBe(1)
     vi.advanceTimersByTime(6000)
     expect(useToastStore.getState().toasts.length).toBe(0)
@@ -76,20 +76,18 @@ describe('toast-store', () => {
   })
 
   it('dedupes by explicit key even when messages differ', () => {
-    const id1 = useToastStore.getState().addToast(
-      'Previous training session expired — server was restarted',
-      'info',
-      undefined,
-      undefined,
-      'training-session-expired',
-    )
-    const id2 = useToastStore.getState().addToast(
-      'Session expired',
-      'info',
-      undefined,
-      undefined,
-      'training-session-expired',
-    )
+    const id1 = useToastStore
+      .getState()
+      .addToast(
+        'Previous training session expired — server was restarted',
+        'info',
+        undefined,
+        undefined,
+        'training-session-expired',
+      )
+    const id2 = useToastStore
+      .getState()
+      .addToast('Session expired', 'info', undefined, undefined, 'training-session-expired')
     expect(id2).toBe(id1)
     expect(useToastStore.getState().toasts).toHaveLength(1)
   })
@@ -104,5 +102,74 @@ describe('toast-store', () => {
     useToastStore.getState().addToast('Session expired', 'info', undefined, undefined, 'k-a')
     useToastStore.getState().addToast('Session expired', 'info', undefined, undefined, 'k-b')
     expect(useToastStore.getState().toasts).toHaveLength(2)
+  })
+
+  // ── sticky / timely persistence ─────────────────────────────
+
+  it('sticky toast never auto-expires', () => {
+    useToastStore.getState().addToast('Training paused', 'info', undefined, undefined, undefined, {
+      sticky: true,
+    })
+    vi.advanceTimersByTime(60_000)
+    expect(useToastStore.getState().toasts).toHaveLength(1)
+    expect(useToastStore.getState().toasts[0].sticky).toBe(true)
+    expect(useToastStore.getState().toasts[0].dismissAt).toBeUndefined()
+  })
+
+  it('honors a custom ttlMs', () => {
+    useToastStore.getState().addToast('Quick note', 'info', undefined, undefined, undefined, {
+      ttlMs: 1500,
+    })
+    vi.advanceTimersByTime(1499)
+    expect(useToastStore.getState().toasts).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(useToastStore.getState().toasts).toHaveLength(0)
+  })
+
+  it('dedupe hit refreshes the expiry deadline', () => {
+    useToastStore.getState().addToast('Progress', 'info')
+    vi.advanceTimersByTime(5000)
+    // Re-announcement at t=5000 must reset the clock, not die at t=6000
+    useToastStore.getState().addToast('Progress', 'info')
+    vi.advanceTimersByTime(5000) // t=10000 — would be dead without the refresh
+    expect(useToastStore.getState().toasts).toHaveLength(1)
+    vi.advanceTimersByTime(1500) // t=11500 > 5000+6000
+    expect(useToastStore.getState().toasts).toHaveLength(0)
+  })
+
+  it('dedupe hit upgrades an existing toast to sticky', () => {
+    useToastStore.getState().addToast('Progress', 'info')
+    useToastStore.getState().addToast('Progress', 'info', undefined, undefined, undefined, {
+      sticky: true,
+    })
+    vi.advanceTimersByTime(60_000)
+    expect(useToastStore.getState().toasts).toHaveLength(1)
+    expect(useToastStore.getState().toasts[0].sticky).toBe(true)
+  })
+
+  it('caps the stack, evicting the oldest non-sticky toast first', () => {
+    useToastStore.getState().addToast('Pinned', 'info', undefined, undefined, undefined, {
+      sticky: true,
+    })
+    for (let i = 1; i <= 5; i++) {
+      useToastStore.getState().addToast(`Msg ${i}`, 'info')
+    }
+    const visible = useToastStore.getState().toasts
+    expect(visible).toHaveLength(5)
+    expect(visible.find((t) => t.message === 'Pinned')).toBeTruthy()
+    expect(visible.find((t) => t.message === 'Msg 1')).toBeUndefined()
+    expect(visible.find((t) => t.message === 'Msg 5')).toBeTruthy()
+  })
+
+  it('bounds an all-sticky stack by evicting the oldest', () => {
+    for (let i = 1; i <= 6; i++) {
+      useToastStore.getState().addToast(`Sticky ${i}`, 'info', undefined, undefined, undefined, {
+        sticky: true,
+      })
+    }
+    const visible = useToastStore.getState().toasts
+    expect(visible).toHaveLength(5)
+    expect(visible.find((t) => t.message === 'Sticky 1')).toBeUndefined()
+    expect(visible.find((t) => t.message === 'Sticky 6')).toBeTruthy()
   })
 })
