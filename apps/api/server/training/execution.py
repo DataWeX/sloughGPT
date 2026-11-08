@@ -299,14 +299,14 @@ async def start_training(
     controller = get_training_controller()
     controller.start(job_id, request.name or "training")
 
-    # Audit trail — training job start (char-level fine-tune)
+    # Audit trail — training job start (algo: bpe = tokenized, else char)
     try:
         from infrastructure.auth import get_audit_logger
 
         get_audit_logger().log(
             "training.start",
             resource=request.dataset.strip() if request.dataset else out_stem,
-            detail="char",
+            detail=str(request.algo or "char"),
             extra={
                 "job_id": job_id,
                 "model": request.model,
@@ -407,7 +407,7 @@ async def start_training(
 
             trainer = SloughGPTTrainer(
                 data_path=data_path_for_thread,
-                **_sloughgpt_trainer_kwds(req_snapshot),
+                **_sloughgpt_trainer_kwds(req_snapshot, data_path=data_path_for_thread),
                 experiment_tracker=tracker,
             )
             result = trainer.train(

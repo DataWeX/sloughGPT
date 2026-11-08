@@ -12,6 +12,19 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { trackEvent } from '@/lib/dev-log'
 import { appShellStore, writeTraining } from '@/lib/app-shell'
 
+// Pre-flight ETA guard: at the ~1.4 steps/s observed on native jobs, a
+// projection beyond this many steps is measured in days — ask before starting.
+const ETA_WARN_STEPS = 50_000
+const ETA_OBSERVED_STEPS_PER_S = 1.4
+
+function formatEta(seconds: number): string {
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'}`
+  return `${Math.round(hours / 24)} days`
+}
+
 export type Method = 'distill' | 'finetune' | 'vlm' | 'native'
 export type InputMode = 'dataset' | 'text'
 
@@ -344,6 +357,31 @@ export function useTrainingForm(
       if (method === 'native' && !hasDataset && !hasText) {
         addToast('Select a dataset or paste text for native training', 'error')
         return
+      }
+
+      // Pre-flight step projection — an absurd job gets a plain-language
+      // chance to abort BEFORE the optimistic row lands (char-level
+      // total_steps inflation; job_cbc6162a projected ~10.7M steps).
+      let projectedChars: number | undefined
+      if (hasText) {
+        projectedChars = textInput.trim().length
+      } else if (hasDataset) {
+        projectedChars = datasets.datasets.find((d) => d.id === datasets.selectedDataset)?.size
+      }
+      if (projectedChars) {
+        const block = Math.max(8, method === 'native' ? nativeBlockSize : 128)
+        const tokens = algo === 'bpe' ? Math.floor(projectedChars / 2) : projectedChars
+        const stepsPerEpoch = Math.floor(tokens / Math.max(1, block * trainingBatchSize))
+        const totalSteps = stepsPerEpoch * trainingEpochs
+        if (totalSteps > ETA_WARN_STEPS) {
+          const confirmed = window.confirm(
+            `This job projects about ${totalSteps.toLocaleString()} training steps — ` +
+              `roughly ${formatEta(totalSteps / ETA_OBSERVED_STEPS_PER_S)} at the speed we've ` +
+              `measured. It will keep the server busy until it finishes or you stop it. ` +
+              `Start anyway?`,
+          )
+          if (!confirmed) return
+        }
       }
 
       const body: Record<string, unknown> = {

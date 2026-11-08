@@ -203,6 +203,63 @@ class TestSetters:
 
 
 # =============================================================================
+# soul metadata → tokenizer dispatch (BPE TokenTree vs legacy SloBPE)
+# =============================================================================
+
+
+class TestTokenizerFromMetadata:
+    @staticmethod
+    def _tree_dict():
+        from domain.training._internal.token_tree import TokenTree
+
+        tree = TokenTree()
+        tree.train(["Hello World hello world"], vocab_size=64, lowercase=False)
+        return tree.to_dict()
+
+    def test_token_tree_metadata_builds_case_preserving_tokenizer(self):
+        from domain.core._internal.soul import _tokenizer_from_metadata
+        from domain.training._internal.token_tree import TokenTree
+
+        md = {"tokenizer": {"type": "token_tree", "tree": self._tree_dict()}}
+        tok = _tokenizer_from_metadata(md)
+        assert isinstance(tok, TokenTree)
+        assert tok.decode(tok.encode("Hello World")) == "Hello World"
+
+    def test_token_tree_wins_over_stale_tokenizer_config(self):
+        from domain.core._internal.soul import _tokenizer_from_metadata
+        from domain.training._internal.token_tree import TokenTree
+
+        md = {
+            "tokenizer": {"type": "token_tree", "tree": self._tree_dict()},
+            "tokenizer_config": {"not": "a valid slo bpe dict"},
+        }
+        assert isinstance(_tokenizer_from_metadata(md), TokenTree)
+
+    def test_missing_metadata_returns_none(self):
+        from domain.core._internal.soul import _tokenizer_from_metadata
+
+        assert _tokenizer_from_metadata({}) is None
+        assert _tokenizer_from_metadata({"stoi": {"a": 0}}) is None
+
+    def test_malformed_token_tree_returns_none(self):
+        from domain.core._internal.soul import _tokenizer_from_metadata
+
+        assert (
+            _tokenizer_from_metadata({"tokenizer": {"type": "token_tree", "tree": "nope"}})
+            is None
+        )
+        assert _tokenizer_from_metadata({"tokenizer": {"type": "other", "tree": {}}}) is None
+
+    def test_tokenizer_config_dispatches_to_slobpe(self, monkeypatch):
+        from domain.core._internal import soul as soul_mod
+        from domain.training._internal.tokenizer import SloBPE
+
+        sentinel = object()
+        monkeypatch.setattr(SloBPE, "from_dict", classmethod(lambda cls, _d: sentinel))
+        assert soul_mod._tokenizer_from_metadata({"tokenizer_config": {"x": 1}}) is sentinel
+
+
+# =============================================================================
 # Prompt building
 # =============================================================================
 

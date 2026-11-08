@@ -210,21 +210,22 @@ def validate_conversation_data(path: str, max_errors: int = 10) -> dict:
     }
 
 
-def prepare_data(data_path, block_size=128, tokenizer=None):
-    """Prepare training data from a text file, feed, or multiple datasets with ratios.
+def load_corpus_text(data_path, block_size=128) -> str:
+    """Resolve a training source to its raw corpus text.
+
+    The single corpus-resolution path: ``prepare_data`` and the API-side
+    tokenizer seam both load through here, so a tokenizer always trains on
+    exactly the text the trainer will see.
 
     Args:
         data_path: path to a text file, a dataset name (resolved against
             ``datasets/<name>/input.txt``), a list of dataset names, a list of
             ``(name, ratio)`` tuples, or a training feed specification
             (``feed:<source>`` / ``http(s)://...`` — see training_feed).
-        block_size: context window (used for logging only).
-        tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
-            TokenTree). When provided, the corpus is tokenized with it and the
-            returned vocabulary is the tokenizer's, not the raw char set.
+        block_size: context window (used by experience loading only).
 
     Returns:
-        (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
+        The corpus text.
     """
     if isinstance(data_path, str) and is_experience_source(data_path):
         corpus = None
@@ -334,6 +335,27 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
                 text = "\n".join(texts) if texts else raw
             else:
                 text = f.read()
+
+    return text
+
+
+def prepare_data(data_path, block_size=128, tokenizer=None):
+    """Prepare training data from a text file, feed, or multiple datasets with ratios.
+
+    Args:
+        data_path: path to a text file, a dataset name (resolved against
+            ``datasets/<name>/input.txt``), a list of dataset names, a list of
+            ``(name, ratio)`` tuples, or a training feed specification
+            (``feed:<source>`` / ``http(s)://...`` — see training_feed).
+        block_size: context window (used for logging only).
+        tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
+            TokenTree). When provided, the corpus is tokenized with it and the
+            returned vocabulary is the tokenizer's, not the raw char set.
+
+    Returns:
+        (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
+    """
+    text = load_corpus_text(data_path, block_size=block_size)
 
     if tokenizer is not None:
         data = np.asarray(tokenizer.encode(text), dtype=np.int64)

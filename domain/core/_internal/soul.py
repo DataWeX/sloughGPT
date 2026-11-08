@@ -65,6 +65,42 @@ class GenerationContext:
     presence_penalty: float = 0.0
 
 
+def _tokenizer_from_metadata(metadata: dict) -> object | None:
+    """Build the tokenizer encoded in soul metadata, or ``None``.
+
+    Trainer checkpoints embed ``metadata["tokenizer"] = {"type": "token_tree",
+    "tree": ...}`` (a BPE TokenTree) so inference reproduces BPE-level
+    encoding; legacy souls carry ``tokenizer_config`` (SloBPE). token_tree is
+    checked first: a self-contained BPE soul must win over any stale config
+    alongside it.
+    """
+    tok_meta = metadata.get("tokenizer")
+    if (
+        isinstance(tok_meta, dict)
+        and tok_meta.get("type") == "token_tree"
+        and isinstance(tok_meta.get("tree"), dict)
+    ):
+        try:
+            from domain.training._internal.token_tree import TokenTree
+
+            return TokenTree.from_dict(tok_meta["tree"])
+        except Exception as e:
+            logger.warning("Failed to load TokenTree from soul: %s", e, extra={"tag": "MODEL"})
+            return None
+    tok_config = metadata.get("tokenizer_config")
+    if tok_config:
+        try:
+            from domain.training._internal.tokenizer import SloBPE
+
+            return SloBPE.from_dict(tok_config)
+        except Exception as e:
+            logger.warning(
+                "Failed to load BPE tokenizer from soul: %s", e, extra={"tag": "MODEL"}
+            )
+            return None
+    return None
+
+
 class SloEngine:
     """
     SloEngine is THE core model wrapper.
@@ -311,21 +347,15 @@ class SloEngine:
         if self._itos:
             self._itos = {int(k): v for k, v in self._itos.items()}
 
-        tok_config = metadata.get("tokenizer_config")
-        if tok_config:
-            try:
-                from domain.training._internal.tokenizer import SloBPE
-
-                self._tokenizer = SloBPE.from_dict(tok_config)
-                logger.info(
-                    "BPE tokenizer loaded from soul metadata (vocab=%d)",
-                    self._tokenizer.vocab_size,
-                    extra={"tag": "MODEL"},
-                )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load BPE tokenizer from soul: %s", e, extra={"tag": "MODEL"}
-                )
+        tokenizer = _tokenizer_from_metadata(metadata)
+        if tokenizer is not None:
+            self._tokenizer = tokenizer
+            logger.info(
+                "Tokenizer loaded from soul metadata (%s, vocab=%d)",
+                type(tokenizer).__name__,
+                getattr(tokenizer, "vocab_size", 0),
+                extra={"tag": "MODEL"},
+            )
 
         logger.info("Loaded soul: %s from %s", soul.name, sou_path, extra={"tag": "MODEL"})
         return soul

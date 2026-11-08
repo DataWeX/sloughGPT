@@ -1996,3 +1996,72 @@ class TestMain:
         )
         with pytest.raises(SystemExit):
             tp.main()
+
+
+# =============================================================================
+# load_corpus_text — single corpus-resolution path (tokenizer seam)
+# =============================================================================
+
+
+class TestLoadCorpusText:
+    def test_plain_file(self, tmp_path):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        p = tmp_path / "corpus.txt"
+        p.write_text(DATA_TEXT, encoding="utf-8")
+        assert load_corpus_text(str(p)) == DATA_TEXT
+
+    def test_jsonl_text_extraction(self, tmp_path):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        text_a = "alpha beta gamma delta epsilon zeta eta theta iota kappa. "
+        text_b = "lambda mu nu xi omicron pi rho sigma tau upsilon phi. "
+        p = tmp_path / "corpus.jsonl"
+        p.write_text(
+            json.dumps({"text": text_a}) + "\n" + json.dumps({"text": text_b}) + "\n",
+            encoding="utf-8",
+        )
+        assert load_corpus_text(str(p)) == text_a + "\n" + text_b
+
+    def test_dataset_name_resolution(self, tmp_path, monkeypatch):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        monkeypatch.chdir(tmp_path)
+        d = tmp_path / "data" / "corpus2"
+        d.mkdir(parents=True)
+        (d / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
+        assert load_corpus_text("corpus2") == DATA_TEXT
+
+    def test_missing_source_error_parity(self, tmp_path):
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        missing = str(tmp_path / "missing.txt")
+        with pytest.raises(FileNotFoundError) as exc_load:
+            load_corpus_text(missing)
+        with pytest.raises(FileNotFoundError) as exc_prepare:
+            prepare_data(missing, block_size=8)
+        assert str(exc_load.value) == str(exc_prepare.value)
+
+    @pytest.mark.parametrize("source_kind", ["file", "dataset_name", "list", "ratio_list"])
+    def test_parity_with_prepare_data(self, tmp_path, monkeypatch, source_kind):
+        """prepare_data's char vocabulary is exactly the chars of load_corpus_text."""
+        from domain.training._internal.train_pipeline import load_corpus_text
+
+        monkeypatch.chdir(tmp_path)
+        d = tmp_path / "data" / "corpus2"
+        d.mkdir(parents=True)
+        (d / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
+        f = tmp_path / "direct.txt"
+        f.write_text(DATA_TEXT, encoding="utf-8")
+
+        sources = {
+            "file": str(f),
+            "dataset_name": "corpus2",
+            "list": ["corpus2"],
+            "ratio_list": [("corpus2", 1.0)],
+        }
+        source = sources[source_kind]
+        data, _n, stoi, _itos = prepare_data(source, block_size=8)
+        text = load_corpus_text(source)
+        assert sorted(stoi) == sorted(set(text))
+        assert len(data) == len(text)
