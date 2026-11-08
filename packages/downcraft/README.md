@@ -22,6 +22,20 @@ downcraft status https://example.com/bigfile.iso
 downcraft list
 ```
 
+Every download reports what it cost **on the wire** vs what it delivered:
+
+```
+✓ Done — 8 MB in 2s
+  ↳ wire 2.1 MB · saved 74% (5.9 MB less) · gzip
+```
+
+Savings come from edge compression the server actually applied
+(`gzip`/`zstd`/`lz4` — we advertise `Accept-Encoding` on every request and
+decode to identity before writing, so resume/verify stay in one byte-space).
+If a compressed response arrives without `Content-Length` the wire size is
+unrecoverable after transparent decoding, so the report says _unknown_
+instead of inventing a number.
+
 ## How resume works
 
 1. Download starts → writes to `file.sgpart`
@@ -31,7 +45,7 @@ downcraft list
 5. On completion → atomically renames to final filename
 
 **Byte-space invariant**: `.sgpart` size, `Range` offsets, `Content-Range`
-responses and `state.json` `bytes_downloaded` are all measured in *decoded*
+responses and `state.json` `bytes_downloaded` are all measured in _decoded_
 (identity) bytes — compressed wire bytes are never persisted, including for
 gzip/zstd/lz4 responses. On every retry the resume offset is re-derived from
 disk (never reused from the previous attempt), so a partially-written chunk
@@ -154,6 +168,10 @@ from downcraft import download
 # Generic URL
 result = download("https://example.com/bigfile.iso", "/tmp/bigfile.iso")
 print(result["status"])  # "complete"
+print(result["wire_bytes"], result["saved_bytes"], result["saved_pct"])
+# Bandwidth accounting for this call: wire vs decoded bytes, savings %,
+# and the content coding seen ("gzip", "zstd", "lz4", "identity").
+# saved_bytes/saved_pct are None when the wire size couldn't be measured.
 
 # With progress callback
 def on_progress(downloaded, total, speed_bps):
@@ -170,15 +188,15 @@ from downcraft.verify import verify_file
 
 ## CLI
 
-| Command | Description |
-|---------|-------------|
-| `downcraft url <url> <dest>` | Download any file |
+| Command                                   | Description                     |
+| ----------------------------------------- | ------------------------------- |
+| `downcraft url <url> <dest>`              | Download any file               |
 | `downcraft url <url> <dest> --compressed` | Download with LZ4 decompression |
-| `downcraft status <key>` | Check download status |
-| `downcraft list` | List all tracked |
-| `downcraft compress <src> <dest>` | Compress file with LZ4 |
-| `downcraft decompress <src> <dest>` | Decompress LZ4 file |
-| `downcraft peek <file>` | Check if file is compressed |
+| `downcraft status <key>`                  | Check download status           |
+| `downcraft list`                          | List all tracked                |
+| `downcraft compress <src> <dest>`         | Compress file with LZ4          |
+| `downcraft decompress <src> <dest>`       | Decompress LZ4 file             |
+| `downcraft peek <file>`                   | Check if file is compressed     |
 
 ## Dependencies
 
