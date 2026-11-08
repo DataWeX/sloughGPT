@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -21,9 +22,11 @@ from infrastructure.auth import require_auth_if_enabled
 from infrastructure.contract import (
     REGISTRY,
     ContractRegistry,
+    RouteEntry,
     RouteSpec,
     create_router,
     derive_method,
+    params_from_model,
 )
 from infrastructure.exception_handlers import register_app_error_handler
 from pydantic import BaseModel, Field
@@ -137,6 +140,36 @@ def test_duplicate_method_path_is_rejected():
     create_router(spec, RouteSpec(path="/same"), _read_echo, prefix="/dup", registry=registry)
     with pytest.raises(ValueError, match="duplicate contract route GET /dup/same"):
         create_router(spec, RouteSpec(path="/same"), _read_echo, prefix="/dup", registry=registry)
+
+
+def test_registration_is_idempotent_across_import_identities():
+    """Dual-identity imports re-execute the module; that is not a collision.
+
+    ``training.control`` and ``apps.api.server.training.control`` are two
+    names for one file (tests import and ``@patch`` via both) — the same
+    capability re-claiming its own crossing from the second identity must be
+    absorbed, while a different capability on that crossing, and a same-
+    identity re-registration (a double projection), must still raise.
+    """
+    registry = ContractRegistry()
+    entry = RouteEntry(
+        name="t.ident",
+        version="1",
+        auth_scope="public",
+        idempotent=True,
+        description="",
+        method="GET",
+        path="/ident",
+        operation_id="t.ident.get",
+        module="training.control",
+    )
+    registry.register(entry)
+    registry.register(replace(entry, module="apps.api.server.training.control"))
+    assert [e["name"] for e in registry.routes()] == ["t.ident"]
+    with pytest.raises(ValueError, match="duplicate contract route"):
+        registry.register(replace(entry, name="t.other"))
+    with pytest.raises(ValueError, match="duplicate contract route"):
+        registry.register(entry)
 
 
 def test_operation_ids_stay_unique():
@@ -347,6 +380,58 @@ def test_openapi_request_body_comes_from_the_generated_model():
     props = schema["properties"]
     assert set(props) == {"text", "count"}
     assert props["text"]["type"] == "string"
+
+
+def test_params_from_model_derives_the_model_fields():
+    """Model-style routes document their model — one declaration, both views."""
+
+    class _Req(BaseModel):
+        name: str = Field(description="job name")
+        epochs: int = 3
+        device: str | None = None
+        tags: list[str] = Field(default_factory=list)
+
+    by_name = {p.name: p for p in params_from_model(_Req)}
+    assert set(by_name) == {"name", "epochs", "device", "tags"}
+    assert (by_name["name"].type, by_name["name"].required) == ("string", True)
+    assert by_name["name"].description == "job name"
+    assert (by_name["epochs"].type, by_name["epochs"].required) == ("integer", False)
+    assert by_name["device"].type == "string"  # ``str | None`` unwraps
+    assert by_name["tags"].type == "array"
+
+
+async def _idle():
+    return {"status": "idle"}
+
+
+async def _ping():
+    return {"ok": True}
+
+
+def test_route_with_nothing_to_validate_publishes_no_422():
+    """No params, no path placeholders, no body → 200 alone (control parity).
+
+    FastAPI auto-422s on *any* body field, even an optional empty one, so a
+    no-param write must not carry one — the hand-built twin published exactly
+    ``{"200"}`` and so must the projection.
+    """
+    app, _ = _serve(
+        _spec("t.idle", idempotent=False, execute=_idle),
+        RouteSpec(path="/idle", method="POST"),
+        _idle,
+    )
+    op = app.openapi()["paths"]["/t/idle"]["post"]
+    assert sorted(op["responses"]) == ["200"]
+    assert "requestBody" not in op
+    assert TestClient(app).post("/t/idle").status_code == 200
+
+
+def test_paramless_read_publishes_no_422():
+    """A GET with nothing to validate serves 200 alone (builds parity)."""
+    app, _ = _serve(_spec("t.ping", execute=_ping), RouteSpec(path="/ping"), _ping)
+    op = app.openapi()["paths"]["/t/ping"]["get"]
+    assert sorted(op["responses"]) == ["200"]
+    assert not op.get("parameters")
 
 
 # ── boot self-registration (the manifest replaced the hand-edited list) ─

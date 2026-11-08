@@ -1,6 +1,10 @@
 """Visual training route — visual-start.
 
 Extracted from execution.py to keep each module focused.
+Descriptor-projected (card 20261104_151036): one ``ToolSpec`` + one
+``create_router`` call instead of a hand-laid decorator. Raw wire — the
+handler's ``{status, job_id, message}`` is served unwrapped
+(``envelope=False``), byte-identical to the hand-built route.
 """
 
 from __future__ import annotations
@@ -12,8 +16,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
+from domain.agents import ToolSpec
 from domain.shared import find_repo_root
 from domain.training._internal.executor import get_training_executor
 
@@ -26,7 +32,6 @@ logger = logging.getLogger("slo")
 router = APIRouter(tags=["training-visual"])
 
 
-@router.post("/training/visual-start")
 async def start_visual_training(
     request: VisualTrainRequest,
     auth_user: dict = Depends(require_auth_if_enabled),
@@ -160,3 +165,32 @@ async def start_visual_training(
         "job_id": job_id,
         "message": f"Visual training started: encoder={request.vision_encoder} llm={request.llm}",
     }
+
+
+# ── Descriptor projection (card 20261104_151036) ───────────────────────
+
+SPEC_VISUAL = ToolSpec(
+    name="training.visual.start",
+    description="Start a vision-language model (VLM) fine-tune on a visual dataset.",
+    parameters=params_from_model(VisualTrainRequest),
+    execute=start_visual_training,
+    auth_scope="authenticated",
+    idempotent=False,
+    result={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "job_id": {"type": "string"},
+            "message": {"type": "string"},
+        },
+    },
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_VISUAL,
+        RouteSpec(path="/training/visual-start", envelope=False),
+        start_visual_training,
+    )
+)

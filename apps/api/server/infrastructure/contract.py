@@ -25,14 +25,15 @@ import logging
 import re
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 
 from fastapi import APIRouter, Body, Depends, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, create_model
 from schemas.common import classify_and_raise, success_response
 
-from domain.agents import ToolSpec
+from domain.agents import ToolParam, ToolSpec
 from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.contract")
@@ -45,6 +46,7 @@ __all__ = [
     "create_router",
     "derive_method",
     "get_contracts",
+    "params_from_model",
 ]
 
 CapabilityHandler = Callable[..., Coroutine[Any, Any, Any]]
@@ -148,6 +150,15 @@ class ContractRegistry:
         key = (entry.method, entry.path)
         existing = self._routes.get(key)
         if existing is not None:
+            if existing.name == entry.name and existing.module != entry.module:
+                # Same capability re-claiming its own crossing from a second
+                # import identity (``training.control`` vs
+                # ``apps.api.server.training.control`` — tests import and
+                # patch via both, so the file executes twice). Idempotent
+                # re-registration, not a collision; the first row stands.
+                # Same identity re-registering is still an error: that is a
+                # double projection of one route.
+                return
             raise ValueError(
                 f"duplicate contract route {entry.method} {entry.path}: "
                 f"'{existing.name}' ({existing.module}) already owns it"
@@ -279,6 +290,46 @@ def _request_model(spec: ToolSpec, path_params: frozenset[str] = frozenset()) ->
 
 
 _ANN_TO_JSON = {str: "string", int: "integer", float: "number", bool: "boolean"}
+
+
+def _json_type_of(annotation: Any) -> str:
+    """JSON Schema type for a field annotation — unions unwrap to their member.
+
+    ``str | None`` documents as ``string`` (nullability is a defaulting detail,
+    not a second type); unknown composites fall back to ``object``, the
+    loosest honest answer in ``ToolParam.type``'s vocabulary.
+    """
+    if isinstance(annotation, type):
+        return _ANN_TO_JSON.get(annotation, "object")
+    origin = get_origin(annotation)
+    if origin is Union or origin is UnionType:
+        members = [a for a in get_args(annotation) if a is not type(None)]
+        if len(members) == 1:
+            return _json_type_of(members[0])
+        return "object"
+    if origin in (list, tuple, set, frozenset):
+        return "array"
+    return "object"
+
+
+def params_from_model(model: type[BaseModel]) -> list[ToolParam]:
+    """Derive descriptor ``parameters`` from a pydantic request model.
+
+    Model-style routes (ruling ``c3c81a311``): the model *is* the runtime
+    validator — constraints and all — while the descriptor's ``parameters``
+    document its fields for the registry/TS projection. Deriving them from
+    ``model_fields`` keeps one declaration (the model) feeding both views, so
+    a field added to the model can never drift from the published contract.
+    """
+    return [
+        ToolParam(
+            name=name,
+            type=_json_type_of(field.annotation),
+            description=field.description or "",
+            required=field.is_required(),
+        )
+        for name, field in model.model_fields.items()
+    ]
 
 
 def _resolve_ann(param: inspect.Parameter, handler: CapabilityHandler) -> Any:
@@ -491,6 +542,12 @@ def _build_endpoint(
     authed = (spec.auth_scope or "public") != "public"
     model_style = _model_param(handler, path_params)
     types = path_types or {}
+    # A body exists only when there is something to validate: a no-arg write
+    # gets no payload parameter at all (hand-built ones ignore a sent body).
+    # That is also the only way to keep FastAPI from auto-declaring a 422 for
+    # a validation that cannot fail — it 422s on *any* body field, even an
+    # optional empty one, while a no-param hand-built route serves 200 only.
+    has_body = model_style is not None or any(p.name not in path_params for p in spec.parameters)
 
     def _bind(payload: Any, request: Request, auth_user: dict | None) -> dict[str, Any]:
         if model_style is not None:
@@ -529,7 +586,9 @@ def _build_endpoint(
         except Exception as exc:
             classify_and_raise(exc, source=source)
 
-    if input_style == "query":
+    if input_style == "query" or not has_body:
+        # Query-carried — or nothing to carry: a no-param write rides the same
+        # payload-free shape with an empty spec (its dependency returns {}).
         dep = _query_dependency(spec, path_params)
         if authed:
 
@@ -553,12 +612,7 @@ def _build_endpoint(
         body_model = (
             model_style[1] if model_style is not None else _request_model(spec, path_params)
         )
-        # A route with nothing to validate accepts an absent body — hand-built
-        # no-arg POSTs never required one, and Body(...) would 422 on them.
-        has_body = model_style is not None or any(
-            p.name not in path_params for p in spec.parameters
-        )
-        body_default: Any = Body(...) if has_body else Body(None)
+        body_default: Any = Body(...)
         if authed:
 
             async def write_endpoint(
@@ -726,6 +780,14 @@ def create_router(
             envelope=route_spec.envelope,
             input_style=input_style,
         )
+        # 422 only when validation can actually fail — no parameters, no path
+        # placeholders and no body model serves 200 alone, exactly what the
+        # hand-built twin published (FastAPI derives the same way).
+        validates = (
+            bool(spec.parameters)
+            or bool(path_params)
+            or _model_param(route_handler, path_params) is not None
+        )
         router.add_api_route(
             route_spec.path,
             endpoint,
@@ -734,9 +796,11 @@ def create_router(
             description=spec.description,
             operation_id=operation_id,
             tags=list(route_spec.tags) if route_spec.tags else None,
-            responses={
-                422: {"description": "Contract violation (missing or mistyped parameter)"},
-            },
+            responses=(
+                {422: {"description": "Contract violation (missing or mistyped parameter)"}}
+                if validates
+                else None
+            ),
             openapi_extra=_openapi_extra(spec, path_params, path_types, input_style),
         )
         logger.debug("projected %s %s -> %s", method, path, spec.name)

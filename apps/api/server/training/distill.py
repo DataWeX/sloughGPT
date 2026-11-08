@@ -1,6 +1,10 @@
 """Knowledge distillation route — distill.
 
 Extracted from execution.py to keep each module focused.
+Descriptor-projected (card 20261104_151036): one ``ToolSpec`` + one
+``create_router`` call instead of a hand-laid decorator. Raw wire — the
+handler's ``{status, job_id, message}`` is served unwrapped
+(``envelope=False``), byte-identical to the hand-built route.
 """
 
 from __future__ import annotations
@@ -12,8 +16,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import raise_error
 
+from domain.agents import ToolSpec
 from domain.shared import find_repo_root
 from domain.training._internal.executor import get_training_executor
 
@@ -30,7 +36,6 @@ router = APIRouter(tags=["training-distill"])
 _MAX_DATA_READ_BYTES = 200_000  # 200 KB max for distillation data
 
 
-@router.post("/training/distill")
 async def start_distillation(
     request: DistillStartRequest,
     auth_user: dict = Depends(require_auth_if_enabled),
@@ -412,3 +417,32 @@ async def start_distillation(
         "job_id": job_id,
         "message": f"Distillation started: teacher={request.teacher_model} epochs={request.epochs}",
     }
+
+
+# ── Descriptor projection (card 20261104_151036) ───────────────────────
+
+SPEC_DISTILL = ToolSpec(
+    name="training.distill.start",
+    description="Knowledge distillation: teach a compact SloNet LSTM student from a teacher HF model.",
+    parameters=params_from_model(DistillStartRequest),
+    execute=start_distillation,
+    auth_scope="authenticated",
+    idempotent=False,
+    result={
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "job_id": {"type": "string"},
+            "message": {"type": "string"},
+        },
+    },
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_DISTILL,
+        RouteSpec(path="/training/distill", envelope=False),
+        start_distillation,
+    )
+)
