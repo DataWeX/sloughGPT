@@ -180,8 +180,8 @@
       "kind": "grandfathered",
       "count": 1
     },
-    "domain/shell/_internal/interactive.py::_InteractiveSpinner.__enter__": {
-      "reason": "TTY spinner pump — I/O pump bound to the rendered frame",
+    "domain/shell/_internal/interactive_spinner.py::_InteractiveSpinner.__enter__": {
+      "reason": "TTY spinner pump — I/O pump bound to the rendered frame (moved from interactive.py by the curses-removal TUI port, 37e4c1053)",
       "kind": "grandfathered",
       "count": 1
     },

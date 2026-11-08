@@ -194,7 +194,7 @@ class TestGetPrompt:
 
 
 class TestListPresets:
-    @patch("routers.companion._get_db")
+    @patch("routers.souls._get_db")
     @patch(PATCH_GET)
     def test_returns_preset_list(self, mock_get, mock_db):
         mock_get.return_value = _make_companion()
