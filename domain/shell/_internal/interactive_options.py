@@ -69,9 +69,7 @@ _STYLES = {
 class _OptionsPrompts(InteractiveBase):
     """The options-screen form-over-flags family."""
 
-    def options_screen(
-        self, rows: list[dict], message: str = "Options"
-    ) -> dict[str, str]:
+    def options_screen(self, rows: list[dict], message: str = "Options") -> dict[str, str]:
         """Interactive options screen; returns {key: value}.
 
         Each row is one option of a command line, named by its flag on

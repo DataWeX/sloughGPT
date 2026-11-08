@@ -175,7 +175,9 @@ def _reflect(I: np.ndarray, N: np.ndarray) -> np.ndarray:
     return I - 2.0 * _dot(I, N)[..., np.newaxis] * N
 
 
-def _refract(I: np.ndarray, N: np.ndarray, eta: float | np.ndarray) -> tuple[np.ndarray, bool | np.ndarray]:
+def _refract(
+    I: np.ndarray, N: np.ndarray, eta: float | np.ndarray
+) -> tuple[np.ndarray, bool | np.ndarray]:
     xp = _xp(I)
     eta = xp.asarray(eta, dtype=np.float64)
     cos_i = -_dot(I, N)
@@ -352,9 +354,7 @@ def _ggx_geometry_batch(NdotV: np.ndarray, NdotL: np.ndarray, alpha2: float) -> 
     return _smith(NdotV) * _smith(NdotL)
 
 
-def _eval_bsdf_batch(
-    wi: np.ndarray, wo: np.ndarray, N: np.ndarray, mat: Material
-) -> np.ndarray:
+def _eval_bsdf_batch(wi: np.ndarray, wo: np.ndarray, N: np.ndarray, mat: Material) -> np.ndarray:
     """Material.eval over a batch — identical math, array ops, masked zeros."""
     xp = _xp(wi)
     diffuse = xp.asarray(mat.base_color / math.pi)
@@ -417,9 +417,7 @@ def _sample_ggx_batch(r1: np.ndarray, r2: np.ndarray, alpha: np.ndarray) -> np.n
     cos2 = (1 - r2) / (1 + (a2 - 1) * r2)
     sin = xp.sqrt(xp.maximum(1 - cos2, 0))
     phi = 2 * math.pi * r1
-    return xp.stack(
-        [sin * xp.cos(phi), sin * xp.sin(phi), xp.sqrt(xp.clip(cos2, 0, 1))], axis=-1
-    )
+    return xp.stack([sin * xp.cos(phi), sin * xp.sin(phi), xp.sqrt(xp.clip(cos2, 0, 1))], axis=-1)
 
 
 def _tangent_frame_batch(N: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -970,9 +968,7 @@ class CyclesRenderer:
         # -> fall through to the numpy oracle (identical math, slower).
         flat_o = np.broadcast_to(origins, (s, self.height, self.width, 3)).reshape(-1, 3)
         flat_d = dirs_all.reshape(-1, 3)
-        rad = self._native.trace(
-            xp, self.scene, flat_o, flat_d, self._seed, MAX_DEPTH, RR_START
-        )
+        rad = self._native.trace(xp, self.scene, flat_o, flat_d, self._seed, MAX_DEPTH, RR_START)
         if rad is not None:
             image = rad.reshape(s, self.height, self.width, 3).mean(axis=0)
             return np.clip(image, 0, 1)

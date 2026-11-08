@@ -479,9 +479,7 @@ def _read_sha_sidecar(path: Path) -> str:
         return ""
 
 
-def build_model_manifest(
-    model_id: str, hf_home: str | None = None
-) -> dict[str, Any] | None:
+def build_model_manifest(model_id: str, hf_home: str | None = None) -> dict[str, Any] | None:
     """Describe a **cached** model as a downloadable file manifest.
 
     Returns ``{"files": [{"path", "size", "sha256"}, ...]}`` — the exact shape

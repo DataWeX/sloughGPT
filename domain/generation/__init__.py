@@ -26,6 +26,7 @@ Public API:
     # From chat
     ChatProcessor, MessageHandler
 """
+
 from __future__ import annotations
 
 from domain.context import (

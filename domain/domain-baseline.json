@@ -38,7 +38,7 @@
       ],
       "note": "agent runtime loop + tool executor (cognitive reasoning over core serving)",
       "debt": null,
-      "tree_hash": "248701c100b5d07e02741b544746a981dd888d82"
+      "tree_hash": "2f452842a1243a6b1eb88f699a18efa0695f8914"
     },
     "ai_personality": {
       "class": "feature",
@@ -51,7 +51,7 @@
       ],
       "note": "persona config/behavior projection for chat",
       "debt": null,
-      "tree_hash": "f907fdfdc605e315505270e3e040ebfb6c463400"
+      "tree_hash": "583c8e7e9dbf856516d21d5d3c7b6fb76cc80689"
     },
     "api": {
       "class": "core-capability",
@@ -65,7 +65,7 @@
       ],
       "note": "HTTP endpoint projections of core contracts (edge exposure)",
       "debt": "overlap with infrastructure/ops \u2014 client/core boundary review pending",
-      "tree_hash": "70963dc01c0639127301eb88eadeeb5571caecab"
+      "tree_hash": "efc636c0c716b1e54ef7d6ea155a421122d2d704"
     },
     "auth": {
       "class": "core-capability",
@@ -78,7 +78,7 @@
       ],
       "note": "session/token checks at the edge (apps/api)",
       "debt": null,
-      "tree_hash": "f5b4c6c900c797d674018f7f5ab61b3873836f97"
+      "tree_hash": "3a707067d6b52ad80ad635999bd56bb63624b16b"
     },
     "benchmark": {
       "class": "feature",
@@ -91,7 +91,7 @@
       ],
       "note": "eval/regression harness (training-loop measurement)",
       "debt": null,
-      "tree_hash": "eb618ed1a32f2fdde7c3b6899349f5b33abed69f"
+      "tree_hash": "8cd70e78d0bfc9ff0ba63de22e7a29c5873b33b8"
     },
     "billing": {
       "class": "feature",
@@ -106,7 +106,7 @@
       ],
       "note": "subscription/edge entitlement exposure",
       "debt": null,
-      "tree_hash": "1a7cf9629b011b7d3982662db3dfa5dd10403c56"
+      "tree_hash": "9847c780a6c4a4020595e93b252efa782bef963e"
     },
     "chat": {
       "class": "feature",
@@ -120,7 +120,7 @@
       ],
       "note": "chat journey domain glue (feedback + context wiring)",
       "debt": null,
-      "tree_hash": "bb88422a8930bc159d39c83e20d0819bfa257556"
+      "tree_hash": "7876de4c80617d9f613af19329429ad5eae23c9d"
     },
     "cognition": {
       "class": "core-capability",
@@ -136,7 +136,7 @@
       ],
       "note": "reasoning core (24 py) \u2014 pair with cognitive/, consolidation card",
       "debt": "duplicate pair with cognitive/ \u2014 merge candidate",
-      "tree_hash": "353a699af136ee7b3418aa2b4e95f8f57ec1aca5"
+      "tree_hash": "c97732333719d22b451fd131a30ce812f1327710"
     },
     "cognitive": {
       "class": "core-capability",
@@ -146,7 +146,7 @@
       "consumers": [],
       "note": "orphan duplicate of cognition/: zero external consumers found \u2014 first merge candidate",
       "debt": "duplicate pair with cognition/ \u2014 merge candidate",
-      "tree_hash": "4a2747481d5729cbeefe72f84f041a91a7752a26"
+      "tree_hash": "45bafe83561f00ae535926f4487b5473aa1b9615"
     },
     "collections": {
       "class": "feature",
@@ -159,7 +159,7 @@
       ],
       "note": "user data organization feature (cli-heavy)",
       "debt": null,
-      "tree_hash": "413148a212be621801ea1eda585096a4c3217232"
+      "tree_hash": "43ad0e94d5785f93b5309582feb1bb5bade6bd66"
     },
     "companion": {
       "class": "feature",
@@ -172,7 +172,7 @@
       ],
       "note": "companion persona feature",
       "debt": null,
-      "tree_hash": "b15db7439fcf2928f513fbb7cc980969bd10b6d0"
+      "tree_hash": "a0300e288980a00c37b140ad8f10ce235c2ed263"
     },
     "context": {
       "class": "core-capability",
@@ -218,7 +218,7 @@
       ],
       "note": "error contracts shared at every seam",
       "debt": null,
-      "tree_hash": "e6e12fbeada0fda7fb06e117739ee3fe04c45277"
+      "tree_hash": "a52741b073913b0d307c75f523360fe7886f06bb"
     },
     "feedback": {
       "class": "feature",
@@ -233,7 +233,7 @@
       ],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "b09629dc18415c5916bcce63d091f30faaf8ec4a"
+      "tree_hash": "4850bf11cfef754e28ee5c5df437706f58c0f7ac"
     },
     "generation": {
       "class": "core-capability",
@@ -243,7 +243,7 @@
       "consumers": [],
       "note": "thin generation seam (1 file, zero external importers \u2014 revisit on inference consolidation)",
       "debt": null,
-      "tree_hash": "942e9905b6ddbaccc11c1269d6c15077ca4ef747"
+      "tree_hash": "ddaabda0d41b39678a6d7fe50f1c641c7104e98b"
     },
     "inference": {
       "class": "core-capability",
@@ -276,7 +276,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) \u2014 overlap with api/ops under review",
       "debt": "overlap with api/ops \u2014 client/core boundary review pending",
-      "tree_hash": "0dd3c63e9623f3e40cf963aeefd128881c485ca1"
+      "tree_hash": "b076f59fa090a7829cf764318e42ff7032dc6ec6"
     },
     "knowledge": {
       "class": "core-capability",
@@ -292,7 +292,7 @@
       ],
       "note": "knowledge base retrieval (feeds learner/agents)",
       "debt": null,
-      "tree_hash": "e13a3cbff08ce7dd146ca09bceb8ce777bd4c67c"
+      "tree_hash": "d2d40481120ed6f0474d4866079069b77a07cb52"
     },
     "learner": {
       "class": "core-capability",
@@ -309,7 +309,7 @@
       ],
       "note": "adaptive learning loop (training objective over cognitive memory)",
       "debt": null,
-      "tree_hash": "062e310628a20623c5ef46e2fc41a7ecde8f15ba"
+      "tree_hash": "55b3c162b24879219f8bbdd5f75dfec42667f358"
     },
     "logging": {
       "class": "core-capability",
@@ -355,7 +355,7 @@
       ],
       "note": "server-side push notification service \u2014 misleading name, user ruling keep as-is (2026-10-31)",
       "debt": "misleading name \u2014 server push service, not a client; user ruling: keep",
-      "tree_hash": "9c65a59060dbf14e3c5d55b083d3b76b856d6ccf"
+      "tree_hash": "18d3cc362e507996d6299a3265c8eb1fe16e5c25"
     },
     "models": {
       "class": "core-capability",
@@ -372,7 +372,7 @@
       ],
       "note": "model registry/defs (serving + training ship as one unit)",
       "debt": null,
-      "tree_hash": "6335f8d75c353d87ac042d7636d40a35d7fc7a7b"
+      "tree_hash": "31367651d1e0b805bcc33189f1e3818f8e1d269f"
     },
     "multimodal": {
       "class": "core-capability",
@@ -389,7 +389,7 @@
       ],
       "note": "vision/phoneme providers (stay here per inference-facade ruling; consumers untouched)",
       "debt": null,
-      "tree_hash": "e0755f8743286e4c2a8c2e0569391208395cd034"
+      "tree_hash": "5f54e51b86e650c89c641e706d2782693c856d11"
     },
     "ops": {
       "class": "core-capability",
@@ -402,7 +402,7 @@
       ],
       "note": "operator/health surface \u2014 overlap with api/infrastructure under review",
       "debt": "overlap with api/infrastructure \u2014 client/core boundary review pending",
-      "tree_hash": "76a621b13813a011911b5c79d1bf06155a6dd8bb"
+      "tree_hash": "e309c45b2559b3bd26b8a17df1318daa05600248"
     },
     "plugins": {
       "class": "core-capability",
@@ -416,7 +416,7 @@
       ],
       "note": "plugin loading seam (microkernel registration)",
       "debt": null,
-      "tree_hash": "eaf2e3d2e7d9a5778252b1da74486ef4fc951ee8"
+      "tree_hash": "23f0b7ea98198cf8fabdd3e7a197d0d456c7d244"
     },
     "search": {
       "class": "core-capability",
@@ -443,7 +443,7 @@
       ],
       "note": "settings service exposed through apps/api",
       "debt": null,
-      "tree_hash": "6b50bbe5d907bdf00e96ad2b72d4be289682b334"
+      "tree_hash": "6dbfc257c373728ef0e275d9569fce79db9321d8"
     },
     "shared": {
       "class": "core-capability",
@@ -459,7 +459,7 @@
       ],
       "note": "cross-cutting helpers (most-consumed domain)",
       "debt": null,
-      "tree_hash": "9fed7a754ce7f8df025fc5beafdbbfc9fabda63d"
+      "tree_hash": "f084f8fa6dbaa5e78a7f3eea72cf6b1ce6f28f67"
     },
     "shell": {
       "class": "core-capability",
@@ -474,7 +474,7 @@
       ],
       "note": "Dait TUI console engine + commands (canonical product surface, VM arch S1)",
       "debt": null,
-      "tree_hash": "7f71b4082faba15491ce707ce22187e10245eed6"
+      "tree_hash": "466e14cb4d839e98e391fc7104e58245a7a5ef21"
     },
     "slolib": {
       "class": "core-capability",
@@ -505,7 +505,7 @@
       ],
       "note": "persona/soul state (consciousness-adjacent, grandfathered name)",
       "debt": null,
-      "tree_hash": "6beb8c9e9e9bb443f6a55ee739b424da46f49a23"
+      "tree_hash": "4c5fe469ea7a3a09e91c4237a24189e5b496f157"
     },
     "testing": {
       "class": "feature",
@@ -517,7 +517,7 @@
       ],
       "note": "domain test utilities",
       "debt": null,
-      "tree_hash": "acbbbf263c371d770538ad1911fe17fecf5eae15"
+      "tree_hash": "076f7a845c2aa92dba46a122512b7a77236d2c97"
     },
     "tools": {
       "class": "feature",
@@ -529,7 +529,7 @@
       ],
       "note": "everyday tools engine (agent tier-1 \u2014 never site tooling)",
       "debt": null,
-      "tree_hash": "4ea9d53ca64adde598798d0175efd5a221df884c"
+      "tree_hash": "c5d306fdba365153a45027157a48df848bcd95e9"
     },
     "training": {
       "class": "core-capability",
@@ -546,7 +546,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "1763d63355d39d957e0b91371bdf016082abdeb4"
+      "tree_hash": "22cb091023573d7d22e5fad0b7c06858ade2a85b"
     },
     "voice": {
       "class": "core-capability",
