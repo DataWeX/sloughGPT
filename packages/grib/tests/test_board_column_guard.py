@@ -15,7 +15,7 @@ import logging
 from pathlib import Path
 
 import pytest
-from app_planner.store import PlannerStore
+from grib.store import PlannerStore
 
 HEADER = {
     "schema": "planner/1",
@@ -49,7 +49,7 @@ def test_undeclared_column_is_reported_and_re_homed(tmp_path, caplog):
             {"id": "phantom-1", "title": "Phantom card", "column": "in-progress"},
         ],
     )
-    with caplog.at_level(logging.WARNING, logger="app_planner.store"):
+    with caplog.at_level(logging.WARNING, logger="grib.store"):
         board = store.load_board()
 
     by_id = {c.id: c for c in board.cards}
@@ -85,7 +85,7 @@ def test_clean_board_loads_without_warnings(tmp_path, caplog):
             {"id": "b", "title": "B", "column": "done"},
         ],
     )
-    with caplog.at_level(logging.WARNING, logger="app_planner.store"):
+    with caplog.at_level(logging.WARNING, logger="grib.store"):
         board = store.load_board()
     assert len(board.cards) == 2
     assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
@@ -96,7 +96,7 @@ def test_headerless_board_falls_back_to_default_vocabulary(tmp_path, caplog):
         tmp_path / "board",
         [{"id": "a", "title": "A", "column": "nonsense"}],
     )
-    with caplog.at_level(logging.WARNING, logger="app_planner.store"):
+    with caplog.at_level(logging.WARNING, logger="grib.store"):
         board = store.load_board()
     # fallback vocabulary (Board().columns) starts with 'todo'
     assert [c.column for c in board.cards] == ["todo"]
