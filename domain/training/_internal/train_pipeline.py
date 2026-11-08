@@ -667,11 +667,17 @@ def _build_training_state_metadata(
     return state
 
 
-def _parse_training_state_metadata(metadata: dict) -> dict:
+def _parse_training_state_metadata(metadata: dict, base_dir=None) -> dict:
     """Extract training state from .soul metadata (inverse of _build_...).
 
     Converts nested lists back to numpy arrays where appropriate so that
     optimizer.load_state_dict() can consume them.
+
+    ``base_dir`` (str | Path) is the directory holding the meta's gzip sibling:
+    when ``optimizer.state`` was externalized as a ``state_ref`` (slim sidecar),
+    it is resolved hash-pinned from there. Without ``base_dir`` a ref degrades
+    to an empty ``state`` — the same fresh-momentum resume semantics as
+    ``include_optimizer_state=False`` — never an error.
 
     Returns:
         Dict with keys: step, epoch, completed_epochs (optional),
@@ -695,12 +701,26 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
     if isinstance(opt_raw, dict):
         opt = dict(opt_raw)
         opt.get("hyperparameters", {})
-        state = opt.get("state", {})
+        state = opt.get("state")
+        ref = opt.get("state_ref")
+        if (
+            (not isinstance(state, dict) or not state)
+            and isinstance(ref, dict)
+            and base_dir is not None
+        ):
+            from domain.inference._internal.soul_meta_slim import load_state_file
+
+            loaded = load_state_file(ref, base_dir)
+            if loaded is not None:
+                state = loaded
+        if not isinstance(state, dict):
+            state = {}
         # Convert nested lists in state back to numpy arrays
         converted_state = {}
         for name, buffers in state.items():
             converted_state[name] = {k: _to_numpy(v) for k, v in buffers.items()}
         opt["state"] = converted_state
+        opt.pop("state_ref", None)
         result["optimizer"] = opt
     sched_raw = raw.get("scheduler")
     if isinstance(sched_raw, dict):
@@ -2667,7 +2687,9 @@ class SloughGPTTrainer:
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
         Args:
-            path: Output path without the extension; ``.soul`` is appended.
+            path: Output path, with or without the ``.soul`` extension —
+                the extension is appended exactly once (callers pass both
+                bare stems and full ``..._trained.soul`` paths).
             format: DEPRECATED and ignored. Retained for backward compatibility;
                 ``SloughGPTTrainer.save()`` always writes ``.soul`` regardless of
                 this value. Passing a non-None value emits a
@@ -2802,7 +2824,12 @@ class SloughGPTTrainer:
             initial_lr=self.config.learning_rate,
         )
 
-        output_path = path + ".soul"
+        # Callers hand over both bare stems ("auto", "<ds>_<ts>") and full
+        # paths already carrying the extension ("<stem>_trained.soul" from
+        # local_api/legacy/execution/from_feedback). save() owns the
+        # extension, so append exactly once — a blind append produced
+        # ``qt_trained.soul.soul`` (+ .soul.soul.meta.json), job_cbc6162a.
+        output_path = path if path.endswith(".soul") else path + ".soul"
         save_soul(self.model, output_path, soul_profile=soul)
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})

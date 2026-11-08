@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 
 from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.inference._internal.soul_meta_slim import externalize_optimizer_state
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.infrastructure._internal.kv_cache.prefix_cache import PrefixCache
@@ -5195,9 +5196,13 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
         )
 
     # Sidecar second and cheap — one durable flush per artifact, not per file.
+    # A round-tripped net can carry training_state moments in net.metadata;
+    # externalize them so a re-export never re-fattens the sidecar.
+    sidecar_path = path + ".meta.json"
+    sidecar_doc, _externalized = externalize_optimizer_state(_sanitize(metadata), sidecar_path)
     atomic_write(
-        path + ".meta.json",
-        json.dumps(_sanitize(metadata), indent=2),
+        sidecar_path,
+        json.dumps(sidecar_doc, indent=2),
     )
 
     # Provenance sidecar — records which dataset/model produced this file so

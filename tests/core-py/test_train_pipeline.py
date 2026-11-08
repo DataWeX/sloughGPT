@@ -1509,6 +1509,19 @@ class TestSaveCheckpoint:
         assert (tmp_path / "ck" / "model.soul.meta.json").is_file()
         assert not [p for p in (tmp_path / "ck").iterdir() if p.suffix == ".tmp"]
 
+    def test_save_with_soul_suffix_does_not_double_extend(self, data_path, tmp_path):
+        """Four callers pass an already-suffixed path (local_api, legacy.py,
+        execution.py, from_feedback.py: ``models/<stem>_trained.soul``) — a
+        second append produced ``qt_trained.soul.soul`` + ``.soul.soul.meta.json``
+        (job_cbc6162a). save() owns the extension: exactly one ``.soul``."""
+        t = make_trainer(data_path, tiny_config(tmp_path))
+        target = str(tmp_path / "qt_trained.soul")
+        t.save(target)
+        assert (tmp_path / "qt_trained.soul").is_file()
+        assert (tmp_path / "qt_trained.soul.meta.json").is_file()
+        assert not (tmp_path / "qt_trained.soul.soul").exists(), "double extension written"
+        assert not (tmp_path / "qt_trained.soul.soul.meta.json").exists()
+
     def test_save_soul_meta_failure_raises_and_leaves_no_sidecar(
         self, data_path, tmp_path, monkeypatch
     ):

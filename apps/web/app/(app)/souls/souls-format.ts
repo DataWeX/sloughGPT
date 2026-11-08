@@ -2,7 +2,7 @@
  * Trait/verdict presentation helpers and page-level types for the Souls
  * workspace. Pure — no React, no IO.
  */
-export type Tab = 'souls' | 'checkpoints' | 'weights' | 'snapshots' | 'analytics'
+export type Tab = 'souls' | 'personality' | 'checkpoints' | 'weights' | 'snapshots' | 'analytics'
 
 export interface ModeInfo {
   label: string

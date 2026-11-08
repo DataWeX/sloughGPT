@@ -260,7 +260,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "2258fdc48d20034cc7e06283f553b6577fc3dd52"
+      "tree_hash": "89955039e3b749012a58445fcf9153f8a4fc7eb8"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -546,7 +546,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "22cb091023573d7d22e5fad0b7c06858ade2a85b"
+      "tree_hash": "5d4090c8463076fb6162ce1dac91cf484d161b6a"
     },
     "voice": {
       "class": "core-capability",

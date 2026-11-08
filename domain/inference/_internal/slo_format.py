@@ -26,6 +26,7 @@ from typing import Any
 
 import numpy as np
 
+from domain.inference._internal.soul_meta_slim import externalize_optimizer_state
 from domain.infrastructure._internal.atomic_write import atomic_write, atomic_writer
 from domain.shared import repair_iso, utc_now_iso
 
@@ -668,9 +669,12 @@ def save_soul(
         )
 
     # Sidecar second and cheap — one durable flush per artifact, not per file.
+    # Adam moments leave the JSON here (gzip sibling + hash-pinned state_ref);
+    # the embedded config above keeps them inline — phase 2 owns that copy.
+    sidecar_doc, _externalized = externalize_optimizer_state(soul_dict, meta_path)
     atomic_write(
         meta_path,
-        json.dumps(soul_dict, indent=2, default=str, allow_nan=False),
+        json.dumps(sidecar_doc, indent=2, default=str, allow_nan=False),
     )
 
     return output_path

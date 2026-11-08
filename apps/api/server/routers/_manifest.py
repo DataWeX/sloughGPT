@@ -12,7 +12,6 @@ ROUTER_MODULES: list[str] = [
     "benchmark",
     "chat",
     "cloud_training",
-    "companion",
     "config",
     "contracts",
     "datasets",

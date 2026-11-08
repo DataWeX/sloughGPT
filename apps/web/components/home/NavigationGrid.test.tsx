@@ -98,7 +98,7 @@ describe('NavigationGrid', () => {
     const links = container.querySelectorAll('a')
     const hrefs = Array.from(links).map((a) => a.getAttribute('href'))
     expect(hrefs).toContain('/chat')
-    expect(hrefs).toContain('/personality')
+    expect(hrefs).toContain('/souls')
     expect(hrefs).toContain('/datasets')
     expect(hrefs).toContain('/training')
     expect(hrefs).toContain('/monitoring')

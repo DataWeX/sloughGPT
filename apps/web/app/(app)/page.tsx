@@ -280,7 +280,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Link
-                      href="/personality"
+                      href="/souls"
                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-primary bg-primary/10 hover:bg-primary/15 transition-colors"
                     >
                       <IconModels className="h-3 w-3" />

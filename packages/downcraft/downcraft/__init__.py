@@ -56,7 +56,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from .download import DownloadError, download_file, download_range, state
+from .download import DownloadError, WireStats, download_file, download_range, state
 from .download.multipart import GroupResult, PartResult, download_parts, parse_urls_file
 from .resolve import (
     patterns,
@@ -101,6 +101,7 @@ __all__ = [
     "download_file",
     "download_range",
     "DownloadError",
+    "WireStats",
     "download_parts",
     "GroupResult",
     "PartResult",
@@ -163,7 +164,12 @@ def download(
         skip_if_exists: If True and checksum provided, skip download if file exists with matching checksum.
 
     Returns:
-        Dict with keys: ``status``, ``dest``, ``elapsed``, ``total_bytes``.
+        Dict with keys: ``status``, ``dest``, ``elapsed``, ``total_bytes``,
+        plus bandwidth accounting for this call: ``wire_bytes`` (body bytes
+        on the wire), ``decoded_bytes``, ``saved_bytes``, ``saved_pct`` and
+        ``content_encoding``.  ``saved_*`` are ``None`` when the wire size
+        could not be measured (encoded response without Content-Length).
+        Skip paths report zeros (nothing was fetched).
     """
     from .download.http import _verify_checksum, download_file
 
@@ -176,7 +182,16 @@ def download(
     if skip_if_exists and checksum and dest.exists():
         if _verify_checksum(dest, checksum):
             logger.info("%s already exists with matching checksum", label)
-            return {"status": "already_downloaded", "dest": str(dest), "label": label}
+            return {
+                "status": "already_downloaded",
+                "dest": str(dest),
+                "label": label,
+                "wire_bytes": 0,
+                "decoded_bytes": 0,
+                "saved_bytes": 0,
+                "saved_pct": 0.0,
+                "content_encoding": "identity",
+            }
 
     # Check existing state — only skip when the destination is actually on disk.
     # State is keyed by URL; a prior download to a different path (or a
@@ -184,7 +199,16 @@ def download(
     existing = st.get(lookup_key)
     if existing and existing.status == "complete" and dest.exists():
         logger.info("%s already downloaded", label)
-        return {"status": "already_downloaded", "dest": str(dest), "label": label}
+        return {
+            "status": "already_downloaded",
+            "dest": str(dest),
+            "label": label,
+            "wire_bytes": 0,
+            "decoded_bytes": 0,
+            "saved_bytes": 0,
+            "saved_pct": 0.0,
+            "content_encoding": "identity",
+        }
     if existing and existing.status == "complete" and not dest.exists():
         logger.warning(
             "%s marked complete in state but missing on disk — re-downloading",
@@ -214,6 +238,7 @@ def download(
             on_progress(bytes_done, max(bytes_done, total), speed)
 
     st.create(lookup_key, str(dest.parent))
+    stats = WireStats()
 
     try:
         download_file(
@@ -224,6 +249,7 @@ def download(
             on_chunk=_chunk_cb,
             compressed=compressed,
             skip_if_exists=False,  # Already checked above
+            stats=stats,
         )
     except DownloadError:
         st.set_status(lookup_key, "failed", error=f"Failed to download {label}")
@@ -238,4 +264,9 @@ def download(
         "dest": str(dest),
         "elapsed": round(elapsed, 1),
         "total_bytes": total_bytes[0],
+        "wire_bytes": stats.wire_bytes,
+        "decoded_bytes": stats.decoded_bytes,
+        "saved_bytes": stats.saved_bytes,
+        "saved_pct": round(stats.saved_pct, 1) if stats.saved_pct is not None else None,
+        "content_encoding": stats.content_encoding,
     }

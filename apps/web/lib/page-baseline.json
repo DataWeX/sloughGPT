@@ -45,7 +45,6 @@
     "app/(app)/monitoring/page.tsx",
     "app/(app)/multimodal/page.tsx",
     "app/(app)/page.tsx",
-    "app/(app)/personality/page.tsx",
     "app/(app)/phoneme/page.tsx",
     "app/(app)/planner/page.tsx",
     "app/(app)/plugins-cloud/page.tsx",

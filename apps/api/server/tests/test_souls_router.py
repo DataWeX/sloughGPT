@@ -310,3 +310,30 @@ class TestSchemaValidation:
     def test_save_weights_invalid_body(self):
         resp = self.client.post("/souls/weights", json="not a dict")
         assert resp.status_code == 422
+
+
+class TestSoulsFacadeAbsorbsCompanion:
+    """The souls router serves the merged /companion routes (card 20261101_154055).
+
+    companion.py is folded into souls.py: one module-level router exposes
+    /souls/* and /companion/* paths, and routers.companion no longer exists.
+    """
+
+    def test_souls_router_serves_both_prefixes(self):
+        from fastapi import FastAPI
+        from routers.souls import router as souls_router
+
+        facade = FastAPI()
+        facade.include_router(souls_router)
+        paths = set(facade.openapi()["paths"])
+        # souls routes keep working
+        assert {"/souls", "/souls/current", "/souls/stats"} <= paths
+        # merged companion routes (all 10 registrations)
+        assert {"/companion/", "/companion/personality", "/companion/preset"} <= paths
+        assert {"/companion/prompt", "/companion/chat", "/companion/presets"} <= paths
+        assert "/companion/presets/{preset_id}" in paths
+
+    def test_companion_module_is_gone(self):
+        import importlib.util
+
+        assert importlib.util.find_spec("routers.companion") is None
