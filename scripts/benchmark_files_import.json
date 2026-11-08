@@ -1,0 +1,93 @@
+[
+  {
+    "ts": "2026-11-08T12:18:32+01:00",
+    "git": "89e7a6a3e",
+    "mib": 8.0,
+    "repeat": 3,
+    "rows": [
+      {
+        "row": "floor-identity",
+        "wall_s": 0.0079,
+        "dec_mibs": 1009.3,
+        "wire_mibs": 1009.3,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": null,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "pipe-identity",
+        "wall_s": 0.0124,
+        "dec_mibs": 647.0,
+        "wire_mibs": 647.0,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "e2e-identity",
+        "wall_s": 0.0384,
+        "dec_mibs": 208.5,
+        "wire_mibs": 208.5,
+        "saved_pct": 0.0,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "identity",
+        "sha_ok": true
+      },
+      {
+        "row": "floor-gzip",
+        "wall_s": 0.0577,
+        "dec_mibs": 138.7,
+        "wire_mibs": 43.2,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": null,
+        "encoding": "gzip",
+        "sha_ok": true
+      },
+      {
+        "row": "pipe-gzip",
+        "wall_s": 0.07,
+        "dec_mibs": 114.3,
+        "wire_mibs": 35.6,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "gzip",
+        "sha_ok": true
+      },
+      {
+        "row": "e2e-gzip",
+        "wall_s": 0.0814,
+        "dec_mibs": 98.2,
+        "wire_mibs": 30.6,
+        "saved_pct": 68.9,
+        "reqs": 3,
+        "state": "done",
+        "pct": 100.0,
+        "encoding": "gzip",
+        "sha_ok": true
+      }
+    ],
+    "overhead": {
+      "identity": "pipe +57.0%  e2e +386.1%",
+      "gzip": "pipe +21.3%  e2e +41.1%"
+    },
+    "poll_us": {
+      "identity_mean_us": 983.4,
+      "identity_p95_us": 1349.5,
+      "gzip_mean_us": 939.0,
+      "gzip_p95_us": 1315.0
+    },
+    "checks_ok": true
+  }
+]
