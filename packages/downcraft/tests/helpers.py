@@ -54,6 +54,9 @@ class RangeHandler(BaseHTTPRequestHandler):
         truncate_once: ``{path: n}`` → first GET promises the full body
             (Content-Length) but sends only *n* bytes, then closes —
             a mid-stream network crash.
+        no_cl_paths: ``{path: True}`` → GET omits Content-Length entirely
+            (HTTP/1.0 read-to-close body) — exercises wire accounting for
+            servers that never declare a length.
         requests_log: per-request dicts (path, range, accept_encoding,
             status, slz4_sha) for byte-space assertions in tests.
     """
@@ -67,6 +70,7 @@ class RangeHandler(BaseHTTPRequestHandler):
     lz4_bad_header: dict = {}
     lz4_bad_resume_sha: dict = {}
     truncate_once: dict = {}
+    no_cl_paths: dict = {}
     requests_log: list = []
 
     def _path(self):
@@ -242,10 +246,10 @@ class RangeHandler(BaseHTTPRequestHandler):
                 entry,
             )
 
-    def _respond(
-        self, status: int, headers: dict, body: bytes, path: str, entry: dict
-    ) -> None:
+    def _respond(self, status: int, headers: dict, body: bytes, path: str, entry: dict) -> None:
         """Send status+headers+body, honoring ``truncate_once`` crash injection."""
+        if path in RangeHandler.no_cl_paths:
+            headers = {k: v for k, v in headers.items() if k.lower() != "content-length"}
         self.send_response(status)
         for k, v in headers.items():
             self.send_header(k, v)

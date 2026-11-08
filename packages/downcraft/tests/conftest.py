@@ -40,6 +40,7 @@ def range_server():
     RangeHandler.lz4_bad_header = {}
     RangeHandler.lz4_bad_resume_sha = {}
     RangeHandler.truncate_once = {}
+    RangeHandler.no_cl_paths = {}
     RangeHandler.requests_log = []
     server = HTTPServer(("127.0.0.1", 0), RangeHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

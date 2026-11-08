@@ -7,6 +7,7 @@ SHA-256 verification, optional LZ4 compression, and multi-part group download.
 
 from .http import (
     DownloadError,
+    WireStats,
     download_compressed,
     download_file,
     download_range,
@@ -19,6 +20,7 @@ from .verify import verify_file
 
 __all__ = [
     "DownloadError",
+    "WireStats",
     "download_file",
     "download_compressed",
     "download_range",
