@@ -14,6 +14,16 @@ What it measures (card 20261108_094501, Import-from-URL):
            500 ms, which adds *display* latency, not throughput; this row
            measures the pipeline itself.
 
+  wan-*     opt-in (``--wan`` / ``--wan-url``): the same e2e journey against a
+            real public origin — RTT, TLS handshake, TCP slow-start and the
+            CDN's *actual* compression answer (loopback origins always honor
+            Accept-Encoding; real ones vary). INFORMATIONAL by design:
+            real-network variance never gates — the loopback rows above stay
+            the recorded baseline. Integrity without a known payload: stored
+            bytes must be identical across repeats (``--wan-repeat`` ≥ 2);
+            one-request is not observable from the client side and stays
+            pinned by the loopback rows.
+
 Reported per row: wall seconds, decoded MiB/s (disk byte-space — the same
 space the progress bar lives in), wire MiB/s, saved % (WireStats), and the
 origin request count. Overhead% = pipe vs floor, e2e vs floor.
@@ -26,7 +36,7 @@ Invariants the benchmark FAILS on (they are what the feature promises):
 
 Run:
     PYTHONNOUSERSITE=1 ./scripts/python scripts/benchmark_files_import.py \
-        [--mib 8] [--repeat 3]
+        [--mib 8] [--repeat 3] [--wan] [--wan-url URL] [--wan-repeat 2]
 
 History is appended to ``scripts/benchmark_files_import.json``
 (``benchmark_results.py record --kind`` has no import category — same call
@@ -73,6 +83,11 @@ from apps.api.server.routers.files import FilesRouter  # noqa: E402
 
 HISTORY = ROOT / "scripts" / "benchmark_files_import.json"
 ENCODINGS = ("identity", "gzip")
+# Our own repo via raw.githubusercontent (Fastly) — polite default: we control
+# the bytes, it answers gzip, and no third party takes load from a benchmark.
+DEFAULT_WAN_URL = (
+    "https://raw.githubusercontent.com/DataWeX/sloughGPT/main/docs/AGENT_SYNC.md"
+)
 
 
 def make_payload(mib: float) -> bytes:
@@ -133,14 +148,27 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def run_floor(origin: _Origin, workdir: Path, tag: str, payload_sha: str) -> dict:
+def stored_blobs(directory: Path) -> list[Path]:
+    """Stored blobs in an uploads dir — any name (WAN filenames aren't .txt).
+
+    Skips ``_``-prefixed bookkeeping files and downcraft ``.sgpart``
+    partials: only real stored payloads count for sha verification.
+    """
+    return sorted(
+        p
+        for p in directory.iterdir()
+        if p.is_file() and not p.name.startswith("_") and not p.name.endswith(".sgpart")
+    )
+
+
+def run_floor(url: str, workdir: Path, tag: str, payload_sha: str | None) -> dict:
     """Raw download_file — the cost floor (no job, no progress callback)."""
     dest = workdir / f"floor-{tag}.bin"
     stats = WireStats()
     t0 = time.perf_counter()
-    download_file(origin.url, dest, compressed=True, skip_if_exists=False, stats=stats)
+    download_file(url, dest, compressed=True, skip_if_exists=False, stats=stats)
     wall = time.perf_counter() - t0
-    ok_sha = sha256_file(dest) == payload_sha
+    ok_sha = None if payload_sha is None else sha256_file(dest) == payload_sha
     dest.unlink(missing_ok=True)
     return {
         "wall_s": wall,
@@ -151,7 +179,7 @@ def run_floor(origin: _Origin, workdir: Path, tag: str, payload_sha: str) -> dic
     }
 
 
-def run_pipe(origin: _Origin, workdir: Path, tag: str, payload_sha: str) -> dict:
+def run_pipe(url: str, workdir: Path, tag: str, payload_sha: str | None) -> dict:
     """FilesRouter._run_import inline — registry + on_chunk + metadata upsert."""
     router = FilesRouter()
     router.UPLOADS_DIR = workdir / f"pipe-{tag}"
@@ -173,11 +201,13 @@ def run_pipe(origin: _Origin, workdir: Path, tag: str, payload_sha: str) -> dict
         },
     )
     t0 = time.perf_counter()
-    router._run_import(job_id, origin.url, "bench.txt")
+    router._run_import(job_id, url, "bench.txt")
     wall = time.perf_counter() - t0
     job = files_mod._IMPORT_JOBS[job_id]
-    stored = list(router.UPLOADS_DIR.glob("*.txt"))
-    ok_sha = bool(stored) and sha256_file(stored[0]) == payload_sha
+    stored = stored_blobs(router.UPLOADS_DIR)
+    ok_sha = None if payload_sha is None else (
+        bool(stored) and sha256_file(stored[0]) == payload_sha
+    )
     return {
         "wall_s": wall,
         "wire_bytes": job["wire_bytes"],
@@ -189,8 +219,13 @@ def run_pipe(origin: _Origin, workdir: Path, tag: str, payload_sha: str) -> dict
     }
 
 
-def run_e2e(origin: _Origin, workdir: Path, tag: str, payload_sha: str) -> dict:
-    """Full ASGI journey: POST start → poll status → terminal state."""
+def run_e2e(url: str, workdir: Path, tag: str, payload_sha: str | None) -> dict:
+    """Full ASGI journey: POST start → poll status → terminal state.
+
+    ``payload_sha`` may be ``None`` (WAN rows fetch an arbitrary URL): then
+    ``sha_ok`` is ``None`` and ``stored_sha`` is returned instead, so the
+    caller can compare stored bytes across repeats.
+    """
     router = FilesRouter()
     router.UPLOADS_DIR = workdir / f"e2e-{tag}"
     router.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -200,7 +235,7 @@ def run_e2e(origin: _Origin, workdir: Path, tag: str, payload_sha: str) -> dict:
 
     with TestClient(app) as client:
         t0 = time.perf_counter()
-        resp = client.post("/files/import", json={"url": origin.url})
+        resp = client.post("/files/import", json={"url": url})
         resp.raise_for_status()
         job_id = resp.json()["job_id"]
         deadline = time.time() + 120
@@ -223,17 +258,21 @@ def run_e2e(origin: _Origin, workdir: Path, tag: str, payload_sha: str) -> dict:
             samples.append((time.perf_counter() - p0) * 1e6)
         samples.sort()
 
-    stored = list(router.UPLOADS_DIR.glob("*.txt"))
-    ok_sha = bool(stored) and sha256_file(stored[0]) == payload_sha
+    stored = stored_blobs(router.UPLOADS_DIR)
+    stored_sha = sha256_file(stored[0]) if stored else None
+    ok_sha = None if payload_sha is None else stored_sha == payload_sha
     return {
         "wall_s": wall,
         "wire_bytes": status["wire_bytes"],
         "saved_bytes": status["saved_bytes"],
         "state": status["state"],
         "pct": status["pct"],
+        "done": status["done"],
+        "total": status["total"],
         "encoding": status["content_encoding"],
         "poll_us_mean": sum(samples) / len(samples),
         "poll_us_p95": samples[int(len(samples) * 0.95) - 1],
+        "stored_sha": stored_sha,
         "sha_ok": ok_sha,
     }
 
@@ -262,7 +301,24 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--mib", type=float, default=8.0, help="payload size in MiB")
     ap.add_argument("--repeat", type=int, default=3, help="runs per row (median kept)")
+    ap.add_argument(
+        "--wan",
+        action="store_true",
+        help="also run an informational e2e row against a real public origin",
+    )
+    ap.add_argument(
+        "--wan-url",
+        default=None,
+        help="real-network URL to fetch (implies --wan; default: our own repo)",
+    )
+    ap.add_argument(
+        "--wan-repeat",
+        type=int,
+        default=1,
+        help="WAN fetches; >=2 enables the cross-repeat sha-stability check",
+    )
     args = ap.parse_args()
+    wan_enabled = args.wan or args.wan_url is not None
 
     payload = make_payload(args.mib)
     payload_sha = hashlib.sha256(payload).hexdigest()
@@ -283,7 +339,8 @@ def main() -> int:
         for encoding in ENCODINGS:
             origin = _Origin(payload, encoding)
             workdir = Path(tempfile.mkdtemp(prefix=f"bench-import-{encoding}-"))
-            try:                # Aggregate across repeats: median wall, summed request count.
+            try:
+                # Aggregate across repeats: median wall, summed request count.
                 agg: dict[str, dict] = {}
                 for row_name, runner in (
                     (f"floor-{encoding}", run_floor),
@@ -294,7 +351,7 @@ def main() -> int:
                     last: dict = {}
                     for i in range(args.repeat):
                         before = origin.count
-                        last = runner(origin, workdir, f"{encoding}-{i}", payload_sha)
+                        last = runner(origin.url, workdir, f"{encoding}-{i}", payload_sha)
                         reqs += origin.count - before
                         walls.append(last["wall_s"])
                     wall = median(walls)
@@ -388,6 +445,92 @@ def main() -> int:
         # Per-encoding cleanup (origin + tempdir) happens in the inner finally.
         pass
 
+    # ── WAN row (opt-in, informational) ────────────────────────────────────
+    # Real-network variance never gates: the loopback rows above are the
+    # recorded baseline. Integrity without a known payload = stored bytes
+    # identical across repeats (--wan-repeat >= 2).
+    wan_out: dict | None = None
+    if wan_enabled:
+        wan_url = args.wan_url or DEFAULT_WAN_URL
+        wan_repeat = max(1, args.wan_repeat)
+        print(f"\nwan-e2e (informational): {wan_url} × {wan_repeat}")
+        wan_workdir = Path(tempfile.mkdtemp(prefix="bench-import-wan-"))
+        wan_runs: list[dict] = []
+        try:
+            for i in range(wan_repeat):
+                wan_runs.append(run_e2e(wan_url, wan_workdir, f"wan-{i}", None))
+        finally:
+            shutil.rmtree(wan_workdir, ignore_errors=True)
+
+        last = wan_runs[-1]
+        wall = median([r["wall_s"] for r in wan_runs])
+        done = last["done"] or 0
+        dec_mibs = done / wall / (1024 * 1024) if wall > 0 else 0.0
+        wire = last.get("wire_bytes") or 0
+        wire_mibs = wire / wall / (1024 * 1024) if wire and wall > 0 else 0.0
+        saved_pct = None
+        if last.get("saved_bytes") is not None:
+            saved_pct = 100.0 * last["saved_bytes"] / max(1, wire + last["saved_bytes"])
+
+        # Invariants (state/pct/integrity/savings — one-request is NOT
+        # observable from the client side; it stays pinned by loopback rows).
+        checks.append(
+            ("wan state==done", last["state"] == "done", f"state={last['state']}")
+        )
+        checks.append(("wan pct==100", last["pct"] == 100.0, f"pct={last['pct']}"))
+        checks.append(
+            (
+                "wan done==total>0",
+                last["done"] == last["total"] and last["total"] > 0,
+                f"done={last['done']} total={last['total']}",
+            )
+        )
+        if wan_repeat >= 2:
+            shas = [r["stored_sha"] for r in wan_runs]
+            stable = None not in shas and len(set(shas)) == 1
+            checks.append(
+                (
+                    "wan repeat sha stable",
+                    bool(stable),
+                    f"{len(set(shas))} distinct sha(s) across {wan_repeat} fetch(es)",
+                )
+            )
+        enc = last.get("encoding")
+        if enc is None:
+            pass  # no content-encoding reported — savings shown honestly as "-"
+        elif enc == "identity":
+            sv = last.get("saved_bytes")
+            ok = sv == 0 if sv is not None else (saved_pct or 0) == 0
+            checks.append(("wan identity saved==0", ok, f"saved={sv}"))
+        else:
+            ok = (last.get("saved_bytes") or 0) > 0 or (saved_pct or 0) > 0
+            checks.append(
+                (f"wan {enc} savings", ok, f"saved={last.get('saved_bytes')}")
+            )
+
+        saved = "-" if saved_pct is None else f"{saved_pct:.1f}"
+        print(
+            f"{'wan-e2e':<18} {wall:>8.4f} {dec_mibs:>10.1f} "
+            f"{wire_mibs:>11.1f} {saved:>7} {'-':>5}"
+        )
+        wan_out = {
+            "url": wan_url,
+            "repeat": wan_repeat,
+            "row": {
+                "row": "wan-e2e",
+                "wall_s": round(wall, 4),
+                "dec_mibs": round(dec_mibs, 1),
+                "wire_mibs": round(wire_mibs, 1),
+                "saved_pct": None if saved_pct is None else round(saved_pct, 1),
+                "state": last["state"],
+                "pct": last["pct"],
+                "done": last["done"],
+                "total": last["total"],
+                "encoding": last.get("encoding"),
+                "stored_sha": last["stored_sha"],
+            },
+        }
+
     print()
     for enc in ENCODINGS:
         print(f"overhead vs floor ({enc}): {overhead[enc]}")
@@ -410,6 +553,7 @@ def main() -> int:
         "rows": rows_out,
         "overhead": overhead,
         "poll_us": poll_out,
+        "wan": wan_out,
         "checks_ok": not failed,
     }
     history = []
