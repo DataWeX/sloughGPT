@@ -1,6 +1,23 @@
 """Legacy training endpoints — /train, /train/resolve.
 
 Kept for backward compatibility. New clients should use /training/start.
+
+Descriptor-projected (card 20261104_151036): ``/train/resolve`` is one
+``ToolSpec`` contract → ``create_router`` projection (raw wire,
+``envelope=False`` — bare payload); its untyped ``body`` param is declared as
+a **required query param**, exactly what hand-built FastAPI published.
+
+**Listed exception — ``/train`` stays hand-built** (brief's exception clause;
+baseline entry retained as ``training/legacy.py: 1``). Hand-built FastAPI
+publishes its untyped ``request`` as a required query member the handler can
+never consume (a JSON-body POST has always 422'd here; a ``?request=`` string
+dies at ``TrainRequest(...)`` — no working invocation exists), and the
+projection machinery rightly **reserves the name ``request``** for raw-Request
+injection: `_check_handler_accepts` refuses to declare it as contract data.
+Declaring it under any other name would rename the wire parameter (breaking
+URL/param parity), and publishing nothing would drop the 422 every real POST
+receives today (breaking runtime parity) — so this site is not projectable
+without a contract redesign, which is out of the card's projection bar.
 """
 
 from __future__ import annotations
@@ -11,8 +28,10 @@ import time
 from typing import Any
 
 from fastapi import APIRouter
+from infrastructure.contract import RouteSpec, create_router
 from schemas.common import raise_error
 
+from domain.agents import ToolParam, ToolSpec
 from domain.training._internal.executor import get_training_executor
 
 from .helpers import _finish_job, _sloughgpt_trainer_kwds
@@ -24,7 +43,7 @@ logger = logging.getLogger("slo")
 router = APIRouter(tags=["training-legacy"])
 
 
-@router.post("/train")
+@router.post("/train")  # retained hand-built exception — see module docstring
 async def train(request):
     """Start a training job (background thread).
 
@@ -114,7 +133,6 @@ async def train(request):
     return out
 
 
-@router.post("/train/resolve")
 async def train_resolve(body) -> dict[str, Any]:
     """Resolve ``data_path`` and checkpoint stem (dry run; no training)."""
     from domain.training._internal.dataset_manifest import ManifestError
@@ -143,3 +161,38 @@ async def train_resolve(body) -> dict[str, Any]:
     if manifest_meta is not None:
         out["manifest"] = manifest_meta
     return out
+
+
+# ── descriptor projection (card 20261104_151036) ────────────────────────
+#
+# One ToolSpec per capability; create_router derives verb, auth, validation,
+# envelope and OpenAPI metadata. RouteSpec.summary carries the hand-built
+# operation title (FastAPI derives it from the route name as
+# ``route.name.replace("_", " ").title()``); spec.description is the handler
+# docstring verbatim, so summary/description publish byte-identically.
+
+# ``/train`` is the listed exception (module docstring): the projection
+# reserves the param name ``request`` for raw-Request injection, so its
+# hand-built declaration stays — baseline entry retained.
+
+SPEC_LEGACY_RESOLVE = ToolSpec(
+    name="training.legacy.resolve",
+    description="Resolve ``data_path`` and checkpoint stem (dry run; no training).",
+    parameters=[ToolParam("body", "string", "", True)],
+    execute=train_resolve,
+    idempotent=False,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_LEGACY_RESOLVE,
+        RouteSpec(
+            path="/train/resolve",
+            input="query",  # hand-built published ``body`` as a required query member
+            envelope=False,
+            summary="Train Resolve",
+        ),
+        train_resolve,
+    )
+)

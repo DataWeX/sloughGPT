@@ -5,6 +5,12 @@ The model's API conversations are appended continuously to a JSONL corpus
 endpoints expose that stream as a paginated JSON feed with an offset cursor so
 training consumers can point a URL at the flow and read only records written
 since their last read position — a subscription feed, not a dataset snapshot.
+
+Descriptor-projected (card 20261104_151036): two ``ToolSpec`` contracts →
+``create_router`` projections instead of hand-laid decorators. Group A — both
+handlers strip their inner ``success_response`` and ride the projection's
+wrap, which emits the same ``{status, data}`` bytes (neither passed
+``message``/``meta``).
 """
 
 from __future__ import annotations
@@ -16,8 +22,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error, success_response
+from infrastructure.contract import RouteSpec, create_router
+from schemas.common import raise_error
 
+from domain.agents import ToolParam, ToolSpec
 from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo")
@@ -212,7 +220,6 @@ def _read_feed(name: str, offset: int, limit: int) -> dict[str, Any]:
     }
 
 
-@router.get("/training/feed")
 async def training_feed(
     source: str = "api-conversations",
     offset: int = 0,
@@ -235,12 +242,71 @@ async def training_feed(
         raise_error("offset must be >= 0", "E_BAD_REQUEST", status_code=400)
     if limit < 0 or limit > _MAX_RECORDS:
         raise_error(f"limit must be between 0 and {_MAX_RECORDS}", "E_BAD_REQUEST", status_code=400)
-    return success_response(data=_read_feed(source, offset, limit))
+    # Group A: the projection's envelope wraps this payload exactly as the
+    # hand-built ``success_response(data=...)`` did — byte-identical wire.
+    return _read_feed(source, offset, limit)
 
 
-@router.get("/training/feeds")
 async def training_feeds(
     auth_user: dict | None = Depends(require_auth_if_enabled),
 ):
     """List available training feed sources with record totals."""
-    return success_response(data={"feeds": list_feed_sources(), "total": len(_SOURCES)})
+    return {"feeds": list_feed_sources(), "total": len(_SOURCES)}
+
+
+# ── descriptor projection (card 20261104_151036) ────────────────────────
+#
+# One ToolSpec per capability; create_router derives verb, auth, validation,
+# envelope and OpenAPI metadata. RouteSpec.summary carries the hand-built
+# operation title (FastAPI derives it from the route name as
+# ``route.name.replace("_", " ").title()``); spec.description is the handler
+# docstring verbatim, so summary/description publish byte-identically.
+
+SPEC_FEED_READ = ToolSpec(
+    name="training.feeds.read",
+    description=(
+        "Read records from a training feed past an offset cursor.\n"
+        "\n"
+        "Args:\n"
+        "    source: feed source name (default ``api-conversations`` = live API logs).\n"
+        "    offset: 0-based record offset to start from.\n"
+        "    limit: max records to return (0 = metadata only; cap ``_MAX_RECORDS``).\n"
+        "\n"
+        "Returns:\n"
+        "    StandardResponse with name/source/offset/next_offset/total/records."
+    ),
+    parameters=[
+        ToolParam("source", "string", ""),
+        ToolParam("offset", "integer", ""),
+        ToolParam("limit", "integer", ""),
+    ],
+    execute=training_feed,
+    idempotent=True,
+    auth_scope="authenticated",
+    version="1",
+)
+
+SPEC_FEEDS_LIST = ToolSpec(
+    name="training.feeds.list",
+    description="List available training feed sources with record totals.",
+    parameters=[],
+    execute=training_feeds,
+    idempotent=True,
+    auth_scope="authenticated",
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_FEED_READ,
+        RouteSpec(path="/training/feed", envelope=True, summary="Training Feed"),
+        training_feed,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_FEEDS_LIST,
+        RouteSpec(path="/training/feeds", envelope=True, summary="Training Feeds"),
+        training_feeds,
+    )
+)

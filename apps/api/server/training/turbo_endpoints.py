@@ -1,6 +1,14 @@
 """Unified turbo and from-sessions endpoints.
 
 Delegates to domain.training._internal.service for state and logic.
+
+Descriptor-projected (card 20261104_151036): three ``ToolSpec`` contracts →
+``create_router`` projections instead of hand-laid decorators. Envelope split:
+``turbo/status`` serves the service's bare dict raw (``envelope=False``);
+``turbo-start`` strips its inner ``success_response`` and rides the
+projection's wrap (group A — byte-identical); ``from-sessions-start`` keeps
+its self-wrap (``envelope=False``) because its outer ``message`` key is part
+of the hand-built wire and the projection's envelope carries ``data`` only.
 """
 
 from __future__ import annotations
@@ -9,8 +17,10 @@ import logging
 import threading
 
 from fastapi import APIRouter
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
+from domain.agents import ToolSpec
 from domain.infrastructure.engine_seam import run_on_engine
 
 from .schemas import FromSessionsRequest, TurboStartRequest
@@ -20,14 +30,12 @@ logger = logging.getLogger("slo")
 router = APIRouter(tags=["training-turbo"])
 
 
-@router.get("/training/turbo/status")
 async def get_turbo_status():
     from domain.training._internal.service import get_turbo_status
 
     return get_turbo_status()
 
 
-@router.post("/training/from-sessions-start")
 async def start_from_sessions_unified(req: FromSessionsRequest):
     """Start from-sessions training."""
     try:
@@ -85,7 +93,6 @@ async def start_from_sessions_unified(req: FromSessionsRequest):
         classify_and_raise(e, source="training.start_from_sessions")
 
 
-@router.post("/training/turbo-start")
 async def start_turbo_training_unified(req: TurboStartRequest):
     """Start turbo training."""
     try:
@@ -192,13 +199,80 @@ async def start_turbo_training_unified(req: TurboStartRequest):
             job_info["data_path"],
             extra={"tag": "TRAIN"},
         )
-        return success_response(
-            data={
-                "status": "started",
-                "job_id": job_info["job_id"],
-                "message": "Turbo training started",
-            }
-        )
+        # Group A: the projection's envelope wraps this payload exactly as the
+        # hand-built ``success_response(data=...)`` did (message lives inside
+        # ``data``), so the inner wrap is stripped — byte-identical wire.
+        return {
+            "status": "started",
+            "job_id": job_info["job_id"],
+            "message": "Turbo training started",
+        }
 
     except Exception as e:
         classify_and_raise(e, source="training.start_turbo")
+
+
+# ── descriptor projection (card 20261104_151036) ────────────────────────
+#
+# One ToolSpec per capability; create_router derives verb, auth, validation,
+# envelope and OpenAPI metadata. RouteSpec.summary carries the hand-built
+# operation title (FastAPI derives it from the route name as
+# ``route.name.replace("_", " ").title()``); spec.description is the handler
+# docstring verbatim, so summary/description publish byte-identically.
+
+SPEC_TURBO_STATUS = ToolSpec(
+    name="training.turbo.status",
+    description="",
+    parameters=[],
+    execute=get_turbo_status,
+    idempotent=True,
+    version="1",
+)
+
+SPEC_FROM_SESSIONS = ToolSpec(
+    name="training.turbo.from_sessions",
+    description="Start from-sessions training.",
+    parameters=params_from_model(FromSessionsRequest),
+    execute=start_from_sessions_unified,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_TURBO_START = ToolSpec(
+    name="training.turbo.start",
+    description="Start turbo training.",
+    parameters=params_from_model(TurboStartRequest),
+    execute=start_turbo_training_unified,
+    idempotent=False,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_TURBO_STATUS,
+        RouteSpec(path="/training/turbo/status", envelope=False, summary="Get Turbo Status"),
+        get_turbo_status,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_FROM_SESSIONS,
+        RouteSpec(
+            path="/training/from-sessions-start",
+            envelope=False,
+            summary="Start From Sessions Unified",
+        ),
+        start_from_sessions_unified,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_TURBO_START,
+        RouteSpec(
+            path="/training/turbo-start",
+            envelope=True,
+            summary="Start Turbo Training Unified",
+        ),
+        start_turbo_training_unified,
+    )
+)
