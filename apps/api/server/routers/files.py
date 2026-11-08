@@ -534,7 +534,7 @@ class FilesRouter:
             "content_encoding": "identity",
             "error": None,
         }
-        _IMPORT_JOBS[job_id] = job
+        self._job_put(job_id, job)
         safe_audit_log("file.import_start", resource=job_id, detail=f"url={url}")
         task = asyncio.create_task(asyncio.to_thread(self._run_import, job_id, url, filename))
         _IMPORT_TASKS.add(task)

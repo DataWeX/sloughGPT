@@ -588,3 +588,36 @@ class TestImportUrl:
         # GET /files/import has no GET route → falls to /{file_id} → 404, not 500
         resp = client.get("/files/import")
         assert resp.status_code == 404
+
+    def test_job_registry_stays_bounded(self):
+        """_job_put prunes terminal jobs past _IMPORT_JOB_KEEP; running stay."""
+        from apps.api.server.routers import files as files_mod
+
+        saved = dict(files_mod._IMPORT_JOBS)
+        try:
+            files_mod._IMPORT_JOBS.clear()
+
+            def _job(jid: str, state: str) -> dict:
+                return {
+                    "job_id": jid,
+                    "state": state,
+                    "filename": "x.txt",
+                    "done": 0,
+                    "total": 0,
+                    "file_id": None,
+                    "wire_bytes": None,
+                    "saved_bytes": None,
+                    "content_encoding": "identity",
+                    "error": None,
+                }
+
+            running_id = "keep-running"
+            files_mod._IMPORT_JOBS[running_id] = _job(running_id, "running")
+            for i in range(files_mod._IMPORT_JOB_KEEP + 10):
+                FilesRouter._job_put(f"bench-{i}", _job(f"bench-{i}", "done"))
+
+            assert len(files_mod._IMPORT_JOBS) <= files_mod._IMPORT_JOB_KEEP
+            assert running_id in files_mod._IMPORT_JOBS  # running jobs never evicted
+        finally:
+            files_mod._IMPORT_JOBS.clear()
+            files_mod._IMPORT_JOBS.update(saved)
