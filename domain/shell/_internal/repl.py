@@ -2033,6 +2033,7 @@ class ShellREPL(LinuxCommandsMixin):
                 "protect": "  protect <model>  — Protect model files",
                 "unprotect": "  unprotect <model>  — Remove protection",
                 "tui": "  tui  — Launch three-pane TUI",
+                "serve": "  serve [--watch] [--port PORT] [worktree]  — Serve a worktree's web UI on a side port",
                 "clear": "  clear  — Clear the terminal screen",
                 "note": "  note <subcmd>  — Note management (add/show/edit/delete/list)",
                 "tutorial": "  tutorial  — Interactive shell walkthrough",
@@ -2591,6 +2592,92 @@ Examples:
             self._print(f"  TUI mode not available: {ex}")
         except Exception as ex:
             self._print(f"  TUI error: {ex}")
+            self._last_exit_code = 1
+
+    def _cmd_serve(self, args: str = "") -> None:
+        """Serve a worktree's web UI on a side port for inspection.
+
+        Flags:
+          --port PORT   port to serve on (default 5174)
+          --watch       resync to origin/main and restart whenever main moves
+        Positional:
+          WORKTREE      worktree to serve as-is (default: the latest-main worktree)
+        """
+        import subprocess
+
+        from domain.shared import find_repo_root
+
+        argv = args.split()
+        port = ""
+        watch = False
+        target = ""
+        i = 0
+        while i < len(argv):
+            a = argv[i]
+            if a in ("-h", "--help"):
+                self._print("  serve [--port PORT] [--watch] [worktree]")
+                return
+            if a == "--port" and i + 1 < len(argv):
+                port = argv[i + 1]
+                i += 2
+            elif a == "--watch":
+                watch = True
+                i += 1
+            elif a.startswith("--"):
+                self._print(f"  serve: unknown flag {a}")
+                self._last_exit_code = 1
+                return
+            else:
+                target = a
+                i += 1
+
+        # Thin projection: the process logic (sync, pidfile-owned kill,
+        # foreign-holder refusal, path-identity header check) lives in the
+        # script — this command only builds its argv (Command Rule: the
+        # shell describes itself to humans; it never enters the model's
+        # tool registry).
+        script = find_repo_root(Path(__file__).resolve()) / "scripts" / "run_frontend_latest.sh"
+        if not script.is_file():
+            self._print(f"  serve: missing {script}")
+            self._last_exit_code = 1
+            return
+        cmd = [str(script)]
+        if target:
+            cmd.append(target)
+        if watch:
+            cmd.append("--watch")
+        env = dict(os.environ)
+        if port:
+            env["SLO_FRONTEND_PORT"] = port
+        log_path = Path("/tmp/opencode") / "serve-cmd.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("w") as log:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                env=env,
+                start_new_session=True,
+            )
+        # Watch mode never exits; give failures (foreign holder, bad path)
+        # a moment to surface, then report either way without stalling.
+        deadline = time.time() + (3.0 if watch else 30.0)
+        while proc.poll() is None and time.time() < deadline:
+            time.sleep(0.25)
+        if proc.poll() is None:
+            state = "watching origin/main" if watch else "starting"
+            self._print(f"  serve: {state} — output: {log_path}")
+            self._print(f"  open http://localhost:{port or '5174'}/")
+            return
+        output = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
+        if proc.returncode == 0:
+            for line in output.rstrip("\n").splitlines():
+                self._print(line)
+            self._last_exit_code = 0
+        else:
+            lines = output.rstrip("\n").splitlines() or [f"  serve failed (exit {proc.returncode})"]
+            for line in lines:
+                self._print(line)
             self._last_exit_code = 1
 
     def _cmd_logs(self, args: str = "") -> None:
@@ -5465,6 +5552,7 @@ _command_specs = [
     ("protect", "_cmd_protect"),
     ("unprotect", "_cmd_unprotect"),
     ("tui", "_cmd_tui"),
+    ("serve", "_cmd_serve"),
     ("note", "_cmd_note"),
     ("tutorial", "_cmd_tutorial"),
     ("boot", "_cmd_boot"),

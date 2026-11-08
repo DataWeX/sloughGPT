@@ -186,6 +186,151 @@ def test_execution_start_validates_like_the_hand_built_route():
     assert "422" in op["responses"]
 
 
+# ── training/jobs_api.py (path params, query input, DELETE, FileResponse) ──
+
+
+JOBS_ROUTES = [
+    # name, path, method, idempotent, auth_scope
+    ("training.jobs.list", "/training/jobs", "GET", True, "authenticated"),
+    ("training.jobs.get", "/training/jobs/{job_id}", "GET", True, "public"),
+    ("training.jobs.stop", "/training/jobs/{job_id}/stop", "POST", False, "public"),
+    ("training.jobs.summary", "/training/jobs/{job_id}/summary", "GET", True, "public"),
+    ("training.jobs.delete", "/training/jobs/{job_id}", "DELETE", False, "authenticated"),
+    ("training.jobs.purge", "/training/jobs/purge", "POST", False, "authenticated"),
+    ("training.jobs.export", "/training/export/{job_id}", "GET", True, "public"),
+    ("training.jobs.export_text", "/training/export-text", "POST", False, "public"),
+]
+
+
+def test_jobs_descriptors_registered():
+    import training.jobs_api  # noqa: F401 — import registers the eight descriptors
+
+    for name, path, method, idem, scope in JOBS_ROUTES:
+        entry = _entry(name)
+        assert entry["path"] == path, name
+        assert entry["method"] == method, name
+        assert entry["idempotent"] is idem, name
+        assert entry["auth_scope"] == scope, name
+    # a path param is a required member of the contract; purge's status keeps
+    # its hand-built description; export-text documents the model's fields
+    assert _entry("training.jobs.get")["params"] == {
+        "type": "object",
+        "properties": {"job_id": {"type": "string", "description": ""}},
+        "required": ["job_id"],
+    }
+    purge_params = _entry("training.jobs.purge")["params"]
+    assert purge_params["properties"]["status"] == {
+        "type": "string",
+        "description": "Only purge jobs in this terminal status",
+    }
+    assert purge_params["required"] == []
+    exported = _entry("training.jobs.export_text")["params"]["properties"]
+    assert {"min_quality", "target_count"} <= set(exported)
+
+
+def test_jobs_serves_the_raw_wire():
+    """Hand-built payloads served unwrapped; verbs, 404s and 400s unchanged."""
+    from infrastructure.exception_handlers import register_all_handlers
+    from training.jobs import training_jobs
+    from training.jobs_api import router
+
+    # raise_error raises AppErrors; the app-level handlers are what turn them
+    # into the 404/400 JSON responses both hand-built and projected routes serve
+    app = FastAPI()
+    app.include_router(router)
+    register_all_handlers(app)
+    client = TestClient(app)
+
+    # list: a bare list — an envelope would wrap it in a dict
+    resp = client.get("/training/jobs")
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+    # reads/actions on a missing id → the handlers' own 404s
+    assert client.get("/training/jobs/no-such-job").status_code == 404
+    assert client.get("/training/jobs/no-such-job/summary").status_code == 404
+    assert client.post("/training/jobs/no-such-job/stop").status_code == 404
+
+    # DELETE is the verb (a wrong verb would answer 405)
+    assert client.delete("/training/jobs/no-such-job").status_code == 404
+
+    # purge keeps its query input: a non-terminal status → the handler's 400
+    assert client.post("/training/jobs/purge?status=running").status_code == 400
+
+    # purge with no status must reach the handler's own default (None) — the
+    # projection may never hand it a transport object instead. This endpoint
+    # mutates the shared tracker by design, so snapshot and restore it.
+    snapshot = dict(training_jobs)
+    try:
+        resp = client.post("/training/jobs/purge")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "purged"
+    finally:
+        training_jobs.clear()
+        training_jobs.update(snapshot)
+
+    # export-text keeps the model's ge/le constraints as 422s (handler never runs)
+    assert client.post("/training/export-text", json={"min_quality": 5}).status_code == 422
+
+
+def test_jobs_export_serves_the_file_response_raw(tmp_path):
+    """export returns a FileResponse — envelope=False keeps the bytes raw."""
+    from training.jobs import training_jobs
+    from training.jobs_api import router
+
+    checkpoint = tmp_path / "model.safetensors"
+    checkpoint.write_bytes(b"weights")
+    training_jobs["wave-export-test"] = {
+        "id": "wave-export-test",
+        "status": "completed",
+        "checkpoint": str(checkpoint),
+    }
+    try:
+        resp = _client(router).get("/training/export/wave-export-test")
+        assert resp.status_code == 200
+        assert resp.content == b"weights"
+        assert "model.safetensors" in resp.headers.get("content-disposition", "")
+    finally:
+        training_jobs.pop("wave-export-test", None)
+
+
+def test_jobs_openapi_matches_the_hand_built_doc():
+    from training.jobs_api import router
+
+    app = FastAPI()
+    app.include_router(router)
+    doc = app.openapi()
+
+    # list publishes 200 alone; every other operation can 422 (path/query/model)
+    assert sorted(doc["paths"]["/training/jobs"]["get"]["responses"]) == ["200"]
+    checked = 0
+    for path, methods in doc["paths"].items():
+        for method, op in methods.items():
+            if (path, method) == ("/training/jobs", "get"):
+                continue
+            assert sorted(op["responses"]) == ["200", "422"], (path, method)
+            checked += 1
+    assert checked == 7
+
+    # path placeholders publish in: path; purge's status stays a query param
+    get_op = doc["paths"]["/training/jobs/{job_id}"]["get"]
+    assert [(p["name"], p["in"]) for p in get_op["parameters"]] == [("job_id", "path")]
+    purge_op = doc["paths"]["/training/jobs/purge"]["post"]
+    assert [(p["name"], p["in"]) for p in purge_op["parameters"]] == [("status", "query")]
+    assert purge_op["parameters"][0]["description"] == "Only purge jobs in this terminal status"
+    assert purge_op["parameters"][0]["required"] is False
+
+    # operation titles match FastAPI's hand-built derivation byte-for-byte
+    # (route.name.replace("_", " ").title()) — carried by RouteSpec.summary
+    assert doc["paths"]["/training/jobs"]["get"]["summary"] == "List Training Jobs"
+    assert doc["paths"]["/training/jobs/purge"]["post"]["summary"] == "Purge Training Jobs"
+    assert doc["paths"]["/training/export-text"]["post"]["summary"] == "Export Feedback Pairs"
+    assert doc["paths"]["/training/export/{job_id}"]["get"]["summary"] == "Export Training Job"
+
+    # GET and DELETE share the job_id path; no stray verbs anywhere
+    assert sorted(doc["paths"]["/training/jobs/{job_id}"]) == ["delete", "get"]
+
+
 def test_full_training_chain_keeps_the_hand_built_tag_composition():
     """Served through training/router.py, tags compose exactly as before."""
     from training.router import router
@@ -207,4 +352,17 @@ def test_full_training_chain_keeps_the_hand_built_tag_composition():
         "training",
         "training-execution",
         "training-visual",
+    ]
+    # jobs composes through its own module tags, exactly as the hand-built
+    # routes did: ['training', 'training', 'jobs']
+    assert doc["paths"]["/training/jobs"]["get"]["tags"] == ["training", "training", "jobs"]
+    assert doc["paths"]["/training/jobs/purge"]["post"]["tags"] == [
+        "training",
+        "training",
+        "jobs",
+    ]
+    assert doc["paths"]["/training/export-text"]["post"]["tags"] == [
+        "training",
+        "training",
+        "jobs",
     ]

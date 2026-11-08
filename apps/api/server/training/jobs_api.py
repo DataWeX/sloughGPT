@@ -1,4 +1,12 @@
-"""Training job management endpoints — list, get, stop, delete, purge, export."""
+"""Training job management endpoints — list, get, stop, delete, purge, export.
+
+Descriptor-projected (card 20261104_151036): eight ``ToolSpec`` contracts →
+``create_router`` projections instead of hand-laid decorators. Raw wire — the
+handlers' payloads are served unwrapped (``envelope=False``), byte-identical
+to the hand-built routes: ``list`` keeps its 200-only doc, ``purge`` keeps its
+query-input ``status`` (``input="query"``), ``delete`` an explicit ``DELETE``,
+``export`` its ``FileResponse``, and ``export-text`` its model-style body.
+"""
 
 from __future__ import annotations
 
@@ -8,11 +16,13 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.contract import RouteSpec, create_router, params_from_model
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
+from domain.agents import ToolParam, ToolSpec
 from domain.training._internal.executor import get_training_executor
 
 from .jobs import training_jobs
@@ -87,7 +97,6 @@ def _job_summary(job: dict) -> dict:
     return {k: v for k, v in summary.items() if v is not None}
 
 
-@router.get("/training/jobs")
 async def list_training_jobs(
     auth_user: dict = Depends(require_auth_if_enabled),
 ):
@@ -118,7 +127,6 @@ async def list_training_jobs(
     return [_job_summary(j) for j in jobs]
 
 
-@router.get("/training/jobs/{job_id}")
 async def get_training_job(job_id: str):
     """Get one training job by id with plain-language status."""
     if job_id not in training_jobs:
@@ -126,7 +134,6 @@ async def get_training_job(job_id: str):
     return _job_summary(training_jobs[job_id])
 
 
-@router.post("/training/jobs/{job_id}/stop")
 async def stop_training_job(job_id: str):
     """Stop a specific training job by id."""
     if job_id not in training_jobs:
@@ -160,7 +167,6 @@ async def stop_training_job(job_id: str):
     return {"status": "stopping", "job_id": job_id}
 
 
-@router.get("/training/jobs/{job_id}/summary")
 async def get_training_summary(job_id: str):
     """Plain-language summary of a training job."""
     if job_id not in training_jobs:
@@ -225,7 +231,6 @@ async def get_training_summary(job_id: str):
     }
 
 
-@router.delete("/training/jobs/{job_id}")
 async def delete_training_job(job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """Delete a training job and optionally its checkpoint files."""
     if job_id not in training_jobs:
@@ -271,9 +276,8 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
     }
 
 
-@router.post("/training/jobs/purge")
 async def purge_training_jobs(
-    status: str | None = Query(None, description="Only purge jobs in this terminal status"),
+    status: str | None = None,
     auth_user: dict = Depends(require_auth_if_enabled),
 ):
     """Remove all terminal training jobs from the in-memory tracker."""
@@ -301,7 +305,6 @@ async def purge_training_jobs(
     }
 
 
-@router.get("/training/export/{job_id}")
 async def export_training_job(job_id: str):
     """Export a completed training job's checkpoint file."""
     from fastapi.responses import FileResponse
@@ -332,7 +335,6 @@ class ExportTextRequest(BaseModel):
     target_count: int = Field(default=100, ge=1, le=10000)
 
 
-@router.post("/training/export-text")
 async def export_feedback_pairs(request: ExportTextRequest):
     """Export feedback conversation pairs with a minimum quality threshold."""
     from controllers.feedback import get_feedback_controller
@@ -356,3 +358,169 @@ async def export_feedback_pairs(request: ExportTextRequest):
     with open(output_file, "w") as f:
         json.dump(pairs, f, indent=2)
     return {"pairs_count": len(pairs), "file": str(output_file), "status": "exported"}
+
+
+# ── descriptor projection (card 20261104_151036) ────────────────────────
+#
+# One ToolSpec per capability; create_router derives verb, auth, validation,
+# envelope and OpenAPI metadata. RouteSpec.summary carries the hand-built
+# operation title (FastAPI derives it from the route name as
+# ``route.name.replace("_", " ").title()``); spec.description is the handler
+# docstring verbatim, so summary/description publish byte-identically.
+
+SPEC_LIST = ToolSpec(
+    name="training.jobs.list",
+    description=(
+        "List all tracked training jobs with plain-language status.\n"
+        "\n"
+        "Auto-purges completed/failed jobs older than 1 hour to bound memory.\n"
+        "Filters by user_id when auth is enabled."
+    ),
+    parameters=[],
+    execute=list_training_jobs,
+    idempotent=True,
+    auth_scope="authenticated",
+    version="1",
+)
+
+SPEC_GET = ToolSpec(
+    name="training.jobs.get",
+    description="Get one training job by id with plain-language status.",
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=get_training_job,
+    idempotent=True,
+    version="1",
+)
+
+SPEC_STOP = ToolSpec(
+    name="training.jobs.stop",
+    description="Stop a specific training job by id.",
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=stop_training_job,
+    idempotent=False,
+    version="1",
+)
+
+SPEC_SUMMARY = ToolSpec(
+    name="training.jobs.summary",
+    description="Plain-language summary of a training job.",
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=get_training_summary,
+    idempotent=True,
+    version="1",
+)
+
+SPEC_DELETE = ToolSpec(
+    name="training.jobs.delete",
+    description="Delete a training job and optionally its checkpoint files.",
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=delete_training_job,
+    idempotent=False,
+    auth_scope="authenticated",
+    version="1",
+)
+
+SPEC_PURGE = ToolSpec(
+    name="training.jobs.purge",
+    description="Remove all terminal training jobs from the in-memory tracker.",
+    parameters=[
+        ToolParam("status", "string", "Only purge jobs in this terminal status"),
+    ],
+    execute=purge_training_jobs,
+    idempotent=False,
+    auth_scope="authenticated",
+    version="1",
+)
+
+SPEC_EXPORT = ToolSpec(
+    name="training.jobs.export",
+    description="Export a completed training job's checkpoint file.",
+    parameters=[ToolParam("job_id", "string", "", True)],
+    execute=export_training_job,
+    idempotent=True,
+    version="1",
+)
+
+SPEC_EXPORT_TEXT = ToolSpec(
+    name="training.jobs.export_text",
+    description="Export feedback conversation pairs with a minimum quality threshold.",
+    parameters=params_from_model(ExportTextRequest),
+    execute=export_feedback_pairs,
+    idempotent=False,
+    version="1",
+)
+
+router.include_router(
+    create_router(
+        SPEC_LIST,
+        RouteSpec(path="/training/jobs", envelope=False, summary="List Training Jobs"),
+        list_training_jobs,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_GET,
+        RouteSpec(path="/training/jobs/{job_id}", envelope=False, summary="Get Training Job"),
+        get_training_job,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_STOP,
+        RouteSpec(
+            path="/training/jobs/{job_id}/stop", envelope=False, summary="Stop Training Job"
+        ),
+        stop_training_job,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_SUMMARY,
+        RouteSpec(
+            path="/training/jobs/{job_id}/summary", envelope=False, summary="Get Training Summary"
+        ),
+        get_training_summary,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_DELETE,
+        RouteSpec(
+            path="/training/jobs/{job_id}",
+            method="DELETE",
+            envelope=False,
+            summary="Delete Training Job",
+        ),
+        delete_training_job,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_PURGE,
+        RouteSpec(
+            path="/training/jobs/purge",
+            envelope=False,
+            input="query",
+            summary="Purge Training Jobs",
+        ),
+        purge_training_jobs,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_EXPORT,
+        RouteSpec(
+            path="/training/export/{job_id}", envelope=False, summary="Export Training Job"
+        ),
+        export_training_job,
+    )
+)
+router.include_router(
+    create_router(
+        SPEC_EXPORT_TEXT,
+        RouteSpec(
+            path="/training/export-text", envelope=False, summary="Export Feedback Pairs"
+        ),
+        export_feedback_pairs,
+    )
+)

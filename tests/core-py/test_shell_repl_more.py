@@ -31053,3 +31053,68 @@ class TestCwdHygiene:
         gate run #3). `monkeypatch.chdir` first restores at teardown.
         """
         assert Path.cwd() == _INITIAL_CWD
+
+
+# ── serve — thin projection over scripts/run_frontend_latest.sh ────
+
+
+class _FakeServeProc:
+    """Stands in for a Popen that already exited with *rc*."""
+
+    def __init__(self, rc: int):
+        self.returncode = None
+        self._rc = rc
+
+    def poll(self):
+        self.returncode = self._rc
+        return self._rc
+
+
+class TestCmdServe:
+    def _invoke(self, repl, monkeypatch, args: str, rc: int = 0):
+        """Run _cmd_serve with Popen faked; return (captured call, output)."""
+        import subprocess
+
+        captured: dict = {}
+
+        def fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            return _FakeServeProc(rc)
+
+        monkeypatch.setattr(subprocess, "Popen", fake_popen)
+        out = _run_with_io(repl, [], lambda: repl._cmd_serve(args))
+        return captured, out
+
+    def test_builds_script_argv(self, repl, monkeypatch):
+        captured, _ = self._invoke(repl, monkeypatch, "--watch --port 9999 /some/worktree")
+        cmd = captured["cmd"]
+        assert cmd[0].endswith("scripts/run_frontend_latest.sh")
+        assert "--watch" in cmd
+        assert "/some/worktree" in cmd
+        assert captured["kwargs"]["env"]["SLO_FRONTEND_PORT"] == "9999"
+        assert captured["kwargs"]["start_new_session"] is True
+        # script stdout lands in a log, never in the REPL's stdin/stdout
+        assert captured["kwargs"]["stdout"].name.endswith("serve-cmd.log")
+
+    def test_defaults_to_main_worktree(self, repl, monkeypatch):
+        captured, _ = self._invoke(repl, monkeypatch, "")
+        cmd = captured["cmd"]
+        assert len(cmd) == 1 and cmd[0].endswith("run_frontend_latest.sh")
+        assert captured["kwargs"]["env"].get("SLO_FRONTEND_PORT") is None
+
+    def test_unknown_flag_fails_without_spawn(self, repl, monkeypatch):
+        captured, out = self._invoke(repl, monkeypatch, "--bogus")
+        assert "cmd" not in captured
+        assert repl._last_exit_code == 1
+        assert "unknown flag" in out
+
+    def test_help_prints_usage_without_spawn(self, repl, monkeypatch):
+        captured, out = self._invoke(repl, monkeypatch, "--help")
+        assert "cmd" not in captured
+        assert "serve [" in out
+
+    def test_failed_script_surfaces_log(self, repl, monkeypatch):
+        captured, _ = self._invoke(repl, monkeypatch, "", rc=7)
+        assert "cmd" in captured
+        assert repl._last_exit_code == 1
