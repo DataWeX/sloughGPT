@@ -21,8 +21,9 @@ CONTROLLER_DIR = REPO / "apps" / "api" / "server" / "controllers"
 
 # Excluded zones per card b22e878a: shell/vm/world_render are another
 # session's concurrent-refactor territory (they historically DO use
-# _internal), and api_keys is deliberately unmounted.
-ROUTER_ALLOWLIST = frozenset({"shell.py", "vm.py", "world_render.py", "api_keys.py"})
+# _internal). api_keys was dropped from this allowlist when its module was
+# merged into routers/settings.py (route-map card 5/7, 20261101_154056).
+ROUTER_ALLOWLIST = frozenset({"shell.py", "vm.py", "world_render.py"})
 
 
 def _module_files(directory: Path) -> list[Path]:

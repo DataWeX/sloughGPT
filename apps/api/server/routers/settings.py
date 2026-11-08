@@ -4,12 +4,18 @@ Settings Router — persistent user configuration that survives restarts.
 Replaces the in-memory config controller with a persistent backend.
 """
 
+import asyncio
+import hashlib
 import logging
+import secrets
+import time
+from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import endpoint, safe_audit_log, success_response
+from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.settings")
 
@@ -1077,4 +1083,392 @@ class SettingsRouter:
         )
 
 
-router = SettingsRouter().router
+# ── Moved verbatim from routers/api_keys.py (route-map card 5/7, card 20261101_154056) ────
+# ApiKeyManager is live storage (auth/workspaces/inference import it); ApiKeysRouter
+# stays deliberately UNMOUNTED exactly as before (layer-conformance allowlist card
+# b22e878a) — its 6 duplicate /security/keys declarations ride along, total flat.
+
+
+class CreateKeyRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    scopes: list[str] = Field(default=["*"])
+    expires_at: int | None = Field(default=None, description="Unix timestamp for key expiration")
+
+
+def _hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+class ApiKeyManager:
+    """Manages API keys with MogDB storage and optional JSON sync."""
+
+    def __init__(
+        self, db=None, db_path: str | Path | None = None, sync_dir: str | Path | None = None
+    ):
+        if db is not None:
+            self._db = db
+        else:
+            from mogdb import MogDB
+
+            if db_path is None:
+                repo_root = Path(__file__).parent.parent.parent.parent
+                db_path = repo_root / "data" / "api_keys_mogdb"
+            if sync_dir is None:
+                repo_root = Path(__file__).parent.parent.parent.parent
+                sync_dir = repo_root / "data" / "api_keys_json"
+            self._db = MogDB(str(db_path), sync_dir=str(sync_dir))
+        self._collection = self._db.collection("api_keys")
+
+    def create(
+        self,
+        name: str,
+        scopes: list[str] | None = None,
+        expires_at: int | None = None,
+        workspace_id: str = "",
+        user_id: str = "",
+    ) -> dict[str, Any]:
+        key = f"slo_{secrets.token_urlsafe(32)}"
+        doc = {
+            "name": name,
+            "key": key,
+            "key_hash": _hash_key(key),
+            "scopes": scopes or ["*"],
+            "created_at": int(time.time()),
+            "workspace_id": workspace_id,
+            "user_id": user_id,
+        }
+        if expires_at is not None:
+            doc["expires_at"] = expires_at
+        doc_id = self._collection.insert_one(doc)
+        doc["id"] = doc_id
+        doc["revoked"] = False
+        logger.info("Created API key '%s' (id=%s, ws=%s)", name, doc_id, workspace_id or "global")
+        return doc
+
+    def list(self, workspace_id: str = "", user_id: str = "") -> list[dict[str, Any]]:
+        query: dict[str, Any] = {}
+        if workspace_id:
+            query["workspace_id"] = workspace_id
+        if user_id:
+            query["user_id"] = user_id
+        docs = self._collection.find(query)
+        result = []
+        for d in docs:
+            entry = {
+                "id": d["_id"],
+                "name": d["name"],
+                "key_hash": d["key_hash"],
+                "scopes": d.get("scopes", ["*"]),
+                "created_at": d["created_at"],
+                "revoked": d.get("revoked", False),
+                "workspace_id": d.get("workspace_id", ""),
+                "user_id": d.get("user_id", ""),
+            }
+            if "expires_at" in d:
+                entry["expires_at"] = d["expires_at"]
+            result.append(entry)
+        return result
+
+    def get(self, key_id: str) -> dict[str, Any] | None:
+        doc = self._collection.find_one({"_id": key_id})
+        if doc is None:
+            return None
+        return {
+            "id": doc["_id"],
+            "name": doc["name"],
+            "key": doc["key"],
+            "key_hash": doc["key_hash"],
+            "scopes": doc.get("scopes", ["*"]),
+            "created_at": doc["created_at"],
+            "expires_at": doc.get("expires_at"),
+            "revoked": doc.get("revoked", False),
+            "workspace_id": doc.get("workspace_id", ""),
+            "user_id": doc.get("user_id", ""),
+        }
+
+    def revoke(self, key_id: str) -> None:
+        doc = self._collection.find_one({"_id": key_id})
+        if doc is None:
+            raise ValueError(f"API key not found: {key_id}")
+        self._collection.update_one({"_id": key_id}, {"$set": {"revoked": True}})
+        logger.info("Revoked API key '%s' (id=%s)", doc.get("name"), key_id)
+
+    def rotate(self, key_id: str) -> dict[str, Any]:
+        old = self._collection.find_one({"_id": key_id})
+        if old is None:
+            raise ValueError(f"API key not found: {key_id}")
+        self.revoke(key_id)
+        return self.create(
+            old["name"],
+            scopes=old.get("scopes", ["*"]),
+            expires_at=old.get("expires_at"),
+            workspace_id=old.get("workspace_id", ""),
+            user_id=old.get("user_id", ""),
+        )
+
+    def validate(self, key: str) -> bool:
+        key_hash = _hash_key(key)
+        docs = self._collection.find({"key_hash": key_hash})
+        for doc in docs:
+            if doc.get("revoked", False):
+                return False
+            if "expires_at" in doc and doc["expires_at"] < time.time():
+                return False
+            return True
+        return False
+
+
+class ApiKeysRouter:
+    """FastAPI router for API key CRUD operations."""
+
+    def __init__(self, key_manager: ApiKeyManager | None = None):
+        self._manager = key_manager or ApiKeyManager()
+        self.router = APIRouter(prefix="/security", tags=["security"])
+        self._register_routes()
+
+    def _register_routes(self):
+        self.router.add_api_route(path="/keys", endpoint=self.create_key, methods=["POST"])
+        self.router.add_api_route(path="/keys", endpoint=self.list_keys, methods=["GET"])
+        self.router.add_api_route(
+            path="/keys/validate", endpoint=self.validate_key, methods=["POST"]
+        )
+        self.router.add_api_route(path="/keys/{key_id}", endpoint=self.get_key, methods=["GET"])
+        self.router.add_api_route(
+            path="/keys/{key_id}", endpoint=self.delete_key, methods=["DELETE"]
+        )
+        self.router.add_api_route(
+            path="/keys/{key_id}/rotate", endpoint=self.rotate_key, methods=["POST"]
+        )
+
+    def _get_workspace_user(self, auth_user: dict) -> tuple[str, str]:
+        """Extract workspace_id and user_id from auth_user."""
+        user_id = auth_user.get("sub", "") if auth_user else ""
+        workspace_id = auth_user.get("workspace_id", "") if auth_user else ""
+        return workspace_id, user_id
+
+    @endpoint("api_keys.create")
+    async def create_key(
+        self, req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        workspace_id, user_id = self._get_workspace_user(auth_user)
+        key = self._manager.create(
+            req.name,
+            scopes=req.scopes,
+            expires_at=req.expires_at,
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        return success_response(data=key)
+
+    @endpoint("api_keys.list")
+    async def list_keys(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        workspace_id, user_id = self._get_workspace_user(auth_user)
+        keys = self._manager.list(workspace_id=workspace_id, user_id=user_id)
+        return success_response(data={"keys": keys, "count": len(keys)})
+
+    @endpoint("api_keys.get")
+    async def get_key(self, key_id: str) -> dict:
+        key = self._manager.get(key_id)
+        if key is None:
+            raise_error("API key not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data=key)
+
+    @endpoint("api_keys.delete")
+    async def delete_key(self, key_id: str) -> dict:
+        try:
+            self._manager.revoke(key_id)
+        except ValueError as e:
+            raise_error(str(e), "E_NOT_FOUND", status_code=404)
+        return success_response(data={"revoked": True})
+
+    @endpoint("api_keys.rotate")
+    async def rotate_key(self, key_id: str) -> dict:
+        try:
+            new_key = self._manager.rotate(key_id)
+        except ValueError as e:
+            raise_error(str(e), "E_NOT_FOUND", status_code=404)
+        return success_response(data=new_key)
+
+    @endpoint("api_keys.validate")
+    async def validate_key(self, body: dict) -> dict:
+        key = body.get("key", "")
+        valid = self._manager.validate(key)
+        return success_response(data={"valid": valid})
+
+
+_api_keys_router: ApiKeysRouter | None = None
+
+
+def get_api_keys_router() -> ApiKeysRouter:
+    global _api_keys_router
+    if _api_keys_router is None:
+        _api_keys_router = ApiKeysRouter()
+    return _api_keys_router
+
+
+# ── Moved verbatim from routers/security.py (route-map card 5/7) ─────────────
+
+
+def _get_key_manager():
+    # Manager moved with the same card (20261101_154056) — it now lives in
+    # this module, so no cross-module import is needed.
+    return ApiKeyManager()
+
+
+class SecurityRouter:
+    """Security Router - Audit logs and API key management."""
+
+    def __init__(self):
+        self.router = APIRouter(prefix="/security", tags=["security"])
+        self._register_routes()
+
+    def _register_routes(self):
+        self.router.add_api_route(path="/audit", endpoint=self.get_audit_logs, methods=["GET"])
+        self.router.add_api_route(path="/keys", endpoint=self.list_keys, methods=["GET"])
+        self.router.add_api_route(path="/keys", endpoint=self.create_key, methods=["POST"])
+        self.router.add_api_route(
+            path="/keys/validate", endpoint=self.validate_key, methods=["POST"]
+        )
+        self.router.add_api_route(path="/keys/{key_id}", endpoint=self.get_key, methods=["GET"])
+        self.router.add_api_route(
+            path="/keys/{key_id}", endpoint=self.delete_key, methods=["DELETE"]
+        )
+        self.router.add_api_route(
+            path="/keys/{key_id}/rotate", endpoint=self.rotate_key, methods=["POST"]
+        )
+
+    # ── Audit logs ──
+
+    @staticmethod
+    @endpoint("security.audit_logs")
+    async def get_audit_logs(
+        limit: int = Query(
+            default=100, ge=1, le=10000, description="Maximum number of log entries to return"
+        ),
+        event_type: str | None = Query(default=None, description="Filter by event type"),
+        history: bool = Query(default=False, description="Read from persisted audit.log file"),
+        before: str | None = Query(default=None, description="ISO-8601 cursor for pagination"),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        from infrastructure.auth import get_audit_logger
+
+        if auth_user and auth_user.get("role") not in ("owner", "admin"):
+            raise_error("Admin access required", code="auth/forbidden", status_code=403)
+
+        audit_logger = get_audit_logger()
+
+        workspace_id = ""
+        if auth_user and auth_user.get("sub"):
+            workspace_id = auth_user.get("workspace_id", "")
+
+        if history:
+            logs = await asyncio.to_thread(
+                audit_logger.file_query,
+                limit=limit,
+                event_type=event_type,
+                before=before,
+                workspace_id=workspace_id,
+            )
+        else:
+            logs = audit_logger.logs[-limit:]
+            if event_type:
+                logs = [l for l in logs if l.get("event_type") == event_type]
+            if workspace_id:
+                logs = [l for l in logs if l.get("workspace_id", "") == workspace_id]
+        return success_response(data={"logs": logs, "count": len(logs)})
+
+    # ── API key management ──
+
+    @staticmethod
+    @endpoint("security.create_key")
+    async def create_key(
+        req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        mgr = _get_key_manager()
+        key = mgr.create(req.name, scopes=req.scopes, expires_at=req.expires_at)
+        return success_response(data=key)
+
+    @staticmethod
+    @endpoint("security.list_keys")
+    async def list_keys(auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        mgr = _get_key_manager()
+        keys = mgr.list()
+        return success_response(
+            data={"keys": keys, "count": len(keys), "configured": len(keys) > 0}
+        )
+
+    @staticmethod
+    @endpoint("security.get_key")
+    async def get_key(key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        mgr = _get_key_manager()
+        key = mgr.get(key_id)
+        if key is None:
+            raise_error("API key not found", "E_NOT_FOUND", status_code=404)
+        if (
+            auth_user is not None
+            and auth_user.get("sub") != key.get("user_id")
+            and auth_user.get("role") != "admin"
+        ):
+            raise_error("Not authorized to manage this key", code="auth/forbidden", status_code=403)
+        return success_response(data=key)
+
+    @staticmethod
+    @endpoint("security.delete_key")
+    async def delete_key(key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            mgr = _get_key_manager()
+            key = mgr.get(key_id)
+            if key is None:
+                raise_error("API key not found", "E_NOT_FOUND", status_code=404)
+            if (
+                auth_user is not None
+                and auth_user.get("sub") != key.get("user_id")
+                and auth_user.get("role") != "admin"
+            ):
+                raise_error(
+                    "Not authorized to manage this key", code="auth/forbidden", status_code=403
+                )
+            mgr.revoke(key_id)
+            return success_response(data={"revoked": True})
+        except ValueError as e:
+            raise_error(str(e), "E_NOT_FOUND", status_code=404)
+
+    @staticmethod
+    @endpoint("security.rotate_key")
+    async def rotate_key(key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            mgr = _get_key_manager()
+            key = mgr.get(key_id)
+            if key is None:
+                raise_error("API key not found", "E_NOT_FOUND", status_code=404)
+            if (
+                auth_user is not None
+                and auth_user.get("sub") != key.get("user_id")
+                and auth_user.get("role") != "admin"
+            ):
+                raise_error(
+                    "Not authorized to manage this key", code="auth/forbidden", status_code=403
+                )
+            new_key = mgr.rotate(key_id)
+            return success_response(data=new_key)
+        except ValueError as e:
+            raise_error(str(e), "E_NOT_FOUND", status_code=404)
+
+    @staticmethod
+    @endpoint("security.validate_key")
+    async def validate_key(body: dict, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        mgr = _get_key_manager()
+        key = body.get("key", "")
+        valid = mgr.validate(key)
+        return success_response(data={"valid": valid})
+
+
+# Aggregate facade (route-map card 5/7): ONE module-level router serving
+# /settings/* and /security/* — sub-router prefixes bake at add-time, so every
+# path stays byte-identical to the two old modules.
+_instance = SettingsRouter()
+_security_router = SecurityRouter()
+
+router = APIRouter()
+router.include_router(_instance.router)
+router.include_router(_security_router.router)

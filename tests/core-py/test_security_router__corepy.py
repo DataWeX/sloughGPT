@@ -1,4 +1,4 @@
-"""Tests for the security API router (routers/security.py).
+"""Tests for the security API router (now merged into routers/settings.py).
 
 Covers: get_audit_logs (memory + file history), get_keys, edge cases.
 """
@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.security import SecurityRouter  # noqa: E402
+from routers.settings import SecurityRouter  # noqa: E402
 
 
 def _app(sr: SecurityRouter) -> FastAPI:
@@ -107,7 +107,7 @@ class TestKeys:
         sr = SecurityRouter()
         # Keys are stored in MogDB via ApiKeyManager now; the route no longer
         # reads settings.get_security_settings (storage refactor).
-        with patch("routers.api_keys.ApiKeyManager.list", return_value=["key1", "key2"]):
+        with patch("routers.settings.ApiKeyManager.list", return_value=["key1", "key2"]):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
         return resp
@@ -121,7 +121,7 @@ class TestKeys:
 
     def test_keys_not_configured(self):
         sr = SecurityRouter()
-        with patch("routers.api_keys.ApiKeyManager.list", return_value=[]):
+        with patch("routers.settings.ApiKeyManager.list", return_value=[]):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
         assert resp.status_code == 200
@@ -129,7 +129,7 @@ class TestKeys:
 
     def test_single_key(self):
         sr = SecurityRouter()
-        with patch("routers.api_keys.ApiKeyManager.list", return_value=["only-one-key"]):
+        with patch("routers.settings.ApiKeyManager.list", return_value=["only-one-key"]):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
         data = resp.json()["data"]
@@ -139,7 +139,7 @@ class TestKeys:
     def test_many_keys(self):
         sr = SecurityRouter()
         with patch(
-            "routers.api_keys.ApiKeyManager.list", return_value=[f"key_{i}" for i in range(50)]
+            "routers.settings.ApiKeyManager.list", return_value=[f"key_{i}" for i in range(50)]
         ):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")

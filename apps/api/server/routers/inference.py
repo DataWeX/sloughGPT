@@ -1623,7 +1623,7 @@ class InferenceRouter:
                 await websocket.close()
                 return
         else:
-            from routers.security import ApiKeyManager
+            from routers.settings import ApiKeyManager
 
             try:
                 _key_mgr = ApiKeyManager()

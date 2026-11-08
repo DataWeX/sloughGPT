@@ -447,9 +447,9 @@ class WorkspacesRouter:
             # API key count
             api_key_count = 0
             try:
-                from routers.api_keys import get_api_key_manager
+                from routers.settings import ApiKeyManager
 
-                mgr = get_api_key_manager()
+                mgr = ApiKeyManager()
                 keys = mgr.list(workspace_id=workspace_id)
                 api_key_count = len(keys) if keys else 0
             except Exception as e:
@@ -609,9 +609,9 @@ class WorkspacesRouter:
             # API keys (metadata only, not secrets)
             api_keys = []
             try:
-                from routers.api_keys import get_api_key_manager
+                from routers.settings import ApiKeyManager
 
-                mgr = get_api_key_manager()
+                mgr = ApiKeyManager()
                 keys = mgr.list(workspace_id=workspace_id)
                 for k in keys:
                     api_keys.append(

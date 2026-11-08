@@ -4,7 +4,6 @@
   "files": {
     "main.py": 1,
     "routers/agents.py": 11,
-    "routers/api_keys.py": 6,
     "routers/auth.py": 6,
     "routers/benchmark.py": 10,
     "routers/bootstrap.py": 1,
@@ -37,9 +36,8 @@
     "routers/profiles.py": 5,
     "routers/ratelimit.py": 2,
     "routers/search.py": 1,
-    "routers/security.py": 7,
     "routers/self_train.py": 3,
-    "routers/settings.py": 41,
+    "routers/settings.py": 54,
     "routers/shell.py": 2,
     "routers/souls.py": 23,
     "routers/status.py": 3,

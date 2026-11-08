@@ -37,7 +37,6 @@ ROUTER_MODULES: list[str] = [
     "profiles",
     "ratelimit",
     "search",
-    "security",
     "self_train",
     "settings",
     "shell",

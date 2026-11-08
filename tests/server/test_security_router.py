@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
-from apps.api.server.routers.security import router
+from apps.api.server.routers.settings import router
 
 
 @pytest.fixture
@@ -396,7 +396,7 @@ class TestAuditLoggerFileQuery:
 class TestSecurityKeys:
     """GET /security/keys — lists MogDB-stored API keys."""
 
-    @patch("apps.api.server.routers.security._get_key_manager")
+    @patch("apps.api.server.routers.settings._get_key_manager")
     def test_returns_empty_list(self, mock_get_mgr, client):
         mock_get_mgr.return_value.list.return_value = []
         resp = client.get("/security/keys")
@@ -405,7 +405,7 @@ class TestSecurityKeys:
         assert data["count"] == 0
         assert data["keys"] == []
 
-    @patch("apps.api.server.routers.security._get_key_manager")
+    @patch("apps.api.server.routers.settings._get_key_manager")
     def test_lists_created_keys(self, mock_get_mgr, client):
         mock_get_mgr.return_value.list.return_value = [
             {
@@ -430,7 +430,7 @@ class TestSecurityKeys:
         assert data["count"] == 2
         assert len(data["keys"]) == 2
 
-    @patch("apps.api.server.routers.security._get_key_manager")
+    @patch("apps.api.server.routers.settings._get_key_manager")
     def test_key_structure_hides_raw_key(self, mock_get_mgr, client):
         mock_get_mgr.return_value.list.return_value = [
             {
@@ -449,7 +449,7 @@ class TestSecurityKeys:
         assert "name" in key_entry
         assert "id" in key_entry
 
-    @patch("apps.api.server.routers.security._get_key_manager")
+    @patch("apps.api.server.routers.settings._get_key_manager")
     def test_create_key(self, mock_get_mgr, client):
         mock_get_mgr.return_value.create.return_value = {
             "id": "1",
@@ -466,14 +466,14 @@ class TestSecurityKeys:
         assert created["name"] == "test"
         assert created["key"].startswith("slo_")
 
-    @patch("apps.api.server.routers.security._get_key_manager")
+    @patch("apps.api.server.routers.settings._get_key_manager")
     def test_delete_key(self, mock_get_mgr, client):
         mock_get_mgr.return_value.revoke.return_value = None
         resp = client.delete("/security/keys/k1")
         assert resp.status_code == 200
         assert resp.json()["data"]["revoked"] is True
 
-    @patch("apps.api.server.routers.security._get_key_manager")
+    @patch("apps.api.server.routers.settings._get_key_manager")
     def test_rotate_key(self, mock_get_mgr, client):
         mock_get_mgr.return_value.rotate.return_value = {
             "id": "2",
@@ -492,13 +492,13 @@ class TestSecurityKeys:
         resp = client.put("/security/keys")
         assert resp.status_code == 405
 
-    @patch("apps.api.server.routers.security._get_key_manager")
+    @patch("apps.api.server.routers.settings._get_key_manager")
     def test_keys_error_returns_500(self, mock_get_mgr, client):
         mock_get_mgr.return_value.list.side_effect = RuntimeError("broken")
         resp = client.get("/security/keys")
         assert resp.status_code == 500
 
-    @patch("apps.api.server.routers.security._get_key_manager")
+    @patch("apps.api.server.routers.settings._get_key_manager")
     def test_keys_exact_data_keys(self, mock_get_mgr, client):
         mock_get_mgr.return_value.list.return_value = []
         resp = client.get("/security/keys")

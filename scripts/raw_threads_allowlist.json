@@ -635,7 +635,7 @@
       "kind": "grandfathered",
       "count": 1
     },
-    "apps/api/server/routers/security.py::SecurityRouter.get_audit_logs": {
+    "apps/api/server/routers/settings.py::SecurityRouter.get_audit_logs": {
       "reason": "stage-4 grandfathered async escape: micro-I/O / short compute stays per the duration rule (charter stage 4)",
       "kind": "grandfathered",
       "count": 1
