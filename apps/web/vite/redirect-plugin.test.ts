@@ -35,7 +35,7 @@ describe('resolveRedirect / splitTarget', () => {
   })
 
   it('has 47 entries matching proxy table', () => {
-    expect(Object.keys(REDIRECTS).length).toBe(47)
+    expect(Object.keys(REDIRECTS).length).toBe(48)
   })
 
   it('redirects the retired /mole page to the plugin surface', () => {

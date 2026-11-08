@@ -60,6 +60,7 @@ End-to-end user flows driven by the **avion** computer-use library (`packages/av
 | Old Route      | Redirects To |
 | -------------- | ------------ |
 | `/companion`   | `/souls`     |
+| `/personality` | `/souls`     |
 | `/evaluate`    | `/benchmark` |
 | `/memory`      | `/knowledge` |
 | `/collections` | `/datasets`  |

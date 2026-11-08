@@ -35,7 +35,7 @@ const APP_ROOT = join(WEB_ROOT, 'app')
  * ?id=-driven detail fold (route-map card 20261101_154054); the old path's
  * in-app link sources now point at `/models?id=<model>`.
  */
-const GRANDFATHERED_CEILING = 71
+const GRANDFATHERED_CEILING = 70
 
 interface PageBaseline {
   grandfathered: string[]

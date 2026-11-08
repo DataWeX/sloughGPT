@@ -92,13 +92,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     labelKey: 'nav.section.ai',
     routes: [
       {
-        path: '/personality',
-        labelKey: 'nav.personality',
-        shortcut: '4',
-        icon: 'brain',
-        description: 'Personalities & traits',
-      },
-      {
         path: '/agents',
         labelKey: 'nav.agents',
         shortcut: '5',
@@ -227,7 +220,6 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/datasets': IconChart,
   '/models': IconGrid,
   '/knowledge': IconBookmark,
-  '/personality': IconBrain,
   '/agents': IconAgents,
   '/souls': IconSparkle,
   '/benchmark': IconBenchmark,

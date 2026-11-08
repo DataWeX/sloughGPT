@@ -497,6 +497,11 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## Companion Router (`/companion`)
 
+> **Provenance (route-map card 4/7):** the `CompanionRouter` class now
+> lives in `routers/souls.py` (merged verbatim, card `20261101_154055`); the
+> module `routers/companion.py` is gone. Every `/companion/*` path below is
+> unchanged — the sub-router prefix bakes at add-time.
+
 | Method   | Path                     | Description                   |
 | -------- | ------------------------ | ----------------------------- |
 | `GET`    | `/companion/`            | Get current companion.        |

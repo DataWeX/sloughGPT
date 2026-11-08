@@ -24,7 +24,6 @@ describe('BottomNav', () => {
     expect(screen.getAllByText('chat').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('training').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('knowledge').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('personality').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('settings').length).toBeGreaterThanOrEqual(1)
   })
   it('has aria-label on nav', () => {
@@ -44,7 +43,6 @@ describe('BottomNav', () => {
     expect(hrefs).toContain('/chat')
     expect(hrefs).toContain('/training')
     expect(hrefs).toContain('/knowledge')
-    expect(hrefs).toContain('/personality')
     expect(hrefs).toContain('/settings')
   })
 })

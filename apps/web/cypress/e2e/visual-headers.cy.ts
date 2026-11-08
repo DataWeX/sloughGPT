@@ -10,7 +10,6 @@
 const PAGES = [
   { path: '/', name: 'home' },
   { path: '/chat', name: 'chat' },
-  { path: '/personality', name: 'personality' },
   { path: '/training', name: 'training' },
   { path: '/datasets', name: 'datasets' },
   { path: '/settings', name: 'settings' },

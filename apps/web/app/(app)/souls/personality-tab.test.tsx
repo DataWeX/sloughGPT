@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, waitFor, fireEvent } from '@testing-library/react'
-import PersonalityPage from './page'
+import { PersonalityTab } from './personality-tab'
 
 const {
   mockGetPersonality,
@@ -75,14 +75,6 @@ vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: (key: string) => key, locale: 'en' }),
 }))
 
-vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ children, title }: { children: React.ReactNode; title: string }) => (
-    <div data-testid="page-container" data-title={title}>
-      {children}
-    </div>
-  ),
-}))
-
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => (
     <div data-testid="responsive-container">{children}</div>
@@ -115,6 +107,11 @@ vi.mock('@sloughgpt/strui', () => {
       <input value={value} onChange={onChange} placeholder={placeholder} {...props} />
     ),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    TabsContent: ({ children, value }: any) => (
+      <div data-testid="tab-content" data-value={value}>
+        {children}
+      </div>
+    ),
     IconHeart: ({ filled }: { filled?: boolean }) => (
       <span data-testid="icon-heart" data-filled={String(!!filled)} />
     ),
@@ -203,15 +200,15 @@ async function waitForLoad() {
   })
 }
 
-describe('PersonalityPage', () => {
-  it('shows page container with correct title', async () => {
-    render(<PersonalityPage />)
+describe('PersonalityTab', () => {
+  it('renders as the personality tab panel', async () => {
+    render(<PersonalityTab />)
     await waitForLoad()
-    expect(screen.getByTestId('page-container')).toHaveAttribute('data-title', 'Personality')
+    expect(screen.getByTestId('tab-content')).toHaveAttribute('data-value', 'personality')
   })
 
   it('fetches profile on mount and displays sections', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     expect(screen.getByText('Core Identity')).toBeInTheDocument()
     expect(screen.getByText('Voice')).toBeInTheDocument()
@@ -220,20 +217,20 @@ describe('PersonalityPage', () => {
   })
 
   it('displays saved personas', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     expect(screen.getByText('Test Persona')).toBeInTheDocument()
   })
 
   it('shows the rose-blue traits icon on persona cards', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     const icons = screen.getAllByTestId('icon-heart')
     expect(icons.length).toBeGreaterThanOrEqual(2)
   })
 
   it('previews defining traits on persona cards', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     const preview = screen.getByLabelText('Test Persona defining traits')
     expect(preview).toHaveTextContent('openness')
@@ -242,7 +239,7 @@ describe('PersonalityPage', () => {
   })
 
   it('marks the active persona and disables its Activate button', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     const activeCard = screen.getByText('Active Persona').closest('[data-active]')
     expect(activeCard).toHaveAttribute('data-active', 'true')
@@ -255,7 +252,7 @@ describe('PersonalityPage', () => {
   })
 
   it('activating a persona calls the controller', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     const inactiveCard = screen.getByText('Test Persona').closest('[data-active]')!
     await act(async () => {
@@ -265,27 +262,27 @@ describe('PersonalityPage', () => {
   })
 
   it('displays personality conflicts', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     expect(screen.getByText('Personality Conflicts')).toBeInTheDocument()
     expect(screen.getByText('Conflict')).toBeInTheDocument()
   })
 
   it('displays preset buttons', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     expect(screen.getByText('Quick Presets')).toBeInTheDocument()
   })
 
   it('shows personality evolution chart when history has 2+ entries', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     expect(screen.getByText('Personality Evolution')).toBeInTheDocument()
     expect(screen.getAllByTestId('line-chart').length).toBe(2)
   })
 
   it('saves profile on Save Changes click', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     await act(async () => {
       fireEvent.click(screen.getByText('Save Changes'))
@@ -303,7 +300,7 @@ describe('PersonalityPage', () => {
   })
 
   it('resets profile on Reset click', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     await act(async () => {
       fireEvent.click(screen.getByText('Reset'))
@@ -315,13 +312,13 @@ describe('PersonalityPage', () => {
   })
 
   it('does not render the quiz', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     expect(screen.queryByTestId('personality-quiz')).not.toBeInTheDocument()
   })
 
   it('updates voice slider values', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     const sliders = screen.getAllByRole('slider')
     expect(sliders.length).toBeGreaterThan(0)
@@ -331,7 +328,7 @@ describe('PersonalityPage', () => {
   })
 
   it('opens save persona dialog', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     await act(async () => {
       fireEvent.click(screen.getByText('personality.saveCurrent'))
@@ -341,7 +338,7 @@ describe('PersonalityPage', () => {
   })
 
   it('saves persona with name', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     await act(async () => {
       fireEvent.click(screen.getByText('personality.saveCurrent'))
@@ -367,7 +364,7 @@ describe('PersonalityPage', () => {
   })
 
   it('activates persona', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     await act(async () => {
       fireEvent.click(screen.getByText('personality.activate'))
@@ -380,7 +377,7 @@ describe('PersonalityPage', () => {
 
   it('deletes persona after confirmation', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     await act(async () => {
       fireEvent.click(screen.getAllByText('personality.delete')[0])
@@ -393,7 +390,7 @@ describe('PersonalityPage', () => {
 
   it('cancels delete when confirmation denied', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     await act(async () => {
       fireEvent.click(screen.getAllByText('personality.delete')[0])
@@ -402,7 +399,7 @@ describe('PersonalityPage', () => {
   })
 
   it('edits values input field', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     const valuesInput = screen.getByPlaceholderText('helpfulness, honesty, curiosity')
     await act(async () => {
@@ -412,7 +409,7 @@ describe('PersonalityPage', () => {
   })
 
   it('cancels persona dialog', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     await act(async () => {
       fireEvent.click(screen.getByText('personality.saveCurrent'))
@@ -424,7 +421,7 @@ describe('PersonalityPage', () => {
   })
 
   it('shows persona card with values', async () => {
-    render(<PersonalityPage />)
+    render(<PersonalityTab />)
     await waitForLoad()
     expect(screen.getByText('honesty')).toBeInTheDocument()
   })

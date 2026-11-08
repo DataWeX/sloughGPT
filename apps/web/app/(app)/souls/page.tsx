@@ -27,6 +27,7 @@ import { CheckpointsTab } from './souls-checkpoints-tab'
 import { WeightsTab } from './souls-weights-tab'
 import { SnapshotsTab } from './souls-snapshots-tab'
 import { AnalyticsTab } from './souls-analytics-tab'
+import { PersonalityTab } from './personality-tab'
 import { SoulDetailDialog } from './souls-detail-dialog'
 import { SoulCompareDialog } from './souls-compare-dialog'
 import { CheckpointDetailDialog } from './souls-checkpoint-dialog'
@@ -92,6 +93,7 @@ export default function SoulsPage() {
       >
         <TabsList>
           <TabsTrigger value="souls">Souls</TabsTrigger>
+          <TabsTrigger value="personality">Personality</TabsTrigger>
           <TabsTrigger value="checkpoints">Checkpoints</TabsTrigger>
           <TabsTrigger value="weights">Weights</TabsTrigger>
           <TabsTrigger value="snapshots">Snapshots</TabsTrigger>
@@ -100,6 +102,7 @@ export default function SoulsPage() {
 
         {/* Each tab panel renders its own <TabsContent> wrapper. */}
         <SoulsListTab wb={wb} />
+        <PersonalityTab />
         <CheckpointsTab wb={wb} />
         <WeightsTab wb={wb} />
         <SnapshotsTab wb={wb} />
