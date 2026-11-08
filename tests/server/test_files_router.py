@@ -2,6 +2,7 @@
 Tests for the files router — upload, list, search, get, delete, ingest.
 """
 
+import time
 from unittest.mock import patch
 
 import pytest
@@ -405,3 +406,185 @@ class TestMethodCoverage:
     def test_ingest_wrong_method_405(self, client):
         resp = client.get("/files/x/ingest")
         assert resp.status_code == 405
+
+
+# ── Import from URL ────────────────────────────────────────────────────────
+
+
+class _Origin:
+    """Tiny local HTTP origin: counts GETs, optional gzip + start delay."""
+
+    def __init__(self):
+        self.count = 0
+        self.body = b"hello"
+        self.encoding = None
+        self.delay = 0.0
+
+
+@pytest.fixture
+def origin():
+    import gzip as gzip_mod
+    import threading
+    import time as time_mod
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    state = _Origin()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            state.count += 1
+            if state.delay:
+                time_mod.sleep(state.delay)
+            body = state.body
+            if state.encoding == "gzip":
+                body = gzip_mod.compress(body)
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            if state.encoding:
+                self.send_header("Content-Encoding", state.encoding)
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):  # silence test output
+            pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    state.base = f"http://127.0.0.1:{srv.server_address[1]}"
+    yield state
+    srv.shutdown()
+    srv.server_close()
+
+
+def _wait_job(client, job_id, timeout=10.0):
+    deadline = time.time() + timeout
+    while True:
+        resp = client.get(f"/files/import/{job_id}")
+        assert resp.status_code == 200, resp.text
+        job = resp.json()
+        if job["state"] != "running":
+            return job
+        assert time.time() < deadline, f"import never finished: {job}"
+        time.sleep(0.05)
+
+
+class TestImportUrl:
+    """POST /files/import + GET /files/import/{job_id} — one-request import."""
+
+    def test_identity_single_request_and_decoded_pct(self, client, origin, monkeypatch):
+        """One GET, no HEAD probe; pct lives in decoded (disk) byte-space."""
+        monkeypatch.setenv("SLO_FILES_ALLOW_PRIVATE", "1")
+        origin.body = b"x" * 50_000
+        with client:
+            resp = client.post("/files/import", json={"url": f"{origin.base}/data.txt"})
+            assert resp.status_code == 200, resp.text
+            job = _wait_job(client, resp.json()["job_id"])
+
+        assert job["state"] == "done", job
+        assert job["error"] is None
+        # decoded/decoded: final total equals the file on disk, not a wire figure
+        assert job["done"] == job["total"] == 50_000
+        assert job["pct"] == 100.0
+        # identity: wire == decoded, nothing saved, single request
+        assert origin.count == 1
+        assert job["wire_bytes"] == 50_000
+        assert job["saved_bytes"] == 0
+        # the file landed in the manager (list reports the stored filename)
+        listing = client.get("/files/").json()
+        assert any(
+            f["filename"].endswith(".txt") and f["size_bytes"] == 50_000 for f in listing["files"]
+        ), listing
+
+    def test_gzip_origin_saves_wire_and_stays_decoded(
+        self, client, origin, monkeypatch, isolated_router
+    ):
+        """gzip origin: bar counts decoded bytes; savings reported separately."""
+        monkeypatch.setenv("SLO_FILES_ALLOW_PRIVATE", "1")
+        original = b"compress me " * 4000  # ~48 KB, compresses well
+        origin.body = original
+        origin.encoding = "gzip"
+        with client:
+            resp = client.post("/files/import", json={"url": f"{origin.base}/doc.txt"})
+            job = _wait_job(client, resp.json()["job_id"])
+
+        assert job["state"] == "done", job
+        assert job["done"] == len(original)  # decoded bytes on disk
+        assert job["pct"] == 100.0
+        assert job["wire_bytes"] < len(original)
+        assert job["saved_bytes"] > 0
+        assert job["content_encoding"] == "gzip"
+        assert origin.count == 1
+        # stored file is the decoded body
+        stored = [p for p in isolated_router.UPLOADS_DIR.iterdir() if p.name.endswith(".txt")]
+        assert stored and stored[0].read_bytes() == original
+
+    def test_running_progress_never_reports_wire_total(self, client, origin, monkeypatch):
+        """Mid-run samples: total is decoded or unknown — never the wire size."""
+        monkeypatch.setenv("SLO_FILES_ALLOW_PRIVATE", "1")
+        original = b"payload " * 6000  # 48 KB
+        origin.body = original
+        origin.encoding = "gzip"
+        origin.delay = 0.2  # hold the response open so we can sample mid-run
+        with client:
+            resp = client.post("/files/import", json={"url": f"{origin.base}/slow.txt"})
+            job_id = resp.json()["job_id"]
+            samples = []
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                j = client.get(f"/files/import/{job_id}").json()
+                samples.append(j)
+                if j["state"] != "running":
+                    break
+                time.sleep(0.05)
+            final = _wait_job(client, job_id)
+
+        wire_size = None
+        for s in samples:
+            # decoded total (or unknown=0) — a wire-space total would equal
+            # the gzip length, which is neither 0 nor the decoded length.
+            if s["total"] not in (0, len(original)):
+                wire_size = s["total"]
+            assert 0.0 <= s["pct"] <= 100.0
+        assert wire_size is None, f"wire total leaked into progress: {wire_size}"
+        assert final["state"] == "done"
+
+    def test_rejects_non_http_scheme(self, client):
+        resp = client.post("/files/import", json={"url": "ftp://host/x.txt"})
+        assert resp.status_code == 400
+
+    def test_rejects_private_address(self, client, monkeypatch):
+        monkeypatch.delenv("SLO_FILES_ALLOW_PRIVATE", raising=False)
+        resp = client.post("/files/import", json={"url": "http://127.0.0.1:1/x.txt"})
+        assert resp.status_code == 403
+
+    def test_rejects_url_without_extension(self, client, monkeypatch):
+        monkeypatch.setenv("SLO_FILES_ALLOW_PRIVATE", "1")
+        resp = client.post("/files/import", json={"url": "http://127.0.0.1:1/noext"})
+        assert resp.status_code == 400
+
+    def test_rejects_empty_url(self, client):
+        resp = client.post("/files/import", json={"url": "  "})
+        assert resp.status_code == 400
+
+    def test_size_cap_aborts_and_cleans_up(self, client, origin, monkeypatch, isolated_router):
+        monkeypatch.setenv("SLO_FILES_ALLOW_PRIVATE", "1")
+        monkeypatch.setattr("apps.api.server.routers.files.MAX_IMPORT_SIZE", 1024)
+        origin.body = b"y" * 64_000
+        with client:
+            resp = client.post("/files/import", json={"url": f"{origin.base}/big.txt"})
+            job = _wait_job(client, resp.json()["job_id"])
+
+        assert job["state"] == "error", job
+        assert "exceeds" in (job["error"] or "")
+        # no partial body, no .sgpart left behind
+        leftovers = [p for p in isolated_router.UPLOADS_DIR.iterdir() if p.name != "_metadata.json"]
+        assert leftovers == [], leftovers
+
+    def test_unknown_job_is_404(self, client):
+        resp = client.get("/files/import/nope")
+        assert resp.status_code == 404
+
+    def test_import_route_registered_before_file_id_catchall(self, client):
+        # GET /files/import has no GET route → falls to /{file_id} → 404, not 500
+        resp = client.get("/files/import")
+        assert resp.status_code == 404

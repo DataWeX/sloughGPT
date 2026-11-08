@@ -10,11 +10,17 @@ import {
   Button,
   Checkbox,
   Input,
+  Progress,
   cn,
 } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { filesController, type FileEntry, type FileDetail } from '@/lib/files-controller'
+import {
+  filesController,
+  type FileEntry,
+  type FileDetail,
+  type ImportStatus,
+} from '@/lib/files-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { ImagesPanel } from '@/components/images/ImagesPanel'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -31,6 +37,11 @@ export default function FilesPage() {
   const [batchDeleting, setBatchDeleting] = useState(false)
   const [previewFile, setPreviewFile] = useState<FileDetail | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importUrl, setImportUrl] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importJob, setImportJob] = useState<ImportStatus | null>(null)
+  const [importTick, setImportTick] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const addToast = notify.toast
 
@@ -50,6 +61,52 @@ export default function FilesPage() {
   useEffect(() => {
     fetchFiles()
   }, [fetchFiles])
+
+  // Poll the import job every 500 ms while it runs; the percentage it carries
+  // is decoded/decoded (disk byte-space) — wire savings are a separate receipt.
+  useEffect(() => {
+    if (!importJob || importJob.state !== 'running') return
+    const t = setTimeout(() => {
+      filesController
+        .importStatus(importJob.job_id)
+        .then((status) => {
+          setImportJob(status)
+          if (status.state === 'done') {
+            addToast(`Imported ${status.filename}`, 'success')
+            void fetchFiles()
+          } else if (status.state === 'error') {
+            addToast(status.error ?? 'Import failed', 'error')
+          }
+        })
+        .catch(() => {
+          /* transient poll failure — keep polling on the next tick */
+        })
+        .finally(() => setImportTick((n) => n + 1))
+    }, 500)
+    return () => clearTimeout(t)
+  }, [importJob, importTick, addToast, fetchFiles])
+
+  const handleStartImport = async () => {
+    const url = importUrl.trim()
+    if (!url) return
+    setImporting(true)
+    try {
+      const { job_id } = await filesController.startImport(url)
+      setImportJob({
+        job_id,
+        state: 'running',
+        filename: url.split('/').pop() || url,
+        done: 0,
+        total: 0,
+        pct: 0,
+      })
+      setImportTick((n) => n + 1)
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Could not start import', 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -207,6 +264,16 @@ export default function FilesPage() {
             >
               <IconRefresh className="h-3 w-3" />
             </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px]"
+              onClick={() => setImportOpen((o) => !o)}
+              aria-label="Toggle import from URL"
+              aria-expanded={importOpen}
+            >
+              Import URL
+            </Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -230,6 +297,33 @@ export default function FilesPage() {
             <div className="rounded-lg bg-primary/5 border border-primary/20 px-2.5 py-1.5 text-[11px] text-primary">
               {uploadMsg}
             </div>
+          )}
+          {importOpen && (
+            <div className="flex gap-1.5" data-testid="import-row">
+              <Input
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void handleStartImport()}
+                placeholder="https://example.com/file.txt"
+                aria-label="Import URL"
+                className="h-7 text-[11px] flex-1"
+              />
+              <Button
+                size="sm"
+                className="h-7 text-[11px]"
+                onClick={() => void handleStartImport()}
+                disabled={importing || !importUrl.trim() || importJob?.state === 'running'}
+              >
+                {importing ? 'Starting...' : 'Start import'}
+              </Button>
+            </div>
+          )}
+          {importJob && (
+            <ImportJobCard
+              job={importJob}
+              formatSize={formatSize}
+              onDismiss={() => setImportJob(null)}
+            />
           )}
           <div className="flex gap-1.5">
             <Input
@@ -397,5 +491,61 @@ export default function FilesPage() {
             (route-map row: /files <- /files + /images, card 7839a7c6). */}
       <ImagesPanel />
     </PageContainer>
+  )
+}
+
+/**
+ * Progress receipt for an import job.
+ *
+ * The bar lives in disk byte-space (decoded vs decoded) — wire bytes are
+ * reported only in the final savings line, never mixed into the percentage.
+ */
+function ImportJobCard({
+  job,
+  formatSize,
+  onDismiss,
+}: {
+  job: ImportStatus
+  formatSize: (bytes: number) => string
+  onDismiss: () => void
+}) {
+  const value = job.state === 'done' ? 100 : job.total > 0 && job.total > job.done ? job.pct : null
+  const indeterminate = job.state === 'running' && value === null
+  const savedPct =
+    job.wire_bytes != null && job.saved_bytes != null
+      ? Math.round((100 * job.saved_bytes) / Math.max(1, job.wire_bytes + job.saved_bytes))
+      : null
+
+  return (
+    <div
+      className="rounded-lg border border-border/40 px-2.5 py-2 space-y-1.5"
+      data-testid="import-job"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium truncate">
+          {job.state === 'running' && `Importing ${job.filename}…`}
+          {job.state === 'done' && `Imported ${job.filename}`}
+          {job.state === 'error' && `Import failed: ${job.error ?? 'unknown error'}`}
+        </span>
+        <Button size="sm" variant="ghost" className="h-5 text-[10px] shrink-0" onClick={onDismiss}>
+          Dismiss
+        </Button>
+      </div>
+      <Progress
+        value={value}
+        indeterminate={indeterminate}
+        max={100}
+        size="xs"
+        variant={job.state === 'done' ? 'success' : job.state === 'error' ? 'error' : 'default'}
+        showValue
+      />
+      {job.state === 'done' && job.wire_bytes != null && job.saved_bytes != null && (
+        <p className="text-[10px] text-muted-foreground/70" data-testid="import-savings">
+          Saved {formatSize(job.saved_bytes)} on the wire ({savedPct}%) — transferred{' '}
+          {formatSize(job.wire_bytes)}, file is {formatSize(job.wire_bytes + job.saved_bytes)} ·{' '}
+          {job.content_encoding ?? 'identity'}
+        </p>
+      )}
+    </div>
   )
 }
