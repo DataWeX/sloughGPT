@@ -76,7 +76,9 @@ Definition of done — all four, each closing with a card ID + landed sha:
    `/benchmark` headless, `/feedback` kept, `/voice` → chat mode: no
    half-merged navigation left behind.
 3. **Build order #5** — phoneme, knowledge, and training pages restructured
-   to follow `UX_FLOWS.md` (`PRODUCT_ENGINEERING.md` → Build Order).
+   to follow `UX_FLOWS.md` (`PRODUCT_ENGINEERING.md` → Build Order) —
+   knowledge + training landed 2026-11-08; phoneme split to card
+   `20261108_152007` (model-capability ruling, not a learning UI).
 4. **Build order #7** — user journeys green: `tests/core-py/test_user_journeys.py`,
    `packages/avion/tests/test_journeys.py`, `scripts/run_journey_tests.py`.
 

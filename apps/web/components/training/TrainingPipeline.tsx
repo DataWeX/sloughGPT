@@ -193,7 +193,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   if (displayEpoch > 0 && displayTotalEpochs > 0)
     runningTiles.push({
       key: 'epoch',
-      label: 'Epoch',
+      label: 'Training round',
       value: displayEpoch,
       hint: `/${displayTotalEpochs}`,
     })
@@ -250,7 +250,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
               </span>
               {displayEpoch > 0 && displayTotalEpochs > 0 && (
                 <span>
-                  Epoch {displayEpoch}/{displayTotalEpochs}
+                  Training round {displayEpoch}/{displayTotalEpochs}
                 </span>
               )}
               {displayLoss != null && <span>Loss: {displayLoss.toFixed(4)}</span>}
@@ -349,7 +349,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
                       onClick={async () => {
                         try {
                           await trainingJobsController.loadAdapter(session.checkpoint!, false)
-                          addToast('LoRA adapter loaded into model', 'success')
+                          addToast('Adapter loaded into model', 'success')
                         } catch (e) {
                           addToast(
                             'Could not load adapter: ' +
@@ -359,7 +359,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
                         }
                       }}
                     >
-                      Load LoRA adapter
+                      Load adapter into model
                     </Button>
                   )}
                 <Button
