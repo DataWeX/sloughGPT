@@ -46,6 +46,7 @@ export const REDIRECTS: Record<string, string> = {
   '/explain': '/chat?mode=explain',
   '/wellness': '/chat?mode=wellness',
   '/shell': '/developer',
+  '/vm': '/developer',
   '/workflow': '/feedback',
   '/tools': '/chat',
   '/workspace-dashboard': '/workspace',

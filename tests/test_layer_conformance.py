@@ -19,11 +19,13 @@ REPO = Path(__file__).resolve().parents[1]
 ROUTER_DIR = REPO / "apps" / "api" / "server" / "routers"
 CONTROLLER_DIR = REPO / "apps" / "api" / "server" / "controllers"
 
-# Excluded zones per card b22e878a: shell/vm/world_render are another
-# session's concurrent-refactor territory (they historically DO use
-# _internal). api_keys was dropped from this allowlist when its module was
-# merged into routers/settings.py (route-map card 5/7, 20261101_154056).
-ROUTER_ALLOWLIST = frozenset({"shell.py", "vm.py", "world_render.py"})
+# Excluded zones per card b22e878a: world_render is another session's
+# concurrent-refactor territory (it historically DOES use _internal).
+# api_keys was dropped when merged into routers/settings.py (route-map card
+# 5/7, 20261101_154056); shell.py + vm.py were dropped when vm.py was merged
+# into shell.py (route-map card 6/7, 20261101_154057) — neither has any AST
+# ``_internal`` import (shell's lone mention is a docstring).
+ROUTER_ALLOWLIST = frozenset({"world_render.py"})
 
 
 def _module_files(directory: Path) -> list[Path]:

@@ -6,13 +6,7 @@
 // presentation over hook state.
 
 import { type Dispatch, type SetStateAction } from 'react'
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@sloughgpt/strui'
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import type { VMRegister, VMRunResult, VMTrainingJob } from '@/lib/vm-controller'
 import type { TrainConfig } from '../vm-data'
@@ -107,9 +101,7 @@ export function VmResultColumn({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() =>
-                  navigator.clipboard.writeText(result.training_result as string)
-                }
+                onClick={() => navigator.clipboard.writeText(result.training_result as string)}
               >
                 Copy
               </Button>
@@ -148,9 +140,7 @@ export function VmResultColumn({
                 size="sm"
                 variant="ghost"
                 onClick={() => {
-                  const text = result.registers
-                    .map((r) => `${r.name} = ${r.hex}`)
-                    .join('\n')
+                  const text = result.registers.map((r) => `${r.name} = ${r.hex}`).join('\n')
                   navigator.clipboard.writeText(text)
                 }}
               >
@@ -204,9 +194,7 @@ export function VmResultColumn({
       )}
 
       {/* VGA memory */}
-      {result && result.success && (
-        <VGADisplay text={result.vga_text} cells={result.vga_cells} />
-      )}
+      {result && result.success && <VGADisplay text={result.vga_text} cells={result.vga_cells} />}
 
       {/* Memory dump */}
       {result?.memory_dump && (

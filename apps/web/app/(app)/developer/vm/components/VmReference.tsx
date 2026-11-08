@@ -37,9 +37,7 @@ export function VmReference({ open }: { open: boolean }) {
           <div>
             <p className="font-medium mb-1">Control Flow</p>
             <pre className="text-muted-foreground">
-              {
-                'JMP label\nJE / JNE label\nJG / JL label\nJGE / JLE label\nCALL func\nRET\nHLT'
-              }
+              {'JMP label\nJE / JNE label\nJG / JL label\nJGE / JLE label\nCALL func\nRET\nHLT'}
             </pre>
           </div>
           <div>

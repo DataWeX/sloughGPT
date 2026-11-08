@@ -59,7 +59,6 @@
     "app/(app)/training/runs/page.tsx",
     "app/(app)/users/page.tsx",
     "app/(app)/vector/page.tsx",
-    "app/(app)/vm/page.tsx",
     "app/(app)/workspace/(overview)/audit/page.tsx",
     "app/(app)/workspace/(overview)/page.tsx",
     "app/(app)/workspace/(overview)/usage/page.tsx",

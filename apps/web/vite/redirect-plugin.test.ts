@@ -34,8 +34,9 @@ describe('resolveRedirect / splitTarget', () => {
     expect(splitTarget('/datasets')).toEqual({ path: '/datasets', search: '' })
   })
 
-  it('has 47 entries matching proxy table', () => {
-    expect(Object.keys(REDIRECTS).length).toBe(48)
+  it('has 49 entries matching proxy table', () => {
+    // 2026-11-08: 48 -> 49 — /vm folded into /developer (route-map card 6/7).
+    expect(Object.keys(REDIRECTS).length).toBe(49)
   })
 
   it('redirects the retired /mole page to the plugin surface', () => {

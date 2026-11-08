@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
-from apps.api.server.routers.vm import router
+from apps.api.server.routers.shell import router  # vm merged into shell (card 6/7)
 
 
 @pytest.fixture

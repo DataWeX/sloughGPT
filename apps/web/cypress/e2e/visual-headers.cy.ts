@@ -17,7 +17,6 @@ const PAGES = [
   { path: '/knowledge', name: 'knowledge' },
   { path: '/memory', name: 'memory' },
   { path: '/shell', name: 'shell' },
-  { path: '/vm', name: 'vm' },
   { path: '/companion', name: 'companion' },
   { path: '/agents', name: 'agents' },
   { path: '/collections', name: 'collections' },

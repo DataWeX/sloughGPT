@@ -20,6 +20,7 @@ import { VoiceTab } from './dev-voice-tab'
 import { ApiTab } from './dev-api-tab'
 import { QuickActionsTab } from './dev-quick-actions-tab'
 import { StartupTab } from './dev-startup-tab'
+import { VmTab } from './dev-vm-tab'
 
 export default function DeveloperPage() {
   const [tab, setTab] = useState<string>('shell')
@@ -34,7 +35,7 @@ export default function DeveloperPage() {
   return (
     <PageContainer
       title="Developer"
-      subtitle="Shell, files, voice & API tools"
+      subtitle="Shell, files, VM, voice & API tools"
       headerRight={
         <div className="flex items-center gap-3">
           {startupStage && startupStage !== 'ready' && startupStage !== 'background' && (
@@ -64,6 +65,7 @@ export default function DeveloperPage() {
           <TabsTrigger value="api">API</TabsTrigger>
           <TabsTrigger value="quick">Quick Actions</TabsTrigger>
           <TabsTrigger value="startup">Startup</TabsTrigger>
+          <TabsTrigger value="vm">VM</TabsTrigger>
         </TabsList>
 
         <TabsContent value="shell">
@@ -83,6 +85,9 @@ export default function DeveloperPage() {
         </TabsContent>
         <TabsContent value="startup">
           <StartupTab />
+        </TabsContent>
+        <TabsContent value="vm">
+          <VmTab />
         </TabsContent>
       </Tabs>
     </PageContainer>

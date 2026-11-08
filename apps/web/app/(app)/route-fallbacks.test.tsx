@@ -29,7 +29,9 @@ describe('route error boundaries', () => {
     // /models (route map card 3/7) and deleted its error/loading/page
     // trio; page-baseline.json was updated in the same commit, this
     // companion floor was missed.
-    expect(errors.length).toBeGreaterThanOrEqual(25)
+    // 2026-11-08: floor 25 -> 24 — /vm folded into /developer as its VM tab
+    // (route map card 6/7) and deleted its error/loading/page trio.
+    expect(errors.length).toBeGreaterThanOrEqual(24)
   })
 
   it.each(errors)('renders %s and retries', (key) => {
@@ -51,7 +53,8 @@ describe('route loading skeletons', () => {
     // 2026-10-24: floor 48 -> 24 — same page-prune as the error boundary
     // (two kept routes carry an error.tsx but no loading.tsx).
     // 2026-11-07: floor 24 -> 23 — same /model/[id] deletion as above.
-    expect(loadings.length).toBeGreaterThanOrEqual(23)
+    // 2026-11-08: floor 23 -> 22 — same /vm deletion as above (card 6/7).
+    expect(loadings.length).toBeGreaterThanOrEqual(22)
   })
 
   it.each(loadings)('renders %s with a skeleton', (key) => {

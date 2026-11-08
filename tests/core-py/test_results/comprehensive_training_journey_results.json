@@ -1,16 +1,16 @@
 [
   {
-    "test": "training_lifecycle_page_loads",
-    "passed": true,
-    "detail": "len=2470",
+    "test": "config_hyperparameter_inputs",
+    "passed": false,
+    "detail": "body_snippet=Training interrupted\nView job\n\ndistill\n\nRecover now\nView logs\nDismiss\nTraining interrupted\nView job\n\nnative-training-1793868625285\n\nRecover now\nView logs\nDismiss\nSkip to main content\nM\nMan\nCONSOLE\n\nCO",
     "devtools": {
-      "step": "training_page_load",
-      "console_count": 15,
+      "step": "config_hyperparams",
+      "console_count": 16,
       "request_count": 322,
       "error_count": 0,
       "console_errors": [],
       "failed_requests": [],
-      "summary": "15 console, 322 network, 0 errors"
+      "summary": "16 console, 322 network, 0 errors"
     }
   },
   {
@@ -25,20 +25,6 @@
       "console_errors": [],
       "failed_requests": [],
       "summary": "16 console, 324 network, 0 errors"
-    }
-  },
-  {
-    "test": "config_hyperparameter_inputs",
-    "passed": false,
-    "detail": "body_snippet=Training interrupted\nView job\n\ndistill\n\nRecover now\nView logs\nDismiss\nTraining interrupted\nView job\n\nnative-training-1793868625285\n\nRecover now\nView logs\nDismiss\nSkip to main content\nM\nMan\nCONSOLE\n\nCO",
-    "devtools": {
-      "step": "config_hyperparams",
-      "console_count": 16,
-      "request_count": 322,
-      "error_count": 0,
-      "console_errors": [],
-      "failed_requests": [],
-      "summary": "16 console, 322 network, 0 errors"
     }
   }
 ]

@@ -50,7 +50,6 @@ ROUTER_MODULES: list[str] = [
     "user_adapters",
     "users",
     "vector",
-    "vm",
     "voice",
     "workflow",
     "workspaces",

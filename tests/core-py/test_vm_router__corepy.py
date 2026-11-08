@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.vm import router as vm_router  # noqa: E402
+from routers.shell import router as vm_router  # noqa: E402 — vm merged into shell (card 6/7)
 
 
 def _app() -> FastAPI:

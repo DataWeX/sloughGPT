@@ -11,9 +11,7 @@ export function VmTrace({ trace }: { trace?: VMRunResult['trace'] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
-          Execution Trace (first {trace.length} steps)
-        </CardTitle>
+        <CardTitle className="text-base">Execution Trace (first {trace.length} steps)</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="max-h-64 overflow-x-auto overflow-y-auto">

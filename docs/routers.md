@@ -622,6 +622,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 ## VM Router (`/vm`)
 
+> Served by `routers/shell.py` since card `20261101_154057` — `vm.py` was merged into the `/shell` facade as its `/vm` sub-router (paths and wire shapes unchanged).
+
 | Method | Path                              | Description                       |
 | ------ | --------------------------------- | --------------------------------- |
 | `POST` | `/vm/run`                         | Run x86 assembly in sandboxed VM. |
