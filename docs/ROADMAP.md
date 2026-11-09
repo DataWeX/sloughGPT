@@ -68,14 +68,16 @@ the remaining release mass, not one track among several.
 
 Definition of done — all four, each closing with a card ID + landed sha:
 
-1. **Seven ⏳ route-map targets landed** — `/models`, `/souls`, `/knowledge`,
+1. **Seven ⏳ route-map targets landed** ✅ (2026-11-09, card `20261101_140445_v1-route-map-land-the-7-pending-targets-models-souls-knowled`) — `/models`, `/souls`, `/knowledge`,
    `/settings`, `/shell`, `/files`, `/monitoring` → ~20 frontend pages, ~15
    routers (per-page merge detail lives in `PRODUCT_ENGINEERING.md` → Route
    Map; this file does not duplicate that table).
-2. **Every 🔧 partial fully integrated** — `/training` sidebar consolidation,
-   `/benchmark` headless, `/feedback` kept, `/voice` → chat mode: no
-   half-merged navigation left behind.
-3. **Build order #5** — phoneme, knowledge, and training pages restructured
+2. **Every 🔧 partial fully integrated** ✅ (2026-11-09, card `20261101_140445_v1-integration-fold-every-partial-surface-into-its-merged-ho`) — `/training` sidebar consolidation,
+   `/benchmark` headless (nav-level: no sidebar entry; page kept as a hidden
+   deep-link surface), `/feedback` kept, `/voice` → chat mode: no
+   half-merged navigation left behind (19/19 nav paths resolve, 0 straggler
+   pages; Route Map status cells truthed up).
+3. **Build order #5** ✅ (2026-11-09, card `20261101_140445_build-order-5-restructure-phoneme-knowledge-and-training-pag`) — phoneme, knowledge, and training pages restructured
    to follow `UX_FLOWS.md` (`PRODUCT_ENGINEERING.md` → Build Order) —
    knowledge + training landed 2026-11-08; phoneme split to card
    `20261108_152007` (model-capability ruling, not a learning UI).
