@@ -613,6 +613,15 @@ def _build_endpoint(
             model_style[1] if model_style is not None else _request_model(spec, path_params)
         )
         body_default: Any = Body(...)
+        if model_style is not None:
+            # A model body whose handler declares a default is an OPTIONAL
+            # body — FastAPI's own semantics for `req: Model = None`. The
+            # hand-built route served an absent body as None → handler
+            # defaults; forcing `Body(...)` here flipped /self-train/start
+            # to 422 on a bodyless POST (caught by CI, card 20261101_154058).
+            _model_sig = inspect.signature(handler).parameters.get(model_style[0])
+            if _model_sig is not None and _model_sig.default is None:
+                body_default = Body(None)
         if authed:
 
             async def write_endpoint(
