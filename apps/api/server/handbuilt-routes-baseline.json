@@ -1,6 +1,6 @@
 {
   "note": "Grandfathered hand-built route declarations for scripts/check_contract.py \u2014 the endpoint rule's ratchet: counts may only shrink, as a reviewed edit. Regenerate with --write-declaration-baseline.",
-  "total": 661,
+  "total": 652,
   "files": {
     "main.py": 1,
     "routers/agents.py": 11,
@@ -54,7 +54,6 @@
     "routers/world_render.py": 5,
     "training/legacy.py": 1,
     "training/live_stream.py": 1,
-    "training/router.py": 27,
-    "training/webhook_endpoints.py": 9
+    "training/router.py": 27
   }
 }
