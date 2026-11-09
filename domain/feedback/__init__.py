@@ -64,6 +64,8 @@ __all__ = [
     "get_message_feedback",
     "HFDPOTrainer",
     "get_online_lora_updater",
+    # Route-surface read (card 20261101_140447)
+    "FeedbackTrainer",
 ]
 
 _LAZY_IMPORTS = {
@@ -71,6 +73,9 @@ _LAZY_IMPORTS = {
     "HFDPOTrainer": ("._internal.hf_dpo", "HFDPOTrainer"),
     "get_feedback_workflow": ("._internal.workflow", "get_feedback_workflow"),
     "get_online_lora_updater": ("._internal.online_train", "get_online_lora_updater"),
+    # Route-surface read (card 20261101_140447) — from_feedback.py imports
+    # through the facade, mapped to the module it reads today.
+    "FeedbackTrainer": ("._internal.training", "FeedbackTrainer"),
 }
 
 

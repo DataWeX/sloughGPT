@@ -45,6 +45,15 @@ _LAZY_IMPORTS = {
     "DatasetRepository": ("._internal.entity_repositories", "DatasetRepository"),
     "KnowledgeRepository": ("._internal.entity_repositories", "KnowledgeRepository"),
     "artifact_registry": ("._internal.artifact_registry", None),
+    # Route-surface reads (card 20261101_140447) — mapped to the _internal
+    # modules because that is what reads them today: tests/test_training_distill
+    # patches domain.infrastructure._internal.{model_registry,server_state}
+    # and consumed through this facade, so the facade binds there (facade
+    # binding rule: map to the module the tests actually patch). Consumers
+    # that import domain.infrastructure.server_state directly (lora.py,
+    # routers/souls.py, …) bypass this entry; AppError is already eager here.
+    "get_model_registry": ("._internal.model_registry", "get_model_registry"),
+    "get_server_state": ("._internal.server_state", "get_server_state"),
 }
 
 
@@ -82,4 +91,7 @@ __all__ = [
     "SLNCCompiler",
     "DatasetRepository",
     "KnowledgeRepository",
+    # Route-surface reads (card 20261101_140447)
+    "get_model_registry",
+    "get_server_state",
 ]

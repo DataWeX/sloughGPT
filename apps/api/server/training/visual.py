@@ -21,7 +21,7 @@ from schemas.common import raise_error
 
 from domain.agents import ToolSpec
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .helpers import _finish_job
 from .jobs import training_jobs
@@ -98,7 +98,7 @@ async def start_visual_training(
     def _run_visual(job_id_: str = job_id):
         try:
             training_jobs[job_id_]["status"] = "running"
-            from domain.training._internal.video_trainer import (
+            from domain.training import (
                 VideoCaptionTrainer,
                 VideoTrainConfig,
             )

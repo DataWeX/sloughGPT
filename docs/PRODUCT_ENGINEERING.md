@@ -167,11 +167,7 @@ Frontend: collections page (single page)
 
 ### Bad examples (fix these)
 
-> **Status 2026-09-29:** Voice/tokenizer/token_tree/kb bypasses are fixed (facade
-> or engine imports). `training/router.py` now delegates everything to
-> `TrainingEngine` (0 `_internal`, see Router Playbook below). Remaining: the
-> engines' own internals — `self_train`/`lora_eval` counts are inside
-> concurrent WIP files.
+> **Status 2026-11-09 (card `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`, routers out of `domain.*_internal*`):** every route-surface module is now facade-clean — `routers/`, `controllers/`, and feature-package sub-routers. Re-measured 2026-11-09: **8 of 66 route-surface files** still imported `_internal` (all in `training/`: distill, execution, from_feedback, jobs_api, legacy, lora, turbo_endpoints, visual — 33 sites), migrated 1:1 through the `domain.training` / `domain.feedback` / `domain.infrastructure` facades. The rule is executable and structural: `test_layer_conformance.py` AST-scans every production module that constructs an `APIRouter`, applies a route decorator, or calls `add_api_route` — the directory list that missed these 8 is gone, and the `world_render` agreed zone is dropped to empty (verified clean). Voice/tokenizer/token_tree/kb were fixed earlier (2026-09-29 note below); `self_train`/`lora_eval` were clean when measured. The three "bad examples" remain as pattern illustrations of the pre-fix state.
 
 **Voice** — 3 routers, domain bypassed:
 
@@ -275,8 +271,13 @@ carry a router's import rule: public `domain.<feature>` facades only
 `domain.*._internal.*` — orchestration shared between routers lives in a
 controller, but its imports are governed exactly like a router's. Both
 layers are checked by an AST import scan in
-`tests/test_layer_conformance.py` (routers allow `shell`/`vm`/
-`world_render`/`api_keys` as agreed zones; controllers allow none).
+`tests/test_layer_conformance.py`, which since card `20261101_140447`
+scans the **structural** route surface — every production module that
+constructs an `APIRouter`, applies a route decorator, or calls
+`add_api_route`, feature packages included (the directory list missed
+`training/`'s 8 sub-routers) — with **no agreed zones left** (shell/vm/
+api_keys merged away; `world_render` verified clean, zone emptied);
+controllers allow none.
 
 **Facade binding rule.** Names the API layer reads must resolve LAZILY
 from a facade (`_LAZY_IMPORTS` + `__getattr__`), never eagerly at facade
@@ -356,7 +357,7 @@ the tests actually patch.
 1. **Write this doc** ✅ (you're reading it)
 2. **Quick cleanup** ✅ — dead routers removed (metrics, collections, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), `/tools` grid removed
 3. **Feature engines** ✅ — VoiceEngine, KnowledgeEngine, TrainingEngine (ToolsEngine pattern) + `get_*_engine` facade exports, routers wired
-4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across all 58 router files — enforced by `tests/test_layer_conformance.py`, shell/vm/world_render/api_keys excluded as agreed zones; facade lazy exports added for heavy symbols; tests may patch facade or `_internal` paths — lazy binding keeps both visible)
+4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across the whole route surface — enforced by `tests/test_layer_conformance.py`, structural since card `20261101_140447`: feature-package sub-routers included, no agreed zones remain; facade lazy exports added for heavy symbols; tests may patch facade or `_internal` paths — lazy binding keeps both visible)
 5. **UI flows** ✅ (2026-11-08) — knowledge + training restructured to follow UX_FLOWS.md: knowledge = ReadMyFilesCard hero + `?id=` detail fold (cards `20260924_058`, `20261101_154056`); training = "Teach me" 3-step pipeline with progressive disclosure + plain-language guard (`training-plain-language.test.tsx` — "Training round" never "Epoch", LoRA-free adapter surface; loss numbers stay per the 3-Click Flow, user ruling 2026-11-08). **Phoneme split out** to card `20261108_152007` — user ruling: it is *model* capability (voice/TTS/tokenizer infra), not a dictionary/learning UI; journey charter decision lives there, not here.
 6. **Consciousness** ✅ — wire cognitive engine to inference pipeline (SloEngine post-gen hook + router single process, level-gated via `ConsciousnessConfig.level`; narrative surfaced through `reasoning_chain` and `CONSCIOUSNESS complete` SSE)
 7. **Test** ✅ (2026-11-09) — verify all user journeys pass: `test_user_journeys.py` **103 passed** against this checkout's live stack (card `20261101_140446`, run with `SLO_WEB_URL`/`SLO_API_URL` — the default `:5173` pointed at a foreign session's tree, caught and re-run; skip-if-unreachable + dead-port negative control prove the env drives the target), avion `test_journeys.py` **3 passed** (FakeBackend), `run_journey_tests.py` **8/8 API + 8/8 Playwright** (exit 0, `--base-url` this checkout's vite). DoD 4 in `ROADMAP.md` closes with this card.

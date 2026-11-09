@@ -21,7 +21,7 @@ from schemas.common import raise_error
 
 from domain.agents import ToolSpec
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async, notify_push
@@ -99,7 +99,7 @@ async def start_distillation(
                 details=quality,
             )
     except Exception as e:
-        from domain.infrastructure._internal.errors import AppError
+        from domain.infrastructure import AppError
 
         if isinstance(e, AppError):
             raise
@@ -150,7 +150,7 @@ async def start_distillation(
             _random.seed(42)
             np.random.seed(42)
 
-            from domain.infrastructure._internal.model_registry import (
+            from domain.infrastructure import (
                 get_model_registry as _get_model_registry,
             )
 
@@ -164,7 +164,7 @@ async def start_distillation(
                 teacher_model = server._model_ref
                 teacher_tokenizer = getattr(server, "_tokenizer", None)
             else:
-                from domain.infrastructure._internal.server_state import (
+                from domain.infrastructure import (
                     get_server_state as _get_server_state,
                 )
 
@@ -267,7 +267,7 @@ async def start_distillation(
                 teacher_model, teacher_tokenizer, slonet=slonet_provider is not None
             )
 
-            from domain.training._internal.distillation import (
+            from domain.training import (
                 DistillationConfig,
                 DistillationTrainer,
             )

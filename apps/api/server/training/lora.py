@@ -26,7 +26,7 @@ from schemas.common import raise_error
 
 from domain.agents import ToolSpec
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -187,7 +187,7 @@ async def start_lora_finetune(
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
-            from domain.training._internal.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
+            from domain.training import HFLoraConfig, HFLoraTrainer
 
             start_time = time.time()
 
@@ -353,12 +353,13 @@ async def load_adapter(request: LoadAdapterRequest):
     try:
         import numpy as np
 
-        from domain.training._internal.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
-        from domain.training._internal.lora import (
+        from domain.training import (
             LoRAConfig,
             apply_lora_to_model,
             count_lora_parameters,
             get_lora_parameters,
+            load_lora_adapter,
+            merge_lora_adapter,
         )
 
         adapter = np.load(str(adapter_path), allow_pickle=True)
@@ -414,7 +415,7 @@ async def unload_adapter():
         raise_error("No model loaded", "E_BAD_REQUEST", status_code=400)
 
     try:
-        from domain.training._internal.hf_lora_finetune import unload_lora_adapter
+        from domain.training import unload_lora_adapter
 
         unload_lora_adapter(provider)
     except Exception as e:

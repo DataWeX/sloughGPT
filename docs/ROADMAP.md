@@ -112,10 +112,13 @@ Definition of done — all four, each closing with a card ID + landed sha:
   proving those failures pre-existed). Fix them or quarantine them honestly
   — a permanently red baseline stops being visible debt the day someone
   starts believing it.
-- **Routers out of `domain.*_internal*`** — 8 in scope, not the 2 the router
-  playbook claimed (measured 2026-10-01); re-card
-  `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`
-  (supersedes lost `97260724`).
+- **Routers out of `domain.*_internal*` ✅ (2026-11-09, card
+  `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`,
+  supersedes lost `97260724`)** — re-measured: 8 in scope (not the 2 the
+  router playbook claimed), all in `training/`'s sub-routers; migrated
+  through facades, conformance scan made structural (route surface outside
+  `routers/`+`controllers/` now scanned; `world_render` zone emptied),
+  landed sha in `AGENT_SYNC.md`.
 - **Feature-flag kill/merge memo — declined (user ruling, 2026-11-02)** — no
   memo, no deletion; the 10 flags that gate nothing stay as-is. Was card
   `d94aea1c` (lost to churn), re-carded, then dropped by ruling; no open

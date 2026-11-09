@@ -32,7 +32,7 @@ from infrastructure.contract import RouteSpec, create_router
 from schemas.common import raise_error
 
 from domain.agents import ToolParam, ToolSpec
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .helpers import _finish_job, _sloughgpt_trainer_kwds
 from .jobs import training_jobs
@@ -51,8 +51,7 @@ async def train(request):
     ``checkpoint_dir`` with ``stoi`` / ``itos`` / ``chars`` for char-LM eval; see
     ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    from domain.training._internal.dataset_manifest import ManifestError
-    from domain.training._internal.train_pipeline import SloughGPTTrainer
+    from domain.training import ManifestError, SloughGPTTrainer
 
     from .schemas import TrainRequest
 
@@ -135,7 +134,7 @@ async def train(request):
 
 async def train_resolve(body) -> dict[str, Any]:
     """Resolve ``data_path`` and checkpoint stem (dry run; no training)."""
-    from domain.training._internal.dataset_manifest import ManifestError
+    from domain.training import ManifestError
 
     from .schemas import TrainResolveRequest
 

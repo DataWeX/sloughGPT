@@ -24,7 +24,7 @@ from schemas.common import raise_error
 
 from domain.agents import ToolSpec
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
+from domain.training import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -70,7 +70,7 @@ async def train_from_feedback(
     lora_alpha = req.lora_alpha
 
     try:
-        from domain.feedback._internal.training import FeedbackTrainer
+        from domain.feedback import FeedbackTrainer
 
         trainer = FeedbackTrainer()
 
@@ -146,7 +146,7 @@ async def train_from_feedback(
 
         def run_feedback_training(job_id_: str = jid):
             try:
-                from domain.training._internal.train_pipeline import SloughGPTTrainer
+                from domain.training import SloughGPTTrainer
 
                 trainer = SloughGPTTrainer(
                     data_path=data_path,

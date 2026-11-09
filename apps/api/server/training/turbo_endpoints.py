@@ -31,7 +31,7 @@ router = APIRouter(tags=["training-turbo"])
 
 
 async def get_turbo_status():
-    from domain.training._internal.service import get_turbo_status
+    from domain.training import get_turbo_status
 
     return get_turbo_status()
 
@@ -39,7 +39,7 @@ async def get_turbo_status():
 async def start_from_sessions_unified(req: FromSessionsRequest):
     """Start from-sessions training."""
     try:
-        from domain.training._internal.service import _state, start_from_sessions_training
+        from domain.training import _state, start_from_sessions_training
 
         # Pre-flight validation
         if req.epochs < 1:
@@ -97,7 +97,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
     """Start turbo training."""
     try:
         from domain.shared import find_repo_root
-        from domain.training._internal.service import run_turbo_worker, start_turbo_training
+        from domain.training import run_turbo_worker, start_turbo_training
 
         # Pre-flight validation
         if req.source_text and len(req.source_text.strip()) < 200:
@@ -110,7 +110,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
         if req.dataset_id:
             from pathlib import Path
 
-            from domain.training._internal.cache_tags import resolve_in_cache
+            from domain.training import resolve_in_cache
 
             from .resolution import resolve_legacy_corpus_path
 
@@ -164,7 +164,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
             )
 
         # Run via executor pool for proper tracking
-        from domain.training._internal.executor import get_training_executor
+        from domain.training import get_training_executor
 
         executor = get_training_executor()
 
@@ -180,8 +180,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
                 # raises before that, surface the cause instead of leaving the
                 # job stuck until the heartbeat watchdog fires.
                 try:
-                    from domain.training._internal.state import _turbo_pause_event
-                    from domain.training._internal.turbo import _turbo_lock, _turbo_state
+                    from domain.training import _turbo_lock, _turbo_pause_event, _turbo_state
 
                     with _turbo_lock:
                         _turbo_state["status"] = "error"
