@@ -12,7 +12,10 @@ producer half of the sync pipeline (``scripts/kanban_sync.sh`` under the
   and which would explode at timer frequency). This mirror is a **union
   merge**, not a byte-copy: the repo copy can hold cards the canonical store
   never saw (sessions commit cards straight to it), so canonical decides the
-  content of cards it owns while repo-only cards survive. The union is then
+  content of cards it owns while repo-only cards survive — except that a
+  column conflict involving ``done`` resolves by recency (newer
+  ``updated_at`` wins), so repo-side closes survive and reopens propagate
+  from either side (incident 2026-10-31, ``0566d9f7f``). The union is then
   re-sealed with :meth:`PlannerStore.compute_chains` so the board keeps one
   valid hash chain. A byte-copy deleted 1124 of 1136 cards on 2026-10-31;
 * canonical ``*.md`` notes   -> ``<repo>/.dev-notes/*.md`` — byte-exact
@@ -38,13 +41,33 @@ from pathlib import Path
 from typing import Any
 
 from . import config
-from .store import PlannerStore
+from .store import Card, PlannerStore
 
 MANIFEST = "manifest.json"
 
 
 class ExportError(RuntimeError):
     """Raised when the canonical store cannot be exported."""
+
+
+def _stamp(card: Card) -> float:
+    """Comparable recency stamp for column-conflict resolution.
+
+    ``updated_at`` is ISO-8601 UTC (``datetime.now(UTC).isoformat()``) on
+    every store mutation, so it orders real writers; unparseable or absent
+    stamps sort oldest, which keeps an undated repo edit from beating a
+    stamped canonical one.
+    """
+    raw = card.updated_at or card.created_at
+    if not raw:
+        return 0.0
+    try:
+        when = datetime.fromisoformat(raw)
+    except ValueError:
+        return 0.0
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return when.timestamp()
 
 
 def union_board(
@@ -63,6 +86,13 @@ def union_board(
     while the repo chain ran to 1115), so a plain concatenation would leave
     the gate failing on duplicate ``chain_index`` values.
 
+    One scoped exception, for column conflicts that involve ``done``
+    (incident 2026-10-31, ``0566d9f7f``: a repo-side close was reverted
+    todo by the next export): the newer ``updated_at`` wins and the merged
+    card carries that stamp forward, so a close survives and a reopen
+    propagates from either side. Ties keep canonical's column, and every
+    non-done conflict keeps canonical-wins.
+
     Returns:
         Number of cards written to the repo board.
     """
@@ -72,6 +102,20 @@ def union_board(
 
     by_id = {card.id: card for card in dest.cards}
     for card in src.cards:
+        repo_card = by_id.get(card.id)
+        if (
+            repo_card is not None
+            and card.column != repo_card.column
+            and "done" in (card.column, repo_card.column)
+            and _stamp(repo_card) > _stamp(card)
+        ):
+            # The repo side mutated the column more recently: keep
+            # canonical's content but adopt the column and its recency —
+            # carrying the stamp forward is what keeps the decision stable
+            # (dropping it turns the next export into a tie).
+            card.column = repo_card.column
+            card.updated_at = repo_card.updated_at
+            card.rev = max(card.rev, repo_card.rev)
         by_id[card.id] = card  # canonical wins for cards it owns
     # Repo order first (stable, and it drops any duplicate id the file
     # already had), then canonical-only cards in canonical order.
