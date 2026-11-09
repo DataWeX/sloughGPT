@@ -79,8 +79,11 @@ Definition of done — all four, each closing with a card ID + landed sha:
    to follow `UX_FLOWS.md` (`PRODUCT_ENGINEERING.md` → Build Order) —
    knowledge + training landed 2026-11-08; phoneme split to card
    `20261108_152007` (model-capability ruling, not a learning UI).
-4. **Build order #7** — user journeys green: `tests/core-py/test_user_journeys.py`,
-   `packages/avion/tests/test_journeys.py`, `scripts/run_journey_tests.py`.
+4. **Build order #7** ✅ (2026-11-09, card `20261101_140446`) — user journeys green:
+   `tests/core-py/test_user_journeys.py` 103 passed (live stack of this checkout:
+   `SLO_WEB_URL`/`SLO_API_URL` — default `:5173` was a foreign session's tree),
+   `packages/avion/tests/test_journeys.py` 3 passed (FakeBackend),
+   `scripts/run_journey_tests.py` 8/8 API + 8/8 Playwright, exit 0.
 
 ## Next — after v1
 
