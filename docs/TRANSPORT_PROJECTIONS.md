@@ -42,13 +42,13 @@ entry. FastAPI composes the fragments (`include_router` → `app.openapi()`
 merges), so **the contract itself is modular**. The same descriptor projects
 everywhere else:
 
-| Projection          | Consumer                                                   | Status here                                                                          |
-| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| HTTP route fragment | web / mobile / SDK clients                                 | ✅ `create_router(spec, route, handler)`                                             |
-| SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                                                          |
-| CLI subcommand      | `cli.py` shell                                             | ❌ not projected                                                                     |
-| Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly                                          |
-| TS client helper    | `http-client.ts` (the only API surface allowed)            | ✅ `gen_ts_contracts.py` → one self-contained artifact per frontend (`lib/protocol/contracts.gen.ts`, SDK `src/contracts.gen.ts`, mobile `src/services/contracts.gen.ts`); rest still hand-written |
+| Projection          | Consumer                                                   | Status here                                                                                                                                                                                                        |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| HTTP route fragment | web / mobile / SDK clients                                 | ✅ `create_router(spec, route, handler)`                                                                                                                                                                           |
+| SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                                                                                                                                                                                        |
+| CLI subcommand      | `cli.py` shell                                             | ❌ not projected                                                                                                                                                                                                   |
+| Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly                                                                                                                                                                        |
+| TS client helper    | `http-client.ts` (the only API surface allowed)            | ✅ `gen_ts_contracts.py` → one self-contained, byte-identical artifact per frontend (`lib/protocol/contracts.gen.ts`, SDK `src/contracts.gen.ts`, mobile `src/services/contracts.gen.ts`); rest still hand-written |
 
 **3. Registration — microkernel, not a switchyard.** Each module self-registers
 at boot (import side-effect or a `@tool(descriptor)` decorator — the WordPress
@@ -101,14 +101,14 @@ Registering a capability is a **registry entry, never an endpoint project**.
 
 ## Where it stands
 
-| Piece                                         | State                                                                       |
-| --------------------------------------------- | --------------------------------------------------------------------------- |
-| Descriptor (`ToolSpec` + derived `params`)    | ✅ contract half exists                                                     |
-| `ToolRegistry` (agent-facing projection)      | ✅ reads the descriptor                                                     |
-| `create_router(spec, route, handler)` emission | ✅ `infrastructure/contract.py` — pilot: `GET /contracts`                      |
-| Boot-time self-registration                   | ✅ generated `routers/_manifest.py` + `scripts/gen_router_manifest.py --check`  |
-| CI contract check (descriptor + OpenAPI diff) | ✅ descriptor/registry blocking, route-baseline diff report-only, **declaration-style ratchet blocking** — new hand-built sites fail against `handbuilt-routes-baseline.json` |
-| TS projection of the contract                 | ❌ `http-client.ts` hand-writes every endpoint                                  |
+| Piece                                          | State                                                                                                                                                                            |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Descriptor (`ToolSpec` + derived `params`)     | ✅ contract half exists                                                                                                                                                          |
+| `ToolRegistry` (agent-facing projection)       | ✅ reads the descriptor                                                                                                                                                          |
+| `create_router(spec, route, handler)` emission | ✅ `infrastructure/contract.py` — pilot: `GET /contracts`                                                                                                                        |
+| Boot-time self-registration                    | ✅ generated `routers/_manifest.py` + `scripts/gen_router_manifest.py --check`                                                                                                   |
+| CI contract check (descriptor + OpenAPI diff)  | ✅ descriptor/registry blocking, route-baseline diff report-only, **declaration-style ratchet blocking** — new hand-built sites fail against `handbuilt-routes-baseline.json`    |
+| TS projection of the contract                  | ✅ `scripts/gen_ts_contracts.py` → `contracts.gen.ts` for web, SDK and mobile (freshness gated by `tests/contract/test_ts_contracts.py`); consumers still hand-write their calls |
 
 ### Census — hand-built route declarations (2026-11-04)
 

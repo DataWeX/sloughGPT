@@ -81,7 +81,7 @@ const RGB_BASELINE = ['app/(app)/magazine/magazine-tokens.ts']
  * See design-system-enforcement skill (§ Stock Tailwind Palette).
  */
 const STOCK_PALETTE_RE =
-  /\b(?:bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(?:indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/g
+  /\b(?:bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(?:indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple|violet)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/g
 
 /** Per-file grandfather list — empty: every stock-palette utility is now an offender. */
 const STOCK_PALETTE_BASELINE: Record<string, number> = {}

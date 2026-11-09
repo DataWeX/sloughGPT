@@ -101,7 +101,9 @@ def main() -> int:
 
     print("board-write benchmark (OCC PlannerStore)")
     print(f"  single-process add      : {single['add_ops_per_s']:>9.1f} ops/s ({args.ops} adds)")
-    print(f"  single-process note     : {single['note_ops_per_s']:>9.1f} ops/s ({args.ops} creates)")
+    print(
+        f"  single-process note     : {single['note_ops_per_s']:>9.1f} ops/s ({args.ops} creates)"
+    )
     print(
         f"  {args.workers}-process hammer       : "
         f"{multi['aggregate_ops_per_s']:>9.1f} ops/s aggregate "

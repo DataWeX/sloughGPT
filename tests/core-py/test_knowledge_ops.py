@@ -939,7 +939,8 @@ def test_bulk_processor_persists_once_per_batch(monkeypatch):
 
     mem = _fresh_memory()
     saves = []
-    monkeypatch.setattr(mem, "_save_entries", lambda: saves.append(1))
+    # The store rewrite itself, so the count is independent of helper naming.
+    monkeypatch.setattr(mem, "_write_entries_json", lambda: saves.append(1))
     bp = BulkProcessor(mem)
     texts = [
         "quantum computing uses qubits for parallel processing",

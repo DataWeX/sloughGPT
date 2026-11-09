@@ -445,6 +445,11 @@ def test_contract_gate_static_checks_pass():
     assert check_contract.main(["--static"]) == 0
 
 
+# TS projection freshness lives in test_ts_contracts.py (subprocess): an
+# in-process check here saw rows other tests had registered into the global
+# REGISTRY and went red on suite order, duplicating that gate.
+
+
 def test_importing_the_routers_package_stays_lazy():
     """Cold-start guard: no router module may load until get_all_routers()."""
     code = (

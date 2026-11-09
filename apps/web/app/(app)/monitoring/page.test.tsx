@@ -696,7 +696,12 @@ describe('MonitoringPage — session inspector compose (card 20261101_154058)', 
       processor: 'Intel',
       cpu_count: 8,
     } as never)
-    sc.getDisk.mockResolvedValue({ total_gb: 500, used_gb: 275, free_gb: 225, percent: 55 } as never)
+    sc.getDisk.mockResolvedValue({
+      total_gb: 500,
+      used_gb: 275,
+      free_gb: 225,
+      percent: 55,
+    } as never)
     sc.getExecutorStatus.mockResolvedValue({
       initialized: true,
       active_jobs: 0,

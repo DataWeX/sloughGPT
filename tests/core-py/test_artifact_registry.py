@@ -140,9 +140,7 @@ class TestListArtifactsProvenance:
         roots = _roots(tmp_path)
         soul = roots["model"][0] / "bad.soul"
         soul.write_bytes(b"\x00" * 8)
-        soul.with_suffix(".soul.meta.json").write_text(
-            '{"training_dataset": "ds2"}'
-        )
+        soul.with_suffix(".soul.meta.json").write_text('{"training_dataset": "ds2"}')
         reg.provenance_path(soul).write_text("{broken")
         with _scan(tmp_path):
             [a] = reg.list_artifacts("model", with_provenance=True)

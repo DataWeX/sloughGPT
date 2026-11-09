@@ -119,9 +119,7 @@ class TestRunAutoResume:
         def refuse(_jid):
             raise RuntimeError("Job status is 'running', only ... can be recovered")
 
-        result = run_auto_resume(
-            store, enabled=True, checkpoint_loadable=_loadable, recover=refuse
-        )
+        result = run_auto_resume(store, enabled=True, checkpoint_loadable=_loadable, recover=refuse)
 
         assert result.outcome is AutoResumeOutcome.SKIPPED
         assert result.events[0]["event"] == "auto_resume_skipped"

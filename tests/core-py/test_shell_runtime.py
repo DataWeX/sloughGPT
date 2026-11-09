@@ -190,10 +190,11 @@ class TestDaitRuntime:
             rt = DaitRuntime()
             # Remote path: local in-process mode (default since ad4f5ec2)
             # bypasses _api.status() entirely — force the mode this mocks.
-            with patch(
-                "domain.shell._internal.config.is_remote_mode", return_value=True
-            ), patch.object(
-                rt._api, "status", return_value={"available": True, "model_loaded": True}
+            with (
+                patch("domain.shell._internal.config.is_remote_mode", return_value=True),
+                patch.object(
+                    rt._api, "status", return_value={"available": True, "model_loaded": True}
+                ),
             ):
                 result = rt.api_status
             assert result["available"] is True

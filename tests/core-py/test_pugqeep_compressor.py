@@ -1,5 +1,7 @@
 """Tests for domain.infrastructure._internal.pugqeep.compressor — PointCompressor."""
 
+import json
+
 import numpy as np
 import pytest
 
@@ -490,12 +492,21 @@ class TestPointNbytes:
         p = c.compress_cluster(np.random.randn(64))
         nb = p.nbytes()
         assert nb > 0
+        # Payload contract (card d9028c8f): base components + residual in
+        # every branch; the huffman branch counts the persisted tree JSON
+        # (CLH1), not the sum of code-string lengths.
+        residual_bytes = p.residual.nbytes if p.residual is not None else 0
         huffman_data = p.params.get("huffman_data")
         if huffman_data is not None:
-            tree_size = sum(len(v) for v in p.params.get("huffman_codes", {}).values())
-            expected = p.params["centroids"].nbytes + len(huffman_data) + tree_size + 8
+            tree_json_len = len(json.dumps(p.params["huffman_codes"]).encode())
+            expected = p.params["centroids"].nbytes + len(huffman_data) + tree_json_len
+            if p.params.get("centroid_quantized"):
+                expected += 8  # centroid_scale + centroid_zero_point
+            expected += residual_bytes
         else:
-            expected = p.params["centroids"].nbytes + p.params["assignments"].nbytes
+            expected = (
+                p.params["centroids"].nbytes + p.params["assignments"].nbytes + residual_bytes
+            )
         assert nb == expected
 
     def test_cluster_nbytes_with_residual(self):

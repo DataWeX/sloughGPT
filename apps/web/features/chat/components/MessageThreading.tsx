@@ -173,7 +173,7 @@ export const MessageThreading = memo(function MessageThreading({
                           onChange={(e) => setReplyDraft(e.target.value)}
                           placeholder="Reply to thread..."
                           aria-label="Reply to thread"
-                          className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                          className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSubmitReply()
                             if (e.key === 'Escape') handleCancelReply()

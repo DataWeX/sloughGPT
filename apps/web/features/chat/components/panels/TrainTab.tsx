@@ -65,7 +65,7 @@ export function TrainTab({ vs }: TrainTabProps) {
           Ground truth label (caption)
         </label>
         <input
-          className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           placeholder="e.g., 'a red car on a sunny road'"
           value={vs.trainLabel}
           onChange={(e) => vs.setTrainLabel(e.target.value)}

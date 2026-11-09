@@ -77,7 +77,7 @@ export const NoteDialog = memo(function NoteDialog({
             </p>
             <textarea
               ref={textareaRef}
-              className="w-full min-h-[100px] text-sm p-2 rounded-md border border-border bg-background resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full min-h-[100px] text-sm p-2 rounded-md border border-border bg-background resize-y focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               placeholder="Enter your note..."
               value={draft}
               onChange={(e) => setDraft(e.target.value)}

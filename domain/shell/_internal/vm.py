@@ -18,6 +18,7 @@ import logging
 import re
 import struct
 import zlib
+from collections import deque
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -517,6 +518,76 @@ class FileDevice(Device):
             import os
 
             return os.path.exists(args[0])
+        return super().call(method, *args)
+
+
+class StreamDevice(Device):
+    """Frame-stream sink/source — ConsoleDevice callback precedent.
+
+    The machine pushes frames here; the host attaches a consumer
+    (``frame_fn``) or pulls with ``read()``.  The ring keeps the NEWEST
+    frames: a slow consumer must not stall the machine — an overrun drops
+    the oldest frame and counts it in ``dropped``.
+
+    Commands (via DEV_CALL):
+      write(data, tag=None) -> bytes_written   push one frame (tag = e.g. tick)
+      read() -> (tag, bytes) | None            pop oldest pending frame
+      clear() -> int                           drop all pending frames
+
+    ``frame_fn(data, tag)`` runs synchronously on every write — it is the
+    seam where a web socket / SSE handler attaches later (Python stays
+    kernel + drivers + socket; the frame loop itself lives in asm).
+    """
+
+    def __init__(self, frame_fn=None, max_pending: int = 8):
+        self._frame_fn = frame_fn
+        self._max_pending = max(1, int(max_pending))
+        self._pending: deque = deque()
+        self._written = 0
+        self._dropped = 0
+
+    def info(self):
+        return {
+            "type": "stream",
+            "pending": len(self._pending),
+            "written": self._written,
+            "dropped": self._dropped,
+            "callback": self._frame_fn is not None,
+        }
+
+    def write(self, data, tag=None):
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        elif isinstance(data, (int, float)):
+            raise DeviceFault("stream: write expects bytes, got a number")
+        else:
+            data = bytes(data)
+        self._written += 1
+        self._pending.append((tag, data))
+        while len(self._pending) > self._max_pending:
+            self._pending.popleft()
+            self._dropped += 1
+        if self._frame_fn is not None:
+            self._frame_fn(data, tag)
+        return len(data)
+
+    def read(self):
+        if not self._pending:
+            return None
+        return self._pending.popleft()
+
+    def clear(self):
+        n = len(self._pending)
+        self._pending.clear()
+        return n
+
+    def call(self, method, *args):
+        if method == "write":
+            return self.write(*args)
+        if method == "read":
+            return self.read()
+        if method == "clear":
+            return self.clear()
         return super().call(method, *args)
 
 
@@ -2545,10 +2616,24 @@ class DeviceRegisterMap:
 # ── CPU ──────────────────────────────────────────────────────────────────────
 
 
-class CPU:
-    """Central processing unit with integer ALU, tensor ALU, and control flow."""
+def _default_tensor():
+    """Build the CPU's tensor backend (lazy import; injectable for tests/alt backends).
 
-    def __init__(self, memory=None, devices=None):
+    The CPU owns control flow + data movement; tensor MATH lives on the device.
+    """
+    from .tensor_device import TensorDevice as _ComputeTensorDevice
+
+    return _ComputeTensorDevice()
+
+
+class CPU:
+    """Central processing unit — control flow, integer ALU, and device/tensor delegation.
+
+    Tensor opcodes (MATMUL, RELU, …) marshal operands here and delegate the math
+    to ``self._tensor`` (a TensorDevice); the CPU no longer inlines tensor math.
+    """
+
+    def __init__(self, memory=None, devices=None, tensor=None):
         self.regs = [0] * NUM_REGS
         self.pc = 0
         self.sp = STACK_BASE
@@ -2558,6 +2643,7 @@ class CPU:
         self._stack = {}
         self._memory = memory or Memory()
         self._devices = devices or DeviceBus()
+        self._tensor = tensor if tensor is not None else _default_tensor()
         self._instructions = []
         self._running = False
         self._step_count = 0
@@ -3056,7 +3142,7 @@ def _op_add(cpu, ops):
     rd = cpu._reg(ops[0])
     a, b = cpu._val(ops[1]), cpu._val(ops[2])
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-        cpu.regs[rd] = cpu._parse_tensor(a) + cpu._parse_tensor(b)
+        cpu.regs[rd] = cpu._tensor.add(cpu._parse_tensor(a), cpu._parse_tensor(b))
     else:
         cpu.regs[rd] = (a or 0) + (b or 0)
 
@@ -3066,7 +3152,7 @@ def _op_sub(cpu, ops):
     rd = cpu._reg(ops[0])
     a, b = cpu._val(ops[1]), cpu._val(ops[2])
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-        cpu.regs[rd] = cpu._parse_tensor(a) - cpu._parse_tensor(b)
+        cpu.regs[rd] = cpu._tensor._sub(cpu._parse_tensor(a), cpu._parse_tensor(b))
     else:
         cpu.regs[rd] = (a or 0) - (b or 0)
 
@@ -3076,7 +3162,7 @@ def _op_mul(cpu, ops):
     rd = cpu._reg(ops[0])
     a, b = cpu._val(ops[1]), cpu._val(ops[2])
     if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-        cpu.regs[rd] = cpu._parse_tensor(a) * cpu._parse_tensor(b)
+        cpu.regs[rd] = cpu._tensor.mul(cpu._parse_tensor(a), cpu._parse_tensor(b))
     else:
         cpu.regs[rd] = (a or 0) * (b or 0)
 
@@ -3086,25 +3172,23 @@ def _op_div(cpu, ops):
     rd = cpu._reg(ops[0])
     a = cpu._parse_tensor(cpu._val(ops[1]))
     b = cpu._parse_tensor(cpu._val(ops[2]))
-    with np.errstate(divide="ignore", invalid="ignore"):
-        result = a / b
-        result = np.where(np.isinf(result), 0.0, result)
-        result = np.where(np.isnan(result), 0.0, result)
-    cpu.regs[rd] = result
+    cpu.regs[rd] = cpu._tensor._safe_div(a, b)
 
 
 def _op_neg(cpu, ops):
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     a = cpu._val(ops[1])
-    cpu.regs[rd] = -cpu._parse_tensor(a) if isinstance(a, np.ndarray) else -(a or 0)
+    cpu.regs[rd] = (
+        cpu._tensor._neg(cpu._parse_tensor(a)) if isinstance(a, np.ndarray) else -(a or 0)
+    )
 
 
 def _op_abs(cpu, ops):
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     a = cpu._val(ops[1])
-    cpu.regs[rd] = np.abs(a) if isinstance(a, np.ndarray) else abs(a or 0)
+    cpu.regs[rd] = cpu._tensor._abs(a) if isinstance(a, np.ndarray) else abs(a or 0)
 
 
 def _op_matmul(cpu, ops):
@@ -3120,44 +3204,44 @@ def _op_matmul(cpu, ops):
         a = a.reshape(1, -1)
     if b.ndim == 1:
         b = b.reshape(-1, 1)
-    cpu.regs[rd] = a @ b
+    cpu.regs[rd] = cpu._tensor.matmul(a, b)
 
 
 def _op_transpose(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = cpu._parse_tensor(cpu._val(ops[1])).T
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._transpose(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_dot(cpu, ops):
     cpu._check_arity(ops, 3)
     a = cpu._parse_tensor(cpu._val(ops[1])).ravel()
     b = cpu._parse_tensor(cpu._val(ops[2])).ravel()
-    cpu.regs[cpu._reg(ops[0])] = float(np.dot(a, b))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._dot(a, b))
 
 
 def _op_norm(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = float(np.linalg.norm(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._norm(cpu._parse_tensor(cpu._val(ops[1]))))
 
 
 def _op_sum(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = float(np.sum(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._sum(cpu._parse_tensor(cpu._val(ops[1]))))
 
 
 def _op_mean(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = float(np.mean(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._mean(cpu._parse_tensor(cpu._val(ops[1]))))
 
 
 def _op_max(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = float(np.max(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = float(cpu._tensor._max(cpu._parse_tensor(cpu._val(ops[1]))))
 
 
 def _op_argmax(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = int(np.argmax(cpu._parse_tensor(cpu._val(ops[1]))))
+    cpu.regs[cpu._reg(ops[0])] = int(cpu._tensor._argmax(cpu._parse_tensor(cpu._val(ops[1])), None))
 
 
 def _op_reshape(cpu, ops):
@@ -3165,68 +3249,64 @@ def _op_reshape(cpu, ops):
     a = cpu._parse_tensor(cpu._val(ops[1]))
     rows = int(ops[2]) if isinstance(ops[2], (int, float)) else -1
     cols = int(ops[3]) if isinstance(ops[3], (int, float)) else -1
-    cpu.regs[cpu._reg(ops[0])] = a.reshape(rows, cols)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._reshape(a, (rows, cols))
 
 
 def _op_shape(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = list(cpu._parse_tensor(cpu._val(ops[1])).shape)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._shape(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_size(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = int(cpu._parse_tensor(cpu._val(ops[1])).size)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._size(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_relu(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = np.maximum(0, cpu._parse_tensor(cpu._val(ops[1])))
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor.relu(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_gelu(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = (
-        0.5 * a * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (a + 0.044715 * a**3)))
-    )
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._gelu(a)
 
 
 def _op_sigmoid(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = 1.0 / (1.0 + np.exp(-np.clip(a, -500, 500)))
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._sigmoid(a)
 
 
 def _op_tanh(cpu, ops):
     cpu._check_arity(ops, 2)
-    cpu.regs[cpu._reg(ops[0])] = np.tanh(cpu._parse_tensor(cpu._val(ops[1])))
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._tanh(cpu._parse_tensor(cpu._val(ops[1])))
 
 
 def _op_softmax(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    shifted = a - np.max(a)
-    exp_a = np.exp(shifted)
-    cpu.regs[cpu._reg(ops[0])] = exp_a / np.sum(exp_a)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor.softmax(a, axis=None)
 
 
 def _op_layernorm(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = (a - np.mean(a)) / np.sqrt(np.var(a) + 1e-5)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._layernorm_global(a)
 
 
 def _op_rmsnorm(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = a / np.sqrt(np.mean(a**2) + 1e-5)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._rmsnorm_global(a)
 
 
 def _op_randn(cpu, ops):
     cpu._check_arity(ops, 3)
     r = int(ops[1]) if isinstance(ops[1], (int, float)) else 1
     c = int(ops[2]) if isinstance(ops[2], (int, float)) else 1
-    cpu.regs[cpu._reg(ops[0])] = np.random.randn(r, c)
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._randn(r, c)
 
 
 def _op_randunif(cpu, ops):
@@ -3235,7 +3315,7 @@ def _op_randunif(cpu, ops):
     c = int(ops[2]) if isinstance(ops[2], (int, float)) else 1
     lo = float(ops[3]) if isinstance(ops[3], (int, float)) else 0.0
     hi = float(ops[4]) if isinstance(ops[4], (int, float)) else 1.0
-    cpu.regs[cpu._reg(ops[0])] = np.random.uniform(lo, hi, (r, c))
+    cpu.regs[cpu._reg(ops[0])] = cpu._tensor._randunif(r, c, lo, hi)
 
 
 # ── Comparison ───────────────────────────────────────────────────────────────
@@ -4277,6 +4357,11 @@ class X86Assembler:
                 self._output.append(0xA4)
             elif inner == "movsw":
                 if self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xA5)
+            elif inner == "movsd":
+                # dword string move: default-size A5 in BITS 32, 66 A5 in BITS 16
+                if not self._pfx("ax"):
                     self._output.append(0x66)
                 self._output.append(0xA5)
             elif inner == "stosb":

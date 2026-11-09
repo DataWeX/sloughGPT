@@ -597,6 +597,57 @@ class TestTinyModelInvariants:
         ok_low, _ = bench._speed_gate(0.05)
         assert ok_low is False
 
+    def test_warm_steady_spread_tolerates_scheduler_stall(self):
+        """One stalled warm sample must not flip the gate (CI flake 2026-11-02).
+
+        Samples are the exact SIGSTOP-stalled run that failed test-core-py:
+        each model took one ~1s stall among four warm samples, std blew past
+        the old 0.5x gate, ``passed`` dropped 7->6 and the baseline compare
+        exited 1. MAD moves one order statistic per stalled sample.
+        """
+        nq_warm = [0.060, 0.072, 1.077, 0.079]
+        q_warm = [1.091, 0.085, 0.132, 0.106]
+        spread_nq = bq._steady_spread(nq_warm)
+        spread_q = bq._steady_spread(q_warm)
+        assert spread_nq < 0.03  # std would be ~0.44
+        assert spread_q < 0.03
+        warm_nq = sorted(nq_warm)[len(nq_warm) // 2]
+        warm_q = sorted(q_warm)[len(q_warm) // 2]
+        assert bq._warm_steady_gate(warm_nq, warm_q, spread_nq, spread_q) is True
+
+    def test_warm_steady_gate_fails_sustained_scatter(self):
+        """Timing that never settles still fails the gate."""
+        nq_warm = [0.5, 2.5, 0.6, 3.0]
+        q_warm = [0.4, 2.0, 0.5, 2.4]
+        spread_nq = bq._steady_spread(nq_warm)
+        spread_q = bq._steady_spread(q_warm)
+        warm_nq = sorted(nq_warm)[len(nq_warm) // 2]
+        warm_q = sorted(q_warm)[len(q_warm) // 2]
+        assert bq._warm_steady_gate(warm_nq, warm_q, spread_nq, spread_q) is False
+
+    def test_warm_steady_gate_survives_two_stalls_at_nine_samples(self):
+        """Quick mode's 9 runs (8 warm) outvote a two-stall burst.
+
+        The old 5-run path could not survive two stalls among four warm
+        samples — the upper median itself gets poisoned and no statistic
+        recovers; the sample-count bump is the second half of the same
+        flake fix (the MAD gate alone only covers single-stall patterns).
+        """
+        nq_warm = [0.061, 0.059, 0.070, 0.065, 1.077, 1.082, 0.068, 0.064]
+        q_warm = [0.090, 0.088, 0.092, 1.101, 0.087, 0.095, 1.094, 0.089]
+        spread_nq = bq._steady_spread(nq_warm)
+        spread_q = bq._steady_spread(q_warm)
+        warm_nq = sorted(nq_warm)[len(nq_warm) // 2]
+        warm_q = sorted(q_warm)[len(q_warm) // 2]
+        assert warm_nq < 0.2 and warm_q < 0.2  # median not poisoned
+        assert bq._warm_steady_gate(warm_nq, warm_q, spread_nq, spread_q) is True
+
+    def test_steady_spread_degenerate_and_flat(self):
+        """n<2 has no spread; flat samples have zero spread."""
+        assert bq._steady_spread([]) == 0.0
+        assert bq._steady_spread([0.05]) == 0.0
+        assert bq._steady_spread([0.05, 0.05, 0.05]) == 0.0
+
     @pytest.mark.slow
     def test_quantized_linear_uses_quantized_weights(self, int8_bench):
         quantized = sum(

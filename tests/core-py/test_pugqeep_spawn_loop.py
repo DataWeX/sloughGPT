@@ -54,7 +54,9 @@ def test_callable_stop_signal_releases_loop():
         while flag["running"]:
             time.sleep(0.02)
 
-    handle = spawn_loop(_spin, name="callable-stop-loop", stop=lambda: flag.__setitem__("running", False))
+    handle = spawn_loop(
+        _spin, name="callable-stop-loop", stop=lambda: flag.__setitem__("running", False)
+    )
     try:
         proc = next(p for p in eng.list_processes() if p.name == "callable-stop-loop")
         assert eng.cancel_process(proc.id) >= 1  # engine cancel → on_cancel → flag flips

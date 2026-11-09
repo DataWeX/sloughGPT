@@ -194,13 +194,13 @@ export function KnowledgeDetailFold({ id }: { id: string }) {
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    className="w-full h-32 p-3 text-sm rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    className="w-full h-32 p-3 text-sm rounded-md border border-border bg-background resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   />
                   <input
                     value={editTopic}
                     onChange={(e) => setEditTopic(e.target.value)}
                     placeholder="Topic"
-                    className="w-full h-8 px-3 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    className="w-full h-8 px-3 text-sm rounded-md border border-border bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   />
                 </div>
               ) : (

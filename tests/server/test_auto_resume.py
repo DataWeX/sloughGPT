@@ -54,8 +54,7 @@ class TestFlagGate:
 class TestConcurrencyCap:
     def test_only_one_job_resumes_even_When_many_eligible(self, store):
         rows = [
-            _row(store, jid, checkpoint_path=f"models/{jid}/ckpt")
-            for jid in ("j1", "j2", "j3")
+            _row(store, jid, checkpoint_path=f"models/{jid}/ckpt") for jid in ("j1", "j2", "j3")
         ]
         plan = plan_auto_resume(rows, enabled=True, checkpoint_loadable=_loadable)
         assert len(plan.to_resume) == 1
@@ -93,9 +92,7 @@ class TestCheckpointGate:
     def test_one_bad_one_good_resumes_the_good(self, store):
         bad = _row(store, "j1", checkpoint_path=None)
         good = _row(store, "j2", checkpoint_path="models/j2/ckpt")
-        plan = plan_auto_resume(
-            [bad, good], enabled=True, checkpoint_loadable=_loadable
-        )
+        plan = plan_auto_resume([bad, good], enabled=True, checkpoint_loadable=_loadable)
         assert [j["id"] for j in plan.to_resume] == ["j2"]
 
 
@@ -112,18 +109,13 @@ class TestDecisionLegibility:
             "auto_resume_skipped",
             "auto_train_started",
         }
-        skipped_ids = {
-            e["process_id"] for e in plan.events if e["event"] == "auto_resume_skipped"
-        }
+        skipped_ids = {e["process_id"] for e in plan.events if e["event"] == "auto_resume_skipped"}
         assert "j1" in skipped_ids
 
     def test_capped_job_gets_no_event(self, store):
         """A job left untouched by the cap is not notified about — no event
         means no dock entry, no phantom 'skipped' claim."""
-        rows = [
-            _row(store, jid, checkpoint_path=f"models/{jid}/ckpt")
-            for jid in ("j1", "j2")
-        ]
+        rows = [_row(store, jid, checkpoint_path=f"models/{jid}/ckpt") for jid in ("j1", "j2")]
         plan = plan_auto_resume(rows, enabled=True, checkpoint_loadable=_loadable)
         assert {e["process_id"] for e in plan.events} == {"j1"}
 

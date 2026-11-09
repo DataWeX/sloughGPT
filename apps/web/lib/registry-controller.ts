@@ -37,7 +37,9 @@ export interface ArtifactRecord {
 
 class RegistryController {
   async list(): Promise<RegisteredModel[]> {
-    const data = await apiGet<{ models?: RegisteredModel[] } | RegisteredModel[]>('/registry/models')
+    const data = await apiGet<{ models?: RegisteredModel[] } | RegisteredModel[]>(
+      '/registry/models',
+    )
     if (Array.isArray(data)) return data
     return data?.models ?? []
   }
@@ -67,7 +69,9 @@ class RegistryController {
   }
 
   async best(): Promise<Record<string, unknown> | null> {
-    const data = await apiGet<{ default_model?: string | null; models_loaded?: number }>('/registry/best')
+    const data = await apiGet<{ default_model?: string | null; models_loaded?: number }>(
+      '/registry/best',
+    )
     if (!data) return null
     return data as Record<string, unknown>
   }

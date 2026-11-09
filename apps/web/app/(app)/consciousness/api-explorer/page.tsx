@@ -648,7 +648,7 @@ export default function ConsciousnessApiExplorerPage() {
                   <textarea
                     value={body}
                     onChange={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-                    className="w-full h-32 rounded-md border border-border/40 bg-muted/20 p-3 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="w-full h-32 rounded-md border border-border/40 bg-muted/20 p-3 text-xs font-mono resize-y focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                     placeholder="{}"
                   />
                 </div>

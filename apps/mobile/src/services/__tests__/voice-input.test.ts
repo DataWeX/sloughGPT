@@ -1,5 +1,6 @@
 jest.mock('../../services/api-client', () => ({
   getApiUrl: jest.fn().mockResolvedValue('http://localhost:8000'),
+  getAuthHeaders: jest.fn().mockResolvedValue({}),
 }));
 
 jest.mock('../../services/haptics', () => ({

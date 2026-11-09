@@ -85,9 +85,7 @@ def test_engine_stop_terminates_child(engine):
 def test_timeout_enforced_by_run_loop(engine):
     """The run loop, not the caller, enforces spawn_command(timeout=...)."""
     engine.run_background()
-    proc = engine.spawn_command(
-        [PY, "-c", "import time; time.sleep(30)"], name="slow", timeout=0.5
-    )
+    proc = engine.spawn_command([PY, "-c", "import time; time.sleep(30)"], name="slow", timeout=0.5)
     done = engine.wait_for(proc.id, timeout=15)
     assert done is not None
     assert proc.status == ProcessStatus.FAILED

@@ -157,9 +157,7 @@ describe('journey: boot with interrupted job -> notify -> Recover', () => {
 
     await waitFor(() => expect(mockRecover).toHaveBeenCalledWith('job-42'))
     // Dispatched confirmation renders (state change is server's to confirm).
-    expect(
-      await screen.findByText(/dispatched/i),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/dispatched/i)).toBeInTheDocument()
   })
 
   it('an empty snapshot renders no dock at all', async () => {
@@ -168,9 +166,7 @@ describe('journey: boot with interrupted job -> notify -> Recover', () => {
     render(<AppLayout>content</AppLayout>)
 
     await waitFor(() => expect(mockApiGet).toHaveBeenCalledWith('/recovery/events'))
-    expect(
-      screen.queryByLabelText('Process notifications'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Process notifications')).not.toBeInTheDocument()
   })
 
   it('a snapshot outage never blocks the layout from rendering', async () => {
@@ -180,8 +176,6 @@ describe('journey: boot with interrupted job -> notify -> Recover', () => {
 
     await waitFor(() => expect(mockApiGet).toHaveBeenCalled())
     expect(screen.getByTestId('status-bar')).toBeInTheDocument()
-    expect(
-      screen.queryByLabelText('Process notifications'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Process notifications')).not.toBeInTheDocument()
   })
 })
