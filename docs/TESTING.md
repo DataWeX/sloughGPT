@@ -86,11 +86,18 @@ vi.mock('@/vite/next-compat/navigation', () => ({
 }))
 ```
 
-**Toast Store:**
+**Notifications (`@/lib/notify`):**
 
 ```typescript
-vi.mock('@/lib/toast-store', () => ({
-  useToastStore: () => ({ addToast: vi.fn() }),
+// The spy must live inside vi.hoisted: vi.mock factories are hoisted above
+// the test module's own declarations, so a top-level `const spy = vi.fn()`
+// throws "Cannot access before initialization" (TDZ) when the SUT imports.
+const { addToast } = vi.hoisted(() => ({ addToast: vi.fn() }))
+
+vi.mock('@/lib/notify', () => ({
+  notify: { toast: addToast, banner: vi.fn() },
+  // legacy reader shape, for components still reading store state
+  useToastStore: (selector) => selector({ addToast }),
 }))
 ```
 
