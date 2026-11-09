@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "0000000000000000000000000000000000000000",
+    "recorded_commit": "7f8a90da25461081e3ee6be75b6c036272518f67",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -64,7 +64,7 @@
         "domain/infrastructure/"
       ],
       "note": "HTTP endpoint projections of core contracts (edge exposure)",
-      "debt": "overlap with infrastructure/ops \u2014 client/core boundary review pending",
+      "debt": "overlap with infrastructure/ops — client/core boundary review pending",
       "tree_hash": "efc636c0c716b1e54ef7d6ea155a421122d2d704"
     },
     "auth": {
@@ -134,8 +134,8 @@
         "scripts/",
         "domain/core/"
       ],
-      "note": "reasoning core (24 py) \u2014 pair with cognitive/, consolidation card",
-      "debt": "duplicate pair with cognitive/ \u2014 merge candidate",
+      "note": "reasoning core (24 py) — pair with cognitive/, consolidation card",
+      "debt": "duplicate pair with cognitive/ — merge candidate",
       "tree_hash": "c97732333719d22b451fd131a30ce812f1327710"
     },
     "cognitive": {
@@ -144,8 +144,8 @@
         "cognitive"
       ],
       "consumers": [],
-      "note": "orphan duplicate of cognition/: zero external consumers found \u2014 first merge candidate",
-      "debt": "duplicate pair with cognition/ \u2014 merge candidate",
+      "note": "orphan duplicate of cognition/: zero external consumers found — first merge candidate",
+      "debt": "duplicate pair with cognition/ — merge candidate",
       "tree_hash": "45bafe83561f00ae535926f4487b5473aa1b9615"
     },
     "collections": {
@@ -241,7 +241,7 @@
         "core"
       ],
       "consumers": [],
-      "note": "thin generation seam (1 file, zero external importers \u2014 revisit on inference consolidation)",
+      "note": "thin generation seam (1 file, zero external importers — revisit on inference consolidation)",
       "debt": null,
       "tree_hash": "ddaabda0d41b39678a6d7fe50f1c641c7104e98b"
     },
@@ -260,7 +260,7 @@
       ],
       "note": "engine-first serving core + provider path (quantization ties to training)",
       "debt": null,
-      "tree_hash": "89955039e3b749012a58445fcf9153f8a4fc7eb8"
+      "tree_hash": "032874e0fc1a46f2603e0f10dff7167950becd16"
     },
     "infrastructure": {
       "class": "core-capability",
@@ -274,8 +274,8 @@
         "domain/training/",
         "domain/core/"
       ],
-      "note": "runtime plumbing/hosting (173 py) \u2014 overlap with api/ops under review",
-      "debt": "overlap with api/ops \u2014 client/core boundary review pending",
+      "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
+      "debt": "overlap with api/ops — client/core boundary review pending",
       "tree_hash": "c5419209793890677029b0926a7c50f65f5ff418"
     },
     "knowledge": {
@@ -353,8 +353,8 @@
         "tests/",
         "apps/api/"
       ],
-      "note": "server-side push notification service \u2014 misleading name, user ruling keep as-is (2026-10-31)",
-      "debt": "misleading name \u2014 server push service, not a client; user ruling: keep",
+      "note": "server-side push notification service — misleading name, user ruling keep as-is (2026-10-31)",
+      "debt": "misleading name — server push service, not a client; user ruling: keep",
       "tree_hash": "18d3cc362e507996d6299a3265c8eb1fe16e5c25"
     },
     "models": {
@@ -400,8 +400,8 @@
         "tests/",
         "apps/api/"
       ],
-      "note": "operator/health surface \u2014 overlap with api/infrastructure under review",
-      "debt": "overlap with api/infrastructure \u2014 client/core boundary review pending",
+      "note": "operator/health surface — overlap with api/infrastructure under review",
+      "debt": "overlap with api/infrastructure — client/core boundary review pending",
       "tree_hash": "e309c45b2559b3bd26b8a17df1318daa05600248"
     },
     "plugins": {
@@ -527,7 +527,7 @@
       "consumers": [
         "apps/api/"
       ],
-      "note": "everyday tools engine (agent tier-1 \u2014 never site tooling)",
+      "note": "everyday tools engine (agent tier-1 — never site tooling)",
       "debt": null,
       "tree_hash": "c5d306fdba365153a45027157a48df848bcd95e9"
     },
@@ -546,7 +546,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "ba3f65c748176a2e9d01fb6283e41763ec732d7d"
+      "tree_hash": "8152f9cde04867c56262ba438d06e8c35b656d8a"
     },
     "voice": {
       "class": "core-capability",
