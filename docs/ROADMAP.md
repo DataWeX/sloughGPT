@@ -116,8 +116,11 @@ Definition of done — all four, each closing with a card ID + landed sha:
   twice in a row (2026-11-08/09). Fixed 2026-11-09, card
   `20261105_170745` — the tests asserted runner stability instead of our
   code; replaced with round-trip + exit/report-coherence claims and a
-  synthetic regression pin. Land bar: two consecutive green CI test-core-py
-  runs.
+  synthetic regression pin. Land bar (two consecutive green CI test-core-py
+  runs) **met 2026-11-09**: `42561514492` (42903 passed) → `42563910820`
+  (42903) → rerun of `42561514492` (42904) — three green executions, 0
+  failed, plus a 4th clean execution of the fixed pair in the pre-rehash
+  run (its only failure was the since-fixed baseline drift).
 - **Routers out of `domain.*_internal*` ✅ (2026-11-09, card
   `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`,
   supersedes lost `97260724`)** — re-measured: 8 in scope (not the 2 the
