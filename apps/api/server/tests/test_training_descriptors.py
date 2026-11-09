@@ -857,3 +857,354 @@ def test_webhook_openapi_matches_the_hand_built_doc():
     # overwritten); (3) param schema cosmetics — hand-built `title`/`default`/
     # `anyOf[null]` vs projection `type`+`description`; (4) 422
     # description/content — the class accepted since part 1.
+
+
+# ── sub-batch B: training/router.py (27 sites) ───────────────────────────
+# 19 GET (idempotent=True) + 5 POST + 3 explicit DELETE (``derive_method``
+# can only emit GET/POST); 2 authenticated — the only routes whose
+# hand-built signature carried ``Depends(require_auth_if_enabled)``; 13
+# group-A (inner ``success_response`` stripped — the projection's wrap
+# emits the identical ``{status, data}`` bytes) vs 14 raw (bare dicts, the
+# ``message="loaded"`` self-wrap, ``FileResponse``/raw ``Response``
+# passthroughs, and the 2 SSE streams' self-wrapped idle errors).
+
+ROUTER_ROUTES = [
+    # name, path, method, idempotent, auth_scope
+    ("training.finetuned.list", "/training/finetuned-models", "GET", True, "public"),
+    (
+        "training.finetuned.load",
+        "/training/finetuned-models/{name}/load",
+        "POST",
+        False,
+        "public",
+    ),
+    (
+        "training.finetuned.delete",
+        "/training/finetuned-models/{name}",
+        "DELETE",
+        False,
+        "authenticated",
+    ),
+    ("training.recovery.check", "/recovery/check", "GET", True, "public"),
+    ("training.recovery.recoverable", "/recovery/recoverable", "GET", True, "public"),
+    ("training.recovery.events", "/recovery/events", "GET", True, "public"),
+    ("training.recovery.recover", "/recovery/recover/{job_id}", "POST", False, "public"),
+    (
+        "training.recovery.abandon",
+        "/recovery/abandon/{job_id}",
+        "DELETE",
+        False,
+        "authenticated",
+    ),
+    ("training.recovery.stats", "/recovery/stats", "GET", True, "public"),
+    ("training.log.get", "/training/log", "GET", True, "public"),
+    ("training.stop.all", "/training/stop", "POST", False, "public"),
+    ("training.checkpoints.list", "/training/checkpoints", "GET", True, "public"),
+    ("training.checkpoints.delete", "/training/checkpoints/{name}", "DELETE", False, "public"),
+    ("training.checkpoints.load", "/training/checkpoints/{name}/load", "POST", False, "public"),
+    (
+        "training.checkpoints.download",
+        "/training/checkpoints/{name}/download",
+        "GET",
+        True,
+        "public",
+    ),
+    ("training.checkpoints.info", "/training/checkpoints/{name}/info", "GET", True, "public"),
+    ("training.metrics.export", "/training/metrics/export", "GET", True, "public"),
+    (
+        "training.from_sessions.cancel",
+        "/training/from-sessions/cancel",
+        "GET",
+        True,
+        "public",
+    ),
+    ("training.stream.live", "/training/stream", "GET", True, "public"),
+    ("training.stream.from_sessions", "/training/from-sessions-stream", "GET", True, "public"),
+    ("training.recommend.get", "/training/recommend", "GET", True, "public"),
+    ("training.trends.get", "/training/trends", "GET", True, "public"),
+    ("training.monitor.status", "/monitor", "GET", True, "public"),
+    ("training.monitor.alerts", "/monitor/alerts", "GET", True, "public"),
+    ("training.monitor.metrics", "/monitor/metrics", "GET", True, "public"),
+    ("training.monitor.reset", "/monitor/reset", "POST", False, "public"),
+    ("training.monitor.resources", "/monitor/resources", "GET", True, "public"),
+]
+
+# Captured hand-built summaries (FastAPI derives them from ``route.name`` —
+# on a projected route that name would be the generated endpoint's, so every
+# value is pinned explicitly in its ``RouteSpec``).
+ROUTER_SUMMARIES = {
+    ("GET", "/training/finetuned-models"): "List Finetuned Models",
+    ("POST", "/training/finetuned-models/{name}/load"): "Load Finetuned Model",
+    ("DELETE", "/training/finetuned-models/{name}"): "Delete Finetuned Model",
+    ("GET", "/recovery/check"): "Check Crashed Jobs",
+    ("GET", "/recovery/recoverable"): "Get Recoverable Jobs",
+    ("GET", "/recovery/events"): "Get Recovery Events",
+    ("POST", "/recovery/recover/{job_id}"): "Recover Job",
+    ("DELETE", "/recovery/abandon/{job_id}"): "Abandon Recovery",
+    ("GET", "/recovery/stats"): "Get Recovery Stats",
+    ("GET", "/training/log"): "Training Log",
+    ("POST", "/training/stop"): "Training Stop",
+    ("GET", "/training/checkpoints"): "Training List Checkpoints",
+    ("DELETE", "/training/checkpoints/{name}"): "Training Delete Checkpoint",
+    ("POST", "/training/checkpoints/{name}/load"): "Training Load Checkpoint",
+    ("GET", "/training/checkpoints/{name}/download"): "Training Download Checkpoint",
+    ("GET", "/training/checkpoints/{name}/info"): "Training Checkpoint Info",
+    ("GET", "/training/metrics/export"): "Training Metrics Export",
+    ("GET", "/training/from-sessions/cancel"): "Training Cancel From Sessions",
+    ("GET", "/training/stream"): "Training Stream",
+    ("GET", "/training/from-sessions-stream"): "Training From Sessions Stream",
+    ("GET", "/training/recommend"): "Get Training Recommendation",
+    ("GET", "/training/trends"): "Get Training Trends",
+    ("GET", "/monitor"): "Training Monitor Status",
+    ("GET", "/monitor/alerts"): "Training Monitor Alerts",
+    ("GET", "/monitor/metrics"): "Training Monitor Metrics",
+    ("POST", "/monitor/reset"): "Training Monitor Reset",
+    ("GET", "/monitor/resources"): "Training Monitor Resources",
+}
+
+# The 14 no-parameter operations publish 200 alone (nothing can fail
+# validation — FastAPI derives the same way on the hand-built routes); the
+# other 13 carry parameters → 200 + 422.
+ROUTER_NO_422 = {
+    ("GET", "/monitor"),
+    ("POST", "/monitor/reset"),
+    ("GET", "/monitor/resources"),
+    ("GET", "/recovery/events"),
+    ("GET", "/recovery/recoverable"),
+    ("GET", "/recovery/stats"),
+    ("GET", "/training/checkpoints"),
+    ("GET", "/training/finetuned-models"),
+    ("GET", "/training/from-sessions-stream"),
+    ("GET", "/training/from-sessions/cancel"),
+    ("GET", "/training/log"),
+    ("GET", "/training/metrics/export"),
+    ("POST", "/training/stop"),
+    ("GET", "/training/stream"),
+}
+
+# Exactly the two routes whose hand-built signature carried
+# ``Depends(require_auth_if_enabled)`` publish a security requirement.
+ROUTER_SECURED = {
+    ("DELETE", "/training/finetuned-models/{name}"),
+    ("DELETE", "/recovery/abandon/{job_id}"),
+}
+
+
+def test_router_descriptors_registered():
+    import training.router  # noqa: F401 — import registers the descriptors
+
+    for name, path, method, idem, scope in ROUTER_ROUTES:
+        entry = _entry(name)
+        assert entry["path"] == path, name
+        assert entry["method"] == method, name
+        assert entry["idempotent"] is idem, name
+        assert entry["auth_scope"] == scope, name
+
+    # edge 4: declared parameters keep the hand-built 422s alive — path
+    # params contract-required, query optionals declared-but-not-required
+    assert _entry("training.finetuned.load")["params"]["required"] == ["name"]
+    assert _entry("training.recovery.check")["params"]["required"] == []
+    trends = _entry("training.trends.get")["params"]
+    assert list(trends["properties"]) == ["model", "dataset", "limit"]
+    assert trends["required"] == []
+    assert _entry("training.monitor.alerts")["params"]["required"] == []
+
+
+def test_router_serves_the_wire(tmp_path):
+    """Group A reproduces ``{status, data}``; raw sites stay unwrapped."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from infrastructure.exception_handlers import register_all_handlers
+    from training.router import router as training_router
+
+    app = FastAPI()
+    app.include_router(training_router)
+    register_all_handlers(app)
+    client = TestClient(app)
+
+    engine = MagicMock()
+    monitor = engine.get_training_monitor.return_value
+    monitor.check_resources.return_value = {"cpu": 50}
+    monitor.get_alerts.return_value = []
+    engine.get_log = AsyncMock(return_value=["line-1"])
+    engine.load_outcomes.return_value = []
+    engine.get_state.return_value.config = {}
+    engine.get_all_checkpoint_data = AsyncMock(return_value=[])
+    engine.load_stored_checkpoint = AsyncMock(return_value={"name": "w"})
+    engine.download_checkpoint_path = AsyncMock(return_value=None)
+
+    store = MagicMock()
+    store.get_stats.return_value = {"total": 1}
+    store.detect_crashed_jobs.return_value = []
+    store.get_recoverable_jobs.return_value = []
+    store.get.return_value = None
+
+    with (
+        patch("domain.training.engine.get_training_engine", return_value=engine),
+        patch("training.sse_stream.stop_all_training", return_value={"stopped": []}),
+        patch("training.router.get_job_store", return_value=store),
+        patch("training.process_events.boot_snapshot", return_value=[]),
+    ):
+        # group A: the inner success_response was stripped — the projection's
+        # wrap must emit the identical {status, data} bytes the hand-built
+        # route served
+        body = client.get("/training/log").json()
+        assert body == {"status": "success", "data": {"lines": ["line-1"], "total": 1}}
+
+        body = client.post("/training/stop").json()
+        assert body == {"status": "success", "data": {"stopped": []}}
+
+        body = client.get("/training/trends").json()
+        assert body["status"] == "success"
+        assert body["data"] == {
+            "runs": [],
+            "models": [],
+            "summary": {
+                "total_runs": 0,
+                "avg_quality": 0,
+                "best_quality": 0,
+                "avg_loss": 0,
+                "trend": "stable",
+            },
+        }
+
+        body = client.get("/training/recommend").json()
+        assert body["status"] == "success"
+        assert isinstance(body["data"], dict)
+
+        body = client.get("/monitor/resources").json()
+        assert body == {"status": "success", "data": {"cpu": 50}}
+
+        # absent optional query keys are omitted → the handler default (50)
+        # survives; the projection must pass nothing, never None
+        body = client.get("/monitor/alerts").json()
+        assert body == {"status": "success", "data": {"alerts": [], "total": 0}}
+        monitor.get_alerts.assert_called_with(severity=None, limit=50)
+
+        # transport validation: a mistyped member 422s before the handler
+        # (these three never reach the engine/store mocks above)
+        assert client.get("/monitor/alerts?limit=abc").status_code == 422
+        assert client.get("/training/trends?limit=abc").status_code == 422
+        assert client.get("/recovery/check?timeout_seconds=abc").status_code == 422
+
+        # raw wire: bare dicts — no envelope may leak
+        body = client.get("/training/finetuned-models").json()
+        assert "status" not in body and "models" in body
+
+        body = client.get("/recovery/stats").json()
+        assert "status" not in body
+        assert body["crashed_jobs"] == 0 and body["recoverable_jobs"] == 0
+
+        assert client.get("/recovery/recoverable").json() == {"count": 0, "jobs": []}
+        assert client.get("/recovery/check").json()["detected_crashes"] == 0
+        events = client.get("/recovery/events").json()
+        assert "status" not in events and events["count"] == 0
+
+        # raw Response passthrough: attachment headers survive, no wrap
+        resp = client.get("/training/metrics/export")
+        assert resp.status_code == 200
+        assert "training-metrics.json" in resp.headers.get("content-disposition", "")
+        assert set(resp.json()) == {"exported_at", "total_checkpoints", "checkpoints"}
+
+        # message="loaded" self-wrap is hand-built wire: exactly one wrap —
+        # envelope=False must not re-wrap it
+        body = client.post("/training/checkpoints/w/load").json()
+        assert body == {
+            "status": "success",
+            "data": {"name": "w"},
+            "message": "loaded",
+        }
+
+        # FileResponse passthrough: bytes, not a JSON envelope — then the
+        # missing-checkpoint guard keeps its raw 404
+        ckpt = tmp_path / "w.ckpt"
+        ckpt.write_bytes(b"CKPT")
+        engine.download_checkpoint_path = AsyncMock(return_value=str(ckpt))
+        resp = client.get("/training/checkpoints/w/download")
+        assert resp.status_code == 200
+        assert resp.content == b"CKPT"
+        engine.download_checkpoint_path = AsyncMock(return_value=None)
+        assert client.get("/training/checkpoints/nope/download").status_code == 404
+
+        # both SSE streams: idle is a self-wrapped 200 — raw wire, one wrap,
+        # never the projection's envelope (which would nest the error dict)
+        for path in ("/training/stream", "/training/from-sessions-stream"):
+            resp = client.get(path)
+            assert resp.status_code == 200, path
+            body = resp.json()
+            assert body["status"] == "success", path
+            assert body["data"]["status"] == "error", path
+            assert body["data"]["code"] == "E_STATE_IDLE", path
+
+        # handler guards keep their raw error shapes on the authenticated
+        # routes too (SLO_AUTH_REQUIRED defaults off — the dependency is
+        # still in the chain, which is what the OpenAPI security pins)
+        resp = client.delete("/training/finetuned-models/nope")
+        assert resp.status_code == 404
+        assert "Fine-tuned model not found" in resp.text
+        resp = client.delete("/recovery/abandon/nope")
+        assert resp.status_code == 404
+        assert "Job not found" in resp.text
+
+
+def test_router_openapi_matches_the_hand_built_doc():
+    """Byte-identical wire fields; the accepted doc-only deltas noted below."""
+    from training.router import router as training_router
+
+    app = FastAPI()
+    app.include_router(training_router)
+    doc = app.openapi()
+
+    assert len(ROUTER_SUMMARIES) == 27
+    for (method, path), summary in ROUTER_SUMMARIES.items():
+        op = doc["paths"][path][method.lower()]
+        assert op["summary"] == summary, (path, method)
+        assert op["tags"] == ["training"], (path, method)  # chain tag, no inner tags
+        assert "requestBody" not in op, (path, method)  # every op is body-free
+        responses = sorted(op["responses"])
+        expected = ["200"] if (method, path) in ROUTER_NO_422 else ["200", "422"]
+        assert responses == expected, (path, method)
+        assert bool(op.get("security")) is ((method, path) in ROUTER_SECURED), (path, method)
+
+    # parameter parity: path params contract-required, query optionals stay
+    # optional and in the hand-built order
+    assert [
+        (p["name"], p["in"], p.get("required"))
+        for p in doc["paths"]["/training/recommend"]["get"]["parameters"]
+    ] == [("dataset_path", "query", False), ("method", "query", False)]
+    assert [
+        (p["name"], p["in"], p.get("required"))
+        for p in doc["paths"]["/training/trends"]["get"]["parameters"]
+    ] == [("model", "query", False), ("dataset", "query", False), ("limit", "query", False)]
+    assert [
+        (p["name"], p["in"], p.get("required"))
+        for p in doc["paths"]["/monitor/alerts"]["get"]["parameters"]
+    ] == [("severity", "query", False), ("limit", "query", False)]
+    assert [
+        (p["name"], p["in"], p.get("required"))
+        for p in doc["paths"]["/recovery/check"]["get"]["parameters"]
+    ] == [("timeout_seconds", "query", False)]
+    assert [
+        (p["name"], p["in"], p.get("required"))
+        for p in doc["paths"]["/training/checkpoints/{name}/download"]["get"]["parameters"]
+    ] == [("name", "path", True)]
+    assert [
+        (p["name"], p["in"], p.get("required"))
+        for p in doc["paths"]["/recovery/abandon/{job_id}"]["delete"]["parameters"]
+    ] == [("job_id", "path", True)]
+    for path, method in (
+        ("/training/log", "get"),
+        ("/training/stream", "get"),
+        ("/training/stop", "post"),
+        ("/monitor", "get"),
+    ):
+        assert "parameters" not in doc["paths"][path][method], (path, method)
+
+    # Accepted doc-only deltas (verified by the before/after OpenAPI diff —
+    # 155 field diffs, zero on wire fields): (1) operationId — the
+    # registry's stable `training.<name>.<verb>` scheme vs FastAPI's
+    # function-name derivation; (2) the additive `x-contract` extension;
+    # (3) param schema cosmetics — hand-built `title`/`default`/`anyOf[null]`
+    # vs projection `type`+`description`; (4) the standing 422
+    # description/content class; (5) 200-response-model schemas on the 13
+    # group-A envelope routes (envelope routes keep the derived `-> dict`).
