@@ -2,7 +2,7 @@
   "metadata": {
     "schema": 1,
     "generated": "2026-10-31",
-    "recorded_commit": "d73e2d85db89432d67b839b093568af8f20ff74a",
+    "recorded_commit": "e3d88fdbce4566edd8015fdb8b8cee2790bd1c9e",
     "card": "20261031_083744",
     "hash": "per-dir git tree hash = git rev-parse HEAD:domain/<name>; verify: scripts/domain_baseline_rehash.py --check",
     "ratchet_rule": "misfiled/projection/debt counts may only shrink; shrink = edit ratchet here + re-review (Page Rule precedent)"
@@ -233,7 +233,7 @@
       ],
       "note": "feedback capture feeding learning (cognitive+training)",
       "debt": null,
-      "tree_hash": "4850bf11cfef754e28ee5c5df437706f58c0f7ac"
+      "tree_hash": "3a62a81f489cdd5d520ee702b6f0c94979294575"
     },
     "generation": {
       "class": "core-capability",
@@ -276,7 +276,7 @@
       ],
       "note": "runtime plumbing/hosting (173 py) — overlap with api/ops under review",
       "debt": "overlap with api/ops — client/core boundary review pending",
-      "tree_hash": "9f9aed732f5013db02cb8cb558fbca0291c8031f"
+      "tree_hash": "baa542819724606d5603771edadf073bc49f2524"
     },
     "knowledge": {
       "class": "core-capability",
@@ -546,7 +546,7 @@
       ],
       "note": "training loops/data/checkpoints (SloughGPTTrainer home)",
       "debt": null,
-      "tree_hash": "969ef0ee2e6a24c8abbac1ff03bbf087485b4fc4"
+      "tree_hash": "d7328fc721581bd20492a505067422671be19e1e"
     },
     "voice": {
       "class": "core-capability",
