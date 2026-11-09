@@ -107,11 +107,17 @@ Definition of done — all four, each closing with a card ID + landed sha:
 
 ### Platform
 
-- **test-core-py green baseline** — chronically red on main (pre-existing
-  timeouts: quantization e2e, shell TUI, VM benchmarks; PRs merge only after
-  proving those failures pre-existed). Fix them or quarantine them honestly
-  — a permanently red baseline stops being visible debt the day someone
-  starts believing it.
+- **test-core-py green baseline ✅ (umbrella closed 2026-11-03, card
+  `20261101_140448` — consecutive green CI runs + honest quarantine of the
+  pre-existing timeouts under `pytest.mark.slow`: shell TUI 18, quant e2e 17,
+  VM benchmarks 71)** — the warning ("a permanently red baseline stops being
+  visible debt the day someone starts believing it") proved right once more:
+  the residual `test_quantization_benchmark_e2e` A-B pair flaked red on CI
+  twice in a row (2026-11-08/09). Fixed 2026-11-09, card
+  `20261105_170745` — the tests asserted runner stability instead of our
+  code; replaced with round-trip + exit/report-coherence claims and a
+  synthetic regression pin. Land bar: two consecutive green CI test-core-py
+  runs.
 - **Routers out of `domain.*_internal*` ✅ (2026-11-09, card
   `20261101_140447_routers-out-of-domain-internal-8-in-scope-re-card-supersedes`,
   supersedes lost `97260724`)** — re-measured: 8 in scope (not the 2 the
